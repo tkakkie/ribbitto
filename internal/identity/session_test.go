@@ -92,6 +92,8 @@ func (f *fakeStore) DeleteExpiredSessions(_ context.Context, before time.Time) e
 	return f.err
 }
 
+func (f *fakeStore) SessionHorizon(context.Context) (kernel.ID, error) { return kernel.ID{}, f.err }
+
 func TestSessions(t *testing.T) {
 	start := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	account := kernel.ID{1, 2, 3}

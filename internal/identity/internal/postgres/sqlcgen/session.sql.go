@@ -92,3 +92,14 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, arg GetSessionByTok
 	)
 	return i, err
 }
+
+const sessionHorizon = `-- name: SessionHorizon :one
+SELECT uuidv7()::uuid AS horizon
+`
+
+func (q *Queries) SessionHorizon(ctx context.Context) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, sessionHorizon)
+	var horizon pgtype.UUID
+	err := row.Scan(&horizon)
+	return horizon, err
+}

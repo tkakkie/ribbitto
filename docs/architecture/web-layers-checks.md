@@ -68,15 +68,14 @@ Existing checks already cover part of it: the HTML-generation patterns
 (a pending item's body goes in through `textContent`), the requests
 patterns (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
 `EventSource`) and the `indexedDB` pattern, and `TestComponentsMarkup` for
-components rendered alone. Planned, each awaiting its issue:
+components rendered alone. Since #1178, `TestBrowser/drafts` covers the
+sign-in cleanup: the millisecond rule, same-millisecond and newer entries
+kept, malformed keys removed, the notice in another tab, sign-out with
+scripts blocked, a failed sign-out, and a signed-in error render with no
+cleanup. Planned, each awaiting its issue:
 
 - #1156 adds a browser test that a body with markup shows as text and that
   the pending item is removed.
-- #1178 limits `localStorage` to the drafts script and tests the sign-in
-  cleanup: the millisecond rule with same-millisecond entries kept, a stale
-  sign-in page that never removes a newer session's entry, sign-out with the
-  sign-in page's scripts blocked, a failed sign-out, and a signed-in error
-  render with no cleanup.
 - #1181 tests organisation-page cleanup: a stale page of an earlier session
   never removes a newer session's entry, a later member or session removes
   the earlier entries, and a page whose session expires without a sign-in
@@ -143,7 +142,8 @@ It rejects:
   `document.writeln` and `createContextualFragment`. Reads and comparisons
   of HTML properties pass.
 - `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource` and
-  `indexedDB` identifiers, and `htmx.ajax`.
+  `indexedDB` identifiers, and `htmx.ajax`; `localStorage` outside
+  `message-drafts-vN.js`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. These evaluation restrictions restate
   the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).
@@ -160,9 +160,8 @@ their contents can be mistaken for code, comments or delimiters. Delimiter
 depth is not scope analysis: block-level `var`, implicit globals and other
 indirect writes can escape it, while some named function expressions can
 look like declarations. Reviewers check these cases, all HTML writes and
-globals by hand. `localStorage` and `sessionStorage` pass mechanically
-until #1178 limits `localStorage` to the drafts script; the check cannot
-prove that a stored value is only a non-sensitive UX setting.
+globals by hand. The check cannot prove that a stored value is only a
+non-sensitive UX setting or a draft entry.
 
 ## Audit, 2026-10-01 (M3)
 

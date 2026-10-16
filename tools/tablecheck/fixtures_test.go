@@ -37,7 +37,7 @@ func TestOwnershipFixtures(t *testing.T) {
 		{"function sequence", "SELECT nextval('account_id_seq')", "", "unsupported function"},
 		{"qualified function", "SELECT public.lower('x')", "", "unsupported function"},
 		{"quoted dotted function", `SELECT "sqlc.arg"()`, "", "unsupported function"},
-		{"allowed functions", "SELECT sqlc.arg(id), sqlc.narg(id), count(*), max(id), lower(body) FROM message", "", ""},
+		{"allowed functions", "SELECT sqlc.arg(id), sqlc.narg(id), count(*), max(id), lower(body), uuidv7() FROM message", "", ""},
 		{"qualified custom operator", "SELECT 1 OPERATOR(public.###) 2", "", "unsupported qualified operator"},
 		{"qualified builtin operator", "SELECT 1 OPERATOR(pg_catalog.+) 2", "", "unsupported qualified operator"},
 		{"unknown operator", "SELECT 1 ### 2", "", "unsupported operator"},

@@ -44,15 +44,20 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		findings = append(findings, javascriptFinding{1, "versioned filename"})
 	}
 	assignment := `(?:=(?:[^=]|$)|(?:\+|-|\*\*?|/|%|<<|>>|>>>|&|\||\^|&&|\|\||\?\?)=)`
-	rules := []struct {
+	type rule struct {
 		name    string
 		pattern *regexp.Regexp
-	}{
+	}
+	rules := []rule{
 		{"HTML generation", regexp.MustCompile(`\b(?:innerHTML|outerHTML)\s*` + assignment + `|\b(?:insertAdjacentHTML|createContextualFragment)\s*\(|\bdocument\s*\.\s*(?:write|writeln)\s*\(`)},
 		{"requests", regexp.MustCompile(`\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource)\b|\bhtmx\s*\.\s*ajax\b`)},
 		{"IndexedDB", regexp.MustCompile(`\bindexedDB\b`)},
 		{"code evaluation", regexp.MustCompile("\\beval\\s*\\(|\\bnew\\s+Function\\b|\\b(?:setTimeout|setInterval)\\s*\\(\\s*[\"'`]")},
 		{"global write", regexp.MustCompile(`\b(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*\s*(?:` + assignment + `|\+\+|--)|(?:\+\+|--)\s*(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*`)},
+	}
+	// Only the drafts script may keep data that outlives the tab (decision 37 (d)).
+	if !regexp.MustCompile(`^message-drafts-v[0-9]+\.js$`).MatchString(name) {
+		rules = append(rules, rule{"localStorage", regexp.MustCompile(`\blocalStorage\b`)})
 	}
 	// Delimiter depth bounds the declaration check without requiring an IIFE.
 	tokens := regexp.MustCompile(`\b(?:var|let|const)\b|\bfunction\b\s*\*?\s*[A-Za-z_$][\w$]*|[{}()]`)
@@ -166,6 +171,7 @@ func TestJavaScriptPatterns(t *testing.T) {
 		{"websocket", `new WebSocket(url);`, "requests"},
 		{"event source", `new EventSource(url);`, "requests"},
 		{"indexed db", `indexedDB.open("state");`, "IndexedDB"},
+		{"local storage", `localStorage.setItem("panel-open", "yes");`, "localStorage"},
 		{"eval", `eval(code);`, "code evaluation"},
 		{"function constructor", `new Function(code);`, "code evaluation"},
 		{"timeout string", `setTimeout("run()", 1);`, "code evaluation"},
@@ -211,7 +217,7 @@ func TestJavaScriptAllowedPatterns(t *testing.T) {
 		`if (node.innerHTML == value || node.outerHTML !== value) use(node);`,
 		`node.textContent = text; node.append(child);`,
 		`form.requestSubmit();`,
-		`localStorage.setItem("panel-open", "yes"); sessionStorage.getItem("panel-open");`,
+		`sessionStorage.setItem("panel-open", "yes"); sessionStorage.getItem("panel-open");`,
 		`setTimeout(run, 1); setInterval(() => run(), 1);`,
 		`setTimeout(function () { run(); }, 1);`,
 		`use(window.example); if (globalThis.example === value) run();`,
@@ -229,6 +235,16 @@ func TestJavaScriptAllowedPatterns(t *testing.T) {
 				t.Fatalf("unexpected findings: %v", got)
 			}
 		})
+	}
+	// localStorage is allowed only in the drafts script, by its exact name.
+	drafts := `window.localStorage.setItem(key, text); localStorage.removeItem(key);`
+	if got := checkJavaScript("message-drafts-v12.js", drafts); len(got) != 0 {
+		t.Errorf("message-drafts-v12.js: unexpected findings: %v", got)
+	}
+	for _, name := range []string{"old-message-drafts-v1.js", "message-drafts-v1.js.bak-v1.js"} {
+		if got := checkJavaScript(name, drafts); len(got) != 1 || got[0].rule != "localStorage" {
+			t.Errorf("%s: got %v, want one localStorage finding", name, got)
+		}
 	}
 }
 

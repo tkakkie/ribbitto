@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -19,11 +20,14 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
-// fakeSignIn records its calls and answers with err.
+// fakeSignIn records its calls and answers with err; SessionHorizon
+// answers with horizon and horizonErr.
 type fakeSignIn struct {
-	err       error
-	previous  string
-	signedOut []string
+	err        error
+	previous   string
+	signedOut  []string
+	horizon    kernel.ID
+	horizonErr error
 }
 
 func (f *fakeSignIn) SignIn(_ context.Context, _, _, previous string) (string, time.Time, error) {
@@ -37,6 +41,16 @@ func (f *fakeSignIn) SignIn(_ context.Context, _, _, previous string) (string, t
 func (f *fakeSignIn) SignOut(_ context.Context, token string) error {
 	f.signedOut = append(f.signedOut, token)
 	return f.err
+}
+
+func (f *fakeSignIn) SessionHorizon(context.Context) (kernel.ID, error) {
+	return f.horizon, f.horizonErr
+}
+
+// uuidv7At is a UUIDv7 whose millisecond prefix is at's.
+func uuidv7At(at time.Time) string {
+	ms := fmt.Sprintf("%012x", at.UnixMilli())
+	return ms[:8] + "-" + ms[8:] + "-7abc-8000-000000000000"
 }
 
 // oneSession signs in whoever sends the cookie value "live".
@@ -144,6 +158,39 @@ func TestSignInPost(t *testing.T) {
 	}
 }
 
+// The sign-in page renders identity's horizon as it is, so a web server
+// clock skewed against PostgreSQL's cannot move it, and only for signed-out
+// requests (decision 37 (d)).
+func TestSignInHorizon(t *testing.T) {
+	rejected := url.Values{"email": {"alice@example.com"}, "password": {"wrong password 123"}}
+	for _, skew := range []time.Duration{5 * time.Second, -5 * time.Second} {
+		t.Run(skew.String(), func(t *testing.T) {
+			// The database clock is 5 s ahead of or behind this server's.
+			horizon := uuidv7At(time.Now().Add(skew))
+			id, _ := pathID(horizon)
+			handler := newSignInHandler(t, &fakeSignIn{err: identity.ErrInvalidCredentials, horizon: id})
+			get := httptest.NewRecorder()
+			handler.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/signin", nil))
+			want := `data-drafts-horizon="` + horizon + `"`
+			for name, w := range map[string]*httptest.ResponseRecorder{"GET": get, "failed POST": postSignIn(handler, rejected, "")} {
+				if body := w.Body.String(); !strings.Contains(body, want) || strings.Count(body, "data-drafts-horizon") != 1 {
+					t.Errorf("%s: want one %s", name, want)
+				}
+			}
+			// A stale form in a signed-in browser: rejected credentials leave
+			// the session, so its drafts stay.
+			if w := postSignIn(handler, rejected, "live"); w.Code != http.StatusUnprocessableEntity || strings.Contains(w.Body.String(), "data-drafts-horizon") {
+				t.Errorf("signed-in failed POST: %d, horizon rendered", w.Code)
+			}
+		})
+	}
+	w := httptest.NewRecorder()
+	newSignInHandler(t, &fakeSignIn{horizonErr: errors.New("connection refused")}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/signin", nil))
+	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "data-drafts-horizon") {
+		t.Errorf("failed horizon read: %d, horizon rendered", w.Code)
+	}
+}
+
 func TestSignOut(t *testing.T) {
 	service := &fakeSignIn{}
 	handler := newSignInHandler(t, service)
@@ -158,6 +205,23 @@ func TestSignOut(t *testing.T) {
 	}
 	if len(service.signedOut) != 1 || service.signedOut[0] != "live" {
 		t.Fatalf("SignOut calls = %q", service.signedOut)
+	}
+	// Storage only: "cookies" would reach the whole registrable domain.
+	if got := w.Header().Values("Clear-Site-Data"); len(got) != 1 || got[0] != `"storage"` {
+		t.Fatalf("Clear-Site-Data = %q", got)
+	}
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/signout", nil))
+	if got := w.Header().Values("Clear-Site-Data"); w.Code != http.StatusSeeOther || len(got) != 1 || got[0] != `"storage"` {
+		t.Fatalf("without a cookie: %d, Clear-Site-Data = %q", w.Code, got)
+	}
+	// A failed sign-out keeps the session, so the drafts stay too.
+	r = httptest.NewRequest(http.MethodPost, "/signout", nil)
+	r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	w = httptest.NewRecorder()
+	newSignInHandler(t, &fakeSignIn{err: errors.New("connection refused")}).ServeHTTP(w, r)
+	if _, sent := w.Header()["Clear-Site-Data"]; w.Code != http.StatusInternalServerError || sent {
+		t.Fatalf("failed sign-out: %d, headers %v", w.Code, w.Header())
 	}
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/signout", nil))

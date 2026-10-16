@@ -78,3 +78,16 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 func (s *SignIn) SignOut(ctx context.Context, token string) error {
 	return s.sessions.Delete(ctx, token)
 }
+
+// SessionHorizon returns a UUIDv7 generated now by the clock that stamps
+// session ids, so every session created after it returns has a millisecond
+// prefix at or after the horizon's. The signed-out sign-in page removes only
+// stored drafts strictly older than it (decision 37 (d)); a web server clock
+// could be skewed against session ids either way. It grants nothing.
+func (s *SignIn) SessionHorizon(ctx context.Context) (kernel.ID, error) {
+	id, err := s.sessions.store.SessionHorizon(ctx)
+	if err != nil {
+		return kernel.ID{}, fmt.Errorf("reading session horizon: %w", err)
+	}
+	return id, nil
+}

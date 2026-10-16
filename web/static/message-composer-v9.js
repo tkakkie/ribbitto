@@ -114,7 +114,7 @@
     // The post handler answers 400/404/413/422 before any write; 429 rejects
     // the request by spec. Other 4xx, 5xx, network errors or timeouts may
     // follow a commit.
-    if (status === 400 || status === 404 || status === 413 || status === 422 || status === 429) {
+    if (status === 400 || status === 404 || status === 413 || status === 429) {
       say(form.dataset.unconfirmedKey ? "stillUnconfirmed" : "notSent");
     } else {
       form.dataset.unconfirmedKey = key;

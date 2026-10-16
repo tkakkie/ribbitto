@@ -149,8 +149,8 @@ replay duplicates replace the same message id without another announcement.
 A **repeated send** (the same key again, after a lost response or a double
 submission) posts nothing: it is answered as a success naming the first
 message, wherever branching has moved it since, and the composer stays on the
-requested feed or topic. The same key with other text or another channel is
-not a retry: 409 keeps the text with an error and a fresh key, so sending
+requested feed or topic. The same key with other text, another quote or
+another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
 again posts it. A malformed key answers 400; a form without one posts without
 deduplication.
 

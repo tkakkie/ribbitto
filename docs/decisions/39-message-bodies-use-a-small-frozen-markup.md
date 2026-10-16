@@ -80,8 +80,9 @@ Rendered HTML stays at most a disposable cache.
 `chat_v1`'s extraction returns text segments and member-reference segments.
 The caller resolves references through org when it uses the text, to
 `@handle`, or to a fixed localised placeholder when the member cannot be
-resolved, never the UUID. No name is stored, so renames never leave stale
-text. Delimiters, escape backslashes, fences and language tags are dropped;
+resolved, never the UUID. A body stores no name, so renames never leave
+stale text in it; a quote's snapshot keeps the handles as they were when it
+was posted, on purpose (below). Delimiters, escape backslashes, fences and language tags are dropped;
 code content is kept literally; each block boundary becomes one line break;
 line breaks inside a block stay; an autolink is its URL. The pins excerpt
 counts its 200 code points after resolution.

@@ -46,7 +46,7 @@ disagree, fix the disagreement in a pull request.
 | Maintainer | Writes rough ideas, approves issues, decides every merge. |
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
-| Copilot | Reviews each pull request **once**, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
+| Copilot | Reviews each pull request **once** (not a [docs-only](reviewing.md#docs-only-pull-requests) one), at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)). Findings are advisory. During its trial, implements a few eligible tier C issues, reviewed by Claude ([trial](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
@@ -95,11 +95,11 @@ idea (maintainer, one line) or finding (AI)
     closure verification; otherwise the maintainer decides
   → reviewer approves
   → merge the current `main`, or confirm no merge is needed
-  → request Copilot by hand on the draft (gh pr edit <n>
-    --add-reviewer @copilot); wait until its review of that head is
-    submitted, then answer and resolve its comments like any other;
-    a change goes through the Copilot follow-up check, still as a
-    draft                                            (see reviewing.md)
+  → unless docs-only (see reviewing.md), request Copilot by hand on
+    the draft (gh pr edit <n> --add-reviewer @copilot); wait until its
+    review of that head is submitted, then answer and resolve its
+    comments like any other; a change goes through the Copilot
+    follow-up check, still as a draft                (see reviewing.md)
   → the initial adversarial review the change's tier requires, on that
     head, still as a draft; never alongside the first cross-review; a
     fix for its finding gets the adversarial follow-up check, then a
@@ -177,7 +177,7 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a pull request, after Copilot's review is answered and the initial adversarial review its tier requires has completed; after a fix for its finding, also the follow-up check and the re-review the completion rule names) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a pull request, after Copilot's review, if requested, is answered and the initial adversarial review its tier requires has completed; after a fix for its finding, also the follow-up check and the re-review the completion rule names) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

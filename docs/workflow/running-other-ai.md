@@ -39,6 +39,10 @@ directly, or `limit 1800 claude -p "…" < /dev/null`.
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
+Argon implementing a trial issue runs under its own boundary, preflight and
+handoff, in [`argon-implementer.md`](argon-implementer.md); Claude reviews
+its work.
+
 ## Running Codex
 
 How the maintainer's orchestrating sessions run Codex (codex-cli 0.153).

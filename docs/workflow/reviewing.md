@@ -2,7 +2,9 @@
 
 **Who reviews:** for an issue, the AI that did not write the issue; for a
 pull request, the AI that did not implement it. Claude's work → Codex;
-Codex's work → Claude.
+Codex's work → Claude; Argon's work in its
+[trial](argon-implementer.md) → Claude, and a fix Claude writes there →
+Codex.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
 pull request, counting re-reviews. Copilot and the adversarial review do
@@ -13,7 +15,9 @@ case, stop and ask the maintainer.
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
-- *Risk* is right (see below) and *Implementer* is set.
+- *Risk* is right (see below) and *Implementer* is set; Argon only for an
+  [eligible issue](argon-implementer.md#which-issues), with its expected
+  tier checked (in doubt, the higher tier, so not Argon).
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
@@ -63,7 +67,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 2. The implementer applies exactly those fixes and nothing else.
 3. The reviewer checks that the whole diff since the round-2 SHA contains
    only the named fixes, then re-runs the failing check or live test for
-   each finding — not the rest of the PR — and reports:
+   each finding — not the rest of the PR; on an Argon trial pull request,
+   reads CI instead — and reports:
 
    ```
    **Closure verification — <Claude|Codex>** (at <SHA>)
@@ -91,7 +96,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
    ready, convert it back to a draft first.)
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
-   right, and reports:
+   right (on an Argon trial pull request, Codex checks a change Claude
+   wrote), and reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex>** (at <SHA>)
@@ -121,11 +127,11 @@ reach the re-review without either AI checking it:
    gate) record instead why, and the alternative verification done: a
    scripted or manual reproduction, a mutation showing the guard matters,
    or the exact text change. Effort or time is never such a reason.
-2. The AI that did not write the fix (Claude ↔ Codex) checks that the diff
-   since the reviewed head contains only that fix, that it answers the
-   original finding, and that the test fails without it — or that the
-   recorded reason holds and the alternative verification was done; a
-   reason it does not accept is ❌. It reports:
+2. The AI that did not write the fix (Claude ↔ Codex; never on an Argon
+   trial pull request, which leaves the trial at tier A or B) checks that the diff since the reviewed head contains only that fix,
+   that it answers the original finding, and that the test fails without
+   it — or that the recorded reason holds and the alternative verification
+   was done; a reason it does not accept is ❌. It reports:
 
    ```
    **Adversarial follow-up check — <Claude|Codex>** (at <SHA>)
@@ -144,7 +150,9 @@ reach the re-review without either AI checking it:
 for a failing check, a merge of `main` — run `make prepush`
 ([Checks](../../README.md#checks)) and push only if it passes: it regenerates
 files and checks the manifests, document sizes and lint, keeping each exit
-status. Ad-hoc command chains have hidden a failure before (#848).
+status. Ad-hoc command chains have hidden a failure before (#848). On an
+Argon trial pull request, green CI replaces it
+([handoff](argon-implementer.md#the-boundary)).
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more

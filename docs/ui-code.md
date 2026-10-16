@@ -58,7 +58,8 @@ a popover inside an ancestor hidden at the current width cannot show.
   The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours, shadows and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
-  the arrival animations, the reduced-motion rule and the safe-area utility. No component classes and
+  the arrival animations, the reduced-motion rule, the safe-area and anchor
+  utilities. No component classes and
   no `@apply` for components; no `style` attributes in templates.
 - **Spacing** follows the 4 px grid; a container sets the space between
   its children with `gap`, rather than margins on each child.

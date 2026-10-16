@@ -248,6 +248,14 @@
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }
 
+/* A popover below its invoking button, aligned to the button's end, flipping
+   above when there is no room (a message's actions menu, #1159). The anchor
+   is the popovertarget button, the popover's implicit anchor. */
+@utility anchor-below-end {
+  position-area: block-end span-inline-start;
+  position-try-fallbacks: flip-block;
+}
+
 /* Navigation: no cross-document view transition, whose setup slowed every
    switch (#921); the new page shows from its first frame. Only an opening
    panel and a new row's pill move. Reduced motion never opts in. */

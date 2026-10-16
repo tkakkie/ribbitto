@@ -138,10 +138,11 @@ lives in browser storage.
 
 - HTML built from strings (what the pattern check rejects) and `templ.Raw`.
 - Composer JavaScript building request URLs, and requests outside htmx.
-- Messages, credentials, session tokens or other server-derived data in
-  browser storage, except (d)'s bounded draft text (which may quote messages),
-  its owner metadata (member UUID, session marker, expiry) and the
-  content-free sign-out notice key with its horizon value. No IndexedDB.
+- Browser storage of messages or server-derived data, except (d)'s bounded
+  drafts allowance or IndexedDB data under
+  [decision 41](41-client-storage-indexeddb-by-data-class.md)'s classes 1–2.
+  Class 3 needs its own decision; credentials, session tokens and their hashes
+  stay forbidden.
 - Client state for the message list, sidebar, unread counts or presence beyond
   decision 34, except toggling (d)'s draft marker. These stay server-rendered;
   a pending item is never turned into a real message in place.

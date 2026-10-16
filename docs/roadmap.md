@@ -1,8 +1,8 @@
 # Roadmap
 
-Where ribbitto is heading, in coarse steps. No dates: this is a hobby
-project. What is happening right now is in the pinned **Status** issue
-(#1); individual tasks are issues grouped by GitHub milestone.
+A coarse plan without dates: ribbitto is a hobby project. Current work is
+in the pinned **Status** issue (#1); tasks are issues grouped by GitHub
+milestone.
 
 Update this file when a milestone is finished or the plan changes, not for
 day-to-day progress. What the steps aim at is in the [vision](vision.md).
@@ -117,7 +117,7 @@ Left for later: a manual light/dark switch.
 
 ## After the MVP
 
-ribbitto is a hobby project. The repository is public, but a release — a
+The repository is public, but a release — a
 container image and a Compose file with PostgreSQL and Caddy
 ([decision 7](decisions/07-rental-vps-and-containers.md)) — comes later,
 when the maintainer chooses, once more is built. Until then the code,
@@ -180,7 +180,10 @@ provisioning, never through the public `/signup` form.
 
 ## Not planned
 
-Native mobile apps, federation, voice and video; per-message read receipts;
-tasks; a Svelte single-page app (message list, sidebar and counts stay
-server-rendered). Offline message caching in IndexedDB needs its own
-decision: [decision 41, class 3](decisions/41-client-storage-indexeddb-by-data-class.md#3-message-content).
+Native mobile apps, federation, voice and video. These may be revisited,
+but nothing in the design should be bent for them now.
+
+Not planned for now either: turning the front end into a Svelte
+single-page app (the message list, sidebar and counts stay server-rendered),
+offline message caching ([decision 41, class 3](decisions/41-client-storage-indexeddb-by-data-class.md#3-message-content)), read receipts per
+message, and tasks.

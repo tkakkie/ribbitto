@@ -49,12 +49,12 @@ for unenhanced channel creation (303/422). Plain posting errors and history
 responses assert the full layout; enhanced posting responses assert the
 composer alone, without another history read.
 
-Reviewers check what patterns cannot prove: storage stays within UX settings,
+Reviewers check what patterns cannot prove: stored values stay within UX settings,
 decision 37's drafts or [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
 classes (1 public, 2 organisation, 3 message content, requiring its own
-decision); application state stays within decisions 34, 37 and 41; composer
-request URLs come from server-rendered attributes; components make no
-authorisation decisions.
+decision); a script owns no application state beyond decisions 34 and 37;
+composer request URLs come from server-rendered attributes; components make
+no authorisation decisions.
 
 **Current exceptions:** review the no-application-state
 rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
@@ -66,14 +66,15 @@ session-bound drafts, with their bounds and owner checks.
 ### Decision 37 checks
 
 Existing checks cover HTML generation (pending bodies use `textContent`),
-requests and components rendered alone (`TestComponentsMarkup`). The
+requests (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
+`EventSource`) and components rendered alone (`TestComponentsMarkup`). The
 `indexedDB` pattern stays in force in every application script until the
 first allowed use; its issue makes the check file-scoped, as `localStorage`
 is limited to `message-drafts-vN.js`. No checks change for decision 41.
 Since #1178, `TestBrowser/drafts` covers sign-in cleanup: the millisecond
 rule, same-millisecond and newer entries kept, malformed keys removed,
 the notice in another tab, sign-out with scripts blocked, failed sign-out,
-and a signed-in error render with no cleanup. Planned:
+and a signed-in error render with no cleanup. Planned, each awaiting its issue:
 
 - #1156 adds a browser test that a body with markup shows as text and that
   the pending item is removed.

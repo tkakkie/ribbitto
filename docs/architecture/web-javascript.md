@@ -78,12 +78,15 @@ htmx sends resync requests. The markup contract is in
 - **Storage:** prefer memory, then the HTTP cache of an immutable, versioned
   asset, then Web Storage within its existing allowances, then IndexedDB
   only under [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
-  data classes. `sessionStorage` still holds only non-sensitive UX settings
-  whose loss affects no function or server state; `localStorage` only the
-  [drafts](#drafts) allowance in the drafts script: bounded text (including
-  quotes), owner metadata and sign-out notice. Neither may hold other
-  server-derived data. Credentials, session tokens and their hashes are
-  never stored.
+  data classes. `sessionStorage` may hold only non-sensitive UX settings
+  whose loss affects no function or server state, such as whether a panel is
+  open or a display preference; `localStorage` only the [drafts](#drafts)
+  allowance, in the drafts script alone
+  ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)).
+  They never hold messages, credentials, session tokens or other
+  server-derived application data, except that allowance's bounded draft
+  text (which may quote messages), owner metadata and sign-out notice.
+  Credentials, session tokens and their hashes are never stored.
 - **Files:** every script is external in `web/static` and loaded with the
   response nonce. Application scripts also define no globals and are
   versioned by file name (`-vN`), since static assets are immutable

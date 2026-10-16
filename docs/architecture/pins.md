@@ -2,8 +2,9 @@
 
 The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
-pin storage (#887) and durable writes (#888) are implemented, and so is the
-generic channel-state writer seam in realtime (#891). The separate router
+pin storage (#887), durable writes (#888) and the overview's pins read in
+the page's snapshot (`conversation.Reader.Overview`, #889) are implemented,
+and so is the generic channel-state writer seam in realtime (#891). The separate router
 stays unregistered in live readers until #892, bypassing rendering; the
 adapters and browser delivery remain separate work.
 

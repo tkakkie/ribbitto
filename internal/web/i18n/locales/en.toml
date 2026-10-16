@@ -274,6 +274,15 @@ other = "lilypad overview"
 ["overview.created"]
 other = "Created"
 
+["pins.title"]
+other = "Pinned messages"
+
+["pins.empty"]
+other = "No pinned messages yet."
+
+["pins.pinned_by"]
+other = "Pinned by"
+
 ["people.empty"]
 other = "No members on this page."
 

@@ -28,13 +28,14 @@ type Channels interface {
 	CreateWithImage(context.Context, org.Membership, string, string) (conversation.Channel, error)
 }
 
-// MessageReader provides the channel page and cursor from one snapshot, the
-// sidebar snapshot the channel list page shows, one message by sequence or
+// MessageReader provides the channel page and cursor from one snapshot, with
+// the channel's pins when the overview is open, the sidebar snapshot the channel list page shows, one message by sequence or
 // a bounded batch by ID for the stream, and where a message is now for its URL.
 type MessageReader interface {
 	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
 	Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
+	Overview(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64) (conversation.ChannelPage, error)
 	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
@@ -289,6 +290,13 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	var history conversation.ChannelPage
 	var err error
 	switch {
+	case page.Panel == view.PanelOverview:
+		// The pins share the page's snapshot, so they agree with its cursor.
+		var before *int64
+		if page.Before > 0 {
+			before = &page.Before
+		}
+		history, err = p.messages.Overview(r.Context(), m, id, p.topicID, before, page.Around)
 	case page.Before > 0:
 		history, err = p.messages.Page(r.Context(), m, id, p.topicID, &page.Before)
 	case page.Around > 0:
@@ -315,6 +323,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
+	page.Pins = viewPins(history.Pins)
 	if page.BodyError == "" {
 		page.Composer = p.issueComposer(m, history.Current, history.Topic)
 	}

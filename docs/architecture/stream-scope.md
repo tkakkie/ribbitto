@@ -84,7 +84,7 @@ per-channel check before shipping these frames.
 
 **Snapshot and resync:** the sidebar's organisation event
 sequence and counts come from one repeatable-read snapshot, exposed through
-the [badge data attributes](web-layers.md#htmx).
+the [badge data attributes](web-contracts.md).
 `POST /organizations/{slug}/sidebar/resync` is member-scoped, publishes through
 `unread.Changes` and returns 204 with no fragment. The member's streams recount
 and deliver snapshots as `sidebar` frames over SSE, applied in stream delivery

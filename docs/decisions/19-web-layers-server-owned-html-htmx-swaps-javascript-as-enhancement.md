@@ -12,10 +12,13 @@ audit: [`web-layers.md`](../architecture/web-layers.md),
 [`web-javascript.md`](../architecture/web-javascript.md) and
 [`web-layers-checks.md`](../architecture/web-layers-checks.md).
 
-**Current exception:**
+**Current exceptions:**
 [decision 34](34-live-unread-counts.md) allows one script to own sidebar badge
 numbers and bounded recovery state. It never creates elements or makes
 requests; htmx sends resync requests.
+[Decision 37](37-composer-javascript-pending-posts-keys-and-drafts.md) allows
+bounded composer state: pending own posts in the DOM, an idempotency key and
+session-bound drafts in `localStorage`. Requests still go through htmx.
 
 **Why:** M3 adds SSE fragments and more scripts across exactly these
 boundaries; without written rules each change would pick its own (#193).

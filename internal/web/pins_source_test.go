@@ -95,6 +95,48 @@ func TestPinsSourceCost(t *testing.T) {
 	}
 }
 
+func TestPinsSourceConnectDuringRefresh(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		var reads atomic.Int32
+		factory := NewPinsSource(t.Context(), pinsReadFunc(func(context.Context, org.Membership, kernel.ID) ([]conversation.Pin, error) {
+			if reads.Add(1) == 1 {
+				<-release
+				return []conversation.Pin{{Excerpt: "earlier snapshot"}}, nil
+			}
+			return []conversation.Pin{{Excerpt: "later snapshot"}}, nil
+		}))
+		refresh := func(source realtime.ChannelStateSource) <-chan realtime.Outgoing {
+			done := make(chan realtime.Outgoing, 1)
+			go func() {
+				out, err := source.Refresh(t.Context(), realtime.Subscription{})
+				if err != nil {
+					t.Error(err)
+				}
+				done <- out
+			}()
+			return done
+		}
+		m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+		older := factory(m, kernel.ID{2})
+		older.Trigger(realtime.Event{OrganizationID: m.Organization.ID, ChannelID: kernel.ID{2}, Kind: conversation.KindPinsChanged, Seq: 10})
+		oldDone := refresh(older)
+		synctest.Wait()
+		// The new connection's page already includes the change after the blocked snapshot.
+		newDone := refresh(factory(m, kernel.ID{2}))
+		synctest.Wait()
+		if reads.Load() != 2 {
+			t.Errorf("connect reused a preexisting snapshot: reads=%d, want 2", reads.Load())
+		}
+		close(release)
+		<-oldDone
+		out := <-newDone
+		if !strings.Contains(string(out.Data), "later snapshot") || strings.Contains(string(out.Data), "earlier snapshot") {
+			t.Errorf("connect received stale pins: %s", out.Data)
+		}
+	})
+}
+
 func TestPinsTriggerAndMessageFilter(t *testing.T) {
 	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
 	source := NewPinsSource(t.Context(), pinsReadFunc(func(context.Context, org.Membership, kernel.ID) ([]conversation.Pin, error) { return nil, nil }))(m, kernel.ID{2})

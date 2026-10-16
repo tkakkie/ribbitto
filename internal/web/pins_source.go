@@ -28,10 +28,11 @@ type pinsRound struct {
 }
 
 type pinsSource struct {
-	shared     *pinsRefreshes
-	membership org.Membership
-	channel    kernel.ID
-	trigger    int64
+	shared      *pinsRefreshes
+	membership  org.Membership
+	channel     kernel.ID
+	trigger     int64
+	preexisting *pinsRound
 }
 
 type pinsRefreshes struct {
@@ -43,12 +44,16 @@ type pinsRefreshes struct {
 }
 
 // NewPinsSource binds membership and channel; Stream authorizes each send.
-// Overlapping Refresh calls share a round unless a newer invalidation intervenes.
+// Overlapping Refresh calls share rounds begun after the source was constructed,
+// unless a newer invalidation intervenes.
 // The last caller discards its round, so completed snapshots are never reused.
 func NewPinsSource(parent context.Context, reader pinsReader) func(org.Membership, kernel.ID) realtime.ChannelStateSource {
 	shared := &pinsRefreshes{parent: parent, reader: reader, render: renderPins, rounds: make(map[pinsScope]*pinsRound)}
 	return func(m org.Membership, channel kernel.ID) realtime.ChannelStateSource {
-		return &pinsSource{shared: shared, membership: m, channel: channel}
+		shared.mu.Lock()
+		defer shared.mu.Unlock()
+		return &pinsSource{shared: shared, membership: m, channel: channel,
+			preexisting: shared.rounds[pinsScope{m.Organization.ID, channel}]}
 	}
 }
 
@@ -66,8 +71,9 @@ func (s *pinsSource) Refresh(ctx context.Context, _ realtime.Subscription) (real
 	shared := s.shared
 	shared.mu.Lock()
 	round := shared.rounds[key]
-	// A snapshot begun before this invalidation cannot answer its refresh.
-	if round == nil || round.trigger < s.trigger {
+	// Connect needs a snapshot begun after this source was constructed;
+	// later refreshes must also cover this source's latest invalidation.
+	if round == nil || round == s.preexisting || round.trigger < s.trigger {
 		// The caches live only for this round, never for an event sequence.
 		// A frozen clock prevents expiry during an overlapping refresh.
 		at := time.Now()
@@ -77,6 +83,7 @@ func (s *pinsSource) Refresh(ctx context.Context, _ realtime.Subscription) (real
 			renders: realtime.NewCache[string, realtime.Outgoing](shared.parent, 2, 2, time.Second, 10*time.Second, nil, now)}
 		shared.rounds[key] = round
 	}
+	s.preexisting = nil
 	round.users++
 	shared.mu.Unlock()
 	defer func() {

@@ -46,17 +46,21 @@ var chatV1Cases = []struct{ name, in, want string }{
 	{"link ends at bidi marks", "https://a.b\u2066c https://a.b\u2067c https://a.b\u2068c https://a.b\u2069c https://a.b\u200ec https://a.b\u200fc https://a.b\u061cc", `T[L("https://a.b") "\u2066c " L("https://a.b") "\u2067c " L("https://a.b") "\u2068c " L("https://a.b") "\u2069c " L("https://a.b") "\u200ec " L("https://a.b") "\u200fc " L("https://a.b") "\u061cc"]`},
 	{"link ends at brackets and quote", `http://a.b<c http://a.b>c http://a.b"c`, `T[L("http://a.b") "<c " L("http://a.b") ">c " L("http://a.b") "\"c"]`},
 	{"not a link", "xhttps://a.b ftp://a.b https:// http:///a https://. HTTPS://a.b", `T["xhttps://a.b ftp://a.b https:// http:///a https://. HTTPS://a.b"]`},
+	{"no host", "https://@ https://user@/path https://a@b@/x https://:80 https://-a http://?q", `T["https://@ https://user@/path https://a@b@/x https://:80 https://-a http://?q"]`},
+	{"hosts", "https://u@example.com/a https://[::1]:8080/ http://例え.jp http://127.0.0.1 https://a/@", `T[L("https://u@example.com/a") " " L("https://[::1]:8080/") " " L("http://例え.jp") " " L("http://127.0.0.1") " " L("https://a/@")]`},
 	{"malformed reference", "<@" + strings.ToUpper(memberUUID) + "> <@0190a0b1> <@" + memberUUID + " <" + memberUUID + ">", `T["<@` + strings.ToUpper(memberUUID) + `> <@0190a0b1> <@` + memberUUID + ` <` + memberUUID + `>"]`},
 	{"code keeps white space", "` a  b\t`\n```\n  x\n\n\ty  \n```", `T[C(" a  b\t")] C:["  x" / "" / "\ty  "]`},
 	// Escapes and code spans.
 	{"escapes", `\` + "`a` \\a \\\\ \\。", "T[\"`a` \\\\a \\\\ \\\\。\"]"},
 	{"backslash in code", "`a\\*b`", `T[C("a\\*b")]`},
 	{"unclosed and empty code span", "``a\nb`", `T["` + "``a" + `" / "b` + "`" + `"]`},
+	{"empty pair then span", "``a`", `T["` + "`" + `" C("a")]`},
 	// Underscore word boundaries, for any script.
 	{"underscore boundaries", "(_a_) x _y_. _z_", `T["(" I("a") ") x " I("y") ". " I("z")]`},
 	{"underscore after letters", "слово_два_ v_x_ naïve_x_", `T["слово_два_ v_x_ naïve_x_"]`},
 	{"underscore after digit and mark", "\u0663_\u0664_ e\u0301_c_ \u0915\u093f_x_", "T[\"\u0663_\u0664_ e\u0301_c_ \u0915\u093f_x_\"]"},
 	{"underscore before word", "_a_b _a_日", `T["_a_b _a_日"]`},
+	{"underscore next to symbols", "🙂_x_🙂 +_y_=", `T["🙂" I("x") "🙂 +" I("y") "="]`},
 	// Delimiters: white space, nesting limit, unclosed at the line's end.
 	{"white space blocks delimiters", "** a** _ b_ **c **", `T["** a** _ b_ **c **"]`},
 	{"nesting limit", "**a _b **c** d_ e**", `T[B("a " I("b **c** d") " e")]`},
@@ -90,7 +94,7 @@ func TestParseChatV1Linear(t *testing.T) {
 	for _, in := range []string{
 		strings.Repeat("```go\n", 100_000),
 		strings.Repeat("`", 1) + strings.Repeat("a", 500_000),
-		strings.Repeat(" http://.(", 60_000),
+		strings.Repeat("(https://@", 60_000),
 		strings.Repeat("**a _b ", 80_000),
 	} {
 		start := time.Now()
@@ -110,10 +114,9 @@ func FuzzParseChatV1(f *testing.F) {
 		if err != nil {
 			return
 		}
-		blocks := conversation.ParseChatV1(body)
 		lines := strings.Split(body, "\n")
 		n := 0
-		for _, b := range blocks {
+		for _, b := range conversation.ParseChatV1(body) {
 			if b.Kind == conversation.BlockCode {
 				if n+len(b.Code)+1 >= len(lines) || lines[n] != "```"+b.Language || lines[n+len(b.Code)+1] != "```" ||
 					strings.Join(lines[n+1:n+1+len(b.Code)], "\n") != strings.Join(b.Code, "\n") {
@@ -126,11 +129,16 @@ func FuzzParseChatV1(f *testing.F) {
 				if n >= len(lines) {
 					t.Fatalf("more lines than %q has", body)
 				}
-				source := lines[n]
-				if b.Kind == conversation.BlockQuote {
-					source = strings.TrimPrefix(source[1:], " ")
+				a := accounting{t: t, source: lines[n]}
+				if quote := a.take(">"); quote != (b.Kind == conversation.BlockQuote) {
+					t.Fatalf("line %q in a block of kind %d", lines[n], b.Kind)
+				} else if quote {
+					a.take(" ")
 				}
-				checkAccounting(t, source, nodes)
+				a.nodes(nodes, 0)
+				if a.pos != len(a.source) {
+					t.Fatalf("%q: tree accounts only for %q", a.source, a.source[:a.pos])
+				}
 				n++
 			}
 		}
@@ -140,56 +148,57 @@ func FuzzParseChatV1(f *testing.F) {
 	})
 }
 
-// checkAccounting checks that a line's kept characters appear in it in
-// order and that the rest are exactly the syntax the tree recognised, plus
-// escape backslashes; and that at most two delimiters are open around any
-// content.
-func checkAccounting(t *testing.T, source string, nodes []conversation.BodyInline) {
-	t.Helper()
-	var kept strings.Builder
-	syntax := map[rune]int{}
-	var walk func([]conversation.BodyInline, int)
-	walk = func(nodes []conversation.BodyInline, depth int) {
-		if depth > 2 {
-			t.Fatalf("%q nests %d delimiters", source, depth)
-		}
-		for _, node := range nodes {
-			switch node.Kind {
-			case conversation.InlineBold:
-				syntax['*'] += 4
-				walk(node.Children, depth+1)
-			case conversation.InlineItalic:
-				syntax['_'] += 2
-				walk(node.Children, depth+1)
-			case conversation.InlineCode:
-				syntax['`'] += 2
-				kept.WriteString(node.Text)
-			case conversation.InlineReference:
-				syntax['<'], syntax['@'], syntax['>'] = syntax['<']+1, syntax['@']+1, syntax['>']+1
-				kept.WriteString(realtime.FormatPayloadID(node.Member))
-			default:
-				kept.WriteString(node.Text)
+// accounting rebuilds a line from its tree, position by position: literal
+// text (where a backslash before ASCII punctuation must be an escape), code
+// content, links and reference IDs, between their syntax. It also checks
+// that at most two delimiters are open around any content.
+type accounting struct {
+	t      *testing.T
+	source string
+	pos    int
+}
+
+func (a *accounting) take(s string) bool {
+	if !strings.HasPrefix(a.source[a.pos:], s) {
+		return false
+	}
+	a.pos += len(s)
+	return true
+}
+
+func (a *accounting) expect(s string) {
+	if !a.take(s) {
+		a.t.Fatalf("%q: expected %q at %d", a.source, s, a.pos)
+	}
+}
+
+func (a *accounting) nodes(nodes []conversation.BodyInline, depth int) {
+	if depth > 2 {
+		a.t.Fatalf("%q nests %d delimiters", a.source, depth)
+	}
+	for _, node := range nodes {
+		switch node.Kind {
+		case conversation.InlineBold:
+			a.expect("**")
+			a.nodes(node.Children, depth+1)
+			a.expect("**")
+		case conversation.InlineItalic:
+			a.expect("_")
+			a.nodes(node.Children, depth+1)
+			a.expect("_")
+		case conversation.InlineCode:
+			a.expect("`" + node.Text + "`")
+		case conversation.InlineLink:
+			a.expect(node.Text)
+		case conversation.InlineReference:
+			a.expect("<@" + realtime.FormatPayloadID(node.Member) + ">")
+		default:
+			for _, r := range node.Text {
+				if rest := a.source[a.pos:]; len(rest) > 1 && rest[0] == '\\' && strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", rest[1]) >= 0 {
+					a.expect("\\")
+				}
+				a.expect(string(r))
 			}
-		}
-	}
-	walk(nodes, 0)
-	rest := []rune(source)
-	for _, r := range kept.String() {
-		for len(rest) > 0 && rest[0] != r {
-			syntax[rest[0]]--
-			rest = rest[1:]
-		}
-		if len(rest) == 0 {
-			t.Fatalf("kept %q is not in order in %q", kept.String(), source)
-		}
-		rest = rest[1:]
-	}
-	for _, r := range rest {
-		syntax[r]--
-	}
-	for r, count := range syntax {
-		if count != 0 && (r != '\\' || count > 0) {
-			t.Fatalf("%q: %q accounted %+d times (kept %q)", source, r, count, kept.String())
 		}
 	}
 }

@@ -246,9 +246,16 @@ func autolink(line string, i int) string {
 	if before, _ := utf8.DecodeLastRuneInString(line[:i]); i > 0 && !unicode.IsSpace(before) && before != '(' {
 		return ""
 	}
-	// A host must follow. Checking its first character before scanning keeps
-	// failed attempts from rescanning the rest of the line.
-	if len(rest) == len(scheme) || strings.ContainsRune("/?#", rune(rest[len(scheme)])) {
+	// The host follows the authority's last "@" and starts with a letter, a
+	// digit or "[". Checking it before scanning the rest keeps a failed
+	// attempt from rescanning the line. No trailing character trimmed below
+	// can be that first character, so the trimmed link keeps its host.
+	authority := rest[len(scheme):]
+	if end := strings.IndexFunc(authority, func(r rune) bool { return strings.ContainsRune("/?#", r) || endsAutolink(r) }); end >= 0 {
+		authority = authority[:end]
+	}
+	host, _ := utf8.DecodeRuneInString(authority[strings.LastIndexByte(authority, '@')+1:])
+	if !unicode.IsLetter(host) && !unicode.IsDigit(host) && host != '[' {
 		return ""
 	}
 	end := strings.IndexFunc(rest[len(scheme):], endsAutolink)
@@ -267,9 +274,6 @@ func autolink(line string, i int) string {
 			break
 		}
 		url = url[:len(url)-1]
-	}
-	if len(url) == len(scheme) {
-		return ""
 	}
 	return url
 }

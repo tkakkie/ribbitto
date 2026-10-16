@@ -37,21 +37,25 @@ position the first rule that applies wins, in this order:
 
 1. a backslash before ASCII punctuation makes that character literal; any
    other backslash is literal;
-2. a code span is text between single backticks on the same line; its
-   content is literal; without a closing backtick the backtick is literal;
+2. a code span is non-empty text between single backticks on the same
+   line; its content is literal; without a closing backtick, or with
+   nothing before the next one, the backtick is literal;
 3. a member reference is `<@` + a canonical lowercase member UUID + `>`;
 4. an autolink is `http://` or `https://` at the start or after white space
-   or `(`, with a host, up to white space, `<`, `>`, `"` or a bidi isolate
-   or mark (LRI, RLI, FSI, PDI, LRM, RLM, ALM); trailing `.,:;!?'*_` and an
-   unbalanced `)` stay outside it;
+   or `(`, with a host (after the scheme, up to the first `/`, `?` or `#`,
+   the part after the last `@` starts with a letter, a digit or `[`), up to
+   white space, `<`, `>`, `"` or a bidi isolate or mark (LRI, RLI, FSI, PDI,
+   LRM, RLM, ALM); trailing `.,:;!?'*_` and an unbalanced `)` stay outside
+   it;
 5. `**` (bold) and `_` (italic) are delimiters.
 
 A delimiter can open when the next character is not white space, and close
 when the previous one is not. `_` also needs a word boundary: it opens only
-after the start, white space or punctuation, and closes only before the end,
-white space or punctuation, where letters, digits and marks of any script
-are word characters. So `snake_case` and `日本_語_` stay literal, while
-`これは**重要**です` is bold. Open delimiters form a stack: a delimiter
+after the start or a character that is not a word character, and closes only
+before the end or such a character, where letters, digits and marks of any
+script are word characters (white space, punctuation, symbols and emoji are
+not). So `snake_case` and `日本_語_` stay literal, while `これは**重要**です`
+is bold. Open delimiters form a stack: a delimiter
 closes the top of the stack if it can close and matches it, and otherwise
 opens if it can, unless two are already open, when it is literal. A closer
 that matches a delimiter deeper in the stack (crossing) is literal, and

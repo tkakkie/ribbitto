@@ -98,51 +98,44 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 		notSent     = "Your message was not sent. Your text is kept."
 		refused     = "This retry was refused, and your earlier send is still unconfirmed. Check the conversation before sending again."
 	)
-	page.MustEval(`() => { document.getElementById('message-body').value = 'hello'; }`)
-	key := state()[1]
 	if role := page.MustEval(`() => document.getElementById('message-send-alert').getAttribute('role')`).Str(); role != "alert" {
 		t.Fatalf("alert role %q", role)
 	}
+	// After a success, "second" is stored but its answer lost; a 404 to the
+	// retry, as after the session ended, proves nothing about it.
+	var key string
 	for _, step := range []struct {
-		answer, mark, alert string
-		timeout             bool
+		text, answer, alert string
+		marked              bool
 	}{
-		{answer: "429", alert: notSent},
-		{answer: "failed", mark: key, alert: unconfirmed},
-		{answer: "hung", mark: key, alert: unconfirmed, timeout: true},
-		{answer: "500", mark: key, alert: unconfirmed},
-		{answer: "429", mark: key, alert: refused},
+		{"hello", "429", notSent, false}, {"hello", "failed", unconfirmed, true},
+		{"hello", "hung", unconfirmed, true}, {"hello", "500", unconfirmed, true},
+		{"hello", "429", refused, true}, {"hello", "pass", "", false},
+		{"second", "lost", unconfirmed, true}, {"second", "404", refused, true}, {"second", "pass", "", false},
 	} {
-		if step.timeout {
-			page.MustEval(`() => document.getElementById('message-composer').setAttribute('hx-request', '{"timeout":200}')`)
+		if state()[0] == "" {
+			page.MustEval(`text => { document.getElementById('message-body').value = text; }`, step.text)
+			key = state()[1]
 		}
-		if form := send(step.answer); form.Get("idempotency_key") != key || form.Get("body") != "hello" {
+		timeout := `{"timeout":30000}`
+		if step.answer == "hung" {
+			timeout = `{"timeout":200}`
+		}
+		page.MustEval(`timeout => document.getElementById('message-composer').setAttribute('hx-request', timeout)`, timeout)
+		if form := send(step.answer); form.Get("idempotency_key") != key || form.Get("body") != step.text {
 			t.Fatalf("%s: sent %v, want the same key", step.answer, form)
 		}
-		if got, want := state(), []string{"hello", key, step.mark, step.alert}; !slices.Equal(got, want) {
+		want := []string{step.text, key, "", step.alert}
+		if step.marked {
+			want[2] = key
+		}
+		got := state()
+		if step.answer == "pass" {
+			want = []string{"", got[1], "", ""} // empty, with a new key
+		}
+		if !slices.Equal(got, want) || step.answer == "pass" && got[1] == key {
 			t.Fatalf("after %s: %q, want %q", step.answer, got, want)
 		}
-		page.MustEval(`() => document.getElementById('message-composer').setAttribute('hx-request', '{"timeout":30000}')`)
-	}
-	send("pass")
-	if got := state(); got[0] != "" || got[1] == key || got[2] != "" || got[3] != "" {
-		t.Fatalf("after success: %q", got)
-	}
-	// The first POST is stored but its answer lost; a 404 to the retry,
-	// as after the session ended, proves nothing about it.
-	key = state()[1]
-	page.MustEval(`() => { document.getElementById('message-body').value = 'second'; }`)
-	for _, step := range []struct{ answer, alert string }{{"lost", unconfirmed}, {"404", refused}} {
-		if form := send(step.answer); form.Get("idempotency_key") != key {
-			t.Fatalf("%s: sent %v", step.answer, form)
-		}
-		if got, want := state(), []string{"second", key, key, step.alert}; !slices.Equal(got, want) {
-			t.Fatalf("after %s: %q, want %q", step.answer, got, want)
-		}
-	}
-	send("pass")
-	if got := state(); got[0] != "" || got[1] == key || got[2] != "" || got[3] != "" {
-		t.Fatalf("after the repeat: %q", got)
 	}
 	mu.Lock()
 	defer mu.Unlock()

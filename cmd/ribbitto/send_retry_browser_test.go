@@ -104,17 +104,19 @@ func TestSendRetryBrowser(t *testing.T) {
 				release <- struct{}{}
 				page.MustWait(`n => window.composerAnswers > n`, n)
 			}
-			state := func() (string, string, string) {
-				got := page.MustEval(`() => { const form = document.getElementById('message-composer');
- return [form.elements.body.value, form.elements.idempotency_key.value, document.getElementById('message-send-alert').textContent]; }`).Arr()
-				return got[0].Str(), got[1].Str(), got[2].Str()
+			// The composer: text, key, mark, alert, caret, aria-invalid, and
+			// whether the help shows an error.
+			state := func() []string {
+				var got []string
+				for _, v := range page.MustEval(`() => { const form = document.getElementById('message-composer'), body = form.elements.body;
+ return [body.value, form.elements.idempotency_key.value, form.dataset.unconfirmedKey ?? '', document.getElementById('message-send-alert').textContent,
+  body.selectionStart, body.getAttribute('aria-invalid'), document.getElementById('message-help').getAttribute('role') === 'alert'].map(String); }`).Arr() {
+					got = append(got, v.Str())
+				}
+				return got
 			}
-			// The caret stays at the end, and the help shows the 409's error
-			// exactly when the textarea is marked invalid.
-			composer := `() => { const body = document.getElementById('message-body'), help = document.getElementById('message-help');
- return [body.selectionStart, body.getAttribute('aria-invalid'), help.getAttribute('role') === 'alert']; }`
 			page.MustEval(`() => { document.getElementById('message-body').value = 'first'; }`)
-			_, key, _ := state()
+			key := state()[1]
 			// The fixture's five messages come first.
 			stored := func(want []string) {
 				t.Helper()
@@ -128,17 +130,16 @@ func TestSendRetryBrowser(t *testing.T) {
 			}
 			send(tc.typed)
 			stored([]string{"first"})
-			if page.MustEval(`() => document.getElementById('message-composer').dataset.unconfirmedKey`).Str() != key {
+			if state()[2] != key {
 				t.Fatal("the lost answer did not mark the send unconfirmed")
 			}
 			send(tc.retyped)
-			text, retryKey, alert := state()
-			if text != tc.retried || retryKey == key || alert != tc.alert {
-				t.Fatalf("after the retry: text %q, alert %q, key changed %t", text, alert, retryKey != key)
-			}
-			got := page.MustEval(composer).Arr()
-			if got[0].Int() != len(text) || got[1].Str() != fmt.Sprint(tc.invalid) || got[2].Bool() != tc.invalid {
-				t.Fatalf("after the retry: caret, aria-invalid, help alert %v", got)
+			// The caret stays at the end, and the help shows the 409's error
+			// exactly when the textarea is marked invalid.
+			got := state()
+			want := []string{tc.retried, got[1], "", tc.alert, fmt.Sprint(len(tc.retried)), fmt.Sprint(tc.invalid), fmt.Sprint(tc.invalid)}
+			if !slices.Equal(got, want) || got[1] == key {
+				t.Fatalf("after the retry: %v", got)
 			}
 			if tc.retried != "" {
 				send("")

@@ -20,6 +20,8 @@ type Entry struct {
 	// References holds the members Blocks names that the organisation's
 	// directory resolved. A reference missing from it is shown as unresolved.
 	References map[kernel.ID]Reference
+	// QuoteAuthor is the quoted member's current names when Quote is set.
+	QuoteAuthor Reference
 }
 
 // Reference is a referenced member's current names.
@@ -150,9 +152,10 @@ func (s historyReader) Many(ctx context.Context, m org.Membership, channelID ker
 	return s.entries(ctx, m, channelID, messages)
 }
 
-// entries adds topic labels, author names and chat_v1 bodies with their
-// references, returning messages oldest first. Referenced members join the
-// authors' batches, so a page or a live render reads names once; they are
+// entries adds topic labels, author names, quoted authors and chat_v1 bodies
+// with their references, returning messages oldest first. Quoted and
+// referenced members join the authors' batches, so a page or a live render
+// reads names once; they are
 // looked up only in m's organisation, which omits foreign and missing
 // members, so a stored reference cannot show another organisation's member.
 func (s historyReader) entries(ctx context.Context, m org.Membership, channelID kernel.ID, messages []Message) ([]Entry, error) {
@@ -160,6 +163,9 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	bodies := make([][]BodyBlock, len(messages))
 	for i, msg := range messages {
 		ids = append(ids, msg.MemberID)
+		if msg.Quote != nil {
+			ids = append(ids, msg.Quote.MemberID)
+		}
 		if msg.Format == FormatChatV1 {
 			bodies[i] = ParseChatV1(msg.Body)
 			ids = appendReferences(ids, bodies[i])
@@ -198,6 +204,13 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
 		}
 		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
+		if msg.Quote != nil {
+			quoted, ok := members[msg.Quote.MemberID]
+			if !ok {
+				return nil, fmt.Errorf("missing quoted author for message %x", msg.ID)
+			}
+			entry.QuoteAuthor = Reference{DisplayName: names[quoted.AccountID], Handle: quoted.Handle}
+		}
 		if bodies[i] != nil {
 			entry.Blocks, entry.References = bodies[i], resolveReferences(bodies[i], members, names)
 		}

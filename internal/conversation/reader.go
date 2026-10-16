@@ -108,7 +108,9 @@ func (s *Reader) Locate(ctx context.Context, m org.Membership, id kernel.ID) (at
 	return at, nil
 }
 
-// Many reads a move's bounded message batch and directories in one snapshot.
+// Many reads a bounded batch of the channel's messages, such as a move's or
+// one to quote, with their quotes and directories in one snapshot. An ID
+// missing or outside the organisation and channel is ErrMessageNotFound.
 func (s *Reader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) (entries []Entry, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reader := s.history(snapshot, s.reads(snapshot))

@@ -45,7 +45,7 @@ message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
 A message may quote one earlier message of the same channel
-([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*: #1176, #1160, #1161). The quote stores the
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, the action and chip *planned*: #1160, #1161). The quote stores the
 quoted message's ID, its author's member ID and a text snapshot that the
 server copies or, for a selection, checks against the original's extracted
 text, in the posting transaction. The snapshot belongs to the quoting
@@ -91,7 +91,7 @@ stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
 keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
 use `message.id`. Authors use `view.MemberName` with current display names
 and handles. Times have a UTC `<time datetime>` fallback; an external script
-shows browser-local time. A quote (*planned*, #1176) shows its author's current name, the
+shows browser-local time. A quote, above the body and outside its `body-` id, shows its author's current name, the
 snapshot escaped the same way and a link built from the slug and message ID
 ([decision 36](../decisions/36-one-message-has-a-stable-url.md)), or no link
 once the original is deleted; nothing current from the original, so it
@@ -102,8 +102,8 @@ owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-own
 `Entry.Text` returns a `plain_text` body unchanged and a `chat_v1` body's
 resolved extraction (below). Its users are the pins excerpt
 (`conversation.PinExcerpt`, 200 code points counted after resolution) and
-the live item's `data-announcement`; *planned*: the quote snapshot (#1176,
-trimmed at both ends, an empty one rejected), the selection check (#1161),
+the live item's `data-announcement`, the quote snapshot (trimmed at both
+ends, an empty one rejected); *planned*: the selection check (#1161),
 and later notifications and search. A quote's snapshot is left out of the
 quoting message's extraction.
 
@@ -149,8 +149,8 @@ replay duplicates replace the same message id without another announcement.
 A **repeated send** (the same key again, after a lost response or a double
 submission) posts nothing: it is answered as a success naming the first
 message, wherever branching has moved it since, and the composer stays on the
-requested feed or topic. The same key with other text or another channel is
-not a retry: 409 keeps the text with an error and a fresh key, so sending
+requested feed or topic. The same key with other text, another quote or
+another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
 again posts it. A malformed key answers 400; a form without one posts without
 deduplication.
 

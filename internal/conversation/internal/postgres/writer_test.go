@@ -81,7 +81,7 @@ func TestWriterIn(t *testing.T) {
 		if got, err := writer.GetTopic(ctx, f.acme, f.general, planning); err != nil || got.ID != planning || got.Name != "Planning" || got.IsDefault {
 			t.Fatalf("GetTopic = %+v, %v; want Planning", got, err)
 		}
-		posted, err := writer.InsertMessage(ctx, f.acme, f.general, planning, f.alice, "hello", 1, nil)
+		posted, err := writer.InsertMessage(ctx, f.acme, f.general, planning, f.alice, "hello", 1, nil, nil)
 		if err != nil || posted.ID == (kernel.ID{}) || posted.OrganizationID != f.acme || posted.ChannelID != f.general || posted.TopicID != planning ||
 			posted.MemberID != f.alice || posted.Body != "hello" || posted.EventSeq != 1 || posted.CreatedAt.IsZero() {
 			t.Fatalf("InsertMessage = %+v, %v", posted, err)
@@ -108,7 +108,7 @@ func TestWriterErrors(t *testing.T) {
 	ctx, f := t.Context(), newFixtures(t, pool)
 	insert := func(channelID, topicID, memberID kernel.ID, body string) func(conversation.Writer) error {
 		return func(w conversation.Writer) error {
-			_, err := w.InsertMessage(ctx, f.acme, channelID, topicID, memberID, body, 1, nil)
+			_, err := w.InsertMessage(ctx, f.acme, channelID, topicID, memberID, body, 1, nil, nil)
 			return err
 		}
 	}
@@ -347,7 +347,7 @@ func TestWriterIdempotencyKey(t *testing.T) {
 		for i, author := range []struct{ organization, channel, topic, member kernel.ID }{
 			{f.acme, f.general, f.generalTopic, f.alice}, {f.acme, f.general, f.generalTopic, carol}, {f.globex, f.foreign, f.foreignTopic, f.bob},
 		} {
-			posted, err := w.InsertMessage(ctx, author.organization, author.channel, author.topic, author.member, "keyed", int64(i+1), &key)
+			posted, err := w.InsertMessage(ctx, author.organization, author.channel, author.topic, author.member, "keyed", int64(i+1), &key, nil)
 			requireNoError(t, err)
 			stored[[2]kernel.ID{author.organization, author.member}] = posted.ID
 		}
@@ -368,7 +368,7 @@ func TestWriterIdempotencyKey(t *testing.T) {
 	}))
 	// A taken key fails the insert, which aborts its transaction.
 	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
-		_, err := writerIn(tx).InsertMessage(ctx, f.acme, f.general, f.generalTopic, f.alice, "again", 4, &key)
+		_, err := writerIn(tx).InsertMessage(ctx, f.acme, f.general, f.generalTopic, f.alice, "again", 4, &key, nil)
 		return err
 	})
 	if !errors.Is(err, conversation.ErrPostKeyTaken) {

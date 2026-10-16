@@ -232,6 +232,9 @@ other = "Ribbit actions"
 ["message.copy_link"]
 other = "Copy link"
 
+["message.quote_link"]
+other = "Original ribbit"
+
 ["message.link_copied"]
 other = "Link copied"
 

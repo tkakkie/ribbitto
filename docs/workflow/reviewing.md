@@ -148,7 +148,9 @@ reach the re-review without either AI checking it:
 for a failing check, a merge of `main` — run `make prepush`
 ([Checks](../../README.md#checks)) and push only if it passes: it regenerates
 files and checks the manifests, document sizes and lint, keeping each exit
-status. Ad-hoc command chains have hidden a failure before (#848).
+status. Ad-hoc command chains have hidden a failure before (#848). On an
+Argon trial pull request, green CI replaces it
+([handoff](argon-implementer.md#the-boundary)).
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more

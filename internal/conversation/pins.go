@@ -25,6 +25,24 @@ type Pin struct {
 	PinnedAt                 time.Time
 }
 
+// Pins reads only the channel's bounded pins, current topics and names in
+// one read-only snapshot. Like Members, public-channel access is checked
+// against the resolved membership's organisation before reading the list.
+func (s *Reader) Pins(ctx context.Context, m org.Membership, channelID kernel.ID) (pins []Pin, err error) {
+	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		reads := s.reads(snapshot)
+		if _, err := reads.GetChannel(ctx, m.Organization.ID, channelID); err != nil {
+			return err
+		}
+		pins, err = s.pins(ctx, snapshot, reads, m, channelID)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading pins snapshot: %w", err)
+	}
+	return pins, nil
+}
+
 // Overview reads the page Page or Around would (around when it is positive,
 // else before) and the channel's bounded pins across all its topics, with
 // their topics and author and pinner names, in the page's snapshot, so the

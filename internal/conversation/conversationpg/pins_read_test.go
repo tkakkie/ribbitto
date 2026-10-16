@@ -2,6 +2,7 @@ package conversationpg_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -44,7 +45,12 @@ func TestReaderOverview(t *testing.T) {
 	if len(page.Pins) != 2 || page.EventCursor == nil || *page.EventCursor != eventSeq(t, pool, f.OrganizationID) {
 		t.Fatalf("page = %+v", page)
 	}
-	newest, oldest := page.Pins[0], page.Pins[1]
+	pins, err := reader.Pins(ctx, m, f.Channel.ID)
+	requireNoError(t, err)
+	if !slices.Equal(pins, page.Pins) {
+		t.Fatalf("pins-only snapshot = %+v", pins)
+	}
+	newest, oldest := pins[0], pins[1]
 	if newest.ID != second.ID || !newest.DefaultTopic || newest.PinnerName != "Curator" || newest.PinnerHandle != "curator" || newest.Handle != "owner" {
 		t.Fatalf("newest = %+v", newest)
 	}
@@ -64,8 +70,12 @@ func TestReaderOverview(t *testing.T) {
 		"organisation": {membership(other.OrganizationID, other.MemberID), f.Channel.ID},
 		"channel":      {m, other.Channel.ID},
 	} {
-		got, err := reader.Overview(ctx, tc.m, tc.channel, nil, nil, 0)
-		if !errors.Is(err, conversation.ErrChannelNotFound) || got.Pins != nil {
+		page, err := reader.Overview(ctx, tc.m, tc.channel, nil, nil, 0)
+		if !errors.Is(err, conversation.ErrChannelNotFound) || page.Pins != nil {
+			t.Fatalf("%s overview: %+v, %v", name, page, err)
+		}
+		got, err := reader.Pins(ctx, tc.m, tc.channel)
+		if !errors.Is(err, conversation.ErrChannelNotFound) || got != nil {
 			t.Fatalf("%s: %+v, %v", name, got, err)
 		}
 	}

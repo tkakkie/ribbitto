@@ -36,6 +36,12 @@ type Renderer interface {
 	Render(ctx context.Context, event Event) (Outgoing, error)
 }
 
+// EventFilter optionally excludes durable kinds from both renderer paths.
+// It does not filter channel-state triggers or stop durable cursor progress.
+type EventFilter interface {
+	Accept(Event) bool
+}
+
 // UnreadRenderer supplies a shared post frame when message interests do not
 // select it. An empty name means a non-post or legacy payload has no frame.
 type UnreadRenderer interface {
@@ -292,6 +298,9 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 		return false, context.Cause(ctx)
 	}
 	if event.OrganizationID != sub.Organization {
+		return false, nil
+	}
+	if filter, ok := s.Renderer.(EventFilter); ok && !filter.Accept(event) {
 		return false, nil
 	}
 	// Render first, then authorize: a render can wait on the database, and

@@ -121,8 +121,9 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	// reads an animation's keyframes when its start event is handled, after
 	// the frame that started it; on a busy runner that frame can outlast a
 	// 100 ms arrival, which has then finished and left no effect to read
-	// (#1251). Speed changes neither the keyframes nor the delay read, and
-	// taps run at full speed, so their press ends as on a phone.
+	// (#1251). Speed changes neither the keyframes nor the delay read. The
+	// press checks (tap) run at full speed, so their press ends as on a
+	// phone; only the tap that navigates runs slowed.
 	rate := func(r float64) {
 		t.Helper()
 		if err := (proto.AnimationSetPlaybackRate{PlaybackRate: r}).Call(page); err != nil {

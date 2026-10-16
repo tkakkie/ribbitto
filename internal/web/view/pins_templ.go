@@ -258,7 +258,7 @@ func pinnedIDs(pins []Pin) string {
 }
 
 // PinResponse updates the control and any loaded overview from one fresh snapshot.
-func PinResponse(entry Message, errorKey string, page ChannelPage) templ.Component {
+func PinResponse(entry Message, errorKey string, page ChannelPage, showPins bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -283,9 +283,11 @@ func PinResponse(entry Message, errorKey string, page ChannelPage) templ.Compone
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = PinsSection(page, true).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		if showPins {
+			templ_7745c5c3_Err = PinsSection(page, true).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		return nil
 	})

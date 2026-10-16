@@ -12,17 +12,22 @@
     }
     if (active) control.querySelector("button:not([hidden])").focus({ preventScroll: true });
   };
+  document.addEventListener("htmx:configRequest", (event) => {
+    if (event.detail.elt.matches("[data-pin-action]") && section()) event.detail.headers["X-Pins-Section"] = "true";
+  });
   document.addEventListener("htmx:sseBeforeMessage", (event) => {
     if (event.detail.type !== "pins") return;
     const incoming = new DOMParser().parseFromString(event.detail.data, "text/html").getElementById("pins-section");
     if (!incoming || stale(incoming)) event.preventDefault();
   });
+  document.addEventListener("htmx:oobBeforeSwap", (event) => {
+    const incoming = event.detail.fragment.querySelector("#pins-section");
+    // Keep the response's control and feedback even if a newer frame won.
+    if (incoming && stale(incoming)) event.detail.shouldSwap = false;
+  });
   document.addEventListener("htmx:beforeSwap", (event) => {
     const control = event.detail.target;
     if (!control?.matches("[data-pin-control]")) return;
-    // Compare the response's snapshot too: either transport can finish first.
-    const incoming = new DOMParser().parseFromString(event.detail.serverResponse, "text/html").getElementById("pins-section");
-    if (incoming && stale(incoming)) { event.detail.shouldSwap = false; return; }
     if (control.contains(document.activeElement)) focused.add(event.detail.xhr);
   });
   const swapped = (event) => {
@@ -30,8 +35,9 @@
       document.querySelectorAll("[data-pin-control]").forEach(sync);
     }
     const control = document.getElementById(event.detail.target?.id);
-    if (control?.matches("[data-pin-control]") && focused.has(event.detail.xhr)) {
-      control.querySelector("button:not([hidden])").focus({ preventScroll: true });
+    if (control?.matches("[data-pin-control]")) {
+      sync(control);
+      if (focused.has(event.detail.xhr)) control.querySelector("button:not([hidden])").focus({ preventScroll: true });
     }
   };
   document.addEventListener("htmx:afterSwap", swapped);

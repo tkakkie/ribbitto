@@ -56,25 +56,28 @@ htmx does only requests and swaps; the server and templ own the HTML.
   regardless of response/delivery order or a reconnect.
 - SSE uses explicit fragments shared with full-page rendering. `MessageItem`
   takes a `view.Message` and renders one `<li>` on its own or in the page.
-- **DOM ids are a contract.** Templates define every id that `hx-target`,
-  `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
-  updating every reference in the same pull request. Today's contract ids
+- **DOM ids are a contract.** Templates define ids used by `hx-target`,
+  `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
-  `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for a message's pin controls (the pins script restores button focus),
+  `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
   `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
-- **Script-read data attributes are a contract too,** with the
-  same renaming rule (#351). Besides `data-event-cursor`,
-  `data-posted-message` and `data-announcement` (this section):
+- **Script-read data attributes are a contract too** (#351). The same renaming
+  rule covers `data-event-cursor`, `data-posted-message`, `data-announcement` and:
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
+  | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
+  | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
+  | `data-pin-control` | pin form | always | message ID |
+  | `data-pinned` | pin form | always | pin state |
+  | `data-pin-action` | pin button | always | `true`: Unpin; `false`: Pin |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
@@ -132,8 +135,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Composer errors replace `#message-composer`; branch errors replace only
   `#branch-feedback`, so selections and drafts survive.
 
-The overview adds `pins` on latest and history pages; whole-section swaps and
-control synchronization follow the [pins contract](pins.md).
+The overview adds `pins` on latest/history pages ([pins contract](pins.md)).
 
 ## JavaScript
 

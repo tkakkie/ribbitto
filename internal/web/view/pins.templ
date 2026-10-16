@@ -79,7 +79,9 @@ func pinnedIDs(pins []Pin) string {
 }
 
 // PinResponse updates the control and any loaded overview from one fresh snapshot.
-templ PinResponse(entry Message, errorKey string, page ChannelPage) {
+templ PinResponse(entry Message, errorKey string, page ChannelPage, showPins bool) {
 	@PinControl(entry, errorKey)
-	@PinsSection(page, true)
+	if showPins {
+		@PinsSection(page, true)
+	}
 }

@@ -47,7 +47,10 @@ but enforced by configuration, not by the prompt.
   `argon/<topic>` from `origin/main`) and runs `agy -p` there with stdin
   closed, a time limit, `--print-timeout`, `--sandbox` and the model the
   maintainer picks (`gemini-4-argon-high` unless he says otherwise). Never
-  `--dangerously-skip-permissions`.
+  `--dangerously-skip-permissions`. `agy` runs in its own session under a
+  supervisor like the review launcher's (`cmd/argonreview/supervise.go`),
+  which stops every process in that session after the run and confirms
+  none is left; a process that calls `setsid` leaves it, as for reviews.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two trials
@@ -68,8 +71,9 @@ but enforced by configuration, not by the prompt.
   else. A guard that fails or prints nothing is a denial. The guard checks
   each path component without following symlinks and refuses a symlink or a
   path that leaves the worktree, because Argon's file tools run outside the
-  command sandbox and a command can create a symlink. The guard and its
-  configuration live outside the worktree, where Argon cannot write.
+  command sandbox and a command can create a symlink; it also refuses every
+  file tool call while the worktree holds a symlink at any depth. The guard
+  and its configuration live outside the worktree, where Argon cannot write.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
@@ -81,8 +85,10 @@ but enforced by configuration, not by the prompt.
   from editing them.
 - **A minimal environment for every command, tests Argon writes included.**
   A dedicated `HOME` does not remove inherited credentials. The run starts
-  from an empty environment except `PATH`, `HOME`, a `TMPDIR` inside the
-  worktree, the caches set inside it as in Codex's handoff (`GOCACHE`,
+  from an empty environment except `PATH`, `HOME`, a fresh `TMPDIR` beside
+  the worktree, not in it, as reviews keep theirs
+  (`cmd/argonreview/review.go`), removed after the run, the caches set
+  inside the worktree as in Codex's handoff (`GOCACHE`,
   `GOMODCACHE`, `GOPATH` and `GOLANGCI_LINT_CACHE` under `bin/.cache/`),
   `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. There is no
   `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, credential helper or keychain
@@ -94,8 +100,8 @@ but enforced by configuration, not by the prompt.
   and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
 - **Handoff: Claude runs nothing Argon wrote; CI checks it.** Argon leaves
-  its changes in the working tree and an untracked `PR_BODY.md`. Claude
-  checks that no process from the run is left (`lsof +D` on the worktree),
+  its changes in the working tree and an untracked `PR_BODY.md`. Once the
+  supervisor has confirmed that no process from the run is left, Claude
   repeats the pre-run checks, reads the diff and runs the credential grep
   from [running Codex](running-other-ai.md#running-codex). It never runs
   `make check`, `make prepush`, `go test`, a build or a tool from Argon's
@@ -118,9 +124,16 @@ harmless sentinels. Each of these is denied or has no effect:
 - reads outside the worktree (absolute, `..`, symlink) and an environment
   sentinel;
 - writes outside the worktree, and a symlink made by a command then read or
-  written with Argon's file tools in the same run;
-- edits to `.git`, `.claude/**` and a nested `AGENTS.md`;
-- `.agents/hooks.json` created in one run and not executed in the next;
+  written with Argon's file tools in the same run: by path, through a
+  directory searched or listed (`list_dir`, `grep_search`, `find_by_name`),
+  and swapped in a race with a file tool;
+- a symlink a command plants in `agy`'s `TMPDIR`;
+- edits to `.git`, `.claude/**` and a nested `AGENTS.md`, by file tools and
+  by commands;
+- `.agents/hooks.json` created by a command, in the same run and in the
+  next;
+- a background process that leaves the worktree's directory: the supervisor
+  stops it, or the trial stops;
 - `search_web`, a subagent, `generate_image`, `schedule` and a failing guard;
 - commit, push, `gh`, another AI CLI and an outside host that is not allowed;
 - **a local service other than the test database:** a loopback listener the
@@ -133,6 +146,9 @@ confirmed off in the home used, as running-argon.md records for the review
 home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any of this
 cannot be verified, the trial stops and the maintainer gets the reason.
+Argon's review of #1208 named the symlink, background-process, same-run
+hook and `TMPDIR` cases; the preflight tests them on effects instead of the
+trial building more mechanism first (maintainer, 2026-10-16).
 
 ## Records
 

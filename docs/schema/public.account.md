@@ -9,6 +9,7 @@
 | display_name | text |  | false |  |  |  |
 | password_hash | text |  | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| send_key | text | 'enter'::text | false |  |  |  |
 
 ## Constraints
 
@@ -24,6 +25,8 @@
 | account_id_not_null | n | NOT NULL id |
 | account_password_hash_check | CHECK | CHECK (starts_with(password_hash, '$argon2id$'::text)) |
 | account_password_hash_not_null | n | NOT NULL password_hash |
+| account_send_key_check | CHECK | CHECK ((send_key = ANY (ARRAY['enter'::text, 'modifier_enter'::text]))) |
+| account_send_key_not_null | n | NOT NULL send_key |
 | account_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | account_email_key | UNIQUE | UNIQUE (email) |
 
@@ -48,6 +51,7 @@ erDiagram
   text display_name
   text password_hash
   timestamp_with_time_zone created_at
+  text send_key
 }
 "public.session" {
   uuid id

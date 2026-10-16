@@ -12,7 +12,7 @@ import (
 )
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO account (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name, password_hash, created_at
+INSERT INTO account (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, display_name, password_hash, created_at, send_key
 `
 
 type CreateAccountParams struct {
@@ -30,12 +30,13 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.DisplayName,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.SendKey,
 	)
 	return i, err
 }
 
 const getAccountByID = `-- name: GetAccountByID :one
-SELECT id, email, display_name, password_hash, created_at FROM account WHERE id = $1
+SELECT id, email, display_name, password_hash, created_at, send_key FROM account WHERE id = $1
 `
 
 func (q *Queries) GetAccountByID(ctx context.Context, id pgtype.UUID) (Account, error) {
@@ -47,6 +48,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id pgtype.UUID) (Account, 
 		&i.DisplayName,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.SendKey,
 	)
 	return i, err
 }
@@ -94,4 +96,21 @@ func (q *Queries) LookupDisplayNames(ctx context.Context, accountIds []pgtype.UU
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAccountSendKey = `-- name: SetAccountSendKey :execrows
+UPDATE account SET send_key = $2 WHERE id = $1
+`
+
+type SetAccountSendKeyParams struct {
+	ID      pgtype.UUID
+	SendKey string
+}
+
+func (q *Queries) SetAccountSendKey(ctx context.Context, arg SetAccountSendKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setAccountSendKey, arg.ID, arg.SendKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

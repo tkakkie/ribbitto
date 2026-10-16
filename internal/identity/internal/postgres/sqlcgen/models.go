@@ -14,4 +14,5 @@ type Account struct {
 	DisplayName  string
 	PasswordHash string
 	CreatedAt    pgtype.Timestamptz
+	SendKey      string
 }

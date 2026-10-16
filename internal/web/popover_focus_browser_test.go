@@ -20,7 +20,8 @@ import (
 // cover the focused control (#1092): leaving one closes it, and focus stays
 // where Tab moved it. Escape still closes it with focus back on its button,
 // and an outside click closes it with focus where the click put it. Opening
-// the account menu with Enter or Space moves focus into it (#1102).
+// the account menu with Enter or Space moves focus into it (#1102). A
+// message's actions menu (#1159) follows the same rules.
 func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -31,6 +32,8 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	for i := range 20 {
 		conversation.Channels = append(conversation.Channels, view.Channel{ID: kernel.ID{byte(i + 1)}, Name: fmt.Sprintf("room%02d", i+1)})
 	}
+	conversation.Messages = []view.Message{{ID: kernel.ID{9}, TopicID: kernel.ID{2}, Handle: "author", Body: "hello", URL: view.MessageURL("acme", kernel.ID{9})}}
+	actions := fmt.Sprintf("message-actions-%x", kernel.ID{9})
 	list := conversation
 	list.List = true
 	mux := http.NewServeMux()
@@ -92,6 +95,8 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		{"desktop/account", "/conversation", 1440, 900, "account-menu", "#message-body", "#message-body"},
 		{"phone/create", "/list", 390, 844, "channel-create", "main h1", "body"},
 		{"phone/account", "/list", 390, 844, "account-menu", "main h1", "body"},
+		{"desktop/message", "/conversation", 1440, 900, actions, "#message-body", "#message-body"},
+		{"phone/message", "/conversation", 390, 844, actions, "main h1", "body"},
 	} {
 		open := func() {
 			t.Helper()

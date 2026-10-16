@@ -59,6 +59,8 @@ type ChannelPage struct {
 	// Panel names the side panel open beside the conversation, if any.
 	Panel   string
 	Members *MemberPage
+	// Pins are the overview's entries, read only when that panel is open.
+	Pins []Pin
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
 	// IdempotencyKey is the composer's key for one send (decision 37 (b));
@@ -274,6 +276,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>

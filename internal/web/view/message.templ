@@ -22,6 +22,18 @@ type Message struct {
 	// TopicURL is the topic view the label links to. It names the
 	// organisation, channel and topic only, so live renders stay shared.
 	TopicURL string
+	// URL is the message's own root-relative URL (MessageURL), for the same reason.
+	URL string
+	// PinURL is where the pin and unpin forms post, with "/pin" or "/unpin";
+	// Pinned, the same for every member, picks the one shown (#890).
+	PinURL string
+	Pinned bool
+}
+
+// PinURL is the base of a message's pin and unpin routes. It names the
+// message's own channel, so the shared message markup needs no page state.
+func PinURL(slug string, channelID, id kernel.ID) string {
+	return ChannelURL(slug, channelID) + "/messages/" + idValue(id)
 }
 
 // MessageURL is one message's stable URL (decision 36): the slug and the
@@ -91,6 +103,7 @@ templ messageItem(entry Message, announcement string) {
 					<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ "body-" + MessageDOMID(entry.ID) }/>
 					{ i18n.T(ctx, "topic.branch_select") }
 				</label>
+				@messageActions(entry)
 			</div>
 		</div>
 		// Text precedes the avatar, whose fixed gutter reserves its space
@@ -100,6 +113,51 @@ templ messageItem(entry Message, announcement string) {
 			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
 		</div>
 	</li>
+}
+
+// messageActions is every message's one actions menu (#1159); later actions
+// (pins #890, quoting #1160) join it rather than adding menus of their own.
+// Its markup depends only on the message and the language, because live
+// renders are shared between members (stream_renderer.go): the link is
+// root-relative, and message-link-v1.js copies the browser-resolved href.
+// From desk the button's negative margin keeps the header's height. Below
+// desk the header has no room for it (#1093 keeps it one 44 px row), so it
+// sits in the avatar's gutter, under the avatar, without growing the item;
+// the menu is a bottom sheet like the account menu.
+templ messageActions(entry Message) {
+	{{ id := fmt.Sprintf("message-actions-%x", entry.ID) }}
+	<button type="button" popovertarget={ id } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ "body-" + MessageDOMID(entry.ID) } class="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:-my-2 max-desk:absolute max-desk:left-0 max-desk:top-10 transition-feedback motion-safe:active:scale-96">
+		// A text glyph: the icon sprite has no "more" symbol.
+		<span aria-hidden="true" class="text-heading">⋯</span>
+	</button>
+	<div id={ id } popover class="m-0 w-56 desk:inset-auto desk:anchor-below-end rounded-xl border border-border bg-surface p-2 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:top-auto max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
+		<a href={ templ.SafeURL(entry.URL) } data-copy-link class="group flex min-h-11 items-center rounded-md px-3 hover:bg-hover">
+			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
+			<span data-copied-label class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
+		</a>
+		@PinControl(entry, "")
+	</div>
+}
+
+// PinControl offers the one action that changes the message's pin state: Pin
+// when unpinned, Unpin when pinned, so a repeated submission asks for the same
+// state again (a no-op). Without JavaScript it posts and follows the 303 to
+// the message; htmx swaps only this form, keeping the composer and its draft,
+// and keeps focus on the button through its stable id. Other tabs and the
+// overview show the change on reload until live pins (#892).
+templ PinControl(entry Message, errorKey string) {
+	{{
+		action, label := entry.PinURL+"/pin", "message.pin"
+		if entry.Pinned {
+			action, label = entry.PinURL+"/unpin", "message.unpin"
+		}
+	}}
+	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } hx-post={ action } hx-target="this" hx-swap="outerHTML">
+		<button id={ "pin-" + MessageDOMID(entry.ID) } type="submit" class="flex min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover">{ i18n.T(ctx, label) }</button>
+		if errorKey != "" {
+			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>
+		}
+	</form>
 }
 
 // MovedMessageItems carries replacement items without new-post announcements.

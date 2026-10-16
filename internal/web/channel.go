@@ -28,13 +28,14 @@ type Channels interface {
 	CreateWithImage(context.Context, org.Membership, string, string) (conversation.Channel, error)
 }
 
-// MessageReader provides the channel page and cursor from one snapshot, the
-// sidebar snapshot the channel list page shows, one message by sequence or
+// MessageReader provides the channel page and cursor from one snapshot, with
+// the channel's pins when the overview is open, the sidebar snapshot the channel list page shows, one message by sequence or
 // a bounded batch by ID for the stream, and where a message is now for its URL.
 type MessageReader interface {
 	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
 	Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
+	Overview(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64) (conversation.ChannelPage, error)
 	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
@@ -55,6 +56,7 @@ type channelPages struct {
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
+	pinning          Pinning
 	topics           TopicLookup
 	topicID          *kernel.ID // Set only on the request-local copy in show.
 	panel            string     // Set only on the request-local copy by a panel route.
@@ -289,6 +291,13 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	var history conversation.ChannelPage
 	var err error
 	switch {
+	case page.Panel == view.PanelOverview:
+		// The pins share the page's snapshot, so they agree with its cursor.
+		var before *int64
+		if page.Before > 0 {
+			before = &page.Before
+		}
+		history, err = p.messages.Overview(r.Context(), m, id, p.topicID, before, page.Around)
 	case page.Before > 0:
 		history, err = p.messages.Page(r.Context(), m, id, p.topicID, &page.Before)
 	case page.Around > 0:
@@ -315,6 +324,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
+	page.Pins = viewPins(history.Pins)
 	if page.BodyError == "" {
 		place := history.Current.DefaultTopicID
 		if history.Topic != nil {
@@ -533,7 +543,8 @@ func viewMessage(slug string, entry conversation.Entry) view.Message {
 		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
-		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID),
+		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),
+		PinURL: view.PinURL(slug, entry.ChannelID, entry.ID), Pinned: entry.Pinned,
 	}
 }
 

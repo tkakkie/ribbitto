@@ -341,6 +341,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SidebarResync: sidebarResync,
 		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
 		Branching:     branching,
+		Pinning:       conversationpg.NewPinning(pool, postingSequence, postingEvents, postingNotifier),
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 		Stream:        stream,

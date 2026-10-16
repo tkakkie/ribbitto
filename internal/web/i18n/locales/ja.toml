@@ -220,6 +220,15 @@ other = "以前のribbitを読み込む"
 ["message.newest"]
 other = "最新のribbitへ"
 
+["message.actions"]
+other = "ribbitの操作"
+
+["message.copy_link"]
+other = "リンクをコピー"
+
+["message.link_copied"]
+other = "リンクをコピーしました"
+
 ["message.new"]
 other = "新しいribbit"
 
@@ -276,6 +285,30 @@ other = "lilypadの概要"
 
 ["overview.created"]
 other = "作成日"
+
+["pins.title"]
+other = "ピン留めしたメッセージ"
+
+["pins.empty"]
+other = "ピン留めしたメッセージはまだありません。"
+
+["pins.pinned_by"]
+other = "ピン留め:"
+
+["message.pin"]
+other = "ピン留め"
+
+["message.unpin"]
+other = "ピン留めを外す"
+
+["pins.limit_title"]
+other = "ピン留めの上限"
+
+["pins.error.limit"]
+other = "このlilypadにはすでに50件のピン留めがあります。ほかをピン留めするには、どれかを外してください。"
+
+["pins.back"]
+other = "メッセージに戻る"
 
 ["people.empty"]
 other = "このページにメンバーはいません。"

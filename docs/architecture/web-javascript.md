@@ -5,8 +5,9 @@ JavaScript responsibilities and constraints for browser enhancements.
 ## JavaScript
 
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
-keyboard, local time, selection constraints, and htmx/SSE input glue. The
-bounded composer state of decision 37 is the [composer](#composer) exception.
+keyboard, local time, selection constraints, copying to the clipboard, and
+htmx/SSE input glue. The bounded composer state of decision 37 is the
+[composer](#composer) exception.
 
 **Exception ([#1039](../decisions/34-live-unread-counts.md)):**
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own
@@ -55,6 +56,13 @@ htmx sends resync requests. The markup contract is in
   | `data-unread-count` on every badge | raw numeric count, including hidden zero; only its number, text and visibility change |
   | `#sidebar-resync` | hidden htmx trigger; custom `sidebar-resync` event sends the member-scoped POST, without a swap |
 
+- `message-link-v1.js` handles "Copy link" in a message's actions menu
+  (#1159): it copies the link's browser-resolved absolute `href` with the
+  Clipboard API, so shared live renders hold no origin; marks the link
+  `data-copied` (which shows "Link copied") until its menu closes; and
+  appends that label to the polite `#message-status`. With a modifier key,
+  without the API, or when copying fails, the link opens, as without
+  JavaScript.
 - SSE `reset` closes htmx's event source and reloads the page after uniform 0–5 s jitter to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch`, `XMLHttpRequest`,
   `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`.

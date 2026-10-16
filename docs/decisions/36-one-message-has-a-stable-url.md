@@ -59,7 +59,8 @@ state, and a link grants no read scope
 ([unread](../domain/unread.md#advancing-it)). A permalink pasted into a
 message is plain text; how a future message format renders it belongs to
 that format's decision
-([decision 18](18-stored-message-formats-never-change-meaning.md)).
+([decision 18](18-stored-message-formats-never-change-meaning.md)):
+[decision 39](39-message-bodies-use-a-small-frozen-markup.md) makes it an ordinary link (planned).
 
 **Considered:** `/channels/{channel-id}/messages/{message-id}` (readable, but
 stale after a move to another channel and repeating what the message row

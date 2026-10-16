@@ -220,6 +220,15 @@ other = "Load older ribbits"
 ["message.newest"]
 other = "Jump to the newest ribbits"
 
+["message.actions"]
+other = "Ribbit actions"
+
+["message.copy_link"]
+other = "Copy link"
+
+["message.link_copied"]
+other = "Link copied"
+
 ["message.new"]
 other = "New ribbit"
 
@@ -276,6 +285,30 @@ other = "lilypad overview"
 
 ["overview.created"]
 other = "Created"
+
+["pins.title"]
+other = "Pinned messages"
+
+["pins.empty"]
+other = "No pinned messages yet."
+
+["pins.pinned_by"]
+other = "Pinned by"
+
+["message.pin"]
+other = "Pin"
+
+["message.unpin"]
+other = "Unpin"
+
+["pins.limit_title"]
+other = "Pin limit reached"
+
+["pins.error.limit"]
+other = "This lilypad already has 50 pinned messages. Unpin one to pin another."
+
+["pins.back"]
+other = "Back to the message"
 
 ["people.empty"]
 other = "No members on this page."

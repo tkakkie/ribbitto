@@ -121,6 +121,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinned := func(t *testing.T) (p bool) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, "SELECT pinned_at IS NOT NULL FROM message WHERE id = $1", linked.ID).Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
 	defer state.Open(acme, membership.Member.ID, acmeChannel)()
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
@@ -131,7 +138,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -141,9 +148,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			// Keep what follows the channel, such as a topic path.
 			path = view.ChannelURL("acme", acmeChannel) + strings.TrimPrefix(route.path, "/channels/{channelID}")
 		}
-		if strings.Contains(path, "{messageID}") {
+		if route.path == "/messages/{messageID}" {
 			path = view.MessageURL("acme", linked.ID)
 		}
+		path = strings.ReplaceAll(path, "{messageID}", strings.TrimPrefix(view.MessageURL("acme", linked.ID), "/organizations/acme/messages/"))
 		path = strings.ReplaceAll(path, "{topicID}", strings.TrimPrefix(view.ConversationURL("acme", acmeChannel, &defaultTopic.ID), view.ChannelURL("acme", acmeChannel)+"/topics/"))
 		for _, tt := range []struct {
 			name   string
@@ -157,10 +165,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			{"expired session", aliceToken, now.Add(identity.SessionLifetime)},
 		} {
 			t.Run(route.method+" "+path+" "+tt.name, func(t *testing.T) {
-				before := state.Read(acme, place, kernel.ID{})
+				before, wasPinned := state.Read(acme, place, kernel.ID{}), pinned(t)
 				w := get(route.method, path, tt.cookie, tt.at)
 				if got := state.Read(acme, place, kernel.ID{}); got.Generation != before.Generation {
 					t.Fatal("unauthorized request changed typing")
+				}
+				if pinned(t) != wasPinned {
+					t.Fatal("unauthorized request changed the pin")
 				}
 				body := w.Body.String()
 				if w.Code != http.StatusNotFound || strings.Contains(body, "Acme") || strings.Contains(body, "Globex") {
@@ -203,6 +214,11 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			case "POST /channels/{channelID}/overview", "POST /channels/{channelID}/topics/{topicID}/overview", "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels/{channelID}/messages/{messageID}/pin", "POST /channels/{channelID}/messages/{messageID}/unpin":
+				// Pin runs before unpin, so each member request changes the state.
+				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.MessageURL("acme", linked.ID) || pinned(t) != strings.HasSuffix(route.path, "/pin") {
+					t.Fatalf("pin: %d %s, pinned %v", w.Code, w.Header().Get("Location"), pinned(t))
 				}
 			case "POST /channels/{channelID}/topics/{topicID}/typing":
 				if w.Code != 204 || w.Body.Len() != 0 {

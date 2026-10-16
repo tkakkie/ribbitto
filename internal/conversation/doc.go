@@ -6,7 +6,8 @@
 // owns the channel, topic and message tables and publishes message.posted
 // plus messages.moved and pins.changed.
 // Message pin metadata is paired and organisation-scoped; transaction-bound
-// pin writes and bounded snapshot reads retain no historical body.
+// pin writes and bounded snapshot reads retain no historical body; the
+// overview page reads the pins' plain-text excerpts in its own snapshot.
 // Channel.image holds a nullable illustration key; web resolves missing or
 // unknown keys to a stable image from the channel ID without a backfill.
 // Members choose validated bundled keys or restore NULL; image writes emit no event.

@@ -1,10 +1,12 @@
-# Pinned messages *(storage and use cases implemented, #887–#888)*
+# Pinned messages *(implemented except live delivery, #887–#890)*
 
 Pins keep important messages within reach in a channel's overview panel
 (#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
 these rules on 2026-10-12 (#880). Metadata storage and bounded snapshot
-reads (#887), pin/unpin use cases (#888) and realtime's generic channel-state
-refresh seam (#891) are implemented; UI and delivery remain planned.
+reads (#887), pin/unpin use cases (#888), realtime's generic channel-state
+refresh seam (#891), the overview's pins section (#889) and Pin and Unpin in
+each message's actions menu (#890) are implemented; live delivery remains
+planned, so other tabs and the overview show a change on reload.
 The jump from a pin uses the message's URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md),
 implemented by #1170), which comes first.
 
@@ -56,8 +58,10 @@ Opening the link follows ordinary message navigation and read rules; the
 pin itself adds no read scope ([decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)).
 
 The excerpt is derived from the stored message, never a retained copy.
-Plain text remains plain text; a future format needs explicit, safe text
-extraction for that format, never reinterpretation of old bodies
+It shortens the message's extracted text: one extraction function per
+format, owned by `conversation`, which returns a `plain_text` body unchanged
+and leaves out a quote's snapshot ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*). A future
+format adds its own extraction, never reinterpretation of old bodies
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 Web escapes the excerpt through templ and isolates its direction. No HTML
 is stored as pin content and no `templ.Raw` is used.

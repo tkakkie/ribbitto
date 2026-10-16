@@ -73,6 +73,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn),
 		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil),
 		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil),
+		Pinning:   conversationpg.NewPinning(pool, postingSequence, postingEvents, nil),
 	}
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)

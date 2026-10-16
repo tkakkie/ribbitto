@@ -50,7 +50,10 @@ diff=$(mktemp) &&
   env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
     GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
     -c core.fsmonitor=false diff --no-ext-diff --no-textconv origin/main...HEAD > "$diff" &&
-  gh pr view P --json title,body,comments >> "$diff" &&
+  gh pr view P --json title,body,comments,headRefOid >> "$diff" &&
+  gh pr checks P >> "$diff" &&
+  gh issue view N --json title,body,comments >> "$diff" &&
+  gh issue view 1 --json body >> "$diff" &&
   (cd "$clean" && limit 1800 codex exec -s read-only -o review.md \
     "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
 ```

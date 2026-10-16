@@ -26,7 +26,11 @@
       if (!status) return;
       status.append(document.createTextNode(label + "\n"));
       while (status.childNodes.length > 10) status.firstChild.remove();
-    }, () => location.assign(link.href));
+    }, () => {
+      // Only the copy the open menu still waits for falls back to opening
+      // the link; a failure after the menu closed must not navigate.
+      if (pending.get(link) === copy) location.assign(link.href);
+    });
   });
   // A closing menu forgets the confirmation, so it reopens with "Copy link".
   // beforetoggle, unlike toggle, fires for each change: toggle events are

@@ -80,6 +80,13 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		await new Promise(r => setTimeout(r, 300)); const copied = a.hasAttribute('data-copied'); navigator.clipboard.writeText = write; m.hidePopover(); return copied; }`, menu).Bool() {
 		t.Fatal("a copy that settled after the menu closed marked it copied")
 	}
+	// A copy that fails after the menu closed does not open the link.
+	if path := page.MustEval(`async menu => { const m = document.querySelector(menu), write = navigator.clipboard.writeText.bind(navigator.clipboard);
+		navigator.clipboard.writeText = () => new Promise((_, reject) => setTimeout(() => reject(new Error('denied')), 100));
+		m.showPopover(); m.querySelector('a').click(); m.hidePopover();
+		await new Promise(r => setTimeout(r, 300)); navigator.clipboard.writeText = write; return location.pathname; }`, menu).Str(); path != "/conversation" {
+		t.Fatalf("a copy that failed after the menu closed navigated to %s", path)
+	}
 	// A failed copy opens the link, as without JavaScript.
 	page.MustEval(`button => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); document.querySelector(button).click(); }`, button)
 	page.MustElement(menu + " a").MustClick()

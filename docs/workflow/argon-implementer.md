@@ -21,10 +21,11 @@ adversarial tier C or B and the case it matches
 can be verified without running its code locally: no `make dev` or browser
 check unless the maintainer runs it. Go code and tests are eligible. Argon
 runs no commands, so CI is its only build and test. Tier A or `high` risk
-means Codex or Claude, as usual. The issue reviewer checks the expected
-tier like any other field; in doubt, the higher tier, and a possible tier A
-means not Argon. The maintainer confirms the implementer when adding
-`ready`. No M7 issue is picked unless the maintainer names it.
+means Codex (Claude only when the maintainer names Claude for that issue).
+The issue reviewer checks the expected tier like any other field; in doubt,
+the higher tier, and a possible tier A means not Argon. The maintainer
+confirms the implementer when adding `ready`. No M7 issue is picked unless
+the maintainer names it.
 
 **The tier follows the diff, not the expectation.** If an Argon change
 matches tier A or touches a `high` risk path, it leaves Argon and the
@@ -51,7 +52,6 @@ Codex is the adversarial reviewer of Argon's tier B pull requests
   and re-reviews ([Argon's pull requests](argon-pull-requests.md)).
 - No AI runs Argon's code on the host; CI checks it
   ([handoff](running-other-ai.md#handoff-of-another-ais-code)).
-- Argon's issues do not count towards Claude's and Codex's equal shares.
 
 ## The boundary
 

@@ -46,9 +46,9 @@ func (c *TopicCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snapsh
 	}
 	read := make([][2]int64, len(state.Ranges))
 	for i, r := range state.Ranges {
-		read[i] = [2]int64{r.Hi, r.Lo}
+		read[i] = [2]int64{r.Lo, r.Hi}
 	}
-	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, scope.OrganizationID, scope.ChannelID, state.Prefix, ids, floors, read, selected, firstUnread)
+	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, scope.OrganizationID, scope.ChannelID, state.Prefix, ids, floors, read, nil, firstUnread)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading topic counts: %w", err)
 	}

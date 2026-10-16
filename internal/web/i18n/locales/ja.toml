@@ -217,6 +217,15 @@ other = "以前のribbitを読み込む"
 ["message.newest"]
 other = "最新のribbitへ"
 
+["message.actions"]
+other = "ribbitの操作"
+
+["message.copy_link"]
+other = "リンクをコピー"
+
+["message.link_copied"]
+other = "リンクをコピーしました"
+
 ["message.new"]
 other = "新しいribbit"
 

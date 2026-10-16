@@ -81,7 +81,8 @@ The `<ol>` isolates authors, timestamps and plain-text bodies
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
 The empty `#message-status` has `role="status"`, `aria-live="polite"` and
 `aria-relevant="additions"`. History and paging stay outside live regions.
-Only live appends announce stream-only text. History, prepends and duplicate
+Only live appends announce stream-only text, and "Copy link" its
+confirmation (#1159). History, prepends and duplicate
 replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
 Latest feeds/topics have a separate visible `#typing-status`, localized and
 polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
@@ -103,17 +104,18 @@ a browser without `:has()` shows both, as before. Below the
 the column instead, and the composer is hidden.
 
 The account menu or sheet (`#account-menu`) and the create popover
-(`#channel-create`) are native popovers, which are not modal, so Tab can
+(`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
+#1159) are native popovers, which are not modal, so Tab can
 leave them while they stay open. Once a Tab or Shift-Tab settles, focus
 does not rest outside an open popover, where the popover could cover it
 (#1092): a Tab or Shift-Tab that moves focus out of it closes it, and focus
 stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
-it suits these two, which nest no popover). They close rather than keep Tab
+it suits all three, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
 where the click put it; a click inside never closes it. Those three are
 the browser's own. Without JavaScript, Tab can still move behind an open
-popover. `testPopoverFocusBrowser` checks both popovers at desktop and
+popover. `testPopoverFocusBrowser` checks each at desktop and
 phone width.
 
 Opening the account menu, by keyboard or pointer, moves focus to its first

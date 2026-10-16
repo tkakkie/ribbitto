@@ -65,6 +65,7 @@ func TestBrowser(t *testing.T) {
 	run("side-panel", testSidePanelBrowser)
 	run("panel-sheet", testPanelSheetBrowser)
 	run("sidebar-scroll", testSidebarScrollBrowser)
+	run("message-actions", testMessageActionsBrowser)
 	run("message-link", testMessageLinkBrowser)
 	run("branch-form", testBranchFormBrowser)
 	run("arrival", testArrivalBrowser)

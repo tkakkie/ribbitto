@@ -64,7 +64,12 @@ func composerHandler(t *testing.T, topic bool, overrides ...func(*Services)) (ht
 	return h, state, m, place
 }
 
-// Read the successful controls of the real form, not a token issued by the test.
+// composerFragment starts every enhanced composer answer: the state alone,
+// never the form or its textarea (#1173).
+const composerFragment = `<div id="message-composer-state"`
+
+// Read the successful controls of the real form, not a token issued by the
+// test: a page's form, or an enhanced answer's state, whose action is "".
 func composerForm(t *testing.T, w *httptest.ResponseRecorder) (string, url.Values) {
 	t.Helper()
 	doc, err := html.Parse(strings.NewReader(w.Body.String()))
@@ -72,7 +77,7 @@ func composerForm(t *testing.T, w *httptest.ResponseRecorder) (string, url.Value
 		t.Fatal(err)
 	}
 	for form := range doc.Descendants() {
-		if attr(form, "id") != "message-composer" {
+		if id := attr(form, "id"); id != "message-composer" && id != "message-composer-state" {
 			continue
 		}
 		values := url.Values{}
@@ -167,17 +172,24 @@ func TestComposerValidationPreservation(t *testing.T) {
 					}
 					if !hx {
 						assertFullConversationPage(t, w.Body.String())
-					} else if !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
-						t.Fatal("enhanced 422 must render only the composer")
+					} else if !strings.HasPrefix(w.Body.String(), composerFragment) {
+						t.Fatal("enhanced 422 must render only the composer state")
 					}
 					action, kept := composerForm(t, w)
-					if action != path {
+					if !hx && action != path {
 						t.Fatalf("422 composer posts to %q, want %q", action, path)
 					}
 					if kept.Has("composer") != (submitted != nil) || (submitted != nil && kept.Get("composer") != *submitted) {
 						t.Fatal("422 replaced submitted generation")
 					}
-					if kept.Get("body") != values.Get("body") {
+					if hx {
+						// The draft stays in the page's textarea; the state
+						// carries the flag the script copies to aria-invalid.
+						state, _ := enhancedForms(t, w.Body.String())
+						if _, invalid := attrOK(state, "data-invalid"); !invalid || kept.Has("body") {
+							t.Fatal("enhanced 422 lacks the invalid flag or replaces the draft")
+						}
+					} else if kept.Get("body") != values.Get("body") {
 						t.Fatal("422 lost draft")
 					}
 					if kept.Has("idempotency_key") {
@@ -223,7 +235,7 @@ func TestComposerPostLifecycle(t *testing.T) {
 						if w.Code != 422 {
 							t.Fatalf("failure status %d", w.Code)
 						}
-						action, values = composerForm(t, w)
+						_, values = composerForm(t, w)
 						if values.Get("composer") != a || !signal(a) {
 							t.Fatal("422 changed or closed generation")
 						}
@@ -231,11 +243,8 @@ func TestComposerPostLifecycle(t *testing.T) {
 					values.Set("body", "posted")
 					w = composerRequest(h, action, values, hx)
 					if hx {
-						if w.Code != 200 || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
+						if w.Code != 200 || !strings.HasPrefix(w.Body.String(), composerFragment) {
 							t.Fatalf("enhanced status %d", w.Code)
-						}
-						if next, _ := composerForm(t, w); next != path {
-							t.Fatalf("fragment posts to %q, want %q", next, path)
 						}
 					} else {
 						if w.Code != 303 || w.Header().Get("Location") != path {

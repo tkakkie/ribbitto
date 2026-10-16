@@ -16,10 +16,10 @@
     return true;
   };
   document.addEventListener("htmx:afterSettle", (event) => {
-    const form = event.target;
-    if (form.id !== "message-composer" || !form.dataset.postedMessage) return;
-    const id = form.dataset.postedMessage;
-    delete form.dataset.postedMessage;
+    const state = event.target;
+    if (state.id !== "message-composer-state" || !state.dataset.postedMessage) return;
+    const id = state.dataset.postedMessage;
+    delete state.dataset.postedMessage;
     pending.add(id);
     // Delivery can precede the POST response; the item is then already here.
     scrollPosted(id);

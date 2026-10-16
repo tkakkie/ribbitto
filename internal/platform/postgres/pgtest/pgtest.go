@@ -27,6 +27,7 @@ const templateLock = 0x726962626974746f
 // holding five connections waited until it timed out (#844, #849). Pools open
 // connections on demand, so an ordinary test still uses one or two. A test
 // that needs more copies its pool's Config and sets MaxConns there.
+// TestMaxConnsFloor fails below five.
 const MaxConns = 16
 
 // New returns a pool on a fresh clone of the migrated template.

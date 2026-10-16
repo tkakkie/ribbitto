@@ -117,9 +117,11 @@ it. The markup is the same for every reader of one language. Its extraction
 ## Posting from the channel page
 
 The bottom composer posts through `conversation.Posting.Send`. On the
-latest page, htmx replaces only the composer with an empty form; the message arrives
-through the stream (on reconnect if disconnected). A 422 replaces only the
-composer, keeping the draft and its field error. Older pages use a plain form:
+latest page the textarea stays usable while the post is in flight; htmx
+replaces only the composer's state, and success removes the sent text from
+the textarea's start, keeping anything typed since (#1173). The message arrives
+through the stream (on reconnect if disconnected). A 422 keeps the draft and
+shows its field error. Older pages use a plain form:
 success gets a 303 to the latest page; errors render a full latest page with
 the draft. Posting without JavaScript uses the same 303/422 flow. The channel
 and organisation are resolved before posting; a non-member gets 404.

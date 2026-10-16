@@ -76,7 +76,8 @@ bounded topic list, the branching endpoint (#305) and its selection UI
 - **Topic view** — one topic's messages, paged by `event_seq` the same way
   as channel history ([`messages.md`](messages.md#older-pages)). Its latest
   page's composer posts into that topic with htmx, replacing only the
-  composer while the message arrives over the topic's stream; without
+  composer's state, never the textarea (#1173), while the message arrives
+  over the topic's stream; without
   JavaScript, and on older pages, it posts plainly and redirects back.
   Invalid bodies preserve the draft (422). Its latest page updates live through a stream of that
   topic only ([replay](../architecture/replay.md)); older pages hold a sidebar-only

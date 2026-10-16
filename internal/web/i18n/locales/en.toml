@@ -208,6 +208,9 @@ other = "Enter sends; Shift+Enter adds a line break."
 ["message.send"]
 other = "Send"
 
+["message.sending"]
+other = "Sending…"
+
 ["message.error.body"]
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
 

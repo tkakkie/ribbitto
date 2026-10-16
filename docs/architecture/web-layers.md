@@ -9,7 +9,7 @@ enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
-  branching, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
+  branching, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), local-time display, and the planned
@@ -60,6 +60,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `pin-form-message-<hex>` and `pin-message-<hex>` for a message's pin control (htmx keeps focus on the button through the swap),
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and

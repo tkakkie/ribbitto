@@ -3,7 +3,8 @@
 **Decided** (#1153, approved by the maintainer). Nothing here is implemented
 yet: #1176 stores, posts and shows a quote of a whole message, #1160 adds the
 "Quote" action and the composer chip, and #1161 quotes a selection. The body
-format, its rendering and how a pasted message URL renders belong to #1171,
+format, its rendering and how a pasted message URL renders belong to #1171
+([decision 39](39-message-bodies-use-a-small-frozen-markup.md), planned),
 which adds its format's extraction rule under the contract below.
 
 ## What a quote stores
@@ -101,7 +102,8 @@ unchanged. It is used for:
 
 A quote's snapshot is left out of the quoting message's extraction, so quoted
 text never adds a mention notification, a search hit or announcement text.
-#1171 adds the extraction rule for its new format under this contract,
+#1171 adds the extraction rule for its new format under this contract
+([decision 39](39-message-bodies-use-a-small-frozen-markup.md)),
 without reinterpreting stored bodies
 ([decision 18](18-stored-message-formats-never-change-meaning.md)).
 

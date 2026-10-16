@@ -24,6 +24,16 @@ type Message struct {
 	TopicURL string
 	// URL is the message's own root-relative URL (MessageURL), for the same reason.
 	URL string
+	// PinURL is where the pin and unpin forms post, with "/pin" or "/unpin";
+	// Pinned, the same for every member, picks the one shown (#890).
+	PinURL string
+	Pinned bool
+}
+
+// PinURL is the base of a message's pin and unpin routes. It names the
+// message's own channel, so the shared message markup needs no page state.
+func PinURL(slug string, channelID, id kernel.ID) string {
+	return ChannelURL(slug, channelID) + "/messages/" + idValue(id)
 }
 
 // MessageURL is one message's stable URL (decision 36): the slug and the
@@ -125,7 +135,29 @@ templ messageActions(entry Message) {
 			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
 			<span data-copied-label class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
+		@PinControl(entry, "")
 	</div>
+}
+
+// PinControl offers the one action that changes the message's pin state: Pin
+// when unpinned, Unpin when pinned, so a repeated submission asks for the same
+// state again (a no-op). Without JavaScript it posts and follows the 303 to
+// the message; htmx swaps only this form, keeping the composer and its draft,
+// and keeps focus on the button through its stable id. Other tabs and the
+// overview show the change on reload until live pins (#892).
+templ PinControl(entry Message, errorKey string) {
+	{{
+		action, label := entry.PinURL+"/pin", "message.pin"
+		if entry.Pinned {
+			action, label = entry.PinURL+"/unpin", "message.unpin"
+		}
+	}}
+	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } hx-post={ action } hx-target="this" hx-swap="outerHTML">
+		<button id={ "pin-" + MessageDOMID(entry.ID) } type="submit" class="flex min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover">{ i18n.T(ctx, label) }</button>
+		if errorKey != "" {
+			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>
+		}
+	</form>
 }
 
 // MovedMessageItems carries replacement items without new-post announcements.

@@ -114,6 +114,7 @@ type Message struct // Message is a plain-text post identified by ID.
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Pinned bool // Pinned is the message's current pin state, the same for every member.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
   func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.

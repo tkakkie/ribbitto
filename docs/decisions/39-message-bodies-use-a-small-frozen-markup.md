@@ -17,7 +17,9 @@ a change of meaning is a new identifier (`chat_v2`), never an edit of
 
 ## Grammar of `chat_v1`
 
-The body passes `ValidateMessageBody` unchanged; the grammar only reads it.
+The grammar reads the body `ValidateMessageBody` stores, after its
+normalisation (CR and CRLF become LF, white space trimmed at both ends); it
+changes nothing further.
 Blocks are found line by line:
 
 - **Fenced code:** a line that is exactly three backticks, optionally
@@ -134,8 +136,9 @@ origin to recognise it by. Every block and every inline element (bold,
 italic, link, code span, reference) is isolated in direction with
 `dir="auto"` or `<bdi>`; plain text runs take their block's isolation.
 
-Output is the same for every reader, so the shared render cache stays
-valid; highlighting one's own mentions happens in the browser from a data
+Output is the same for every reader of one language (only the unresolved
+member placeholder is localised), so the shared render cache, keyed by
+language, stays valid; highlighting one's own mentions happens in the browser from a data
 attribute. Existing headers already help: `Referrer-Policy: same-origin`
 and the CSP's `img-src 'self' data:`.
 

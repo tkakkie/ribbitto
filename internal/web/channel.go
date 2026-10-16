@@ -56,6 +56,7 @@ type channelPages struct {
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
+	pinning          Pinning
 	topics           TopicLookup
 	topicID          *kernel.ID // Set only on the request-local copy in show.
 	panel            string     // Set only on the request-local copy by a panel route.
@@ -520,6 +521,7 @@ func viewMessage(slug string, entry conversation.Entry) view.Message {
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),
+		PinURL: view.PinURL(slug, entry.ChannelID, entry.ID), Pinned: entry.Pinned,
 	}
 }
 

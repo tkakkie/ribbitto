@@ -24,6 +24,8 @@ type Message struct {
 	Body                                             string
 	EventSeq                                         int64
 	CreatedAt                                        time.Time
+	// Pinned is the message's current pin state, the same for every member.
+	Pinned bool
 }
 
 // ValidateMessageBody normalizes line endings and trims the whole plain-text body.

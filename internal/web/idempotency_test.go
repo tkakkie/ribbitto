@@ -99,13 +99,18 @@ func TestComposerIdempotencyKey(t *testing.T) {
 				reused.Set("body", "changed")
 				w = keyedSend(t, h, path, reused, hx, http.StatusConflict)
 				_, conflict := composerForm(t, w)
-				if conflict.Get("body") != "changed" || conflict.Get("composer") != generation || conflict.Get("idempotency_key") == first || !canonicalKey.MatchString(conflict.Get("idempotency_key")) || writer.inserts != 1 {
+				// An enhanced 409 leaves the draft in the page's textarea (#1173).
+				draft := "changed"
+				if hx {
+					draft = ""
+				}
+				if conflict.Get("body") != draft || conflict.Get("composer") != generation || conflict.Get("idempotency_key") == first || !canonicalKey.MatchString(conflict.Get("idempotency_key")) || writer.inserts != 1 {
 					t.Fatalf("409 controls %v, inserts %d", conflict, writer.inserts)
 				}
 				if !strings.Contains(w.Body.String(), `data-posted-message="`+view.MessageDOMID(kernel.ID{0x42})+`"`) || !strings.Contains(w.Body.String(), "A different message was already sent from this composer.") {
 					t.Fatalf("409 does not name the stored message or explain: %s", w.Body.String())
 				}
-				if hx != strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
+				if hx != strings.HasPrefix(w.Body.String(), composerFragment) {
 					t.Fatal("409 must render the composer alone for htmx and the page otherwise")
 				}
 				if !state.Signal(m.Organization.ID, place, typing.Typist{Member: m.Member.ID}, generation, time.Now()) {
@@ -180,12 +185,17 @@ func TestComposerRepeatAfterMove(t *testing.T) {
 				// A plain repeat redirects to the requested path; keyedSend
 				// follows it to the page the browser would show.
 				w := keyedSend(t, h, path, values, hx, success)
-				form, signal := enhancedForms(t, w.Body.String())
+				_, signal := enhancedForms(t, w.Body.String())
 				typingURL := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
-				if attr(form, "action") != path || attr(form, "hx-post") != path || attr(signal, "hx-post") != typingURL || writer.inserts != 1 {
-					t.Fatalf("repeat composer posts to %q / %q, typing %q, inserts %d", attr(form, "action"), attr(form, "hx-post"), attr(signal, "hx-post"), writer.inserts)
+				// An enhanced answer keeps the page's form, so it has no action.
+				action, fresh := composerForm(t, w)
+				wantAction := path
+				if hx {
+					wantAction = ""
 				}
-				_, fresh := composerForm(t, w)
+				if action != wantAction || attr(signal, "hx-post") != typingURL || writer.inserts != 1 {
+					t.Fatalf("repeat composer posts to %q, typing %q, inserts %d", action, attr(signal, "hx-post"), writer.inserts)
+				}
 				typist := typing.Typist{Member: m.Member.ID}
 				if state.Signal(m.Organization.ID, place, typist, submitted, time.Now()) {
 					t.Fatal("the repeat did not close the submitted generation in the requested place")

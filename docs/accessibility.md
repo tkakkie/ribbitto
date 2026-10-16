@@ -87,8 +87,11 @@ replacements stay silent. The status keeps the latest 10 entries; pruning is sil
 Latest feeds/topics have a separate visible `#typing-status`, localized and
 polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
 it stays outside history and composer replacement, with no keyboard stop.
-The textarea keeps invalid drafts and links errors with `aria-describedby`;
-htmx submissions return focus to it. "Load older"
+The textarea is never replaced (#1173): it keeps drafts and text typed while a
+post is in flight, links errors with `aria-describedby` and takes
+`aria-invalid` from each answer; focus left on the disabled send button
+returns to it. In flight, a polite `role="status"` shows "Sending…" over the
+help, which turns invisible but keeps its space. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 

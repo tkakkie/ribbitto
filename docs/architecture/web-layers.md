@@ -38,18 +38,20 @@ formatting, choosing an i18n message ID) belongs in them.
 htmx does only requests and swaps; the server and templ own the HTML.
 
 - A normal request gets a full page. `hx-select` can select part of it (Load older).
-  Enhanced posts return `MessageComposer`: the message form plus a hidden
+  Enhanced posts return `MessageComposer`: `#message-composer-state` (hidden
+  controls and `#message-help`; never the textarea, #1173) plus a hidden
   `typing-form`, refreshed out of band with the same generation (only there: Load
   older would install an unclosed one). Signals use the
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
-  htmx. On success the message form's
+  htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id; errors omit it,
-  except a 409, which names the stored message. Every composer has a hidden
+  except a 409, which names the stored message. A field error sets its
+  `data-invalid`, copied to the textarea's `aria-invalid`. Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  `message-composer-v7.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v8.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
@@ -60,7 +62,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-composer-state`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `pin-form-message-<hex>` and `pin-message-<hex>` for a message's pin control (htmx keeps focus on the button through the swap),
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
@@ -71,7 +73,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   (32 lowercase hex digits). Load older selects `#message-items > li`.
 - **Script-read data attributes are a contract too,** with the
   same renaming rule (#351). Besides `data-event-cursor`,
-  `data-posted-message` and `data-announcement` (this section):
+  `data-posted-message`, `data-invalid` and `data-announcement` (this section):
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
@@ -129,7 +131,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
-  Composer errors replace `#message-composer`; branch errors replace only
+  Composer answers replace only `#message-composer-state`, branch errors only
   `#branch-feedback`, so selections and drafts survive.
 
 ## JavaScript

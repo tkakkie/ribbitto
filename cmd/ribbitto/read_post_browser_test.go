@@ -288,7 +288,7 @@ func TestReadPostBrowser(t *testing.T) {
 				// stream application advances it (TestTopicPostBrowser).
 				if kind == "feed" || kind == "topic" {
 					page.MustEval(`() => document.addEventListener('htmx:afterSettle', e => {
-						if (e.target.id === 'message-composer') document.body.dataset.ownResponse = 'done';
+						if (e.target.id === 'message-composer-state') document.body.dataset.ownResponse = 'done';
 					})`)
 					inputStep(t, page, "typing the own response", func(p *rod.Page) { p.MustElement("#message-body").MustInput("own response without stream delivery") })
 					page.MustEval(`() => document.querySelector('#message-composer').requestSubmit()`)

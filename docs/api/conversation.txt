@@ -4,6 +4,20 @@ package github.com/tkakkie/ribbitto/internal/conversation
 type AccountDirectory interface // AccountDirectory is the display-name lookup the page reader needs from identity.
   func (AccountDirectory).LookupDisplayNames(ctx context.Context, accountIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]string, error)
 type AccountDirectoryIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) AccountDirectory // AccountDirectoryIn binds an account directory to the caller's snapshot, the same one the member directory and the messages are read in.
+const BlockCode BlockKind = 2 // The chat_v1 blocks (decision 39).
+type BlockKind int // BlockKind says which chat_v1 block a BodyBlock is.
+const BlockQuote BlockKind = 1 // The chat_v1 blocks (decision 39).
+const BlockText BlockKind = 0 // The chat_v1 blocks (decision 39).
+type BodyBlock struct // BodyBlock is one block of a parsed chat_v1 body.
+  field Code []string // Code holds a code block's content lines, literal; Language is its tag, or empty.
+  field Kind BlockKind
+  field Language string
+  field Lines [][]BodyInline // Lines are a text or quote block's lines, each as inline nodes; a blank line has none.
+type BodyInline struct // BodyInline is one inline node of a parsed chat_v1 body.
+  field Children []BodyInline // Children are a bold or italic node's content.
+  field Kind InlineKind
+  field Member github.com/tkakkie/ribbitto/internal/kernel.ID // Member is a reference's member, not yet resolved or checked.
+  field Text string // Text is literal text, a code span's content or a link's URL.
 type Branch struct // Branch moves Messages, expected in topic From, to an existing topic To or to a new topic named NewName, in the same channel.
   field From github.com/tkakkie/ribbitto/internal/kernel.ID
   field Messages []github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -92,6 +106,13 @@ type EventSequence interface // EventSequence is what posting, branching and pin
 type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventSequence // EventSequenceIn binds org's sequence to the caller's transaction.
 type IdempotencyKey [16]byte // IdempotencyKey is a composer's key for one send (decision 37 (b)): a random UUID, its own type because kernel.ID values are UUIDv7 that PostgreSQL generates.
   func (IdempotencyKey).String() string // String returns the canonical 36-character form composers render.
+const InlineBold InlineKind = 1 // The chat_v1 inline nodes (decision 39).
+const InlineCode InlineKind = 3 // The chat_v1 inline nodes (decision 39).
+const InlineItalic InlineKind = 2 // The chat_v1 inline nodes (decision 39).
+type InlineKind int // InlineKind says which chat_v1 inline node a BodyInline is.
+const InlineLink InlineKind = 4 // The chat_v1 inline nodes (decision 39).
+const InlineReference InlineKind = 5 // The chat_v1 inline nodes (decision 39).
+const InlineText InlineKind = 0 // The chat_v1 inline nodes (decision 39).
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
 const KindPinsChanged github.com/tkakkie/ribbitto/internal/realtime.EventKind = "pins.changed" // KindPinsChanged invalidates current channel pins, without retaining content.
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
@@ -151,6 +172,7 @@ type PageCounts struct // PageCounts holds capped sidebar counts and uncapped fi
   field TopicFirstUnread int64
 type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
+func ParseChatV1(body string) []BodyBlock // ParseChatV1 parses a body that ValidateMessageBody returned under chat_v1's grammar (decision 39).
 type Pin struct // Pin is one overview entry: the current message with its author and topic, its excerpt, and who pinned it when, with current names.
   field Entry Entry
   field Excerpt string
@@ -213,6 +235,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
   func (*Reader).Overview(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64, around int64) (ChannelPage, error) // Overview reads the page Page or Around would (around when it is positive, else before) and the channel's bounded pins across all its topics, with their topics and author and pinner names, in the page's snapshot, so the pins and the page cursor agree.
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (ChannelPage, error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
+  func (*Reader).Pins(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (pins []Pin, err error) // Pins reads only the channel's bounded pins, current topics and names in one read-only snapshot.
   func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePinsChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePinsChanged routes channel-wide invalidations across every topic.

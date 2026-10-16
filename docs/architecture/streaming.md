@@ -14,7 +14,7 @@ Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 A [shared reader per organisation](shared-reader.md) is designed but not built (#232).
 The generic [channel-state refresh seam](pins.md#ordering-authorization-and-cost)
 is implemented (#891), with consumer-defined frames and no SSE IDs; its web
-adapter and interests are not yet activated (#892).
+pins adapter is implemented (#892); wiring and browser interests await #1205.
 
 ### Retention
 

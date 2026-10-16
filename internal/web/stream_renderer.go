@@ -44,6 +44,12 @@ type renderKey struct {
 	unread                bool
 }
 
+// Accept keeps pin invalidations out of message and unread rendering;
+// the channel-state source consumes them independently.
+func (r messageRenderer) Accept(event realtime.Event) bool {
+	return event.Kind != conversation.KindPinsChanged
+}
+
 // RenderUnread uses a language-independent cache entry: every sidebar recipient
 // gets the same posting-time routing data, without a message read or cursor ID.
 func (r messageRenderer) RenderUnread(ctx context.Context, event realtime.Event) (realtime.Outgoing, error) {

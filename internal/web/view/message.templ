@@ -144,7 +144,7 @@ templ messageActions(entry Message) {
 // state again (a no-op). Without JavaScript it posts and follows the 303 to
 // the message; htmx swaps only this form, keeping the composer and its draft,
 // and keeps focus on the button through its stable id. Other tabs and the
-// overview show the change on reload until live pins (#892).
+// overview show the change on reload until live pins (#1205).
 templ PinControl(entry Message, errorKey string) {
 	{{
 		action, label := entry.PinURL+"/pin", "message.pin"

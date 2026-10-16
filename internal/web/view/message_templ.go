@@ -523,7 +523,7 @@ func messageActions(entry Message) templ.Component {
 // state again (a no-op). Without JavaScript it posts and follows the 303 to
 // the message; htmx swaps only this form, keeping the composer and its draft,
 // and keeps focus on the button through its stable id. Other tabs and the
-// overview show the change on reload until live pins (#892).
+// overview show the change on reload until live pins (#1205).
 func PinControl(entry Message, errorKey string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context

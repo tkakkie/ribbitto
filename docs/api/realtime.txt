@@ -49,6 +49,8 @@ type Event struct // Event is a durable change ordered within an organisation: a
   field Topics []github.com/tkakkie/ribbitto/internal/kernel.ID
 type EventCleaner interface // EventCleaner deletes expired rows and raises replay boundaries in atomic batches.
   func (EventCleaner).ExpireEvents(context.Context, time.Time) error
+type EventFilter interface // EventFilter optionally excludes durable kinds from both renderer paths.
+  func (EventFilter).Accept(Event) bool
 type EventKind string // EventKind identifies a durable change.
 type EventReader interface // EventReader reads an organisation's durable events with a sequence above after, in sequence order, at most limit of them.
   func (EventReader).EventsAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int) ([]Event, error)

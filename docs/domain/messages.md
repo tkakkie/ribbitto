@@ -8,8 +8,8 @@ these rules change.
 
 ## Identity and format
 
-A message is identified by its `id` (UUIDv7) — in the DOM and pin metadata,
-and later in permalinks, reactions, editing and deleting. `event_seq` orders messages
+A message is identified by its `id` (UUIDv7) — in the DOM, pin metadata and
+its URL, and later in reactions, editing and deleting. `event_seq` orders messages
 and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.

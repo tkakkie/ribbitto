@@ -12,6 +12,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
@@ -42,12 +43,14 @@ type BodyBlock struct {
 // BodyInline is one inline node. Text is plain text, a code span or a link's
 // URL; Children are a bold or italic node's content. A member reference
 // carries the member's current names, its display name already converted
-// like an author's; an empty Handle means it could not be resolved.
+// like an author's; an empty Handle means it could not be resolved and
+// MemberID is empty too.
 type BodyInline struct {
 	Kind                BodyKind
 	Text                string
 	Children            []BodyInline
 	DisplayName, Handle string
+	MemberID            kernel.ID
 }
 
 // webURL is the link allow-list, checked again here although only the
@@ -97,7 +100,7 @@ func messageBody(entry Message) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue("body-" + MessageDOMID(entry.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 65, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 68, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 			if templ_7745c5c3_Err != nil {
@@ -110,7 +113,7 @@ func messageBody(entry Message) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Body)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 65, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 68, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -128,7 +131,7 @@ func messageBody(entry Message) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue("body-" + MessageDOMID(entry.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 67, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 70, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -148,7 +151,7 @@ func messageBody(entry Message) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(block.Code)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 71, Col: 108}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 74, Col: 108}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -289,7 +292,7 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(node.Text)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 107, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 110, Col: 85}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -308,7 +311,7 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 					var templ_7745c5c3_Var9 templ.SafeURL
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(node.Text)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 110, Col: 24}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 113, Col: 24}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -321,7 +324,7 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(node.Text)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 110, Col: 118}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 113, Col: 118}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -335,7 +338,7 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(node.Text)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 112, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 115, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -343,17 +346,40 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 					}
 				}
 			case BodyMember:
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<bdi class=\"rounded-sm bg-selected px-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<bdi")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if node.MemberID != (kernel.ID{}) {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " data-member-id=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var12 string
+					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(idValue(node.MemberID))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 120, Col: 45}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " class=\"rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-brand\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if node.Handle == "" {
-					var templ_7745c5c3_Var12 string
-					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(UnknownMember(ctx))
+					var templ_7745c5c3_Var13 string
+					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(UnknownMember(ctx))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 117, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 125, Col: 26}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -363,17 +389,17 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</bdi>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</bdi>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			default:
-				var templ_7745c5c3_Var13 string
-				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(node.Text)
+				var templ_7745c5c3_Var14 string
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(node.Text)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 123, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/message_body.templ`, Line: 131, Col: 15}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -102,23 +102,20 @@ Claude follows the [local checks](../../AGENTS.md#commands) and
 
 ## Running Codex
 
-How the maintainer's orchestrating sessions run Codex (codex-cli 0.153).
-This records that setup, not general limits of Codex. Evidence: #48.
+Maintainer setup, not general Codex limits (codex-cli 0.153; evidence: #48).
 
 ### Codex permissions
 
-**Implementation.** The global `~/.codex/config.toml` is shared with other
-projects and allows only localhost, so do not edit it. Instead, pass a
-per-run permission profile with `-c` and run the command from the issue's
-worktree. The profile allows:
+**Implementation.** Do not edit the shared, localhost-only
+`~/.codex/config.toml`. Run from the issue's worktree with this per-run
+`-c` profile, allowing:
 
 - writes only to the worktree;
 - network access only to localhost, the Go module proxy and checksum
   database, GitHub and the npm registry.
 
-Any other host is refused ("Network access to "example.com" was blocked:
-domain is not on the allowlist"). It uses a Bash array, so run it from bash
-or zsh with `limit` as above:
+Other hosts are refused. Use bash or zsh for the arrays, with `limit`
+as above:
 
 ```bash
 perms=(
@@ -128,39 +125,50 @@ perms=(
   -c 'permissions.ribbitto.network.domains={"localhost"="allow","127.0.0.1"="allow","proxy.golang.org"="allow","sum.golang.org"="allow","storage.googleapis.com"="allow","github.com"="allow","api.github.com"="allow","codeload.github.com"="allow","objects.githubusercontent.com"="allow","release-assets.githubusercontent.com"="allow","raw.githubusercontent.com"="allow","registry.npmjs.org"="allow"}'
   -c 'default_permissions="ribbitto"'
 )
-limit 3600 codex exec "${perms[@]}" -o result.md "$(cat prompt.md)" < /dev/null
+# size=small|normal, as stated in the brief.
+case $size in
+  small) effort=(-c model_reasoning_effort=medium) ;;
+  normal) effort=() ;;
+  *) false ;;
+esac &&
+  limit 3600 codex exec "${perms[@]}" "${effort[@]}" -o result.md "$(cat prompt.md)" < /dev/null
 ```
 
 ### Start confirmation
 
-**Started.** A background Codex run counts as started only once its log
-shows the header's `workdir:` and `model:` lines, naming the expected
-worktree and model; only then is it reported as running. If the run exits
-before those lines appear, such as Codex refusing an untrusted directory,
-report it as a failed start (#359).
+**Started.** Report a background run as running only after its log header
+shows the expected `workdir:` and `model:`. An earlier exit is a failed
+start (#359).
 
 ### Implementation brief
 
-The prompt carries the issue and its review comments, plus these rules:
+The orchestrator's brief includes the issue and review comments, size class,
+starting files or packages, and the [Codex implementer entry](README.md#implementer-codex).
+These are starting points; read any dependencies the change needs.
+
+`small`: expected adversarial tier C and either documentation only or an
+expected diff under about 100 lines → `medium`. Otherwise `normal`: current
+default, no effort flag. Tier A/B is always `normal`, including gate documents under
+`docs/workflow/`.
+
+The brief also includes:
 
 - **Go caches.** Only the worktree is writable, so use
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
   (`bin/` is git-ignored).
-- **Database.** Codex cannot use Docker, so the orchestrator starts
-  PostgreSQL and waits until it is ready. The prompt then says to run
+- **Database.** Codex cannot use Docker. The orchestrator starts and waits
+  for PostgreSQL, then the brief says to run
   `make check` with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
-  and `RIBBITTO_REQUIRE_DB=1`. Its Go tests run with the race detector,
-  which works in this profile. `make vuln` does not, because
-  `vuln.go.dev` is not on the allowlist; CI runs it
-  ([Checks](../../README.md#checks)). The sandbox does not permit `ps`, so
-  `check-test` fails in the process tests of `cmd/argonreview`,
-  `cmd/capacity` and `cmd/dev`, and `make check` stops before `check-tools`
+  and `RIBBITTO_REQUIRE_DB=1`. The race detector works in this profile;
+  `make vuln` needs `vuln.go.dev`, which is not allowed, so CI runs it
+  ([Checks](../../README.md#checks)). Without `ps`,
+  `check-test` fails in `cmd/argonreview`, `cmd/capacity` and `cmd/dev`
+  process tests; `make check` stops before `check-tools`
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
   expected; CI runs the full check ([handoff](#handoff-of-another-ais-code)).
 
   ```sh
-  # Reuse the container if it is already running; either way, wait for it.
   if ! docker ps --format '{{.Names}}' | grep -qx ribbitto-codex-pg; then
     docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
       -e POSTGRES_PASSWORD=codex-dev-only postgres:18
@@ -175,10 +183,9 @@ The prompt carries the issue and its review comments, plus these rules:
   )
   ```
 
-  Do not start Codex unless this exits 0. If a stopped container with that
-  name exists, `docker run` fails. Remove it with
-  `docker rm -f ribbitto-codex-pg`, which is also how to clean up when you
-  are done. If port 55433 is taken, pick another and change both commands.
+  Start Codex only if this exits 0. A stopped container with that name
+  makes `docker run` fail; remove it with `docker rm -f ribbitto-codex-pg`,
+  also used for cleanup. If port 55433 is taken, change it in both commands.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`, which never contains a connection string with
@@ -218,5 +225,5 @@ The orchestrator then, running nothing from the tree
 ### Review context
 
 **Reviews.** Supply the issue and, for a PR, the PR with comments, diff
-and CI; never supply or fetch Status #1. Effort follows the tier, as in
-the snippets above; implementation keeps its setting.
+and CI; never supply or fetch Status #1. Review effort follows the tier
+above; implementation effort follows size.

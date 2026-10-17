@@ -1,5 +1,4 @@
 (() => {
-  const pendingRequests = new Set();
   document.addEventListener("submit", (event) => {
     if (event.target.id !== "message-composer") return;
     const stream = document.getElementById("organization-stream");
@@ -8,17 +7,15 @@
     const template = document.getElementById("message-pending-template");
     if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) return;
     const form = event.target, body = form.elements.body;
+    const text = body.value.trim();
+    if (!text || [...body.value].length > 4000) return;
     const list = document.getElementById("message-pending");
-    // Both forms replace the same state; a stale ordinary answer must not
-    // overwrite a pending send's fresh generation and key.
-    if (list.firstElementChild || pendingRequests.size || form.classList.contains("htmx-request")) {
+    if (list.firstElementChild) {
       event.preventDefault();
       event.stopImmediatePropagation();
       say("busy");
       return;
     }
-    const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const item = template.content.firstElementChild.cloneNode(true);
@@ -62,10 +59,6 @@
   document.addEventListener("htmx:beforeRequest", (event) => {
     const form = pendingForm(event);
     if (!form) return;
-    pendingRequests.add(form);
-    // htmx dispatches completion on the form even after it is detached,
-    // when the event can no longer bubble to document.
-    form.addEventListener("htmx:afterRequest", () => pendingRequests.delete(form), { once: true });
     document.getElementById("message-body").focus({ preventScroll: true });
     form.querySelector("[role=status]").textContent = "";
     form.querySelector("[data-pending-actions]").hidden = true;
@@ -146,15 +139,13 @@
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
     if (state.id !== "message-composer-state") return;
-    const body = document.getElementById("message-body");
     const pending = pendingForm(event);
     if (pending) {
-      body.removeAttribute("aria-invalid");
-      body.removeAttribute("aria-describedby");
       pending.closest("li").dataset.postedMessage = state.dataset.postedMessage;
       reconcile();
       return;
     }
+    const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const status = event.detail.xhr.status;
     if (status === 200) {

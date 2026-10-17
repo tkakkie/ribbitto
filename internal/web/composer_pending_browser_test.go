@@ -146,7 +146,12 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 					page.MustWait(`() => window.answers===1`)
 				case "removed-in-flight":
 					// Exercise the request guard independently of the item's lifetime.
-					page.MustEval(`() => document.querySelector('[data-pending-remove]').click()`)
+					page.MustEval(`() => {
+ const form=document.querySelector('[data-pending-form]');
+ window.removedAnswers=0;
+ form.addEventListener('htmx:afterRequest',()=>window.removedAnswers++,{once:true});
+ document.querySelector('[data-pending-remove]').click();
+}`)
 				}
 				page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; window.draft=b.value; b.form.requestSubmit(); }`, tc.text)
 				if problem := page.MustEval(`removed => {
@@ -164,7 +169,25 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 				}
 				if state == "sending" || state == "removed-in-flight" {
 					request.reply <- browserReply{status: 400, body: []byte("refused")}
-					page.MustWait(`() => window.answers===1`)
+					if state == "removed-in-flight" {
+						page.MustWait(`() => window.removedAnswers===1`)
+						page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='after removal'; b.form.requestSubmit(); }`)
+						if page.MustEval(`() => window.requests!==2 || !document.querySelector('#message-pending > li') || document.getElementById('message-body').value!==''`).Bool() {
+							t.Fatal("completed detached request did not release a new pending send")
+						}
+						select {
+						case next := <-posts:
+							if next.values.Get("body") != "after removal" {
+								t.Fatal("send after detached completion changed text")
+							}
+							next.reply <- browserReply{status: 400, body: []byte("refused")}
+						case <-page.GetContext().Done():
+							t.Fatal("send after detached completion did not reach the server")
+						}
+						page.MustWait(`() => !document.querySelector('[data-pending-form].htmx-request')`)
+					} else {
+						page.MustWait(`() => window.answers===1`)
+					}
 				}
 			})
 		}

@@ -63,6 +63,9 @@
     const form = pendingForm(event);
     if (!form) return;
     pendingRequests.add(form);
+    // htmx dispatches completion on the form even after it is detached,
+    // when the event can no longer bubble to document.
+    form.addEventListener("htmx:afterRequest", () => pendingRequests.delete(form), { once: true });
     document.getElementById("message-body").focus({ preventScroll: true });
     form.querySelector("[role=status]").textContent = "";
     form.querySelector("[data-pending-actions]").hidden = true;
@@ -182,7 +185,6 @@
     const form = event.target;
     const pending = pendingForm(event);
     if (pending) {
-      pendingRequests.delete(pending);
       const status = event.detail.xhr.status;
       if (status === 200) return;
       const alert = document.getElementById("message-send-alert");

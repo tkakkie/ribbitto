@@ -1,6 +1,30 @@
 (() => {
   const pendingRequests = new Set();
+  const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];
+  const dispatch = () => {
+    if (pendingRequests.size || document.getElementById("message-composer")?.classList.contains("htmx-request")) return;
+    const forms = pendingForms();
+    if (forms.some(form => form.dataset.state === "failed" && form.dataset.unconfirmed)) return;
+    const head = forms.find(form => form.dataset.state === "queued");
+    if (head) htmx.trigger(head, "pending-send");
+  };
   document.addEventListener("submit", (event) => {
+    if (event.target.matches("[data-pending-form]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const form = event.target;
+      if (form.dataset.state !== "failed") return;
+      // A refused send will now be stored after the later sends. An unknown
+      // outcome keeps its place until its same-key retry resolves it.
+      if (!form.dataset.unconfirmed) form.closest("li").parentElement.append(form.closest("li"));
+      form.dataset.state = "queued";
+      form.querySelector("[role=status]").textContent = "";
+      form.querySelector("[data-pending-actions]").hidden = true;
+      form.closest("li").querySelector("[data-pending-sending]").hidden = false;
+      document.getElementById("message-body").focus({ preventScroll: true });
+      dispatch();
+      return;
+    }
     if (event.target.id !== "message-composer") return;
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
@@ -11,21 +35,33 @@
     const list = document.getElementById("message-pending");
     // Both forms replace the same state; a stale ordinary answer must not
     // overwrite a pending send's fresh generation and key.
-    if (list.firstElementChild || pendingRequests.size || form.classList.contains("htmx-request")) {
+    if (form.classList.contains("htmx-request") || list.children.length >= 10) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      say("busy");
+      say(list.children.length >= 10 ? "capacity" : "busy");
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) return;
+    if (!text || [...text].length > 4000) {
+      if (list.firstElementChild || pendingRequests.size) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        say("busy");
+      }
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
+    sending.elements.idempotency_key.value = crypto.randomUUID();
     sending.elements.body.value = body.value;
-    item.querySelector("#message-pending-body").textContent = text;
+    const shownBody = item.querySelector("[data-pending-body]");
+    shownBody.textContent = text;
+    shownBody.id += "-" + sending.elements.idempotency_key.value;
+    for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
+    sending.dataset.state = "queued";
     list.append(item);
     body.value = "";
     form.elements.idempotency_key.value = crypto.randomUUID();
@@ -34,7 +70,7 @@
     reconcile();
     item.scrollIntoView({ block: "nearest" });
     htmx.process(sending);
-    sending.requestSubmit();
+    dispatch();
   }, true);
   const pendingForm = (event) => {
     const form = event.detail.requestConfig?.elt;
@@ -44,40 +80,50 @@
   // paints both identities. Stream-first waits for the response's ID.
   const reconcile = () => {
     const list = document.getElementById("message-pending");
-    const item = list?.firstElementChild;
-    if (item?.dataset.postedMessage && document.getElementById(item.dataset.postedMessage)?.parentElement.id === "message-items") item.remove();
+    for (const item of [...(list?.children || [])]) {
+      if (item.dataset.postedMessage && document.getElementById(item.dataset.postedMessage)?.parentElement.id === "message-items") {
+        item.remove();
+        say("");
+      }
+    }
     const empty = document.getElementById("message-empty");
     if (empty) empty.style.display = list?.firstElementChild ? "none" : "";
-    if (item && !item.isConnected) say("");
   };
   const items = document.getElementById("message-items");
   if (items) new MutationObserver(reconcile).observe(items, { childList: true });
   document.addEventListener("htmx:sseBeforeMessage", (event) => {
     if (event.target.id !== "message-items" || event.detail.type !== "messages-moved") return;
-    const item = document.getElementById("message-pending")?.firstElementChild;
-    if (!item?.dataset.postedMessage || !items.dataset.topic) return;
+    if (!items.dataset.topic) return;
     const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
-    if (payload.querySelector("ul")?.dataset.fromTopic === items.dataset.topic &&
-        payload.getElementById(item.dataset.postedMessage)) {
-      item.remove();
-      say("");
-      reconcile();
+    if (payload.querySelector("ul")?.dataset.fromTopic !== items.dataset.topic) return;
+    for (const form of pendingForms()) {
+      const item = form.closest("li");
+      if (item.dataset.postedMessage && payload.getElementById(item.dataset.postedMessage)) item.remove();
     }
+    say("");
+    reconcile();
   });
   document.addEventListener("click", (event) => {
     if (!event.target.closest("[data-pending-remove]")) return;
     event.target.closest("li").remove();
     say("");
     reconcile();
+    dispatch();
     document.getElementById("message-body").focus({ preventScroll: true });
   });
   document.addEventListener("htmx:beforeRequest", (event) => {
     const form = pendingForm(event);
     if (!form) return;
     pendingRequests.add(form);
+    form.dataset.state = "sending";
     // htmx dispatches completion on the form even after it is detached,
     // when the event can no longer bubble to document.
-    form.addEventListener("htmx:afterRequest", () => pendingRequests.delete(form), { once: true });
+    form.addEventListener("htmx:afterRequest", (answer) => {
+      completePending(answer, form);
+      pendingRequests.delete(form);
+      // Finish htmx's request cleanup before triggering the next form.
+      queueMicrotask(dispatch);
+    }, { once: true });
     document.getElementById("message-body").focus({ preventScroll: true });
     form.querySelector("[role=status]").textContent = "";
     form.querySelector("[data-pending-actions]").hidden = true;
@@ -200,30 +246,33 @@
     const active = document.activeElement;
     if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
   });
+  const completePending = (event, pending) => {
+    const status = event.detail.xhr.status;
+    if (status === 200) {
+      pending.dataset.state = "confirmed";
+      delete pending.dataset.unconfirmed;
+      return;
+    }
+    pending.dataset.state = "failed";
+    const alert = document.getElementById("message-send-alert");
+    let name = "unconfirmed";
+    if (status === 409) {
+      name = "repeat";
+      delete pending.dataset.unconfirmed;
+      pending.elements.idempotency_key.value = crypto.randomUUID();
+    } else if ([400, 404, 413, 422, 429].includes(status)) {
+      name = pending.dataset.unconfirmed ? "stillUnconfirmed" : "notSent";
+    } else pending.dataset.unconfirmed = "true";
+    pending.querySelector("[role=status]").textContent = alert.dataset[name];
+    pending.querySelector("[data-pending-actions]").hidden = false;
+    pending.closest("li").querySelector("[data-pending-sending]").hidden = true;
+  };
   // Every failure keeps the text and the key, so sending again repeats this
   // send (decision 37 (b)). Only a 200 or a 409 comes after the server's key
   // lookup and brings a new key; until then an unconfirmed send stays marked
   // on its key, whatever a retry is answered (#1179).
   document.addEventListener("htmx:afterRequest", (event) => {
     const form = event.target;
-    const pending = pendingForm(event);
-    if (pending) {
-      const status = event.detail.xhr.status;
-      if (status === 200) return;
-      const alert = document.getElementById("message-send-alert");
-      let name = "unconfirmed";
-      if (status === 409) {
-        name = "repeat";
-        delete pending.dataset.unconfirmed;
-        pending.elements.idempotency_key.value = crypto.randomUUID();
-      } else if ([400, 404, 413, 422, 429].includes(status)) {
-        name = pending.dataset.unconfirmed ? "stillUnconfirmed" : "notSent";
-      } else pending.dataset.unconfirmed = "true";
-      pending.querySelector("[role=status]").textContent = alert.dataset[name];
-      pending.querySelector("[data-pending-actions]").hidden = false;
-      pending.closest("li").querySelector("[data-pending-sending]").hidden = true;
-      return;
-    }
     if (form.id !== "message-composer") return;
     const status = event.detail.xhr.status;
     const key = form.elements.idempotency_key?.value;

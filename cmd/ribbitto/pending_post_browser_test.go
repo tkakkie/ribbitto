@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,7 +29,10 @@ func TestPendingPostBrowser(t *testing.T) {
 	defer cancel()
 	browser := launchBrowser(t, ctx, "pending posts")
 	for _, topic := range []bool{false, true} {
-		t.Run(map[bool]string{false: "feed", true: "topic"}[topic], func(t *testing.T) { testPendingPostPage(t, ctx, browser, topic) })
+		t.Run(map[bool]string{false: "feed", true: "topic"}[topic], func(t *testing.T) {
+			testPendingPostPage(t, ctx, browser, topic)
+			testPendingQueuePostPage(t, ctx, browser, topic)
+		})
 	}
 }
 
@@ -123,6 +127,111 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 			}
 			if count != 1 || reads.Load() != initialReads+1 || page.MustEval(`id => document.querySelectorAll('#message-items > #'+id).length!==1`, view.MessageDOMID(id)).Bool() {
 				t.Fatal("delivery did not replace/read exactly once, or retry stored twice")
+			}
+		})
+	}
+}
+
+func testPendingQueuePostPage(t *testing.T, ctx context.Context, browser *rod.Browser, topic bool) {
+	for _, lost := range []bool{false, true} {
+		t.Run(fmt.Sprintf("queue/lost=%t", lost), func(t *testing.T) {
+			pool, scope := feedFixture(t)
+			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
+			feedRequire(t, err)
+			var account kernel.ID
+			feedRequire(t, pool.QueryRow(ctx, "SELECT account_id FROM member WHERE organization_id=$1 AND id=$2", scope.OrganizationID, scope.MemberID).Scan(&account))
+			token, _, err := sessions.Create(ctx, account)
+			feedRequire(t, err)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
+				handler.ServeHTTP(w, r)
+			}))
+			defer server.Close()
+			path := view.ChannelURL("feed", scope.ChannelID)
+			if topic {
+				place := conversationtest.Topic(t, pool, scope.OrganizationID, scope.ChannelID, "queue")
+				path = view.ConversationURL("feed", scope.ChannelID, &place.ID)
+			}
+			page, closePage := boundedPage(t, browser, ctx, "queued posts")
+			defer closePage()
+			page.MustEvalOnNewDocument(`(() => {window.answers=0;document.addEventListener('htmx:afterRequest',e=>{if(e.detail.requestConfig?.elt.matches('[data-pending-form]')) window.answers++;});})()`)
+			page.MustNavigate(server.URL + path).MustWaitLoad()
+			sent, release := make(chan url.Values, 4), make(chan struct{}, 4)
+			router := page.HijackRequests()
+			var attempts atomic.Int32
+			router.MustAdd(server.URL+path, func(h *rod.Hijack) {
+				if h.Request.Method() != "POST" {
+					h.ContinueRequest(&proto.FetchContinueRequest{})
+					return
+				}
+				values, _ := url.ParseQuery(h.Request.Body())
+				sent <- values
+				n := attempts.Add(1)
+				if err := h.LoadResponse(http.DefaultClient, true); err != nil {
+					t.Error(err)
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				if lost && n == 2 {
+					h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
+				}
+			})
+			go router.Run()
+			defer func() { _ = router.Stop() }()
+			page.MustEval(`() => {const b=document.getElementById('message-body');for(const text of ['queue 1','queue 2','queue 3']) {b.value=text;b.form.requestSubmit();}}`)
+			receive := func() url.Values {
+				t.Helper()
+				select {
+				case v := <-sent:
+					return v
+				case <-ctx.Done():
+					t.Fatal("queue request missing")
+					return nil
+				}
+			}
+			for i := 1; i <= 3; i++ {
+				values := receive()
+				if values.Get("body") != fmt.Sprintf("queue %d", i) || len(sent) != 0 {
+					t.Fatal("POST order or serialization differs")
+				}
+				release <- struct{}{}
+				answers := i
+				if lost && i == 3 {
+					answers++
+				}
+				page.MustWait(`n => window.answers===n`, answers)
+				if lost && i == 2 {
+					if attempts.Load() != 2 || len(sent) != 0 {
+						t.Fatal("third POST escaped the unknown-outcome pause")
+					}
+					page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+					retry := receive()
+					if retry.Get("idempotency_key") != values.Get("idempotency_key") || retry.Get("body") != values.Get("body") {
+						t.Fatal("same-key retry changed the second send")
+					}
+					release <- struct{}{}
+					page.MustWait(`() => window.answers===3`)
+				}
+			}
+			page.MustWait(`() => !document.querySelector('#message-pending > li') && document.querySelectorAll('#message-items > li').length===3`)
+			rows, err := pool.Query(ctx, "SELECT id, body FROM message WHERE organization_id=$1 AND channel_id=$2 ORDER BY event_seq", scope.OrganizationID, scope.ChannelID)
+			feedRequire(t, err)
+			defer rows.Close()
+			n := 0
+			for rows.Next() {
+				var id kernel.ID
+				var body string
+				feedRequire(t, rows.Scan(&id, &body))
+				n++
+				if body != fmt.Sprintf("queue %d", n) || page.MustElement("#body-"+view.MessageDOMID(id)).MustText() != body || page.MustEval(`id => document.querySelectorAll('#'+id).length!==1`, view.MessageDOMID(id)).Bool() {
+					t.Fatal("database event_seq order or visible identity differs")
+				}
+			}
+			feedRequire(t, rows.Err())
+			if n != 3 {
+				t.Fatalf("stored %d messages, want 3", n)
 			}
 		})
 	}

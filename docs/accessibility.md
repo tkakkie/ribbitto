@@ -18,7 +18,7 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for
   layout.
 - **Forms are labelled.** ✓ Every text input, `<select>` and `<textarea>` has
-  a label — a wrapping `<label>` or `for`/`id`; hidden inputs need none.
+  a `<label>` (wrapping or `for`/`id`); hidden inputs need none.
   Field labels contain only the field name; errors sit outside the label,
   linked from the input with `aria-describedby`, and use `role="alert"`
   after a submit. Setup and sign-up use the shared `textField` component:
@@ -26,12 +26,13 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   valid inputs omit both attributes. Sign-in uses `textField` with empty
   field errors and keeps one form-level alert. A radio group's error (the
   channel image picker) is its own alert: every radio in the group has
-  `aria-invalid="true"` and is described by it. A failed enhanced send fills
-  the composer's empty `#message-send-alert` (`role="alert"`), outside the
-  swapped state, with a server-rendered text saying whether it was not sent,
-  could not be confirmed or was recovered. Pending items instead use
-  an empty polite status for failures; Sending is silent. Retry and Remove
-  are described by the pending body. Arrival announces once in `#message-status`.
+  `aria-invalid="true"` and is described by it. Enhanced failures fill
+  `#message-send-alert` (`role="alert"`, outside swaps) with localised
+  not-sent, unconfirmed or recovered text. Pending failures
+  use an empty polite status; queued/sending states are silent.
+  Retry and Remove describe their own unique body. At 10 items,
+  a localised capacity alert retains the draft, `aria-invalid` and
+  `aria-describedby="message-help"`. Arrival announces in `#message-status`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -96,9 +97,8 @@ The textarea is never replaced (#1173): it keeps drafts and text typed while a
 post is in flight, keeps `aria-describedby="message-help"` and takes
 `aria-invalid` from every swapped state (`"false"` on pending success).
 Help shows errors or guidance; focus left on the disabled send button
-returns to it. While either form sends, feed submits keep the draft and announce
-busy. In flight, a polite `role="status"` shows "Sending…" over the
-help, which turns invisible but keeps its space. "Load older"
+returns to it. Pending sends queue ([contract](architecture/web-composer.md#composer)).
+A polite `role="status"` shows "Sending…" over the help, which turns invisible but keeps its space. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 

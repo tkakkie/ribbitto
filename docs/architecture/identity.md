@@ -101,4 +101,4 @@ one `identity.Hasher` here and shares it with every authentication use case.
 **Drafts horizon.** `SignIn.SessionHorizon` returns a `uuidv7()` from
 PostgreSQL, the clock of session ids, so a later session's id has a
 millisecond prefix at or after it; it grants nothing. Only signed-out renders
-of the sign-in page read it ([drafts](web-javascript.md#drafts)).
+of the sign-in page read it ([drafts](web-composer.md#drafts)).

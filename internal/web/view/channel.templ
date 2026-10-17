@@ -296,7 +296,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v11.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v12.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -446,8 +446,8 @@ templ pendingMessage(page ChannelPage) {
 			</div>
 			// Keep the empty failure status exposed without adding a flex gap.
 			<div>
-				<p id="message-pending-body" dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
-				<form data-pending-form method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt="find button" hx-request={ `{"timeout":30000}` }>
+				<p data-pending-body id="message-pending-body" dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
+				<form data-pending-form hx-trigger="pending-send" method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt="find button" hx-request={ `{"timeout":30000}` }>
 					<input type="hidden" name="body"/>
 					<input type="hidden" name="idempotency_key"/>
 					<input type="hidden" name="composer"/>
@@ -502,6 +502,7 @@ templ messageComposer(page ChannelPage) {
 						data-recovered={ i18n.T(ctx, "message.send_alert.recovered") }
 						data-repeat={ i18n.T(ctx, "message.error.repeat") }
 						data-busy={ i18n.T(ctx, "message.busy") }
+						data-capacity={ i18n.T(ctx, "message.capacity") }
 						class="text-caption text-danger sending:invisible"
 					></p>
 				}

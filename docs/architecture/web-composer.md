@@ -33,16 +33,25 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.
-- **Pending own post** (#1156, #1188; queue #1174):
+- **Pending own posts** (#1156, #1188, #1174):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
   after `#message-items`. The item's own htmx form holds the original text,
   key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. Any pending item or in-flight pending
-  request, or the composer's own in-flight request (`htmx-request`), blocks all
-  composer submits before body validation, shows a localised notice and keeps
-  the next text. The two forms' requests never overlap, so stale ordinary
-  answers cannot overwrite a pending success's fresh generation and key.
+  focus and takes `crypto.randomUUID()`. Each queued form also gets its own
+  fresh UUID. Up to 10 items per tab count in every state, including failures
+  and confirmed items awaiting delivery. At capacity a localised alert keeps
+  the next text; Retry takes no slot. Delivery, move-out and Remove free slots.
+  FIFO dispatch sends one form at a time, after classifying its predecessor.
+  An ordinary request blocks composer submits; pending items or requests block
+  invalid ordinary submits, so the two forms' requests never overlap.
+  A Not sent item lets later items continue; Retry moves it to the list and
+  queue's end. An unknown outcome pauses later items (still showing Sending).
+  Its same-key Retry keeps its place; success resumes dispatch. A refused retry
+  keeps the pause while the earlier outcome is unknown. Remove resumes without
+  resolving that request: it may commit later, and its real delivery stays
+  visible. Storage order follows send order on uninterrupted success or a
+  successful same-key Retry, but may differ after Remove.
   A 200 swaps the composer state and out-of-band typing form, sets
   `aria-invalid="false"` and keeps `aria-describedby="message-help"` and the
   textarea text.

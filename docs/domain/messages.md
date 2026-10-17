@@ -127,32 +127,32 @@ language too.
 
 ## Posting from the channel page
 
-The composer uses `conversation.Posting.Send`. Enhanced latest feeds/topics show a
-pending item immediately and empty the composer (#1156, #1188). Any pending item or
-in-flight request from either send form blocks all composer submits before body
-validation; ordinary and pending requests never overlap.
-Retry keeps its text and key; failures appear on the item ([contract](../architecture/web-composer.md#composer)).
-Idle feed/topic sends with
-blank text or over 4,000 code points after normalisation and trimming, or without
-`crypto.randomUUID()`, keep the ordinary path: the textarea stays usable during
-sending; success removes only the sent prefix, keeping later input (#1173); 422 keeps the
-text with a field error. Real items arrive through the stream, including
-reconnect replay. Older pages and scriptless posts use 303 on success and
-full-page 422 errors with the text kept. Organisation and channel resolve
-before posting; non-members get 404.
+Enhanced latest feeds/topics show pending items and empty the composer
+(#1156, #1188, #1174).
+All states count toward 10 items per tab; an eleventh send keeps its text
+with a localised notice. Delivery, move-out or Remove free slots; Retry uses
+its existing slot. Requests run singly in FIFO order. Not sent retries go
+last; unknown outcomes pause until same-key Retry succeeds or Remove.
+Remove permits late, visible commits out of order; uninterrupted success and
+same-key Retry preserve storage order. Ordinary and pending requests never overlap
+([contract](../architecture/web-composer.md#composer)).
+Idle blank/over-limit sends (4,000 code points after normalisation and trimming)
+or sends without `crypto.randomUUID()` use the ordinary path: the textarea
+stays usable; success removes only the sent prefix (#1173); 422 keeps text
+with a field error. The stream delivers real items, including replay.
+Older pages and scriptless posts use 303 on success and full-page 422 errors.
+Organisation and channel resolve before posting; non-members get 404.
 
-Enter sends, Shift+Enter inserts a newline, and IME composition never sends.
+Enter sends, Shift+Enter adds a newline; IME composition never sends.
 The help names formatting. Pages open at the newest message. Live delivery
 follows only at the bottom, except the sender's response ID scrolls its
 message into view once, in either response/delivery order and after reconnect.
-Focus stays in the composer. Only live appends announce; replay replaces the
-same ID silently.
+Focus stays in the composer. Live appends announce; replay replaces IDs silently.
 
-A **repeated send** (the same key again, after a lost response or a double
-submission) posts nothing: it is answered as a success naming the first
-message, wherever branching has moved it since, and the composer stays on the
-requested feed or topic. The same key with other text, another quote or
-another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
+A **repeated send** (the same key after a lost response or double submission)
+posts nothing: success names the original message, even after branching,
+while the composer stays on the requested feed or topic. The same key with
+other text, another quote or another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
 again posts it. A malformed key answers 400; a form without one posts without
 deduplication. A failed enhanced send (#1179) keeps text and key:
 400/404/413/422/429 mean not sent, unless its earlier send is unconfirmed;

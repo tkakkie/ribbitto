@@ -1,5 +1,6 @@
-// Command argonreview runs issue and adversarial pull request reviews with Gemini 4
-// Argon in Antigravity (#1041, #1065). verify refuses a binary not built from
+// Command argonreview runs issue and adversarial reviews and Copilot follow-up
+// checks with Gemini 4 Argon in Antigravity (#1041, #1065, #1270).
+// verify refuses a binary not built from
 // a clean origin/main of the source checkout named by RIBBITTO_ARGON_SOURCE,
 // so a pull request's copy never acts as the launcher; prepare runs that
 // check, then writes and checks Antigravity's configuration in the dedicated
@@ -10,6 +11,7 @@
 // review runs Argon on a pull request there and prints the report only if
 // the run passes the failure rules (#1096);
 // issue reviews an issue against the trusted revision (#1263);
+// copilot-check checks Copilot follow-up changes at the pull request head (#1270);
 // probe runs the same pipeline on a local throwaway repository with a
 // trusted prompt and prints what agy did (#1071);
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
@@ -39,6 +41,10 @@ func main() {
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	round := 1
+	approved := ""
+	if len(args) == 3 && args[0] == "copilot-check" && commitID.MatchString(args[2]) {
+		approved, args = args[2], args[:2]
+	}
 	if len(args) == 3 && args[0] == "issue" && (args[2] == "1" || args[2] == "2") {
 		round, _ = strconv.Atoi(args[2])
 		args = args[:2]
@@ -57,7 +63,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	if len(args) == 2 && (args[0] == "prompt" || args[0] == "review" || args[0] == "issue") && prNumber.MatchString(args[1]) {
+	if len(args) == 2 && (args[0] == "prompt" || args[0] == "review" || args[0] == "issue" || args[0] == "copilot-check" && approved != "") && prNumber.MatchString(args[1]) {
 		number, _ := strconv.Atoi(args[1])
 		info, ok := debug.ReadBuildInfo()
 		source := os.Getenv("RIBBITTO_ARGON_SOURCE")
@@ -73,6 +79,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		if err == nil && args[0] == "issue" {
 			code, err = issueHere(source, revision, number, round, stdout)
+		}
+		if err == nil && args[0] == "copilot-check" {
+			code, err = copilotHere(source, revision, number, approved, stdout)
 		}
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "argonreview: %v\n", err)
@@ -103,7 +112,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | probe <repository> <prompt-file> | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard")
 	return 2
 }
 

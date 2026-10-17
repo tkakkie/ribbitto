@@ -1,11 +1,9 @@
 # Packages and allowed imports
 
-Which package does what and which imports are allowed. The [feature map](features.md)
-groups these packages by feature; the [architecture index](README.md) lists
-the other files.
+Package responsibilities and allowed imports. See the [feature map](features.md)
+and [architecture index](README.md).
 
-**Keep it current:** update this file in the same pull request whenever a
-package's responsibility or an allowed import changes.
+**Keep current:** update this file with responsibility or import changes.
 
 `cmd/ribbitto` is the server composition root: it reads configuration,
 builds the concrete implementations and wires them together. `cmd/seed` is
@@ -27,13 +25,13 @@ It imports only `internal/platform/postgres/pgtest` from this module to report
 including templ's server in another process group, and confirms descendant
 cleanup on shutdown. It imports no application packages; `bin/ai-db run`
 applies worktree configuration to templ and its server.
-`cmd/argonreview` runs Argon's reviews (#1065): `verify` refuses a
-build not from a clean `origin/main`; `prepare` writes Antigravity's settings
-in a dedicated `HOME` (#1069); `check` lists models under a supervisor
-(#1070); `prompt` prints a review's prompt (#1068), `review` runs
-it (#1096), `issue` an issue (#1263), `probe` a scratch repository
-(#1071); `guard` is the tool hook. It
-imports no application packages.
+`cmd/argonreview` imports no application packages. `verify` requires a clean
+`origin/main` build; `prepare` configures a dedicated `HOME`; `check` lists
+models under a supervisor. `prompt` prints a PR review prompt; `review`
+runs it; `issue` reviews issues; `copilot-check` checks Copilot follow-ups;
+`probe` runs on scratch repositories; `guard` is the tool hook. A failed or
+non-counting Copilot check falls back to the AI that did not write the
+change: Codex for Claude's, Claude for Codex's ([workflow](../workflow/copilot.md)).
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

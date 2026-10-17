@@ -1,9 +1,10 @@
 # Running Argon
 
 Argon is Gemini 4 Argon (High) in Antigravity's `agy` CLI. The Go launcher
-`cmd/argonreview` runs its issue reviews and adversarial reviews (#1065
-series). Which pull requests get one is [adversarial-review.md](adversarial-review.md)'s
-business; this file covers the setup, the invocation and the boundary.
+`cmd/argonreview` runs issue reviews, adversarial reviews and Copilot
+follow-up checks (#1065 series, #1270). [Adversarial selection](adversarial-review.md)
+and [Copilot assignments](copilot.md) define when to use them; this file
+covers setup, invocation and the boundary.
 
 ## One-time setup
 
@@ -84,11 +85,12 @@ or accidental build, not a malicious one, whose own code could skip it.
 | `prompt <pr>` | prints the prompt a review would send, and leaves nothing |
 | `review <pr>` | the review; prints the report only if the run counts |
 | `issue <number> [round]` | reviews an issue against the trusted revision; prints the report only if the run counts |
+| `copilot-check <pr> <approved-sha>` | checks Copilot follow-up changes at the current PR head; prints only a counted report |
 | `probe <repo> <prompt-file>` | the same pipeline on a scratch repository's `HEAD` with a trusted prompt; prints `agy`'s output and the verdict |
 | `guard` | the `PreToolUse` hook; Antigravity calls it, not you |
 
 `RIBBITTO_ARGON_TIMEOUT` (a Go duration, default `25m`) limits `agy`. A
-pull request review, issue review or probe exits 0 for a run that counts,
+review, Copilot check or probe exits 0 for a run that counts,
 124 for the time limit, 130 or 143 for INT or TERM, a failing `agy`'s own status, and 1 for
 anything else, with the reason on stderr. Bad arguments exit 2. `guard`
 exits 0 only for an allow, and non-zero for a deny or a failed write.
@@ -122,8 +124,20 @@ title, body and comments, check out the trusted revision in a fresh
 repository with the same symlink refusal and `.agents` removal, and read
 `.github/prompts/issue-review.md` from that revision. The issue snapshot is
 one `UNTRUSTED_PAYLOAD_JSON` line, never instructions. Steps 1 and 5–7,
-including every run-counting rule, are identical. Follow-up checks and
-closure verification on Argon are out of scope.
+including every run-counting rule, are identical.
+
+For `copilot-check <pr> <approved-sha>`, use the same trusted invocation.
+One GraphQL snapshot holds the PR text, head and Copilot review bodies and
+inline comments; truncated connections are refused. The workspace uses
+`newWorkspace` as `review` does, then refuses a fetched PR head different
+from the snapshot or a full approved SHA that is not its ancestor. The
+trusted `.github/prompts/copilot-check.md` and one `UNTRUSTED_PAYLOAD_JSON`
+line with the snapshot and `<approved-sha>..<head>` diff replace the prompt.
+All run-counting rules stay. On Claude's and Codex's pull requests, a failed
+or non-counting run falls back to the AI that did not write the follow-up
+change: Codex for Claude's, Claude for Codex's
+([Copilot](copilot.md#copilot-follow-up-check)). Argon's own pull requests,
+adversarial follow-up checks and closure verification keep their reviewers.
 
 ## The boundary
 
@@ -170,3 +184,9 @@ of pull request content and `.agents` removal; the guard and deny rules
 are unchanged, so #1071's probes still cover tool denial. After merge,
 record one live `issue` run from the trusted build on #1263, including
 whether it counted.
+
+For #1270, fixture tests cover the current PR head, approved SHA ancestry,
+isolated checkout with `.agents` removed, and one JSON payload line. Guard
+and deny rules are unchanged. After merge, record the first live
+`copilot-check` run on #1270 with its duration and whether it counted or
+fell back.

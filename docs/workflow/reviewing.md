@@ -8,7 +8,8 @@ Argon through the trusted `argonreview issue` subcommand
 ([invocation](running-argon.md#the-trusted-invocation)), falling back to
 Codex when the run does not count; other Claude work → Codex;
 Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
-there → Codex ([Argon's pull requests](argon-pull-requests.md)).
+there → Codex ([Argon's pull requests](argon-pull-requests.md)). Copilot
+follow-up checks use [Argon and an independent fallback](copilot.md#copilot-follow-up-check).
 Claude's own work is its issues, the fixes it writes during a review, and
 an issue the maintainer named Claude to implement.
 
@@ -78,8 +79,11 @@ Verdict: approve | changes requested
 "Approve" with no findings is a valid review. Only `[blocking]` findings
 hold things up. For each Claude-written issue review, the orchestrator
 notes in its review comment whether Argon counted or fell back to Codex.
-Argon is used only for issue reviews here; follow-up checks and closure
-verification keep their existing reviewers.
+Argon also runs `argonreview copilot-check` on Claude's and Codex's pull
+requests; a failed or non-counting run falls back to the AI that did not
+write the change (Codex for Claude's, Claude for Codex's), as in
+[Copilot follow-up](copilot.md#copilot-follow-up-check). Adversarial follow-up
+checks and closure verification keep their existing reviewers.
 
 ## Closure verification
 

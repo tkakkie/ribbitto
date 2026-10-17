@@ -465,6 +465,16 @@ func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang
 						t.Fatalf("add htmx form fixture support for <%s name=%q>", n.Data, name)
 					}
 				}
+				if _, pending := attrOK(element, "data-pending-form"); pending {
+					// A clone gets these controls from the live composer before submit.
+					form.Set("idempotency_key", "00000000-0000-4000-8000-000000000001")
+					form.Set("cursor", "0")
+					for n := range page.Descendants() {
+						if value := attr(n, "value"); value != "" && form.Has(attr(n, "name")) {
+							form.Set(attr(n, "name"), value)
+						}
+					}
+				}
 				// Check the rendered draft (including validation errors), then a
 				// successful post: both responses must satisfy the same selectors.
 				for _, submit := range []bool{false, true} {
@@ -741,6 +751,12 @@ func TestPagesMarkup(t *testing.T) {
 					for n := range doc.Descendants() {
 						if _, ok := attrOK(n, "data-announcement"); ok {
 							t.Error("history must not carry announcement text")
+						}
+						if _, pending := attrOK(n.Parent, "data-pending-form"); pending && attr(n, "role") == "status" {
+							if _, hidden := attrOK(n.Parent, "hidden"); hidden || text(n) != "" || attr(n, "aria-live") == "assertive" {
+								t.Error("pending failure status must start exposed, empty and polite")
+							}
+							continue
 						}
 						if attr(n, "role") == "status" && attr(n, "id") != "typing-status" && attr(n, "id") != "message-sending" {
 							statusCount++

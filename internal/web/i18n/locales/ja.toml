@@ -393,3 +393,12 @@ other = "アカウント"
 
 ["creation.error.limit"]
 other = "ここではこれ以上作成できません。"
+
+["message.retry"]
+other = "再送"
+
+["message.remove"]
+other = "削除"
+
+["message.busy"]
+other = "送信中のメッセージを待つか削除してから、次のメッセージを送信してください。"

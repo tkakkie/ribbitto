@@ -1,10 +1,79 @@
 (() => {
+  const pendingRequests = new Set();
   document.addEventListener("submit", (event) => {
     if (event.target.id !== "message-composer") return;
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
+    const template = document.getElementById("message-pending-template");
+    if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) return;
+    const form = event.target, body = form.elements.body;
+    const list = document.getElementById("message-pending");
+    // Both forms replace the same state; a stale ordinary answer must not
+    // overwrite a pending send's fresh generation and key.
+    if (list.firstElementChild || pendingRequests.size || form.classList.contains("htmx-request")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      say("busy");
+      return;
+    }
+    const text = body.value.replace(/\r\n?/g, "\n").trim();
+    if (!text || [...text].length > 4000) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const item = template.content.firstElementChild.cloneNode(true);
+    const sending = item.querySelector("form");
+    for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
+    sending.elements.body.value = body.value;
+    item.querySelector("#message-pending-body").textContent = text;
+    list.append(item);
+    body.value = "";
+    form.elements.idempotency_key.value = crypto.randomUUID();
+    body.focus({ preventScroll: true });
+    say("");
+    reconcile();
+    item.scrollIntoView({ block: "nearest" });
+    htmx.process(sending);
+    sending.requestSubmit();
   }, true);
+  const pendingForm = (event) => {
+    const form = event.detail.requestConfig?.elt;
+    return form?.matches("[data-pending-form]") ? form : null;
+  };
+  // Mutation observers run before paint: a response-first delivery never
+  // paints both identities. Stream-first waits for the response's ID.
+  const reconcile = () => {
+    const list = document.getElementById("message-pending");
+    const item = list?.firstElementChild;
+    if (item?.dataset.postedMessage && document.getElementById(item.dataset.postedMessage)?.parentElement.id === "message-items") item.remove();
+    const empty = document.getElementById("message-empty");
+    if (empty) empty.style.display = list?.firstElementChild ? "none" : "";
+    if (item && !item.isConnected) say("");
+  };
+  const items = document.getElementById("message-items");
+  if (items) new MutationObserver(reconcile).observe(items, { childList: true });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-pending-remove]")) return;
+    event.target.closest("li").remove();
+    say("");
+    reconcile();
+    document.getElementById("message-body").focus({ preventScroll: true });
+  });
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    const form = pendingForm(event);
+    if (!form) return;
+    pendingRequests.add(form);
+    // htmx dispatches completion on the form even after it is detached,
+    // when the event can no longer bubble to document.
+    form.addEventListener("htmx:afterRequest", () => pendingRequests.delete(form), { once: true });
+    document.getElementById("message-body").focus({ preventScroll: true });
+    form.querySelector("[role=status]").textContent = "";
+    form.querySelector("[data-pending-actions]").hidden = true;
+    form.closest("li").querySelector("[data-pending-sending]").hidden = false;
+  });
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    if (pendingForm(event) && event.detail.xhr.status !== 200) event.detail.shouldSwap = false;
+  });
   // Some phone IMEs end composition before dispatching the confirming Enter,
   // with neither isComposing nor 229. Keep that short event sequence local to
   // its textarea; a later deliberate Enter still sends normally.
@@ -79,6 +148,12 @@
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
+    const pending = pendingForm(event);
+    if (pending) {
+      pending.closest("li").dataset.postedMessage = state.dataset.postedMessage;
+      reconcile();
+      return;
+    }
     const status = event.detail.xhr.status;
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");
@@ -106,6 +181,24 @@
   // on its key, whatever a retry is answered (#1179).
   document.addEventListener("htmx:afterRequest", (event) => {
     const form = event.target;
+    const pending = pendingForm(event);
+    if (pending) {
+      const status = event.detail.xhr.status;
+      if (status === 200) return;
+      const alert = document.getElementById("message-send-alert");
+      let name = "unconfirmed";
+      if (status === 409) {
+        name = "repeat";
+        delete pending.dataset.unconfirmed;
+        pending.elements.idempotency_key.value = crypto.randomUUID();
+      } else if ([400, 404, 413, 422, 429].includes(status)) {
+        name = pending.dataset.unconfirmed ? "stillUnconfirmed" : "notSent";
+      } else pending.dataset.unconfirmed = "true";
+      pending.querySelector("[role=status]").textContent = alert.dataset[name];
+      pending.querySelector("[data-pending-actions]").hidden = false;
+      pending.closest("li").querySelector("[data-pending-sending]").hidden = true;
+      return;
+    }
     if (form.id !== "message-composer") return;
     const status = event.detail.xhr.status;
     const key = form.elements.idempotency_key?.value;

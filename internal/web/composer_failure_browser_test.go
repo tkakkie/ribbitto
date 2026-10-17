@@ -22,7 +22,7 @@ import (
 func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
-	handler, writer, _, _, _, path := keyedComposer(t, false)
+	handler, writer, _, _, _, path := keyedComposer(t, true)
 	// The fake writer is not safe for concurrent use; the test reads it too.
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +38,9 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
  document.addEventListener('htmx:afterRequest', e => { if (e.target.id === 'message-composer') window.composerAnswers++; });
 })()`)
 	page.MustNavigate(server.URL + path).MustWaitLoad()
+	if page.MustHas("#message-pending-template") {
+		t.Fatal("topic has a pending template")
+	}
 	if got := page.MustEval(`() => document.getElementById('message-composer').getAttribute('hx-request')`).Str(); got != `{"timeout":30000}` {
 		t.Fatalf("hx-request %q", got)
 	}

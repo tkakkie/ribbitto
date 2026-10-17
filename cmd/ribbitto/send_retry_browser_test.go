@@ -52,11 +52,11 @@ func TestSendRetryBrowser(t *testing.T) {
 			pool, scope := feedFixture(t)
 			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
 			feedRequire(t, err)
-			var account kernel.ID
-			feedRequire(t, pool.QueryRow(ctx, "SELECT account_id FROM member WHERE organization_id=$1 AND id=$2", scope.OrganizationID, scope.MemberID).Scan(&account))
+			var account, topic kernel.ID
+			feedRequire(t, pool.QueryRow(ctx, "SELECT m.account_id,c.default_topic_id FROM member m JOIN channel c ON c.organization_id=m.organization_id WHERE m.organization_id=$1 AND m.id=$2 AND c.id=$3", scope.OrganizationID, scope.MemberID, scope.ChannelID).Scan(&account, &topic))
 			token, _, err := sessions.Create(ctx, account)
 			feedRequire(t, err)
-			path := view.ChannelURL("feed", scope.ChannelID)
+			path := view.ConversationURL("feed", scope.ChannelID, &topic)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
 				handler.ServeHTTP(w, r)

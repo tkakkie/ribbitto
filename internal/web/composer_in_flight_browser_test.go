@@ -16,13 +16,13 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-// heldComposer serves the feed with every post held until the test releases
+// heldComposer serves a topic with every post held until the test releases
 // it, so the test can type while a send is in flight (#1173).
 func heldComposer(t *testing.T, browser *rod.Browser) (*rod.Page, func() chan struct{}, *atomic.Int32) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	t.Cleanup(cancel)
-	handler, _, _, place := composerHandler(t, false)
+	handler, _, _, place := composerHandler(t, true)
 	var posts atomic.Int32
 	held := make(chan chan struct{}, 4)
 	// Ending the test releases every held post, so that a failure cannot
@@ -56,7 +56,7 @@ func heldComposer(t *testing.T, browser *rod.Browser) (*rod.Page, func() chan st
  window.composerBody = () => { const b = document.getElementById('message-body');
   return JSON.stringify([b.value, b.selectionStart, b.selectionEnd, document.activeElement === b, b.getAttribute('aria-invalid')]); };
 })()`)
-	page.MustNavigate(server.URL + view.ChannelURL("acme", place.Channel)).MustWaitLoad()
+	page.MustNavigate(server.URL + view.ConversationURL("acme", place.Channel, &place.Topic)).MustWaitLoad()
 	next := func() chan struct{} {
 		t.Helper()
 		select {

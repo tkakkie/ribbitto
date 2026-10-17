@@ -15,9 +15,8 @@ from importing `internal/identity`, `internal/org` or
 in both languages, with `HX-Request: true`. It checks `hx-target` ids in
 the requesting page, `hx-select` matches in the response, and every
 `hx-select-oob` match in the response and its destination id in the page.
-Selection may use response-only ids. The selector helper supports `#id`
-and `#id > tag`, including comma-separated lists; new syntax needs explicit
-test support. Non-id targets `this`, `closest …` and `find …` are allowed;
+Selection may use response-only ids. The selector helper supports `#id`, `#id > tag` and comma-separated lists;
+new syntax needs test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find button"` and `hx-sync="this:drop"`
 are not swap selectors. The real sibling typing form is checked for its POST
@@ -66,24 +65,18 @@ session-bound drafts, with their bounds and owner checks.
 
 ### Decision 37 checks
 
-Existing checks cover HTML generation (pending bodies use `textContent`),
-requests (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
-`EventSource`) and components rendered alone (`TestComponentsMarkup`). The
+Checks cover HTML generation (`textContent` for pending bodies), requests
+and standalone markup (`TestComponentsMarkup`). The
 `indexedDB` pattern stays in force in every application script until the
 first allowed use; its issue makes the check file-scoped, as `localStorage`
 is limited to `message-drafts-vN.js`. No checks change for decision 41.
-Since #1178, `TestBrowser/drafts` covers sign-in cleanup: the millisecond
-rule, same-millisecond and newer entries kept, malformed keys removed,
-the notice in another tab, sign-out with scripts blocked, failed sign-out,
-and a signed-in error render with no cleanup. Since #1181,
-`TestBrowser/drafts-org` covers both organisation pages: a stale page keeps
-newer and same-millisecond sessions' entries unread, a later member or
-session removes earlier ones, each malformed key and own value goes, and an
-expiring page cleans up. Planned, each awaiting its issue:
-
-- #1156 adds a browser test that a body with markup shows as text and that
-  the pending item is removed.
-- #1162 tests a controlled interleaving: a tab of an earlier session writes
+`TestBrowser/drafts` checks sign-in cleanup (#1178): millisecond boundaries,
+malformed keys, cross-tab notices, blocked scripts, failed sign-out and
+signed-in errors. `TestBrowser/drafts-org` checks both organisation pages
+(#1181): stale sessions keep newer/same-millisecond entries unread; later
+sessions or members remove earlier ones; malformed values and expired own
+sessions are removed. Pending markup, replacement and recovery are checked
+below. Planned: #1162 tests a controlled interleaving: a tab of an earlier session writes
   after a later session's page has loaded and cleaned, and the later session
   never restores that text. It also tests sign-out with two tabs open and a
   debounced save pending.
@@ -92,13 +85,12 @@ expiring page cleans up. Planned, each awaiting its issue:
 
 `TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared
 browser suite. Its stream cases run the embedded `message-stream-v12.js`, vendored htmx and SSE extension
-in headless Chrome through go-rod. An HTTP test server renders real
+in headless Chrome through go-rod. A test server renders
 `ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, removal of the moved first-unread message's divider, preservation on
-other moves, and abort/400 followed by another request. Exact ordered ID lists
-detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
+other moves, and abort/400 followed by another request. Ordered IDs detect duplicates and gaps; waits use DOM/lifecycle gates.
 The panel-sheet reading checks use a named observation window,
 `noReadWindow`, when no POST is expected.
 Script-disabled tabs wait for document readiness without page-side event
@@ -112,7 +104,11 @@ replacement, closed/fresh generations, a post held in flight while typing
 and composing (#1173), enhanced latest feed/topic posts and
 plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
 posts from a topic view through real PostgreSQL and the real stream.
-The composer harness controls only the two-second throttle timer, without sleeps.
+Feed pending cases cover both response/delivery orders, reconnect replay,
+feed moves, same-text collisions, JavaScript whitespace, failure classes and
+Retry/Remove. Per-frame identity counts and desktop/phone body positions
+check replacement; PostgreSQL checks pending/response/delivery cursor phases
+and a committed send with its response lost. The composer harness controls only the two-second throttle timer, without sleeps.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple
 streams/last close and current/empty reconnects. Transport cases assert native

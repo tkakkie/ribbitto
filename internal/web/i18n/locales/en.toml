@@ -393,3 +393,12 @@ other = "Account"
 
 ["creation.error.limit"]
 other = "No more can be created here."
+
+["message.retry"]
+other = "Retry"
+
+["message.remove"]
+other = "Remove"
+
+["message.busy"]
+other = "Wait for your pending message, or remove it, before sending another."

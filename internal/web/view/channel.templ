@@ -251,7 +251,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 								@MessageItem(entry)
 							}
 						</ol>
-						<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+						if latest(page) && page.Topic == nil {
+							<ol id="message-pending" class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
+							@pendingMessage(page)
+						}
+						<div id="message-empty" class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
 						if !latest(page) {
 							// Only an older page reached by its own URL shows this: a
 							// message's link, or "Load older" without JavaScript.
@@ -288,7 +292,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v9.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v10.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -424,6 +428,38 @@ templ MessageComposer(page ChannelPage) {
 	@typingForm(page, true)
 }
 
+// Pending markup stays server-owned; its body is filled as text, never HTML.
+// Layout mirrors messageItem to preserve its shared stream markup;
+// testPendingComposerBrowser guards their geometry within 1 px.
+templ pendingMessage(page ChannelPage) {
+	<template id="message-pending-template">
+		<li class="relative flex scroll-mt-6 flex-col gap-1 pl-12 max-desk:wrap-anywhere">
+			<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body min-h-9 max-desk:min-h-11 max-desk:items-center">
+				<div class="contents max-desk:flex max-desk:min-w-0 max-desk:flex-col">
+					<span class="min-w-0 break-words">@MemberName(page.DisplayName, page.Handle)</span>
+					<span data-pending-sending class="text-caption text-muted desk:min-w-timestamp">{ i18n.T(ctx, "message.sending") }</span>
+				</div>
+			</div>
+			// Keep the empty failure status exposed without adding a flex gap.
+			<div>
+				<p id="message-pending-body" dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
+				<form data-pending-form method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt="find button" hx-request={ `{"timeout":30000}` }>
+					<input type="hidden" name="body"/>
+					<input type="hidden" name="idempotency_key"/>
+					<input type="hidden" name="composer"/>
+					<input type="hidden" name="cursor"/>
+					<p role="status" class="text-caption text-danger"></p>
+					<div data-pending-actions hidden>
+						<button type="submit" aria-describedby="message-pending-body" class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
+						<button type="button" data-pending-remove aria-describedby="message-pending-body" class="min-h-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
+					</div>
+				</form>
+			</div>
+			<div class="absolute left-0 top-0">@Avatar(page.MemberID, page.DisplayName, page.Handle)</div>
+		</li>
+	</template>
+}
+
 // The textarea and the send button stay outside every swap: only the state
 // is replaced, and the button alone is disabled while a post is in flight.
 templ messageComposer(page ChannelPage) {
@@ -461,6 +497,7 @@ templ messageComposer(page ChannelPage) {
 						data-still-unconfirmed={ i18n.T(ctx, "message.send_alert.still_unconfirmed") }
 						data-recovered={ i18n.T(ctx, "message.send_alert.recovered") }
 						data-repeat={ i18n.T(ctx, "message.error.repeat") }
+						data-busy={ i18n.T(ctx, "message.busy") }
 						class="text-caption text-danger sending:invisible"
 					></p>
 				}

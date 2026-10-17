@@ -29,7 +29,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   `aria-invalid="true"` and is described by it. A failed enhanced send fills
   the composer's empty `#message-send-alert` (`role="alert"`), outside the
   swapped state, with a server-rendered text saying whether it was not sent,
-  could not be confirmed or was recovered.
+  could not be confirmed or was recovered. Feed pending items instead use
+  an empty polite status for failures; Sending is silent. Retry and Remove
+  are described by the pending body. Arrival announces once in `#message-status`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -91,9 +93,11 @@ Latest feeds/topics have a separate visible `#typing-status`, localized and
 polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
 it stays outside history and composer replacement, with no keyboard stop.
 The textarea is never replaced (#1173): it keeps drafts and text typed while a
-post is in flight, links errors with `aria-describedby` and takes
-`aria-invalid` from each answer; focus left on the disabled send button
-returns to it. In flight, a polite `role="status"` shows "Sending…" over the
+post is in flight, keeps `aria-describedby="message-help"` and takes
+`aria-invalid` from every swapped state (`"false"` on pending success).
+Help shows errors or guidance; focus left on the disabled send button
+returns to it. While either form sends, feed submits keep the draft and announce
+busy. In flight, a polite `role="status"` shows "Sending…" over the
 help, which turns invisible but keeps its space. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.

@@ -8,9 +8,9 @@ Composer JavaScript and drafts on the device.
 the sending glue and feed pending items below exist; the parts marked
 *planned* await their issues.
 
-The ordinary path applies to topic composers and feed sends that create no
-pending item: blank text, text over 4,000 code points or contexts without
-`crypto.randomUUID()`.
+The ordinary path applies to topic composers and idle feed sends with blank
+text or over 4,000 code points after line-ending
+normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 
 - **Ordinary sending** (input glue, #1173): the textarea stays usable while a post is
   in flight, since answers replace only `#message-composer-state`. On a 200
@@ -38,11 +38,14 @@ pending item: blank text, text over 4,000 code points or contexts without
   rules. Latest feeds use `#message-pending-template` and `#message-pending`,
   after `#message-items`. The item's own htmx form holds the original text,
   key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. One item, in any state, blocks
-  another send that would create a pending item with a localised notice
-  and keeps the next text.
-  A 200 swaps the composer state and out-of-band typing form; it never
-  clears or marks the textarea. Its `data-posted-message` associates
+  focus and takes `crypto.randomUUID()`. Any pending item or in-flight pending
+  request, or the composer's own in-flight request (`htmx-request`), blocks all
+  composer submits before body validation, shows a localised notice and keeps
+  the next text. The two forms' requests never overlap, so stale ordinary
+  answers cannot overwrite a pending success's fresh generation and key.
+  A 200 swaps the composer state and out-of-band typing form and clears stale
+  `aria-invalid` and `aria-describedby`; it keeps the textarea text.
+  Its `data-posted-message` associates
   the item with delivery. A `MutationObserver` removes a
   confirmed item before paint when that ID appears in `#message-items`.
   Stream-first briefly shows both until the response; replay and feed moves
@@ -53,7 +56,7 @@ pending item: blank text, text over 4,000 code points or contexts without
   shows `message.error.repeat` and renews the item's key. Remove discards
   the item and text; an uncertain committed post can still arrive later.
   Pending sends bypass prefix removal, the ordinary send alert, the
-  unconfirmed-key mark, 409 cleanup and `aria-invalid` mirroring.
+  unconfirmed-key mark and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a

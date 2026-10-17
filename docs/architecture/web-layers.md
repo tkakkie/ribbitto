@@ -47,11 +47,13 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `data-posted-message` carries the posted message's DOM id; errors omit it,
   except a 409, which names the stored message and, when the text starts
   with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
-  `data-invalid`, copied to the textarea's `aria-invalid`. Every composer has a hidden
+  `data-invalid`, copied to the textarea's `aria-invalid`; pending success clears
+  stale `aria-invalid` and `aria-describedby`. Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  Feed pending items use the [composer contract](web-composer.md#composer).
+  Feed pending items use the [composer contract](web-composer.md#composer):
+  ordinary and pending requests never overlap; either form in flight blocks submits.
   `message-composer-v10.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.

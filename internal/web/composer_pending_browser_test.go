@@ -81,14 +81,14 @@ func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtim
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
 	page.MustEvalOnNewDocument(`(() => {
- window.answers=0; window.opens=0; window.requests=0; window.failures=[];
+ window.answers=0; window.opens=0; window.requests=0; window.ordinaryRequests=0; window.failures=[];
  document.addEventListener('DOMContentLoaded',()=>new MutationObserver(records=>{
   if(records.some(r=>r.target.matches?.('[data-pending-form] [role=status]'))) {
    const text=document.querySelector('[data-pending-form] [role=status]')?.textContent;
    if(text) window.failures.push(text);
   }
  }).observe(document.getElementById('message-pending'),{childList:true,subtree:true}));
- document.addEventListener('htmx:beforeSend',e=>{if(e.detail.requestConfig?.elt.matches('[data-pending-form]')) window.requests++;});
+ document.addEventListener('htmx:beforeSend',e=>{const form=e.detail.requestConfig?.elt; if(form?.matches('[data-pending-form]')) window.requests++; else if(form?.id==='message-composer') window.ordinaryRequests++;});
  document.addEventListener('htmx:afterRequest', e => { if(e.detail.requestConfig?.elt.matches('[data-pending-form]')) window.answers++; });
  document.addEventListener('htmx:sseOpen', e => { window.source=e.detail.source; window.opens++; });
  })()`)
@@ -125,36 +125,148 @@ func TestPendingTemplateScope(t *testing.T) {
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 	for _, tc := range []struct{ name, text string }{
 		{"empty", ""}, {"blank", " \u3000\n"}, {"oversized", strings.Repeat("x", 4001)},
+		{"trimmed-limit", strings.Repeat("🙂", 4000) + " \r\n"},
 	} {
-		t.Run("ordinary-while-pending/"+tc.name, func(t *testing.T) {
+		for _, state := range []string{"sending", "failed", "confirmed", "removed-in-flight"} {
+			t.Run("ordinary-while-pending/"+tc.name+"/"+state, func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser)
+				page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='pending'; b.form.requestSubmit(); }`)
+				var request pendingRequest
+				select {
+				case request = <-posts:
+				case <-page.GetContext().Done():
+					t.Fatal("pending request did not arrive")
+				}
+				switch state {
+				case "failed":
+					request.reply <- browserReply{status: 400, body: []byte("refused")}
+					page.MustWait(`() => window.answers===1`)
+				case "confirmed":
+					request.reply <- pendingAnswer(t, kernel.ID{51})
+					page.MustWait(`() => window.answers===1`)
+				case "removed-in-flight":
+					// Exercise the request guard independently of the item's lifetime.
+					page.MustEval(`() => document.querySelector('[data-pending-remove]').click()`)
+				}
+				page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; window.draft=b.value; b.form.requestSubmit(); }`, tc.text)
+				if problem := page.MustEval(`removed => {
+ const b=document.getElementById('message-body'), alert=document.getElementById('message-send-alert');
+ if(window.ordinaryRequests || window.requests!==1) return 'busy send started a request';
+ if(alert.textContent!==alert.dataset.busy) return 'missing busy notice';
+ if(b.value!==window.draft) return 'busy send changed the draft';
+ if(!removed && document.getElementById('message-pending-body').textContent!=='pending') return 'busy send changed the pending text';
+ return '';
+}`, state == "removed-in-flight").Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				if len(posts) != 0 {
+					t.Fatal("busy send reached the server")
+				}
+				if state == "sending" || state == "removed-in-flight" {
+					request.reply <- browserReply{status: 400, body: []byte("refused")}
+					page.MustWait(`() => window.answers===1`)
+				}
+			})
+		}
+	}
+	for _, tc := range []struct{ name, text, want string }{
+		{"trailing-space", strings.Repeat("🙂", 4000) + " ", strings.Repeat("🙂", 4000)},
+		{"crlf", strings.Repeat("x\r\n", 1999) + "xx \r\n", strings.Repeat("x\n", 1999) + "xx"},
+		{"cr", strings.Repeat("x\r", 1999) + "xx \r", strings.Repeat("x\n", 1999) + "xx"},
+	} {
+		t.Run("normalized-limit/"+tc.name, func(t *testing.T) {
 			page, _, posts, _ := pendingBrowser(t, browser)
-			page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='pending'; b.form.requestSubmit(); }`)
-			select {
-			case request := <-posts:
-				request.reply <- browserReply{status: 400, body: []byte("refused")}
-			case <-page.GetContext().Done():
-				t.Fatal("pending request did not arrive")
-			}
-			page.MustWait(`() => window.answers===1`)
 			page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
 			select {
 			case request := <-posts:
-				if request.values.Get("body") != tc.text {
-					t.Fatal("ordinary send changed text")
+				if page.MustEval(`() => window.requests!==1 || window.ordinaryRequests!==0`).Bool() || !page.MustHas("#message-pending > li") {
+					t.Fatal("valid normalized body bypassed the pending path")
 				}
-				if page.MustElement("#message-send-alert").MustText() != "" || !page.MustHas("#message-pending > li") {
-					t.Fatal("ordinary send showed busy or removed pending item")
+				if page.MustElement("#message-pending-body").MustText() != tc.want || page.MustElement("#message-body").MustProperty("value").Str() != "" {
+					t.Fatal("normalized pending text or cleared composer differs")
+				}
+				if request.values.Get("body") != strings.ReplaceAll(strings.ReplaceAll(tc.text, "\r\n", "\n"), "\r", "\n") {
+					t.Fatal("pending request lost the original textarea text")
 				}
 				request.reply <- browserReply{status: 400, body: []byte("refused")}
+				page.MustWait(`() => window.answers===1`)
 			case <-page.GetContext().Done():
-				t.Fatal("ordinary send was blocked by pending item")
-			}
-			page.MustWait(`() => document.getElementById('message-send-alert').textContent===document.getElementById('message-send-alert').dataset.notSent`)
-			if page.MustElement("#message-body").MustProperty("value").Str() != tc.text || page.MustElement("#message-pending-body").MustText() != "pending" {
-				t.Fatal("ordinary failure changed composer or pending text")
+				t.Fatal("normalized pending request did not arrive")
 			}
 		})
 	}
+	for _, tc := range []struct{ name, text string }{
+		{"blank", ""}, {"oversized", strings.Repeat("x", 4001)},
+	} {
+		t.Run("pending-while-ordinary/"+tc.name, func(t *testing.T) {
+			page, _, posts, _ := pendingBrowser(t, browser)
+			page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
+			var ordinary pendingRequest
+			select {
+			case ordinary = <-posts:
+			case <-page.GetContext().Done():
+				t.Fatal("ordinary request did not arrive")
+			}
+			page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='next draft'; b.form.requestSubmit(); }`)
+			if problem := page.MustEval(`() => {
+ const b=document.getElementById('message-body'), alert=document.getElementById('message-send-alert');
+ if(window.ordinaryRequests!==1 || window.requests || document.querySelector('#message-pending > li')) return 'ordinary request overlapped a pending send';
+ if(alert.textContent!==alert.dataset.busy) return 'missing busy notice';
+ if(b.value!=='next draft') return 'busy send changed the draft';
+ return '';
+}`).Str(); problem != "" {
+				t.Fatal(problem)
+			}
+			if len(posts) != 0 {
+				t.Fatal("busy send reached the server")
+			}
+			ordinary.reply <- browserReply{status: 400, body: []byte("refused")}
+			page.MustWait(`() => !document.querySelector('#message-composer.htmx-request')`)
+			page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+			select {
+			case pending := <-posts:
+				if page.MustEval(`() => window.requests!==1 || window.ordinaryRequests!==1`).Bool() || pending.values.Get("body") != "next draft" {
+					t.Fatal("completed ordinary request did not release the pending send")
+				}
+				pending.reply <- browserReply{status: 400, body: []byte("refused")}
+				page.MustWait(`() => window.answers===1`)
+			case <-page.GetContext().Done():
+				t.Fatal("pending request stayed blocked after the ordinary response")
+			}
+		})
+	}
+	t.Run("422-then-pending-200", func(t *testing.T) {
+		page, _, posts, _ := pendingBrowser(t, browser)
+		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+		var ordinary pendingRequest
+		select {
+		case ordinary = <-posts:
+		case <-page.GetContext().Done():
+			t.Fatal("ordinary blank request did not arrive")
+		}
+		ordinary.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{BodyError: "message.error.body", Composer: new("generation"), IdempotencyKey: new(ordinary.values.Get("idempotency_key")), EventCursor: new(int64(42))})))}
+		page.MustWait(`() => document.getElementById('message-body').getAttribute('aria-invalid')==='true' && !document.querySelector('#message-composer.htmx-request')`)
+		if !page.MustHas("#message-body[aria-describedby]") {
+			t.Fatal("422 did not retain the error description")
+		}
+		page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='valid'; b.form.requestSubmit(); }`)
+		var pending pendingRequest
+		select {
+		case pending = <-posts:
+		case <-page.GetContext().Done():
+			t.Fatal("pending request did not arrive")
+		}
+		pending.reply <- pendingAnswer(t, kernel.ID{51})
+		page.MustWait(`() => window.answers===1`)
+		if problem := page.MustEval(`() => {
+ const b=document.getElementById('message-body'), f=b.form, typing=document.getElementById('typing-form');
+ if(b.hasAttribute('aria-invalid') || b.hasAttribute('aria-describedby')) return 'pending success retained stale field errors';
+ if(f.elements.composer.value!=='fresh' || typing.elements.composer.value!=='fresh' || f.elements.idempotency_key.value!=='00000000-0000-4000-8000-000000000002') return 'pending success did not renew state';
+ return '';
+}`).Str(); problem != "" {
+			t.Fatal(problem)
+		}
+	})
 	for _, width := range []int{1280, 390} {
 		for _, first := range []string{"response", "stream"} {
 			for _, space := range []string{"\u3000", "\ufeff"} {

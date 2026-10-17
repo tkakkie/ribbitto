@@ -94,8 +94,10 @@ polite with `aria-atomic="true"`. Content replacement keeps the region and focus
 it stays outside history and composer replacement, with no keyboard stop.
 The textarea is never replaced (#1173): it keeps drafts and text typed while a
 post is in flight, links errors with `aria-describedby` and takes
-`aria-invalid` from each answer; focus left on the disabled send button
-returns to it. In flight, a polite `role="status"` shows "Sending…" over the
+`aria-invalid` from ordinary answers. Pending success clears stale
+`aria-invalid` and `aria-describedby`; focus left on the disabled send button
+returns to it. While either form sends, feed submits keep the draft and announce
+busy. In flight, a polite `role="status"` shows "Sending…" over the
 help, which turns invisible but keeps its space. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.

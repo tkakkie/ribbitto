@@ -78,9 +78,9 @@ ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). Latest feeds instead
 show a pending own post immediately ([contract](web-composer.md#composer));
-the following sending/failure rules apply to topic composers and feed sends
-that create no pending item (blank, over 4,000 code points or without
-`crypto.randomUUID()`). In flight only the send
+these rules apply to topics and idle feeds with blank or over-limit text
+(after normalisation and trimming), or without `crypto.randomUUID()`. Either
+form in flight blocks feed submits. Only the send
 button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
 help, which keeps its space; the textarea stays usable. A send times out after

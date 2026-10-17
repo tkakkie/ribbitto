@@ -126,14 +126,8 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 		return w, err
 	}
 	w.target, w.name = t, fmt.Sprintf("tkakkie/ribbitto#%d", t.Number)
-	// Borrowing the source's objects saves fetching the history again; only
-	// objects are read from there.
-	objects, err := git(source, "rev-parse", "--path-format=absolute", "--git-path", "objects")
-	if err != nil {
-		return w, fmt.Errorf("finding the source checkout's objects: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(w.tree, ".git/objects/info/alternates"), []byte(objects), 0o600); err != nil {
-		return w, fmt.Errorf("sharing the source checkout's objects: %w", err)
+	if err := w.shareObjects(git); err != nil {
+		return w, err
 	}
 	if _, err := git(w.tree, "fetch", "--quiet", "--no-tags", remote,
 		"+refs/heads/"+t.BaseRef+":refs/argonreview/base", fmt.Sprintf("+refs/pull/%d/head:refs/argonreview/head", t.Number)); err != nil {
@@ -172,6 +166,19 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 	}
 	w.prompt = instructions + "\nUNTRUSTED_PAYLOAD_JSON: " + string(payload) + "\n"
 	return w, nil
+}
+
+// shareObjects borrows only objects, keeping the source's configuration and
+// working tree out of the workspace.
+func (w *workspace) shareObjects(git func(string, ...string) (string, error)) error {
+	objects, err := git(w.source, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+	if err != nil {
+		return fmt.Errorf("finding the source checkout's objects: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(w.tree, ".git/objects/info/alternates"), []byte(objects), 0o600); err != nil {
+		return fmt.Errorf("sharing the source checkout's objects: %w", err)
+	}
+	return nil
 }
 
 // probeWorkspace builds a workspace from the HEAD of repo, a local throwaway

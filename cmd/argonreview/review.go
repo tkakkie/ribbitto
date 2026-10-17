@@ -21,8 +21,8 @@ import (
 // never loads or changes it; it is read only to hash (#1041).
 const sharedSettings = ".gemini/antigravity-cli/settings.json"
 
-// review is one Argon run: a review of a pull request (#1096) or a probe of
-// a throwaway repository (#1071), which differ only in what build makes.
+// review is one Argon run: a pull request or issue review, or a probe of a
+// throwaway repository, which differ only in what build makes.
 type review struct {
 	revision          string
 	home, shared, agy string

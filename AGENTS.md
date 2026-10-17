@@ -16,11 +16,11 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
 
 - **Session start:** orchestrators read Status #1 and `docs/roadmap.md`;
   other runs skip Status.
-- **Every issue and pull request an AI writes (including the docs it
-  changes) is reviewed by an AI that did not write it (Claude ↔ Codex;
-  Argon → Claude) before the maintainer is asked.** At most two review
-  rounds; then closure verification (only mechanical, verified fixes
-  left; `docs/workflow/reviewing.md`) or ask the maintainer.
+- **AI issues, PRs and docs need another AI's review before the
+  maintainer is asked:** Claude issues → `argonreview issue`
+  (Codex if uncounted); other Claude → Codex; Codex/Argon → Claude. At most
+  two rounds across Argon/Codex; then closure verification (verified
+  mechanical fixes; `docs/workflow/reviewing.md`) or ask the maintainer.
 - **[Handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code):**
   no AI runs another AI's unverified code directly on the host; CI
   checks it.

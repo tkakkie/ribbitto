@@ -7,10 +7,10 @@ time limit.** macOS has no `timeout`, so use Perl's `alarm`:
 limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # limit 900 cmd args…
 ```
 
-Codex reviews Claude's work:
+Codex reviews Claude's work (issues: [Argon first](reviewing.md)):
 
 ```sh
-# Read-only Codex cannot reach GitHub; the orchestrator pipes context in.
+# Read-only Codex cannot reach GitHub: pipe its context in.
 # Chain fetches with && so Codex never starts on partial context.
 
 # Issue with comments (including earlier rounds).
@@ -33,8 +33,8 @@ case $tier in A|B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
     "Review this pull request: run 'git diff $compared'. Context is on stdin. Follow docs/workflow/reviewing.md and reply in the report format." < "$ctx"
 ```
 
-Claude reviews Codex's work: the orchestrating Claude session reviews
-directly, or `limit 1800 claude -p "…" < /dev/null`.
+Claude reviews Codex's work directly, or with
+`limit 1800 claude -p "…" < /dev/null`.
 
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.

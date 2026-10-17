@@ -552,12 +552,13 @@ func testPendingFailurePage(t *testing.T, browser *rod.Browser, topic bool) {
 	}
 }
 
-// Hold the posting-time answer while stream application establishes move-out.
+// Gate answers and stream application independently to isolate move-out rules.
 func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
-	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "move-answer"} {
+	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "lost-retry-post-move", "move-answer"} {
 		t.Run(order, func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, true)
-			if order == "lost-move-retry" {
+			earlyRetry := order == "lost-retry-post-move"
+			if order == "lost-move-retry" || earlyRetry {
 				// Closing a reused server connection before headers can make Chrome
 				// resend transparently, leaving answers at zero with another held POST.
 				// Lose the rendered answer at the browser boundary, as in the retry tests.
@@ -579,7 +580,7 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 			own := streamTestMessages(kernel.ID{2}, 51)[0]
 			own.Body, own.Text = "moving post", "moving post"
 			answer := pendingAnswer(t, own.ID) // Rendered before any move, still naming A.
-			page.MustEval(`() => {
+			page.MustEval(`earlyRetry => {
     const b=document.getElementById('message-body'); b.value='moving post'; b.form.requestSubmit();
     window.frames=[]; window.badTasks=[];
     const count=()=>document.querySelectorAll('#message-items > #message-33000000000000000000000000000000').length+
@@ -591,10 +592,16 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
       if(moved && confirmed && n!==0) window.badTasks.push(n);
       return [n,moved,confirmed,!!document.querySelector('#message-items > #message-33000000000000000000000000000000')];
     };
-    document.addEventListener('htmx:afterSwap',()=>queueMicrotask(check));
+    document.addEventListener('htmx:afterSwap',e=>queueMicrotask(()=>{
+      check();
+      if(earlyRetry && e.target.id==='message-composer-state') {
+        const s=document.getElementById('organization-stream');
+        window.retryTask=[!!document.querySelector('#message-pending > li'),s.dataset.appliedCursor,s.dataset.eventCursor];
+      }
+    }));
     document.addEventListener('htmx:sseBeforeMessage',()=>queueMicrotask(check));
     const frame=()=>{ window.frames.push(check()); window.frame=requestAnimationFrame(frame); }; frame();
-   }`)
+   }`, earlyRetry)
 			receive := func() pendingRequest {
 				t.Helper()
 				select {
@@ -613,19 +620,46 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 			case "answer-move":
 				request.reply <- answer
 				page.MustWait(`() => window.answers===1`)
-			case "lost-move-retry":
+			case "lost-move-retry", "lost-retry-post-move":
 				request.reply <- answer
 				page.MustWait(`() => window.answers===1`)
 			}
-			if order == "post-move-answer" {
-				events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
-				page.MustWait(`() => !!document.querySelector('#message-items > #message-33000000000000000000000000000000')`)
-			}
 			moved := own
 			moved.TopicID = kernel.ID{4}
+			var next pendingRequest
+			if earlyRetry {
+				page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+				retry := receive()
+				if retry.values.Encode() != request.values.Encode() {
+					t.Fatal("retry changed form values")
+				}
+				retry.reply <- pendingTopicAnswer(t, own.ID, moved.TopicID)
+				page.MustWait(`() => window.answers===2`)
+				if problem := page.MustEval(`() => {
+    if(!window.retryTask || window.retryTask[0]) return 'routing answer kept pending in its task';
+    if(window.retryTask[1] || window.retryTask[2]!=='42') return 'stream reached page before routing answer';
+    if(document.querySelector('#message-pending > li')) return 'routing answer kept pending';
+    const b=document.getElementById('message-body'); b.value='next'; b.form.requestSubmit();
+    if(window.requests!==3) return 'routing answer blocked next request';
+    return '';
+   }`).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				next = receive()
+				if next.values.Get("body") != "next" {
+					t.Fatal("send after routing answer changed text")
+				}
+			}
+			if order == "post-move-answer" || earlyRetry {
+				events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+				page.MustWait(`() => !!document.querySelector('#message-items > #message-33000000000000000000000000000000')`)
+				if earlyRetry {
+					page.MustEval(`() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`)
+				}
+			}
 			events <- realtime.Outgoing{ID: 52, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, own.TopicID, moved.TopicID)))}
 			page.MustWait(`() => document.getElementById('organization-stream').dataset.appliedCursor==='52'`)
-			if order != "answer-move" {
+			if order != "answer-move" && !earlyRetry {
 				if !page.MustHas("#message-pending > li") || page.MustHas("#message-items > li") {
 					t.Fatal("move before confirmation must leave only the pending item")
 				}
@@ -640,18 +674,26 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 					request.reply <- answer
 				}
 			}
-			page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+			if !earlyRetry {
+				page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+			}
 			page.MustEval(`() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`)
-			if problem := page.MustEval(`() => {
+			if problem := page.MustEval(`earlyRetry => {
     cancelAnimationFrame(window.frame);
     if(window.badTasks.length) return 'move-out not removed in same task: '+window.badTasks;
-    if(window.frames.some(([n,moved,confirmed,real])=> n!==(moved ? (confirmed?0:1) : (real&&!confirmed?2:1)))) return 'frame identities: '+JSON.stringify(window.frames);
-    if(document.querySelector('#message-pending > li, #message-items > #message-33000000000000000000000000000000')) return 'identity remained';
+    if(window.frames.some(([n,moved,confirmed,real])=> n!==(earlyRetry&&confirmed ? (real?1:0) : (moved ? (confirmed?0:1) : (real&&!confirmed?2:1))))) return 'frame identities: '+JSON.stringify(window.frames);
+    if(earlyRetry && !window.frames.some(([n,moved,confirmed,real])=>n===1&&!moved&&confirmed&&real)) return 'missing real post frame';
+    if((!earlyRetry && document.querySelector('#message-pending > li')) ||
+       document.querySelector('#message-items > #message-33000000000000000000000000000000') ||
+       [...document.querySelectorAll('#message-pending-body')].some(e=>e.textContent==='moving post')) return 'identity remained';
+    if(earlyRetry) return '';
     const b=document.getElementById('message-body'); b.value='next'; b.form.requestSubmit(); return '';
-   }`).Str(); problem != "" {
+   }`, earlyRetry).Str(); problem != "" {
 				t.Fatal(problem)
 			}
-			next := receive()
+			if !earlyRetry {
+				next = receive()
+			}
 			next.reply <- pendingAnswer(t, kernel.ID{60})
 		})
 	}

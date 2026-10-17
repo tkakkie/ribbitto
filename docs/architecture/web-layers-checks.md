@@ -106,10 +106,10 @@ plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
 posts from a topic view through real PostgreSQL and the real stream.
 Feed/topic pending cases cover both orders, replay, feed moves,
 same-text collisions, JavaScript whitespace, failures and Retry/Remove.
-Topics cover post/move/answer, answer/move, lost-response/move/retry
-and defensive move-only/answer, same-task removal and the next send. Frame
-identity counts and desktop/phone positions check replacement;
-PostgreSQL checks cursor phases and lost-response Retry. Loss uses interception.
+Topic orders: post/move/answer, answer/move, lost/move/retry,
+lost/retry-to-B/post/move (Retry before any stream), move-only/answer.
+Checks cover same-task removal, next sends, frame identities and desktop/phone
+positions; PostgreSQL covers cursors and lost-response Retry via interception.
 The throttle timer is gated.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple

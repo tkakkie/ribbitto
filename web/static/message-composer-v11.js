@@ -167,12 +167,14 @@
       // Read response routing once; retain only the confirmed ID on the item.
       // Ordered application proves an absent post has already moved away.
       const topic = items.dataset.topic;
-      const applied = document.getElementById("organization-stream").dataset.appliedCursor;
-      if (topic && (state.dataset.postedTopic !== topic ||
-          (!items.querySelector("#" + state.dataset.postedMessage) && applied &&
-           BigInt(applied) >= BigInt(state.dataset.postedSeq)))) {
-        item.remove();
-        say("");
+      if (topic) {
+        const applied = document.getElementById("organization-stream").dataset.appliedCursor;
+        if (state.dataset.postedTopic !== topic ||
+            (!items.querySelector("#" + state.dataset.postedMessage) && applied &&
+             BigInt(applied) >= BigInt(state.dataset.postedSeq))) {
+          item.remove();
+          say("");
+        }
       }
       reconcile();
       return;

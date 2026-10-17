@@ -10,27 +10,26 @@ limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # limit 900 cmd args…
 Codex reviews Claude's work:
 
 ```sh
-# Read-only Codex cannot reach GitHub, so the orchestrator fetches the
-# context first and passes it on stdin (which also keeps stdin from being
-# left open). Every fetch is chained with &&, so if any of them fails, Codex
-# does not start on partial context.
+# Read-only Codex cannot reach GitHub; the orchestrator pipes context in.
+# Chain fetches with && so Codex never starts on partial context.
 
-# Issue: the issue with its comments (earlier rounds) and the Status issue.
+# Issue with comments (including earlier rounds).
 ctx=$(mktemp) &&
   gh issue view N --json title,body,comments > "$ctx" &&
-  gh issue view 1 --json body >> "$ctx" &&
-  limit 900 codex exec -s read-only -o review.md \
+  limit 900 codex exec -s read-only -c model_reasoning_effort=medium -o review.md \
     "Review this GitHub issue following docs/workflow/reviewing.md. Reply in the report format." < "$ctx"
 
-# Pull request (in a clean worktree at the PR head, after git fetch): the
-# PR with its comments (earlier rounds), the linked issue and the Status issue.
+# PR: clean worktree at its head, after git fetch.
 # Not `codex exec review --base …`: it rejects a custom prompt.
+effort=high # A/B; medium for C.
+compared=origin/main...HEAD # Round 2: <round-1 SHA>..<head SHA>.
 ctx=$(mktemp) &&
-  gh pr view P --json title,body,comments > "$ctx" &&
+  printf 'Compared: %s\n' "$compared" > "$ctx" &&
+  gh pr view P --json title,body,comments,headRefOid >> "$ctx" &&
   gh issue view N --json title,body,comments >> "$ctx" &&
-  gh issue view 1 --json body >> "$ctx" &&
-  limit 1800 codex exec -s read-only -o review.md \
-    "Review this pull request: run 'git diff origin/main...HEAD'. Its GitHub context is on stdin. Follow docs/workflow/reviewing.md and reply in the report format." < "$ctx"
+  gh pr checks P >> "$ctx" &&
+  limit 1800 codex exec -s read-only -c model_reasoning_effort="$effort" -o review.md \
+    "Review this pull request: run 'git diff $compared'. Context is on stdin. Follow docs/workflow/reviewing.md and reply in the report format." < "$ctx"
 ```
 
 Claude reviews Codex's work: the orchestrating Claude session reviews
@@ -46,22 +45,22 @@ request's head, and gets the diff on stdin
 check also [more context](argon-pull-requests.md#who-reviews)):
 
 ```sh
-# $W: Argon's worktree; $clean: a clean worktree at origin/main; $base:
-# origin/main for a review; for a follow-up check, the approved SHA
-# (Copilot) or the reviewed one (adversarial).
+# $W: Argon's worktree; $clean: clean origin/main; $base: merge base with
+# origin/main for round 1, round-1 SHA for round 2, approved SHA (Copilot)
+# or reviewed SHA (adversarial) for a follow-up.
 # gh pr checks fails unless CI is green, which the review needs first.
+effort=high # B; medium for C.
 g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
   GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
   -c core.fsmonitor=false "$@"; }
 diff=$(mktemp) && head=$(g rev-parse HEAD) &&
   test "$head" = "$(gh pr view P --json headRefOid -q .headRefOid)" &&
   echo "Compared: $base..$head" > "$diff" &&
-  g diff --no-ext-diff --no-textconv "$base...$head" >> "$diff" &&
+  g diff --no-ext-diff --no-textconv "$base..$head" >> "$diff" &&
   gh pr view P --json title,body,comments,headRefOid >> "$diff" &&
   gh pr checks P >> "$diff" &&
   gh issue view N --json title,body,comments >> "$diff" &&
-  gh issue view 1 --json body >> "$diff" &&
-  (cd "$clean" && limit 1800 codex exec -s read-only -o review.md \
+  (cd "$clean" && limit 1800 codex exec -s read-only -c model_reasoning_effort="$effort" -o review.md \
     "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
 ```
 
@@ -207,9 +206,7 @@ The orchestrator then, running nothing from the tree
 3. commits, pushes and opens the draft PR; green CI on it comes before
    the review.
 
-**Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
-everything the review needs, as the examples above do:
-
-- the issue, or the pull request and its linked issue, with their comments
-  (these include the earlier review rounds);
-- the Status issue (#1).
+**Reviews.** Supply the issue and, for a PR, the PR with comments, diff
+and CI; never supply or fetch Status #1. Codex uses `medium` reasoning
+effort for issues and tier C PRs, `high` for tier A/B. Implementation keeps
+its current setting.

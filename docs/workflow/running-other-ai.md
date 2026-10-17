@@ -73,7 +73,7 @@ review differences: [Argon's pull requests](argon-pull-requests.md#who-reviews).
 
 ## Handoff of another AI's code
 
-One rule for code Codex or Argon wrote (maintainer, 2026-10-16,
+For code Codex or Argon wrote (maintainer, 2026-10-16,
 [#1220](https://github.com/tkakkie/ribbitto/issues/1220)): no unreasoned
 difference between the AIs, enough safety for practice, little to operate.
 
@@ -83,12 +83,11 @@ difference between the AIs, enough safety for practice, little to operate.
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
   `go test`, a build, `make dev` or any tool from that tree.
-- The only exception is an [approved performance measurement](investigations.md#host-measurements).
+- The only standing exception is an [approved performance measurement](investigations.md#host-measurements).
 - **CI is the check.** GitHub Actions runs PR code with read-only access
   and no secrets. Green draft CI replaces `make check` before the
   first review; green CI on each follow-up head replaces `make prepush`;
-  closure verification and follow-up checks read CI instead of re-running
-  anything.
+  closure verification and follow-up checks read CI without re-running code.
 - **Still done on the host:** code and diff review, the credential grep on
   `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
   workspace checks ([boundary](argon-implementer.md#the-boundary)).

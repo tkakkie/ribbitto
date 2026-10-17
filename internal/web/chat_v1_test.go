@@ -155,6 +155,9 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		t.Error("the page shows another organisation's member")
 	}
 	for _, markup := range []string{string(ownerPage), string(stream("en"))} {
+		if strings.Contains(markup, "data-own-mention=") {
+			t.Error("the server rendered a reader-dependent highlight")
+		}
 		for _, id := range []kernel.ID{spy, {0xee}} {
 			if strings.Contains(markup, realtime.FormatPayloadID(id)) {
 				t.Error("an unresolved UUID reached page or live HTML")

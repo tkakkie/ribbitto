@@ -65,10 +65,14 @@ htmx sends resync requests. The markup contract is in
   pin IDs. It restores button focus without touching history, draft or cursors.
 - `member-mentions-v1.js` marks resolved references whose `data-member-id`
   matches `#organization-stream`'s existing `data-member`, on page load and
-  scoped `htmx:load` (live posts, Load older and moves). Token utilities add
-  an outline, so the highlight has a shape as well as colour. The shared
-  server render stays identical for every reader; unresolved references
-  carry no ID. Quote snapshots remain plain text.
+  scoped `htmx:load`. Live posts, duplicate replay and moves use `htmx.swap`;
+  Load older selects and prepends server-rendered items. Both run htmx's
+  inserted-node load tasks, including for replacement and destination insertion.
+  No DOM observer or polling is needed. Token utilities add a 2 px `brand`
+  outline: a shape cue with at least 3:1 contrast against the message background
+  and `selected` chip in both themes (see [colour contrast](../ui-colours.md#contrast-wcag-22-aa)).
+  The shared server render stays identical for every reader; unresolved and
+  other-organisation references carry no ID. Quote snapshots remain plain text.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the
   Clipboard API, so shared live renders hold no origin; marks the link

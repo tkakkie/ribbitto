@@ -147,7 +147,8 @@ italic, link, code span, reference) is isolated in direction with
 
 Output is the same for every reader of one language (only the unresolved
 member placeholder is localised), so the shared render cache, keyed by
-language, stays valid. Highlighting one's own mentions happens in the browser
+organisation, channel, sequence and language, stays valid. Highlighting one's
+own mentions happens in the browser
 (#1313): only resolved references carry `data-member-id`; unresolved UUIDs
 never reach the HTML. The viewer's ID comes from `#organization-stream`'s
 existing `data-member`. Existing headers already help: `Referrer-Policy: same-origin`

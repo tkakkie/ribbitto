@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -17,6 +19,12 @@ import (
 )
 
 func testMemberMentionsBrowser(t *testing.T, browser *rod.Browser) {
+	for _, mode := range []string{"feed", "topic"} {
+		t.Run(mode, func(t *testing.T) { testMemberMentionsViewBrowser(t, browser, mode == "topic") })
+	}
+}
+
+func testMemberMentionsViewBrowser(t *testing.T, browser *rod.Browser, topicView bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	viewer, other, unknown, topic := kernel.ID{1}, kernel.ID{2}, kernel.ID{3}, kernel.ID{4}
@@ -27,42 +35,137 @@ func testMemberMentionsBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Current: view.Channel{ID: kernel.ID{5}, Name: "general"},
 		Role: "owner", MemberID: viewer, Handle: "alice", EventCursor: new(int64), Older: true, Messages: []view.Message{message(20)}}
+	if topicView {
+		snapshot.Topic = &view.Topic{ID: topic}
+	}
 	older := snapshot
 	older.Before, older.EventCursor, older.Older, older.Messages = 20, nil, false, []view.Message{message(10)}
-	mux := messagePageMux(t, snapshot, http.FileServerFS(static.FS()))
-	mux.Handle("GET /organizations/acme/channels/{channel}", templ.Handler(view.ChannelScreen("/static/css/app.css", older)))
+	markup := func(component templ.Component) []byte {
+		t.Helper()
+		data := streamTestMarkup(t, component)
+		if bytes.Contains(data, []byte("data-own-mention=")) {
+			t.Fatal("the server rendered a reader-dependent highlight")
+		}
+		return data
+	}
+	initialHTML := markup(view.ChannelScreen("/static/css/app.css", snapshot))
+	olderHTML := markup(view.ChannelScreen("/static/css/app.css", older))
+	events := make(chan realtime.Outgoing)
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if err := sender.Heartbeat(r.Context()); err != nil {
+			return
+		}
+		for {
+			select {
+			case out := <-events:
+				if err := sender.Send(r.Context(), out); err != nil {
+					return
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+	})
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if before := r.URL.Query().Get("before"); before != "" {
+			if before != "20" || r.Header.Get("HX-Request") != "true" {
+				t.Errorf("unexpected history request: before=%s, HX-Request=%s", before, r.Header.Get("HX-Request"))
+			}
+			_, _ = w.Write(olderHTML)
+			return
+		}
+		_, _ = w.Write(initialHTML)
+	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
 	defer server.CloseClientConnections()
 	page, closePage := boundedPage(t, browser, ctx, "member mentions")
 	defer closePage()
 	page = page.WithPanic(func(v any) { t.Fatal(v) })
+	page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', () => window.mentionsStreamOpen = true)`)
 	page.MustNavigate(server.URL + "/").MustWaitLoad()
+	page.MustWait(`() => window.mentionsStreamOpen === true`)
+	remember := func(seq byte) {
+		page.MustEval(`id => window.mentionBefore = document.getElementById(id)`, view.MessageDOMID(kernel.ID{seq}))
+	}
 	assert := func(seq byte) {
 		t.Helper()
 		selector := "#body-" + view.MessageDOMID(kernel.ID{seq}) + " > p > bdi"
-		page.MustWait(`s => document.querySelectorAll(s).length === 3 && document.querySelector(s).hasAttribute('data-own-mention')`, selector)
-		if got := page.MustEval(`s => [...document.querySelectorAll(s)].map(e => {
-			const c = getComputedStyle(e);
-			return [e.hasAttribute('data-member-id'), e.hasAttribute('data-own-mention'), c.outlineStyle, c.outlineWidth].join();
-		}).join(';')`, selector).Str(); got != "true,true,solid,2px;true,false,none,0px;false,false,none,0px" {
-			t.Fatalf("message %d: resolved ID, own highlight, outline = %s", seq, got)
+		// Payloads have no highlight attribute. A fresh node must acquire it,
+		// including replay/move replacements of an already highlighted item.
+		page.MustWait(`s => document.querySelectorAll(s).length === 3 &&
+			document.querySelector(s).closest('li') !== window.mentionBefore &&
+			document.querySelector(s).hasAttribute('data-own-mention')`, selector)
+		for _, scheme := range []string{"light", "dark"} {
+			if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: scheme}}}).Call(page); err != nil {
+				t.Fatal(err)
+			}
+			if got := page.MustEval(mentionOutlineStyles, selector).Str(); got != "true,true,solid,2px,true;true,false,none;false,false,none" {
+				t.Fatalf("message %d (%s): resolved ID, own highlight, outline, contrast = %s", seq, scheme, got)
+			}
 		}
 	}
 	assert(20)
+	remember(10)
 	page.MustEval(`() => document.querySelector('#load-older a').click()`)
 	assert(10)
-	// Exercise the production stream handler, including replay replacement.
+	send := func(out realtime.Outgoing) {
+		t.Helper()
+		select {
+		case events <- out:
+		case <-ctx.Done():
+			t.Fatal("stream did not receive frame", ctx.Err())
+		}
+	}
+	// The real EventSource and SSE extension deliver new posts and replays to
+	// message-stream's production handler; no synthetic load events are sent.
 	for range 2 {
-		page.MustEval(`html => htmx.trigger(document.getElementById('message-items'), 'htmx:sseBeforeMessage', {
-			type: 'message', data: html, lastEventId: '30'
-		})`, string(streamTestMarkup(t, view.LiveMessageItem(message(30)))))
+		remember(30)
+		send(realtime.Outgoing{ID: 30, Name: "message", Data: markup(view.LiveMessageItem(message(30)))})
 		assert(30)
 	}
 	moved := message(30)
 	moved.TopicID = kernel.ID{6}
-	page.MustEval(`html => htmx.trigger(document.getElementById('message-items'), 'htmx:sseBeforeMessage', {
-		type: 'messages-moved', data: html, lastEventId: '31'
-	})`, string(streamTestMarkup(t, view.MovedMessageItems([]view.Message{moved}, topic, moved.TopicID))))
+	remember(30)
+	send(realtime.Outgoing{ID: 31, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, topic, moved.TopicID))})
+	if topicView {
+		page.MustWait(`id => !document.getElementById(id)`, view.MessageDOMID(moved.ID))
+		// Moving back exercises destination insertion, not feed replacement.
+		moved.TopicID = topic
+		remember(30)
+		send(realtime.Outgoing{ID: 32, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, kernel.ID{6}, topic))})
+	}
 	assert(30)
 }
+
+// Width is meaningful only for a visible outline: Chrome reports medium
+// (3px) for outline-style:none. Check the shape and non-text contrast against
+// both the chip and its nearest painted ancestor in each emulated theme.
+const mentionOutlineStyles = `s => {
+	const luminance = color => {
+		const rgb = color.match(/[\d.]+/g).slice(0, 3).map(v => {
+			const c = +v / 255;
+			return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+		});
+		return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+	};
+	const contrast = (a, b) => (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+	return [...document.querySelectorAll(s)].map(e => {
+		const c = getComputedStyle(e);
+		const result = [e.hasAttribute('data-member-id'), e.hasAttribute('data-own-mention'), c.outlineStyle];
+		if (c.outlineStyle !== 'none') {
+			let parent = e.parentElement;
+			while (getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
+			const outline = luminance(c.outlineColor);
+			result.push(c.outlineWidth, contrast(outline, luminance(c.backgroundColor)) >= 3 &&
+				contrast(outline, luminance(getComputedStyle(parent).backgroundColor)) >= 3);
+		}
+		return result.join();
+	}).join(';');
+}`

@@ -69,7 +69,8 @@ cannot be resolved shows a localised placeholder, never the UUID or another
 organisation's name.
 Only resolved references carry `data-member-id` in HTML. The browser matches
 it to the viewer's member ID and outlines their own mentions (#1313),
-including live and older messages; the server render is shared by all readers.
+including live posts, replay, older messages and moves; the server render is
+shared by all readers.
 The channel page resolves member IDs (authors and references) to handles and
 account IDs through org, then looks up display names through identity, in
 two batches. The members

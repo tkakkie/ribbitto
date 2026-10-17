@@ -7,17 +7,22 @@ disagree, fix the disagreement in a pull request.
 
 ## Index
 
+Start with your role: [Codex implementer](#implementer-codex),
+[Argon implementer](#implementer-argon), [reviewer](#reviewer), or
+[orchestrator/handoff](#orchestrator-and-handoff).
+
 | File | Covers |
 |---|---|
-| `README.md` (this file) | Principles, roles, the lifecycle of an issue, keeping state, the occasional audit, labels |
-| [`pull-requests.md`](pull-requests.md) | The lifecycle of a pull request, from a `ready` issue to the merge decision |
-| [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the adversarial follow-up check, risk |
-| [`copilot.md`](copilot.md) | The Copilot follow-up check, and docs-only pull requests, which skip Copilot |
-| [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review (Codex for Argon's own pull requests), and when it completes |
-| [`running-argon.md`](running-argon.md) | running Argon's issue and adversarial reviews: setup, the Go launcher, its boundary and evidence |
-| [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, how the maintainer's sessions run Codex, and the handoff of another AI's code |
-| [`argon-implementer.md`](argon-implementer.md) | Argon implementing eligible normal-risk tier B and C issues: eligibility, roles, boundary, preflight, records |
-| [`argon-pull-requests.md`](argon-pull-requests.md) | Argon's pull requests: who reviews them, Codex's fixed adversarial review invocation, mutation evidence on CI |
+| This file | Principles, role entries, issues, state, audit, labels |
+| [Pull requests](pull-requests.md#lifecycle-of-a-pull-request) | Delivery and merge approval |
+| [Reviewing](reviewing.md#review-independence-and-rounds) | Cross-review, closure, follow-up, risk |
+| [Copilot](copilot.md#copilot) | Requesting, follow-up, docs-only exception |
+| [Adversarial review](adversarial-review.md#adversarial-review) | Tiers and completion |
+| [Running Argon](running-argon.md#running-argon) | Trusted review launcher |
+| [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
+| [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
+| [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |
+| [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target |
 
 ## Principles
 
@@ -27,11 +32,8 @@ disagree, fix the disagreement in a pull request.
    Status updates, workflow-log comments and chat messages are not
    reviewed.
 2. **The maintainer decides at two normal delivery gates:** approving an
-   issue (`ready`) and merging a pull request. Everything between is done
-   by the AIs. Deciding is the gate, not clicking: after the maintainer's
-   own explicit instruction in the chat for a specific pull request, an AI
-   may execute the merge (see
-   [Lifecycle of a pull request](pull-requests.md#lifecycle-of-a-pull-request)).
+   issue (`ready`) and [merging a pull request](pull-requests.md#lifecycle-of-a-pull-request).
+   Everything between is done by the AIs. The linked merge rule covers AI execution.
    The maintainer is also asked when a review does not converge (see
    [Reviewing](reviewing.md)) and when choosing retrospective proposals.
 3. **Process grows only from evidence.** From now on, a new process rule
@@ -45,21 +47,72 @@ disagree, fix the disagreement in a pull request.
 
 ## Roles
 
-| Who | Does |
-|---|---|
-| Maintainer | Writes rough ideas, approves issues, decides every merge. |
-| Claude | Writes and details issues, orchestrates (drives the other CLIs), reviews Codex's issues and pull requests and Argon's pull requests, and does the [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code). |
-| Codex | Writes issues, implements tier A, `high` risk and other work Argon may not take (except issues for which the maintainer names Claude), reviews Claude's other work and issues when Argon's run does not count, and runs the adversarial review of Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). |
-| Copilot | Reviews each pull request **once** (not a [docs-only](copilot.md#docs-only-pull-requests) one), at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Antigravity / Argon | Reviews Claude-written issues through the trusted `argonreview issue` subcommand, with Codex fallback if the run does not count (two rounds total across both; [reviewing](reviewing.md)). One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)), except its own: Codex reviews Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). Findings are advisory. Implements eligible normal-risk tier B and C issues, reviewed by Claude ([as implementer](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
+The maintainer writes rough ideas, approves issues and decides merges.
+Claude writes and details issues, orchestrates the other CLIs and handles
+handoffs. Codex also writes issues. Review assignments are in
+[reviewing](reviewing.md#review-independence-and-rounds);
+implementation assignments are in [eligibility](argon-implementer.md#which-issues).
 
-Argon implements eligible normal-risk tier B and C issues under its
-[standing rules](argon-implementer.md); Codex implements everything else,
-except an issue for which the maintainer names Claude.
-Claude implements only when the maintainer names Claude for a specific
-issue (maintainer, 2026-10-17,
-[#1252](https://github.com/tkakkie/ribbitto/issues/1252)). Existing `ready`
-issues naming Claude are reassigned when started, without a bulk edit.
+### Shared gates
+
+[Principles](#principles), [issue gate](#lifecycle-of-an-issue),
+[delivery and merge approval](pull-requests.md#lifecycle-of-a-pull-request),
+[review independence and rounds](reviewing.md#review-independence-and-rounds),
+[risk](reviewing.md#risk), [adversarial tiers](adversarial-review.md#which-review-runs)
+and [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code).
+
+### Implementer Codex
+
+- [Shared gates](#shared-gates).
+- [Assignment](argon-implementer.md#which-issues), [permissions](running-other-ai.md#codex-permissions),
+  [implementation brief](running-other-ai.md#implementation-brief).
+- For fixes: [closure verification](reviewing.md#closure-verification),
+  [adversarial follow-up](reviewing.md#adversarial-follow-up-check),
+  [follow-up pushes](reviewing.md#follow-up-pushes),
+  [Copilot](copilot.md#copilot-follow-up-check) and
+  [completion](adversarial-review.md#completion).
+- [State](#keeping-state); [Investigations](investigations.md#investigations-and-the-performance-target) when needed.
+
+### Implementer Argon
+
+- [Shared gates](#shared-gates).
+- [Start gate, eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer).
+- For fixes: [closure verification](reviewing.md#closure-verification),
+  [adversarial follow-up](reviewing.md#adversarial-follow-up-check),
+  [Copilot](copilot.md#copilot-follow-up-check) and
+  [completion](adversarial-review.md#completion).
+- [State](#keeping-state); [Investigations](investigations.md#investigations-and-the-performance-target) when needed.
+
+### Reviewer
+
+- [Shared gates](#shared-gates), [reporting](reviewing.md#reporting).
+- [Issue checklist](reviewing.md#issue-review) or
+  [pull request checklist](reviewing.md#pull-request-review).
+- [Closure](reviewing.md#closure-verification),
+  [adversarial follow-up](reviewing.md#adversarial-follow-up-check),
+  [follow-up pushes](reviewing.md#follow-up-pushes),
+  [Copilot](copilot.md#copilot-follow-up-check) and
+  [completion](adversarial-review.md#completion).
+- [Headless reviews](running-other-ai.md#headless-reviews),
+  [context](running-other-ai.md#review-context).
+- For Argon's work: [roles](argon-implementer.md#who-does-what),
+  [review differences](argon-pull-requests.md#who-reviews),
+  [invocation](argon-pull-requests.md#the-fixed-invocation),
+  [mutation evidence](argon-pull-requests.md#mutation-evidence).
+- For trusted Argon reviews: [launcher permissions](running-argon.md#the-boundary).
+  [State](#keeping-state).
+
+### Orchestrator and handoff
+
+- [Shared gates](#shared-gates), [state](#keeping-state), [labels](#labels) and [investigations](investigations.md#investigations-and-the-performance-target).
+- [Review checks, reporting, closure and follow-ups](reviewing.md#reviewing).
+- [Copilot](copilot.md#copilot), [adversarial review](adversarial-review.md#adversarial-review).
+- [Headless reviews](running-other-ai.md#headless-reviews),
+  [Codex permissions and brief](running-other-ai.md#running-codex).
+- For Argon: [eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer),
+  [pull requests](argon-pull-requests.md#argons-pull-requests),
+  [review launcher](running-argon.md#running-argon).
+- Optional: [audit](#occasional-audit).
 
 - Mechanical subagent chores (waiting for CI, merge preparation, conflict
   resolution, Status updates) may run on a smaller model.
@@ -94,7 +147,8 @@ The lifecycle of a pull request is in [`pull-requests.md`](pull-requests.md).
 ## Keeping state
 
 - **Status (#1):** read it only at the start of an orchestrating session;
-  review, implementation and chore runs skip it. At the end of a unit of
+  review, implementation and chore runs skip it. Orchestrating sessions also
+  read `docs/roadmap.md` at the start. At the end of a unit of
   work, overwrite its body using its headings: under 30 lines and 3,000
   characters. *Recently done* holds only the latest unit; history lives in
   pull requests and issues. The `pr-chores` writer refuses a body outside
@@ -116,6 +170,8 @@ The lifecycle of a pull request is in [`pull-requests.md`](pull-requests.md).
   plan changes.
 
 ## Occasional audit
+
+Argon may also do UI screenshot reviews and experiments.
 
 Optional and maintainer-run, for example after large document changes; not
 at every milestone. Antigravity looks for
@@ -140,7 +196,7 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a pull request, after Copilot's review, if requested, is answered and the initial adversarial review its tier requires has completed; after a fix for its finding, also the follow-up check and the re-review the completion rule names) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
+| `ai-reviewed` | the orchestrating AI, after issue review approval or the [pull request review gates](pull-requests.md#lifecycle-of-a-pull-request) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

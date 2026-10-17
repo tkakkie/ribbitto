@@ -1,7 +1,9 @@
 # Reviewing
 
-**Who reviews:** for an issue, the AI that did not write the issue; for a
-pull request, the AI that did not implement it. Claude-written issues →
+## Review independence and rounds
+
+**Who reviews:** following [review independence](README.md#principles),
+Claude-written issues →
 Argon through the trusted `argonreview issue` subcommand
 ([invocation](running-argon.md#the-trusted-invocation)), falling back to
 Codex when the run does not count; other Claude work → Codex;
@@ -23,6 +25,8 @@ effect on unchanged code and the issue's *Done when*. Re-read the rest only
 where the delta affects it. An issue's round two remains a full re-read;
 issue revisions have no SHA.
 
+## Issue review
+
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
@@ -33,6 +37,8 @@ issue revisions have no SHA.
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
+
+## Pull request review
 
 **What to check on a pull request:**
 - It does what the issue's *Done when* says, and nothing unrelated.
@@ -57,6 +63,8 @@ issue revisions have no SHA.
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 
+## Reporting
+
 **How to report:** one comment on the issue or pull request:
 
 ```
@@ -73,6 +81,8 @@ notes in its review comment whether Argon counted or fell back to Codex.
 Argon is used only for issue reviews here; follow-up checks and closure
 verification keep their existing reviewers.
 
+## Closure verification
+
 **Closure verification** (pull requests only; after the two-round limit;
 at most once per PR; not a review round). Evidence: #2, the case of #14.
 
@@ -84,9 +94,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 2. The implementer applies exactly those fixes and nothing else.
 3. The reviewer checks that the whole diff since the round-2 SHA contains
    only the named fixes, then re-runs the failing check or live test for
-   each finding — not the rest of the PR; where the
-   [handoff rule](running-other-ai.md#handoff-of-another-ais-code) keeps
-   it from running another AI's code, reads CI instead — and reports:
+   each finding — not the rest of the PR — under the
+   [handoff rule](running-other-ai.md#handoff-of-another-ais-code), and reports:
 
    ```
    **Closure verification — <Claude|Codex>** (at <SHA>)
@@ -94,18 +103,14 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → the remaining steps (merge the current `main` or confirm no
-   merge is needed, then Copilot, requested by hand on the draft unless the
-   [docs-only rule](copilot.md#docs-only-pull-requests) applies, and its
-   follow-up check if answering it needs a change, then the initial
-   adversarial review its
-   [tier requires](adversarial-review.md#which-review-runs) on that head,
-   still as a draft, then `ai-reviewed` and ready for review) and the
-   normal merge decision. Any other change
-   in the diff, a failed check, a new blocking finding or anything needing
-   a decision → ask the maintainer.
+4. All pass → the remaining [pull request lifecycle](pull-requests.md#lifecycle-of-a-pull-request)
+   after cross-review approval. Any other change in the diff, a failed
+   check, a new blocking finding or anything needing a decision → ask the
+   maintainer.
 
 **Copilot follow-up check:** in [`copilot.md`](copilot.md).
+
+## Adversarial follow-up check
 
 **Adversarial follow-up check** (pull requests only; after a fix for a
 finding of the adversarial review; not a review round, so the two-round
@@ -137,31 +142,28 @@ reach the re-review without either AI checking it:
    ```
 
 3. All pass → the re-review the
-   [completion rule](adversarial-review.md#which-review-runs) names, at the
+   [completion rule](adversarial-review.md#completion) names, at the
    checked SHA; a push before it starts this check again. Any other change,
    a failed check, or a fix needing a design or specification decision →
    ask the maintainer.
+
+## Follow-up pushes
 
 **Before every follow-up push** — a Copilot or adversarial follow-up, a fix
 for a failing check, a merge of `main` — run `make prepush`
 ([Checks](../../README.md#checks)) and push only if it passes: it regenerates
 files and checks the manifests, document sizes and lint, keeping each exit
-status. Ad-hoc command chains have hidden a failure before (#848). On a
-branch with another AI's code, green CI on the pushed head replaces it
-([handoff](running-other-ai.md#handoff-of-another-ais-code)).
+status. Ad-hoc command chains have hidden a failure before (#848). The
+[handoff exception](running-other-ai.md#handoff-of-another-ais-code) applies.
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review. A combination that
 changes lock or transaction order or the delivery contract (tier A's first
-item) does more than combine, even when every line came from one side. Either way, if the diff
-from the last adversarially reviewed head to the merge result matches tier
-A or B, the pull request's tier, recomputed at the merge result, is
-reviewed again by the reviewer the completion rule names, counting this
-pull request's own commits since the last adversarially reviewed head, not
-only the resolution, before it is marked ready
-([completion](adversarial-review.md#which-review-runs)); a pull request
-already marked ready is converted back to a draft until then.
+item) does more than combine, even when every line came from one side. Either way, follow the
+[completion rule](adversarial-review.md#completion), counting this pull
+request's own commits since the last adversarially reviewed head, not only
+the resolution.
 
 Which pull requests skip Copilot: [docs-only pull requests](copilot.md#docs-only-pull-requests).
 

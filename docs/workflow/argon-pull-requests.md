@@ -8,16 +8,15 @@ Approved on [#1247](https://github.com/tkakkie/ribbitto/issues/1247).
 
 ## Who reviews
 
-- **Cross-review:** Claude; Claude also does the Copilot follow-up check of
-  Argon's fixes, and Codex checks a change Claude writes
-  ([who does what](argon-implementer.md#who-does-what)). This stays a full
-  independent review at tier C, even with no unanswered Copilot finding.
+- **Cross-review:** [assignments](reviewing.md#review-independence-and-rounds).
+  Claude also does the Copilot follow-up check of Argon's fixes. This stays
+  a full independent review at tier C, even with no unanswered Copilot finding.
 - **Adversarial review:** tier B, Codex, with the fixed invocation below;
-  never Argon, which never reviews its own work. Tier C, none. A diff that
-  reaches tier A leaves Argon, and the maintainer decides.
+  tier C, none. [Eligibility and escalation](argon-implementer.md#which-issues)
+  still apply.
 - **After the adversarial review:** the adversarial follow-up checks
   ([reviewing](reviewing.md)) and every re-review the
-  [completion rule](adversarial-review.md#which-review-runs) requires are
+  [completion rule](adversarial-review.md#completion) requires are
   Codex's: a follow-up check with `$base` the reviewed SHA; a re-review
   with the fixed invocation on the new head. The sequencing, head and CI
   checks, dispositions, and the failure and retry rules are unchanged;
@@ -30,9 +29,8 @@ merge base with `origin/main`, and, for a regression test, the scratch
 pull request's diff and the failing job's log
 ([mutation evidence](#mutation-evidence)).
 
-The template's *Adversarial* field says `Codex (B) at <SHA>`. Claude posts
-the report as `**Adversarial review — Codex (tier B)** (at <SHA>)`, each
-finding with a disposition.
+Claude posts the report using the [report format](adversarial-review.md#running-argon)
+and [template field](adversarial-review.md#which-review-runs).
 
 ## The fixed invocation
 
@@ -99,13 +97,13 @@ The base and head must equal the pull request's `baseRefOid` and
 the diff start from their merge base, which must be on `origin/main`; and
 the CI results are those of that head. A
 failed, timed-out or empty run does not count
-([completion](adversarial-review.md#which-review-runs)).
+([completion](adversarial-review.md#completion)).
 
 ## Mutation evidence
 
-Argon runs nothing, and no AI runs its code on the host, so where its pull
-request needs deliberate-defect evidence (a test-only pull request or a
-regression test for an adversarial finding, [reviewing](reviewing.md), or
+Under the [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code),
+where its pull request needs deliberate-defect evidence (a test-only pull
+request or a regression test for an adversarial finding, [reviewing](reviewing.md), or
 its issue's *Done when*), Claude prepares it on CI with as few runs as
 possible:
 

@@ -1,15 +1,9 @@
 # Adversarial review
 
-**A pull request gets the adversarial review its tier asks for before the
-maintainer is asked**, whatever its risk class: one Argon review for tier A
-or B, or none for tier C. An Argon pull request's tier B review is Codex's
-([Argon's pull requests](argon-pull-requests.md)). The required review
-must run; its findings are advisory. It does not count towards the two review rounds. The
-initial review runs after the cross-review, after merging the current
-`main` (or confirming that no merge is needed) and after Copilot's one
-review and any follow-up (*When it runs*, below), while the pull request is
-still a draft, and before it is marked ready for review. Later pushes are
-reviewed again under the completion rule.
+The [tiers](#which-review-runs) determine the required review, whatever the
+risk class. Its findings are advisory. The
+[cross-review round rule](reviewing.md#review-independence-and-rounds) applies.
+See [when it runs](#when-it-runs) and [completion](#completion).
 
 ## Which review runs
 
@@ -17,18 +11,7 @@ The tier follows what the change alters, **wherever the code lives**
 (handlers, use cases, stores, queries, migrations, scripts), not its risk
 class, which only decides how much the maintainer reads.
 
-**Historical evidence that led to the tiers.** Grok's
-findings came from concurrency, long-lived state and the gates
-themselves: up to #497, 8 of its 74 reviews (#334, #427 and #431 in real
-time and retention, #336 and #347 in launchers, #338, #340 and #364 in
-gates), and none of step 3's org, identity and web refactors (#339, #498).
-In #760–#839,
-Grok's 23 first reviews found defects in 4 — #775 (read writes in posting's
-transaction), #795 (browser retry state), #833 (an htmx swap of a live form),
-#835 (a watch's ordering contract) — and its 7 re-runs none new (#840).
-
-A tier follows what the change does; a past review without findings is
-never a reason for a lower one.
+A past review without findings is never a reason for a lower tier.
 
 **Precedence: A, then B, then C.** **When in doubt, the higher tier.** In
 A's code areas a change to what the code does or its order is tier A,
@@ -119,15 +102,20 @@ the reason naming the C case, for example "dependency bump". "Behaviour unchange
 areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
 
+## When it runs
+
 **When it runs:** the initial review runs after the other AI approves and
 its findings are fixed, after the branch has merged the current `main` or
-it is confirmed that no merge is needed, and after Copilot, requested by
-hand on the draft, has reviewed and any change answering it has passed the
-Copilot follow-up check ([Copilot](copilot.md)): on that head, while the
+it is confirmed that no merge is needed, and after
+[Copilot](copilot.md#requesting-copilot) has reviewed and any change answering
+it has passed the [Copilot follow-up check](copilot.md#copilot-follow-up-check):
+on that head, while the
 pull request is still a draft, immediately before `ai-reviewed`. GitHub
 cannot merge a draft, so this holds the merge until the review completes.
 It does not run alongside the first cross-review. A report on an earlier
 head covers a later one only under the completion rule below.
+
+## Completion
 
 **A required review counts only when it completes:** a report on the pull
 request at its head commit, each finding with a disposition. After a later
@@ -139,8 +127,8 @@ reviews again (Codex for an Argon pull request). A tier C pull request
 lifted to B or A gets its first review, compared against the base when no reviewed head exists, and Copilot's
 review before it if it had skipped Copilot under the
 [docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
-gets Codex's at B and at A leaves Argon for the maintainer to decide, since
-Argon never reviews its own work
+gets Codex's at B and at A leaves Argon for the maintainer to decide, under
+[review independence](README.md#principles)
 ([who reviews](argon-pull-requests.md#who-reviews)). Fixes first get the
 follow-up check in [reviewing](reviewing.md) or [Copilot](copilot.md).
 
@@ -154,9 +142,8 @@ the maintainer decides.
 ## Running Argon
 
 Use `cmd/argonreview` through the trusted Go invocation in
-[`running-argon.md`](running-argon.md), which documents its setup, security
-boundary and limits. Build from clean `origin/main` as documented there;
-never build or run a pull request's copy of the launcher. Codex reviews
+[`running-argon.md`](running-argon.md#the-trusted-invocation), which documents
+its setup, security boundary and limits. Codex reviews
 an Argon pull request with the fixed invocation in
 [`argon-pull-requests.md`](argon-pull-requests.md#the-fixed-invocation).
 
@@ -164,3 +151,15 @@ Post the report as `**Adversarial review — Gemini 4 Argon (tier A|B)** (at <SH
 or Codex's as `**Adversarial review — Codex (tier B)** (at <SHA>)`.
 Each finding gets a disposition: fixed, a follow-up issue, or declined with
 the reason.
+
+## Evidence
+
+**Historical evidence that led to the tiers.** Grok's
+findings came from concurrency, long-lived state and the gates
+themselves: up to #497, 8 of its 74 reviews (#334, #427 and #431 in real
+time and retention, #336 and #347 in launchers, #338, #340 and #364 in
+gates), and none of step 3's org, identity and web refactors (#339, #498).
+In #760–#839,
+Grok's 23 first reviews found defects in 4 — #775 (read writes in posting's
+transaction), #795 (browser retry state), #833 (an htmx swap of a live form),
+#835 (a watch's ordering contract) — and its 7 re-runs none new (#840).

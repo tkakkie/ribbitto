@@ -1,16 +1,19 @@
 # Reviewing
 
 **Who reviews:** for an issue, the AI that did not write the issue; for a
-pull request, the AI that did not implement it. Claude's work → Codex;
+pull request, the AI that did not implement it. Claude-written issues →
+Argon through the trusted `argonreview issue` subcommand
+([invocation](running-argon.md#the-trusted-invocation)), falling back to
+Codex when the run does not count; other Claude work → Codex;
 Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
 there → Codex ([Argon's pull requests](argon-pull-requests.md)).
 Claude's own work is its issues, the fixes it writes during a review, and
 an issue the maintainer named Claude to implement.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
-pull request, counting re-reviews. Copilot and the adversarial review do
-not count. If round two still has blocking findings, a pull request may go
-through *closure verification* (below) when it qualifies; in every other
+pull request, counting re-reviews and Argon and fallback Codex together.
+Copilot and the adversarial review do not count. If round two still has
+blocking findings, a pull request may go through *closure verification* (below) when it qualifies; in every other
 case, stop and ask the maintainer.
 
 **What to check on an issue:**
@@ -50,14 +53,17 @@ case, stop and ask the maintainer.
 **How to report:** one comment on the issue or pull request:
 
 ```
-**AI review — <Codex|Claude>, round <1|2>** (for a PR: at <short SHA>)
+**AI review — <Codex|Claude|Argon>, round <1|2>** (for a PR: at <short SHA>)
 Verdict: approve | changes requested
 - [blocking] file:line or section — problem — suggested fix
 - [nit] …
 ```
 
 "Approve" with no findings is a valid review. Only `[blocking]` findings
-hold things up.
+hold things up. For each Claude-written issue review, the orchestrator
+notes in its review comment whether Argon counted or fell back to Codex.
+Argon is used only for issue reviews here; follow-up checks and closure
+verification keep their existing reviewers.
 
 **Closure verification** (pull requests only; after the two-round limit;
 at most once per PR; not a review round). Evidence: #2, the case of #14.

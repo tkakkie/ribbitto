@@ -7,15 +7,15 @@ time limit.** macOS has no `timeout`, so use Perl's `alarm`:
 limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # limit 900 cmd args…
 ```
 
-Codex reviews Claude's work:
+Claude-written issues use trusted
+[`argonreview issue N [round]`](running-argon.md#the-trusted-invocation),
+falling back to Codex below if uncounted; both share the
+[two-round limit](reviewing.md). Codex reviews Claude's other work:
 
 ```sh
-# Read-only Codex cannot reach GitHub, so the orchestrator fetches the
-# context first and passes it on stdin (which also keeps stdin from being
-# left open). Every fetch is chained with &&, so if any of them fails, Codex
-# does not start on partial context.
+# Codex cannot reach GitHub: fetch context first. && stops on a failed fetch.
 
-# Issue: the issue with its comments (earlier rounds) and the Status issue.
+# Issue fallback: the issue with comments (earlier rounds) and Status.
 ctx=$(mktemp) &&
   gh issue view N --json title,body,comments > "$ctx" &&
   gh issue view 1 --json body >> "$ctx" &&

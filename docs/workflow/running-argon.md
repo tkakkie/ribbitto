@@ -1,8 +1,8 @@
 # Running Argon
 
 Argon is Gemini 4 Argon (High) in Antigravity's `agy` CLI. The Go launcher
-`cmd/argonreview` runs its adversarial reviews (#1065 series). Which pull
-requests get one is [adversarial-review.md](adversarial-review.md)'s
+`cmd/argonreview` runs its issue reviews and adversarial reviews (#1065
+series). Which pull requests get one is [adversarial-review.md](adversarial-review.md)'s
 business; this file covers the setup, the invocation and the boundary.
 
 ## One-time setup
@@ -47,6 +47,18 @@ src=$RIBBITTO_ARGON_SOURCE &&
   "$RIBBITTO_ARGON_HOME/bin/argonreview" review <pr-number>
 ```
 
+For a Claude-written issue, use the same trusted build and invocation,
+replacing the final command with:
+
+```sh
+"$RIBBITTO_ARGON_HOME/bin/argonreview" issue <number> [round]
+```
+
+The round defaults to 1; only 1 and 2 are accepted. If the run does not
+count, fall back to Codex; the two-round limit spans both reviewers
+([reviewing](reviewing.md)). Record whether Argon counted or fell back in
+the issue review comment.
+
 `pinned` runs git with an empty environment but `PATH`, so no inherited
 `GIT_*` variable or `GIT_CONFIG_*` setting applies, and with global and
 system configuration and replace refs off, as the launcher's own git calls
@@ -71,12 +83,13 @@ or accidental build, not a malicious one, whose own code could skip it.
 | `check` | `prepare`, then `agy models` under the supervisor: Argon must be listed |
 | `prompt <pr>` | prints the prompt a review would send, and leaves nothing |
 | `review <pr>` | the review; prints the report only if the run counts |
+| `issue <number> [round]` | reviews an issue against the trusted revision; prints the report only if the run counts |
 | `probe <repo> <prompt-file>` | the same pipeline on a scratch repository's `HEAD` with a trusted prompt; prints `agy`'s output and the verdict |
 | `guard` | the `PreToolUse` hook; Antigravity calls it, not you |
 
 `RIBBITTO_ARGON_TIMEOUT` (a Go duration, default `25m`) limits `agy`. A
-review or a probe exits 0 for a run that counts, 124 for the time limit,
-130 or 143 for INT or TERM, a failing `agy`'s own status, and 1 for
+pull request review, issue review or probe exits 0 for a run that counts,
+124 for the time limit, 130 or 143 for INT or TERM, a failing `agy`'s own status, and 1 for
 anything else, with the reason on stderr. Bad arguments exit 2. `guard`
 exits 0 only for an allow, and non-zero for a deny or a failed write.
 
@@ -103,6 +116,14 @@ exits 0 only for an allow, and non-zero for a deny or a failed write.
    cleanup the supervisor cannot confirm; a workspace it cannot remove.
 7. The workspace is removed, then the report is written, headed with the
    target and the launcher revision.
+
+For `issue`, steps 2–4 instead take one `gh issue view` snapshot of the
+title, body and comments, check out the trusted revision in a fresh
+repository with the same symlink refusal and `.agents` removal, and read
+`.github/prompts/issue-review.md` from that revision. The issue snapshot is
+one `UNTRUSTED_PAYLOAD_JSON` line, never instructions. Steps 1 and 5–7,
+including every run-counting rule, are identical. Follow-up checks and
+closure verification on Argon are out of scope.
 
 ## The boundary
 
@@ -143,3 +164,9 @@ refuses customisation there but does not police the rest.
 - #1071 and #1130: a broken hook that printed nothing and exited 0 let
   `search_web` run; the guard now denies by its exit status, rechecked from
   `origin/main` at 42ff887.
+
+For #1263, pre-merge fixture tests cover the trusted issue checkout, absence
+of pull request content and `.agents` removal; the guard and deny rules
+are unchanged, so #1071's probes still cover tool denial. After merge,
+record one live `issue` run from the trusted build on #1263, including
+whether it counted.

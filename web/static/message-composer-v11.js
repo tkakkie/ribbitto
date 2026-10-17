@@ -169,7 +169,7 @@
       const topic = items.dataset.topic;
       if (topic) {
         const applied = document.getElementById("organization-stream").dataset.appliedCursor;
-        if (state.dataset.postedTopic !== topic ||
+        if (
             (!items.querySelector("#" + state.dataset.postedMessage) && applied &&
              BigInt(applied) >= BigInt(state.dataset.postedSeq))) {
           item.remove();

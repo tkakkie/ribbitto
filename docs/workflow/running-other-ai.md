@@ -21,9 +21,10 @@ ctx=$(mktemp) &&
 
 # PR: clean worktree at its head, after git fetch.
 # Not `codex exec review --base …`: it rejects a custom prompt.
-effort=high # A/B; medium for C.
-compared=origin/main...HEAD # Round 2: <round-1 SHA>..<head SHA>.
-ctx=$(mktemp) &&
+# tier=A|B|C; round 2 also sets round1=<SHA>.
+case $tier in A|B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
+  compared=${round1:+$round1..HEAD} && compared=${compared:-origin/main...HEAD} &&
+  ctx=$(mktemp) &&
   printf 'Compared: %s\n' "$compared" > "$ctx" &&
   gh pr view P --json title,body,comments,headRefOid >> "$ctx" &&
   gh issue view N --json title,body,comments >> "$ctx" &&
@@ -49,7 +50,8 @@ check also [more context](argon-pull-requests.md#who-reviews)):
 # origin/main for round 1, round-1 SHA for round 2, approved SHA (Copilot)
 # or reviewed SHA (adversarial) for a follow-up.
 # gh pr checks fails unless CI is green, which the review needs first.
-effort=high # B; medium for C.
+# tier=B|C
+case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
 g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
   GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
   -c core.fsmonitor=false "$@"; }
@@ -207,6 +209,5 @@ The orchestrator then, running nothing from the tree
    the review.
 
 **Reviews.** Supply the issue and, for a PR, the PR with comments, diff
-and CI; never supply or fetch Status #1. Codex uses `medium` reasoning
-effort for issues and tier C PRs, `high` for tier A/B. Implementation keeps
-its current setting.
+and CI; never supply or fetch Status #1. Effort follows the tier, as in
+the snippets above; implementation keeps its setting.

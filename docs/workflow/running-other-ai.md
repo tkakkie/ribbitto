@@ -1,5 +1,7 @@
 # Running the other AI
 
+## Headless reviews
+
 Headless CLIs can wait forever for input. **Always close stdin and set a
 time limit.** macOS has no `timeout`, so use Perl's `alarm`:
 
@@ -66,11 +68,8 @@ case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
     "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
 ```
 
-Argon implementing an eligible issue runs under its own boundary and
-preflight, in [`argon-implementer.md`](argon-implementer.md); Claude reviews
-its work, and Codex runs its tier B adversarial review
-([Argon's pull requests](argon-pull-requests.md)).
-Its handoff follows the same rule as Codex's (below).
+Argon's setup: [boundary and preflight](argon-implementer.md#argon-as-implementer);
+review differences: [Argon's pull requests](argon-pull-requests.md#who-reviews).
 
 ## Handoff of another AI's code
 
@@ -80,7 +79,7 @@ difference between the AIs, enough safety for practice, little to operate.
 
 - **In its own sandbox,** the implementing AI may build and test as before:
   Codex in its profile ([below](#running-codex)), Argon only as its
-  [boundary](argon-implementer.md#the-boundary) allows: no commands at all.
+  [boundary](argon-implementer.md#the-boundary) allows.
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
   `go test`, a build, `make dev` or any tool from that tree.
@@ -98,13 +97,15 @@ difference between the AIs, enough safety for practice, little to operate.
   actually needed.
 
 A branch with only Claude's own code on top of `main` is not a handoff:
-Claude runs `make check` before opening its pull request and `make prepush`
-before a follow-up push.
+Claude follows the [local checks](../../AGENTS.md#commands) and
+[follow-up push checks](reviewing.md#follow-up-pushes).
 
 ## Running Codex
 
 How the maintainer's orchestrating sessions run Codex (codex-cli 0.153).
 This records that setup, not general limits of Codex. Evidence: #48.
+
+### Codex permissions
 
 **Implementation.** The global `~/.codex/config.toml` is shared with other
 projects and allows only localhost, so do not edit it. Instead, pass a
@@ -130,11 +131,15 @@ perms=(
 limit 3600 codex exec "${perms[@]}" -o result.md "$(cat prompt.md)" < /dev/null
 ```
 
+### Start confirmation
+
 **Started.** A background Codex run counts as started only once its log
 shows the header's `workdir:` and `model:` lines, naming the expected
 worktree and model; only then is it reported as running. If the run exits
 before those lines appear, such as Codex refusing an untrusted directory,
 report it as a failed start (#359).
+
+### Implementation brief
 
 The prompt carries the issue and its review comments, plus these rules:
 
@@ -191,6 +196,8 @@ The prompt carries the issue and its review comments, plus these rules:
   pick files up there. The orchestrator likewise reports a tool that will not
   run instead of modifying it.
 
+### Handoff checks
+
 The orchestrator then, running nothing from the tree
 ([handoff](#handoff-of-another-ais-code)):
 
@@ -205,8 +212,10 @@ The orchestrator then, running nothing from the tree
      grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
    ```
 
-3. commits, pushes and opens the draft PR; green CI on it comes before
-   the review.
+3. commits, pushes and opens the draft PR under the
+   [handoff rule](#handoff-of-another-ais-code).
+
+### Review context
 
 **Reviews.** Supply the issue and, for a PR, the PR with comments, diff
 and CI; never supply or fetch Status #1. Effort follows the tier, as in

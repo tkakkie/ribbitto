@@ -4,14 +4,18 @@ Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements eligible issues
 (below) under the boundary, preflight and records in this file, which
 grew out of [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
 became a standing rule with
-[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Everything else in
-this directory applies as usual. If a boundary below fails, Argon stops at
-once and the maintainer decides.
+[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Start at the [Argon
+entry point](README.md#implementer-argon). If a boundary below fails, Argon
+stops at once and the maintainer decides.
 
 **Start gate.** No Argon run starts until an issue records a preflight
 (below) that passed in full for the `agy` version and custom agent in use.
 
 ## Which issues
+
+Argon implements eligible normal-risk tier B and C issues under the rules
+below; Codex implements everything else, except an issue for which the
+maintainer names Claude.
 
 An issue is eligible only if its *Risk* is `normal`
 ([risk](reviewing.md#risk)) **and** its *Implementer* field states an expected
@@ -19,39 +23,36 @@ adversarial tier C or B and the case it matches
 ([tiers](adversarial-review.md#which-review-runs)), for example
 `Argon (normal risk; expected tier B: tests in A's areas)`, and only if it
 can be verified without running its code locally: no `make dev` or browser
-check unless the maintainer runs it. Go code and tests are eligible. Argon
-runs no commands, so CI is its only build and test. Tier A or `high` risk
-means Codex (Claude only when the maintainer names Claude for that issue).
-The issue reviewer checks the expected tier like any other field; in doubt,
-the higher tier, and a possible tier A means not Argon. The maintainer
-confirms the implementer when adding `ready`. No M7 issue is picked unless
-the maintainer names it.
+check unless the maintainer runs it. Go code and tests are eligible;
+verification follows the [boundary](#the-boundary) and
+[handoff](running-other-ai.md#handoff-of-another-ais-code).
+The [issue review](reviewing.md#issue-review) checks the expected tier.
+No M7 issue is picked unless the maintainer names it.
 
 **The tier follows the diff, not the expectation.** If an Argon change
 matches tier A or touches a `high` risk path, it leaves Argon and the
 maintainer decides; Claude checks this against `origin/main` before every
-push and does not push such a change. Argon never reviews its own work:
-Codex is the adversarial reviewer of Argon's tier B pull requests
-([Argon's pull requests](argon-pull-requests.md)).
+push and does not push such a change. See [Argon's review
+assignments](argon-pull-requests.md#who-reviews).
+
+Claude implements only when the maintainer names Claude for a specific
+issue (maintainer, 2026-10-17,
+[#1252](https://github.com/tkakkie/ribbitto/issues/1252)). Existing `ready`
+issues naming Claude are reassigned when started, without a bulk edit.
 
 ## Who does what
 
-- **Claude** reviews the pull request: the AI that did not implement it, at
-  most two rounds ([reviewing](reviewing.md)). Claude also does the Copilot
-  follow-up check of Argon's fixes. Closure verification and every check
-  re-run rely on CI, not on local runs. Claude prepares any mutation
-  evidence on CI ([mutation evidence](argon-pull-requests.md#mutation-evidence)).
+- Cross-review assignments and rounds: [reviewing](reviewing.md#review-independence-and-rounds).
+  Copilot and adversarial checks: [who reviews](argon-pull-requests.md#who-reviews).
+  Claude prepares [mutation evidence](argon-pull-requests.md#mutation-evidence).
 - **Argon** applies the review, Copilot and adversarial fixes, in further
   runs in the same worktree. If it cannot finish a fix in one more run, the
   maintainer decides: reassign or stop. A reassigned issue restarts from a clean `origin/main`.
-- **Codex** checks any fix Claude writes itself, a Copilot fix included,
-  since that is not Argon's work. It reads CI and a diff Claude makes with
+- For a fix Claude writes itself, [review independence](reviewing.md#review-independence-and-rounds)
+  applies. Codex reads CI and a diff Claude makes with
   the hardened git settings below and passes on stdin, and it runs in a clean
-  worktree of `origin/main`, never in Argon's. Codex is also the
-  adversarial reviewer of a tier B pull request, with its follow-up checks
-  and re-reviews ([Argon's pull requests](argon-pull-requests.md)).
-- No AI runs Argon's code on the host; CI checks it
-  ([handoff](running-other-ai.md#handoff-of-another-ais-code)).
+  worktree of `origin/main`, never in Argon's. See the
+  [review invocation](running-other-ai.md#headless-reviews).
 
 ## The boundary
 
@@ -130,8 +131,7 @@ but enforced by configuration, not by the prompt.
   and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
 - **Handoff: the [shared rule](running-other-ai.md#handoff-of-another-ais-code)
-  for Codex and Argon.** Claude runs nothing Argon wrote, and green CI on
-  the draft replaces the local checks before any review. Argon leaves
+  for Codex and Argon.** Argon leaves
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
   supervisor has confirmed that no process from the run is left, Claude
   repeats the pre-run checks, reads the diff and runs the credential grep

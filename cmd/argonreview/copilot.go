@@ -101,23 +101,23 @@ func parseCopilot(number int, data []byte) (copilotSnapshot, error) {
 	}
 	p := response.Data.Repository.PullRequest
 	if len(response.Errors) != 0 || p == nil {
-		return copilotSnapshot{}, errors.New("Copilot snapshot is unavailable or has GraphQL errors")
+		return copilotSnapshot{}, errors.New("the Copilot snapshot is unavailable or has GraphQL errors")
 	}
 	if p.Reviews.PageInfo.HasNextPage {
-		return copilotSnapshot{}, errors.New("Copilot snapshot has truncated reviews")
+		return copilotSnapshot{}, errors.New("the Copilot snapshot has truncated reviews")
 	}
 	snapshot := copilotSnapshot{target: p.target}
 	snapshot.Number = number
 	for _, review := range p.Reviews.Nodes {
 		if review.Comments.PageInfo.HasNextPage {
-			return copilotSnapshot{}, errors.New("Copilot snapshot has truncated inline comments")
+			return copilotSnapshot{}, errors.New("the Copilot snapshot has truncated inline comments")
 		}
 		if isCopilot(review.Author.Login) {
 			snapshot.Reviews = append(snapshot.Reviews, review)
 		}
 	}
 	if len(snapshot.Reviews) == 0 {
-		return copilotSnapshot{}, errors.New("Copilot snapshot has no Copilot review")
+		return copilotSnapshot{}, errors.New("the Copilot snapshot has no Copilot review")
 	}
 	return snapshot, nil
 }

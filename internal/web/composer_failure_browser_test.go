@@ -34,12 +34,15 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	t.Cleanup(server.Close)
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
-	page.MustEvalOnNewDocument(`(() => { window.composerAnswers = 0;
+	// Exercise ordinary sending when the secure-context UUID API is unavailable.
+	// Latest topics now also render the pending template.
+	page.MustEvalOnNewDocument(`(() => {
+ Object.defineProperty(crypto, 'randomUUID', {value: undefined}); window.composerAnswers = 0;
  document.addEventListener('htmx:afterRequest', e => { if (e.target.id === 'message-composer') window.composerAnswers++; });
 })()`)
 	page.MustNavigate(server.URL + path).MustWaitLoad()
-	if page.MustHas("#message-pending-template") {
-		t.Fatal("topic has a pending template")
+	if !page.MustHas("#message-pending-template") {
+		t.Fatal("latest topic is missing its pending template")
 	}
 	if got := page.MustEval(`() => document.getElementById('message-composer').getAttribute('hx-request')`).Str(); got != `{"timeout":30000}` {
 		t.Fatalf("hx-request %q", got)

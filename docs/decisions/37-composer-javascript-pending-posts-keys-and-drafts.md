@@ -1,8 +1,7 @@
 # 37. Composer JavaScript: pending posts, idempotency keys and drafts on the device
 
 **Decided** (#1151, approved by the maintainer on 2026-10-16). Each use names
-the issue that implements it. Use (a) is implemented on the feed; topic
-pending items await #1188. It is the second
+the issue that implements it. Use (a) is now implemented on the feed and topic views. It is the second
 narrow exception to
 [decision 19](19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
 beside [decision 34](34-live-unread-counts.md). The rules apply to any
@@ -13,8 +12,8 @@ may change them only through its own decision, with its measurements.
 
 After the person sends, one composer script may show the post as *sending*
 before the server answers. Only enhanced composers on pages that receive live
-messages get pending posts: the latest channel feed today, and latest topic
-views once #1188 implements them. `?before=` and `?around=` pages and every other
+messages get pending posts: the latest channel feed and latest topic
+views (#1188). `?before=` and `?around=` pages and every other
 plain composer keep plain submission.
 
 The item is cloned from a server-rendered, localised `<template>`

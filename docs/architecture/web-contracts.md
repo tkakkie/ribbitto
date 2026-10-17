@@ -34,9 +34,10 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-snapshot-seq` | `#sidebar-channels` | always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-unread-count` | every sidebar badge, including the heading badge | always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-unconfirmed-key` | `#message-composer` | after a send could not be confirmed | that send's key, until the key changes ([composer](web-composer.md#composer)) |
+  | `data-posted-topic`, `data-posted-seq` | `#message-composer-state` | with `data-posted-message` | posted message's topic ID and posting sequence, including repeats; read once for topic pending removal |
   | `data-sent-body` | `#message-composer-state` | an htmx 409 whose text starts with it, unquoted | the stored body of the requester's message the key names; the help then shows no error |
   | `data-unconfirmed`, `data-not-sent`, `data-still-unconfirmed`, `data-recovered`, `data-repeat`, `data-busy` | `#message-send-alert` | latest composers | localised alert texts |
-  | `data-pending-form`, `data-pending-actions`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feed | form and state/control hooks; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
+  | `data-pending-form`, `data-pending-actions`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
   | `data-drafts-horizon` | the sign-in form | signed-out renders only | UUIDv7; stored drafts of sessions from earlier milliseconds are removed ([drafts](web-composer.md#drafts)) |
   | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the drafts cleanup's horizon and deadline ([drafts](web-composer.md#drafts)) |
 

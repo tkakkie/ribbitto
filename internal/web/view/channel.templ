@@ -68,6 +68,9 @@ type ChannelPage struct {
 	IdempotencyKey *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
+	// PostedTopicID and PostedEventSeq let topic pending posts settle after a move.
+	PostedTopicID  kernel.ID
+	PostedEventSeq int64
 	// SentBody is, on an enhanced 409 whose text starts with it, the stored
 	// body of the message the key names: always the requester's own, since
 	// posting looks keys up by author. The script removes it, so the 409's
@@ -251,7 +254,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 								@MessageItem(entry)
 							}
 						</ol>
-						if latest(page) && page.Topic == nil {
+						if latest(page) {
 							<ol id="message-pending" class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
 							@pendingMessage(page)
 						}
@@ -292,7 +295,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v10.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v11.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -518,6 +521,8 @@ templ composerState(page ChannelPage) {
 		id="message-composer-state"
 		if page.PostedMessageID != nil {
 			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
+			data-posted-topic={ idValue(page.PostedTopicID) }
+			data-posted-seq={ fmt.Sprint(page.PostedEventSeq) }
 		}
 		if page.SentBody != "" {
 			data-sent-body={ page.SentBody }

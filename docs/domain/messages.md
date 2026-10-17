@@ -127,12 +127,12 @@ language too.
 
 ## Posting from the channel page
 
-The composer uses `conversation.Posting.Send`. Enhanced latest feeds show a
-pending item immediately and empty the composer (#1156). Any pending item or
+The composer uses `conversation.Posting.Send`. Enhanced latest feeds/topics show a
+pending item immediately and empty the composer (#1156, #1188). Any pending item or
 in-flight request from either send form blocks all composer submits before body
 validation; ordinary and pending requests never overlap.
 Retry keeps its text and key; failures appear on the item ([contract](../architecture/web-composer.md#composer)).
-Topic pending items await #1188. Topic composers and idle feed sends with
+Idle feed/topic sends with
 blank text or over 4,000 code points after normalisation and trimming, or without
 `crypto.randomUUID()`, keep the ordinary path: the textarea stays usable during
 sending; success removes only the sent prefix, keeping later input (#1173); 422 keeps the

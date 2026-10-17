@@ -343,11 +343,11 @@ func TestMessagePostHandler(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/htmx=%t/topic=%t", tt.name, hx, mode.topic), func(t *testing.T) {
 				writer := &fakePostingWriter{id: kernel.ID{37}, err: tt.storeErr}
 				state := typing.New(realtime.NewHub())
-				actual := conversation.Message{ID: writer.id, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}}
+				actual := conversation.Message{ID: writer.id, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}, EventSeq: 71}
 				writer.returned = &actual
 				// Posting closes the generation in the requested place: the
 				// fake's default topic and the topic URL's are both {2}, and
-				// the returned message's topic {6} is never used (#1155).
+				// typing never uses the returned message's topic {6} (#1155).
 				place := typing.Place{Channel: actual.ChannelID, Topic: kernel.ID{2}}
 				other := typing.Place{Channel: place.Channel, Topic: kernel.ID{3}}
 				defer state.Open(actual.OrganizationID, actual.MemberID, place.Channel)()
@@ -411,6 +411,9 @@ func TestMessagePostHandler(t *testing.T) {
 					t.Fatal("composer must echo submitted cursor, not post sequence")
 				}
 				if hx && want == 200 {
+					if !strings.Contains(w.Body.String(), `data-posted-topic="06000000-0000-0000-0000-000000000000"`) || !strings.Contains(w.Body.String(), `data-posted-seq="71"`) {
+						t.Fatal("success must carry the returned message's topic and posting sequence")
+					}
 					if !strings.Contains(w.Body.String(), marker) {
 						t.Fatal("success must identify the posted message for stream correlation")
 					}

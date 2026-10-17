@@ -456,7 +456,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case errors.Is(err, conversation.ErrPostKeyReused):
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
-		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, SentBody: recovered(enhanced, c.ID, body, quote != nil, posted), IdempotencyKey: freshKey()})
+		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, PostedTopicID: posted.TopicID, PostedEventSeq: posted.EventSeq, SentBody: recovered(enhanced, c.ID, body, quote != nil, posted), IdempotencyKey: freshKey()})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound),
 		errors.Is(err, conversation.ErrQuoteNotFound):
 		// The channel, membership or organisation went away after this
@@ -466,7 +466,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case enhanced:
-		p.renderComposer(w, r, m, c, topic, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID})
+		p.renderComposer(w, r, m, c, topic, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID, PostedTopicID: posted.TopicID, PostedEventSeq: posted.EventSeq})
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, c.ID, p.topicID), http.StatusSeeOther)
 	}

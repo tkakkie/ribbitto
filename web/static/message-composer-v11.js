@@ -52,6 +52,18 @@
   };
   const items = document.getElementById("message-items");
   if (items) new MutationObserver(reconcile).observe(items, { childList: true });
+  document.addEventListener("htmx:sseBeforeMessage", (event) => {
+    if (event.target.id !== "message-items" || event.detail.type !== "messages-moved") return;
+    const item = document.getElementById("message-pending")?.firstElementChild;
+    if (!item?.dataset.postedMessage || !items.dataset.topic) return;
+    const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
+    if (payload.querySelector("ul")?.dataset.fromTopic === items.dataset.topic &&
+        payload.getElementById(item.dataset.postedMessage)) {
+      item.remove();
+      say("");
+      reconcile();
+    }
+  });
   document.addEventListener("click", (event) => {
     if (!event.target.closest("[data-pending-remove]")) return;
     event.target.closest("li").remove();
@@ -150,7 +162,20 @@
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);
     if (pending) {
-      pending.closest("li").dataset.postedMessage = state.dataset.postedMessage;
+      const item = pending.closest("li");
+      item.dataset.postedMessage = state.dataset.postedMessage;
+      // Read response routing once; retain only the confirmed ID on the item.
+      // Ordered application proves an absent post has already moved away.
+      const topic = items.dataset.topic;
+      if (topic) {
+        const applied = document.getElementById("organization-stream").dataset.appliedCursor;
+        if (state.dataset.postedTopic !== topic ||
+            (!items.querySelector("#" + state.dataset.postedMessage) && applied &&
+             BigInt(applied) >= BigInt(state.dataset.postedSeq))) {
+          item.remove();
+          say("");
+        }
+      }
       reconcile();
       return;
     }

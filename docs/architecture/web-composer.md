@@ -5,10 +5,10 @@ Composer JavaScript and drafts on the device.
 ## Composer
 
 [Decision 37][d37] allows bounded composer state. The server-rendered key and
-the sending glue and feed pending items below exist; the parts marked
+the sending glue and feed/topic pending items below exist; the parts marked
 *planned* await their issues.
 
-The ordinary path applies to topic composers and idle feed sends with blank
+The ordinary path applies to idle feed/topic sends with blank
 text or over 4,000 code points after line-ending
 normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 
@@ -33,9 +33,9 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.
-- **Pending own post** (#1156; topic pending items #1188, queue #1174):
+- **Pending own post** (#1156, #1188; queue #1174):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
-  rules. Latest feeds use `#message-pending-template` and `#message-pending`,
+  rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
   after `#message-items`. The item's own htmx form holds the original text,
   key, generation and shown cursor. The composer empties immediately, keeps
   focus and takes `crypto.randomUUID()`. Any pending item or in-flight pending
@@ -50,7 +50,13 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   the item with delivery. A `MutationObserver` removes a
   confirmed item before paint when that ID appears in `#message-items`.
   Stream-first briefly shows both until the response; replay and feed moves
-  preserve the real ID.
+  preserve the real ID. On topics, a response also removes the item if its
+  `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
+  has reached `data-posted-seq`. Those attributes are read once, never kept
+  on the item. After confirmation, `htmx:sseBeforeMessage` removes it when
+  a `messages-moved` payload names its ID with this topic as source.
+  Ordered application makes an absent, already-applied post safe to remove
+  ([topic replay](replay.md#ordering-and-replay)).
   Failed responses never swap. The same failure classes as above fill only
   the item's empty polite status. Retry uses its form's
   text and key, including after an unconfirmed send's refused retry. A 409
@@ -61,7 +67,7 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a
-  stream payload. On a pending feed send the script replaces it with
+  stream payload. On a pending send the script replaces it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read

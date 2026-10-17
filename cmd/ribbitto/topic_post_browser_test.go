@@ -88,7 +88,7 @@ func TestTopicPostBrowser(t *testing.T) {
 			shown := page.MustEval(`() => document.querySelector('#organization-stream').dataset.eventCursor`).Str()
 			inputStep(t, page, "typing the topic post", func(p *rod.Page) { p.MustElement("#message-body").MustInput(text) })
 			inputStep(t, page, "sending with Enter", func(p *rod.Page) { p.Keyboard.MustType(input.Enter) })
-			if err := page.Timeout(10 * time.Second).Wait(rod.Eval(`text => [...document.querySelectorAll('#message-items p')].some(e => e.textContent === text) && document.getElementById('message-body').value === '' && document.activeElement.id === 'message-body'`, text)); err != nil {
+			if err := page.Timeout(10 * time.Second).Wait(rod.Eval(`text => [...document.querySelectorAll('#message-items div[id^=body-]')].some(e => e.textContent === text) && document.getElementById('message-body').value === '' && document.activeElement.id === 'message-body'`, text)); err != nil {
 				t.Fatalf("topic post did not show, clear and keep focus: %v", err)
 			}
 			var id kernel.ID
@@ -103,7 +103,7 @@ func TestTopicPostBrowser(t *testing.T) {
 			page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 300))`)
 			if problem := page.MustEval(`(id, text) => {
 				if (window.topicPostMarker !== 'kept') return 'the page navigated';
-				if (document.querySelectorAll('#' + id).length !== 1 || [...document.querySelectorAll('#message-items p')].filter(e => e.textContent === text).length !== 1) return 'own message not shown exactly once';
+				if (document.querySelectorAll('#' + id).length !== 1 || [...document.querySelectorAll('#message-items div[id^=body-]')].filter(e => e.textContent === text).length !== 1) return 'own message not shown exactly once';
 				if (!document.getElementById('message-items').contains(document.getElementById(id))) return 'own message outside #message-items';
 				const item = document.getElementById(id).getBoundingClientRect(), pane = document.getElementById('message-list').getBoundingClientRect();
 				if (item.top < pane.top - 1 || item.bottom > pane.bottom + 1) return 'own message not scrolled into view';

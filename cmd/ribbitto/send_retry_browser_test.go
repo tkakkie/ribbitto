@@ -64,7 +64,10 @@ func TestSendRetryBrowser(t *testing.T) {
 			defer server.Close()
 			page, closePage := boundedPage(t, browser, ctx, "send retry")
 			defer closePage()
+			// Keep the ordinary-path retry and in-flight text checks: latest
+			// topics also use pending sends when the UUID API is available.
 			page.MustEvalOnNewDocument(`(() => { window.composerAnswers = 0;
+ Object.defineProperty(crypto, 'randomUUID', {value: undefined});
  document.addEventListener('htmx:afterRequest', e => { if (e.target.id === 'message-composer') window.composerAnswers++; });
 })()`)
 			page.MustNavigate(server.URL + path).MustWaitLoad()

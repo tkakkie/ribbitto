@@ -13,6 +13,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -26,6 +27,12 @@ func TestPendingPostBrowser(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	browser := launchBrowser(t, ctx, "pending posts")
+	for _, topic := range []bool{false, true} {
+		t.Run(map[bool]string{false: "feed", true: "topic"}[topic], func(t *testing.T) { testPendingPostPage(t, ctx, browser, topic) })
+	}
+}
+
+func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser, topic bool) {
 	for _, lost := range []bool{false, true} {
 		t.Run(map[bool]string{false: "replacement", true: "lost-response"}[lost], func(t *testing.T) {
 			pool, scope := feedFixture(t)
@@ -51,6 +58,10 @@ func TestPendingPostBrowser(t *testing.T) {
    document.addEventListener('htmx:sseBeforeMessage',e=>{if(window.holding && e.target.id==='message-items') {e.stopImmediatePropagation(); e.preventDefault(); window.delivery=e; }},true);
   })()`)
 			path := view.ChannelURL("feed", scope.ChannelID)
+			if topic {
+				place := conversationtest.Topic(t, pool, scope.OrganizationID, scope.ChannelID, "planning")
+				path = view.ConversationURL("feed", scope.ChannelID, &place.ID)
+			}
 			page.MustNavigate(server.URL + path).MustWaitLoad()
 			page.MustWait(`() => !document.querySelector('#read-form.htmx-request')`)
 			before := page.MustEval(`() => {const s=document.getElementById('organization-stream');return JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor]);}`).Str()
@@ -107,6 +118,9 @@ func TestPendingPostBrowser(t *testing.T) {
 			var id kernel.ID
 			feedRequire(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, "pending database post").Scan(&count))
 			feedRequire(t, pool.QueryRow(ctx, "SELECT id FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, "pending database post").Scan(&id))
+			if page.MustElement("#body-"+view.MessageDOMID(id)).MustText() != "pending database post" {
+				t.Fatal("stream body differs from pending text")
+			}
 			if count != 1 || reads.Load() != initialReads+1 || page.MustEval(`id => document.querySelectorAll('#message-items > #'+id).length!==1`, view.MessageDOMID(id)).Bool() {
 				t.Fatal("delivery did not replace/read exactly once, or retry stored twice")
 			}

@@ -109,7 +109,7 @@ same-text collisions, JavaScript whitespace, failures and Retry/Remove.
 Topics cover post/move/answer, answer/move, lost-response/move/retry
 and defensive move-only/answer, same-task removal and the next send. Frame
 identity counts and desktop/phone positions check replacement;
-PostgreSQL checks cursor phases and retry after a lost commit response.
+PostgreSQL checks cursor phases and lost-response Retry. Loss uses interception.
 The throttle timer is gated.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple

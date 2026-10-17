@@ -67,15 +67,6 @@ func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool) (*rod.Page, 
 			posts <- request
 			select {
 			case reply := <-request.reply:
-				if reply.status == 0 {
-					conn, _, err := http.NewResponseController(w).Hijack()
-					if err != nil {
-						t.Error(err)
-					} else {
-						_ = conn.Close()
-					}
-					return
-				}
 				w.WriteHeader(reply.status)
 				_, _ = w.Write(reply.body)
 			case <-r.Context().Done():
@@ -566,6 +557,25 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "move-answer"} {
 		t.Run(order, func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, true)
+			if order == "lost-move-retry" {
+				// Closing a reused server connection before headers can make Chrome
+				// resend transparently, leaving answers at zero with another held POST.
+				// Lose the rendered answer at the browser boundary, as in the retry tests.
+				var answered atomic.Bool
+				router := page.HijackRequests()
+				router.MustAdd("*/organizations/acme/channels/*", func(h *rod.Hijack) {
+					if h.Request.Method() != "POST" || strings.HasSuffix(h.Request.URL().Path, "/read") || strings.HasSuffix(h.Request.URL().Path, "/typing") || answered.Swap(true) {
+						h.ContinueRequest(&proto.FetchContinueRequest{})
+						return
+					}
+					if err := h.LoadResponse(http.DefaultClient, true); err != nil {
+						t.Error(err)
+					}
+					h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
+				})
+				go router.Run()
+				t.Cleanup(func() { _ = router.Stop() })
+			}
 			own := streamTestMessages(kernel.ID{2}, 51)[0]
 			own.Body, own.Text = "moving post", "moving post"
 			answer := pendingAnswer(t, own.ID) // Rendered before any move, still naming A.
@@ -604,7 +614,7 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 				request.reply <- answer
 				page.MustWait(`() => window.answers===1`)
 			case "lost-move-retry":
-				request.reply <- browserReply{status: 0}
+				request.reply <- answer
 				page.MustWait(`() => window.answers===1`)
 			}
 			if order == "post-move-answer" {

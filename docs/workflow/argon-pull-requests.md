@@ -10,7 +10,8 @@ Approved on [#1247](https://github.com/tkakkie/ribbitto/issues/1247).
 
 - **Cross-review:** Claude; Claude also does the Copilot follow-up check of
   Argon's fixes, and Codex checks a change Claude writes
-  ([who does what](argon-implementer.md#who-does-what)).
+  ([who does what](argon-implementer.md#who-does-what)). This stays a full
+  independent review at tier C, even with no unanswered Copilot finding.
 - **Adversarial review:** tier B, Codex, with the fixed invocation below;
   never Argon, which never reviews its own work. Tier C, none. A diff that
   reaches tier A leaves Argon, and the maintainer decides.
@@ -22,11 +23,12 @@ Approved on [#1247](https://github.com/tkakkie/ribbitto/issues/1247).
   checks, dispositions, and the failure and retry rules are unchanged;
   only the reviewer is Codex instead of Argon.
 
-**Codex's follow-up checks** (Copilot or adversarial) run as in
-[running the other AI](running-other-ai.md). Their stdin also carries the
-whole diff up to `$base` from its merge base with `origin/main`, and, for
-a regression test, the scratch pull request's diff and the failing job's
-log ([mutation evidence](#mutation-evidence)).
+**Round-2 reviews and Codex's follow-up checks** (Copilot or adversarial)
+run as in [running the other AI](running-other-ai.md). Their stdin also
+carries the whole diff up to `$base` (round 2: the round-1 SHA) from its
+merge base with `origin/main`, and, for a regression test, the scratch
+pull request's diff and the failing job's log
+([mutation evidence](#mutation-evidence)).
 
 The template's *Adversarial* field says `Codex (B) at <SHA>`. Claude posts
 the report as `**Adversarial review — Codex (tier B)** (at <SHA>)`, each
@@ -89,7 +91,7 @@ EOF
   now=$(gh pr view P --json baseRefOid,headRefOid -q '.baseRefOid+" "+.headRefOid') &&
   test "$now" = "$base $head" &&
   (cd "$clean" && limit 1800 codex exec -m gpt-6-astra -s read-only \
-    -o "$d/report.md" - < "$d/in")
+    -c model_reasoning_effort=high -o "$d/report.md" - < "$d/in")
 ```
 
 The base and head must equal the pull request's `baseRefOid` and

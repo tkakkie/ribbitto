@@ -62,7 +62,7 @@ text around it. A blank-looking display name — including one stored before
 this rule — is converted to an empty name by web when building the channel
 page, members panel and message view models, and shown as `@handle` alone.
 Channel message authors use the same component for the page and stream.
-Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); mentions, #117,
+Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); typed mentions, #1311,
 will be these) store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
 resolved through org's directory in the URL's organisation; a member who
 cannot be resolved shows a localised placeholder, never the UUID or another
@@ -72,6 +72,23 @@ account IDs through org, then looks up display names through identity, in
 two batches. The members
 page takes account IDs and handles from org's paged directory, then resolves
 display names through identity in one batch.
+
+## Member search
+
+`org.MemberSearch.Search` takes the resolved URL membership and returns at most
+8 candidates (member ID, handle, display name) from that organisation only.
+Trim the query, drop one leading `@`, then normalise to NFC; more than 50 code
+points returns none. Both query and names use NFKC and Unicode lower case for
+substring matching on display name or handle. Thus `加藤`, `智也`, `tomo` and
+`ｔｏｍｏ` find `加藤 智也 @tomoya`; reading-based search is not supported.
+Blank-looking display names count as empty, including in the returned candidate.
+Handle prefixes, display-name prefixes and prefixes of whitespace-separated
+display-name parts rank equally first, then other substrings; ties use handle
+order. Empty queries (including `@`) return the first 8 by handle.
+Reserved words (`all`, `everyone`, `here`, `channel`) are ordinary search text:
+only members whose names contain them can match; there are no group candidates.
+The route/fragment (#1310), typed-handle conversion (#1311), composer picker
+(#1312) and own-mention highlighting (#1313) are separate work.
 
 ## Handles
 

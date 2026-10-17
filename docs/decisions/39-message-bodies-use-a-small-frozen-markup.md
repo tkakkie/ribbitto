@@ -120,7 +120,7 @@ A token holds the member's UUID only, never a handle or name.
   answer reveals nothing about other organisations.
 - A **malformed** token is not a reference: it stays literal text.
 - **At rendering,** a reference shows the current `Display name @handle`
-  through `view.MemberName` (#117, [names](../domain/names.md)). A member
+  through `view.MemberName` (#1310, [names](../domain/names.md)). A member
   who later leaves or cannot be resolved shows the localised placeholder.
   Lookups go through the same organisation-scoped directory, so nothing
   from another organisation can show even if a bad row exists.
@@ -128,7 +128,7 @@ A token holds the member's UUID only, never a handle or name.
   naming another organisation's member UUID never shows that member's
   display name or handle on the page, in the stream or in extracted text.
 
-Mentions (#117) are stored only as these references, so #117 lands with or
+Typed mentions (#1311) are stored only as these references, so #1311 lands with or
 after `chat_v1`'s implementation.
 
 ## Rendering and security

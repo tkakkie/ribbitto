@@ -5,10 +5,10 @@ Composer JavaScript and drafts on the device.
 ## Composer
 
 [Decision 37][d37] allows bounded composer state. The server-rendered key and
-the sending glue below exist; the parts marked *planned* await their issues,
-and today the composer script keeps none of their state.
+the sending glue and feed pending items below exist; the parts marked
+*planned* await their issues.
 
-- **Sending** (input glue, #1173): the textarea stays usable while a post is
+- **Topic sending** (input glue, #1173): the textarea stays usable while a post is
   in flight, since answers replace only `#message-composer-state`. On a 200
   the script removes the sent body (htmx's request parameters) from the
   textarea's start, only if it still starts with it, with
@@ -17,7 +17,7 @@ and today the composer script keeps none of their state.
   follows. During an IME composition it waits for `compositionend`, keeping
   that one removal per textarea in a `WeakMap`. Every answer sets the
   textarea's `aria-invalid` from the state's `data-invalid`.
-- **Failures** (#1179) keep the text and the key; `#message-send-alert` says
+- **Topic failures** (#1179) keep the text and the key; `#message-send-alert` says
   which. The handler rejects 400/404/413/422 before any write; 429 rejects
   by spec: *not sent*, or with the mark, *this retry was refused and the
   earlier send is still unconfirmed*. A network error, a timeout, a 5xx or
@@ -29,17 +29,32 @@ and today the composer script keeps none of their state.
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.
-- **Pending own post** (planned, #1156; queue #1174): on enhanced latest
-  composers only, a pending item cloned from a server-rendered `<template>`,
-  body through `textContent`, in its own list beside `#message-items`. At
-  most 10 per tab, DOM only; matched to its message through the response's
-  `data-posted-message`. It never moves `data-event-cursor` or
-  `data-applied-cursor`, reads, counts or announces.
+- **Pending own post** (#1156; topics await #1188, queue #1174): latest
+  feeds clone a localised server `<template>` into `#message-pending`, after
+  `#message-items`. JavaScript trims nonblank text of at most 4,000 code
+  points and sets `textContent`. The item's own htmx form holds the
+  original text, key, generation and shown cursor. The composer empties immediately, keeps
+  focus and takes `crypto.randomUUID()`. One item, in any state, blocks
+  another send with a localised notice and keeps the next text.
+  A 200 swaps the composer state and out-of-band typing form; it never
+  clears or marks the textarea. Only its `data-posted-message` associates
+  the item with delivery, never text. A `MutationObserver` removes a
+  confirmed item before paint when that ID appears in `#message-items`.
+  Stream-first briefly shows both until the response; replay and feed moves
+  preserve the real ID. Pending items never move either cursor, read,
+  count or announce arrival. They use full opacity and no motion.
+  Failed responses never swap. The same failure classes as above fill only
+  the item's empty polite status; Sending is silent. Retry uses its form's
+  text and key, including after an unconfirmed send's refused retry. A 409
+  shows `message.error.repeat` and renews the item's key. Remove discards
+  the item and text; an uncertain committed post can still arrive later.
+  Pending sends bypass prefix removal, the ordinary send alert, the
+  unconfirmed-key mark, 409 cleanup and `aria-invalid` mirroring.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a
-  stream payload. Planned (#1156): the script may replace it with
-  `crypto.randomUUID()`.
+  stream payload. On a pending feed send the script replaces it with
+  `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

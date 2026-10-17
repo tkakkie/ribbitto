@@ -127,24 +127,23 @@ language too.
 
 ## Posting from the channel page
 
-The bottom composer posts through `conversation.Posting.Send`. On the
-latest page the textarea stays usable while the post is in flight; htmx
-replaces only the composer's state, and success removes the sent text from
-the textarea's start, keeping anything typed since (#1173). The message arrives
-through the stream (on reconnect if disconnected). A 422 keeps the draft and
-shows its field error. Older pages use a plain form:
-success gets a 303 to the latest page; errors render a full latest page with
-the draft. Posting without JavaScript uses the same 303/422 flow. The channel
-and organisation are resolved before posting; a non-member gets 404.
-Enter sends, Shift+Enter inserts a line break, and IME composition never
-sends; the help under the composer also names bold, italic, code and quotes. The page opens at the newest message; live delivery keeps it in view only
-when the reader is already at the bottom, except for their own successful post:
-the composer's success fragment identifies its message, and the sender scrolls
-to that item even when scrolled up. This works whether the stream arrives before
-or after the response, including delivery after reconnect. Each successful
-post's scroll intent is consumed once; failed posts create none. Focus stays in
-the composer. Live appends are announced politely;
-replay duplicates replace the same message id without another announcement.
+The composer uses `conversation.Posting.Send`. Enhanced latest feeds show a
+pending item immediately and empty the composer (#1156). One item blocks
+another send until delivery or Remove. Retry keeps its text and key;
+failures appear on the item ([contract](../architecture/web-composer.md#composer)).
+Topic views await #1188: their textarea stays usable during sending; success
+removes only the sent prefix, keeping later input (#1173); 422 keeps the
+text with a field error. Real items arrive through the stream, including
+reconnect replay. Older pages and scriptless posts use 303 on success and
+full-page 422 errors with the text kept. Organisation and channel resolve
+before posting; non-members get 404.
+
+Enter sends, Shift+Enter inserts a newline, and IME composition never sends.
+The help names formatting. Pages open at the newest message. Live delivery
+follows only at the bottom, except the sender's response ID scrolls its
+message into view once, in either response/delivery order and after reconnect.
+Focus stays in the composer. Only live appends announce; replay replaces the
+same ID silently.
 
 A **repeated send** (the same key again, after a lost response or a double
 submission) posts nothing: it is answered as a success naming the first

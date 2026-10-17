@@ -9,9 +9,7 @@ shared component is added or changes.
 
 ## Shared components
 
-A look used in two places becomes a component in `internal/web/view`, and
-pages compose components instead of repeating a control's class string.
-Today's shared controls:
+Shared looks become components in `internal/web/view`:
 
 | Component | File | Use |
 |---|---|---|
@@ -50,23 +48,25 @@ height. Every `textInput` has `text-entry` (16 px) text below `desk`, so
 iOS Safari does not zoom on focus (#1120). The move form's `<select>`
 has it too.
 
-Topic links in messages and the overview wrap anywhere at every width, so a
-long name never widens the reading column or the panel (#974). Below `desk`
+Topic links wrap anywhere, keeping messages and the overview within their
+columns (#974). Below `desk`
 a message's topic link and **Select** label are 44 px tall and an overview
 topic link fills its row. There a message's time sits under the name and
 the topic link and **Select** stay together at the row's end, so at 390 px
 a one-line message by a seed member takes that 44 px row and its body line;
 a narrower screen or a long name or topic moves them to their own row (#1093, `testMessageRowBrowser` in
-`internal/web/message_row_browser_test.go`). From `desk` a message's time
-reserves `min-w-timestamp` with tabular digits, wider than the server's UTC
-text and the local format of either language, so `message-time-v2.js`
-replacing it moves neither the topic link nor **Select** (#1094,
+`internal/web/message_row_browser_test.go`). From `desk` the time reserves `min-w-timestamp` with tabular digits, fitting
+UTC and both languages without moving the topic link or **Select** (#1094,
 `testMessageTimeBrowser` in `internal/web/message_time_browser_test.go`). Below
 `desk` they sit at the row's end, where the time's width moves them only if
 it changes how the header wraps; reserving it there would wrap seed rows at 390 px. At every width the create popover may stretch to
 16 px above the bottom, capped at its content height, so in a short
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.
+
+Feed pending items clone the message layout at full opacity without motion,
+reserving the 44 px phone header row; Retry and Remove describe their body.
+They have no topic label, selection or actions menu (#1156).
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer

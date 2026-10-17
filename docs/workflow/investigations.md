@@ -58,29 +58,27 @@ warm-up posts. Another session's absolute values never decide results alone.
 
 ### Build routes
 
-The approved operator works outside the implementer's sandbox with trusted
-git/Go and a trusted Docker Go image pinned by digest. Set `sha` to the full
-approved head or fixed trusted base SHA; repeat in a fresh checkout. Reuse
-no local clone, config, hooks or cache. Apply condition 5's git settings;
-also disable hooks/fsmonitor:
+Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference.
+Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
+head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
 ```sh
 session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
   src=$session/src && mkdir "$src" "$session/out" &&
-  pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; } &&
+  pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=false "$@"; } &&
   pinned init --quiet --template= &&
   pinned fetch --quiet https://github.com/tkakkie/ribbitto.git "$sha" &&
   replaced=$(pinned for-each-ref refs/replace) && test -z "$replaced" &&
+  tree=$(pinned ls-tree -r --full-tree "$sha") &&
+  printf '%s\n' "$tree" | awk '$1 == "120000" { exit 1 }' &&
   pinned checkout --quiet --detach "$sha" &&
   test "$(pinned rev-parse HEAD)" = "$sha" &&
   tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
   test -z "$tree_status"
 ```
 
-Continue only on success. Cross-compile in a throwaway container; `image`
-is the trusted image's digest reference. Check modules against this SHA's
-`go.sum`. Mount only read-only source and empty output; no host home,
-credentials or Docker socket:
+On success, cross-compile in a throwaway container. Check modules against
+this SHA's `go.sum`. Mount only read-only source and empty output:
 
 ```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
@@ -94,16 +92,15 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   go build -mod=readonly -trimpath -buildvcs=false -o /out/ribbitto ./cmd/ribbitto
 ```
 
-Apple silicon only: both SHAs use native arm64, never Rosetta. Run only
-this Go build in the tree: no asset regeneration or PR binaries. Record SHA
-and `shasum -a 256` before staging;
+Apple silicon only, never Rosetta. In-tree: only this Go build. Before staging
+record SHA and `shasum -a 256`;
 `-buildvcs=false` avoids container git ownership differences.
 
-If unusable, record why. The maintainer stages freshly verified source
-read-only in dedicated `build`, empty of old output/caches; no symlink may
-escape. The user writes only output/caches there. Recheck staged `HEAD` and
-clean status with `pinned` (`src` is staged source). Set `go` to the absolute
-trusted Go executable; match the container's version and flags:
+If unusable, record why. Maintainer: stage source read-only in
+`build`, empty of old output/caches; no symlink may escape.
+User writes only output/caches. With `src` staged, recheck `HEAD`/clean status
+via `pinned`; require `test -z "$(find "$src" -type l)"`.
+`go`: absolute trusted Go path, container version/flags:
 
 ```sh
 cd /private/var/ribbitto-measure/build/src &&
@@ -133,21 +130,19 @@ Setup is maintainer-only:
 - Validate this macOS version as the dedicated user with the trusted base,
   in order. Watch denials with
   `log stream --style compact --predicate 'sender == "Sandbox"'`:
-  1. With no database, use the run command's user/environment below:
+  1. No database; use run user/environment:
      `sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
-     Expect logged usage error and exit 1: profile, dyld and Go start.
-  2. Start with the throwaway database; make a database-backed request to
-     `127.0.0.1:18080`, watching the log. Possible gaps: self-signals
-     (`(allow signal (target self))`), parent-directory metadata reads and
-     pgx's current-user lookup. Prefer explicit `user=` and `sslmode=disable`
-     in `db_url` to allowing `mach-lookup`.
-  3. In a separate test copy, add only execution/runtime reads for `/bin/cat`
-     and `/usr/bin/nc`; keep other file/network rules. With the same
-     user/environment, confirm outside reads (including operator's `~`) and
-     connections to 5432, 55433 and Chrome's DevTools port fail. Also check
-     other programs cannot execute and other addresses/ports cannot bind.
-  Record results/profiles in the PR. A denial is a stop; widening needs
-  review and maintainer approval.
+     Expect logged usage error, exit 1: profile, dyld and Go start.
+  2. With throwaway DB, make a database-backed request to `127.0.0.1:18080`.
+     Possible gaps: self-signals (`(allow signal (target self))`),
+     parent-directory metadata reads, pgx current-user lookup. Prefer explicit
+     `user=` and `sslmode=disable` in `db_url` over allowing `mach-lookup`.
+  3. Test copy: add only execution/runtime reads for `/bin/cat` and
+     `/usr/bin/nc`; same user/environment and other file/network rules.
+     Confirm denial: outside reads (including operator's `~`), connections to
+     5432/55433/Chrome's DevTools port, other execution and address/port binds.
+  Record results/profiles in PR. A denial stops; widening needs review and
+  maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
 imports. SBPL requires `localhost`, not numeric hosts; it matches only
@@ -171,28 +166,44 @@ loopback. Commands still use `127.0.0.1`:
 (allow network-outbound (remote tcp "localhost:55434"))
 ```
 
-For each SHA, stop servers, stage its checksummed binary read-only, clear
-`data` and restore the same dataset with trusted base tools only.
-Start the throwaway database at `127.0.0.1:55434`; set `db_url` to its
-disposable connection string with that numeric host/port, explicit `user=`
-and `sslmode=disable`, no fallback hosts or Unix sockets. Run in the
-foreground. Trusted Perl closes all descriptors above 2 as that user before the
-profile, including its directory handle; only standard input/output/error
-survive. `env -i` alone leaves files open:
+Per SHA: stop servers; stage checksummed binary read-only; clear `data`;
+restore dataset with trusted base tools only. Start DB; `db_url`: disposable,
+`127.0.0.1:55434`, explicit `user=`, `sslmode=disable`, no fallback hosts/Unix
+sockets. Run in foreground.
+Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
+fresh `data/server.log`, and closes higher fds (directory handle included)
+before the profile; `env -i` alone leaves files open.
+Ctrl-C then stops only the waiting parent; stop the server by PID.
 
 ```sh
 cd /private/var/ribbitto-measure/data &&
   sudo -u _ribbitto_measure /usr/bin/env -i PATH=/usr/bin:/bin \
   HOME=/private/var/ribbitto-measure/data TMPDIR=/private/var/ribbitto-measure/data \
   TZ=UTC RIBBITTO_ADDR=127.0.0.1:18080 RIBBITTO_DATABASE_URL="$db_url" \
-  /usr/bin/perl -MPOSIX -e 'opendir(my $d, "/dev/fd") or die $!; my @fds = readdir $d; closedir($d) or die $!; for (@fds) { next unless /^\d+$/ && $_ > 2; POSIX::close($_) == 0 or $!{EBADF} or die $!; } exec @ARGV; die $!;' \
+  /usr/bin/perl -MPOSIX -MFcntl=:DEFAULT -e '
+  my $pid = fork(); defined $pid or die $!;
+  if ($pid) {
+    waitpid($pid, 0) == $pid or die $!;
+    exit(($? & 127) ? 128 + ($? & 127) : $? >> 8);
+  }
+  POSIX::setsid() > 0 or die $!;
+  open(STDIN, "<", "/dev/null") or die $!;
+  sysopen(STDOUT, "server.log", O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW, 0600) or die $!;
+  open(STDERR, ">&", \*STDOUT) or die $!;
+  opendir(my $d, "/dev/fd") or die $!;
+  my @fds = readdir $d; closedir($d) or die $!;
+  for (@fds) {
+    next unless /^\d+$/ && $_ > 2;
+    POSIX::close($_) or $!{EBADF} or die $!;
+  }
+  exec @ARGV; die $!;' \
   /usr/bin/sandbox-exec -f /private/var/ribbitto-measure/server.sb \
-  /private/var/ribbitto-measure/server serve < /dev/null
+  /private/var/ribbitto-measure/server serve
 ```
 
-As administrator check `lsof -a -p "$pid" -d 3-65535` after start (`pid` is the
-server PID). Stop on inherited operator files/sockets; record in the PR.
+Administrator after start: `lsof -a -p "$pid" -d 0-65535` (`pid`: server).
+Require 0: `/dev/null`; 1-2: fresh log; higher: server-opened allowed files,
+runtime kqueue/pipes or permitted sockets only. Stop on inherited operator
+files/terminals/sockets.
 
-Trusted harness/Chrome run separately as operator, never as server user;
-keep DevTools denied. Stop the server before swapping binaries; apply
-condition 9 after the session, even on error.
+Trusted harness/Chrome run separately as operator, never as server user.

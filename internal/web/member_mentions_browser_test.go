@@ -51,8 +51,90 @@ func testMemberMentionsViewBrowser(t *testing.T, browser *rod.Browser, topicView
 	initialHTML := markup(view.ChannelScreen("/static/css/app.css", snapshot))
 	olderHTML := markup(view.ChannelScreen("/static/css/app.css", older))
 	events := make(chan realtime.Outgoing)
+	mux := memberMentionsMux(t, initialHTML, olderHTML, events)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	defer server.CloseClientConnections()
+	page, closePage := boundedPage(t, browser, ctx, "member mentions")
+	defer closePage()
+	page = page.WithPanic(func(v any) { t.Fatal(v) })
+	setScheme := func(scheme string) {
+		t.Helper()
+		if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: scheme}}}).Call(page); err != nil {
+			t.Fatal(err)
+		}
+		page.MustWait(`scheme => matchMedia('(prefers-color-scheme: ' + scheme + ')').matches`, scheme)
+	}
+	setScheme("light")
+	page.MustEvalOnNewDocument(`window.mentionBefore = null;
+		document.addEventListener('htmx:sseOpen', e => {
+			if (e.target.id === 'organization-stream') window.mentionsStreamOpen = true;
+		})`)
+	page.MustNavigate(server.URL + "/").MustWaitLoad()
+	page.MustWait(`() => window.mentionsStreamOpen === true`)
+	remember := func(seq byte, present bool) {
+		t.Helper()
+		id := view.MessageDOMID(kernel.ID{seq})
+		page.MustWait(`(id, present) => !!document.getElementById(id) === present`, id, present)
+		// A missing node is intentional for inserts; replacements must first
+		// capture the existing node so an old highlight cannot satisfy assert.
+		page.MustEval(`id => { window.mentionBefore = document.getElementById(id); }`, id)
+	}
+	assert := func(seq byte) {
+		t.Helper()
+		selector := "#body-" + view.MessageDOMID(kernel.ID{seq}) + " > p > bdi"
+		// Payloads have no highlight attribute. A fresh node must acquire it,
+		// including replay/move replacements of an already highlighted item.
+		page.MustWait(`s => document.querySelectorAll(s).length === 3 &&
+			document.querySelector(s).closest('li') !== window.mentionBefore &&
+			document.querySelector(s).hasAttribute('data-own-mention')`, selector)
+		defer setScheme("light")
+		for _, scheme := range []string{"light", "dark"} {
+			setScheme(scheme)
+			if got := page.MustEval(mentionOutlineStyles, selector).Str(); got != "true,true,solid,2px,true;true,false,none;false,false,none" {
+				t.Fatalf("message %d (%s): resolved ID, own highlight, outline, contrast = %s", seq, scheme, got)
+			}
+		}
+	}
+	assert(20)
+	remember(10, false)
+	page.MustEval(`() => document.querySelector('#load-older a').click()`)
+	assert(10)
+	send := func(out realtime.Outgoing) {
+		t.Helper()
+		select {
+		case events <- out:
+		case <-ctx.Done():
+			t.Fatal("stream did not receive frame", ctx.Err())
+		}
+	}
+	// The real EventSource and SSE extension deliver new posts and replays to
+	// message-stream's production handler; no synthetic load events are sent.
+	for delivery := range 2 {
+		remember(30, delivery > 0)
+		send(realtime.Outgoing{ID: 30, Name: "message", Data: markup(view.LiveMessageItem(message(30)))})
+		assert(30)
+	}
+	moved := message(30)
+	moved.TopicID = kernel.ID{6}
+	remember(30, true)
+	send(realtime.Outgoing{ID: 31, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, topic, moved.TopicID))})
+	if topicView {
+		page.MustWait(`id => !document.getElementById(id)`, view.MessageDOMID(moved.ID))
+		// Moving back exercises destination insertion, not feed replacement.
+		moved.TopicID = topic
+		remember(30, false)
+		send(realtime.Outgoing{ID: 32, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, kernel.ID{6}, topic))})
+	}
+	assert(30)
+}
+
+// memberMentionsMux keeps the page, history and real SSE transport together
+// so its route registrations can also be exercised without launching Chrome.
+func memberMentionsMux(t *testing.T, initialHTML, olderHTML []byte, events <-chan realtime.Outgoing) *http.ServeMux {
+	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -82,66 +164,7 @@ func testMemberMentionsViewBrowser(t *testing.T, browser *rod.Browser, topicView
 		}
 		_, _ = w.Write(initialHTML)
 	})
-	server := httptest.NewServer(mux)
-	defer server.Close()
-	defer server.CloseClientConnections()
-	page, closePage := boundedPage(t, browser, ctx, "member mentions")
-	defer closePage()
-	page = page.WithPanic(func(v any) { t.Fatal(v) })
-	page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', () => window.mentionsStreamOpen = true)`)
-	page.MustNavigate(server.URL + "/").MustWaitLoad()
-	page.MustWait(`() => window.mentionsStreamOpen === true`)
-	remember := func(seq byte) {
-		page.MustEval(`id => window.mentionBefore = document.getElementById(id)`, view.MessageDOMID(kernel.ID{seq}))
-	}
-	assert := func(seq byte) {
-		t.Helper()
-		selector := "#body-" + view.MessageDOMID(kernel.ID{seq}) + " > p > bdi"
-		// Payloads have no highlight attribute. A fresh node must acquire it,
-		// including replay/move replacements of an already highlighted item.
-		page.MustWait(`s => document.querySelectorAll(s).length === 3 &&
-			document.querySelector(s).closest('li') !== window.mentionBefore &&
-			document.querySelector(s).hasAttribute('data-own-mention')`, selector)
-		for _, scheme := range []string{"light", "dark"} {
-			if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: scheme}}}).Call(page); err != nil {
-				t.Fatal(err)
-			}
-			if got := page.MustEval(mentionOutlineStyles, selector).Str(); got != "true,true,solid,2px,true;true,false,none;false,false,none" {
-				t.Fatalf("message %d (%s): resolved ID, own highlight, outline, contrast = %s", seq, scheme, got)
-			}
-		}
-	}
-	assert(20)
-	remember(10)
-	page.MustEval(`() => document.querySelector('#load-older a').click()`)
-	assert(10)
-	send := func(out realtime.Outgoing) {
-		t.Helper()
-		select {
-		case events <- out:
-		case <-ctx.Done():
-			t.Fatal("stream did not receive frame", ctx.Err())
-		}
-	}
-	// The real EventSource and SSE extension deliver new posts and replays to
-	// message-stream's production handler; no synthetic load events are sent.
-	for range 2 {
-		remember(30)
-		send(realtime.Outgoing{ID: 30, Name: "message", Data: markup(view.LiveMessageItem(message(30)))})
-		assert(30)
-	}
-	moved := message(30)
-	moved.TopicID = kernel.ID{6}
-	remember(30)
-	send(realtime.Outgoing{ID: 31, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, topic, moved.TopicID))})
-	if topicView {
-		page.MustWait(`id => !document.getElementById(id)`, view.MessageDOMID(moved.ID))
-		// Moving back exercises destination insertion, not feed replacement.
-		moved.TopicID = topic
-		remember(30)
-		send(realtime.Outgoing{ID: 32, Name: "messages-moved", Data: markup(view.MovedMessageItems([]view.Message{moved}, kernel.ID{6}, topic))})
-	}
-	assert(30)
+	return mux
 }
 
 // Width is meaningful only for a visible outline: Chrome reports medium
@@ -161,7 +184,8 @@ const mentionOutlineStyles = `s => {
 		const result = [e.hasAttribute('data-member-id'), e.hasAttribute('data-own-mention'), c.outlineStyle];
 		if (c.outlineStyle !== 'none') {
 			let parent = e.parentElement;
-			while (getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
+			while (parent && getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
+			if (!parent) throw new Error('mention has no painted ancestor');
 			const outline = luminance(c.outlineColor);
 			result.push(c.outlineWidth, contrast(outline, luminance(c.backgroundColor)) >= 3 &&
 				contrast(outline, luminance(getComputedStyle(parent).backgroundColor)) >= 3);

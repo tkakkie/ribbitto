@@ -98,9 +98,11 @@
     if (payload.querySelector("ul")?.dataset.fromTopic !== items.dataset.topic) return;
     for (const form of pendingForms()) {
       const item = form.closest("li");
-      if (item.dataset.postedMessage && payload.getElementById(item.dataset.postedMessage)) item.remove();
+      if (item.dataset.postedMessage && payload.getElementById(item.dataset.postedMessage)) {
+        item.remove();
+        say("");
+      }
     }
-    say("");
     reconcile();
   });
   document.addEventListener("click", (event) => {

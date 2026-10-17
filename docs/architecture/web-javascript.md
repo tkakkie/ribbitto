@@ -99,8 +99,10 @@ htmx sends resync requests. The markup contract is in
 
 ## Composer
 
-See [composer JavaScript and drafts](web-composer.md). Topic pending items
-settle by confirmed ID, response topic/applied sequence, or a subsequent
+The [composer queue](web-composer.md#composer) holds at most 10 pending items
+and dispatches in FIFO order, pausing while an outcome is unknown. Retry of
+a Not sent item goes to the end; an unknown outcome's Retry keeps its place.
+Topic pending items settle by confirmed ID, response topic/applied sequence, or a subsequent
 move from the shown topic; the script retains no move history
 ([decision 37][d37]).
 

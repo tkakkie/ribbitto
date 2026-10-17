@@ -585,6 +585,64 @@ func testPendingFailurePage(t *testing.T, browser *rod.Browser, topic bool) {
 
 // Gate answers and stream application independently to isolate move-out rules.
 func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("nonfirst-confirmed-frees-capacity", func(t *testing.T) {
+		page, events, posts, _ := pendingBrowser(t, browser, true)
+		page.MustEval(`() => {
+ const b=document.getElementById('message-body');
+ for(let i=0;i<10;i++) {b.value='pending '+i;b.form.requestSubmit();}
+ window.nodes=[...document.querySelectorAll('#message-pending > li')];
+}`)
+		for i := 0; i < 2; i++ {
+			request := receivePending(t, page, posts)
+			request.reply <- pendingAnswer(t, kernel.ID{byte(51 + i)})
+			page.MustWait(`n => window.answers===n`, i+1)
+		}
+		third := receivePending(t, page, posts)
+		if page.MustEval(`() => window.nodes.length!==10 || window.nodes.slice(0,2).some(n=>!n.dataset.postedMessage)`).Bool() {
+			t.Fatal("queue did not retain two confirmed items at capacity")
+		}
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='freed slot';b.form.requestSubmit();}`)
+		if page.MustEval(`() => {
+ const a=document.getElementById('message-send-alert');
+ return !a.textContent || a.textContent!==a.dataset.capacity || document.getElementById('message-body').value!=='freed slot';
+}`).Bool() {
+			t.Fatal("full queue did not retain the draft with a capacity notice")
+		}
+		move := func(id byte, seq int64) {
+			t.Helper()
+			moved := streamTestMessages(kernel.ID{2}, int(id))[0]
+			moved.TopicID = kernel.ID{4}
+			events <- realtime.Outgoing{ID: seq, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, kernel.ID{2}, moved.TopicID)))}
+			page.MustWait(`seq => document.getElementById('organization-stream').dataset.appliedCursor===String(seq)`, seq)
+		}
+		move(50, 53) // An unrelated move from this topic must preserve the notice.
+		if page.MustEval(`() => {
+ const a=document.getElementById('message-send-alert');
+ return a.textContent!==a.dataset.capacity || window.nodes.some(n=>!n.isConnected);
+}`).Bool() {
+			t.Fatal("unrelated move cleared the capacity notice or removed a pending item")
+		}
+		move(52, 54)
+		if page.MustEval(`() => {
+ const nodes=[...document.querySelectorAll('#message-pending > li')];
+ return nodes.length!==9 || window.nodes[1].isConnected ||
+  nodes.some((n,i)=>n!==window.nodes[i<1?i:i+1]);
+}`).Bool() {
+			t.Fatal("move must remove only the second confirmed item and keep the first")
+		}
+		page.MustEval(`() => document.getElementById('message-body').form.requestSubmit()`)
+		if page.MustEval(`() => {
+ const nodes=[...document.querySelectorAll('#message-pending > li')], last=nodes.at(-1);
+ return nodes.length!==10 || document.getElementById('message-body').value!=='' ||
+  document.getElementById('message-send-alert').textContent!=='' ||
+  last.querySelector('[data-pending-body]').textContent!=='freed slot' ||
+  last.querySelector('form').dataset.state!=='queued' || window.requests!==3 || window.ordinaryRequests!==0;
+}`).Bool() || len(posts) != 0 {
+			t.Fatal("move did not free a slot for the next queued send without a capacity notice")
+		}
+		third.reply <- browserReply{status: 500, body: []byte("pause")}
+		page.MustWait(`() => window.answers===3`)
+	})
 	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "lost-retry-post-move", "move-answer"} {
 		t.Run(order, func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, true)

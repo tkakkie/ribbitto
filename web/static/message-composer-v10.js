@@ -147,13 +147,15 @@
     const state = event.target;
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
-    body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);
     if (pending) {
+      body.removeAttribute("aria-invalid");
+      body.removeAttribute("aria-describedby");
       pending.closest("li").dataset.postedMessage = state.dataset.postedMessage;
       reconcile();
       return;
     }
+    body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const status = event.detail.xhr.status;
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");

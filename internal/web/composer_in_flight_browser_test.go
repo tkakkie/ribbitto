@@ -48,7 +48,10 @@ func heldComposer(t *testing.T, browser *rod.Browser) (*rod.Page, func() chan st
 	t.Cleanup(func() { close(stop) })
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
+	// Exercise ordinary sending when the secure-context UUID API is unavailable.
+	// Latest topics now also render the pending template.
 	page.MustEvalOnNewDocument(`(() => {
+ Object.defineProperty(crypto, 'randomUUID', {value: undefined});
  window.composerSwaps = 0; window.bodyInputs = 0; window.composerSubmits = 0;
  document.addEventListener('submit', e => { if (e.target.id === 'message-composer') window.composerSubmits++; }, true);
  document.addEventListener('htmx:afterSettle', e => { if (e.target.id === 'message-composer-state') window.composerSwaps++; });

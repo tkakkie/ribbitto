@@ -28,11 +28,14 @@ type pendingRequest struct {
 }
 
 // Real markup, htmx and stream script; only transport delivery is gated.
-func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
+func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 	snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, MemberID: kernel.ID{3}, Handle: "alice", DisplayName: "Alice", Role: "member", EventCursor: new(int64(42)), Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001"), Reading: true}
+	if topic {
+		snapshot.Topic = &view.Topic{ID: kernel.ID{2}}
+	}
 	events, posts := make(chan realtime.Outgoing, 8), make(chan pendingRequest, 8)
 	var reads atomic.Int32
 	mux := http.NewServeMux()
@@ -64,6 +67,15 @@ func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtim
 			posts <- request
 			select {
 			case reply := <-request.reply:
+				if reply.status == 0 {
+					conn, _, err := http.NewResponseController(w).Hijack()
+					if err != nil {
+						t.Error(err)
+					} else {
+						_ = conn.Close()
+					}
+					return
+				}
 				w.WriteHeader(reply.status)
 				_, _ = w.Write(reply.body)
 			case <-r.Context().Done():
@@ -99,7 +111,12 @@ func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtim
 
 func pendingAnswer(t *testing.T, id kernel.ID) browserReply {
 	t.Helper()
-	return browserReply{status: 200, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{PostedMessageID: &id, Composer: new("fresh"), IdempotencyKey: new("00000000-0000-4000-8000-000000000002"), EventCursor: new(int64(999))})))}
+	return pendingTopicAnswer(t, id, kernel.ID{2})
+}
+
+func pendingTopicAnswer(t *testing.T, id, topic kernel.ID) browserReply {
+	t.Helper()
+	return browserReply{status: 200, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{PostedMessageID: &id, PostedTopicID: topic, PostedEventSeq: int64(id[0]), Composer: new("fresh"), IdempotencyKey: new("00000000-0000-4000-8000-000000000002"), EventCursor: new(int64(999))})))}
 }
 
 func TestPendingTemplateScope(t *testing.T) {
@@ -109,7 +126,7 @@ func TestPendingTemplateScope(t *testing.T) {
 		topic          *view.Topic
 		want           bool
 	}{
-		{"feed", 0, 0, nil, true}, {"older", 40, 0, nil, false}, {"around", 0, 40, nil, false}, {"topic", 0, 0, &view.Topic{ID: kernel.ID{2}}, false},
+		{"feed", 0, 0, nil, true}, {"older", 40, 0, nil, false}, {"around", 0, 40, nil, false}, {"topic", 0, 0, &view.Topic{ID: kernel.ID{2}}, true}, {"topic-older", 40, 0, &view.Topic{ID: kernel.ID{2}}, false}, {"topic-around", 0, 40, &view.Topic{ID: kernel.ID{2}}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			markup := string([]byte(renderIn(t, "en", view.ChannelScreen("/static/css/app.css", view.ChannelPage{Before: tc.before, Around: tc.around, Topic: tc.topic}))))
@@ -123,13 +140,19 @@ func TestPendingTemplateScope(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, topic := range []bool{false, true} {
+		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) { testPendingComposerPage(t, browser, topic) })
+	}
+}
+
+func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 	for _, tc := range []struct{ name, text string }{
 		{"empty", ""}, {"blank", " \u3000\n"}, {"oversized", strings.Repeat("x", 4001)},
 		{"trimmed-limit", strings.Repeat("🙂", 4000) + " \r\n"},
 	} {
 		for _, state := range []string{"sending", "failed", "confirmed", "removed-in-flight"} {
 			t.Run("ordinary-while-pending/"+tc.name+"/"+state, func(t *testing.T) {
-				page, _, posts, _ := pendingBrowser(t, browser)
+				page, _, posts, _ := pendingBrowser(t, browser, topic)
 				page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='pending'; b.form.requestSubmit(); }`)
 				var request pendingRequest
 				select {
@@ -198,7 +221,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		{"cr", strings.Repeat("x\r", 1999) + "xx \r", strings.Repeat("x\n", 1999) + "xx"},
 	} {
 		t.Run("normalized-limit/"+tc.name, func(t *testing.T) {
-			page, _, posts, _ := pendingBrowser(t, browser)
+			page, _, posts, _ := pendingBrowser(t, browser, topic)
 			page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
 			select {
 			case request := <-posts:
@@ -222,7 +245,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		{"blank", ""}, {"oversized", strings.Repeat("x", 4001)},
 	} {
 		t.Run("pending-while-ordinary/"+tc.name, func(t *testing.T) {
-			page, _, posts, _ := pendingBrowser(t, browser)
+			page, _, posts, _ := pendingBrowser(t, browser, topic)
 			page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
 			var ordinary pendingRequest
 			select {
@@ -259,7 +282,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		})
 	}
 	t.Run("422-then-pending-200", func(t *testing.T) {
-		page, _, posts, _ := pendingBrowser(t, browser)
+		page, _, posts, _ := pendingBrowser(t, browser, topic)
 		page.MustEval(`() => { window.help=document.getElementById('message-help').textContent; document.getElementById('message-composer').requestSubmit(); }`)
 		var ordinary pendingRequest
 		select {
@@ -292,7 +315,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		}
 	})
 	t.Run("pending-200-then-422", func(t *testing.T) {
-		page, events, posts, _ := pendingBrowser(t, browser)
+		page, events, posts, _ := pendingBrowser(t, browser, topic)
 		page.MustEval(`() => { const b=document.getElementById('message-body'); window.help=document.getElementById('message-help').textContent; b.value='valid'; b.form.requestSubmit(); }`)
 		var pending pendingRequest
 		select {
@@ -338,7 +361,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		for _, first := range []string{"response", "stream"} {
 			for _, space := range []string{"\u3000", "\ufeff"} {
 				t.Run(fmt.Sprintf("%d/%s/%x", width, first, space), func(t *testing.T) {
-					page, events, posts, reads := pendingBrowser(t, browser)
+					page, events, posts, reads := pendingBrowser(t, browser, topic)
 					page.MustSetViewport(width, 800, 1, false)
 					initialReads := reads.Load()
 					page.MustEval(`space => {
@@ -412,10 +435,12 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 					out := realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
 					events <- out
 					page.MustWait(`() => !!document.querySelector('#message-items > #message-33000000000000000000000000000000')`)
-					moved := own
-					moved.TopicID = kernel.ID{4}
-					events <- realtime.Outgoing{ID: 52, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, kernel.ID{2}, kernel.ID{4})))}
-					page.MustWait(`() => document.getElementById('organization-stream').dataset.eventCursor==='52'`)
+					if !topic {
+						moved := own
+						moved.TopicID = kernel.ID{4}
+						events <- realtime.Outgoing{ID: 52, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, kernel.ID{2}, kernel.ID{4})))}
+						page.MustWait(`() => document.getElementById('organization-stream').dataset.eventCursor==='52'`)
+					}
 					if first == "stream" {
 						if !page.MustHas("#message-pending > li") {
 							t.Fatal("stream matched without response")
@@ -451,7 +476,13 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 }
 
 func testPendingFailureBrowser(t *testing.T, browser *rod.Browser) {
-	page, _, posts, _ := pendingBrowser(t, browser)
+	for _, topic := range []bool{false, true} {
+		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) { testPendingFailurePage(t, browser, topic) })
+	}
+}
+
+func testPendingFailurePage(t *testing.T, browser *rod.Browser, topic bool) {
+	page, _, posts, _ := pendingBrowser(t, browser, topic)
 	answers := make(chan string, 1)
 	sent := make(chan url.Values, 1)
 	router := page.HijackRequests()
@@ -527,5 +558,91 @@ func testPendingFailureBrowser(t *testing.T, browser *rod.Browser) {
 	page.MustWait(`() => window.answers===12`)
 	if len(posts) != 0 {
 		t.Fatal("hijacked request escaped")
+	}
+}
+
+// Hold the posting-time answer while stream application establishes move-out.
+func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
+	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "move-answer"} {
+		t.Run(order, func(t *testing.T) {
+			page, events, posts, _ := pendingBrowser(t, browser, true)
+			own := streamTestMessages(kernel.ID{2}, 51)[0]
+			own.Body, own.Text = "moving post", "moving post"
+			answer := pendingAnswer(t, own.ID) // Rendered before any move, still naming A.
+			page.MustEval(`() => {
+    const b=document.getElementById('message-body'); b.value='moving post'; b.form.requestSubmit();
+    window.frames=[]; window.badTasks=[];
+    const count=()=>document.querySelectorAll('#message-items > #message-33000000000000000000000000000000').length+
+      [...document.querySelectorAll('#message-pending-body')].filter(e=>e.textContent==='moving post').length;
+    const check=()=>{
+      const moved=document.getElementById('organization-stream').dataset.appliedCursor==='52';
+      const confirmed=!!document.querySelector('#message-composer-state [name=composer][value=fresh]');
+      const n=count();
+      if(moved && confirmed && n!==0) window.badTasks.push(n);
+      return [n,moved,confirmed,!!document.querySelector('#message-items > #message-33000000000000000000000000000000')];
+    };
+    document.addEventListener('htmx:afterSwap',()=>queueMicrotask(check));
+    document.addEventListener('htmx:sseBeforeMessage',()=>queueMicrotask(check));
+    const frame=()=>{ window.frames.push(check()); window.frame=requestAnimationFrame(frame); }; frame();
+   }`)
+			receive := func() pendingRequest {
+				t.Helper()
+				select {
+				case request := <-posts:
+					return request
+				case <-page.GetContext().Done():
+					t.Fatal("pending request did not arrive")
+					return pendingRequest{}
+				}
+			}
+			request := receive()
+			if !page.MustEval(`() => document.querySelector('[data-pending-form]').getAttribute('action')===document.getElementById('message-composer').getAttribute('action') && document.querySelector('[data-pending-form]').action.includes('/topics/')`).Bool() {
+				t.Fatal("pending form did not post to the topic")
+			}
+			switch order {
+			case "answer-move":
+				request.reply <- answer
+				page.MustWait(`() => window.answers===1`)
+			case "lost-move-retry":
+				request.reply <- browserReply{status: 0}
+				page.MustWait(`() => window.answers===1`)
+			}
+			if order == "post-move-answer" {
+				events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+				page.MustWait(`() => !!document.querySelector('#message-items > #message-33000000000000000000000000000000')`)
+			}
+			moved := own
+			moved.TopicID = kernel.ID{4}
+			events <- realtime.Outgoing{ID: 52, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, own.TopicID, moved.TopicID)))}
+			page.MustWait(`() => document.getElementById('organization-stream').dataset.appliedCursor==='52'`)
+			if order != "answer-move" {
+				if !page.MustHas("#message-pending > li") || page.MustHas("#message-items > li") {
+					t.Fatal("move before confirmation must leave only the pending item")
+				}
+				if order == "lost-move-retry" {
+					page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+					retry := receive()
+					if retry.values.Encode() != request.values.Encode() {
+						t.Fatal("retry changed form values")
+					}
+					retry.reply <- pendingTopicAnswer(t, own.ID, moved.TopicID)
+				} else {
+					request.reply <- answer
+				}
+			}
+			page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+			page.MustEval(`() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`)
+			if problem := page.MustEval(`() => {
+    cancelAnimationFrame(window.frame);
+    if(window.badTasks.length) return 'move-out not removed in same task: '+window.badTasks;
+    if(window.frames.some(([n,moved,confirmed,real])=> n!==(moved ? (confirmed?0:1) : (real&&!confirmed?2:1)))) return 'frame identities: '+JSON.stringify(window.frames);
+    if(document.querySelector('#message-pending > li, #message-items > #message-33000000000000000000000000000000')) return 'identity remained';
+    const b=document.getElementById('message-body'); b.value='next'; b.form.requestSubmit(); return '';
+   }`).Str(); problem != "" {
+				t.Fatal(problem)
+			}
+			next := receive()
+			next.reply <- pendingAnswer(t, kernel.ID{60})
+		})
 	}
 }

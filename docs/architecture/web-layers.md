@@ -12,7 +12,7 @@ enhancement, not full parity.
   branching, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
-  keyboard shortcuts (Enter to send), local-time display, pending own posts on the feed and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
+  keyboard shortcuts (Enter to send), local-time display, pending own posts on feeds/topics and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
 
 ## Go handlers
@@ -44,7 +44,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
   htmx. On success the state's
-  `data-posted-message` carries the posted message's DOM id; errors omit it,
+  `data-posted-message` carries the posted message's DOM id, with
+  `data-posted-topic` and `data-posted-seq` from that message (including repeats); errors omit them,
   except a 409, which names the stored message and, when the text starts
   with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
@@ -53,9 +54,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  Feed pending items use the [composer contract](web-composer.md#composer):
+  Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; either form in flight blocks submits.
-  `message-composer-v10.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v11.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,

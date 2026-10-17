@@ -29,7 +29,7 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   `aria-invalid="true"` and is described by it. A failed enhanced send fills
   the composer's empty `#message-send-alert` (`role="alert"`), outside the
   swapped state, with a server-rendered text saying whether it was not sent,
-  could not be confirmed or was recovered. Feed pending items instead use
+  could not be confirmed or was recovered. Pending items instead use
   an empty polite status for failures; Sending is silent. Retry and Remove
   are described by the pending body. Arrival announces once in `#message-status`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and

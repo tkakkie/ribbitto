@@ -204,6 +204,9 @@ func TestComposerRepeatAfterMove(t *testing.T) {
 				// A plain repeat redirects to the requested path; keyedSend
 				// follows it to the page the browser would show.
 				w := keyedSend(t, h, path, values, hx, success)
+				if hx && (!strings.Contains(w.Body.String(), `data-posted-topic="09000000-0000-0000-0000-000000000000"`) || !strings.Contains(w.Body.String(), `data-posted-seq="43"`)) {
+					t.Fatalf("repeat did not return the moved message's topic and original sequence: %s", w.Body.String())
+				}
 				_, signal := enhancedForms(t, w.Body.String())
 				typingURL := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
 				// An enhanced answer keeps the page's form, so it has no action.

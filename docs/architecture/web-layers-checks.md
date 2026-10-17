@@ -104,11 +104,13 @@ replacement, closed/fresh generations, a post held in flight while typing
 and composing (#1173), enhanced latest feed/topic posts and
 plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
 posts from a topic view through real PostgreSQL and the real stream.
-Feed pending cases cover both response/delivery orders, reconnect replay,
-feed moves, same-text collisions, JavaScript whitespace, failure classes and
-Retry/Remove. Per-frame identity counts and desktop/phone body positions
-check replacement; PostgreSQL checks pending/response/delivery cursor phases
-and a committed send with its response lost. The composer harness controls only the two-second throttle timer, without sleeps.
+Feed/topic pending cases cover both orders, replay, feed moves,
+same-text collisions, JavaScript whitespace, failures and Retry/Remove.
+Topics cover post/move/answer, answer/move, lost-response/move/retry
+and defensive move-only/answer, same-task removal and the next send. Frame
+identity counts and desktop/phone positions check replacement;
+PostgreSQL checks cursor phases and retry after a lost commit response.
+The throttle timer is gated.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple
 streams/last close and current/empty reconnects. Transport cases assert native

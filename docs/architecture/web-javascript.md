@@ -99,7 +99,10 @@ htmx sends resync requests. The markup contract is in
 
 ## Composer
 
-See [composer JavaScript and drafts](web-composer.md).
+See [composer JavaScript and drafts](web-composer.md). Topic pending items
+settle by confirmed ID, response topic/applied sequence, or a subsequent
+move from the shown topic; the script retains no move history
+([decision 37][d37]).
 
 [a11y]: ../accessibility.md
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md

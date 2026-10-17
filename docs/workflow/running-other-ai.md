@@ -51,11 +51,11 @@ check also [more context](argon-pull-requests.md#who-reviews)):
 # or reviewed SHA (adversarial) for a follow-up.
 # gh pr checks fails unless CI is green, which the review needs first.
 # tier=B|C
-case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
 g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
   GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
   -c core.fsmonitor=false "$@"; }
-diff=$(mktemp) && head=$(g rev-parse HEAD) &&
+case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
+  diff=$(mktemp) && head=$(g rev-parse HEAD) &&
   test "$head" = "$(gh pr view P --json headRefOid -q .headRefOid)" &&
   echo "Compared: $base..$head" > "$diff" &&
   g diff --no-ext-diff --no-textconv "$base..$head" >> "$diff" &&

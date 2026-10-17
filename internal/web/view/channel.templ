@@ -429,6 +429,8 @@ templ MessageComposer(page ChannelPage) {
 }
 
 // Pending markup stays server-owned; its body is filled as text, never HTML.
+// Layout mirrors messageItem to preserve its shared stream markup;
+// testPendingComposerBrowser guards their geometry within 1 px.
 templ pendingMessage(page ChannelPage) {
 	<template id="message-pending-template">
 		<li class="relative flex scroll-mt-6 flex-col gap-1 pl-12 max-desk:wrap-anywhere">

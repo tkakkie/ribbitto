@@ -7,6 +7,8 @@
     const template = document.getElementById("message-pending-template");
     if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) return;
     const form = event.target, body = form.elements.body;
+    const text = body.value.trim();
+    if (!text || [...body.value].length > 4000) return;
     const list = document.getElementById("message-pending");
     if (list.firstElementChild) {
       event.preventDefault();
@@ -14,8 +16,6 @@
       say("busy");
       return;
     }
-    const text = body.value.trim();
-    if (!text || [...body.value].length > 4000) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const item = template.content.firstElementChild.cloneNode(true);

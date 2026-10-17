@@ -73,6 +73,8 @@ templ LiveMessageItem(entry Message) {
 	@messageItem(entry, i18n.T(ctx, "message.new")+" @"+entry.Handle+": "+entry.Text)
 }
 
+// Layout is mirrored by pendingMessage to preserve this shared stream markup;
+// testPendingComposerBrowser guards their geometry within 1 px.
 templ messageItem(entry Message, announcement string) {
 	<li
 		id={ MessageDOMID(entry.ID) }

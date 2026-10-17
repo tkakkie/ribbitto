@@ -8,7 +8,11 @@ Composer JavaScript and drafts on the device.
 the sending glue and feed pending items below exist; the parts marked
 *planned* await their issues.
 
-- **Topic sending** (input glue, #1173): the textarea stays usable while a post is
+The ordinary path applies to topic composers and feed sends that create no
+pending item: blank text, text over 4,000 code points or contexts without
+`crypto.randomUUID()`.
+
+- **Ordinary sending** (input glue, #1173): the textarea stays usable while a post is
   in flight, since answers replace only `#message-composer-state`. On a 200
   the script removes the sent body (htmx's request parameters) from the
   textarea's start, only if it still starts with it, with
@@ -17,7 +21,7 @@ the sending glue and feed pending items below exist; the parts marked
   follows. During an IME composition it waits for `compositionend`, keeping
   that one removal per textarea in a `WeakMap`. Every answer sets the
   textarea's `aria-invalid` from the state's `data-invalid`.
-- **Topic failures** (#1179) keep the text and the key; `#message-send-alert` says
+- **Ordinary failures** (#1179) keep the text and the key; `#message-send-alert` says
   which. The handler rejects 400/404/413/422 before any write; 429 rejects
   by spec: *not sent*, or with the mark, *this retry was refused and the
   earlier send is still unconfirmed*. A network error, a timeout, a 5xx or
@@ -29,22 +33,22 @@ the sending glue and feed pending items below exist; the parts marked
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.
-- **Pending own post** (#1156; topics await #1188, queue #1174): latest
-  feeds clone a localised server `<template>` into `#message-pending`, after
-  `#message-items`. JavaScript trims nonblank text of at most 4,000 code
-  points and sets `textContent`. The item's own htmx form holds the
-  original text, key, generation and shown cursor. The composer empties immediately, keeps
+- **Pending own post** (#1156; topic pending items #1188, queue #1174):
+  [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
+  rules. Latest feeds use `#message-pending-template` and `#message-pending`,
+  after `#message-items`. The item's own htmx form holds the original text,
+  key, generation and shown cursor. The composer empties immediately, keeps
   focus and takes `crypto.randomUUID()`. One item, in any state, blocks
-  another send with a localised notice and keeps the next text.
+  another send that would create a pending item with a localised notice
+  and keeps the next text.
   A 200 swaps the composer state and out-of-band typing form; it never
-  clears or marks the textarea. Only its `data-posted-message` associates
-  the item with delivery, never text. A `MutationObserver` removes a
+  clears or marks the textarea. Its `data-posted-message` associates
+  the item with delivery. A `MutationObserver` removes a
   confirmed item before paint when that ID appears in `#message-items`.
   Stream-first briefly shows both until the response; replay and feed moves
-  preserve the real ID. Pending items never move either cursor, read,
-  count or announce arrival. They use full opacity and no motion.
+  preserve the real ID.
   Failed responses never swap. The same failure classes as above fill only
-  the item's empty polite status; Sending is silent. Retry uses its form's
+  the item's empty polite status. Retry uses its form's
   text and key, including after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
   the item and text; an uncertain committed post can still arrive later.

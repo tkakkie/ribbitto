@@ -122,6 +122,38 @@ func TestPendingTemplateScope(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, tc := range []struct{ name, text string }{
+		{"empty", ""}, {"blank", " \u3000\n"}, {"oversized", strings.Repeat("x", 4001)},
+	} {
+		t.Run("ordinary-while-pending/"+tc.name, func(t *testing.T) {
+			page, _, posts, _ := pendingBrowser(t, browser)
+			page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='pending'; b.form.requestSubmit(); }`)
+			select {
+			case request := <-posts:
+				request.reply <- browserReply{status: 400, body: []byte("refused")}
+			case <-page.GetContext().Done():
+				t.Fatal("pending request did not arrive")
+			}
+			page.MustWait(`() => window.answers===1`)
+			page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
+			select {
+			case request := <-posts:
+				if request.values.Get("body") != tc.text {
+					t.Fatal("ordinary send changed text")
+				}
+				if page.MustElement("#message-send-alert").MustText() != "" || !page.MustHas("#message-pending > li") {
+					t.Fatal("ordinary send showed busy or removed pending item")
+				}
+				request.reply <- browserReply{status: 400, body: []byte("refused")}
+			case <-page.GetContext().Done():
+				t.Fatal("ordinary send was blocked by pending item")
+			}
+			page.MustWait(`() => document.getElementById('message-send-alert').textContent===document.getElementById('message-send-alert').dataset.notSent`)
+			if page.MustElement("#message-body").MustProperty("value").Str() != tc.text || page.MustElement("#message-pending-body").MustText() != "pending" {
+				t.Fatal("ordinary failure changed composer or pending text")
+			}
+		})
+	}
 	for _, width := range []int{1280, 390} {
 		for _, first := range []string{"response", "stream"} {
 			for _, space := range []string{"\u3000", "\ufeff"} {

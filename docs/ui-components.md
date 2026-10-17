@@ -1,15 +1,15 @@
 # UI components
 
-The shared templ components that pages compose instead of repeating a
-control's class string ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
-How templates and styles are written is in [`ui-code.md`](ui-code.md).
+Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
+Writing rules: [`ui-code.md`](ui-code.md).
 
 **Keep it current:** update this file in the same pull request when a
 shared component is added or changes.
 
 ## Shared components
 
-Shared looks become components in `internal/web/view`:
+A look used in two places becomes a component in `internal/web/view`;
+pages compose components instead of repeating a control's class string.
 
 | Component | File | Use |
 |---|---|---|
@@ -37,10 +37,8 @@ Shared looks become components in `internal/web/view`:
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
-- **A new component arrives with its first user.** The account menu came
-  with #872 (`appBar`, an HTML popover), the avatar with #873, the panel
-  with #874, the image with #875. When a page is
-  restyled, its repeated looks (links, for example) become components too.
+- **A new component arrives with its first user.** Restyling a page also
+  extracts its repeated looks.
 
 Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
 for 48 px phone targets; `textField` sets `inputProps.Tall` for the same
@@ -64,9 +62,12 @@ it changes how the header wraps; reserving it there would wrap seed rows at 390 
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.
 
-Feed pending items clone the message layout at full opacity without motion,
-reserving the 44 px phone header row; Retry and Remove describe their body.
-They have no topic label, selection or actions menu (#1156).
+Exception (#1156): `pendingMessage` mirrors `messageItem`'s layout to keep
+the shared stream render unchanged; their different headers and bodies
+would complicate a wrapper. `testPendingComposerBrowser` guards geometry
+within 1 px. Pending items reserve the 44 px phone header, at full opacity
+without motion; Retry and Remove describe their body. No topic label,
+selection or actions menu.
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer

@@ -176,16 +176,16 @@ For each SHA, stop servers, stage its checksummed binary read-only, clear
 Start the throwaway database at `127.0.0.1:55434`; set `db_url` to its
 disposable connection string with that numeric host/port, explicit `user=`
 and `sslmode=disable`, no fallback hosts or Unix sockets. Run in the
-foreground. Before the profile, trusted Perl runs as that user and closes all
-descriptors above 2, including its directory handle; only standard
-input/output/error survive. `env -i` alone leaves files open:
+foreground. Trusted Perl closes all descriptors above 2 as that user before the
+profile, including its directory handle; only standard input/output/error
+survive. `env -i` alone leaves files open:
 
 ```sh
 cd /private/var/ribbitto-measure/data &&
   sudo -u _ribbitto_measure /usr/bin/env -i PATH=/usr/bin:/bin \
   HOME=/private/var/ribbitto-measure/data TMPDIR=/private/var/ribbitto-measure/data \
   TZ=UTC RIBBITTO_ADDR=127.0.0.1:18080 RIBBITTO_DATABASE_URL="$db_url" \
-  /usr/bin/perl -MPOSIX -e 'opendir(my $d, "/dev/fd") or die $!; for (readdir $d) { next unless /^\d+$/ && $_ > 2 && $_ != fileno($d); POSIX::close($_) == 0 or die $!; } closedir($d) or die $!; exec @ARGV; die $!;' \
+  /usr/bin/perl -MPOSIX -e 'opendir(my $d, "/dev/fd") or die $!; my @fds = readdir $d; closedir($d) or die $!; for (@fds) { next unless /^\d+$/ && $_ > 2; POSIX::close($_) == 0 or $!{EBADF} or die $!; } exec @ARGV; die $!;' \
   /usr/bin/sandbox-exec -f /private/var/ribbitto-measure/server.sb \
   /private/var/ribbitto-measure/server serve < /dev/null
 ```

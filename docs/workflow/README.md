@@ -93,9 +93,12 @@ The lifecycle of a pull request is in [`pull-requests.md`](pull-requests.md).
 
 ## Keeping state
 
-- **Status (#1):** read it at the start of a session. At the end of a unit
-  of work, overwrite its body using its headings (under ~30 lines;
-  replace, don't append).
+- **Status (#1):** read it only at the start of an orchestrating session;
+  review, implementation and chore runs skip it. At the end of a unit of
+  work, overwrite its body using its headings: under 30 lines and 3,000
+  characters. *Recently done* holds only the latest unit; history lives in
+  pull requests and issues. The `pr-chores` writer refuses a body outside
+  these limits; shorten it before writing.
 - **AI workflow log (#2):** when something goes wrong with the workflow —
   a tool hangs, a review misses something, work is redone, an instruction
   is misunderstood — add one comment: what happened · cost · likely cause

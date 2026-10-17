@@ -16,6 +16,13 @@ Copilot and the adversarial review do not count. If round two still has
 blocking findings, a pull request may go through *closure verification* (below) when it qualifies; in every other
 case, stop and ask the maintainer.
 
+**Round two:** for a pull request, supply `Compared: <round-1 SHA>..<head>`
+and centre the review on that delta: verify that each round-1 blocking
+finding is resolved and that the delta adds no new problem, including its
+effect on unchanged code and the issue's *Done when*. Re-read the rest only
+where the delta affects it. An issue's round two remains a full re-read;
+issue revisions have no SHA.
+
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
@@ -54,6 +61,7 @@ case, stop and ask the maintainer.
 
 ```
 **AI review — <Codex|Claude|Argon>, round <1|2>** (for a PR: at <short SHA>)
+Compared: <round-1 SHA>..<head> (PR round 2 only)
 Verdict: approve | changes requested
 - [blocking] file:line or section — problem — suggested fix
 - [nit] …
@@ -68,8 +76,8 @@ verification keep their existing reviewers.
 **Closure verification** (pull requests only; after the two-round limit;
 at most once per PR; not a review round). Evidence: #2, the case of #14.
 
-1. **Eligibility is declared in the round-2 report,** after a normal
-   review of that revision, and only if every remaining blocking finding
+1. **Eligibility is declared in the round-2 report,** after the round-two
+   review described above, and only if every remaining blocking finding
    is mechanical: the report names the exact fix, the reviewer has
    verified that the fix works, and it needs no design or specification
    decision. Without that declaration, ask the maintainer.

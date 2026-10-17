@@ -14,8 +14,8 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs approval and a cap. The rules you must not skip:
 
-- **Start of a session:** read the pinned Status issue (`gh issue view 1`)
-  and `docs/roadmap.md`.
+- **Session start:** orchestrators read Status #1 and `docs/roadmap.md`;
+  other runs skip Status.
 - **AI issues, PRs and docs need another AI's review before the
   maintainer is asked:** Claude issues → `argonreview issue`
   (Codex if uncounted); other Claude → Codex; Codex/Argon → Claude. At most

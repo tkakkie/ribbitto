@@ -12,8 +12,8 @@ requests that review by hand on the draft
 (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), at the point in
 the [delivery sequence](pull-requests.md#lifecycle-of-a-pull-request).
 The `main` ruleset does not
-request it on ready, and drafts and new pushes do not trigger it; re-request
-it by hand if a later change needs another look. Advisory. Balanced is not
+request it on ready, and drafts and new pushes do not trigger it. A repeat
+review is requested only when the maintainer asks. Advisory. Balanced is not
 used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and
 API cannot set the effort.
 
@@ -28,8 +28,8 @@ review; not a review round). A change made to answer it would otherwise
 reach the maintainer unreviewed. If answering Copilot needs a change:
 
 1. Apply only the changes that answer Copilot; the pull request is still
-   a draft. (If Copilot is re-requested after the pull request was marked
-   ready, convert it back to a draft first.)
+   a draft. (If the maintainer asks for another Copilot review after the
+   pull request was marked ready, convert it back to a draft first.)
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
    right. On an Argon pull request, Codex checks a change Claude
@@ -45,9 +45,9 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 3. All pass → the [initial adversarial review](adversarial-review.md#when-it-runs)
    and, for a later follow-up, its [completion rule](adversarial-review.md#completion),
    then the remaining [delivery steps](pull-requests.md#lifecycle-of-a-pull-request).
-   Copilot is not
-   re-requested; if Copilot reviews again anyway, handle it the same way
-   once, then ask the maintainer. A change needing a design or
+   Copilot is not re-requested unless the maintainer asks; if Copilot
+   reviews again anyway, handle it the same way once, then ask the
+   maintainer. A change needing a design or
    specification decision, a failed check or a new blocking finding → ask
    the maintainer.
 

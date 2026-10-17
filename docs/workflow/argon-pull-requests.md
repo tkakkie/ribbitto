@@ -126,5 +126,7 @@ possible:
    scratch pull request and links it from the real one.
 
 If a later commit changes the tests or the code under test, Claude repeats
-this for the behaviours it touches. Code Claude or Codex wrote keeps local
-per-defect checks.
+this for the behaviours it touches. Code Claude or Codex wrote keeps
+per-defect checks, run where the
+[handoff rule](running-other-ai.md#handoff-of-another-ais-code) allows: on
+the host for Claude's own code, in Codex's sandbox or on CI for Codex's.

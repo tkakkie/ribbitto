@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,7 +32,7 @@ func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtim
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
-	snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, MemberID: kernel.ID{3}, Handle: "alice", DisplayName: "Alice", EventCursor: new(int64(42)), Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001"), Reading: true}
+	snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, MemberID: kernel.ID{3}, Handle: "alice", DisplayName: "Alice", Role: "member", EventCursor: new(int64(42)), Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001"), Reading: true}
 	events, posts := make(chan realtime.Outgoing, 8), make(chan pendingRequest, 8)
 	var reads atomic.Int32
 	mux := http.NewServeMux()
@@ -71,7 +72,7 @@ func pendingBrowser(t *testing.T, browser *rod.Browser) (*rod.Page, chan realtim
 			templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
 		}
 	})
-	catalogues, err := i18n.New(nil)
+	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

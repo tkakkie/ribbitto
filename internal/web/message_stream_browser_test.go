@@ -62,6 +62,7 @@ func TestBrowser(t *testing.T) {
 	run("composer/pending", testPendingComposerBrowser)
 	run("composer/pending-failure", testPendingFailureBrowser)
 	run("composer/pending-move", testPendingMoveBrowser)
+	run("composer/pending-queue", testPendingQueueBrowser)
 	run("read-recovery", testReadRecoveryBrowser)
 	run("unread-divider", testUnreadDividerBrowser)
 	run("read-control", testReadControlBrowser)

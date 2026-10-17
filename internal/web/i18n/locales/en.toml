@@ -401,4 +401,7 @@ other = "Retry"
 other = "Remove"
 
 ["message.busy"]
-other = "Wait for your pending message, or remove it, before sending another."
+other = "Wait for pending messages, or remove them, before trying this send again."
+
+["message.capacity"]
+other = "You have 10 pending messages. Wait for delivery or remove one to send another."

@@ -72,15 +72,15 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v11.js` also loads with the response nonce on channel pages.
-One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
+`message-composer-v12.js` loads with the response nonce on channel pages.
+Key handling maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
-uses the native form submission path through `requestSubmit`. The latest-page form uses
+uses native submission through `requestSubmit`. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). Latest feeds/topics instead
 show a pending own post immediately ([contract](web-composer.md#composer));
 these rules apply to idle feeds/topics with blank or over-limit text
-(after normalisation and trimming), or without `crypto.randomUUID()`. Either
-form in flight blocks composer submits. Only the send
+(after normalisation and trimming), or without `crypto.randomUUID()`. An ordinary
+form in flight blocks composer submits; valid pending sends queue. Only the send
 button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
 help, which keeps its space; the textarea stays usable. A send times out after

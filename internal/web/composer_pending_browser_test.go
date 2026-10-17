@@ -167,13 +167,43 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
  document.querySelector('[data-pending-remove]').click();
 }`)
 				}
+
+				if tc.name == "trimmed-limit" {
+					// This valid boundary body now queues, including behind a
+					// detached form whose original request is still in flight.
+					page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, tc.text)
+					count, requests := 2, 2
+					held := state == "sending" || state == "removed-in-flight"
+					if held {
+						requests = 1
+					}
+					if state == "removed-in-flight" {
+						count = 1
+					}
+					if page.MustEval(`([count,requests]) => document.querySelectorAll('#message-pending > li').length!==count || window.requests!==requests || window.ordinaryRequests!==0 || document.getElementById('message-body').value!==''`, []int{count, requests}).Bool() {
+						t.Fatal("valid boundary send did not queue separately and serialize")
+					}
+					if held {
+						if len(posts) != 0 {
+							t.Fatal("queued send overlapped the earlier request")
+						}
+						request.reply <- browserReply{status: 400, body: []byte("refused")}
+					}
+					next := receivePending(t, page, posts)
+					if strings.TrimSpace(next.values.Get("body")) != strings.Repeat("🙂", 4000) {
+						t.Fatal("queued boundary body changed")
+					}
+					next.reply <- browserReply{status: 400, body: []byte("refused")}
+					page.MustWait(`() => !document.querySelector('[data-pending-form].htmx-request')`)
+					return
+				}
 				page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; window.draft=b.value; b.form.requestSubmit(); }`, tc.text)
 				if problem := page.MustEval(`removed => {
  const b=document.getElementById('message-body'), alert=document.getElementById('message-send-alert');
  if(window.ordinaryRequests || window.requests!==1) return 'busy send started a request';
  if(alert.textContent!==alert.dataset.busy) return 'missing busy notice';
  if(b.value!==window.draft) return 'busy send changed the draft';
- if(!removed && document.getElementById('message-pending-body').textContent!=='pending') return 'busy send changed the pending text';
+ if(!removed && document.querySelector('[data-pending-body]').textContent!=='pending') return 'busy send changed the pending text';
  return '';
 }`, state == "removed-in-flight").Str(); problem != "" {
 					t.Fatal(problem)
@@ -219,7 +249,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 				if page.MustEval(`() => window.requests!==1 || window.ordinaryRequests!==0`).Bool() || !page.MustHas("#message-pending > li") {
 					t.Fatal("valid normalized body bypassed the pending path")
 				}
-				if page.MustElement("#message-pending-body").MustText() != tc.want || page.MustElement("#message-body").MustProperty("value").Str() != "" {
+				if page.MustElement("[data-pending-body]").MustText() != tc.want || page.MustElement("#message-body").MustProperty("value").Str() != "" {
 					t.Fatal("normalized pending text or cleared composer differs")
 				}
 				if request.values.Get("body") != strings.ReplaceAll(strings.ReplaceAll(tc.text, "\r\n", "\n"), "\r", "\n") {
@@ -371,7 +401,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 						t.Fatalf("pending controls: %v", request.values)
 					}
 					if problem := page.MustEval(`() => {
-   const b=document.getElementById('message-body'), p=document.getElementById('message-pending-body'), s=document.getElementById('organization-stream');
+   const b=document.getElementById('message-body'), p=document.querySelector('[data-pending-body]'), s=document.getElementById('organization-stream');
    if(document.querySelector('[data-pending-sending]').textContent!=='Sending…') return 'unlocalised sending';
    if(p.textContent!=='<b>x</b>' || p.children.length || b.value || document.activeElement!==b || b.form.elements.idempotency_key.value===window.oldKey) return 'text, focus or key';
    if(document.getElementById('message-status').textContent || s.dataset.eventCursor!=='42' || s.dataset.appliedCursor) return 'announcement or cursor';
@@ -383,10 +413,11 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 					draft := space + "<b>x</b>" + space + "next"
 					busy := func() {
 						t.Helper()
-						page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, draft)
-						if page.MustEval(`() => window.requests`).Int() != 1 || len(posts) != 0 || page.MustElement("#message-body").MustProperty("value").Str() != draft || page.MustElement("#message-send-alert").MustText() == "" {
+						page.MustEval(`text => { const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit(); }`, " ")
+						if page.MustEval(`() => window.requests`).Int() != 1 || len(posts) != 0 || page.MustElement("#message-body").MustProperty("value").Str() != " " || page.MustElement("#message-send-alert").MustText() == "" {
 							t.Fatal("busy send lost text or started a request")
 						}
+						page.MustEval(`text => document.getElementById("message-body").value=text`, draft)
 					}
 					busy()
 					if first == "response" {
@@ -422,7 +453,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 					if !page.MustHas("#message-pending > li") {
 						t.Fatal("collision removed pending")
 					}
-					page.MustEval(`() => { const r=document.getElementById('message-pending-body').getBoundingClientRect(); window.position=[r.x,r.y]; }`)
+					page.MustEval(`() => { const r=document.querySelector('[data-pending-body]').getBoundingClientRect(); window.position=[r.x,r.y]; }`)
 					out := realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
 					events <- out
 					page.MustWait(`() => !!document.querySelector('#message-items > #message-33000000000000000000000000000000')`)
@@ -531,9 +562,9 @@ func testPendingFailurePage(t *testing.T, browser *rod.Browser, topic bool) {
 		if i == 10 {
 			name = "repeat"
 		}
-		page.MustEval(`() => { const b=document.getElementById("message-body"); b.value="next draft"; b.form.requestSubmit(); }`)
-		if page.MustEval(`() => document.getElementById("message-body").value!=="next draft"`).Bool() || len(sent) != 0 {
-			t.Fatal("failed item did not block another send")
+		page.MustEval(`() => { const b=document.getElementById("message-body"); b.value=" "; b.form.requestSubmit(); }`)
+		if page.MustEval(`() => document.getElementById("message-body").value!==" "`).Bool() || len(sent) != 0 {
+			t.Fatal("failed item did not block an ordinary submit")
 		}
 		if page.MustEval(`name => document.querySelector('[data-pending-form] [role=status]').textContent!==document.getElementById('message-send-alert').dataset[name] || document.getElementById('message-send-alert').textContent!==document.getElementById('message-send-alert').dataset.busy || document.getElementById('message-body').getAttribute('aria-invalid')!=='false' || document.querySelector('#message-composer [name=composer]').value!=='generation'`, name).Bool() {
 			t.Fatalf("failure %s", answer)
@@ -554,6 +585,64 @@ func testPendingFailurePage(t *testing.T, browser *rod.Browser, topic bool) {
 
 // Gate answers and stream application independently to isolate move-out rules.
 func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("nonfirst-confirmed-frees-capacity", func(t *testing.T) {
+		page, events, posts, _ := pendingBrowser(t, browser, true)
+		page.MustEval(`() => {
+ const b=document.getElementById('message-body');
+ for(let i=0;i<10;i++) {b.value='pending '+i;b.form.requestSubmit();}
+ window.nodes=[...document.querySelectorAll('#message-pending > li')];
+}`)
+		for i := 0; i < 2; i++ {
+			request := receivePending(t, page, posts)
+			request.reply <- pendingAnswer(t, kernel.ID{byte(51 + i)})
+			page.MustWait(`n => window.answers===n`, i+1)
+		}
+		third := receivePending(t, page, posts)
+		if page.MustEval(`() => window.nodes.length!==10 || window.nodes.slice(0,2).some(n=>!n.dataset.postedMessage)`).Bool() {
+			t.Fatal("queue did not retain two confirmed items at capacity")
+		}
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='freed slot';b.form.requestSubmit();}`)
+		if page.MustEval(`() => {
+ const a=document.getElementById('message-send-alert');
+ return !a.textContent || a.textContent!==a.dataset.capacity || document.getElementById('message-body').value!=='freed slot';
+}`).Bool() {
+			t.Fatal("full queue did not retain the draft with a capacity notice")
+		}
+		move := func(id byte, seq int64) {
+			t.Helper()
+			moved := streamTestMessages(kernel.ID{2}, int(id))[0]
+			moved.TopicID = kernel.ID{4}
+			events <- realtime.Outgoing{ID: seq, Name: "messages-moved", Data: []byte(renderIn(t, "en", view.MovedMessageItems([]view.Message{moved}, kernel.ID{2}, moved.TopicID)))}
+			page.MustWait(`seq => document.getElementById('organization-stream').dataset.appliedCursor===String(seq)`, seq)
+		}
+		move(50, 53) // An unrelated move from this topic must preserve the notice.
+		if page.MustEval(`() => {
+ const a=document.getElementById('message-send-alert');
+ return a.textContent!==a.dataset.capacity || window.nodes.some(n=>!n.isConnected);
+}`).Bool() {
+			t.Fatal("unrelated move cleared the capacity notice or removed a pending item")
+		}
+		move(52, 54)
+		if page.MustEval(`() => {
+ const nodes=[...document.querySelectorAll('#message-pending > li')];
+ return nodes.length!==9 || window.nodes[1].isConnected ||
+  nodes.some((n,i)=>n!==window.nodes[i<1?i:i+1]);
+}`).Bool() {
+			t.Fatal("move must remove only the second confirmed item and keep the first")
+		}
+		page.MustEval(`() => document.getElementById('message-body').form.requestSubmit()`)
+		if page.MustEval(`() => {
+ const nodes=[...document.querySelectorAll('#message-pending > li')], last=nodes.at(-1);
+ return nodes.length!==10 || document.getElementById('message-body').value!=='' ||
+  document.getElementById('message-send-alert').textContent!=='' ||
+  last.querySelector('[data-pending-body]').textContent!=='freed slot' ||
+  last.querySelector('form').dataset.state!=='queued' || window.requests!==3 || window.ordinaryRequests!==0;
+}`).Bool() || len(posts) != 0 {
+			t.Fatal("move did not free a slot for the next queued send without a capacity notice")
+		}
+		third.reply <- browserReply{status: 500, body: []byte("pause")}
+		page.MustWait(`() => window.answers===3`)
+	})
 	for _, order := range []string{"post-move-answer", "answer-move", "lost-move-retry", "lost-retry-post-move", "move-answer"} {
 		t.Run(order, func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, true)
@@ -584,7 +673,7 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
     const b=document.getElementById('message-body'); b.value='moving post'; b.form.requestSubmit();
     window.frames=[]; window.badTasks=[];
     const count=()=>document.querySelectorAll('#message-items > #message-33000000000000000000000000000000').length+
-      [...document.querySelectorAll('#message-pending-body')].filter(e=>e.textContent==='moving post').length;
+      [...document.querySelectorAll('[data-pending-body]')].filter(e=>e.textContent==='moving post').length;
     const check=()=>{
       const moved=document.getElementById('organization-stream').dataset.appliedCursor==='52';
       const confirmed=!!document.querySelector('#message-composer-state [name=composer][value=fresh]');
@@ -685,7 +774,7 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
     if(earlyRetry && !window.frames.some(([n,moved,confirmed,real])=>n===1&&!moved&&confirmed&&real)) return 'missing real post frame';
     if((!earlyRetry && document.querySelector('#message-pending > li')) ||
        document.querySelector('#message-items > #message-33000000000000000000000000000000') ||
-       [...document.querySelectorAll('#message-pending-body')].some(e=>e.textContent==='moving post')) return 'identity remained';
+       [...document.querySelectorAll('[data-pending-body]')].some(e=>e.textContent==='moving post')) return 'identity remained';
     if(earlyRetry) return '';
     const b=document.getElementById('message-body'); b.value='next'; b.form.requestSubmit(); return '';
    }`, earlyRetry).Str(); problem != "" {
@@ -696,5 +785,229 @@ func testPendingMoveBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			next.reply <- pendingAnswer(t, kernel.ID{60})
 		})
+	}
+}
+
+// Queue scenarios keep each POST held until its order and pending state are checked.
+func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
+	for _, topic := range []bool{false, true} {
+		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) {
+			t.Run("capacity-all-states", func(t *testing.T) {
+				page, events, posts, _ := pendingBrowser(t, browser, topic)
+				send := func(text string) {
+					page.MustEval(`text => {const b=document.getElementById('message-body'); b.value=text; b.form.requestSubmit();}`, text)
+				}
+				answer := func(status int, id byte, n int) {
+					request := receivePending(t, page, posts)
+					reply := pendingAnswer(t, kernel.ID{id})
+					if status != 200 {
+						reply = browserReply{status: status, body: []byte("refused")}
+					}
+					request.reply <- reply
+					page.MustWait(`n => window.answers===n`, n)
+				}
+				send("refused")
+				answer(422, 50, 1)
+				send("confirmed")
+				answer(200, 51, 2)
+				send("unknown")
+				answer(500, 52, 3)
+				for i := 3; i < 10; i++ {
+					send(fmt.Sprint(i))
+				}
+				reject := func() {
+					t.Helper()
+					send("eleventh")
+					if page.MustEval(`() => {
+      const b=document.getElementById('message-body'), a=document.getElementById('message-send-alert');
+      const bodies=[...document.querySelectorAll('[data-pending-body]')];
+      return b.value!=='eleventh' || a.textContent!==a.dataset.capacity || !a.textContent ||
+       b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help' ||
+       bodies.length!==10 || new Set(bodies.map(b=>b.id)).size!==10 ||
+       [...document.querySelectorAll('[data-pending-form] button')].some(b=>!document.getElementById(b.getAttribute('aria-describedby')));
+     }`).Bool() {
+						t.Fatal("capacity did not retain draft, count every state, or preserve accessibility")
+					}
+				}
+				reject() // Includes an unknown outcome, queued, refused and confirmed items.
+				if page.MustEval(`() => window.requests!==3 || window.ordinaryRequests!==0`).Bool() || len(posts) != 0 {
+					t.Fatal("unknown outcome did not pause queued sends")
+				}
+				page.MustEval(`() => document.querySelectorAll('[data-pending-form]')[2].requestSubmit()`)
+				retry := receivePending(t, page, posts)
+				reject() // The same ten slots now include an in-flight retry.
+				if page.MustEval(`() => window.requests!==4`).Bool() {
+					t.Fatal("retry at capacity did not use its existing slot")
+				}
+				retry.reply <- pendingAnswer(t, kernel.ID{52})
+				next := receivePending(t, page, posts) // FIFO resumes at the first queued item.
+				if next.values.Get("body") != "3" {
+					t.Fatal("retry did not resume the FIFO head")
+				}
+				own := streamTestMessages(kernel.ID{2}, 51)[0]
+				events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+				page.MustWait(`() => document.querySelectorAll('#message-pending > li').length===9`)
+				send("delivery freed slot")
+				if page.MustElement("#message-body").MustProperty("value").Str() != "" {
+					t.Fatal("delivery did not free capacity")
+				}
+				page.MustElement("[data-pending-remove]").MustClick()
+				send("remove freed slot")
+				if page.MustEval(`() => document.getElementById('message-body').value!=='' || document.querySelectorAll('#message-pending > li').length!==10 || window.requests!==5 || window.ordinaryRequests!==0`).Bool() || len(posts) != 0 {
+					t.Fatal("Remove did not free capacity or queue overlapped an in-flight send")
+				}
+				next.reply <- browserReply{status: 500, body: []byte("pause")}
+			})
+			for _, mode := range []string{"not-sent-retry-last", "unknown-committed", "unknown-not-committed", "unknown-remove", "identical-delayed", "identical-lost", "identical-replay"} {
+				t.Run(mode, func(t *testing.T) {
+					page, events, posts, _ := pendingBrowser(t, browser, topic)
+					if mode == "identical-lost" {
+						var lost atomic.Bool
+						router := page.HijackRequests()
+						router.MustAdd("*/organizations/acme/channels/*", func(h *rod.Hijack) {
+							if h.Request.Method() != "POST" || strings.HasSuffix(h.Request.URL().Path, "/read") || strings.HasSuffix(h.Request.URL().Path, "/typing") || lost.Swap(true) {
+								h.ContinueRequest(&proto.FetchContinueRequest{})
+								return
+							}
+							if err := h.LoadResponse(http.DefaultClient, true); err != nil {
+								t.Error(err)
+							}
+							h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
+						})
+						go router.Run()
+						t.Cleanup(func() { _ = router.Stop() })
+					}
+					identical := strings.HasPrefix(mode, "identical-")
+					bodies := []string{"first", "second"}
+					if identical {
+						bodies = []string{"A", "A"}
+					}
+					page.MustEval(`bodies => {
+      const b=document.getElementById('message-body');
+      for(const text of bodies) {b.value=text;b.form.requestSubmit();}
+      window.nodes=[...document.querySelectorAll('#message-pending > li')];
+      window.badFrames=[];
+      const frame=()=>{
+       window.nodes.forEach((node,i)=>{
+        const id=['message-33000000000000000000000000000000','message-34000000000000000000000000000000'][i];
+        const real=!!document.getElementById(id), confirmed=!!node.dataset.postedMessage;
+        const n=Number(real)+Number(node.isConnected);
+        if(n!==(real&&!confirmed?2:1)) window.badFrames.push([i,n,real,confirmed]);
+       });
+       window.frame=requestAnimationFrame(frame);
+      }; frame();
+     }`, bodies)
+					first := receivePending(t, page, posts)
+					if page.MustEval(`() => window.requests!==1 || window.ordinaryRequests || window.nodes.length!==2 || document.getElementById('message-body').value!==''`).Bool() || len(posts) != 0 {
+						t.Fatal("quick sends did not queue behind one request")
+					}
+					deliver := func(id byte) {
+						own := streamTestMessages(kernel.ID{2}, int(id))[0]
+						own.Body = bodies[int(id)-51]
+						own.Text = own.Body
+						if mode == "unknown-remove" && id == 51 {
+							own.EventSeq = 53
+						}
+						events <- realtime.Outgoing{ID: own.EventSeq, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+						page.MustWait(`id => !!document.getElementById(id)`, view.MessageDOMID(own.ID))
+					}
+					unknown := strings.HasPrefix(mode, "unknown-") || mode == "identical-lost"
+					status := 200
+					if mode == "not-sent-retry-last" {
+						status = 422
+					}
+					if strings.HasPrefix(mode, "unknown-") {
+						status = 500
+					}
+					reply := pendingAnswer(t, kernel.ID{51})
+					if status != 200 {
+						reply = browserReply{status: status, body: []byte("refused")}
+					}
+					first.reply <- reply
+					page.MustWait(`() => window.answers===1`)
+					if unknown {
+						if page.MustEval(`() => window.requests!==1 || document.querySelectorAll('[data-state=queued]').length!==1`).Bool() || len(posts) != 0 {
+							t.Fatal("unknown outcome dispatched a later send")
+						}
+						if mode == "unknown-committed" || mode == "identical-lost" {
+							deliver(51)
+						}
+						if mode == "unknown-remove" {
+							page.MustElement("[data-pending-remove]").MustClick()
+						} else {
+							page.MustEval(`() => window.nodes[0].querySelector('form').requestSubmit()`)
+							retry := receivePending(t, page, posts)
+							if retry.values.Encode() != first.values.Encode() {
+								t.Fatal("unknown retry changed key, body or place")
+							}
+							if page.MustEval(`() => window.requests!==2`).Bool() || len(posts) != 0 {
+								t.Fatal("retry overlapped the later send")
+							}
+							retry.reply <- pendingAnswer(t, kernel.ID{51})
+						}
+					}
+					second := receivePending(t, page, posts)
+					if second.values.Get("body") != bodies[1] || first.values.Get("idempotency_key") == second.values.Get("idempotency_key") {
+						t.Fatal("FIFO body or independent key differs")
+					}
+					if mode == "not-sent-retry-last" {
+						page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+						if page.MustEval(`() => document.querySelector('#message-pending > li')!==window.nodes[1] || window.requests!==2 || document.activeElement!==document.getElementById('message-body')`).Bool() || len(posts) != 0 {
+							t.Fatal("Not sent retry did not move to the list/dispatch tail")
+						}
+					}
+					if mode == "identical-replay" {
+						deliver(51) // A's ID cannot provisionally match the still-unconfirmed A′.
+						if !page.MustEval(`() => window.nodes[1].isConnected`).Bool() {
+							t.Fatal("another message ID matched A′")
+						}
+						page.MustEval(`() => {window.source.close(); window.source.dispatchEvent(new Event('error'));}`)
+						page.MustWait(`() => window.opens===2`)
+					}
+					second.reply <- pendingAnswer(t, kernel.ID{52})
+					answers := 2
+					if unknown && mode != "unknown-remove" {
+						answers++
+					}
+					page.MustWait(`n => window.answers===n`, answers)
+					if mode == "not-sent-retry-last" {
+						retry := receivePending(t, page, posts)
+						if retry.values.Encode() != first.values.Encode() {
+							t.Fatal("Not sent retry changed the original send")
+						}
+						retry.reply <- pendingAnswer(t, kernel.ID{53})
+						page.MustWait(`() => window.answers===3`)
+						return
+					}
+					if mode == "unknown-remove" {
+						deliver(52)
+						deliver(51) // The removed original commits after its successor.
+					} else {
+						deliver(51)
+						deliver(52)
+					}
+					if mode == "identical-replay" {
+						deliver(51)
+						deliver(52)
+					}
+					page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+					page.MustEval(`() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`)
+					if page.MustEval(`removed => {cancelAnimationFrame(window.frame);return (!removed && window.badFrames.length>0) || document.querySelectorAll('#message-items > li').length!==2;}`, mode == "unknown-remove").Bool() {
+						t.Fatal("per-message frame identity or late original delivery differs")
+					}
+				})
+			}
+		})
+	}
+}
+
+func receivePending(t *testing.T, page *rod.Page, posts <-chan pendingRequest) pendingRequest {
+	t.Helper()
+	select {
+	case request := <-posts:
+		return request
+	case <-page.GetContext().Done():
+		t.Fatal("pending request did not arrive")
+		return pendingRequest{}
 	}
 }

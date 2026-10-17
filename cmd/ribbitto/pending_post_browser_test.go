@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -24,17 +26,20 @@ import (
 // independently gated at the browser boundary.
 func TestPendingPostBrowser(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
-	defer cancel()
-	browser := launchBrowser(t, ctx, "pending posts")
+	browser := launchBrowser(t, t.Context(), "pending posts")
 	for _, topic := range []bool{false, true} {
-		t.Run(map[bool]string{false: "feed", true: "topic"}[topic], func(t *testing.T) { testPendingPostPage(t, ctx, browser, topic) })
+		t.Run(map[bool]string{false: "feed", true: "topic"}[topic], func(t *testing.T) {
+			testPendingPostPage(t, browser, topic)
+			testPendingQueuePostPage(t, browser, topic)
+		})
 	}
 }
 
-func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser, topic bool) {
+func testPendingPostPage(t *testing.T, browser *rod.Browser, topic bool) {
 	for _, lost := range []bool{false, true} {
 		t.Run(map[bool]string{false: "replacement", true: "lost-response"}[lost], func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+			defer cancel()
 			pool, scope := feedFixture(t)
 			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
 			feedRequire(t, err)
@@ -63,7 +68,7 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 				path = view.ConversationURL("feed", scope.ChannelID, &place.ID)
 			}
 			page.MustNavigate(server.URL + path).MustWaitLoad()
-			page.MustWait(`() => !document.querySelector('#read-form.htmx-request')`)
+			waitPendingPost(t, page, "initial read completion", `() => !document.querySelector('#read-form.htmx-request')`)
 			before := page.MustEval(`() => {const s=document.getElementById('organization-stream');return JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor]);}`).Str()
 			initialReads := reads.Load()
 			sent, release := make(chan url.Values, 2), make(chan struct{}, 2)
@@ -71,7 +76,11 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 			var attempt atomic.Int32
 			router.MustAdd(server.URL+path, func(h *rod.Hijack) {
 				values, _ := url.ParseQuery(h.Request.Body())
-				sent <- values
+				select {
+				case sent <- values:
+				case <-ctx.Done():
+					return
+				}
 				n := attempt.Add(1)
 				if err := h.LoadResponse(http.DefaultClient, true); err != nil {
 					t.Error(err)
@@ -85,9 +94,12 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 				}
 			})
 			go router.Run()
-			defer func() { _ = router.Stop() }()
+			defer func() {
+				cancel()
+				_ = router.Stop()
+			}()
 			page.MustEval(`() => {const b=document.getElementById('message-body'); window.cursor=document.getElementById('organization-stream').dataset.eventCursor; b.value='pending database post'; b.form.requestSubmit();}`)
-			values := <-sent
+			values := receivePendingPost(t, ctx, sent, "initial POST")
 			if values.Get("cursor") != page.MustEval(`() => window.cursor`).Str() {
 				t.Fatal("wrong shown cursor")
 			}
@@ -99,21 +111,21 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 			}
 			assertPhase()
 			release <- struct{}{}
-			page.MustWait(`() => window.answers===1`)
+			waitPendingPost(t, page, "initial POST answer", `() => window.answers===1`)
 			assertPhase()
 			if lost {
 				page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
-				retry := <-sent
+				retry := receivePendingPost(t, ctx, sent, "retry POST")
 				if retry.Get("idempotency_key") != values.Get("idempotency_key") || retry.Get("body") != values.Get("body") {
 					t.Fatal("retry changed text/key")
 				}
 				release <- struct{}{}
-				page.MustWait(`() => window.answers===2`)
+				waitPendingPost(t, page, "retry answer", `() => window.answers===2`)
 				assertPhase()
 			}
-			page.MustWait(`() => !!window.delivery`)
+			waitPendingPost(t, page, "held stream delivery", `() => !!window.delivery`)
 			page.MustEval(`() => { window.holding=false; const old=window.delivery; document.getElementById('message-items').dispatchEvent(new CustomEvent('htmx:sseBeforeMessage',{bubbles:true,cancelable:true,detail:old.detail})); }`)
-			page.MustWait(`before => {const s=document.getElementById('organization-stream');return !document.querySelector('#message-pending > li') && !!s.dataset.appliedCursor && s.dataset.eventCursor===s.dataset.appliedCursor && JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor])!==before && !document.querySelector('#read-form.htmx-request');}`, before)
+			waitPendingPost(t, page, "stream replacement and read completion", `before => {const s=document.getElementById('organization-stream');return !document.querySelector('#message-pending > li') && !!s.dataset.appliedCursor && s.dataset.eventCursor===s.dataset.appliedCursor && JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor])!==before && !document.querySelector('#read-form.htmx-request');}`, before)
 			var count int
 			var id kernel.ID
 			feedRequire(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, "pending database post").Scan(&count))
@@ -125,5 +137,130 @@ func testPendingPostPage(t *testing.T, ctx context.Context, browser *rod.Browser
 				t.Fatal("delivery did not replace/read exactly once, or retry stored twice")
 			}
 		})
+	}
+}
+
+func testPendingQueuePostPage(t *testing.T, browser *rod.Browser, topic bool) {
+	for _, lost := range []bool{false, true} {
+		t.Run(fmt.Sprintf("queue/lost=%t", lost), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+			defer cancel()
+			// The queue assertions count the entire history; feedFixture seeds five posts.
+			pool := pgtest.New(t)
+			f := conversationtest.OrganizationWithOwner(t, pool, "feed", "general")
+			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
+			feedRequire(t, err)
+			var account kernel.ID
+			feedRequire(t, pool.QueryRow(ctx, "SELECT account_id FROM member WHERE organization_id=$1 AND id=$2", f.OrganizationID, f.MemberID).Scan(&account))
+			token, _, err := sessions.Create(ctx, account)
+			feedRequire(t, err)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
+				handler.ServeHTTP(w, r)
+			}))
+			defer server.Close()
+			path := view.ChannelURL("feed", f.Channel.ID)
+			if topic {
+				place := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "queue")
+				path = view.ConversationURL("feed", f.Channel.ID, &place.ID)
+			}
+			page, closePage := boundedPage(t, browser, ctx, "queued posts")
+			defer closePage()
+			page.MustEvalOnNewDocument(`(() => {window.answers=0;document.addEventListener('htmx:afterRequest',e=>{if(e.detail.requestConfig?.elt.matches('[data-pending-form]')) window.answers++;});})()`)
+			page.MustNavigate(server.URL + path).MustWaitLoad()
+			sent, release := make(chan url.Values, 4), make(chan struct{}, 4)
+			router := page.HijackRequests()
+			var attempts atomic.Int32
+			router.MustAdd(server.URL+path, func(h *rod.Hijack) {
+				if h.Request.Method() != "POST" {
+					h.ContinueRequest(&proto.FetchContinueRequest{})
+					return
+				}
+				values, _ := url.ParseQuery(h.Request.Body())
+				select {
+				case sent <- values:
+				case <-ctx.Done():
+					return
+				}
+				n := attempts.Add(1)
+				if err := h.LoadResponse(http.DefaultClient, true); err != nil {
+					t.Error(err)
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				if lost && n == 2 {
+					h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
+				}
+			})
+			go router.Run()
+			defer func() {
+				cancel()
+				_ = router.Stop()
+			}()
+			page.MustEval(`() => {const b=document.getElementById('message-body');for(const text of ['queue 1','queue 2','queue 3']) {b.value=text;b.form.requestSubmit();}}`)
+
+			for i := 1; i <= 3; i++ {
+				values := receivePendingPost(t, ctx, sent, fmt.Sprintf("queue POST %d", i))
+				if values.Get("body") != fmt.Sprintf("queue %d", i) || len(sent) != 0 {
+					t.Fatal("POST order or serialization differs")
+				}
+				release <- struct{}{}
+				answers := i
+				if lost && i == 3 {
+					answers++
+				}
+				waitPendingPost(t, page, fmt.Sprintf("queue answer %d", answers), `n => window.answers===n`, answers)
+				if lost && i == 2 {
+					if attempts.Load() != 2 || len(sent) != 0 {
+						t.Fatal("third POST escaped the unknown-outcome pause")
+					}
+					page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+					retry := receivePendingPost(t, ctx, sent, "second POST retry")
+					if retry.Get("idempotency_key") != values.Get("idempotency_key") || retry.Get("body") != values.Get("body") {
+						t.Fatal("same-key retry changed the second send")
+					}
+					release <- struct{}{}
+					waitPendingPost(t, page, "second POST retry answer", `() => window.answers===3`)
+				}
+			}
+			waitPendingPost(t, page, "three delivered messages and no pending items", `() => !document.querySelector('#message-pending > li') && document.querySelectorAll('#message-items > li').length===3`)
+			rows, err := pool.Query(ctx, "SELECT id, body FROM message WHERE organization_id=$1 AND channel_id=$2 ORDER BY event_seq", f.OrganizationID, f.Channel.ID)
+			feedRequire(t, err)
+			defer rows.Close()
+			n := 0
+			for rows.Next() {
+				var id kernel.ID
+				var body string
+				feedRequire(t, rows.Scan(&id, &body))
+				n++
+				if body != fmt.Sprintf("queue %d", n) || page.MustElement("#body-"+view.MessageDOMID(id)).MustText() != body || page.MustEval(`id => document.querySelectorAll('#'+id).length!==1`, view.MessageDOMID(id)).Bool() {
+					t.Fatal("database event_seq order or visible identity differs")
+				}
+			}
+			feedRequire(t, rows.Err())
+			if n != 3 {
+				t.Fatalf("stored %d messages, want 3", n)
+			}
+		})
+	}
+}
+
+func receivePendingPost(t *testing.T, ctx context.Context, sent <-chan url.Values, what string) url.Values {
+	t.Helper()
+	select {
+	case values := <-sent:
+		return values
+	case <-ctx.Done():
+		t.Fatalf("waiting for %s: %v", what, ctx.Err())
+		return nil
+	}
+}
+
+func waitPendingPost(t *testing.T, page *rod.Page, what, predicate string, args ...any) {
+	t.Helper()
+	if err := page.Wait(rod.Eval(predicate, args...)); err != nil {
+		t.Fatalf("waiting for %s: %v", what, err)
 	}
 }

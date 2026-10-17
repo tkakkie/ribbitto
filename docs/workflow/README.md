@@ -22,7 +22,7 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |
-| [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target |
+| [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target, host measurements |
 
 ## Principles
 
@@ -59,7 +59,7 @@ implementation assignments are in [eligibility](argon-implementer.md#which-issue
 [delivery and merge approval](pull-requests.md#lifecycle-of-a-pull-request),
 [review independence and rounds](reviewing.md#review-independence-and-rounds),
 [risk](reviewing.md#risk), [adversarial tiers](adversarial-review.md#which-review-runs)
-and [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code).
+and [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
 
 ### Implementer Codex
 

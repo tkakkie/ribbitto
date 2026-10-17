@@ -46,7 +46,7 @@ except B's narrow carve-out; a change there that keeps both is tier B
     `.github/instructions/**`; `.github/workflows/**`; the files that define
     the review gates (`docs/workflow/README.md`, `pull-requests.md`, `reviewing.md`,
     `copilot.md`, `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`,
-    `argon-pull-requests.md`, this
+    `argon-pull-requests.md`, `investigations.md`, this
     whole file, and `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.

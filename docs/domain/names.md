@@ -62,7 +62,7 @@ text around it. A blank-looking display name — including one stored before
 this rule — is converted to an empty name by web when building the channel
 page, members panel and message view models, and shown as `@handle` alone.
 Channel message authors use the same component for the page and stream.
-Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); typed mentions, #1311,
+Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); mentions (#1311)
 will be these) store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
 resolved through org's directory in the URL's organisation; a member who
 cannot be resolved shows a localised placeholder, never the UUID or another

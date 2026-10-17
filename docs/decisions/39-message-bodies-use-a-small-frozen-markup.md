@@ -128,8 +128,8 @@ A token holds the member's UUID only, never a handle or name.
   naming another organisation's member UUID never shows that member's
   display name or handle on the page, in the stream or in extracted text.
 
-Typed mentions (#1311) are stored only as these references, so #1311 lands with or
-after `chat_v1`'s implementation.
+Mentions (#1311 converts them at posting) are stored only as these references,
+so #1311 lands with or after `chat_v1`'s implementation.
 
 ## Rendering and security
 

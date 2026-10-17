@@ -43,8 +43,9 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   composer submits before body validation, shows a localised notice and keeps
   the next text. The two forms' requests never overlap, so stale ordinary
   answers cannot overwrite a pending success's fresh generation and key.
-  A 200 swaps the composer state and out-of-band typing form and clears stale
-  `aria-invalid` and `aria-describedby`; it keeps the textarea text.
+  A 200 swaps the composer state and out-of-band typing form, sets
+  `aria-invalid="false"` and keeps `aria-describedby="message-help"` and the
+  textarea text.
   Its `data-posted-message` associates
   the item with delivery. A `MutationObserver` removes a
   confirmed item before paint when that ID appears in `#message-items`.

@@ -47,8 +47,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `data-posted-message` carries the posted message's DOM id; errors omit it,
   except a 409, which names the stored message and, when the text starts
   with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
-  `data-invalid`, copied to the textarea's `aria-invalid`; pending success clears
-  stale `aria-invalid` and `aria-describedby`. Every composer has a hidden
+  `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
+  success sets it to `"false"` and keeps `aria-describedby="message-help"`.
+  Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.

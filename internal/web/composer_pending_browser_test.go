@@ -260,7 +260,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	t.Run("422-then-pending-200", func(t *testing.T) {
 		page, _, posts, _ := pendingBrowser(t, browser)
-		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+		page.MustEval(`() => { window.help=document.getElementById('message-help').textContent; document.getElementById('message-composer').requestSubmit(); }`)
 		var ordinary pendingRequest
 		select {
 		case ordinary = <-posts:
@@ -269,7 +269,7 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		ordinary.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{BodyError: "message.error.body", Composer: new("generation"), IdempotencyKey: new(ordinary.values.Get("idempotency_key")), EventCursor: new(int64(42))})))}
 		page.MustWait(`() => document.getElementById('message-body').getAttribute('aria-invalid')==='true' && !document.querySelector('#message-composer.htmx-request')`)
-		if !page.MustHas("#message-body[aria-describedby]") {
+		if !page.MustHas(`#message-body[aria-describedby="message-help"]`) {
 			t.Fatal("422 did not retain the error description")
 		}
 		page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='valid'; b.form.requestSubmit(); }`)
@@ -283,8 +283,52 @@ func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
 		page.MustWait(`() => window.answers===1`)
 		if problem := page.MustEval(`() => {
  const b=document.getElementById('message-body'), f=b.form, typing=document.getElementById('typing-form');
- if(b.hasAttribute('aria-invalid') || b.hasAttribute('aria-describedby')) return 'pending success retained stale field errors';
+ if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help') return 'pending success lost field accessibility state';
+ if(document.querySelector('#message-composer-state[data-invalid], #message-help[role=alert]') || document.getElementById('message-help')?.textContent!==window.help) return 'pending success retained stale field errors';
  if(f.elements.composer.value!=='fresh' || typing.elements.composer.value!=='fresh' || f.elements.idempotency_key.value!=='00000000-0000-4000-8000-000000000002') return 'pending success did not renew state';
+ return '';
+}`).Str(); problem != "" {
+			t.Fatal(problem)
+		}
+	})
+	t.Run("pending-200-then-422", func(t *testing.T) {
+		page, events, posts, _ := pendingBrowser(t, browser)
+		page.MustEval(`() => { const b=document.getElementById('message-body'); window.help=document.getElementById('message-help').textContent; b.value='valid'; b.form.requestSubmit(); }`)
+		var pending pendingRequest
+		select {
+		case pending = <-posts:
+		case <-page.GetContext().Done():
+			t.Fatal("pending request did not arrive")
+		}
+		pending.reply <- pendingAnswer(t, kernel.ID{51})
+		page.MustWait(`() => window.answers===1`)
+		if problem := page.MustEval(`() => {
+ const b=document.getElementById('message-body');
+ if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help') return 'pending success lost field accessibility state';
+ if(document.querySelector('#message-composer-state[data-invalid], #message-help[role=alert]') || document.getElementById('message-help')?.textContent!==window.help) return 'pending success did not restore ordinary help';
+ return '';
+}`).Str(); problem != "" {
+			t.Fatal(problem)
+		}
+		own := streamTestMessages(kernel.ID{2}, 51)[0]
+		events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+		page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+		var ordinary pendingRequest
+		select {
+		case ordinary = <-posts:
+		case <-page.GetContext().Done():
+			t.Fatal("ordinary blank request did not arrive")
+		}
+		if ordinary.values.Get("body") != "" || page.MustEval(`() => window.ordinaryRequests!==1 || window.requests!==1`).Bool() {
+			t.Fatal("blank submit did not take the ordinary path")
+		}
+		ordinary.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{BodyError: "message.error.body", Composer: new("fresh"), IdempotencyKey: new(ordinary.values.Get("idempotency_key")), EventCursor: new(int64(51))})))}
+		page.MustWait(`() => !document.querySelector('#message-composer.htmx-request')`)
+		if problem := page.MustEval(`() => {
+ const b=document.getElementById('message-body'), help=document.getElementById('message-help');
+ if(b.getAttribute('aria-invalid')!=='true' || b.getAttribute('aria-describedby')!=='message-help') return '422 lost the error description after pending success';
+ if(!document.querySelector('#message-composer-state[data-invalid]') || help?.getAttribute('role')!=='alert' || help.textContent!=='Enter 1–4000 characters without control characters or directional embeddings and overrides.') return '422 did not render the field error';
  return '';
 }`).Str(); problem != "" {
 			t.Fatal(problem)

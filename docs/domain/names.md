@@ -87,8 +87,11 @@ display-name parts rank equally first, then other substrings; ties use handle
 order. Empty queries (including `@`) return the first 8 by handle.
 Reserved words (`all`, `everyone`, `here`, `channel`) are ordinary search text:
 only members whose names contain them can match; there are no group candidates.
-The route/fragment (#1310), typed-handle conversion (#1311), composer picker
-(#1312) and own-mention highlighting (#1313) are separate work.
+`GET /organizations/{slug}/mention-candidates?q=` serves the search as a
+no-store listbox fragment, behind membership and an independent per-member
+[rate limit](../architecture/rate-limits.md#member-admission-for-mention-candidates).
+Typed-handle conversion (#1311), the composer picker (#1312) and own-mention
+highlighting (#1313) are separate work.
 
 ## Handles
 

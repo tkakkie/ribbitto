@@ -69,10 +69,9 @@ keys. Refused requests create no buckets, take no tokens and do not extend
 retention. Admission and eviction are serialized, including concurrent
 requests for the same member.
 
-This limiter also lives in memory per process: share one instance across
-all typing signal callers. Restarting resets the budgets; multiple server
-processes have independent budgets. There are no new configuration settings
-or distributed limits.
+All member limiters live in memory per process: share one instance per
+request type. Restart resets budgets; server processes have independent
+budgets. There are no configuration settings or distributed limits.
 
 ## Member admission for reads
 
@@ -84,8 +83,7 @@ form parsing and the read transaction. Refusal is immediate 429 with
 `Retry-After: 1`; a defer releases each admitted slot on success, error, panic
 or cancellation. The 10,000-bucket bound and full-refill eviction rule also
 apply here, but a bucket with an active slot is never evicted. Refusals take
-no tokens or slots and do not extend retention. State is in memory, per
-process; restart resets it and multiple processes have independent budgets.
+no tokens or slots and do not extend retention.
 PR #860's client retries 429s until success or no longer needed. Some of 16
 tabs revealing together can be refused. With healthy service and subsiding
 competing load, all pending pages converge without another user action;
@@ -93,24 +91,20 @@ there is no success guarantee under sustained overload.
 
 ## Member admission for channel creation
 
-Channel creation requires an independent `Services.CreateLimits` instance
-(shared with neither reads, typing nor branching); missing or shared wiring fails startup.
+Channel creation requires independent `Services.CreateLimits`; missing or
+shared wiring fails startup.
 Its `MemberRateLimiter` allows burst 10, then
 one token per minute per trusted organisation/member pair. Session and
 membership resolution precede admission, which precedes form parsing and
 all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
-nothing. Failed admitted attempts also consume a token. Other members and
-organisations have independent budgets, as do typing and reads. The same
-10,000-bucket bound and full-refill eviction rule apply. State is in memory
-per process; restarting resets it and multiple processes have independent
-budgets. The separate persistent count cap is described in
+nothing. Failed admitted attempts also consume a token. The same bucket
+bound and eviction rules apply. The persistent count cap is described in
 [channels](../domain/channels.md#creation-limits).
 
 ## Member admission for sidebar resyncs
 
-The sidebar resync POST requires an independent `Services.ResyncLimits`
-instance, shared with neither typing, reads, creation nor branching; missing or shared
-wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
+The sidebar resync POST requires independent `Services.ResyncLimits`;
+missing or shared wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
 all tabs, sessions and addresses. The script's exponential backoff starts
 at 250 ms and is capped at 8 s, each wait between half and all of it: at the
@@ -122,10 +116,8 @@ CSRF, session and membership checks precede admission; non-members still
 get 404. Admission precedes `RequestResync`. Refusal is empty 429 with
 `Retry-After: 1` and never advances the member's watch generation or wakes
 streams. Success is empty 204 and publishes only to that member's streams.
-Other members and organisations have independent budgets. The same
-10,000-bucket bound and full-refill eviction rule apply. State is in memory
-per process; restarting resets it and multiple processes have independent
-budgets. A 429 follows the script's failed-request path: recovery stays
+The same bucket bound and eviction rules apply. A 429 follows the script's
+failed-request path: recovery stays
 open and retries with backoff. Only a successful request with an applied,
 covering snapshot and no intervening loss clears recovery; overload has no
 convergence guarantee.
@@ -143,11 +135,19 @@ and addresses share it. Other members and organisations have independent
 budgets. The same 10,000-bucket bound, full-refill eviction
 and per-process reset rules apply.
 
+## Member admission for mention candidates
+
+Candidate GETs require independent `Services.MentionLimits`; missing or
+shared wiring fails startup. Initial, unmeasured budget: 4/s, burst 8,
+two concurrent requests per trusted organisation/member, across sessions
+and addresses. Session and membership precede admission; search follows.
+Refusal is empty 429 with `Retry-After: 1`; the picker ignores it. Admitted
+slots release on every exit. The 10,000-bucket, full-refill eviction and
+active-slot rules above apply. Responses use `Cache-Control: no-store`.
+
 ## Reverse proxies
 
-ribbitto works behind any reverse proxy (Caddy, nginx, HAProxy, Traefik…)
-that meets this contract. Its security does not depend on any one proxy's
-behaviour.
+Any reverse proxy meeting this contract works.
 
 - `RIBBITTO_TRUSTED_PROXIES` lists the **proxy peers trusted to forward the
   client address to ribbitto**, not trusted networks. It is comma-separated

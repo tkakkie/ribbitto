@@ -98,6 +98,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	services := postgresServices(t, pool, sessions, "", false)
+	// This multi-route fixture intentionally posts more than the production burst.
+	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
 	state := typing.New(realtime.NewHub())
 	services.Typing = state
 	budgetTime := now
@@ -138,7 +140,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.MemberSearch, services.MentionLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}

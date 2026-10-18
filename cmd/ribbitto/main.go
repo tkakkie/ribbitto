@@ -352,6 +352,8 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		CreateLimits:  middleware.NewChannelCreationRateLimiter(time.Now),
 		ResyncLimits:  middleware.NewSidebarResyncRateLimiter(time.Now),
 		BranchLimits:  middleware.NewBranchRateLimiter(time.Now),
+		PostLimits:    middleware.NewPostRateLimiter(time.Now),
+		PinLimits:     middleware.NewPinRateLimiter(time.Now),
 		MemberSearch:  newMemberSearch(pool),
 		MentionLimits: middleware.NewMentionRateLimiter(time.Now),
 	})

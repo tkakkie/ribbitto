@@ -52,7 +52,7 @@ at a time. CPU defaults to 30 seconds; positive `seconds` selects the duration.
 For timed profiles, Go's handlers extend the metrics server's 10-second write
 deadline by that duration, so a 30-second capture gets 40 seconds. There is no
 additional capture-duration cap; shutdown still has a 10-second grace period
-and can interrupt a capture. See [load results](load-results.md#reproducing-it)
+and can interrupt a capture. See [load results](../measurements/load-results.md#reproducing-it)
 for the 15,000-stream HTTP/1.1 step.
 
 ## The snapshot

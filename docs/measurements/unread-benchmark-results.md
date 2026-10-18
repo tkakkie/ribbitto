@@ -1,10 +1,10 @@
 # Unread benchmark results
 
 Results of `TestUnreadBench` (#283), which measures the statement shapes of
-[unread counts](unread-counts.md) under
+[unread counts](../architecture/unread-counts.md) under
 [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 before anything is built. How to run it is in
-[unread count costs](unread-count-costs.md#running-the-benchmark). The maintainer
+[unread count costs](../architecture/unread-count-costs.md#running-the-benchmark). The maintainer
 decided go on 2026-10-10 from these results (below).
 
 ## Run, 2026-10-10
@@ -149,7 +149,7 @@ per statement, for comparison.
 ## Decision
 
 **Go** (maintainer, 2026-10-10, #283): build read ranges with the
-topic-floor scan, as decision 32 and [unread counts](unread-counts.md)
+topic-floor scan, as decision 32 and [unread counts](../architecture/unread-counts.md)
 describe.
 
 - **Why:** caught up, the 50-topic count took 0.29–0.56 ms; with 10,000 own

@@ -53,7 +53,7 @@ transaction order and durable event notification; branching keeps `Merge`'s
 error-only entry point over the same locked union. Neither adapter calls the
 reading publisher; both retain their durable `message.posted` notification.
 `Merge` still delegates to `MergeCovered`: posting and branching also sort ranges
-and build the difference. [Short matched measurements](read-advance-results.md)
+and build the difference. [Short matched measurements](../measurements/read-advance-results.md)
 compare real posting/branching transactions and fragmented unions with the
 pre-coverage baseline (the non-blocking note on #828). Sorting/subtraction adds
 allocations without extra SQL. #832's overnight posting/delivery comparison
@@ -94,7 +94,7 @@ A newly read message
   org's sequence first and refuses `S` above the pre-post committed limit.
   Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
   write and own-message union to that transaction. For a topic post with a
-  cursor, the adapter captures the page write's prepared topic after cursor
+  cursor, `unread.PostReads` captures the page write's prepared topic after cursor
   validation and reuses it for the own-message `Add` and final floor update.
   Preparation runs once; both unions and the event append still commit or
   roll back together, with no prepared state surviving the transaction.

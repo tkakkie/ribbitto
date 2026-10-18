@@ -4,7 +4,7 @@ What one post costs the delivery loop as open streams grow, measured by
 `TestStreamCost` in `internal/realtime/cost_test.go` (#215). It measures the
 current delivery path. The results below precede #670's cached allows and
 fresh shared epoch reads; #671 measured those with the same benchmark
-([results](stream-authorization-results.md)).
+([results](../measurements/stream-authorization-results.md)).
 
 ## Running it
 
@@ -27,7 +27,7 @@ a run stops at its first failing step), `_RATE` (posts per second, default
 10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
 default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
 (one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members; set duration/rate explicitly). Its measured
-results and commands are in [client counts results](stream-client-counts-results.md).
+results and commands are in [client counts results](../measurements/stream-client-counts-results.md).
 `_OTHER=0..100` places that percentage on another channel in sidebar mode.
 `_RECOUNTS=<n>` overrides the shared recount limit (default `max(1, pool/2)`).
 `_SMOKE=1` checks function without reporting timings.
@@ -102,8 +102,8 @@ classified by sqlc names, separately from list queries and transaction statement
 Reports include absolute SQL totals, recounts, elapsed posting plus drain time,
 recounts/connection/second, count statements/recount and /post, pool wait totals
 and acquisitions, and message and unread p50/p95/p99.
-[Client counts results](stream-client-counts-results.md) describes placement and
-final resync accounting; [sidebar counts history](sidebar-counts-history.md)
+[Client counts results](../measurements/stream-client-counts-results.md) describes placement and
+final resync accounting; [sidebar counts history](../measurements/sidebar-counts-history.md)
 summarises the stopped server-recount comparisons.
 
 ## Results, 2026-10-01
@@ -170,7 +170,7 @@ it does not prove Go adds nothing at higher counts. #227 shares each event read
 organisation and renders once per language; what
 remained per connection was the membership check. #670 implements its
 [freshness protocol](stream-authorization.md#decision). With it (#671's
-[results](stream-authorization-results.md)), queries per post stay near 16
+[results](../measurements/stream-authorization-results.md)), queries per post stay near 16
 to 46 up to 10,000 streams in the unstaggered ladders. The next limits are the authorization cache's
 capacity and, with one member, something the benchmark cannot see (not the
 pool). Cached allows remove the per-stream query; a cache miss still loads

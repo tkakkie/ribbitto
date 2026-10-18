@@ -67,7 +67,7 @@ A fresh bound check precedes every write; revocation or cancellation stops deliv
 Changes dirty a [fixed deadline](stream-limits.md) checked
 between batches and in the combined wait. Authorize organisation and bound member
 after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconnect recounts.
-[Short results](read-advance-results.md) record costs and acceptance. The
+[Short results](../measurements/read-advance-results.md) record costs and acceptance. The
 [single-process contract](ephemeral-state.md#member-read-change-watches) and
 [unknown-COMMIT exception](unread-writes.md) limit recovery.
 

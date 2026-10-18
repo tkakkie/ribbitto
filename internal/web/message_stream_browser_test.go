@@ -63,6 +63,8 @@ func TestBrowser(t *testing.T) {
 	run("composer/pending-failure", testPendingFailureBrowser)
 	run("composer/pending-move", testPendingMoveBrowser)
 	run("composer/pending-queue", testPendingQueueBrowser)
+	run("composer/pending-edit", testPendingEditBrowser)
+	run("stream-reset", testStreamResetBrowser)
 	run("read-recovery", testReadRecoveryBrowser)
 	run("unread-divider", testUnreadDividerBrowser)
 	run("read-control", testReadControlBrowser)
@@ -72,6 +74,11 @@ func TestBrowser(t *testing.T) {
 	run("side-panel", testSidePanelBrowser)
 	run("panel-sheet", testPanelSheetBrowser)
 	run("sidebar-scroll", testSidebarScrollBrowser)
+	for _, scripts := range []bool{true, false} {
+		for _, width := range []int{1280, 390} {
+			run(fmt.Sprintf("quote/scripts=%t/width=%d", scripts, width), func(t *testing.T, browser *rod.Browser) { testQuoteBrowser(t, browser, scripts, width) })
+		}
+	}
 	run("message-actions", testMessageActionsBrowser)
 	run("message-link", testMessageLinkBrowser)
 	run("branch-form", testBranchFormBrowser)

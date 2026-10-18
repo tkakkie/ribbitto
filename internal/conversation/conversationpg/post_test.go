@@ -149,6 +149,6 @@ type rawBodyWriter struct {
 	body string
 }
 
-func (w rawBodyWriter) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, _ string, seq int64, key *conversation.IdempotencyKey, quote *conversation.Quote) (conversation.Message, error) {
-	return w.Writer.InsertMessage(ctx, organizationID, channelID, topicID, memberID, w.body, seq, key, quote)
+func (w rawBodyWriter) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, _ string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote) (conversation.Message, error) {
+	return w.Writer.InsertMessage(ctx, organizationID, channelID, topicID, memberID, w.body, seq, key, proof, quote)
 }

@@ -55,6 +55,8 @@ type channelPages struct {
 	limiter          *middleware.MemberRateLimiter
 	createLimit      *middleware.MemberRateLimiter
 	branchLimit      *middleware.MemberRateLimiter
+	postLimit        *middleware.MemberRateLimiter
+	pinLimit         *middleware.MemberRateLimiter
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
@@ -328,6 +330,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
+	if _, present := r.URL.Query()["quote"]; present && r.Method == http.MethodGet {
+		if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
+			return
+		}
+		var ok bool
+		page.Quote, ok = p.readQuote(w, r, m, id, r.URL.Query())
+		if !ok {
+			return
+		}
+	}
 	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" {
 		place := history.Current.DefaultTopicID
@@ -366,6 +378,13 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 }
 
 func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
+	release, admitted := p.postLimit.Admit(m.Organization.ID, m.Member.ID)
+	if !admitted {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+	defer release()
 	c, err := p.channels.Get(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
@@ -477,6 +496,14 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // fragment's typing form signals there and its generation is scoped to it,
 // while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
+	_, page.QuoteUpdate = r.PostForm["quote"]
+	if page.BodyError != "" {
+		var ok bool
+		page.Quote, ok = p.readQuote(w, r, m, c.ID, r.PostForm)
+		if !ok {
+			return
+		}
+	}
 	if r.Header.Get("HX-Request") == "true" {
 		place := c.DefaultTopicID
 		if topic != nil {
@@ -500,17 +527,17 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: channel, Topic: topic}, m.Member.ID))
 }
 
-// recovered returns the stored body when an enhanced retry's text starts
-// with it: the earlier answer was lost while the member typed on, and the
-// script removes the stored part instead of showing the 409's error (#1179).
+// recovered offers only a verified typed prefix: after a lost answer, the
+// script can remove the earlier input while keeping later typing (#1179).
+// Stored references cannot reconstruct that input after a handle rename.
 // A plain form, or text that no longer starts with it, keeps the error, as
 // does a quote on either side: a stored one may still be in the composer for
 // the rest, and a requested one would be dropped with the text.
 func recovered(enhanced bool, channel kernel.ID, body string, quoted bool, stored conversation.Message) string {
-	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil || !strings.HasPrefix(body, stored.Body) {
+	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil {
 		return ""
 	}
-	return stored.Body
+	return stored.TypedBodyPrefix(body)
 }
 
 // freshKey renders a new composer key: on every render but a 422, which

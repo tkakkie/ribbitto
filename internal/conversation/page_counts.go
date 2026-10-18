@@ -37,6 +37,9 @@ func (s *Reader) pageCounts(ctx context.Context, snapshot platform.Snapshot, m o
 }
 
 func (s *Reader) readCounts(ctx context.Context, snapshot platform.Snapshot, m org.Membership, channelID kernel.ID, channels []Channel, topics []Topic, selected *kernel.ID, firstUnread bool) (PageCounts, error) {
+	if s.counts == nil {
+		return PageCounts{}, nil
+	}
 	channelIDs, topicIDs := make([]kernel.ID, len(channels)), make([]kernel.ID, len(topics))
 	for i, channel := range channels {
 		channelIDs[i] = channel.ID

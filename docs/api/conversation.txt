@@ -134,8 +134,10 @@ type Location struct // Location is where a message is now.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 const MaxBranchMessages untyped int = 100 // MaxBranchMessages bounds how many messages one branch may move, so its transaction and its event payload stay small.
 const MaxChannelPins untyped int = 50 // MaxChannelPins bounds a channel's curated list across all its topics.
-type MemberDirectory interface // MemberDirectory is the author lookup and bounded member listing the page reader needs from org.
+const MaxMessageBodyLength untyped int = 4000 // MaxMessageBodyLength bounds typed and stored bodies in Unicode code points.
+type MemberDirectory interface [embeds github.com/tkakkie/ribbitto/internal/org.MemberSearchStore] // MemberDirectory supplies org's author lookup, bounded page listing and handle listing for posting.
   func (MemberDirectory).ListMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int32) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error) // ListMembers returns a bounded ID-ordered page after the optional member ID.
+  func (github.com/tkakkie/ribbitto/internal/org.MemberSearchStore).ListSearchMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error)
   func (MemberDirectory).LookupMembers(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]github.com/tkakkie/ribbitto/internal/org.DirectoryEntry, error)
 type MemberDirectoryIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) MemberDirectory // MemberDirectoryIn binds a member directory to the caller's snapshot, so the authors are read in the same snapshot as the messages they wrote.
 const MemberPageSize untyped int = 100 // MemberPageSize bounds the members shown and resolved on each page.
@@ -154,6 +156,8 @@ type Message struct // Message is a post identified by ID, its body read under F
   field Pinned bool // Pinned is the message's current pin state, the same for every member.
   field Quote *Quote // Quote is the earlier message this one quotes, or nil.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
+  func (Message).TypedBodyPrefix(typed string) string // TypedBodyPrefix returns only a prefix verified against the original typed input.
+  field TypedBodyProof TypedBodyProof // TypedBodyProof verifies the whole normalized typed body on keyed retries.
 type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
   func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.
   func (MessageSequences).HasMessages(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, []int64) (bool, error) // HasMessages probes parallel half-open bounds in one transaction-bound statement.
@@ -168,7 +172,7 @@ func NewIdempotencyKey() IdempotencyKey // NewIdempotencyKey returns a random ve
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, quotes ReadStoreIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction, and member references and quoted messages read through members and quotes in a snapshot of their own.
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
-func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
+func NewReader(runner SnapshotRunner, countRunner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
 type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; callers raise only after commit.
@@ -273,7 +277,7 @@ type Send struct // Send is one composer submission.
 type Sent struct // Sent is what a send produced.
   field Message Message // Message is the new message or, on a repeat or with ErrPostKeyReused, the author's stored one, wherever branching has moved it since.
   field Repeat bool // Repeat reports that an earlier send with the key stored Message.
-  field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the requested place: the topic resolved before the insert, which a repeat's composer and typing stay on.
+  field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the requested place, resolved before inserting or replaying, which a repeat's composer and typing stay on.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64
@@ -311,6 +315,7 @@ type Topics struct // Topics runs the topic lookups for a member resolved by org
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
 type TxRunner interface // TxRunner runs channel creation, posting, branching and pinning (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
+type TypedBodyProof [36]byte // TypedBodyProof records the normalized typed body's byte length (big-endian uint32) and SHA-256 digest.
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
 func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole body source text.
@@ -319,7 +324,7 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.
   func (Writer).GetDefaultTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetDefaultTopic returns the channel's default topic; none, as for another organisation's channel, is ErrTopicNotFound.
   func (Writer).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetTopic returns a topic of the channel, or ErrTopicNotFound.
-  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey, quote *Quote) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
+  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
   func (Writer).InsertNotice(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64) (Message, error) // InsertNotice inserts branching's notice like InsertMessage but maps no error, so a failure there stays a server error (R2 on #502).
   func (Writer).KeyedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, key IdempotencyKey) (Message, error) // KeyedMessage returns the author's message stored with the key in the organisation, or ErrMessageNotFound.
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.

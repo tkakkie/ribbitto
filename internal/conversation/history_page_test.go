@@ -12,6 +12,7 @@ import (
 )
 
 type directoryHistory struct {
+	org.MemberSearchStore
 	t     *testing.T
 	fail  string
 	calls []string
@@ -157,4 +158,8 @@ func (*directoryHistory) ListMembers(context.Context, kernel.ID, *kernel.ID, int
 
 func (fullHistory) ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error) {
 	return nil, nil
+}
+
+func (fullHistory) ListSearchMembers(context.Context, kernel.ID) ([]org.ListedMember, error) {
+	panic("unexpected ListSearchMembers")
 }

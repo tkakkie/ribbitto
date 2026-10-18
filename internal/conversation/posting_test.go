@@ -73,7 +73,7 @@ func (f *postingFake) GetTopic(_ context.Context, organizationID, channelID, id 
 	}
 	return conversation.Topic{ID: id}, f.step("selected")
 }
-func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, _ *conversation.IdempotencyKey, _ *conversation.Quote) (conversation.Message, error) {
+func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, _ *conversation.IdempotencyKey, _ conversation.TypedBodyProof, _ *conversation.Quote) (conversation.Message, error) {
 	f.scope(organizationID, channelID)
 	if topicID != f.topic || memberID != (kernel.ID{2}) || seq != 7 {
 		f.t.Fatal("wrong insert arguments")

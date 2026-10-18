@@ -98,5 +98,5 @@ endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching the use cases.
 
-`serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
-a `database/sql` handle, which goose needs.
+`serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
+uses goose's `database/sql` handle.

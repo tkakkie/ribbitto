@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -58,7 +59,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			selected := kernel.ID{3}
 			var lookups [][3]kernel.ID
 			writer := &fakePostingWriter{}
-			p := channelPages{channels: &fakeChannels{}, posting: testPosting(writer), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
+			p := channelPages{postLimit: middleware.NewPostRateLimiter(time.Now), channels: &fakeChannels{}, posting: testPosting(writer), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
 			// A nil message reader makes any unnecessary history read fail.
 			path := view.ConversationURL("acme", kernel.ID{1}, &selected)
 			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader(url.Values{"body": {tt.body}, "cursor": {"0"}}.Encode()))
@@ -328,7 +329,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v12.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v9.js"] {
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v13.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v9.js"] {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
@@ -448,5 +449,40 @@ func TestChannelCreationCorrection(t *testing.T) {
 				t.Fatalf("resubmission: %d %s", w.Code, w.Header().Get("Location"))
 			}
 		})
+	}
+}
+
+func TestStreamStoppedNotice(t *testing.T) {
+	for _, tc := range []struct{ lang, notice, link string }{
+		{"en", "Live updates have stopped. Waiting for unsent messages.", "Reload now"},
+		{"ja", "未送信のメッセージがあるため、リアルタイム更新を停止して待機しています。", "今すぐ再読み込み"},
+	} {
+		for _, topic := range []*view.Topic{nil, {ID: kernel.ID{2}}} {
+			t.Run(tc.lang+fmt.Sprint(topic), func(t *testing.T) {
+				snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, Topic: topic}
+				doc, err := html.Parse(strings.NewReader(renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", snapshot))))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var notice *html.Node
+				for n := range doc.Descendants() {
+					if attr(n, "id") == "stream-stopped" {
+						notice = n
+					}
+				}
+				if notice == nil {
+					t.Fatal("missing stopped-updates notice")
+				}
+				_, hidden := attrOK(notice, "hidden")
+				link := find(notice, atom.A)
+				var id *kernel.ID
+				if topic != nil {
+					id = &topic.ID
+				}
+				if !hidden || attr(notice, "role") != "status" || link == nil || attr(link, "href") != view.ConversationURL("acme", snapshot.Current.ID, id) || strings.TrimSpace(text(link)) != tc.link || !strings.Contains(text(notice), tc.notice) {
+					t.Fatal("stopped-updates notice is not hidden, localized, or linked to the conversation")
+				}
+			})
+		}
 	}
 }

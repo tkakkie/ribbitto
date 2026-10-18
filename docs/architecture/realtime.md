@@ -81,7 +81,9 @@ without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
 `migrate up`. Retention raises the boundary in the same transaction as deletion,
-locking one organisation before its events as [posting](posting.md) does; the lock and the
+locking one organisation with `FOR NO KEY UPDATE` before its events as
+[posting](posting.md) does. This serialises batches with `event_seq` writers
+while allowing foreign-key inserts into child tables. The lock and the
 boundary (`greatest`, so it never goes down) come through the injected
 `realtime.RetentionBoundary`. The cleaner lists organisations with expired rows
 from `event_log` in ID order without write locks, then commits
@@ -93,9 +95,11 @@ start) need not follow `seq` (#430); expired rows above that row wait for a
 later run. Each batch reads only the organisation's 1,000 lowest sequences
 under the lock and deletes the expired run at their start, so the work under
 the lock stays bounded. Each batch reads after acquiring the organisation lock,
-so concurrent cleaners see committed progress. Only that organisation's writers
-wait; errors or the one-minute run timeout preserve all committed batches for
-the next hourly tick. Messages,
+so concurrent cleaners see committed progress. Every update of that organisation's
+row still waits, including `event_seq` writes, `member_access_changed`'s
+`access_epoch` reset on member deletion or role change, and another cleaner's
+boundary raise; errors or the one-minute run timeout preserve all
+committed batches for the next hourly tick. Messages,
 their sequences and read state are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.

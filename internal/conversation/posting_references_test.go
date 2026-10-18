@@ -22,6 +22,29 @@ type referenceDirectory struct {
 	err     error
 	open    bool
 	lookups [][]kernel.ID
+	lists   int
+	handle  string
+	handles map[kernel.ID]string
+}
+
+func (d *referenceDirectory) ListSearchMembers(_ context.Context, organizationID kernel.ID) ([]org.ListedMember, error) {
+	if !d.open {
+		d.t.Fatal("listing outside the snapshot")
+	}
+	d.lists++
+	var members []org.ListedMember
+	handle := d.handle
+	if handle == "" {
+		handle = "tomoya"
+	}
+	for _, id := range d.members[organizationID] {
+		memberHandle := handle
+		if h, ok := d.handles[id]; ok {
+			memberHandle = h
+		}
+		members = append(members, org.ListedMember{ID: id, DirectoryEntry: org.DirectoryEntry{Handle: memberHandle}})
+	}
+	return members, d.err
 }
 
 func (d *referenceDirectory) InSnapshot(_ context.Context, fn func(platform.Snapshot) error) error {

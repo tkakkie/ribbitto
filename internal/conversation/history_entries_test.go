@@ -13,6 +13,7 @@ import (
 )
 
 type singleMessage struct {
+	org.MemberSearchStore
 	t                           *testing.T
 	msg                         conversation.Message
 	readErr, memberErr, nameErr error
@@ -118,6 +119,7 @@ func (singleMessage) GetMessages(context.Context, kernel.ID, kernel.ID, []kernel
 // partialBatch returns only the messages it holds, as the store omits missing
 // or out-of-scope IDs, and fails the test if any directory is read.
 type partialBatch struct {
+	org.MemberSearchStore
 	t     *testing.T
 	found []conversation.Message
 	calls []string

@@ -7,9 +7,10 @@ sequenceDiagram
   participant A as use case (module root)
   participant P as PostgreSQL store (module)
   B->>W: HTTP request (/organizations/{slug}/…)
-  W->>W: parse and validate input, resolve session → account
+  W->>W: resolve session → account
+  W->>A: resolve member of {slug}, authorize
+  W->>W: member admission where limited, then parse and validate input
   W->>A: call use case with plain arguments
-  A->>A: resolve member of {slug}, authorize
   A->>P: repository calls inside one transaction
   P-->>A: domain values
   A-->>W: plain result struct
@@ -38,6 +39,12 @@ the home page.
 Every route under `/organizations/{slug}/` and its result is listed in
 [`routes.md`](routes.md).
 
+Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
+its channel, reads one ID through `conversation.Reader.Many`, and returns only
+`#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
+uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
+messages get the posting route's plain 404, without their text.
+
 ## Server timeouts
 
 In `newServer` (`cmd/ribbitto`):
@@ -51,6 +58,9 @@ Without these limits, a client could hold a connection for as long as it liked: 
 **The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: M3's SSE sets a finite deadline before each write (see [`stream-limits.md`](stream-limits.md)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
 
 ribbitto keeps these limits itself and does not rely on a reverse proxy for them ([decision 15](../decisions/15-every-ordinary-response-has-a-bounded-write-ribbitto-does-not-rely-on-a-proxy-for-it.md)). A proxy in front (Caddy by default, or nginx, Traefik and others) adds defense in depth: TLS, keeping the backend unreachable from outside, and connection and slow-client limits.
+
+The write deadline does not cancel the handler's context. Independent
+[database timeouts](../recount-capacity.md#server-side-timeouts) bound SQL work.
 
 ## Middleware order
 

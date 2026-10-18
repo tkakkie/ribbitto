@@ -20,6 +20,7 @@
 | quoted_message_id | uuid |  | true |  | [public.message](public.message.md) |  |
 | quoted_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
 | quote_text | text |  | true |  |  |  |
+| typed_body_proof | bytea |  | true |  |  |  |
 
 ## Constraints
 
@@ -44,6 +45,7 @@
 | message_quote_text_length_check | CHECK | CHECK (((length(quote_text) >= 1) AND (length(quote_text) <= 4000))) |
 | message_quote_text_trim_check | CHECK | CHECK ((quote_text = btrim(quote_text, '	<br /><br /> '::text))) |
 | message_topic_id_not_null | n | NOT NULL topic_id |
+| message_typed_body_proof_check | CHECK | CHECK (((typed_body_proof IS NULL) OR (octet_length(typed_body_proof) = 36))) |
 | message_organization_id_member_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_pinner_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_quoted_member_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
@@ -97,6 +99,7 @@ erDiagram
   uuid quoted_message_id FK
   uuid quoted_member_id FK
   text quote_text
+  bytea typed_body_proof
 }
 "public.member" {
   uuid id

@@ -26,6 +26,10 @@ func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (kerne
 	return f.account.ID, f.hash, nil
 }
 
+func (fakeAccounts) RehashPassword(context.Context, kernel.ID, string, string) error {
+	panic("unexpected password rehash")
+}
+
 func TestSignIn(t *testing.T) {
 	hasher, err := identity.NewHasher()
 	if err != nil {

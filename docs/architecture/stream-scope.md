@@ -105,7 +105,8 @@ and its arrival, then reapply eligible retained events above it. Retained events
 are not losses; otherwise show the snapshot numbers, resync again and stay
 recovering. No event-history
 replay or unbounded retention is added. PR 4 now spreads connect recounts by 0–3 s,
-visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s. One bound on
+visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s once
+no send, queue or failed text holds the [reload guard](web-javascript.md#javascript). One bound on
 concurrent recount computations covers connect, read, resync and moves,
 separately from stream registrations, sized
 against [normal-work pool headroom](../recount-capacity.md#current-computation-sizing-1046). After a bounded slot wait, leave the sidebar
@@ -124,7 +125,7 @@ Swap targets:
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
 | `pins` | none | whole `#pins-section`, including empty lists |
 | `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
-| `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page |
+| `reset` | the cursor for durable reset; none for owner reset | the stream script reloads once no text is at stake |
 
 `#organization-stream`, holding `sse-connect`, wraps the sidebar, conversation and any side panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a

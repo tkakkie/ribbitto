@@ -23,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
 )
@@ -87,6 +88,60 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 			t.Errorf("quote %q: status %d", quote, w.Code)
 		}
 	}
+	chip := func(method string, quoted ...string) *httptest.ResponseRecorder {
+		form := url.Values{"quote": quoted}
+		path := feed + "/quote"
+		if method == http.MethodGet {
+			path = feed + "?" + form.Encode()
+		}
+		return serveForm(handler, method, path, cookie, form)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		for _, raw := range [][]string{{"bad"}, {strings.ToUpper(id)}, {id, id}} {
+			if w := chip(method, raw...); w.Code != 400 {
+				t.Fatalf("%s malformed chip: %d %s", method, w.Code, w.Body.String())
+			}
+		}
+		for _, quoted := range outside {
+			w := chip(method, realtime.FormatPayloadID(quoted))
+			if w.Code != 404 || w.Body.String() != "404 page not found\n" {
+				t.Fatalf("%s out-of-scope chip: %d %s", method, w.Code, w.Body.String())
+			}
+		}
+		w := chip(method, id)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;") || !strings.Contains(w.Body.String(), "Bob Example") || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
+			t.Fatalf("%s chip: %d %s", method, w.Code, w.Body.String())
+		}
+		if method == http.MethodPost && strings.Contains(w.Body.String(), "message-composer-state") {
+			t.Fatal("chip route returned composer state")
+		}
+	}
+	// Isolate organisation scope from channel scope: the foreign message and
+	// channel match, but the membership still belongs to acme.
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	w := httptest.NewRecorder()
+	if _, ok := (channelPages{messages: reader}).readQuote(w, httptest.NewRequest("GET", "/", nil), m, foreign.Channel.ID, url.Values{"quote": {realtime.FormatPayloadID(outside[2])}}); ok || w.Code != 404 || w.Body.String() != "404 page not found\n" {
+		t.Fatalf("organisation-only scope: %d %s", w.Code, w.Body.String())
+	}
+	compose := func(body string, hx bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", feed, strings.NewReader(url.Values{"body": {body}, "quote": {id}}.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
+		if hx {
+			r.Header.Set("HX-Request", "true")
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, hx := range []bool{false, true} {
+		if w := compose("", hx); w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
+			t.Fatalf("422 chip (htmx %t): %d %s", hx, w.Code, w.Body.String())
+		}
+	}
+	if w := serveForm(handler, "POST", feed+"/quote", cookie, nil); w.Code != 200 || strings.Contains(w.Body.String(), `name="quote"`) {
+		t.Fatalf("remove chip: %d %s", w.Code, w.Body.String())
+	}
 	var answers []string
 	for _, quoted := range outside {
 		w := send(realtime.FormatPayloadID(quoted))
@@ -142,7 +197,6 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Accept-Language", "en")
 	catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { english = r.Context() })).ServeHTTP(httptest.NewRecorder(), r)
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 	event := eventOf(t, f.OrganizationID, seq, conversation.KindPosted, conversation.Moved{ChannelID: f.Channel.ID, ToTopicID: f.Channel.DefaultTopicID})
 	live, err := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}.Render(english, event)
 	if err != nil {
@@ -173,6 +227,10 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 		if !strings.Contains(quote, want) {
 			t.Errorf("quote lacks %s:\n%s", want, quote)
 		}
+	}
+
+	if w := compose("Enhanced answer", true); w.Code != 200 || !strings.Contains(w.Body.String(), `id="composer-quote" hidden`) || strings.Contains(w.Body.String(), `name="quote"`) {
+		t.Fatalf("success retained the chip: %d %s", w.Code, w.Body.String())
 	}
 
 	// Deleting the original keeps the author and the text, without a link.

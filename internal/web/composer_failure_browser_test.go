@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -179,9 +180,30 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	if got := state(); got[0] != " w日本orld" || caret != 4 || got[3] != "Your earlier message was sent. What you typed after it is kept." {
 		t.Fatalf("after the composition: %q, caret %d", got, caret)
 	}
+	// A legacy row cannot prove the original typed input. Even a body that
+	// starts with the stored text must keep the draft and show the 409 error.
+	page.MustEval(`() => { document.getElementById('message-body').value = 'legacy'; }`)
+	send("lost")
+	mu.Lock()
+	for scope, stored := range writer.keyed {
+		if stored.Body == "legacy" {
+			stored.TypedBodyProof = conversation.TypedBodyProof{}
+			writer.keyed[scope] = stored
+		}
+	}
+	mu.Unlock()
+	page.MustEval(`() => { const body = document.getElementById('message-body'); body.value = 'legacy extra'; body.setSelectionRange(8, 8); }`)
+	send("pass")
+	if got := state()[0]; got != "legacy extra" || page.MustEval(`() => document.getElementById('message-body').selectionStart`).Int() != 8 {
+		t.Fatalf("unverified 409 removed draft: %q", got)
+	}
+	if !page.MustEval(`() => document.getElementById('message-help').textContent.includes('A different message was already sent')`).Bool() {
+		t.Fatal("unverified 409 hid the conflict error")
+	}
+	// The verified-prefix case above also asserts the caret after removal.
 	mu.Lock()
 	defer mu.Unlock()
-	if writer.inserts != 3 {
-		t.Fatalf("%d messages stored, want 3", writer.inserts)
+	if writer.inserts != 4 {
+		t.Fatalf("%d messages stored, want 4", writer.inserts)
 	}
 }

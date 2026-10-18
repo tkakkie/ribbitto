@@ -47,23 +47,31 @@ htmx does only requests and swaps; the server and templ own the HTML.
   htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id, with
   `data-posted-topic` and `data-posted-seq` from that message (including repeats); errors omit them,
-  except a 409, which names the stored message and, when the text starts
-  with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
+  except a 409, which names the stored message. Unquoted htmx 409s in the same
+  channel offer only a retry-text prefix verified against the stored typed-body
+  proof (`data-sent-body`) instead of the error; legacy rows without proof keep the error and draft. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
-  success sets it to `"false"` and keeps `aria-describedby="message-help"`.
+  success sets it to `"false"` and keeps `aria-describedby="message-help composer-quote-description"`.
   Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v12.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v14.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
 - SSE uses explicit fragments shared with full-page rendering. `MessageItem`
   takes a `view.Message` and renders one `<li>` on its own or in the page.
+- `#quote-form` is a page-level GET to the current conversation and composer
+  fragment; htmx posts it to the channel's `/quote`, swapping `#composer-quote`.
+  Each shared menu submits only `name="quote"` and the message UUID. The chip
+  lives inside the composer, submits a hidden `quote`, and describes the textarea
+  through `#composer-quote-description` (author/excerpt only; empty without a quote).
+  Quoted post responses refresh it out of band: re-read on 422/409, empty on
+  success. Unquoted pending responses leave it alone.
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).
 - Every channel/topic page (`?before=` and panel pages included) and the
   channel list page carry `data-event-cursor` on `#organization-stream`, the outer layout div outside

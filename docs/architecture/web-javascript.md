@@ -76,7 +76,10 @@ htmx sends resync requests. The markup contract is in
   The shared server render stays identical for every reader; unresolved and
   other-organisation references carry no ID. Quote snapshots remain plain text.
 - `message-composer-v14.js` closes the Quote action's popover and focuses the
-  textarea after a chip swap. Quoted sends use the ordinary path, waiting for
+  textarea after a chip swap. At `htmx:configRequest` it copies the native
+  submitter's name/value for `#quote-form`, since popover focus restoration clears
+  htmx's remembered button; the unnamed Remove button adds nothing.
+  Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the

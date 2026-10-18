@@ -1,110 +1,105 @@
 # Web composer
 
-Composer JavaScript and drafts on the device.
+Composer JavaScript and device drafts.
 
 ## Composer
 
-[Decision 37][d37] allows bounded composer state. The server-rendered key and
-the sending glue and feed/topic pending items below exist; the parts marked
-*planned* await their issues.
+Bounded composer state follows [decision 37][d37]. Server-rendered keys,
+sending glue and feed/topic pending items exist; *planned* parts await their issues.
 
-The ordinary path applies to idle feed/topic sends with blank
-text, a selected quote, or over 4,000 code points after line-ending
-normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
+Idle feed/topic sends use the ordinary path for blank text, a selected quote,
+or over 4,000 code points after line-ending normalisation and trimming;
+so do contexts without `crypto.randomUUID()`.
 
-- **Ordinary sending** (input glue, #1173): the textarea stays usable while a post is
-  in flight, since answers replace only `#message-composer-state`. On a 200
-  the script removes the sent body (htmx's request parameters) from the
-  textarea's start, only if it still starts with it, with
-  `setRangeText("", 0, length, "preserve")`: the caret and selection stay on
-  the remaining text, and no `input` event fires, so no typing signal
-  follows. During an IME composition it waits for `compositionend`, keeping
-  that one removal per textarea in a `WeakMap`. Every answer sets the
-  textarea's `aria-invalid` from the state's `data-invalid`.
+- **Ordinary sending** (input glue, #1173): textarea usable in flight:
+  answers replace only `#message-composer-state`. On 200 remove sent body
+  (htmx request parameters) only if still a textarea prefix, via
+  `setRangeText("", 0, length, "preserve")`: caret/selection stay on
+  remaining text; no `input` fires, hence no typing signal.
+  During IME composition it waits for `compositionend`, keeping
+  one removal per textarea in a `WeakMap`. Every answer copies state
+  `data-invalid` to textarea `aria-invalid`.
 - **Ordinary failures** (#1179) keep the text and the key; `#message-send-alert` says
-  which. The handler rejects 400/404/413/422 before any write; 429 rejects
-  by spec: *not sent*, or with the mark, *this retry was refused and the
-  earlier send is still unconfirmed*. A network error, a timeout, a 5xx or
-  another 4xx (except 409) may follow a commit: *could not confirm*, and the
-  key is marked in `data-unconfirmed-key`. Only a 200 or a 409 follows the
-  key lookup; both bring a new key, and the mark goes
-  exactly when the key changes. A 409 carries `data-sent-body`, and omits
-  its error, only in the same channel, with neither the stored nor the retried
-  text quoted, and when the stored typed-body byte length and SHA-256 digest
+  which. 400/404/413/422 reject before any write; 429 by spec:
+  *not sent*, or with the mark, *this retry was refused and the
+  earlier send is still unconfirmed*. Network errors, timeouts, 5xx or
+  other 4xx (except 409) may follow a commit: *could not confirm*, marking the
+  key in `data-unconfirmed-key`. Only 200/409 follow the
+  key lookup; both renew the key. The mark clears exactly on key change.
+  A 409 carries `data-sent-body` and omits its error only in the same channel,
+  with neither stored nor retried text quoted, and when stored typed-body byte length and SHA-256 digest
   verify that prefix of the retry text (without resolving handles): the
-  script removes that prefix under the same rules (*the earlier message was
-  sent*), or says the 409's error if the start was edited since. Otherwise
-  the text stays with the error, including legacy rows without a proof.
+  script removes that prefix by the same rules (*the earlier message was
+  sent*), or says the 409's error if the start changed. Otherwise
+  text stays with the error, including legacy rows without proof.
 - **Pending own posts** (#1156, #1188, #1174, #1180):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
-  after `#message-items`. The item's own htmx form holds the original text,
+  after `#message-items`. Each item's htmx form holds original text,
   key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. Each queued form gets a fresh UUID
-  unless restored by Edit. Up to 10 items per tab count in every state, including failures
+  focus and takes `crypto.randomUUID()`. Fresh UUID per queued form unless
+  restored by Edit. At most 10 items per tab in all states, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
   the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
-  FIFO dispatch sends one form at a time, after classifying its predecessor.
-  An ordinary request blocks composer submits; pending items or requests block
-  quoted or invalid ordinary submits, so the two forms' requests never overlap.
+  FIFO: one form at a time, predecessor classified first.
+  Ordinary requests block composer submits; pending items or requests block
+  quoted or invalid ordinary submits, preventing overlap between forms' requests.
   A Not sent item lets later items continue; Retry moves it to the list and
-  queue's end. An unknown outcome pauses later items (still showing Sending).
-  Its same-key Retry keeps its place; success resumes dispatch. A refused retry
+  queue's end. Unknown outcomes pause later items (showing Sending).
+  Same-key Retry keeps its place; success resumes dispatch. A refused retry
   keeps the pause while the earlier outcome is unknown. Remove and Edit resume
-  without resolving that request: it may commit later, and its real delivery stays
-  visible. Storage order follows send order on uninterrupted success or a
-  successful same-key Retry, but may differ after Remove or Edit.
+  without resolving that request: it may commit later; real delivery stays
+  visible. Storage follows send order on uninterrupted success or
+  successful same-key Retry; Remove or Edit may reorder it.
   A 200 swaps the composer state and out-of-band typing form, sets
   `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
-  Its `data-posted-message` associates
-  the item with delivery. A `MutationObserver` removes a
-  confirmed item before paint when that ID appears in `#message-items`.
+  `data-posted-message` links the item to delivery. A `MutationObserver` removes
+  confirmed items before paint when their ID appears in `#message-items`.
   Stream-first briefly shows both until the response; replay and feed moves
-  preserve the real ID. On topics, a response also removes the item if its
+  preserve the real ID. Topic responses also remove the item if its
   `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
-  has reached `data-posted-seq`. Those attributes are read once, never kept
-  on the item. After confirmation, `htmx:sseBeforeMessage` removes it when
+  has reached `data-posted-seq`. Read attributes once, never keep them
+  on the item. Once confirmed, `htmx:sseBeforeMessage` removes it when
   a `messages-moved` payload names its ID with this topic as source.
-  Ordered application makes an absent, already-applied post safe to remove
+  Ordering allows removal of absent, already-applied posts
   ([topic replay](replay.md#ordering-and-replay)).
-  Failed responses never swap. The same failure classes as above fill only
-  the item's empty polite status. Retry uses its form's
-  text and key, including after an unconfirmed send's refused retry. A 409
+  Failed responses never swap; the failure classes above fill only
+  the item's empty polite status. Retry uses form text/key,
+  even after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
-  the item and text; an uncertain committed post can still arrive later.
-  Edit is available on either failure only with an empty composer outside IME
-  composition; otherwise it stays visible but disabled with an associated
-  localised explanation. It never overwrites a draft. It restores the raw
-  text, key and any unconfirmed mark, focuses the textarea with the caret at
-  the end, then removes the item. The key follows that text across state swaps
-  until sent or emptied; its unconfirmed mark waits in the composer's
+  item and text; an uncertain committed post can still arrive later.
+  Edit requires either failure, an empty composer and no IME
+  composition; otherwise visible but disabled with an associated
+  localised explanation. It never overwrites a draft. It restores raw
+  text, key and any unconfirmed mark, focuses the textarea with caret at
+  end, then removes the item. The key follows that text across state swaps
+  until sent or emptied; its unconfirmed mark stays in composer
   `data-unconfirmed-key` for either sending path. A pending resend transfers
-  it to its own form and clears the composer's mark; emptying the restored
+  it to its form and clears the composer's mark; emptying restored
   text clears it and takes a fresh UUID.
   Editing a known refusal clears any stale composer mark.
   An unused key posts normally; a body matching the [retry rule](posting.md)
-  under a used key returns the stored message; a different body gets the pending 409 above.
-  Pending sends bypass prefix removal, the ordinary send alert, ordinary
-  failure classification and 409 cleanup.
-- **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
-  the server fresh on the initial render, after success and with 409, kept
-  on 422. Scoped by the server to the authorised membership; never in a
-  stream payload. On a pending send the script replaces it with
+  under a used key returns the stored message; a different body gets that pending 409.
+  Pending sends bypass prefix removal, ordinary send alerts/failure
+  classification and 409 cleanup.
+- **Idempotency key** (#1155): hidden `idempotency_key`, server-rendered fresh
+  initially, after success and with 409; kept on 422. Server-scoped to
+  authorised membership; never in stream payloads. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
   `data-state`, the composer's request class and #1179's failure alert. Queued, sending
   and failed items hold reload; confirmed items do not. Retry success, Remove
-  or Edit can release it: Edit's restored text is a draft. Each dispatched
-  request has a 30 s timeout; queues, retries and failed text can extend the hold.
-- **Quote chip:** `#composer-quote-description` holds only the quoted author
-  and excerpt and stays present, empty, without a quote. Quote and Remove
+  or Edit can release it: Edit's restored text is a draft. Dispatched
+  requests time out after 30 s; queues, retries and failed text can extend the hold.
+- **Quote chip:** `#composer-quote-description` holds only quoted author
+  and excerpt; present but empty without a quote. Quote and Remove
   quote focus the textarea after the chip swap; Quote closes its actions
   popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
-  the existing resize observer preserves the reader on chip changes. Without
+  the resize observer preserves the reader on chip changes. Without
   scripts both submit a GET with `#message-composer`; removal loses unsent text.
 - **Mention picker:** `mention-picker-v1.js` enhances all composers.
-  `#mention-search` uses htmx's 120 ms debounce,
+  `#mention-search`: htmx 120 ms debounce,
   replace sync and `outerHTML` into `#mention-listbox`. Only matching `data-query`
   responses open; picks recheck the token. Empty results hide the picker;
   `#mention-status` announces no members. `@` requests eight members.
@@ -112,55 +107,63 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   no escapes, URLs or email. Code-span/fence checks are conservative.
   Plain Enter/Tab pick; modified keys pass through except Ctrl/Cmd+Enter closes
   and follows the send setting. Blur forgets dismissal; refocus searches.
-  Composition hides the picker; Enter has a 100 ms guard after commit.
+  Composition hides it; Enter has a 100 ms guard after commit.
   Picks use `setRangeText` and dispatch `input` for drafts and typing.
 - **Drafts:** [below](#drafts).
-- **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
+- **Send key** (planned, #1158): server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.
 
 ### Drafts
 
-Only `message-drafts-vN.js` may use `localStorage` (the pattern check).
-`message-drafts-v2.js` cleans up on the sign-in page (#1178) and on
-organisation pages (#1181); saving and restoring (#1162) and the sidebar
-marker (#1177) are planned: a page restores only its own member and
-session's unexpired entries, writes only before its session's deadline, and
-only shows or hides a server-rendered sidebar marker.
+Only `message-drafts-vN.js` may use `localStorage` (checked).
+`message-drafts-v3.js` cleans up (#1178, #1181), saves latest feed/topic
+input (#1186), never `?before=`/`?around=`. Restore, confirmed-send clearing
+(#1162) and sidebar markers (#1177) are planned. Sent text stays until
+edit or cleanup (decision 37's temporary plaintext copy).
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
-  canonical lower-case UUIDs; the session is its id, a UUIDv7, and the place
-  the literal `feed` or the topic's ID.
-- **Value:** JSON `{member, session, expires, text, at}`; at most 50 entries
-  per member and session (best effort across tabs, #1186), each kept 7 days
-  after its last edit (`at`).
-- **Notice:** `ribbitto.signed-out.v1`, without content; its value is the
-  horizon that wrote it, so each write fires a `storage` event in other tabs.
-- **Millisecond rule:** a cleanup removes an entry only if its session's
-  48-bit millisecond prefix (the first 12 hex digits) is strictly before its
-  horizon's, plus every `ribbitto.draft.v1:` key without that format. Entries
-  in the horizon's millisecond stay until expiry or a later cleanup, so a
-  stale page never removes a newer session's entry, and never reads another
-  session's value.
-- **Sign-in page:** the form's `data-drafts-horizon` is a `uuidv7()` from
-  PostgreSQL (`identity.SessionHorizon`, the clock of session ids), rendered
-  only for signed-out requests, including `POST /signin`'s error renders.
-  With it the script cleans up, then writes the notice, once per document
-  load, never on a back-forward cache restore. A storage error leaves the
-  page working.
-- **Organisation pages:** the channel and channel list pages render on
-  `#organization-stream` `data-session` (the session's id, never its token
-  or hash), `data-session-expires` and `data-rendered-at` (Unix
-  milliseconds) beside `data-member`. Once per document load the script
-  decides each key under the prefix by the first rule that applies: without
-  the format, or with the page's session and another member, removed;
-  another session's, removed if its millisecond is before the page's, else
-  kept unread; the page's own, the only values read, removed if not JSON,
-  lacking or mistyping a field, differing from the key and page in member,
-  session or expiry, over 4,000 code points, or with `at` 7 days old or more
-  than a day ahead. At the deadline (expiry minus render time, timed with
-  `performance.now()` from the document's time origin) an open page removes
-  its own session's keys unread.
+  canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
+- **Value:** JSON `{member, session, expires, text, at}`; `expires` and `at`
+  are Unix milliseconds. Limit: 4,000 code points, 50 entries per member
+  and session. Retention: last edit (`at`), checked only at load.
+- **Saving:** latest htmx forms carry `data-draft-channel` and optional
+  `data-draft-topic`, outside state swaps. Snapshots use tab-monotonic edit
+  times, never save times; 300 ms debounce, `pagehide`/hidden flush;
+  wait for `compositionend`. Clean tabs never flush. Blank/over-limit input
+  and future clearing write empty-text tombstones at edit time,
+  never delete keys. Tombstones restore nothing, count toward 50,
+  leave only by eviction, session end or retention.
+- **Races and cap:** pre-write reads skip equal/later stored edits, leaving
+  the tab clean. Sort own entries by edit time (oldest first), then key;
+  trim other entries to 49 before insertion, all to 50 after every write.
+  Both rules are best effort on observed values: overlapping reads may
+  leave older text; eviction may remove a concurrent update. No repair;
+  textarea unchanged. Only next input saves again.
+  Foreign values unread, keys unwritten.
+- **Stopping:** sign-out notices and deadline cancel pending saves,
+  stop writes until reload; every save checks the deadline. Storage errors
+  leave typing/sending usable.
+- **Notice:** `ribbitto.signed-out.v1` holds only the horizon;
+  every write fires `storage` in other tabs.
+- **Millisecond rule:** cleanup removes malformed `ribbitto.draft.v1:` keys
+  and entries whose session's 48-bit millisecond prefix (first 12 hex digits)
+  strictly precedes its horizon's. Foreign sessions at/after that millisecond
+  stay unread: stale pages cannot remove newer sessions' entries.
+- **Sign-in page:** `data-drafts-horizon` is PostgreSQL's `uuidv7()`
+  (`identity.SessionHorizon`, session-id clock), only when
+  signed out, including sign-in errors. Cleanup then notice run once per
+  document load, never on back-forward cache restore. Storage errors keep it usable.
+- **Organisation pages:** channel/list pages' `#organization-stream` has
+  `data-session` (id, never token/hash), `data-session-expires` and
+  `data-rendered-at` (Unix milliseconds) beside `data-member`. Once per load,
+  first match per draft key wins: malformed or own session
+  with another member, removed; foreign session, removed if earlier by the
+  millisecond rule, else unread; own values, removed if invalid JSON, fields
+  missing/mistyped, member/session/expiry mismatched, over 4,000 code points,
+  or `at` at least 7 days old or over a day ahead. At the deadline (expiry
+  minus render time; `performance.now()` from document time origin),
+  remove own session's keys unread.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
-  where the browser supports it (Chromium); the sign-in page covers the rest.
+  where supported (Chromium); the sign-in page covers the rest.
 
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md

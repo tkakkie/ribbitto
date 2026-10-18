@@ -120,7 +120,7 @@ A token holds the member's UUID only, never a handle or name.
   answer reveals nothing about other organisations.
 - A **malformed** token is not a reference: it stays literal text.
 - **At rendering,** a reference shows the current `Display name @handle`
-  through `view.MemberName` (#117, [names](../domain/names.md)). A member
+  through `view.MemberName` (#1310, [names](../domain/names.md)). A member
   who later leaves or cannot be resolved shows the localised placeholder.
   Lookups go through the same organisation-scoped directory, so nothing
   from another organisation can show even if a bad row exists.
@@ -128,8 +128,8 @@ A token holds the member's UUID only, never a handle or name.
   naming another organisation's member UUID never shows that member's
   display name or handle on the page, in the stream or in extracted text.
 
-Mentions (#117) are stored only as these references, so #117 lands with or
-after `chat_v1`'s implementation.
+Mentions (#1311 converts them at posting) are stored only as these references,
+so #1311 lands with or after `chat_v1`'s implementation.
 
 ## Rendering and security
 
@@ -147,8 +147,11 @@ italic, link, code span, reference) is isolated in direction with
 
 Output is the same for every reader of one language (only the unresolved
 member placeholder is localised), so the shared render cache, keyed by
-language, stays valid; highlighting one's own mentions happens in the browser from a data
-attribute. Existing headers already help: `Referrer-Policy: same-origin`
+organisation, channel, sequence and language, stays valid. Highlighting one's
+own mentions happens in the browser
+(#1313): only resolved references carry `data-member-id`; unresolved UUIDs
+never reach the HTML. The viewer's ID comes from `#organization-stream`'s
+existing `data-member`. Existing headers already help: `Referrer-Policy: same-origin`
 and the CSP's `img-src 'self' data:`.
 
 **Why:** code, links and mentions need structure that plain text cannot

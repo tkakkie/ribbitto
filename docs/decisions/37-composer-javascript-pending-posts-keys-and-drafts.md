@@ -60,7 +60,7 @@ Composer JavaScript sends no requests itself: no `fetch`, `XMLHttpRequest`,
 set form-control values and call `requestSubmit()`, `htmx.trigger` and
 `htmx.process` on server-rendered or template-cloned elements. Every composer
 request URL comes from a server-rendered attribute, never built by JavaScript.
-Mention suggestions (#117) come as server-rendered fragments over `hx-get`.
+Mention suggestions (#1310, #1312) come as server-rendered fragments over `hx-get`.
 
 ## (d) Drafts on this device (#1178, #1181, #1162, #1177)
 

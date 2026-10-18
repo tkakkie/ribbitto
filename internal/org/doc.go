@@ -12,4 +12,6 @@
 // hashing; setup and sign-up own their transactions so the account, member
 // and sequence commit together. Setup also creates the default channel in
 // that transaction. Cross-feature writes use injected writers.
+// Member search scopes its listing to the resolved membership's organisation
+// before asking identity for those accounts' display names in the same snapshot.
 package org

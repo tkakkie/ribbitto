@@ -26,7 +26,7 @@ without a reload.
 | `border-strong` | `#7f8986` | `#768380` | borders that identify a control (inputs) |
 | `fg` | `#171c1b` | `#e4ecea` | body text |
 | `muted` | `#545d5b` | `#9ba7a4` | secondary text, timestamps |
-| `brand` / `on-brand` | `#0f766e` / `#ffffff` | `#4cc9b8` / `#062421` | primary buttons, focus ring, selection indicator, unread counts, links |
+| `brand` / `on-brand` | `#0f766e` / `#ffffff` | `#4cc9b8` / `#062421` | primary buttons, focus ring, own-mention outline, selection indicator, unread counts, links |
 | `brand-hover` | `#0b5f58` | `#6dd8c9` | hovered primary buttons and the send button, under `on-brand` (darker in light, lighter in dark) |
 | `selected` / `on-selected` | `#d5f1ea` / `#0b4d48` | `#1d3d38` / `#b8ece2` | the current row |
 | `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | `#3a2216` / `#ffc6a3` | the "New" divider's label |
@@ -51,7 +51,7 @@ black shadows and the `selected` and `brand` tokens.
 Normal text, including button labels, links and typed text, needs 4.5:1;
 large text — at least 24 px regular or 18.66 px bold (18 pt / 14 pt), or
 the equivalent size for Japanese text — needs 3:1; non-text indicators that convey state (focus ring, input borders,
-selection indicator, online dot) 3:1 against what is next to them. Ratios are
+own-mention outline, selection indicator, online dot) 3:1 against what is next to them. Ratios are
 truncated, never rounded up. Decorative `border` and `accent-line` carry no
 information and are exempt; a control's boundary always uses
 `border-strong`. The current row is shown by `on-selected` text **and** the
@@ -69,8 +69,8 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Light | `on-brand` on `brand-hover` | hovered button label | 4.5:1 | 7.52 |
 | Light | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
 | Light | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
-| Light | `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
-| Light | `brand` on `selected` | indicator on the current row | 3:1 | 4.58 |
+| Light | `brand` on `bg` / `base` | link text; focus ring; own-mention outline | 4.5:1 | 5.47 / 4.90 |
+| Light | `brand` on `selected` | current-row indicator; own-mention outline | 3:1 | 4.58 |
 | Light | `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
 | Light | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
 | Light | `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
@@ -88,10 +88,10 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Dark | `on-selected` on `selected` | current row's label | 4.5:1 | 9.08 |
 | Dark | `on-selected` on `bg` | app bar Home label (`rail` equals `bg`) | 4.5:1 | 12.58 |
 | Dark | `on-accent` on `accent` | "New" divider label | 4.5:1 | 9.75 |
-| Dark | `brand` on `bg` / `base` / `hover` | link text; focus ring | 4.5:1 | 8.07 / 9.10 / 6.70 |
+| Dark | `brand` on `bg` / `base` / `hover` | link text; focus ring; own-mention outline | 4.5:1 | 8.07 / 9.10 / 6.70 |
 | Dark | `brand` on `surface` | links; focus outline | 4.5:1 | 7.33 |
 | Dark | `brand` on `input` | focus outline and focused control border | 3:1 | 7.33 |
-| Dark | `brand` on `selected` | indicator on the current row | 3:1 | 5.82 |
+| Dark | `brand` on `selected` | current-row indicator; own-mention outline | 3:1 | 5.82 |
 | Dark | `success` on `bg` / `base` | online dot | 3:1 | 7.44 / 8.39 |
 | Dark | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 8.75 / 9.86 |
 | Dark | `danger` on `bg` / `base` | error text | 4.5:1 | 7.19 / 8.11 |

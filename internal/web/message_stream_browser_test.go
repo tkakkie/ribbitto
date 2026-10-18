@@ -81,6 +81,7 @@ func TestBrowser(t *testing.T) {
 	run("width-audit", testWidthAuditBrowser)
 	run("message-row", testMessageRowBrowser)
 	run("message-time", testMessageTimeBrowser)
+	run("member-mentions", testMemberMentionsBrowser)
 	run("short-height", testShortHeightBrowser)
 	run("welcome", testWelcomeBrowser)
 	run("input-text", testInputTextBrowser)

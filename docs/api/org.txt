@@ -53,6 +53,15 @@ type Member struct // Member is an account's membership in one organisation.
   field JoinedEventSeq int64 // JoinedEventSeq is the persisted join boundary for read-state writes.
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Role Role
+type MemberCandidate struct // MemberCandidate identifies a member offered for a mention.
+  field DisplayName string
+  field Handle string
+  field ID github.com/tkakkie/ribbitto/internal/kernel.ID
+type MemberSearch struct // MemberSearch finds mention candidates within a resolved membership's organisation.
+  func (*MemberSearch).Search(ctx context.Context, m Membership, query string) (candidates []MemberCandidate, err error) // Search returns at most eight members, preferring handle and display-name word prefixes over other substrings, then ordering by handle.
+type MemberSearchStore interface // MemberSearchStore lists only the organisation's members, in handle order.
+  func (MemberSearchStore).ListSearchMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) ([]ListedMember, error)
+type MemberSearchStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) MemberSearchStore // MemberSearchStoreIn binds the search listing to its snapshot.
 type Membership struct // Membership is a member together with its organisation.
   field AccessEpoch int64 // AccessEpoch is read in the same statement as the membership.
   field Member Member
@@ -66,6 +75,7 @@ type MembershipStore interface // MembershipStore looks memberships up.
 func NewAuthorizer(store MembershipStore) *Authorizer // NewAuthorizer returns an Authorizer with default capacity and a background lifetime.
 func NewCachedAuthorizer(parent context.Context, store MembershipStore, capacity int) *Authorizer // NewCachedAuthorizer shares fresh epoch reads under parent and holds at most capacity stream allows.
 func NewHandleChanger(authorizer MembershipResolver, store HandleStore) *HandleChanger // NewHandleChanger returns a HandleChanger.
+func NewMemberSearch(runner SnapshotRunner, members MemberSearchStoreIn, accounts SearchAccountsIn) *MemberSearch // NewMemberSearch constructs a search with snapshot-bound member and name reads.
 func NewSetup(state SetupState, runner TxRunner, writes RegistrationWriterIn, accounts AccountCreatorIn, events EventAppenderIn, channels DefaultChannelCreatorIn, hasher *github.com/tkakkie/ribbitto/internal/identity.Hasher, token string) *Setup // NewSetup constructs a setup service with the configured token and transaction-bound writers.
 func NewSignUp(state SetupState, runner TxRunner, writes RegistrationWriterIn, accounts AccountCreatorIn, events EventAppenderIn, hasher *github.com/tkakkie/ribbitto/internal/identity.Hasher, enabled bool) *SignUp // NewSignUp constructs a registration service with transaction-bound writers.
 type Organization struct // Organization is a workspace; it owns everything its members create.
@@ -83,6 +93,7 @@ type Role string // Role is a member's role in an organisation.
 const RoleMember Role = "member" // The two roles of the MVP.
 const RoleOwner Role = "owner" // The two roles of the MVP.
 func RouteJoined(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteJoined is member.joined's realtime.Router.
+type SearchAccountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) github.com/tkakkie/ribbitto/internal/identity.Directory // SearchAccountsIn binds identity's display-name directory to the search snapshot.
 type Setup struct // Setup controls first-run setup.
   func (*Setup).Complete(ctx context.Context, token string, input SetupInput) (SetupResult, error) // Complete validates before hashing and commits all rows or none.
   func (*Setup).Open(ctx context.Context) (bool, error) // Open reports whether the installation has no completed setup row.
@@ -101,6 +112,8 @@ type SetupState interface // SetupState reads installation-wide state, outside a
 type SignUp struct // SignUp shares the process's hasher and owns the registration transaction.
   func (*SignUp).Open(ctx context.Context) (bool, error) // Open reports whether registration is enabled and setup has completed.
   func (*SignUp).SignUp(ctx context.Context, displayName string, handle string, email string, password string) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // SignUp validates before hashing and commits the account and member together.
+type SnapshotRunner interface // SnapshotRunner runs a use case's reads in one read-only, repeatable-read snapshot.
+  func (SnapshotRunner).InSnapshot(context.Context, func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) error) error
 type TxRunner interface // TxRunner runs the transaction of a flow that writes several modules' rows, such as setup and sign-up (decision 26): the use case owns the boundary, the stores only bind to the Tx they are given.
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
 func ValidateHandle(value string) (string, error) // ValidateHandle returns the canonical lower-case handle: 2–32 characters, starting with a-z, ending with a-z or 0-9, with a-z, 0-9, `_`, `.` or `-` in between, and not a reserved word.

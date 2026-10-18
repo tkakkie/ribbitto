@@ -32,3 +32,7 @@ SELECT access_epoch FROM organization WHERE id = $1;
 SELECT id, account_id, handle FROM member
 WHERE organization_id = $1 AND (sqlc.narg(after_id)::uuid IS NULL OR id > sqlc.narg(after_id)::uuid)
 ORDER BY id LIMIT sqlc.arg(page_limit);
+
+-- name: ListSearchMembers :many
+SELECT id, account_id, handle FROM member
+WHERE organization_id = $1 ORDER BY handle;

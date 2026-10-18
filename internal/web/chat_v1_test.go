@@ -122,6 +122,10 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		return out.Data
 	}
 	stream := func(lang string) []byte { return streamAs(m, lang) }
+	bobM := org.Membership{Organization: m.Organization, Member: org.Member{ID: bob, OrganizationID: f.OrganizationID}}
+	if got, other := stream("en"), streamAs(bobM, "en"); !bytes.Equal(got, other) {
+		t.Fatalf("two members' live HTML differs:\n%s\n%s", got, other)
+	}
 
 	ownerPage := page(f.AccountID)
 	got := item(ownerPage, rich.ID)
@@ -150,6 +154,19 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	if strings.Contains(string(ownerPage), "Foreign Spy") || strings.Contains(string(ownerPage), "@spy") {
 		t.Error("the page shows another organisation's member")
 	}
+	for _, markup := range []string{string(ownerPage), string(stream("en"))} {
+		if strings.Contains(markup, "data-own-mention=") {
+			t.Error("the server rendered a reader-dependent highlight")
+		}
+		for _, id := range []kernel.ID{spy, {0xee}} {
+			if strings.Contains(markup, realtime.FormatPayloadID(id)) {
+				t.Error("an unresolved UUID reached page or live HTML")
+			}
+		}
+	}
+	if strings.Count(got, "data-member-id=") != 2 || !strings.Contains(got, `data-member-id="`+realtime.FormatPayloadID(bob)+`"`) || !strings.Contains(got, `data-member-id="`+realtime.FormatPayloadID(blank)+`"`) {
+		t.Errorf("only resolved references must carry their member IDs:\n%s", got)
+	}
 	if ja := item(stream("ja"), rich.ID); strings.Count(ja, "@不明なメンバー") != 2 {
 		t.Errorf("Japanese placeholder:\n%s", ja)
 	}
@@ -170,7 +187,6 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("no live item")
 		return ""
 	}
-	bobM := org.Membership{Organization: m.Organization, Member: org.Member{ID: bob, OrganizationID: f.OrganizationID}}
 	wantText := "Hi @bob and @blank, see https://example.com/a.\nfrom @unknown member x<y\nfmt.Print(\"<b>\")\nunknown @unknown member"
 	if got, other := announcement(m, "en"), announcement(bobM, "en"); got != "New ribbit @owner: "+wantText || other != got {
 		t.Errorf("announcements differ or are not the resolved extraction:\n%q\n%q", got, other)

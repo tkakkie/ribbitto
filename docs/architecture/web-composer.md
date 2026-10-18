@@ -30,10 +30,11 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   key lookup; both bring a new key, and the mark goes
   exactly when the key changes. A 409 carries `data-sent-body`, and omits
   its error, only in the same channel, with neither the stored nor the retried
-  text quoted, and when the retried text started with the stored body: the
-  script removes that body under the same rules (*the earlier message was
+  text quoted, and when the stored typed-body byte length and SHA-256 digest
+  verify that prefix of the retry text (without resolving handles): the
+  script removes that prefix under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
-  the text stays with the error.
+  the text stays with the error, including legacy rows without a proof.
 - **Pending own posts** (#1156, #1188, #1174, #1180):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,

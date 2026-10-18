@@ -86,7 +86,7 @@ variant (htmx's `htmx-request` class) shows a polite "Sending…" status over th
 help, which keeps its space; the textarea stays usable. A send times out after
 30 s (`hx-request`). Failures fill `#message-send-alert` (#1179,
 [web JavaScript](web-composer.md#composer)); a 409's state carries the
-stored body in `data-sent-body` when the retried text starts with it.
+verified typed prefix in `data-sent-body`; absent or mismatched proofs keep the draft.
 Older pages use a plain form. Every feed/topic composer, including older pages,
 submits a hidden server-issued `composer` generation scoped to the resolved
 organisation/member/channel and actual posting topic. A failed message post

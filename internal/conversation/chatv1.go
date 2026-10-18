@@ -57,7 +57,19 @@ type BodyInline struct {
 // chat_v1's grammar (decision 39). Anything outside the grammar is literal
 // text, so every body parses. It runs in time linear in the body's length.
 func ParseChatV1(body string) []BodyBlock {
+	return parseChatV1(body, nil)
+}
+
+// textRun locates unescaped plain text in the source, before extraction.
+// line is the content's start, after any block quote marker.
+type textRun struct{ start, end, line int }
+
+func parseChatV1(body string, runs *[]textRun) []BodyBlock {
 	lines := strings.Split(body, "\n")
+	offsets := make([]int, len(lines)+1)
+	for i, line := range lines {
+		offsets[i+1] = offsets[i] + len(line) + 1
+	}
 	// closing[i] is the first line from i on that is exactly a fence, so an
 	// opening line without one costs a lookup instead of a scan of the rest.
 	closing := make([]int, len(lines)+1)
@@ -84,7 +96,7 @@ func ParseChatV1(body string) []BodyBlock {
 			blocks = append(blocks, BodyBlock{Kind: kind})
 		}
 		last := &blocks[len(blocks)-1]
-		last.Lines = append(last.Lines, parseInline(content))
+		last.Lines = append(last.Lines, parseInline(content, offsets[i]+len(lines[i])-len(content), runs))
 	}
 	return blocks
 }
@@ -123,25 +135,53 @@ func fenceOpening(line string) (string, bool) {
 type inlineFrame struct {
 	kind  InlineKind
 	delim string
+	start int
 	nodes []BodyInline
 }
 
 type inlineParser struct {
-	line  string
-	stack []inlineFrame
-	text  strings.Builder
+	line    string
+	stack   []inlineFrame
+	text    strings.Builder
+	literal bool
 }
 
-func parseInline(line string) []BodyInline {
+func parseInline(line string, offset int, runs *[]textRun) []BodyInline {
 	p := inlineParser{line: line, stack: make([]inlineFrame, 1, 3)}
+	var plain []bool
+	if runs != nil {
+		plain = make([]bool, len(line))
+	}
 	for i := 0; i < len(line); {
-		i = p.step(i)
+		p.literal = false
+		next := p.step(i)
+		if runs != nil && p.literal {
+			for j := i; j < next; j++ {
+				plain[j] = true
+			}
+		}
+		i = next
 	}
 	p.flush()
 	// Delimiters still open at the end of the line are literal.
 	for top := len(p.stack) - 1; top > 0; top-- {
 		frame, parent := p.stack[top], &p.stack[top-1]
+		if runs != nil {
+			for j := frame.start; j < frame.start+len(frame.delim); j++ {
+				plain[j] = true
+			}
+		}
 		parent.nodes = append(append(parent.nodes, BodyInline{Kind: InlineText, Text: frame.delim}), frame.nodes...)
+	}
+	for i := 0; i < len(plain); i++ {
+		if !plain[i] {
+			continue
+		}
+		start := i
+		for i < len(plain) && plain[i] {
+			i++
+		}
+		*runs = append(*runs, textRun{offset + start, offset + i, offset})
 	}
 	return mergeText(p.stack[0].nodes)
 }
@@ -178,6 +218,7 @@ func (p *inlineParser) step(i int) int {
 		return i + 1
 	}
 	_, size := utf8.DecodeRuneInString(line[i:])
+	p.literal = true
 	p.text.WriteString(line[i : i+size])
 	return i + size
 }
@@ -201,9 +242,10 @@ func (p *inlineParser) delimiter(i int, kind InlineKind, delim string) {
 		p.add(BodyInline{Kind: kind, Children: mergeText(frame.nodes)})
 	case canOpen && top < 2: // two open delimiters at most
 		p.flush()
-		p.stack = append(p.stack, inlineFrame{kind: kind, delim: delim})
+		p.stack = append(p.stack, inlineFrame{kind: kind, delim: delim, start: i})
 	default:
 		// Includes a closer matching a deeper delimiter (crossing).
+		p.literal = true
 		p.text.WriteString(delim)
 	}
 }

@@ -148,18 +148,17 @@ Pages start at newest; live delivery follows only at the bottom. The sender's
 response ID scrolls once in either delivery order and after reconnect. Focus
 stays in the composer. Live appends announce; replay replaces IDs silently.
 
-Unused keys post normally. **Repeated sends** compare whole normalized typed
-bodies by proof (trimmed, line endings normalized). Legacy NULL-proof rows
-require exact stored text with no reference (`plain_text`, or `chat_v1` with
-none). A prefix is not a retry.
-Equal retries return the stored message without writing, even after branching;
-the composer stays on the requested feed/topic. Different typed text, quote or
+**Repeated sends** compare whole normalized typed bodies by proof. Legacy
+NULL-proof rows require exact stored text without references (`plain_text`,
+or `chat_v1` with none). A prefix is not a retry. Unused keys post normally.
+Equal retries return the stored message without writing, even after a move
+or handle change; the composer stays on the requested feed/topic. Different typed text, quote or
 channel gets 409 and a fresh key for Retry; pending 409 shows `message.error.repeat`.
 Malformed keys get 400; absent keys disable deduplication. Enhanced failures
 (#1179) keep text/key: 400/404/413/422/429 mean not sent unless an earlier send is
 unconfirmed; network errors, 30 s timeouts, other 4xx except 409 and 5xx are
-unconfirmed. Retries cannot post twice. Ordinary 409 recovers a prefix under the
-[composer conditions](../architecture/web-composer.md#composer).
+unconfirmed. Retries cannot post twice. Ordinary 409 recovers only a proven typed
+prefix under the [composer conditions](../architecture/web-composer.md#composer).
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

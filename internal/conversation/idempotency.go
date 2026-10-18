@@ -20,6 +20,16 @@ func proveTypedBody(body string) TypedBodyProof {
 	return proof
 }
 
+// TypedBodyPrefix returns only a prefix verified against the original typed
+// input. Stored member IDs cannot reconstruct handles after a rename.
+func (m Message) TypedBodyPrefix(typed string) string {
+	length := int(binary.BigEndian.Uint32(m.TypedBodyProof[:4]))
+	if length <= 0 || length > len(typed) || proveTypedBody(typed[:length]) != m.TypedBodyProof {
+		return ""
+	}
+	return typed[:length]
+}
+
 func (m Message) sameTypedBody(body string) bool {
 	if m.TypedBodyProof != (TypedBodyProof{}) {
 		return proveTypedBody(body) == m.TypedBodyProof

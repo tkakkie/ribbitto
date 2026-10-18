@@ -134,8 +134,10 @@ type Location struct // Location is where a message is now.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 const MaxBranchMessages untyped int = 100 // MaxBranchMessages bounds how many messages one branch may move, so its transaction and its event payload stay small.
 const MaxChannelPins untyped int = 50 // MaxChannelPins bounds a channel's curated list across all its topics.
-type MemberDirectory interface // MemberDirectory is the author lookup and bounded member listing the page reader needs from org.
+const MaxMessageBodyLength untyped int = 4000 // MaxMessageBodyLength bounds typed and stored bodies in Unicode code points.
+type MemberDirectory interface [embeds github.com/tkakkie/ribbitto/internal/org.MemberSearchStore] // MemberDirectory supplies org's author lookup, bounded page listing and handle listing for posting.
   func (MemberDirectory).ListMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int32) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error) // ListMembers returns a bounded ID-ordered page after the optional member ID.
+  func (github.com/tkakkie/ribbitto/internal/org.MemberSearchStore).ListSearchMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error)
   func (MemberDirectory).LookupMembers(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]github.com/tkakkie/ribbitto/internal/org.DirectoryEntry, error)
 type MemberDirectoryIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) MemberDirectory // MemberDirectoryIn binds a member directory to the caller's snapshot, so the authors are read in the same snapshot as the messages they wrote.
 const MemberPageSize untyped int = 100 // MemberPageSize bounds the members shown and resolved on each page.
@@ -154,6 +156,7 @@ type Message struct // Message is a post identified by ID, its body read under F
   field Pinned bool // Pinned is the message's current pin state, the same for every member.
   field Quote *Quote // Quote is the earlier message this one quotes, or nil.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
+  func (Message).TypedBodyPrefix(typed string) string // TypedBodyPrefix returns only a prefix verified against the original typed input.
   field TypedBodyProof TypedBodyProof // TypedBodyProof verifies the whole normalized typed body on keyed retries.
 type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
   func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.
@@ -274,7 +277,7 @@ type Send struct // Send is one composer submission.
 type Sent struct // Sent is what a send produced.
   field Message Message // Message is the new message or, on a repeat or with ErrPostKeyReused, the author's stored one, wherever branching has moved it since.
   field Repeat bool // Repeat reports that an earlier send with the key stored Message.
-  field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the requested place: the topic resolved before the insert, which a repeat's composer and typing stay on.
+  field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the requested place, resolved before inserting or replaying, which a repeat's composer and typing stay on.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64

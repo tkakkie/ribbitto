@@ -9,10 +9,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// MemberDirectory is the author lookup and bounded member listing the page
-// reader needs from org. Lookups omit missing and foreign members; both
+// MemberDirectory supplies org's author lookup, bounded page listing and
+// handle listing for posting. Lookups omit missing and foreign members;
 // reads return org's result types (no copies here).
 type MemberDirectory interface {
+	org.MemberSearchStore
 	// ListMembers returns a bounded ID-ordered page after the optional member ID.
 	ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error)
 	LookupMembers(ctx context.Context, organizationID kernel.ID, memberIDs []kernel.ID) (map[kernel.ID]org.DirectoryEntry, error)

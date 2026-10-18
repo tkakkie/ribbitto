@@ -62,8 +62,8 @@ text around it. A blank-looking display name — including one stored before
 this rule — is converted to an empty name by web when building the channel
 page, members panel and message view models, and shown as `@handle` alone.
 Channel message authors use the same component for the page and stream.
-Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); mentions (#1311)
-will be these) store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
+Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md))
+store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
 resolved through org's directory in the URL's organisation; a member who
 cannot be resolved shows a localised placeholder, never the UUID or another
 organisation's name.
@@ -94,8 +94,25 @@ only members whose names contain them can match; there are no group candidates.
 `GET /organizations/{slug}/mention-candidates?q=` serves the search as a
 no-store listbox fragment, behind membership and an independent per-member
 [rate limit](../architecture/rate-limits.md#member-admission-for-mention-candidates).
-Typed-handle conversion (#1311), the composer picker (#1312) and own-mention
-highlighting (#1313) are separate work.
+The planned composer picker (#1312) will insert typed `@handle` text.
+
+## Typed mentions
+
+Posting converts `@handle`, ignoring ASCII case, only in the parser's plain
+text: at the start of a line or after whitespace or `(`, followed by a valid
+handle ending in a letter or digit. Trailing punctuation stays outside.
+Code spans, closed fences, escapes, URLs and e-mail addresses stay literal;
+an unclosed fence is ordinary text. Only the URL organisation's members
+resolve, through org's existing handle-ordered listing, fetched once only
+when needed. Unknown, foreign and reserved handles stay literal, with no error.
+
+Resolution happens at posting: if members swap handles between a pick and
+send, the mention follows the handle. Storage keeps only the resolved ID;
+later renames show the current name. A same-key retry verifies the normalized
+typed input's stored byte length and SHA-256 digest, without resolving today's
+owner again. Different typed input, including another handle or casing, channel
+or quote returns 409. Recovery removes only a prefix verified by that proof;
+without it the draft stays ([posting](../architecture/posting.md)).
 
 ## Handles
 
@@ -107,6 +124,6 @@ Kelvin sign U+212A must not become `k`), then ASCII letters are lower-cased.
 Members that existed before handles got `member-<n>`, numbered per
 organisation in id order.
 
-A handle can change safely, since nothing refers to it: a member changes
+A handle can change safely, since stored references use IDs: a member changes
 only their own (`org.HandleChanger`), and a released handle is free for anyone at
 once.

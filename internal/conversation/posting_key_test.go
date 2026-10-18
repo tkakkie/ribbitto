@@ -3,8 +3,10 @@ package conversation_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -165,6 +167,109 @@ func TestPostingIdempotencyKey(t *testing.T) {
 			}
 			if tt.wantRepeat != (len(s.lookups) == 1) || slices.ContainsFunc(s.lookups, func(k keyScope) bool { return k.key != key }) {
 				t.Fatalf("lookups %+v", s.lookups)
+			}
+		})
+	}
+}
+
+func TestTypedReplayBeforeExpansion(t *testing.T) {
+	s := &keyedStore{state: keyedState{seq: map[kernel.ID]int64{{1}: 1}, keyed: map[keyScope]conversation.Message{}}}
+	d := &referenceDirectory{t: t, members: map[kernel.ID][]kernel.ID{}}
+	p := conversation.NewPagePosting(s,
+		func(platform.Tx) conversation.Writer { return s },
+		func(platform.Tx) conversation.EventSequence { return s },
+		func(platform.Tx) conversation.EventAppender { return s },
+		nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil, nil)
+	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+	key := conversation.NewIdempotencyKey()
+	topic := kernel.ID{4}
+	body := "@tomoya " + strings.Repeat("界", conversation.MaxMessageBodyLength-8)
+	first, err := p.Send(t.Context(), m, kernel.ID{3}, conversation.Send{Body: body, Topic: &topic, Key: &key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A repeat stays in the requested topic even after branching moved it.
+	first.Message.TopicID = kernel.ID{5}
+	s.state.keyed[keyScope{m.Organization.ID, m.Member.ID, key}] = first.Message
+	// A formerly literal token now resolves and would exceed the stored limit.
+	d.members[m.Organization.ID] = []kernel.ID{{0xa1}}
+	again, err := p.Send(t.Context(), m, kernel.ID{3}, conversation.Send{Body: body, Topic: &topic, Key: &key})
+	if err != nil || !again.Repeat || again.Message != first.Message || again.Topic != topic || d.lists != 1 {
+		t.Fatalf("retry resolved again: %+v, %v, lists %d", again, err, d.lists)
+	}
+	if _, err := p.Send(t.Context(), m, kernel.ID{3}, conversation.Send{Body: body}); !errors.Is(err, conversation.ErrInvalidBody) {
+		t.Fatalf("new post escaped expanded length check: %v", err)
+	}
+}
+
+// Keyed ordinary sends must retain the insert-first hot path. These candidate
+// cases also guard reuse of chat_v1's token rule, including its exclusions.
+func TestPostingPreflightReads(t *testing.T) {
+	for _, tc := range []struct {
+		body  string
+		keyed bool
+		reads int
+	}{
+		{"hello", true, 0}, {"@tomoya", false, 0}, {"hi @tomoya", true, 1},
+		{"@unknown", true, 1}, {"@everyone @x", true, 0},
+		{"`@tomoya`", true, 0}, {"\\@tomoya", true, 0},
+		{"https://example.org/@tomoya a@tomoya.dev", true, 0},
+	} {
+		t.Run(tc.body+fmt.Sprint(tc.keyed), func(t *testing.T) {
+			s := &keyedStore{state: keyedState{seq: map[kernel.ID]int64{}, keyed: map[keyScope]conversation.Message{}}}
+			d := &referenceDirectory{t: t, members: map[kernel.ID][]kernel.ID{}}
+			p := conversation.NewPagePosting(s,
+				func(platform.Tx) conversation.Writer { return s },
+				func(platform.Tx) conversation.EventSequence { return s },
+				func(platform.Tx) conversation.EventAppender { return s },
+				nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil, nil)
+			m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+			var key *conversation.IdempotencyKey
+			if tc.keyed {
+				key = new(conversation.NewIdempotencyKey())
+			}
+			_, err := p.Send(t.Context(), m, kernel.ID{3}, conversation.Send{Body: tc.body, Key: key})
+			if err != nil || len(s.lookups) != tc.reads {
+				t.Fatalf("preflight reads %d, error %v; want %d", len(s.lookups), err, tc.reads)
+			}
+		})
+	}
+}
+
+func TestTypedReplayScope(t *testing.T) {
+	for _, tc := range []struct {
+		name                          string
+		organization, author, channel byte
+		repeat                        bool
+		wantErr                       error
+	}{
+		{"same scope", 1, 2, 3, true, nil},
+		{"organization alone differs", 9, 2, 3, false, nil},
+		{"author alone differs", 1, 5, 3, false, nil},
+		{"channel alone differs", 1, 2, 8, true, conversation.ErrPostKeyReused},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &keyedStore{state: keyedState{seq: map[kernel.ID]int64{}, keyed: map[keyScope]conversation.Message{}}}
+			d := &referenceDirectory{t: t, members: map[kernel.ID][]kernel.ID{}}
+			p := conversation.NewPagePosting(s,
+				func(platform.Tx) conversation.Writer { return s },
+				func(platform.Tx) conversation.EventSequence { return s },
+				func(platform.Tx) conversation.EventAppender { return s },
+				nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil, nil)
+			m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+			key := conversation.NewIdempotencyKey()
+			first, err := p.Send(t.Context(), m, kernel.ID{3}, conversation.Send{Body: "@unknown", Key: &key})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.Organization.ID, m.Member.ID = kernel.ID{tc.organization}, kernel.ID{tc.author}
+			got, err := p.Send(t.Context(), m, kernel.ID{tc.channel}, conversation.Send{Body: "@unknown", Key: &key})
+			if !errors.Is(err, tc.wantErr) || got.Repeat != tc.repeat || (got.Message.ID == first.Message.ID) != tc.repeat {
+				t.Fatalf("scoped replay %+v, %v", got, err)
+			}
+			want := []keyScope{{kernel.ID{1}, kernel.ID{2}, key}, {m.Organization.ID, m.Member.ID, key}}
+			if !slices.Equal(s.lookups, want) {
+				t.Fatalf("lookups %+v, want %+v", s.lookups, want)
 			}
 		})
 	}

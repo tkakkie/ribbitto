@@ -83,7 +83,7 @@ func TestSidebarSnapshot(t *testing.T) {
 					sidebar.ChannelCounts[f.Channel.ID] != 2 || sidebar.ChannelCounts[empty.ID] != 0 {
 					t.Fatalf("sidebar mixed snapshots or disagrees with page: %+v", sidebar)
 				}
-				wantStatements := int64(8)
+				wantStatements := int64(9) // includes the local statement budget
 				if selectedView {
 					wantStatements++
 					if sidebar.Topic == nil || sidebar.Topic.ID != selected || sidebar.TopicCounts[selected] != 2 || len(sidebar.TopicCounts) != 51 {

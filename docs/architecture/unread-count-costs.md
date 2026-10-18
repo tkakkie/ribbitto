@@ -49,6 +49,10 @@ recounts 8, in one begin/commit pair. Normal pages remain 12 feed and 13 topic
 (10 on the standalone members page before #903 moved members into a panel on the
 feed or topic page). No execution saving is claimed.
 
+Since #1285, conversation reader snapshots also execute one `SET LOCAL` for
+their [statement budget](../recount-capacity.md#server-side-timeouts); add one
+to the historical page and recount statement totals above.
+
 Measured on local PostgreSQL 18.6, default planner settings, ANALYZE and second
 (warm) EXPLAIN on 2026-10-12: 10k history messages, 1k unread moves below floor
 20,000 and one message above it; join prefix 2. Listed uses one topic, unlisted

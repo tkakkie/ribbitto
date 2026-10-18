@@ -52,6 +52,9 @@ Without these limits, a client could hold a connection for as long as it liked: 
 
 ribbitto keeps these limits itself and does not rely on a reverse proxy for them ([decision 15](../decisions/15-every-ordinary-response-has-a-bounded-write-ribbitto-does-not-rely-on-a-proxy-for-it.md)). A proxy in front (Caddy by default, or nginx, Traefik and others) adds defense in depth: TLS, keeping the backend unreachable from outside, and connection and slow-client limits.
 
+The write deadline does not cancel the handler's context. Independent
+[database timeouts](../recount-capacity.md#server-side-timeouts) bound SQL work.
+
 ## Middleware order
 
 Outermost first:

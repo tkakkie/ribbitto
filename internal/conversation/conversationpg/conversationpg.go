@@ -2,6 +2,7 @@ package conversationpg
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -53,7 +54,10 @@ func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, eve
 
 // NewReader builds the page, single-message and batch use case over the pool.
 func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn, counts conversation.PageCountsIn) *conversation.Reader {
-	return conversation.NewReader(newSnapshotRunner(pool), readStoreIn, members, accounts, cursor, counts)
+	// Page and sidebar counts cap candidates, but fragmented read sets and
+	// above-floor filtering can scan history. Extend only reader snapshots,
+	// leaving writes and posting's validation snapshots on the pool budget.
+	return conversation.NewReader(snapshotRunner{pool: pool, statementTimeout: time.Minute}, readStoreIn, members, accounts, cursor, counts)
 }
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
@@ -83,10 +87,13 @@ func newSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
 	return snapshotRunner{pool: pool}
 }
 
-type snapshotRunner struct{ pool *pgxpool.Pool }
+type snapshotRunner struct {
+	pool             *pgxpool.Pool
+	statementTimeout time.Duration
+}
 
 func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error {
-	return platform.InSnapshot(ctx, r.pool, fn)
+	return platform.InSnapshotWithStatementTimeout(ctx, r.pool, r.statementTimeout, fn)
 }
 
 // readStoreIn returns conversation's reads bound to the caller's snapshot;

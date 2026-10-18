@@ -4,7 +4,8 @@
 // to its transaction; NewTopics binds the topic lookup to the pool.
 // DefaultChannelCreatorIn binds setup's default-channel write to org's transaction. NewPosting and
 // NewBrancher bind their writes to transactions over the pool; NewReader
-// binds conversation's reads to snapshots over the pool. Their runners and
+// binds conversation's reads to snapshots over the pool with a local one-minute
+// statement budget for history-dependent counts. Their runners and
 // own-module bindings are unexported; EventKinds registers the event routers
 // with realtime alongside PinEventKinds for pin invalidations. MessageSequencesIn binds channel bounds and message existence to
 // its caller's transaction; TopicReadCandidatesIn binds topic unread bounds

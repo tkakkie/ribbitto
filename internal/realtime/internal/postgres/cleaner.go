@@ -31,7 +31,15 @@ func NewCleaner(pool *pgxpool.Pool, boundary realtime.RetentionBoundaryIn) *Clea
 // transaction. An error or cancellation stops the run but keeps committed batches.
 func (c *Cleaner) ExpireEvents(ctx context.Context, cutoff time.Time) error {
 	expiry := pgtype.Timestamptz{Time: cutoff, Valid: true}
-	organizations, err := sqlcgen.New(c.pool).OrganizationsWithExpiredEvents(ctx, expiry)
+	var organizations []pgtype.UUID
+	// The initial listing scans the whole event log (no created_at index),
+	// unlike the 1,000-row batches. Allow the worker's full one-minute budget
+	// for this read only; batch writes keep the pool's shorter limits.
+	err := platform.InSnapshotWithStatementTimeout(ctx, c.pool, time.Minute, func(s platform.Snapshot) error {
+		var err error
+		organizations, err = sqlcgen.New(pgxbridge.Snapshot(s)).OrganizationsWithExpiredEvents(ctx, expiry)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("listing organisations with expired events: %w", err)
 	}

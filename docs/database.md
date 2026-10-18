@@ -13,8 +13,7 @@ See [worktree environments](worktree-env.md) for per-worktree dev databases, por
 
 ## Recount capacity
 
-See [recount capacity](recount-capacity.md) for the shared computation limit
-and its sizing from the effective pgx pool maximum.
+See [pool sizing, timeouts and recount capacity](recount-capacity.md).
 
 ## Database workflow
 

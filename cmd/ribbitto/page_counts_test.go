@@ -123,9 +123,9 @@ func TestPageCountsSnapshot(t *testing.T) {
 							t.Fatalf("%s statements=%d, want 1", name, trace.names[name])
 						}
 					}
-					wantStatements := int64(12)
+					wantStatements := int64(13) // includes the local statement budget
 					if strings.HasPrefix(kind, "topic") {
-						wantStatements = 13
+						wantStatements = 14
 					}
 					if q := trace.Counts(); q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 || q.Queries != wantStatements {
 						t.Fatalf("page transactions: %+v", q)

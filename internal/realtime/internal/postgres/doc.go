@@ -5,4 +5,6 @@
 // read in the same snapshot as the rows, and retention's lock and boundary
 // through an injected realtime.RetentionBoundary. It unwraps the platform's
 // handles through pgxbridge.
+// Retention's full-log listing gets a local one-minute read budget; bounded
+// deletion batches retain the pool's session timeouts.
 package postgres

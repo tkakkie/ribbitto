@@ -34,6 +34,24 @@ func (s idleShutdownStream) MayReceive(context.Context, kernel.ID, string, realt
 	return true, nil
 }
 
+func TestLifecycleMarksShutdownBeforeCleanup(t *testing.T) {
+	l := newServiceLifecycle(t.Context(), realtime.NewHub(), func() {})
+	if l.stopping.Load() {
+		t.Fatal("new lifecycle is stopping")
+	}
+	l.stopStreams = func() {
+		if !l.stopping.Load() {
+			t.Error("shutdown was not marked before stream cleanup")
+		}
+		if l.ctx.Err() != nil {
+			t.Error("service context canceled before stream cleanup")
+		}
+	}
+	if err := l.close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLifecycleWaitsForActualReturn(t *testing.T) {
 	for _, blocked := range []string{"maintenance"} {
 		t.Run(blocked, func(t *testing.T) {

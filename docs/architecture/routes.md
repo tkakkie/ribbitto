@@ -1,5 +1,11 @@
 # Organisation routes
 
+Outside organisation routes, `GET /healthz` is liveness (always 200 `ok`),
+while `GET /readyz` is readiness: a database pool ping with a one-second
+timeout. It returns 200 `ok` on success or 503 `unavailable` on failure,
+timeout, a missing pinger or shutdown. Both skip security headers, sessions,
+authentication and rate limits and read no organisation data.
+
 What each route under `/organizations/{slug}/` answers, after
 [request flow](request-flow.md)'s organisation check resolved the membership.
 

@@ -84,7 +84,8 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   when one is open.
 - **Conversation:** a thin header; a centred reading column about 760 px
   wide with 15 px text; a rounded composer block at the bottom, whose
-  place the move form takes while a message is checked.
+  place the move form takes while a message is checked. The field
+  [grows with its text](ui-composer.md).
 - **Every page** (M6, #966): setup, sign-in, sign-up, home `/`, the
   channel feed and the topic view with the members and overview panels,
   the rate-limit page, and the channel list page (#969). 404 and

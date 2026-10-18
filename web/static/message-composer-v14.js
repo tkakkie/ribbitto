@@ -1,5 +1,6 @@
 (() => {
   const pendingRequests = new Set();
+  let rememberPost = () => {};
   // An edited send keeps its identity even when another queue response swaps
   // the hidden controls. Only sending or emptying this text releases it.
   let restoredKey = null;
@@ -88,6 +89,7 @@
     reconcile();
     updateEdits();
     item.scrollIntoView({ block: "nearest" });
+    rememberPost();
     htmx.process(sending);
     dispatch();
   }, true);
@@ -245,6 +247,44 @@
     if (list) list.scrollTop = list.scrollHeight;
   };
   newest();
+  const pane = document.getElementById("message-list");
+  if (pane) {
+    let height = pane.clientHeight, position, settling = false;
+    const remember = () => {
+      const top = pane.getBoundingClientRect().top;
+      const item = [...pane.querySelectorAll("#message-items > li, #message-pending > li")]
+        .find(item => item.getBoundingClientRect().bottom > top);
+      position = { scrollTop: pane.scrollTop, newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
+        item, offset: item ? item.getBoundingClientRect().top - top : 0 };
+    };
+    remember();
+    rememberPost = () => { height = pane.clientHeight; remember(); };
+    // A resize can clamp scrollTop before its scroll event. Keep the state
+    // from the old height until the observer has restored the reader.
+    pane.addEventListener("scroll", () => { if (pane.clientHeight === height) remember(); });
+    new ResizeObserver(() => {
+      if (pane.clientHeight === height) return;
+      height = pane.clientHeight;
+      // A stream/history scroll in this frame also wins. Only the old
+      // position or its unavoidable clamp belongs to the resize itself.
+      const clamped = Math.max(0, Math.min(position.scrollTop, pane.scrollHeight - height));
+      if (!settling && Math.abs(pane.scrollTop - clamped) <= 1) {
+        if (position.newest) pane.scrollTop = pane.scrollHeight;
+        else if (position.item?.isConnected) pane.scrollTop +=
+          position.item.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.offset;
+      }
+      remember();
+    }).observe(pane);
+    document.addEventListener("htmx:afterSwap", (event) => {
+      if (event.target.id === "message-composer-state" && event.target.dataset.postedMessage) settling = true;
+    });
+    document.addEventListener("htmx:afterSettle", (event) => {
+      if (event.target.id !== "message-composer-state" || !settling) return;
+      // The stream's scrollPosted runs in this same settle event. Its scroll
+      // wins even when clearing the sent text also resizes the pane.
+      requestAnimationFrame(() => { height = pane.clientHeight; remember(); settling = false; });
+    });
+  }
   // Responses replace only #message-composer-state (#1173): the textarea
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {

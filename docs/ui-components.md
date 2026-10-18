@@ -108,10 +108,10 @@ own page: its links still close it and page the members.
 
 ## Short heights
 
-Below the `short:` height (#1056) a conversation no longer fits its frame:
-the header, the composer and the frame's padding take 307 px from `desk`
-(291 px below it), so 436 px leaves the list 128 px, `h-32`, a few short
-messages. There `#conversation` scrolls as a whole (`short:overflow-y-auto`)
+Below `short:` (436 px, #1056), the [composer](ui-composer.md) rests at
+38 px from `desk`, 44 px below it, and grows up to three lines (82 px).
+The list keeps 128 px (`h-32`), a few short messages.
+Here `#conversation` scrolls as a whole (`short:overflow-y-auto`)
 and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
 composer, history and stream scripts move, so they need no change. The
 frame keeps `h-dvh`: a frame of `min-h-dvh` would let the desktop sidebar

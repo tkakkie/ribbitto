@@ -252,6 +252,19 @@
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }
 
+/* Three lines win over the list's 128 px reserve. The column deductions
+   (rounded up from the layout) include that reserve; see docs/ui-composer.md.
+   rows=3 remains the fallback when field-sizing is unsupported or fixed. */
+@utility max-h-composer {
+  max-height: max(5.125rem, min(50dvh, calc(100dvh - 22.0625rem)));
+  @variant max-desk {
+    max-height: max(5.125rem, min(50dvh, calc(100dvh - 21.0625rem - env(safe-area-inset-bottom))));
+  }
+  @variant short {
+    max-height: 5.125rem;
+  }
+}
+
 /* A popover below its invoking button, aligned to the button's end, flipping
    above when there is no room (a message's actions menu, #1159). The anchor
    is the popovertarget button, the popover's implicit anchor. */

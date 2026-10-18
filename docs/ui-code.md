@@ -58,8 +58,8 @@ a popover inside an ancestor hidden at the current width cannot show.
   The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours, shadows and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
-  the arrival animations, the reduced-motion rule, the safe-area and anchor
-  utilities. No component classes and
+  arrival animations, reduced motion, sizing, safe-area and anchor utilities.
+  No component classes and
   no `@apply` for components; no `style` attributes in templates.
 - **Spacing** follows the 4 px grid; a container sets the space between
   its children with `gap`, rather than margins on each child.
@@ -112,7 +112,7 @@ every width (#974).
 Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid
 iOS focus zoom (#973, #1120). The send button stays 44 × 44 px.
 Only latest feed and topic pages are enhanced;
-history submissions remain plain forms. `message-composer-v13.js`
+history submissions remain plain forms. `message-composer-v14.js`
 also guards Enter within 100 ms of `compositionend`, since phone IMEs can
 clear `isComposing` before the confirming keydown.
 

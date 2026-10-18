@@ -22,7 +22,7 @@ creates elements or makes requests;
 htmx sends resync requests. The markup contract is in
 [web contracts](web-contracts.md).
 
-- `message-stream-v12.js` observes `checkpoint` to update only `sse-connect`'s
+- `message-stream-v13.js` observes `checkpoint` to update only `sse-connect`'s
   `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic
@@ -82,14 +82,19 @@ htmx sends resync requests. The markup contract is in
   appends that label to the polite `#message-status`. With a modifier key,
   without the API, or when copying fails, the link opens, as without
   JavaScript.
-- SSE `reset` closes htmx's event source and reloads the page after uniform 0–5 s jitter to obtain a fresh snapshot.
+- SSE `reset` closes htmx's event source. A DOM observer holds reload while
+  the composer has `htmx-request` or #1179's failure alert, or a pending form
+  is queued, sending or failed (including unconfirmed). A localised status
+  offers a plain reload link. With nothing at stake, one uniform 0–5 s timer
+  reloads for a fresh snapshot; new at-stake state cancels it, and firing
+  rechecks. Confirmed items await reload delivery; drafts do not hold it.
 - **No requests of its own:** no `fetch`, `XMLHttpRequest`,
   `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`.
   Requests go through HTML forms, links and htmx. A script may set
   form-control values and call `requestSubmit()`, `htmx.trigger` and
   `htmx.process` on server-rendered or template-cloned elements; request
   URLs come from server-rendered attributes, never built by a script. The
-  one kept rewrite is `message-stream-v12.js` updating only the `after`
+  one kept rewrite is `message-stream-v13.js` updating only the `after`
   parameter of the server-rendered `sse-connect` URL (above).
 - **Storage:** `sessionStorage` may hold only non-sensitive UX settings
   whose loss affects no function and no server state, such as whether a

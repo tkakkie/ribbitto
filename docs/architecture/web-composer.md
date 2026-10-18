@@ -91,6 +91,11 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   on 422. Scoped by the server to the authorised membership; never in a
   stream payload. On a pending send the script replaces it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
+- **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
+  `data-state`, the composer's request class and #1179's failure alert. Queued, sending
+  and failed items hold reload; confirmed items do not. Retry success, Remove
+  or Edit can release it: Edit's restored text is a draft. Each dispatched
+  request has a 30 s timeout; queues, retries and failed text can extend the hold.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

@@ -420,3 +420,9 @@ other = "No members found."
 
 ["mention.count"]
 other = "Members found: %d"
+
+["stream.stopped"]
+other = "Live updates have stopped. Waiting for unsent messages."
+
+["stream.reload"]
+other = "Reload now"

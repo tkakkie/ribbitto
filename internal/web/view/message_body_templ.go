@@ -369,7 +369,7 @@ func bodyInlines(nodes []BodyInline) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " class=\"rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-brand\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " class=\"rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-dashed data-own-mention:outline-brand\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

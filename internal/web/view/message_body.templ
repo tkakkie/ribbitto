@@ -119,7 +119,7 @@ templ bodyInlines(nodes []BodyInline) {
 					if node.MemberID != (kernel.ID{}) {
 						data-member-id={ idValue(node.MemberID) }
 					}
-					class="rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-brand"
+					class="rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-dashed data-own-mention:outline-brand"
 				>
 					if node.Handle == "" {
 						{ UnknownMember(ctx) }

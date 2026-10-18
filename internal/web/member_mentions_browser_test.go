@@ -91,11 +91,13 @@ func testMemberMentionsViewBrowser(t *testing.T, browser *rod.Browser, topicView
 		defer setScheme("light")
 		for _, scheme := range []string{"light", "dark"} {
 			setScheme(scheme)
-			if got := page.MustEval(mentionOutlineStyles, selector).Str(); got != "true,true,solid,2px,true;true,false,none;false,false,none" {
+			if got := page.MustEval(mentionOutlineStyles, selector).Str(); got != "true,true,dashed,2px,0px,true;true,false,none;false,false,none" {
 				t.Fatalf("message %d (%s): resolved ID, own highlight, outline, contrast = %s", seq, scheme, got)
 			}
 		}
 	}
+	// No history request or SSE message has run: only htmx's initial body
+	// load can highlight this server-rendered message.
 	assert(20)
 	remember(10, false)
 	page.MustEval(`() => document.querySelector('#load-older a').click()`)
@@ -187,7 +189,7 @@ const mentionOutlineStyles = `s => {
 			while (parent && getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
 			if (!parent) throw new Error('mention has no painted ancestor');
 			const outline = luminance(c.outlineColor);
-			result.push(c.outlineWidth, contrast(outline, luminance(c.backgroundColor)) >= 3 &&
+			result.push(c.outlineWidth, c.outlineOffset, contrast(outline, luminance(c.backgroundColor)) >= 3 &&
 				contrast(outline, luminance(getComputedStyle(parent).backgroundColor)) >= 3);
 		}
 		return result.join();

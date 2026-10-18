@@ -8,7 +8,6 @@
     if (root.matches?.(selector)) highlight(root);
     root.querySelectorAll(selector).forEach(highlight);
   };
-  highlightWithin(document);
-  // Live posts, Load older and moves all settle through htmx's load event.
+  // First render, live posts, Load older and moves all use htmx's load event.
   document.addEventListener("htmx:load", (event) => highlightWithin(event.detail.elt));
 })();

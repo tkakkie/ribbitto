@@ -64,12 +64,14 @@ htmx sends resync requests. The markup contract is in
   swaps and selects loaded controls' server-rendered actions from the section's
   pin IDs. It restores button focus without touching history, draft or cursors.
 - `member-mentions-v1.js` marks resolved references whose `data-member-id`
-  matches `#organization-stream`'s existing `data-member`, on page load and
-  scoped `htmx:load`. Live posts, duplicate replay and moves use `htmx.swap`;
+  matches `#organization-stream`'s existing `data-member`, on scoped
+  `htmx:load` (including htmx's initial body event after all deferred scripts).
+  Live posts, duplicate replay and moves use `htmx.swap`;
   Load older selects and prepends server-rendered items. Both run htmx's
   inserted-node load tasks, including for replacement and destination insertion.
-  No DOM observer or polling is needed. Token utilities add a 2 px `brand`
-  outline: a shape cue with at least 3:1 contrast against the message background
+  No DOM observer or polling is needed. Token utilities add a 2 px dashed `brand`
+  outline with no offset, distinct from the solid, 2 px offset focus ring:
+  a shape cue with at least 3:1 contrast against the message background
   and `selected` chip in both themes (see [colour contrast](../ui-colours.md#contrast-wcag-22-aa)).
   The shared server render stays identical for every reader; unresolved and
   other-organisation references carry no ID. Quote snapshots remain plain text.

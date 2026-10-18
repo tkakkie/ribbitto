@@ -58,8 +58,8 @@ a popover inside an ancestor hidden at the current width cannot show.
   The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours, shadows and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
-  the arrival animations, the reduced-motion rule, the safe-area and anchor
-  utilities. No component classes and
+  arrival animations, reduced motion, sizing, safe-area and anchor utilities.
+  No component classes and
   no `@apply` for components; no `style` attributes in templates.
 - **Spacing** follows the 4 px grid; a container sets the space between
   its children with `gap`, rather than margins on each child.
@@ -112,14 +112,13 @@ every width (#974).
 Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid
 iOS focus zoom (#973, #1120). The send button stays 44 × 44 px.
 Only latest feed and topic pages are enhanced;
-history submissions remain plain forms. `message-composer-v14.js`
-also guards Enter within 100 ms of `compositionend`, since phone IMEs can
-clear `isComposing` before the confirming keydown.
+history uses plain forms. `message-composer-v16.js` handles quote focus and
+[growth anchoring](ui-composer.md), and guards Enter for 100 ms after
+`compositionend`, when IMEs may clear `isComposing`.
 
-The viewport also requests `interactive-widget=resizes-content`: supporting
-browsers resize the existing `h-dvh` frame for the keyboard, leaving the
-composer outside the message pane. No keyboard JavaScript is added;
-browsers that ignore the key still need device/emulation verification.
+The viewport requests `interactive-widget=resizes-content` for supporting
+browsers. The composer script also uses the visual viewport for iOS Safari's
+keyboard; [composer growth](ui-composer.md) covers sizing and the `dvh` fallback.
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

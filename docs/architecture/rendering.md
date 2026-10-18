@@ -72,10 +72,11 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v14.js` loads with the response nonce on channel pages.
-Key handling maps Enter to `send` and Shift+Enter to `newline`,
-ignoring IME composition (`isComposing` or keyCode 229); one submit function
-uses native submission through `requestSubmit`. The latest-page form uses
+`message-composer-v16.js` loads with the response nonce on channel pages.
+It anchors the list during [composer growth](../ui-composer.md) and handles
+[quote focus and locking](web-javascript.md#javascript).
+Enter sends via `requestSubmit`; Shift+Enter inserts a newline.
+IME composition (`isComposing` or keyCode 229) is ignored. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). Latest feeds/topics instead
 show a pending own post immediately ([contract](web-composer.md#composer));
 these rules apply to idle feeds/topics with blank or over-limit text
@@ -109,8 +110,7 @@ fragment names a message on the page: a page opened from a message's URL
 ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)
 keeps the browser's scroll to that message, which CSS `:target` highlights
 with or without scripts. Focus left on the disabled send button returns to the
-textarea. Scripts
-stay outside the replaced section; CSP and htmx evaluation remain unchanged.
+textarea. Scripts stay outside the swap.
 
 `message-history-v2.js` keeps the reader's place when "Load older"
 prepends a page: the link selects the older page's `<li>` elements into

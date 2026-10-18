@@ -100,8 +100,9 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 - **Quote chip:** `#composer-quote-description` holds only the quoted author
   and excerpt and stays present, empty, without a quote. Quote and Remove
   quote focus the textarea after the chip swap; Quote closes its actions
-  popover. Without scripts both submit a GET with `#message-composer`;
-  removal loses unsent text.
+  popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
+  the existing resize observer preserves the reader on chip changes. Without
+  scripts both submit a GET with `#message-composer`; removal loses unsent text.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

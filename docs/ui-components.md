@@ -8,8 +8,7 @@ shared component is added or changes.
 
 ## Shared components
 
-A look used in two places becomes a component in `internal/web/view`;
-pages compose components instead of repeating a control's class string.
+A look used in two places becomes an `internal/web/view` component; pages reuse it.
 
 | Component | File | Use |
 |---|---|---|
@@ -25,7 +24,7 @@ pages compose components instead of repeating a control's class string.
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
-| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line body excerpt, hidden ID and 44 px Remove quote; empty without selection |
+| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line body excerpt, hidden ID and 44 px Remove quote; empty without selection; `message-composer-v16.js` restores textarea focus |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link, covering the conversation below `wide` ([side panels](#side-panels)); a header link, icon-only below `desk` with its accessible name kept, that opens one panel, `aria-current="true"` and a Filled icon while it is open |
@@ -109,16 +108,15 @@ own page: its links still close it and page the members.
 
 ## Short heights
 
-Below the `short:` height (#1056) a conversation no longer fits its frame:
-the header, the composer and the frame's padding take 307 px from `desk`
-(291 px below it), so 436 px leaves the list 128 px, `h-32`, a few short
-messages. There `#conversation` scrolls as a whole (`short:overflow-y-auto`)
+Below `short:` (436 px, #1056), the [composer](ui-composer.md) rests at
+38 px from `desk`, 44 px below it, and grows up to three lines (82 px).
+The list keeps 128 px (`h-32`), a few short messages.
+Here `#conversation` scrolls as a whole (`short:overflow-y-auto`)
 and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
 composer, history and stream scripts move, so they need no change. The
-frame keeps `h-dvh`: a frame of `min-h-dvh` would let the desktop sidebar
-and a panel beside the conversation grow to their content and stop
-scrolling themselves, while this leaves the sidebar, app bar, panels and
-list page as they are.
+frame uses `h-conversation-viewport` (`dvh` without the visual viewport).
+A minimum height would let the sidebar and adjacent panel grow to their
+content and stop scrolling themselves.
 
 Two things differ there. A covering move form would scroll away from the
 composer with the conversation, so the form follows the list in the column

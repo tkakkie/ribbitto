@@ -56,6 +56,7 @@ func TestBrowser(t *testing.T) {
 	}
 	run("typing/indicator", testTypingIndicatorBrowser)
 	run("composer/typing", testTypingComposerBrowser)
+	run("composer/growth", testComposerGrowthBrowser)
 	run("composer/no-javascript", testComposerWithoutJavaScript)
 	run("composer/in-flight", testComposerInFlightBrowser)
 	run("composer/send-failure", testComposerFailureBrowser)

@@ -303,7 +303,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v14.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v16.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -334,7 +334,7 @@ templ channelFrame(page ChannelPage) {
 			hx-ext="sse"
 			sse-connect={ streamURL(page) }
 		}
-		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
+		class={ "flex h-conversation-viewport gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
 		if page.EventCursor != nil {
 			<form id="sidebar-resync" hidden method="post" action={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-post={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-trigger="sidebar-resync" hx-sync="this:drop" hx-swap="none"></form>
@@ -508,7 +508,7 @@ templ messageComposer(page ChannelPage) {
 		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

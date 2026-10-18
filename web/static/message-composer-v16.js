@@ -1,5 +1,22 @@
 (() => {
+  // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
+  const viewport = window.visualViewport;
+  const updateViewport = () => {
+    const style = document.documentElement.style;
+    for (const [name, value] of [["--composer-viewport-h", viewport?.height], ["--composer-viewport-top", viewport?.offsetTop]]) {
+      const next = value === undefined ? "" : value + "px";
+      if (style.getPropertyValue(name) === next) continue;
+      if (next) style.setProperty(name, next);
+      else style.removeProperty(name);
+    }
+  };
+  updateViewport();
+  viewport?.addEventListener("resize", updateViewport);
+  viewport?.addEventListener("scroll", updateViewport);
+  window.addEventListener("resize", updateViewport);
+  window.addEventListener("orientationchange", updateViewport);
   const pendingRequests = new Set();
+  let rememberPost = () => {};
   // An edited send keeps its identity even when another queue response swaps
   // the hidden controls. Only sending or emptying this text releases it.
   let restoredKey = null;
@@ -95,6 +112,7 @@
     reconcile();
     updateEdits();
     item.scrollIntoView({ block: "nearest" });
+    rememberPost();
     htmx.process(sending);
     dispatch();
   }, true);
@@ -239,8 +257,33 @@
     const form = document.getElementById("typing-form");
     if (form && event.target.value.trim()) htmx.trigger(form, "typing-input");
   };
+  // Native caret scrolling can precede field-sizing layout, including a
+  // select-all replacement at the cap. Reveal the end using the final size.
+  const revealEnd = (body) => {
+    if (document.activeElement === body && body.selectionStart === body.value.length && body.selectionEnd === body.value.length) {
+      body.scrollTop = body.scrollHeight;
+    }
+  };
+  const body = document.getElementById("message-body");
+  let quoteResized = false;
+  const updateQuoteHeight = () => {
+    if (!body) return;
+    const quote = document.getElementById("composer-quote");
+    const height = quote?.getBoundingClientRect().height || 0;
+    // A visible chip adds one flex gap as well as its own height.
+    const next = (height ? height + parseFloat(getComputedStyle(body.form).rowGap) : 0) + "px";
+    if (body.form.style.getPropertyValue("--composer-quote-h") === next) return;
+    body.form.style.setProperty("--composer-quote-h", next);
+    // Measuring a removed chip can briefly grow the list and clamp its scroll,
+    // even when the updated cap brings the list back to the same height.
+    quoteResized = true;
+  };
+  updateQuoteHeight();
+  // The first measurement is the initial layout, not a change to restore from.
+  quoteResized = false;
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
+    requestAnimationFrame(() => revealEnd(event.target));
     if (restoredKey && event.target.value === "") {
       restoredKey = null;
       delete event.target.form.dataset.unconfirmedKey;
@@ -260,11 +303,60 @@
     if (list) list.scrollTop = list.scrollHeight;
   };
   newest();
+  const pane = document.getElementById("message-list");
+  if (pane) {
+    let height = pane.clientHeight, position, settling = false;
+    const remember = () => {
+      const top = pane.getBoundingClientRect().top;
+      let item;
+      for (const candidate of pane.querySelectorAll("#message-items > li, #message-pending > li")) {
+        if (candidate.getBoundingClientRect().bottom > top) { item = candidate; break; }
+      }
+      position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
+        item, offset: item ? item.getBoundingClientRect().top - top : 0 };
+    };
+    remember();
+    rememberPost = () => { height = pane.clientHeight; remember(); };
+    // A resize can clamp scrollTop before its scroll event. Keep the state
+    // from the old height until the observer has restored the reader.
+    pane.addEventListener("scroll", () => { if (!quoteResized && pane.clientHeight === height) remember(); });
+    const resize = new ResizeObserver(() => {
+      updateQuoteHeight();
+      if (pane.clientHeight !== height || quoteResized) {
+        quoteResized = false;
+        height = pane.clientHeight;
+        // Native resize scrolling need not equal a clamp of the old top.
+        // Restore the saved intent instead of treating that motion as a reader scroll.
+        if (!settling) {
+          if (position.newest) pane.scrollTop = pane.scrollHeight;
+          else if (position.item?.isConnected) pane.scrollTop +=
+            position.item.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.offset;
+        }
+        remember();
+      }
+      if (body) revealEnd(body);
+    });
+    resize.observe(pane);
+    if (body) { resize.observe(body); resize.observe(body.form); }
+    document.addEventListener("htmx:afterSwap", (event) => {
+      if (event.target.id === "message-composer-state" && event.target.dataset.postedMessage) settling = true;
+    });
+    document.addEventListener("htmx:afterSettle", (event) => {
+      // History restores and the stream's afterSettleCallback scroll run
+      // synchronously after this listener. Save their result before resizing.
+      if (pane.contains(event.target)) queueMicrotask(rememberPost);
+      if (event.target.id !== "message-composer-state" || !settling) return;
+      // The stream's scrollPosted runs in this same settle event. Its scroll
+      // wins even when clearing the sent text also resizes the pane.
+      queueMicrotask(() => { rememberPost(); settling = false; });
+    });
+  }
   // Responses replace only #message-composer-state (#1173): the textarea
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
     if (state.id === "composer-quote") {
+      updateQuoteHeight();
       document.getElementById("message-body").focus({ preventScroll: true });
       return;
     }

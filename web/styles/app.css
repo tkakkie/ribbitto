@@ -252,6 +252,25 @@
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }
 
+/* Keep the frame's bottom at the visible bottom even when Safari pans the
+   visual viewport. Its list/textarea ResizeObserver handles the new layout. */
+@utility h-conversation-viewport {
+  height: calc(var(--composer-viewport-h, 100dvh) + var(--composer-viewport-top, 0px));
+}
+
+/* Three lines win over the list's 128 px reserve. The column deductions
+   (rounded up) include label/buttons and that reserve; the measured chip
+   adds its gap. rows=3 remains the fallback when field-sizing is unsupported or fixed. */
+@utility max-h-composer {
+  max-height: max(5.125rem, min(calc(var(--composer-viewport-h, 100dvh) / 2), calc(var(--composer-viewport-h, 100dvh) - 22.0625rem - var(--composer-quote-h, 0px))));
+  @variant max-desk {
+    max-height: max(5.125rem, min(calc(var(--composer-viewport-h, 100dvh) / 2), calc(var(--composer-viewport-h, 100dvh) - 21.0625rem - var(--composer-quote-h, 0px) - env(safe-area-inset-bottom))));
+  }
+  @variant short {
+    max-height: 5.125rem;
+  }
+}
+
 /* A popover below its invoking button, aligned to the button's end, flipping
    above when there is no room (a message's actions menu, #1159). The anchor
    is the popovertarget button, the popover's implicit anchor. */

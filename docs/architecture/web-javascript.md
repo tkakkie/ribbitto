@@ -75,7 +75,9 @@ htmx sends resync requests. The markup contract is in
   and `selected` chip in both themes (see [colour contrast](../ui-colours.md#contrast-wcag-22-aa)).
   The shared server render stays identical for every reader; unresolved and
   other-organisation references carry no ID. Quote snapshots remain plain text.
-- `message-composer-v14.js` closes the Quote action's popover and focuses the
+- `message-composer-v16.js` preserves the list's newest position or visible item
+  during [composer growth](../ui-composer.md), reveals the end caret after layout,
+  and gives successful-post scrolling precedence. It closes Quote's popover and focuses the
   textarea after a chip swap. At `htmx:configRequest` it copies the native
   submitter's name/value for `#quote-form`, since popover focus restoration clears
   htmx's remembered button; the unnamed Remove button adds nothing.

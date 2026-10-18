@@ -58,7 +58,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v14.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v16.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
@@ -129,7 +129,8 @@ requests; the server still renders the badges and htmx sends resync requests.
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
 allows bounded composer state (pending posts, idempotency keys, session-bound
 drafts); implemented uses follow the [composer contract](web-composer.md).
-Requests stay with htmx.
+Requests stay with htmx. [Composer growth](../ui-composer.md) uses CSS;
+the composer script preserves the reader's position as the list resizes.
 
 ## How the rules are checked
 

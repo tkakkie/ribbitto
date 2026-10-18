@@ -15,6 +15,7 @@ import (
 
 type signUpStore struct {
 	org.RegistrationWriter
+	hash    *string
 	steps   *[]string
 	pending bool
 	openErr error
@@ -26,6 +27,7 @@ func (s signUpStore) Open(context.Context) (bool, error) { return s.pending, s.o
 func (s signUpStore) CreateAccount(_ context.Context, email, name, hash string) (kernel.ID, error) {
 	s.t.Helper()
 	*s.steps = append(*s.steps, "account")
+	*s.hash = hash
 	if name != "Alice" || email != "alice@example.org" || !strings.HasPrefix(hash, "$argon2id$") {
 		s.t.Fatalf("bad normalized account or hash: %s %s", name, email)
 	}
@@ -84,7 +86,7 @@ func TestSignUp(t *testing.T) {
 		off, pending, openFailure                               bool
 		want                                                    error
 	}{
-		{label: "normalized account", name: " Alice ", handle: " Alice ", email: " Alice@Example.org ", password: "long enough password"},
+		{label: "normalized account", name: " Alice ", handle: " Alice ", email: " Alice@Example.org ", password: "long enough password e\u0301"},
 		{label: "duplicate email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrEmailTaken},
 		{label: "duplicate handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrHandleTaken},
 		{label: "store invalid email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", storeField: "email", want: identity.ErrInvalidEmail},
@@ -107,7 +109,8 @@ func TestSignUp(t *testing.T) {
 				h = nil
 			}
 			var steps []string
-			store := signUpStore{steps: &steps, pending: tc.pending, err: tc.want, t: t}
+			var hash string
+			store := signUpStore{hash: &hash, steps: &steps, pending: tc.pending, err: tc.want, t: t}
 			service := org.NewSignUp(store, store,
 				func(platform.Tx) org.RegistrationWriter { return store },
 				func(platform.Tx) org.AccountCreator { return store },
@@ -135,6 +138,11 @@ func TestSignUp(t *testing.T) {
 				}
 			} else if !errors.Is(err, tc.want) || (err == nil && id != (kernel.ID{1})) {
 				t.Fatalf("case %+v: %v %v", tc, id, err)
+			}
+			if err == nil {
+				if ok, err := hasher.Verify(t.Context(), "long enough password é", hash); err != nil || !ok {
+					t.Fatalf("sign-up did not hash NFC: %v", err)
+				}
 			}
 			if tc.openFailure && (len(steps) != 0 || err.Error() != "checking sign-up: "+unexpected.Error()) {
 				t.Fatalf("Open failure reached writes or added context twice: %v, %v", steps, err)

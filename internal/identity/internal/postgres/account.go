@@ -37,6 +37,17 @@ func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (ke
 	return row.ID.Bytes, row.PasswordHash, nil
 }
 
+// RehashPassword replaces only the hash that sign-in verified.
+func (s *AccountStore) RehashPassword(ctx context.Context, accountID kernel.ID, oldHash, newHash string) error {
+	err := s.queries.RehashPassword(ctx, sqlcgen.RehashPasswordParams{
+		ID: uuid(accountID), OldHash: oldHash, NewHash: newHash,
+	})
+	if err != nil {
+		return fmt.Errorf("rehashing password: %w", withoutDetail(err))
+	}
+	return nil
+}
+
 // Directory implements identity.Directory inside a caller's snapshot. It
 // reads only display names, never credentials.
 type Directory struct {

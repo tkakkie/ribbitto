@@ -6,8 +6,9 @@ type Account struct // Account is a person who can sign in.
   field Email string
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
   field SendKey SendKey // SendKey is loaded with the session, so pages need no extra query.
-type AccountStore interface // AccountStore finds accounts for signing in.
+type AccountStore interface // AccountStore finds accounts and migrates legacy password hashes at sign-in.
   func (AccountStore).AccountCredentials(ctx context.Context, email string) (accountID github.com/tkakkie/ribbitto/internal/kernel.ID, passwordHash string, err error) // AccountCredentials returns the ID and stored password hash of the account with this normalised email, or ErrNoAccount.
+  func (AccountStore).RehashPassword(ctx context.Context, accountID github.com/tkakkie/ribbitto/internal/kernel.ID, oldHash string, newHash string) error // RehashPassword replaces oldHash only if it is still current.
 type Directory interface // Directory exposes identity's display names for only the requested accounts.
   func (Directory).LookupDisplayNames(context.Context, []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]string, error)
 var ErrBusy error // ErrBusy means every hashing slot stayed taken until the wait ended or the caller's context was done.
@@ -60,4 +61,4 @@ type SignIn struct // SignIn signs accounts in and out.
   func (*SignIn).SignOut(ctx context.Context, token string) error // SignOut ends the session with this token.
 func ValidateDisplayName(value string) (string, error) // ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode code points that is not blank-looking (IsBlankLookingName).
 func ValidateEmail(value string) (string, error) // ValidateEmail returns the trimmed, lower-case NFC address used for storage and lookup.
-func ValidatePassword(value string) (string, error) // ValidatePassword preserves the input and imposes only a 15–128 code point length.
+func ValidatePassword(value string) (string, error) // ValidatePassword returns NFC text with 15–128 code points after normalisation.

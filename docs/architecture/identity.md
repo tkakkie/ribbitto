@@ -59,11 +59,21 @@ Session token hashes must never be logged; PostgreSQL errors from session
 creation and replacement omit the detail, which could contain the hash.
 
 **Signing in** (`identity.SignIn`). The email is normalised and looked up.
-An unknown email still runs one Argon2id verification against a dummy hash
-made with the current parameters and gets the same `ErrInvalidCredentials`
-as a wrong password, which makes timing-based discovery of accounts much
-harder. On success the session is **replaced** (`Sessions.Replace`): one
-transaction deletes the session named by the token the browser sent (if
+Passwords use the same NFC normalisation as setup and sign-up, without applying
+new-password length limits to existing credentials. Sign-in verifies NFC first.
+When the input differs, it also verifies the raw form, even if NFC succeeded;
+unknown emails run the same one or two verifications against a dummy hash made
+with current parameters. Wrong passwords and unknown emails both return
+`ErrInvalidCredentials`. This makes timing-based account discovery harder,
+though stored hashes with older parameters may cost differently.
+
+A raw-only success migrates the hash to NFC through the shared hasher's slots.
+The update compares the verified old hash before replacing it, so a concurrent
+credential change cannot be overwritten. Hashing or update failure leaves the
+successful credential decision intact; migration can retry at a later sign-in.
+Identity has no logger, and this best-effort path logs neither errors nor hashes.
+
+On success the session is **replaced** (`Sessions.Replace`): one transaction deletes the session named by the token the browser sent (if
 any) and inserts the new one, so a token that existed before sign-in never
 becomes signed in (session fixation). Rejected credentials change nothing;
 a replacement error ends the previous session's streams as described above.

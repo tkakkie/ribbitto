@@ -25,13 +25,17 @@ func ValidateEmail(value string) (string, error) {
 	return value, nil
 }
 
-// ValidatePassword preserves the input and imposes only a 15–128 code point length.
+// ValidatePassword returns NFC text with 15–128 code points after normalisation.
+// It does not trim spaces or fold compatibility characters.
 func ValidatePassword(value string) (string, error) {
+	value = normalizePassword(value)
 	if !utf8.ValidString(value) || utf8.RuneCountInString(value) < 15 || utf8.RuneCountInString(value) > 128 {
 		return "", fmt.Errorf("password must contain 15–128 Unicode code points")
 	}
 	return value, nil
 }
+
+func normalizePassword(value string) string { return norm.NFC.String(value) }
 
 // ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode
 // code points that is not blank-looking (IsBlankLookingName).

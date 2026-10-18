@@ -24,3 +24,22 @@ func TestAccountStore(t *testing.T) {
 		t.Fatalf("unknown email: %v", err)
 	}
 }
+
+func TestRehashPasswordCompareAndSet(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	id := identitytest.Account(t, pool, "a@example.com", "A")
+	store := postgres.NewAccountStore(pool)
+	for _, tc := range []struct{ oldHash, newHash, want string }{
+		{"$argon2id$x", "$argon2id$new", "$argon2id$new"},
+		{"$argon2id$x", "$argon2id$stale", "$argon2id$new"},
+	} {
+		if err := store.RehashPassword(t.Context(), id, tc.oldHash, tc.newHash); err != nil {
+			t.Fatal(err)
+		}
+		_, got, err := store.AccountCredentials(t.Context(), "a@example.com")
+		if err != nil || got != tc.want {
+			t.Fatalf("stored hash = %q, %v; want %q", got, err, tc.want)
+		}
+	}
+}

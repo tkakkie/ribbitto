@@ -38,7 +38,7 @@ func newLimitedHandler(t *testing.T, overrides ...func(*Services)) (http.Handler
 	}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	services := testServices(overrides...)
-	services.Limits = middleware.NewAuthLimits(nil, func() time.Time { return now })
+	services.Limits = middleware.NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler))
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

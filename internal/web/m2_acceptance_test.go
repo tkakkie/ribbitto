@@ -39,7 +39,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	// This multi-route fixture intentionally posts more than the production burst.
 	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
 	// The real limits, as in production: the flow stays within them.
-	services.Limits = middleware.NewAuthLimits(nil, time.Now)
+	services.Limits = middleware.NewAuthLimits(nil, time.Now, slog.New(slog.NewTextHandler(&logs, nil)))
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

@@ -74,7 +74,16 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	signIn := &draftsSignIn{}
 	horizon, _ := pathID("019a1b2c-3d4f-7000-8000-000000000000")
 	signIn.horizon.Store(&horizon)
-	setup := func(s *Services) { s.Sessions, s.SignIn = login, signIn }
+	// The cases share handlers and burst input without real sleeps. Give each
+	// typing request a fresh allowance; rate limiting has its own tests.
+	var signalTicks atomic.Int64
+	signalNow := time.Now()
+	setup := func(s *Services) {
+		s.Sessions, s.SignIn = login, signIn
+		s.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time {
+			return signalNow.Add(time.Duration(signalTicks.Add(1)) * time.Second)
+		})
+	}
 	handler, _, _, place := composerHandler(t, true, setup)
 	feedHandler, _, _, _ := composerHandler(t, false, setup)
 	var noticeOnly atomic.Bool
@@ -102,15 +111,39 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		}
 	}))
 	defer server.Close()
+	step := func(t *testing.T, p *rod.Page, name string) *rod.Page {
+		t.Helper()
+		bounded := p.Timeout(3 * time.Second).WithPanic(func(v any) { t.Fatalf("%s: %v", name, v) })
+		t.Cleanup(func() { bounded.CancelTimeout() })
+		return bounded
+	}
+	eval := func(t *testing.T, p *rod.Page, name, js string, args ...any) *proto.RuntimeRemoteObject {
+		t.Helper()
+		result, err := step(t, p, name).Eval(js, args...)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		return result
+	}
 	open := func(t *testing.T, topic bool, inject string) *rod.Page {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		t.Cleanup(cancel)
-		p := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-		t.Cleanup(func() { p.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
+		// Rod's page event loop inherits the creation context. Stop only the
+		// creation timer on success, keeping that context alive for the page.
+		creating, cancelCreating := context.WithCancel(ctx)
+		t.Cleanup(cancelCreating)
+		creationTimer := time.AfterFunc(3*time.Second, cancelCreating)
+		p, err := browser.Context(creating).Page(proto.TargetCreateTarget{})
+		creationTimer.Stop()
+		if err != nil {
+			t.Fatalf("create draft page: %v", err)
+		}
+		p = p.Context(ctx)
+		t.Cleanup(func() { step(t, p.Context(context.Background()), "close draft page").MustClose() })
 		// Only the drafts debounce is gated, including cancellation. Lifecycle
 		// events and clocks are controlled independently of focus and real sleeps.
-		p.MustEvalOnNewDocument(`(() => {
+		step(t, p, "install draft controls").MustEvalOnNewDocument(`(() => {
    const timers = new Map(), set = window.setTimeout, clear = window.clearTimeout; let id = 0;
    window.setTimeout = (f, d, ...a) => { if (d > 60000) window.expireDrafts = () => f(...a); return d === 300 ? (timers.set(--id, {run: () => f(...a), left:d}), id) : set(f, d, ...a); };
    window.clearTimeout = id => { timers.delete(id); clear(id); };
@@ -137,12 +170,16 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		if topic {
 			path = view.ConversationURL("acme", place.Channel, &place.Topic)
 		}
-		p.MustNavigate(server.URL + path).MustWaitLoad()
-		p.MustEval(`() => { const f = document.querySelector('#message-composer').dataset, p = document.querySelector('#organization-stream').dataset;
+		step(t, p, "navigate to composer").MustNavigate(server.URL + path)
+		step(t, p, "load composer").MustWaitLoad()
+		eval(t, p, "read draft scope", `() => { const f = document.querySelector('#message-composer').dataset, p = document.querySelector('#organization-stream').dataset;
    window.draftKey = 'ribbitto.draft.v1:' + p.member + ':' + p.session + ':' + f.draftChannel + ':' + (f.draftTopic || 'feed'); }`)
 		return p
 	}
-	run := func(t *testing.T, p *rod.Page, code string) { t.Helper(); p.MustEval(`() => { ` + code + ` }`) }
+	run := func(t *testing.T, p *rod.Page, code string) {
+		t.Helper()
+		eval(t, p, "draft assertions: "+strings.SplitN(code, "\n", 2)[0], `() => { `+code+` }`)
+	}
 	// Sequential CDP evaluations do not order storage propagation to another
 	// tab. A unique marker also orders a remove/restore whose final snapshot
 	// equals the reader's old one; waiting for that snapshot alone could pass early.
@@ -151,10 +188,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		t.Helper()
 		const marker = "ribbitto.test-storage-barrier"
 		storageSync++
-		want := from.MustEval(`(key, value) => { localStorage.setItem(key, value); return snapshot(); }`, marker, storageSync).Str()
-		to.MustWait(`want => snapshot() === want`, want)
-		from.MustEval(`key => localStorage.removeItem(key)`, marker)
-		to.MustWait(`key => localStorage.getItem(key) === null`, marker)
+		want := eval(t, from, "write storage barrier", `(key, value) => { localStorage.setItem(key, value); return snapshot(); }`, marker, storageSync).Value.Str()
+		step(t, to, "propagate storage snapshot").MustWait(`want => snapshot() === want`, want)
+		eval(t, from, "remove storage barrier", `key => localStorage.removeItem(key)`, marker)
+		step(t, to, "propagate barrier removal").MustWait(`key => localStorage.getItem(key) === null`, marker)
 	}
 	t.Run("saving", func(t *testing.T) {
 		p := open(t, false, "")
@@ -179,20 +216,20 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			a, b := open(t, false, ""), open(t, false, "")
 			run(t, a, `localStorage.clear(); edit('A', editNow + 100);`)
 			syncStorage(t, a, b)
-			b.MustEval(`(mode, aAt) => { edit('B', mode === 'equal' ? aAt : editNow + 1000); flush();
+			eval(t, b, "save competing draft", `(mode, aAt) => { edit('B', mode === 'equal' ? aAt : editNow + 1000); flush();
     check(entry().text === 'B' && (mode !== 'equal' || entry().at === aAt), 'B save or equal input time');
-    if (mode === 'deletion' || mode === 'over-limit') { edit(mode === 'deletion' ? ' ' : '🐸'.repeat(4001), editNow + 1); flush(); } }`, mode, a.MustEval(`() => editNow`).Num())
+    if (mode === 'deletion' || mode === 'over-limit') { edit(mode === 'deletion' ? ' ' : '🐸'.repeat(4001), editNow + 1); flush(); } }`, mode, eval(t, a, "read input time", `() => editNow`).Value.Num())
 			syncStorage(t, b, a)
 			run(t, a, `const winner = localStorage.getItem(draftKey); releaseDrafts(); check(localStorage.getItem(draftKey) === winner, 'older/equal save won');
     localStorage.removeItem(draftKey); hide(); flush(); check(!entry(), 'skipped save stayed dirty'); localStorage.setItem(draftKey, winner);`)
 			syncStorage(t, a, b)
 			if mode == "overlap" {
 				// Both reads could have preceded either write: apply A's stale write.
-				b.MustEval(`at => { const older = {...entry(), text:'A', at}; localStorage.setItem(draftKey, JSON.stringify(older));
+				eval(t, b, "apply overlapping save", `at => { const older = {...entry(), text:'A', at}; localStorage.setItem(draftKey, JSON.stringify(older));
      hide(); flush(); check(entry().text === 'A' && document.querySelector('#message-body').value === 'B', 'clean tab repaired overlap');
-     edit('B again', editNow + 1); releaseDrafts(); check(entry().text === 'B again', 'next input did not recover'); }`, a.MustEval(`() => editNow`).Num())
+     edit('B again', editNow + 1); releaseDrafts(); check(entry().text === 'B again', 'next input did not recover'); }`, eval(t, a, "read input time", `() => editNow`).Value.Num())
 			} else {
-				b.MustEval(`mode => check(entry().text === (mode === 'deletion' || mode === 'over-limit' ? '' : 'B'), 'stored winner')`, mode)
+				eval(t, b, "check stored winner", `mode => check(entry().text === (mode === 'deletion' || mode === 'over-limit' ? '' : 'B'), 'stored winner')`, mode)
 			}
 		})
 	}
@@ -243,7 +280,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	for _, field := range []string{"member", "session"} {
 		t.Run("scope/"+field, func(t *testing.T) {
 			p := open(t, false, "")
-			p.MustEval(`field => { localStorage.clear(); edit('seed', editNow); flush(); const e = entry(); localStorage.clear();
+			eval(t, p, "check foreign draft scope", `field => { localStorage.clear(); edit('seed', editNow); flush(); const e = entry(); localStorage.clear();
     const foreign = draftKey.replace(e[field], field === 'member' ? '09000000-0000-0000-0000-000000000000' : '019a1b2c-3d51-7000-8000-000000000000');
     for (let n=1; n<=50; n++) localStorage.setItem(foreign.replace(/feed$/, '00000000-0000-0000-0000-' + n.toString(16).padStart(12,'0')), 'foreign unread');
     const before = snapshot(), reads = [], writes = [], get = Storage.prototype.getItem, set = Storage.prototype.setItem;
@@ -274,10 +311,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		run(t, b, `localStorage.clear(); edit('oldest', editNow); flush(); window.oldest = draftKey;
    for (let n=1; n<50; n++) localStorage.setItem(draftKey.replace(/feed$/, '00000000-0000-0000-0000-' + n.toString(16).padStart(12,'0')), JSON.stringify({...entry(), at:editNow + n}));`)
 		// A selected K before B updated it; apply A's removal and insertion.
-		k := b.MustEval(`() => oldest`).Str()
+		k := eval(t, b, "read eviction key", `() => oldest`).Value.Str()
 		run(t, b, `edit('B newer', editNow + 1000); flush();`)
 		syncStorage(t, b, a)
-		a.MustEval(`k => { localStorage.removeItem(k); edit('A', editNow + 2000); flush(); check(!localStorage.getItem(k) && Object.keys(localStorage).length === 50, 'eviction race'); }`, k)
+		eval(t, a, "apply overlapping eviction", `k => { localStorage.removeItem(k); edit('A', editNow + 2000); flush(); check(!localStorage.getItem(k) && Object.keys(localStorage).length === 50, 'eviction race'); }`, k)
 		syncStorage(t, a, b)
 		run(t, b, `hide(); check(!entry() && document.querySelector('#message-body').value === 'B newer', 'clean evicted tab wrote');
    edit('B recovered', editNow + 1); releaseDrafts(); check(entry().text === 'B recovered' && Object.keys(localStorage).length === 50, 'eviction recovery');`)
@@ -296,11 +333,15 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		})
 		go router.Run()
 		defer router.MustStop()
-		wait := a.WaitNavigation(proto.PageLifecycleEventNameLoad)
-		a.MustElement(`form[action="/signout"]`).MustEval(`function() { this.requestSubmit(); }`)
+		signOut := step(t, a, "submit sign-out and load sign-in")
+		wait := signOut.WaitNavigation(proto.PageLifecycleEventNameLoad)
+		signOut.MustElement(`form[action="/signout"]`).MustEval(`function() { this.requestSubmit(); }`)
 		wait()
-		a.MustEval(`h => localStorage.setItem('ribbitto.signed-out.v1', h)`, "019a1b2c-3d4f-7000-8000-000000000000")
-		b.MustWait(`() => notified`)
+		if err := signOut.GetContext().Err(); err != nil {
+			t.Fatalf("load sign-in after sign-out: %v", err)
+		}
+		eval(t, a, "publish sign-out notice", `h => localStorage.setItem('ribbitto.signed-out.v1', h)`, "019a1b2c-3d4f-7000-8000-000000000000")
+		step(t, b, "receive sign-out notice").MustWait(`() => notified`)
 		run(t, b, `check(entry()?.text === 'saved', 'cleanup ran before stop assertion');
    check(pendingDrafts() === 0, 'notice did not cancel save'); const before = snapshot();
    releaseDrafts(); edit('after sign-out', editNow + 1); flush(); hide(); check(snapshot() === before && pendingDrafts() === 0, 'ended session wrote');`)
@@ -308,10 +349,14 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	t.Run("sign-out cleanup", func(t *testing.T) {
 		p := open(t, false, "")
 		run(t, p, `localStorage.clear(); edit('ended session', editNow); flush();`)
-		wait := p.WaitNavigation(proto.PageLifecycleEventNameLoad)
-		p.MustElement(`form[action="/signout"]`).MustEval(`function() { this.requestSubmit(); }`)
+		signOut := step(t, p, "submit sign-out and load sign-in")
+		wait := signOut.WaitNavigation(proto.PageLifecycleEventNameLoad)
+		signOut.MustElement(`form[action="/signout"]`).MustEval(`function() { this.requestSubmit(); }`)
 		wait()
-		if !strings.HasSuffix(p.MustInfo().URL, "/signin") {
+		if err := signOut.GetContext().Err(); err != nil {
+			t.Fatalf("load sign-in after sign-out: %v", err)
+		}
+		if !strings.HasSuffix(step(t, p, "read sign-out URL").MustInfo().URL, "/signin") {
 			t.Fatal("sign-out did not reach sign-in")
 		}
 		run(t, p, `check(!Object.keys(localStorage).some(k => k.startsWith('ribbitto.draft.v1:')), 'sign-out cleanup');`)
@@ -328,7 +373,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		b := open(t, false, "")
 		run(t, a, `releaseDrafts(); check(entry().text === 'pending old session', 'stale write missing');`)
 		syncStorage(t, a, b)
-		b.MustNavigate(b.MustInfo().URL).MustWaitLoad()
+		step(t, b, "reload later session").MustNavigate(step(t, b, "read later-session URL").MustInfo().URL)
+		step(t, b, "load later session").MustWaitLoad()
 		run(t, b, `check(!Object.keys(localStorage).some(k => k.includes('`+session+`')), 'later load kept stale entry');`)
 	})
 	t.Run("expiry", func(t *testing.T) {
@@ -341,7 +387,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	for _, trigger := range []string{"input", "save"} {
 		t.Run("deadline guard/"+trigger, func(t *testing.T) {
 			p := open(t, false, "")
-			p.MustEval(`trigger => { localStorage.clear(); if (trigger === 'save') edit('pending', editNow);
+			eval(t, p, "check deadline guard", `trigger => { localStorage.clear(); if (trigger === 'save') edit('pending', editNow);
     elapsed = 31*86400000; if (trigger === 'input') edit('past deadline', editNow);
     if (trigger === 'input') check(pendingDrafts() === 0, 'expired input queued a save');
     // No deadline timer callback: queued lifecycle work still checks time.
@@ -363,7 +409,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			if mode == "quota" || mode == "blocked" {
 				run(t, p, `check(storageFailures > 0, 'storage failure was not exercised');`)
 			}
-			p.MustWait(`() => signals > 0`)
+			step(t, p, "receive successful typing response").MustWait(`() => signals > 0`)
 			for _, text := range []string{" ", "sent"} {
 				status, topic := 200, "03000000-0000-0000-0000-000000000000"
 				if text == " " {
@@ -372,9 +418,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				if mode == "feed" {
 					topic = ""
 				}
-				p.MustEval(`text => { document.querySelector('#message-body').value = text; document.querySelector('#message-composer').requestSubmit(); }`, text)
-				p.MustWait(`() => swaps > 0 && !document.querySelector('#message-composer button').disabled`)
-				p.MustEval(`(status, topic) => { const f = document.querySelector('#message-composer'); check(swapStatus === status && f.dataset.draftChannel === '01000000-0000-0000-0000-000000000000' && (f.dataset.draftTopic || '') === topic, 'swap status or place'); swaps = 0; }`, status, topic)
+				eval(t, p, fmt.Sprintf("submit body %q", text), `text => { document.querySelector('#message-body').value = text; document.querySelector('#message-composer').requestSubmit(); }`, text)
+				step(t, p, fmt.Sprintf("settle %d response and enable send", status)).MustWait(`() => swaps > 0 && !document.querySelector('#message-composer button').disabled`)
+				eval(t, p, fmt.Sprintf("check %d response scope", status), `(status, topic) => { const f = document.querySelector('#message-composer'); check(swapStatus === status && f.dataset.draftChannel === '01000000-0000-0000-0000-000000000000' && (f.dataset.draftTopic || '') === topic, 'swap status or place'); swaps = 0; }`, status, topic)
 			}
 			run(t, p, `check(document.querySelector('#message-body').value === '', 'sending broken');`)
 		})

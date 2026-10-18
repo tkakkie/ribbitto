@@ -141,6 +141,12 @@ adversarial follow-up checks and closure verification keep their reviewers.
 
 ## The boundary
 
+`agy` receives only the dedicated `HOME`, workspace `TMPDIR` (reviews only;
+none for `check`), `PATH`, `LANG`, `LC_*`, `USER` and `LOGNAME`. To extend
+the allowlist, edit it in `cmd/argonreview` and open a pull request. Record
+a live `check` and one live `issue`/`review` run from the trusted build:
+the allowlist cannot be verified without real `agy`.
+
 Deny rules refuse file writes, commands, URL reads and MCP. The guard, the
 only hook, allows `view_file`, `list_dir`, `grep_search` and `find_by_name`
 and denies everything else, including `search_web`, subagents,
@@ -161,7 +167,7 @@ Remaining limits:
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 
-A review report is emitted only after successful workspace removal. The
+Reports appear only after successful workspace removal. The
 dedicated `HOME` keeps the sign-in, the launcher's three files and
 Antigravity's own state (logs, conversation store, caches); `prepare`
 refuses customisation there but does not police the rest.

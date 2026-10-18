@@ -29,6 +29,7 @@ func TestRehashPasswordCompareAndSet(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	id := identitytest.Account(t, pool, "a@example.com", "A")
+	identitytest.Account(t, pool, "b@example.com", "B")
 	store := postgres.NewAccountStore(pool)
 	for _, tc := range []struct{ oldHash, newHash, want string }{
 		{"$argon2id$x", "$argon2id$new", "$argon2id$new"},
@@ -41,5 +42,9 @@ func TestRehashPasswordCompareAndSet(t *testing.T) {
 		if err != nil || got != tc.want {
 			t.Fatalf("stored hash = %q, %v; want %q", got, err, tc.want)
 		}
+	}
+	_, got, err := store.AccountCredentials(t.Context(), "b@example.com")
+	if err != nil || got != "$argon2id$x" {
+		t.Fatalf("other account hash = %q, %v; want fixture hash", got, err)
 	}
 }

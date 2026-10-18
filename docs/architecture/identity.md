@@ -72,6 +72,9 @@ The update compares the verified old hash before replacing it, so a concurrent
 credential change cannot be overwritten. Hashing or update failure leaves the
 successful credential decision intact; migration can retry at a later sign-in.
 Identity has no logger, and this best-effort path logs neither errors nor hashes.
+Migration is one-way: after a rehash, and for accounts created since this change,
+a binary from before this change accepts only NFC and rejects the original
+non-NFC input, so rollback past this change is unsupported for those passwords.
 
 On success the session is **replaced** (`Sessions.Replace`): one transaction deletes the session named by the token the browser sent (if
 any) and inserts the new one, so a token that existed before sign-in never

@@ -33,25 +33,25 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.
-- **Pending own posts** (#1156, #1188, #1174):
+- **Pending own posts** (#1156, #1188, #1174, #1180):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
   after `#message-items`. The item's own htmx form holds the original text,
   key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. Each queued form also gets its own
-  fresh UUID. Up to 10 items per tab count in every state, including failures
+  focus and takes `crypto.randomUUID()`. Each queued form gets a fresh UUID
+  unless restored by Edit. Up to 10 items per tab count in every state, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
-  the next text; Retry takes no slot. Delivery, move-out and Remove free slots.
+  the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
   FIFO dispatch sends one form at a time, after classifying its predecessor.
   An ordinary request blocks composer submits; pending items or requests block
   invalid ordinary submits, so the two forms' requests never overlap.
   A Not sent item lets later items continue; Retry moves it to the list and
   queue's end. An unknown outcome pauses later items (still showing Sending).
   Its same-key Retry keeps its place; success resumes dispatch. A refused retry
-  keeps the pause while the earlier outcome is unknown. Remove resumes without
-  resolving that request: it may commit later, and its real delivery stays
+  keeps the pause while the earlier outcome is unknown. Remove and Edit resume
+  without resolving that request: it may commit later, and its real delivery stays
   visible. Storage order follows send order on uninterrupted success or a
-  successful same-key Retry, but may differ after Remove.
+  successful same-key Retry, but may differ after Remove or Edit.
   A 200 swaps the composer state and out-of-band typing form, sets
   `aria-invalid="false"` and keeps `aria-describedby="message-help"` and the
   textarea text.
@@ -71,8 +71,14 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   text and key, including after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
   the item and text; an uncertain committed post can still arrive later.
-  Pending sends bypass prefix removal, the ordinary send alert, the
-  unconfirmed-key mark and 409 cleanup.
+  Edit is available on either failure only with an empty composer; otherwise
+  it is disabled with an associated localised explanation. It restores the raw
+  text and key, focuses the textarea with the caret at the end, then removes
+  the item. The key follows that text across state swaps until sent or emptied;
+  emptying it takes a fresh UUID. An unused key posts normally; an equivalent
+  validated body under a used key returns the stored message; a different body
+  gets the pending 409 above. Pending sends bypass prefix removal, the ordinary
+  send alert, the unconfirmed-key mark and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a

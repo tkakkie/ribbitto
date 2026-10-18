@@ -104,8 +104,8 @@ replacement, closed/fresh generations, a post held in flight while typing
 and composing (#1173), enhanced latest feed/topic posts and
 plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
 posts from a topic view through real PostgreSQL and the real stream.
-Feed/topic pending cases cover both orders, replay, feed moves,
-same-text collisions, JavaScript whitespace, failures and Retry/Remove.
+Feed/topic cases cover both orders, replay, feed moves,
+same-text collisions, JavaScript whitespace, failures and Retry/Edit/Remove.
 Topic orders: post/move/answer, answer/move, lost/move/retry,
 lost/retry-to-B/post/move (Retry before any stream), move-only/answer.
 Checks cover same-task removal, next sends, frame identities and desktop/phone

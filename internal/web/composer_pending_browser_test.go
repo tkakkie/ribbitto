@@ -1011,3 +1011,109 @@ func receivePending(t *testing.T, page *rod.Page, posts <-chan pendingRequest) p
 		return pendingRequest{}
 	}
 }
+
+func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
+	for _, mode := range []string{"unused", "equivalent", "normalized", "changed"} {
+		t.Run(mode, func(t *testing.T) {
+			page, events, posts, _ := pendingBrowser(t, browser, false)
+			original, edited, status := "original", "original", 500
+			switch mode {
+			case "unused":
+				original, edited, status = "bad\u0001", "corrected", 422
+			case "normalized":
+				edited = " \noriginal \n"
+			case "changed":
+				edited = "changed"
+			}
+			page.MustEval(`text => {const b=document.getElementById('message-body');b.value=text;b.form.requestSubmit();}`, original)
+			first := receivePending(t, page, posts)
+			first.reply <- browserReply{status: status, body: []byte("refused")}
+			page.MustWait(`() => window.answers===1`)
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.value=' ';b.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-pending-edit]').click();}`)
+			if page.MustEval(`() => {const e=document.querySelector('[data-pending-edit]'), h=document.querySelector('[data-pending-edit-help]');return !e.disabled || !h.checkVisibility() || !e.getAttribute('aria-describedby').split(' ').includes(h.id) || h.textContent!=='Empty the composer before editing.' || document.getElementById('message-body').value!==' ';}`).Bool() {
+				t.Fatal("occupied composer did not disable and describe Edit")
+			}
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.value='';b.dispatchEvent(new Event('input',{bubbles:true}));}`)
+			page.MustElement("[data-pending-edit]").MustClick()
+			if page.MustEval(`([text,key]) => {const b=document.getElementById('message-body');return b.value!==text || b.form.elements.idempotency_key.value!==key || document.activeElement!==b || b.selectionStart!==text.length || b.selectionEnd!==text.length || !!document.querySelector('#message-pending > li');}`, []string{original, first.values.Get("idempotency_key")}).Bool() {
+				t.Fatal("Edit did not restore text/key, end caret, focus and remove item")
+			}
+			page.MustEval(`text => {const b=document.getElementById('message-body');b.value=text;b.dispatchEvent(new Event('input',{bubbles:true}));b.form.requestSubmit();b.value=text+' next draft';b.dispatchEvent(new Event('input',{bubbles:true}));window.draft=b.value;window.state=document.getElementById('message-composer-state');}`, edited)
+			resend := receivePending(t, page, posts)
+			if resend.values.Get("idempotency_key") != first.values.Get("idempotency_key") || resend.values.Get("body") != edited {
+				t.Fatal("edited resend lost text or original key")
+			}
+			if mode == "changed" {
+				// Even a composer-shaped 409 must stay confined to the pending item.
+				conflict := pendingAnswer(t, kernel.ID{51})
+				conflict.status = 409
+				resend.reply <- conflict
+				page.MustWait(`() => window.answers===2`)
+				if page.MustEval(`key => {const f=document.querySelector('[data-pending-form]');return f.dataset.state!=='failed' || f.elements.idempotency_key.value===key || f.querySelector('[role=status]').textContent!==document.getElementById('message-send-alert').dataset.repeat || document.getElementById('message-composer-state')!==window.state;}`, first.values.Get("idempotency_key")).Bool() {
+					t.Fatal("409 did not fail locally with repeat and a fresh key")
+				}
+				stored := streamTestMessages(kernel.ID{2}, 51)[0]
+				stored.Body, stored.Text = original, original
+				events <- realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(stored)))}
+				page.MustWait(`() => document.querySelectorAll('#message-items > li').length===1`)
+				fresh := page.MustEval(`() => document.querySelector('[data-pending-form]').elements.idempotency_key.value`).Str()
+				page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+				resend = receivePending(t, page, posts)
+				if resend.values.Get("idempotency_key") != fresh || resend.values.Get("body") != edited {
+					t.Fatal("Retry did not send changed text with the fresh key")
+				}
+			}
+			resend.reply <- pendingAnswer(t, kernel.ID{52})
+			answers := 2
+			if mode == "changed" {
+				answers++
+			}
+			page.MustWait(`n => window.answers===n`, answers)
+			if page.MustEval(`() => {const b=document.getElementById('message-body');return b.value!==window.draft || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help' || document.querySelector('[data-pending-form]').dataset.state!=='confirmed';}`).Bool() {
+				t.Fatal("pending answer changed the composer or did not confirm the item")
+			}
+			own := streamTestMessages(kernel.ID{2}, 52)[0]
+			own.Body, own.Text = strings.TrimSpace(edited), strings.TrimSpace(edited)
+			events <- realtime.Outgoing{ID: 52, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
+			page.MustWait(`() => !document.querySelector('#message-pending > li')`)
+			want := 1
+			if mode == "changed" {
+				want = 2
+			}
+			if page.MustEval(`n => document.querySelectorAll('#message-items > li').length!==n`, want).Bool() {
+				t.Fatal("resend did not leave exactly the expected message identities")
+			}
+		})
+	}
+	t.Run("edit-resumes-and-frees-slot", func(t *testing.T) {
+		page, _, posts, _ := pendingBrowser(t, browser, false)
+		page.MustEval(`() => {const b=document.getElementById('message-body');for(let n=0;n<10;n++){b.value='queued '+n;b.form.requestSubmit();}}`)
+		first := receivePending(t, page, posts)
+		first.reply <- browserReply{status: 500, body: []byte("unknown")}
+		page.MustWait(`() => window.answers===1`)
+		page.MustElement("[data-pending-edit]").MustClick()
+		next := receivePending(t, page, posts)
+		if next.values.Get("body") != "queued 1" || page.MustEval(`() => document.querySelectorAll('#message-pending > li').length!==9 || window.requests!==2 || window.ordinaryRequests!==0`).Bool() {
+			t.Fatal("Edit did not free capacity and resume the paused FIFO")
+		}
+		next.reply <- pendingAnswer(t, kernel.ID{51})
+		third := receivePending(t, page, posts)
+		if page.MustEval(`key => {const b=document.getElementById('message-body');return b.value!=='queued 0' || b.form.elements.idempotency_key.value!==key || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help';}`, first.values.Get("idempotency_key")).Bool() {
+			t.Fatal("another send's state swap replaced the restored key or text")
+		}
+		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+		if page.MustEval(`key => document.getElementById('message-body').value!=='' || document.querySelectorAll('#message-pending > li').length!==10 || document.querySelector('#message-pending > li:last-child form').elements.idempotency_key.value!==key || window.requests!==3 || window.ordinaryRequests!==0`, first.values.Get("idempotency_key")).Bool() || len(posts) != 0 {
+			t.Fatal("restored send could not use the freed slot or overlapped a send")
+		}
+		third.reply <- browserReply{status: 500, body: []byte("pause")}
+		page.MustWait(`() => window.answers===3`)
+		page.MustElement("[data-state=failed] [data-pending-edit]").MustClick()
+		key := page.MustEval(`() => document.getElementById('message-composer').elements.idempotency_key.value`).Str()
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='';b.dispatchEvent(new Event('input',{bubbles:true}));window.emptyKey=b.form.elements.idempotency_key.value;b.value='replacement';b.dispatchEvent(new Event('input',{bubbles:true}));b.form.requestSubmit();}`)
+		if page.MustEval(`key => window.emptyKey===key || document.querySelector('#message-pending > li:last-child form').elements.idempotency_key.value===key`, key).Bool() {
+			t.Fatal("emptying edited text did not discard its original key")
+		}
+		fourth := receivePending(t, page, posts)
+		fourth.reply <- browserReply{status: 500, body: []byte("pause")}
+	})
+}

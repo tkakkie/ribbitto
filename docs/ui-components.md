@@ -66,7 +66,7 @@ Exception (#1156): `pendingMessage` mirrors `messageItem`'s layout to keep
 the shared stream render unchanged; their different headers and bodies
 would complicate a wrapper. `testPendingComposerBrowser` guards geometry
 within 1 px. Pending items reserve the 44 px phone header, at full opacity
-without motion; Retry and Remove describe their body. No topic label,
+without motion; Retry, Edit and Remove describe their body. No topic label,
 selection or actions menu.
 
 Message avatars and the account button use the first grapheme of the

@@ -295,7 +295,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v12.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v13.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -454,6 +454,8 @@ templ pendingMessage(page ChannelPage) {
 					<p role="status" class="text-caption text-danger"></p>
 					<div data-pending-actions hidden>
 						<button type="submit" aria-describedby="message-pending-body" class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
+						<button type="button" data-pending-edit aria-describedby="message-pending-body" class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.edit") }</button>
+						<span data-pending-edit-help id="message-pending-edit-help" hidden class="text-caption text-muted">{ i18n.T(ctx, "message.edit.unavailable") }</span>
 						<button type="button" data-pending-remove aria-describedby="message-pending-body" class="min-h-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
 					</div>
 				</form>

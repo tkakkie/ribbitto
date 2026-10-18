@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -50,9 +51,9 @@ func TestChannelCounts(t *testing.T) {
 	channels := []kernel.ID{firstCh, secondCh, firstCh, thirdCh, secondCh}
 	wantIDs := []kernel.ID{firstCh, secondCh, thirdCh}
 	states := map[kernel.ID]ChannelReadState{
-		firstCh:  {Prefix: 5, Gaps: []Range{{Lo: 6, Hi: 8}, {Lo: 12, Hi: 15}}},
+		firstCh:  {Prefix: 5, Gaps: []conversation.SequenceRange{{Lo: 6, Hi: 8}, {Lo: 12, Hi: 15}}},
 		secondCh: {Prefix: 5},
-		thirdCh:  {Prefix: 9, Gaps: []Range{{Lo: 10, Hi: 20}}},
+		thirdCh:  {Prefix: 9, Gaps: []conversation.SequenceRange{{Lo: 10, Hi: 20}}},
 	}
 	wantGapChannels := []kernel.ID{firstCh, firstCh, thirdCh}
 	wantLos := []int64{6, 12, 10}

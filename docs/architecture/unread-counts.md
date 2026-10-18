@@ -4,9 +4,8 @@ How read state is stored and counted (what that costs is in
 [unread count costs](unread-count-costs.md), writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
-The move column, read-state tables, range store, feed, topic and branch-notice
-reads, the visible-page reading POSTs, posting writes and channel and topic counts
-and their sidebar display are current. The rules are in
+Feed, topic and branch-notice reads, visible-page POSTs, posting writes and
+sidebar counts are current. The rules are in
 [unread](../domain/unread.md).
 
 ## Storage
@@ -95,8 +94,9 @@ read writes use the existing durable trigger, without a duplicate read signal.
 [Read results and acceptance](../measurements/read-advance-results.md) cover the per-tab cost;
 browser badge increments follow the [script contract](web-javascript.md).
 
-Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
-parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.
+Read sets and gaps use `conversation.SequenceRange`; unread owns the counters,
+conversation's wiring returns concrete stores. SQL receives bound arrays or one
+`int8multirange` parameter. Statements share their page or sidebar snapshot, with none per channel or topic.
 
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|

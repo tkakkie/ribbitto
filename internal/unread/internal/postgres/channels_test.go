@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -18,12 +19,12 @@ func TestChannelRanges(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "ranges", "general")
 	for _, tc := range []struct {
 		name string
-		rows []unread.Range
+		rows []conversation.SequenceRange
 		want unread.ChannelReadState
 	}{
-		{"no stored state uses join prefix", nil, unread.ChannelReadState{Prefix: 6, Gaps: []unread.Range{{Lo: 6, Hi: math.MaxInt64}}}},
-		{"fragmented ranges", []unread.Range{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}}, unread.ChannelReadState{Prefix: 11, Gaps: []unread.Range{{Lo: 11, Hi: 12}, {Lo: 13, Hi: 14}, {Lo: 16, Hi: math.MaxInt64}}}},
-		{"one range", []unread.Range{{Lo: 0, Hi: 20}}, unread.ChannelReadState{Prefix: 20, Gaps: []unread.Range{{Lo: 20, Hi: math.MaxInt64}}}},
+		{"no stored state uses join prefix", nil, unread.ChannelReadState{Prefix: 6, Gaps: []conversation.SequenceRange{{Lo: 6, Hi: math.MaxInt64}}}},
+		{"fragmented ranges", []conversation.SequenceRange{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}}, unread.ChannelReadState{Prefix: 11, Gaps: []conversation.SequenceRange{{Lo: 11, Hi: 12}, {Lo: 13, Hi: 14}, {Lo: 16, Hi: math.MaxInt64}}}},
+		{"one range", []conversation.SequenceRange{{Lo: 0, Hi: 20}}, unread.ChannelReadState{Prefix: 20, Gaps: []conversation.SequenceRange{{Lo: 20, Hi: math.MaxInt64}}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			channel := conversationtest.Channel(t, pool, f.OrganizationID, tc.name, false).ID
@@ -41,16 +42,16 @@ func TestChannelRanges(t *testing.T) {
 		})
 	}
 	t.Run("more than 101 stored ranges", func(t *testing.T) {
-		rs := []unread.Range{{Lo: 0, Hi: 2}}
+		rs := []conversation.SequenceRange{{Lo: 0, Hi: 2}}
 		for i := int64(1); i < 150; i++ {
-			rs = append(rs, unread.Range{Lo: 2*i + 1, Hi: 2*i + 2})
+			rs = append(rs, conversation.SequenceRange{Lo: 2*i + 1, Hi: 2*i + 2})
 		}
 		seedRanges(t, pool, scopeOf(f), rs)
 		require(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
 			got, err := ChannelRangesIn(s).Read(t.Context(), f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID})
 			require(t, err)
 			state := got[f.Channel.ID]
-			if state.Prefix != 2 || len(state.Gaps) != 100 || state.Gaps[99] != (unread.Range{Lo: 200, Hi: 201}) {
+			if state.Prefix != 2 || len(state.Gaps) != 100 || state.Gaps[99] != (conversation.SequenceRange{Lo: 200, Hi: 201}) {
 				t.Fatalf("truncated state=%v", state)
 			}
 			return nil
@@ -76,11 +77,11 @@ func TestChannelRangesScope(t *testing.T) {
 			case "channel":
 				other.ChannelID = kernel.ID{1}
 			}
-			seedRanges(t, pool, other, []unread.Range{{Lo: 0, Hi: 50}, {Lo: 60, Hi: 70}})
+			seedRanges(t, pool, other, []conversation.SequenceRange{{Lo: 0, Hi: 50}, {Lo: 60, Hi: 70}})
 			require(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
 				got, err := ChannelRangesIn(s).Read(t.Context(), scope.OrganizationID, scope.MemberID, 1, []kernel.ID{scope.ChannelID})
 				require(t, err)
-				want := unread.ChannelReadState{Prefix: 2, Gaps: []unread.Range{{Lo: 2, Hi: math.MaxInt64}}}
+				want := unread.ChannelReadState{Prefix: 2, Gaps: []conversation.SequenceRange{{Lo: 2, Hi: math.MaxInt64}}}
 				if !reflect.DeepEqual(got, map[kernel.ID]unread.ChannelReadState{scope.ChannelID: want}) {
 					t.Fatalf("single-scope decoy leaked: %v", got)
 				}

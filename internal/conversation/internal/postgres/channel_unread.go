@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -13,17 +12,20 @@ import (
 )
 
 // ChannelUnreadIn binds capped message counts to the caller's snapshot.
-func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
-	return channelUnread{sqlcgen.New(pgxbridge.Snapshot(s))}
+func ChannelUnreadIn(s platform.Snapshot) *ChannelUnread {
+	return &ChannelUnread{sqlcgen.New(pgxbridge.Snapshot(s))}
 }
 
-type channelUnread struct{ queries *sqlcgen.Queries }
+// ChannelUnread counts messages in supplied channel gaps in a caller-owned snapshot.
+type ChannelUnread struct{ queries *sqlcgen.Queries }
 
-func (r channelUnread) Count(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
+// Count returns counts capped at 100 and first unread sequences (zero if none).
+func (r ChannelUnread) Count(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
 	return r.CountWithFirstUnread(ctx, organizationID, channels, gapChannels, los, his, true)
 }
 
-func (r channelUnread) CountWithFirstUnread(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64, firstUnread bool) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
+// CountWithFirstUnread explicitly chooses whether to compute first unread.
+func (r ChannelUnread) CountWithFirstUnread(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64, firstUnread bool) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
 	if len(gapChannels) != len(los) || len(los) != len(his) {
 		return nil, nil, fmt.Errorf("counting channel unread: unequal gap arrays")
 	}

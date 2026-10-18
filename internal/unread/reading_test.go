@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -32,15 +33,17 @@ func (s readingState) FirstMessageAfter(context.Context, kernel.ID, kernel.ID, i
 func (s readingState) HasMessages(context.Context, kernel.ID, kernel.ID, []int64, []int64) (bool, error) {
 	return s.changed, nil
 }
-func (s readingState) Merge(context.Context, Scope, int64, Range) error { return s.err }
-func (s readingState) MergeCovered(context.Context, Scope, int64, Range) ([]Range, error) {
-	return []Range{{Lo: 2, Hi: 3}}, s.err
+func (s readingState) Merge(context.Context, Scope, int64, conversation.SequenceRange) error {
+	return s.err
 }
-func (s readingState) ReadState() (int64, int64, []Range)                 { return 2, 1, nil }
-func (s readingState) Add(context.Context, []int64, []int64, int64) error { return s.err }
-func (s readingState) Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, []Range) ([]Range, error) {
+func (s readingState) MergeCovered(context.Context, Scope, int64, conversation.SequenceRange) ([]conversation.SequenceRange, error) {
+	return []conversation.SequenceRange{{Lo: 2, Hi: 3}}, s.err
+}
+func (s readingState) ReadState() (int64, int64, []conversation.SequenceRange) { return 2, 1, nil }
+func (s readingState) Add(context.Context, []int64, []int64, int64) error      { return s.err }
+func (s readingState) Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, []conversation.SequenceRange) ([]conversation.SequenceRange, error) {
 	if s.changed {
-		return []Range{{Lo: 2, Hi: 3}}, nil
+		return []conversation.SequenceRange{{Lo: 2, Hi: 3}}, nil
 	}
 	return nil, nil
 }

@@ -21,7 +21,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
-	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -125,20 +124,20 @@ func TestReadPostBrowser(t *testing.T) {
 			if posts.Load() != 0 {
 				t.Fatal("hidden load sent a POST")
 			}
-			feedRanges(t, pool, scope, []unread.Range{})
+			feedRanges(t, pool, scope, []conversation.SequenceRange{})
 			page.MustEval(`() => { document.querySelector('#organization-stream').dataset.eventCursor = '99'; window.testVisibility = 'visible'; document.dispatchEvent(new Event('visibilitychange')); }`)
 			if !older {
 				page.MustWait(`() => !document.querySelector('#read-form').classList.contains('htmx-request')`)
 				if posts.Load() != 1 {
 					t.Fatal("visible load did not POST once")
 				}
-				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 7}})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 7}})
 			}
 			page.MustEval(`() => { document.dispatchEvent(new Event('visibilitychange')); return new Promise(resolve => setTimeout(resolve, 150)); }`)
 			want := int32(1)
 			if older {
 				want = 0
-				feedRanges(t, pool, scope, []unread.Range{})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{})
 			}
 			if posts.Load() != want {
 				t.Fatalf("read posts=%d, want %d", posts.Load(), want)
@@ -185,7 +184,7 @@ func TestReadPostBrowser(t *testing.T) {
 					if posts.Load() != 2 || len(reads) != 0 {
 						t.Fatal("failed reading POST retried without another trigger")
 					}
-					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 7}})
+					feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 7}})
 					page.MustEval(`() => {
 						window.testVisibility = 'hidden';
 						document.dispatchEvent(new Event('visibilitychange'));
@@ -194,7 +193,7 @@ func TestReadPostBrowser(t *testing.T) {
 					}`)
 					assertRead("7")
 					page.MustWait(`() => document.body.dataset.readStatus === '204'`)
-					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 8}})
+					feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 8}})
 					if posts.Load() != 3 || len(reads) != 0 {
 						t.Fatal("visibility did not retry the failed cursor exactly once")
 					}
@@ -217,7 +216,7 @@ func TestReadPostBrowser(t *testing.T) {
 					release <- struct{}{}
 					assertRead("8")
 					page.MustWait(`() => document.body.dataset.readStatus === '204'`)
-					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 9}})
+					feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 9}})
 					if posts.Load() != 3 || len(reads) != 0 {
 						t.Fatal("failed reading did not flush the newer shown cursor exactly once")
 					}
@@ -229,7 +228,7 @@ func TestReadPostBrowser(t *testing.T) {
 					if posts.Load() != 4 || len(reads) != 0 {
 						t.Fatal("persistently failed cursor retried without another trigger")
 					}
-					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 9}})
+					feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 9}})
 					return
 				}
 				// Stop between receiving the frame and applying its server-rendered HTML.
@@ -243,7 +242,7 @@ func TestReadPostBrowser(t *testing.T) {
 				post(topicID, true) // 7 received, not applied or shown.
 				page.MustWait(`() => !!window.applyHeld`)
 				page.MustEval(`() => document.dispatchEvent(new Event('visibilitychange'))`)
-				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 7}})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 7}})
 				if posts.Load() != 1 {
 					t.Fatal("received but unapplied message caused a read")
 				}
@@ -259,7 +258,7 @@ func TestReadPostBrowser(t *testing.T) {
 				}
 				release <- struct{}{}
 				page.MustWait(`() => !document.querySelector('#read-form').classList.contains('htmx-request')`)
-				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 8}})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 8}})
 				if posts.Load() != 2 {
 					t.Fatal("hidden applications caused reading POSTs")
 				}
@@ -276,9 +275,9 @@ func TestReadPostBrowser(t *testing.T) {
 				assertRead("11")
 				release <- struct{}{}
 				page.MustWait(`() => !document.querySelector('#read-form').classList.contains('htmx-request')`)
-				want := []unread.Range{{Lo: 0, Hi: 12}}
+				want := []conversation.SequenceRange{{Lo: 0, Hi: 12}}
 				if kind == "topic" {
-					want = []unread.Range{{Lo: 0, Hi: 10}, {Lo: 11, Hi: 12}}
+					want = []conversation.SequenceRange{{Lo: 0, Hi: 10}, {Lo: 11, Hi: 12}}
 				}
 				feedRanges(t, pool, scope, want)
 				if posts.Load() != 4 || len(reads) != 0 {

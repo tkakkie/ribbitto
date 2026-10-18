@@ -13,13 +13,15 @@ import (
 )
 
 // TopicReadCandidatesIn binds topic unread bounds to the caller's transaction.
-func TopicReadCandidatesIn(tx platform.Tx) conversation.TopicReadCandidates {
-	return topicReadCandidates{queries: sqlcgen.New(pgxbridge.Tx(tx))}
+func TopicReadCandidatesIn(tx platform.Tx) *TopicReadCandidates {
+	return &TopicReadCandidates{queries: sqlcgen.New(pgxbridge.Tx(tx))}
 }
 
-type topicReadCandidates struct{ queries *sqlcgen.Queries }
+// TopicReadCandidates queries unread topic bounds in a caller-owned transaction.
+type TopicReadCandidates struct{ queries *sqlcgen.Queries }
 
-func (t topicReadCandidates) Ranges(ctx context.Context, organizationID, channelID, topicID kernel.ID, cursor, prefix, floor int64, readSet []conversation.SequenceRange) ([]conversation.SequenceRange, error) {
+// Ranges returns whole-channel neighbour bounds for the topic's unread messages.
+func (t TopicReadCandidates) Ranges(ctx context.Context, organizationID, channelID, topicID kernel.ID, cursor, prefix, floor int64, readSet []conversation.SequenceRange) ([]conversation.SequenceRange, error) {
 	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(readSet))
 	for i, r := range readSet {
 		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: r.Lo, Valid: true}, Upper: pgtype.Int8{Int64: r.Hi, Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}

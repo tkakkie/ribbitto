@@ -133,10 +133,11 @@ FIFO requests run one at a time and never overlap ordinary sends.
 Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
 Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
 success and same-key Retry preserve storage order.
-Edit restores a failure's text/key to an empty composer, focuses its end and
-removes the item; otherwise it is disabled with a description. The restored
-key survives state swaps until sent or emptied; emptying renews it. Pending
-responses keep composer text; failures never swap its state.
+Edit restores text/key and uncertainty to an empty composer, focuses
+its end and removes the item; otherwise it is disabled with a description.
+The key and uncertainty survive state swaps and refusals; emptying renews the
+key and clears uncertainty. Pending responses keep composer text; failures
+never swap its state.
 Idle blank/over-limit sends (4,000 normalised, trimmed code points), or without
 `crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
 (#1173); 422 keeps text and a field error. The textarea stays usable.

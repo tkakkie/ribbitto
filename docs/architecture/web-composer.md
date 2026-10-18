@@ -75,12 +75,17 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   Edit is available on either failure only with an empty composer outside IME
   composition; otherwise it stays visible but disabled with an associated
   localised explanation. It never overwrites a draft. It restores the raw
-  text and key, focuses the textarea with the caret at the end, then removes
-  the item. The key follows that text across state swaps until sent or emptied;
-  emptying it takes a fresh UUID. An unused key posts normally; an equivalent
-  validated body under a used key returns the stored message; a different body
-  gets the pending 409 above. Pending sends bypass prefix removal, the ordinary
-  send alert, the unconfirmed-key mark and 409 cleanup.
+  text, key and any unconfirmed mark, focuses the textarea with the caret at
+  the end, then removes the item. The key follows that text across state swaps
+  until sent or emptied; its unconfirmed mark waits in the composer's
+  `data-unconfirmed-key` for either sending path. A pending resend transfers
+  it to its own form and clears the composer's mark; emptying the restored
+  text clears it and takes a fresh UUID.
+  Editing a known refusal clears any stale composer mark.
+  An unused key posts normally; an equivalent validated body under a used key
+  returns the stored message; a different body gets the pending 409 above.
+  Pending sends bypass prefix removal, the ordinary send alert, ordinary
+  failure classification and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a

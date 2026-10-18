@@ -1038,6 +1038,7 @@ func receivePending(t *testing.T, page *rod.Page, posts <-chan pendingRequest) p
 }
 
 func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("unconfirmed", func(t *testing.T) { testPendingEditUnconfirmedBrowser(t, browser) })
 	for _, mode := range []string{"unused", "equivalent", "normalized", "changed"} {
 		t.Run(mode, func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, false)
@@ -1197,5 +1198,106 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		fourth := receivePending(t, page, posts)
 		fourth.reply <- browserReply{status: 500, body: []byte("pause")}
+	})
+}
+
+func testPendingEditUnconfirmedBrowser(t *testing.T, browser *rod.Browser) {
+	restore := func(t *testing.T) (*rod.Page, chan pendingRequest, string) {
+		t.Helper()
+		page, _, posts, _ := pendingBrowser(t, browser, false)
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='hello';b.form.requestSubmit();}`)
+		first := receivePending(t, page, posts)
+		// A 5xx may follow a commit, so the outcome stays unknown without delivery.
+		first.reply <- browserReply{status: 500, body: []byte("unknown")}
+		page.MustWait(`() => window.answers===1`)
+		page.MustElement("[data-pending-edit]").MustClick()
+		return page, posts, first.values.Get("idempotency_key")
+	}
+	for _, status := range []int{429, 422} {
+		t.Run(fmt.Sprintf("pending-%d", status), func(t *testing.T) {
+			page, posts, key := restore(t)
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.form.requestSubmit();b.value='follow-up';b.form.requestSubmit();}`)
+			resend := receivePending(t, page, posts)
+			if resend.values.Get("idempotency_key") != key || resend.values.Get("body") != "hello" {
+				t.Fatal("edited resend changed its key or text")
+			}
+			resend.reply <- browserReply{status: status, body: []byte("refused")}
+			page.MustWait(`() => window.answers===2`)
+			if page.MustEval(`() => {const f=document.querySelector('[data-pending-form]'), a=document.getElementById('message-send-alert');return f.querySelector('[role=status]').textContent!==a.dataset.stillUnconfirmed || f.querySelector('[role=status]').textContent===a.dataset.notSent;}`).Bool() {
+				t.Fatal("refused edited resend did not announce that the earlier send is still unconfirmed")
+			}
+			if page.MustEval(`() => window.requests!==2 || document.querySelectorAll('[data-state=queued]').length!==1`).Bool() || len(posts) != 0 {
+				t.Fatal("later message escaped the edited unconfirmed item's pause")
+			}
+			if page.MustEval(`() => document.getElementById('message-composer').dataset.unconfirmedKey!==undefined`).Bool() {
+				t.Fatal("pending resend left the unconfirmed mark on the composer")
+			}
+			page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
+			retry := receivePending(t, page, posts)
+			if retry.values.Encode() != resend.values.Encode() || page.MustEval(`key => document.querySelector('[data-pending-form]').elements.idempotency_key.value!==key || window.requests!==3`, key).Bool() {
+				t.Fatal("unconfirmed Retry moved behind the later message or changed its send")
+			}
+			retry.reply <- pendingAnswer(t, kernel.ID{51})
+			next := receivePending(t, page, posts)
+			if next.values.Get("body") != "follow-up" || next.values.Get("idempotency_key") == key {
+				t.Fatal("confirmed Retry did not resume the later message")
+			}
+			next.reply <- pendingAnswer(t, kernel.ID{52})
+			page.MustWait(`() => window.answers===4`)
+		})
+		t.Run(fmt.Sprintf("ordinary-%d", status), func(t *testing.T) {
+			page, posts, key := restore(t)
+			page.MustEval(`text => {
+ window.ordinaryAnswers=0;
+ document.addEventListener('htmx:afterRequest',e=>{if(e.target.id==='message-composer') window.ordinaryAnswers++;});
+ const b=document.getElementById('message-body');b.value=text;b.dispatchEvent(new Event('input',{bubbles:true}));b.form.requestSubmit();
+}`, strings.Repeat("x", 4001))
+			resend := receivePending(t, page, posts)
+			if resend.values.Get("idempotency_key") != key || page.MustEval(`() => window.ordinaryRequests!==1 || !!document.querySelector('[data-pending-form]')`).Bool() {
+				t.Fatal("over-limit edit did not use the ordinary path with its restored key")
+			}
+			resend.reply <- browserReply{status: status, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{IdempotencyKey: &key, Composer: new("generation"), BodyError: "refused", EventCursor: new(int64(42))})))}
+			page.MustWait(`() => window.ordinaryAnswers===1`)
+			if page.MustEval(`key => {const f=document.getElementById('message-composer'), a=document.getElementById('message-send-alert');return a.textContent!==a.dataset.stillUnconfirmed || a.textContent===a.dataset.notSent || f.dataset.unconfirmedKey!==key || f.elements.idempotency_key.value!==key;}`, key).Bool() {
+				t.Fatal("ordinary refused edit lost the unconfirmed outcome")
+			}
+		})
+	}
+	t.Run("empty-clears-mark", func(t *testing.T) {
+		page, posts, key := restore(t)
+		if page.MustEval(`key => document.getElementById('message-composer').dataset.unconfirmedKey!==key`, key).Bool() {
+			t.Fatal("restored text is missing its unconfirmed mark")
+		}
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='';b.dispatchEvent(new Event('input',{bubbles:true}));}`)
+		if page.MustEval(`key => {const f=document.getElementById('message-composer');return f.dataset.unconfirmedKey!==undefined || f.elements.idempotency_key.value===key;}`, key).Bool() {
+			t.Fatal("emptying the restored text retained its unconfirmed mark or key")
+		}
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='replacement';b.dispatchEvent(new Event('input',{bubbles:true}));b.form.requestSubmit();}`)
+		next := receivePending(t, page, posts)
+		next.reply <- browserReply{status: 422, body: []byte("refused")}
+		page.MustWait(`() => window.answers===2`)
+		if next.values.Get("idempotency_key") == key || page.MustEval(`() => document.querySelector('[data-pending-form] [role=status]').textContent!==document.getElementById('message-send-alert').dataset.notSent`).Bool() {
+			t.Fatal("replacement inherited the discarded send's identity or uncertainty")
+		}
+	})
+	t.Run("known-refusal-clears-mark", func(t *testing.T) {
+		page, _, posts, _ := pendingBrowser(t, browser, false)
+		page.MustEval(`() => {const b=document.getElementById('message-body');b.value='refused';b.form.requestSubmit();}`)
+		first := receivePending(t, page, posts)
+		first.reply <- browserReply{status: 422, body: []byte("refused")}
+		page.MustWait(`() => window.answers===1`)
+		// Isolate Edit's cleanup from the input and pending-submit cleanups.
+		page.MustEval(`key => {document.getElementById('message-composer').dataset.unconfirmedKey=key;}`, first.values.Get("idempotency_key"))
+		page.MustElement("[data-pending-edit]").MustClick()
+		if page.MustEval(`() => document.getElementById('message-composer').dataset.unconfirmedKey!==undefined`).Bool() {
+			t.Fatal("editing a known refusal kept a stale unconfirmed mark")
+		}
+		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+		resend := receivePending(t, page, posts)
+		resend.reply <- browserReply{status: 429, body: []byte("refused")}
+		page.MustWait(`() => window.answers===2`)
+		if page.MustEval(`() => document.querySelector('[data-pending-form] [role=status]').textContent!==document.getElementById('message-send-alert').dataset.notSent`).Bool() {
+			t.Fatal("known refusal became unconfirmed after Edit")
+		}
 	})
 }

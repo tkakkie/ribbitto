@@ -36,7 +36,7 @@ Rules: [unread](../domain/unread.md#counts); composition:
 per second makes SQL work grow with connections. At 5,000 connections,
 median message arrival was 22 ms without unread counts at 20 posts/s,
 1.2 s with counts at 5 posts/s and 1.5 s at 20 posts/s
-([measured results](../architecture/stream-sidebar-results.md)). Small shared
+([measured results](../measurements/stream-sidebar-results.md)). Small shared
 per-post frames keep counts moving without that repeated SQL; resync restores
 exact values.
 

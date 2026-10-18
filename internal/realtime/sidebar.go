@@ -42,7 +42,7 @@ type SidebarWatch interface {
 // SidebarInterval bounds recounts to once per second per connection, allowing
 // bursts to coalesce while keeping current counts responsive. Reconnects always
 // recount; production query cost was measured in #812
-// (docs/architecture/stream-sidebar-results.md).
+// (docs/measurements/stream-sidebar-results.md).
 const SidebarInterval = time.Second
 
 var errSidebarDue = errors.New("realtime: sidebar recount due")

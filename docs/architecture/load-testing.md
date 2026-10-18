@@ -6,8 +6,8 @@ in-process cost per post is in [stream cost](stream-cost.md). Server
 counters are described in [development metrics](dev-metrics.md).
 
 **Keep it current:** #216's results and commands are in
-[load results](load-results.md), #219's in
-[reconnect storm results](load-results-restart.md), and their measurements
+[load results](../measurements/load-results.md), #219's in
+[reconnect storm results](../measurements/load-results-restart.md), and their measurements
 for the dispositions are below. Change a disposition here when a measurement changes it.
 
 ## Assumptions and dispositions
@@ -58,8 +58,8 @@ numbers are named when #216 tunes them (#261 B13).
 
 ## Measurements (#216, 2026-10-07)
 
-From the run in [load results](load-results.md); every step's figures are in
-[load results by step](load-results-steps.md).
+From the run in [load results](../measurements/load-results.md); every step's figures are in
+[load results by step](../measurements/load-results-steps.md).
 
 - **A4 (render cache):** at 1,000 streams and 10 posts/s for 30 s over
   HTTP/1.1, on a freshly started server, each step delivered 300 renders.
@@ -93,4 +93,4 @@ From the run in [load results](load-results.md); every step's figures are in
   40,000 streams).
 - **A7, SIGTERM to exit (#219, 2026-10-08):** 23–80 ms with 300 to 5,000
   streams open and posts in flight, well within the 10 s exit deadline
-  ([reconnect storm results](load-results-restart.md#exit-and-readiness)).
+  ([reconnect storm results](../measurements/load-results-restart.md#exit-and-readiness)).

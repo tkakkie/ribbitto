@@ -35,8 +35,8 @@ Counts-only recounts also stopped computing first-unread positions.
 *Unread count costs*, measured 2026-10-12, records a listed-topic statement
 falling from 0.291 to 0.047 ms, but an unlisted selection from 29.801 to
 29.485 ms in warm plans. This demonstrated skipped work, not an end-to-end
-throughput guarantee. [Unread count costs](unread-count-costs.md) retains the
-query costs and qualifications; [Stream cost](stream-cost.md) explains the
+throughput guarantee. [Unread count costs](../architecture/unread-count-costs.md) retains the
+query costs and qualifications; [Stream cost](../architecture/stream-cost.md) explains the
 benchmark's accounting and clocks.
 
 ## Pool, queue and writer experiments

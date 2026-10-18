@@ -135,9 +135,9 @@ and the new upper end.
 ## Results
 
 The two PostgreSQL 18.6 runs on 2026-10-10, their medians and measured
-limits are in [benchmark results](unread-benchmark-results.md).
+limits are in [benchmark results](../measurements/unread-benchmark-results.md).
 
 **Decision: go** (maintainer, 2026-10-10): read ranges with the topic-floor
 scan; topic-view writes are set-based. Not a performance guarantee; the
 reasons, limits and when to revisit are in
-[benchmark results](unread-benchmark-results.md#decision).
+[benchmark results](../measurements/unread-benchmark-results.md#decision).

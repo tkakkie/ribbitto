@@ -53,7 +53,7 @@ transaction order and durable event notification; branching keeps `Merge`'s
 error-only entry point over the same locked union. Neither adapter calls the
 reading publisher; both retain their durable `message.posted` notification.
 `Merge` still delegates to `MergeCovered`: posting and branching also sort ranges
-and build the difference. [Short matched measurements](read-advance-results.md)
+and build the difference. [Short matched measurements](../measurements/read-advance-results.md)
 compare real posting/branching transactions and fragmented unions with the
 pre-coverage baseline (the non-blocking note on #828). Sorting/subtraction adds
 allocations without extra SQL. #832's overnight posting/delivery comparison

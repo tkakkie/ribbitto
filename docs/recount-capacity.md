@@ -20,7 +20,7 @@ reserved connections; the pool maximum is per process, not per installation.
 Adjust using pool acquisition waits, query latency, PostgreSQL CPU and memory,
 and the actual workload. Check slow queries, indexes, storage and recount work
 before raising the maximum. Larger pools are only one lever; the historical
-[load results](architecture/load-results.md) used different hardware and do not
+[load results](measurements/load-results.md) used different hardware and do not
 make their 40-connection setting a small-VPS recommendation.
 
 ## Server-side timeouts

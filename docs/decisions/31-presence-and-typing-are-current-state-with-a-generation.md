@@ -10,7 +10,7 @@ Member read invalidation extends this contract (#711, option B): registry and
 sidebar delivery are wired in production; core HTTP acceptance is implemented.
 The three stacked #711 PRs cover production wiring/core HTTP acceptance,
 race/isolation/recovery/browser acceptance, and short measurements/documentation.
-[Results and evidence](../architecture/read-advance-results.md) record condition 5;
+[Results and evidence](../measurements/read-advance-results.md) record condition 5;
 #832's longer comparison follows separately.
 
 - **Current state, not events.** Presence (who has a stream open) and

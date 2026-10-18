@@ -153,7 +153,7 @@ not publish; posting reuses `message.posted`, with no duplicate read signal.
 Read-only publications do not move durable cursors. Lost process-local signals
 have no bounded repair without reconnect; the durable watermark cannot help.
 An unknown-COMMIT recount may precede persistence and miss the eventual commit:
-[unread writes](unread-writes.md) records the exception, spurious requests and
+[unread writes](../architecture/unread-writes.md) records the exception, spurious requests and
 failure limits. Multiple processes need shared member invalidation and a
 subscribe/snapshot handshake; bounded loss recovery needs durable revisions/replay
-([member contract](ephemeral-state.md#member-read-change-watches)).
+([member contract](../architecture/ephemeral-state.md#member-read-change-watches)).

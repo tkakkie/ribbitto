@@ -107,7 +107,10 @@ func agyEnvironment(parent []string, home, tmp string) []string {
 		switch {
 		case name == "PATH": // agy and its sandbox helpers need executable lookup.
 			env = append(env, value)
-		case name == "LANG", strings.HasPrefix(name, "LC_"): // Preserve locale selection.
+		case name == "LANG", name == "LC_ALL", name == "LC_COLLATE", name == "LC_CTYPE",
+			name == "LC_MESSAGES", name == "LC_MONETARY", name == "LC_NUMERIC", name == "LC_TIME",
+			name == "LC_ADDRESS", name == "LC_IDENTIFICATION", name == "LC_MEASUREMENT",
+			name == "LC_NAME", name == "LC_PAPER", name == "LC_TELEPHONE": // Preserve POSIX/glibc locale selection.
 			env = append(env, value)
 		case name == "USER", name == "LOGNAME": // macOS keychain fallback needs the account name.
 			env = append(env, value)

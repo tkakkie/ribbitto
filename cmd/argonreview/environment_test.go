@@ -15,13 +15,19 @@ func TestAgyEnvironment(t *testing.T) {
 		{"empty parent", "", nil, map[string]string{"HOME": "/review-home"}},
 		{"check", "", []string{
 			"HOME=/caller-home", "TMPDIR=/caller-tmp", "PATH=/bin", "LANG=C",
-			"LC_ALL=C", "LC_MESSAGES=C", "LC_CUSTOM=custom", "USER=operator", "LOGNAME=operator",
+			"LC_ALL=C", "LC_COLLATE=C", "LC_CTYPE=C", "LC_MESSAGES=C", "LC_MONETARY=C",
+			"LC_NUMERIC=C", "LC_TIME=C", "LC_ADDRESS=C", "LC_IDENTIFICATION=C",
+			"LC_MEASUREMENT=C", "LC_NAME=C", "LC_PAPER=C", "LC_TELEPHONE=C",
+			"USER=operator", "LOGNAME=operator", "LC_CUSTOM=excluded", "LC_TERMINAL=excluded",
 			"GH_TOKEN=dummy", "RIBBITTO_DATABASE_URL=dummy", "AWS_SECRET_ACCESS_KEY=dummy",
 			"HTTPS_PROXY=dummy", "SSL_CERT_FILE=dummy", "LC=excluded", "PATH_EXTRA=excluded", "malformed",
 			"PWD=/caller-dir", "SHLVL=3", "_=/caller-executable",
 		}, map[string]string{
 			"HOME": "/review-home", "PATH": "/bin", "LANG": "C", "LC_ALL": "C",
-			"LC_MESSAGES": "C", "LC_CUSTOM": "custom", "USER": "operator", "LOGNAME": "operator",
+			"LC_COLLATE": "C", "LC_CTYPE": "C", "LC_MESSAGES": "C", "LC_MONETARY": "C",
+			"LC_NUMERIC": "C", "LC_TIME": "C", "LC_ADDRESS": "C", "LC_IDENTIFICATION": "C",
+			"LC_MEASUREMENT": "C", "LC_NAME": "C", "LC_PAPER": "C", "LC_TELEPHONE": "C",
+			"USER": "operator", "LOGNAME": "operator",
 		}},
 		{"review", "/workspace/tmp", []string{"HOME=/caller-home", "TMPDIR=/caller-tmp", "GH_TOKEN=dummy"},
 			map[string]string{"HOME": "/review-home", "TMPDIR": "/workspace/tmp"}},
@@ -35,23 +41,25 @@ func TestAgyEnvironment(t *testing.T) {
 }
 
 // testAgyParentEnvironment seeds both subprocess paths with dummy credentials
-// and known allowed values. Existing LC_* variables are also allowed.
+// and known allowed values. Only POSIX/glibc locale names are preserved.
 func testAgyParentEnvironment(t *testing.T) map[string]string {
 	t.Helper()
-	for _, name := range []string{"GH_TOKEN", "RIBBITTO_DATABASE_URL", "AWS_SECRET_ACCESS_KEY", "HTTPS_PROXY", "SSL_CERT_FILE", "LC", "PATH_EXTRA"} {
+	for _, name := range []string{"GH_TOKEN", "RIBBITTO_DATABASE_URL", "AWS_SECRET_ACCESS_KEY", "HTTPS_PROXY", "SSL_CERT_FILE", "LC", "LC_CUSTOM", "LC_TERMINAL", "PATH_EXTRA"} {
 		t.Setenv(name, "dummy-excluded")
 	}
 	t.Setenv("HOME", "/caller-home")
 	want := map[string]string{
-		"PATH": os.Getenv("PATH"), "LANG": "C", "LC_ALL": "C", "LC_MESSAGES": "C",
+		"PATH": os.Getenv("PATH"), "LANG": "C", "LC_ALL": "C", "LC_CTYPE": "C", "LC_MESSAGES": "C", "LC_TIME": "C",
 		"USER": "test-operator", "LOGNAME": "test-operator",
 	}
 	for name, value := range want {
 		t.Setenv(name, value)
 	}
-	for _, entry := range os.Environ() {
-		name, value, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(name, "LC_") {
+	for _, name := range []string{
+		"LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC", "LC_TIME",
+		"LC_ADDRESS", "LC_IDENTIFICATION", "LC_MEASUREMENT", "LC_NAME", "LC_PAPER", "LC_TELEPHONE",
+	} {
+		if value, ok := os.LookupEnv(name); ok {
 			want[name] = value
 		}
 	}

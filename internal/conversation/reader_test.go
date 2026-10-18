@@ -87,7 +87,7 @@ func (f *snapshotFake) EventSeq(context.Context, kernel.ID) (int64, error) {
 func testReader(t *testing.T, data readerData) (*conversation.Reader, *snapshotFake) {
 	t.Helper()
 	f := &snapshotFake{postingFake: &postingFake{t: t, err: conversation.ErrMessageNotFound}, historyData: data}
-	reader := conversation.NewReader(f,
+	reader := conversation.NewReader(f, f,
 		func(s platform.Snapshot) conversation.ReadStore { f.bound(s, "reads"); return f },
 		func(s platform.Snapshot) conversation.MemberDirectory { f.bound(s, "members"); return data },
 		func(s platform.Snapshot) conversation.AccountDirectory { f.bound(s, "accounts"); return data },
@@ -258,7 +258,7 @@ func TestReaderChannelListSnapshot(t *testing.T) {
 			f := &snapshotFake{postingFake: &postingFake{t: t, err: conversation.ErrMessageNotFound}, organizationID: membership.Organization.ID,
 				channels: []conversation.Channel{{ID: kernel.ID{3}}}, topics: []conversation.Topic{{ID: kernel.ID{5}}}}
 			f.fail = fail
-			reader := conversation.NewReader(f,
+			reader := conversation.NewReader(f, f,
 				func(s platform.Snapshot) conversation.ReadStore { f.bound(s, "reads"); return f },
 				nil, nil,
 				func(s platform.Snapshot) conversation.EventCursor { f.bound(s, "bind cursor"); return f },

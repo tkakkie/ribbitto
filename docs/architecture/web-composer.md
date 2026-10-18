@@ -72,8 +72,9 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   text and key, including after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
   the item and text; an uncertain committed post can still arrive later.
-  Edit is available on either failure only with an empty composer; otherwise
-  it is disabled with an associated localised explanation. It restores the raw
+  Edit is available on either failure only with an empty composer outside IME
+  composition; otherwise it stays visible but disabled with an associated
+  localised explanation. It never overwrites a draft. It restores the raw
   text and key, focuses the textarea with the caret at the end, then removes
   the item. The key follows that text across state swaps until sent or emptied;
   emptying it takes a fresh UUID. An unused key posts normally; an equivalent

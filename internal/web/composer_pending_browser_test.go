@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
+	"golang.org/x/net/html"
 )
 
 type pendingRequest struct {
@@ -125,6 +126,30 @@ func TestPendingTemplateScope(t *testing.T) {
 				if strings.Contains(markup, `id="`+id+`"`) != tc.want {
 					t.Fatalf("%s scope", id)
 				}
+			}
+		})
+	}
+}
+
+func TestPendingEditUnavailableReason(t *testing.T) {
+	for _, tc := range []struct{ lang, want string }{
+		{"en", "Clear the text you are writing to edit this message."},
+		{"ja", "編集中の文章を消してから編集してください。"},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			markup := renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", view.ChannelPage{}))
+			doc, err := html.Parse(strings.NewReader(markup))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reason string
+			for node := range doc.Descendants() {
+				if _, ok := attrOK(node, "data-pending-edit-help"); ok {
+					reason = text(node)
+				}
+			}
+			if reason != tc.want {
+				t.Fatalf("pending Edit reason = %q, want %q", reason, tc.want)
 			}
 		})
 	}
@@ -1030,7 +1055,7 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 			first.reply <- browserReply{status: status, body: []byte("refused")}
 			page.MustWait(`() => window.answers===1`)
 			page.MustEval(`() => {const b=document.getElementById('message-body');b.value=' ';b.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-pending-edit]').click();}`)
-			if page.MustEval(`() => {const e=document.querySelector('[data-pending-edit]'), h=document.querySelector('[data-pending-edit-help]');return !e.disabled || !h.checkVisibility() || !e.getAttribute('aria-describedby').split(' ').includes(h.id) || h.textContent!=='Empty the composer before editing.' || document.getElementById('message-body').value!==' ';}`).Bool() {
+			if page.MustEval(`() => {const e=document.querySelector('[data-pending-edit]'), h=document.querySelector('[data-pending-edit-help]');return !e.disabled || e.hidden || !e.checkVisibility() || !h.checkVisibility() || !e.getAttribute('aria-describedby').split(' ').includes(h.id) || h.textContent!=='Clear the text you are writing to edit this message.' || document.getElementById('message-body').value!==' ';}`).Bool() {
 				t.Fatal("occupied composer did not disable and describe Edit")
 			}
 			page.MustEval(`() => {const b=document.getElementById('message-body');b.value='';b.dispatchEvent(new Event('input',{bubbles:true}));}`)
@@ -1101,6 +1126,45 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 			delivered.Body, delivered.Text = strings.TrimSpace(nextBody), strings.TrimSpace(nextBody)
 			events <- realtime.Outgoing{ID: 53, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(delivered)))}
 			page.MustWait(`n => !document.querySelector('#message-pending > li') && document.querySelectorAll('#message-items > li').length===n`, want+1)
+		})
+	}
+	for _, mode := range []string{"draft-click-guard", "composition-availability", "composition-click-guard"} {
+		t.Run(mode, func(t *testing.T) {
+			page, _, posts, _ := pendingBrowser(t, browser, false)
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.value='original';b.form.requestSubmit();}`)
+			first := receivePending(t, page, posts)
+			first.reply <- browserReply{status: 500, body: []byte("unknown")}
+			page.MustWait(`() => window.answers===1`)
+			if page.MustEval(`() => document.querySelector('[data-pending-edit]').disabled`).Bool() {
+				t.Fatal("Edit was unavailable with an empty composer")
+			}
+			key := page.MustEval(`() => {window.failedItem=document.querySelector('#message-pending > li');return document.getElementById('message-composer').elements.idempotency_key.value;}`).Str()
+			if mode == "composition-availability" {
+				page.MustEval(`() => document.getElementById('message-body').dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))`)
+				if !page.MustEval(`() => document.querySelector('[data-pending-edit]').disabled`).Bool() {
+					t.Fatal("Edit stayed enabled during composition")
+				}
+				page.MustEval(`() => document.getElementById('message-body').dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}))`)
+				if page.MustEval(`() => document.querySelector('[data-pending-edit]').disabled`).Bool() {
+					t.Fatal("Edit stayed disabled after composition ended with an empty composer")
+				}
+				return
+			}
+			want := ""
+			if mode == "draft-click-guard" {
+				// No input event: leave Edit enabled to exercise the click guard itself.
+				want = "new draft"
+				page.MustEval(`text => {document.getElementById('message-body').value=text;}`, want)
+			} else {
+				page.MustEval(`() => {document.getElementById('message-body').dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));document.querySelector('[data-pending-edit]').disabled=false;}`)
+			}
+			if page.MustEval(`() => document.querySelector('[data-pending-edit]').disabled`).Bool() {
+				t.Fatal("click-guard test requires an enabled Edit button")
+			}
+			page.MustEval(`() => document.querySelector('[data-pending-edit]').click()`)
+			if page.MustEval(`([text,key]) => {const b=document.getElementById('message-body');return b.value!==text || b.form.elements.idempotency_key.value!==key || document.querySelector('#message-pending > li')!==window.failedItem || window.failedItem.querySelector('form').dataset.state!=='failed';}`, []string{want, key}).Bool() {
+				t.Fatal("Edit click changed the draft, key or failed item while unavailable")
+			}
 		})
 	}
 	t.Run("edit-resumes-and-frees-slot", func(t *testing.T) {

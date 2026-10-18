@@ -410,4 +410,4 @@ other = "You have 10 pending messages. Wait for delivery or remove one to send a
 other = "Edit"
 
 ["message.edit.unavailable"]
-other = "Empty the composer before editing."
+other = "Clear the text you are writing to edit this message."

@@ -102,9 +102,10 @@ htmx sends resync requests. The markup contract is in
 The [composer queue](web-composer.md#composer) holds at most 10 pending items
 and dispatches in FIFO order, pausing while an outcome is unknown. Retry of
 a Not sent item goes to the end; an unknown outcome's Retry keeps its place.
-Edit restores a failed item's text and key only into an empty composer, removes
-that item, frees its slot and resumes a paused queue. Otherwise the disabled
-button describes why. The restored key survives other responses' state swaps;
+Edit restores a failed item's text and key only into an empty composer outside
+IME composition; it never overwrites a draft. It removes that item, frees its
+slot and resumes a paused queue. Otherwise the visible, disabled button
+describes why. The restored key survives other responses' state swaps;
 sending transfers it to the pending form, and emptying the textarea renews it.
 Unused keys post normally; equivalent validated bodies return the stored ID;
 a different body under a used key gets 409 and a fresh key for Retry.

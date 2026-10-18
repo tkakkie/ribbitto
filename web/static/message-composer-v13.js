@@ -4,7 +4,8 @@
   // the hidden controls. Only sending or emptying this text releases it.
   let restoredKey = null;
   const updateEdits = () => {
-    const occupied = document.getElementById("message-body").value !== "";
+    const body = document.getElementById("message-body");
+    const occupied = body.value !== "" || composing.has(body);
     for (const form of pendingForms()) {
       const edit = form.querySelector("[data-pending-edit]");
       const help = form.querySelector("[data-pending-edit-help]");
@@ -127,7 +128,7 @@
     const body = document.getElementById("message-body");
     if (edit) {
       const form = edit.closest("form");
-      if (body.value || form.dataset.state !== "failed") return;
+      if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
       body.form.elements.idempotency_key.value = restoredKey;
@@ -187,7 +188,9 @@
     if (alert) alert.textContent = name ? alert.dataset[name] : "";
   };
   document.addEventListener("compositionstart", (event) => {
-    if (event.target.id === "message-body") composing.add(event.target);
+    if (event.target.id !== "message-body") return;
+    composing.add(event.target);
+    updateEdits();
   });
   document.addEventListener("compositionend", (event) => {
     const body = event.target;
@@ -198,6 +201,7 @@
       pendingRemoval.get(body)();
       pendingRemoval.delete(body);
     }
+    updateEdits();
   });
   const command = (event) => {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;

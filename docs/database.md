@@ -1,8 +1,7 @@
 # Database development
 
-**Keep it current:** update this file when configuration or the migration
-workflow changes; the integration-test setup is in
-[database tests](database-tests.md).
+**Keep it current:** update for configuration or migration changes.
+See [database tests](database-tests.md) and [database locales](database-locales.md).
 
 `RIBBITTO_DATABASE_URL` configures both the server and the explicit
 `migrate up|down|status` command. The server checks connectivity but never

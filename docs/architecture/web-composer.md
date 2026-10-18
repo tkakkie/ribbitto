@@ -103,6 +103,17 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
   the existing resize observer preserves the reader on chip changes. Without
   scripts both submit a GET with `#message-composer`; removal loses unsent text.
+- **Mention picker:** `mention-picker-v1.js` enhances all composers.
+  `#mention-search` uses htmx's 120 ms debounce,
+  replace sync and `outerHTML` into `#mention-listbox`. Only matching `data-query`
+  responses open; picks recheck the token. Empty results hide the picker;
+  `#mention-status` announces no members. `@` requests eight members.
+  Token starts mirror posting: line start, lone column-zero `>`, Unicode space or `(`;
+  no escapes, URLs or email. Code-span/fence checks are conservative.
+  Plain Enter/Tab pick; modified keys pass through except Ctrl/Cmd+Enter closes
+  and follows the send setting. Blur forgets dismissal; refocus searches.
+  Composition hides the picker; Enter has a 100 ms guard after commit.
+  Picks use `setRangeText` and dispatch `input` for drafts and typing.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

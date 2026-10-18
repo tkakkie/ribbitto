@@ -8,7 +8,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `composer-quote-description`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`, `stream-stopped`,
   `message-pending`, `message-pending-template`, `message-pending-body`, `message-pending-edit-help` (template; clones append their send UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
-  `mention-listbox` and `mention-option-<hex>` for mention candidates,
+  `mention-picker`, `mention-search`, `mention-status`, `mention-listbox` and `mention-option-<hex>` for mention candidates,
   `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from

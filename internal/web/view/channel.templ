@@ -303,6 +303,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v16.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -479,6 +480,7 @@ templ pendingMessage(page ChannelPage) {
 // The textarea and the send button stay outside every swap: only the state
 // is replaced, and the button alone is disabled while a post is in flight.
 templ messageComposer(page ChannelPage) {
+	@mentionPicker(page)
 	<form id="quote-form" hidden method="get" action={ conversationURL(page) + "#message-composer" } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/quote" } hx-target="#composer-quote" hx-swap="outerHTML" hx-sync="#message-composer:drop">
 		if page.Before > 0 {
 			<input type="hidden" name="before" value={ fmt.Sprint(page.Before) }/>
@@ -508,7 +510,7 @@ templ messageComposer(page ChannelPage) {
 		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-autocomplete="list" aria-controls="mention-listbox" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" aria-description={ i18n.T(ctx, "mention.help") } class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

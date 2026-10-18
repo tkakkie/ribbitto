@@ -29,7 +29,7 @@ All scheduled posts completed: baseline/sidebar20 80 per step, sidebar5 20;
 all messages and each member's final snapshot arrived. SQL is attempted query/tx
 statements. Count SQL is a subset of queries. Time includes drain. Wait is empty
 acquisitions/total seconds, summed across acquisitions, not wall time. Latency
-triplets are p50/p95/p99 in milliseconds; definitions are in [stream cost](stream-cost.md#sidebar-mode-812).
+triplets are p50/p95/p99 in milliseconds; definitions are in [stream cost](../architecture/stream-cost.md#sidebar-mode-812).
 
 | Mode | Streams | SQL query/tx | Count SQL | Recounts | Time | Recounts/connection/s | Count SQL/recount /post | Pool empty/wait s | Message ms | Recount delay ms |
 |---|---|---|---|---|---|---|---|---|---|---|

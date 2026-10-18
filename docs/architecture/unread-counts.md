@@ -41,8 +41,8 @@ tables. Page and independent sidebar snapshots (`conversation.Reader`) reach
 `unread` through an injected, snapshot-bound factory. Pages also reach org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
 `conversation`'s snapshot-bound message queries. The composition root supplies conversation's consumer-owned
-`PageCountsIn` factory. `PageCounter` adapts `newChannelCounts` and
-`newTopicCounts` using org's resolved `Membership.Member.JoinedEventSeq`;
+`PageCountsIn` factory. `PageCounter` adapts `unread.ChannelCounts` and
+`unread.TopicCounts` using org's resolved `Membership.Member.JoinedEventSeq`;
 unread never queries `member`. Feed, topic and `?before=` pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
@@ -88,12 +88,12 @@ recounts with reload targets, distinguish members with the same join sequence,
 and revoke access during a gated recount. `TestLiveSidebarBranchDisplacement`
 checks a real mixed-read branch displacing the selected source from 50 links;
 `TestLiveSidebarBrowser` checks production replacement, retained-link focus and
-the unlisted heading against a reload (#811). Post/move costs are in [sidebar results](stream-sidebar-results.md).
+the unlisted heading against a reload (#811). Post/move costs are in [sidebar results](../measurements/stream-sidebar-results.md).
 Read advances now trigger this same full snapshot only for the same member and
 organisation: reading A clears A and reduces the channel while preserving B;
 reading the feed clears its related displayed topics in every tab. Posting's
 read writes use the existing durable trigger, without a duplicate read signal.
-[Read results and acceptance](read-advance-results.md) cover the per-tab cost;
+[Read results and acceptance](../measurements/read-advance-results.md) cover the per-tab cost;
 browser badge increments follow the [script contract](web-javascript.md).
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
@@ -130,8 +130,8 @@ lower sequence bound. Ordered count branches each cap at 100, then share an
 ordered cap of 100.
 When first unread is enabled, only the selected topic probes above the floor and materialises its unread
 moved candidates before choosing the lowest `event_seq`, without a candidate
-cap. `unread.TopicCounts`, wired by `newTopicCounts`,
-combines steps 3–4 in the page snapshot. The channel first-sequence expression
+cap. `unread.TopicCounts` combines steps 3–4 in the page snapshot
+([wiring](cross-feature-access.md)). The channel first-sequence expression
 and topic first-unread expression each have an explicit boolean SQL guard.
 Recounts pass false, so the extra channel bounded-CTE scan/sort and both topic
 first-unread branches (including the moved CTE) do not execute. The count

@@ -1,8 +1,8 @@
 # Stream authorization results
 
 What #670's cached allows and shared epoch reads
-([decision](stream-authorization.md#decision)) cost, measured by #671: the
-stream-cost benchmark ([how it runs](stream-cost.md)) and a rerun of #216's
+([decision](../architecture/stream-authorization.md#decision)) cost, measured by #671: the
+stream-cost benchmark ([how it runs](../architecture/stream-cost.md)) and a rerun of #216's
 active steps ([how they run](load-results.md#reproducing-it)).
 
 ## Benchmark, 2026-10-09
@@ -57,7 +57,7 @@ unless marked.
 | stagger 100 ms | 15,000 | 5,712 | 162 | 0.0108 | 0.633 | 8.29 / 15.82 / 16.32 s | 182 / 355 / 404 ms | fail: p95 |
 
 Before #670 a post cost about `N + 10` queries and the highest passing step
-was 2,000 ([stream cost](stream-cost.md#with-shared-reads-227-2026-10-01)).
+was 2,000 ([stream cost](../architecture/stream-cost.md#with-shared-reads-227-2026-10-01)).
 
 - **Queries per post no longer follow `N`:** in the unstaggered ladders,
   about 16 to 19 with one member and 26 to 46 with distinct members up to
@@ -104,7 +104,7 @@ The production design does not change.
   churns, the hit rate falls and the pool limits delivery again. The default
   stream cap (`realtime.DefaultMaxStreams`, 5,000) keeps a process below
   that, so it does not block #671. #692 ties the unset capacity to the
-  [effective stream limit](stream-limits.md) and warns on a smaller explicit
+  [effective stream limit](../architecture/stream-limits.md) and warns on a smaller explicit
   capacity.
 - **One member: not the pool.** At 40,000 no acquisition found the pool
   empty; the first delivery over 1 s came at +4.5 s. The benchmark does not

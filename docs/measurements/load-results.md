@@ -2,9 +2,9 @@
 
 End-to-end results of #216: how many concurrent event streams ribbitto
 serves, and what breaks first. The assumptions and dispositions are in
-[load testing](load-testing.md), the client in [load client](load-client.md),
-and the in-process cost per post in [stream cost](stream-cost.md). #219's
-restart with every stream open is in [reconnect storm results](load-results-restart.md).
+[tests](../architecture/load-testing.md), the client in [client](../architecture/load-client.md),
+and the in-process cost per post in [cost](../architecture/stream-cost.md). #219's
+restart with every stream open is in [restart results](load-results-restart.md).
 
 ## Run of 2026-10-07
 
@@ -46,7 +46,7 @@ Memory figures are in MiB and KiB, as `/proc` reports them. CPU comes only from
 reruns of the 7,000 and 10,000 active steps, sampled per interval from
 `/proc/<pid>/stat`: the first series' sampler read `ps`'s `%CPU`, a lifetime
 average, so it is not used. Every step's measurements, including the reruns
-and the failing steps, are in [load results by step](load-results-steps.md).
+and the failing steps, are in [steps](load-results-steps.md).
 
 ### Active steps: 10 posts/s
 
@@ -79,7 +79,7 @@ and the failing steps, are in [load results by step](load-results-steps.md).
 **What hit the limit first: the server's database pool.**
 - **Queries in this run (before #670):** a post cost about one query per open stream, plus about 15.
   That one query was the membership check each connection made before
-  sending each event ([streaming](streaming.md#authorization-and-revocation)).
+  sending each event ([SSE](../architecture/streaming.md#authorization-and-revocation)).
   At 10,000 streams and 10 posts/s that is about 100,000 queries a second.
 - **Pool:** the mean wait for a connection grows with the stream count.
 - **CPU had room:** in the reruns at 10,000 streams over HTTP/1.1, the VM was
@@ -144,7 +144,7 @@ what the active steps left behind.
   active steps ([results](stream-authorization-results.md#216s-active-steps-rerun-2026-10-09)):
   10,000 now passes with the default pool and HTTP/1.1 reaches 15,000; the
   pool was no longer the limit, and the run did not isolate what was.
-- #623: a process-wide stream cap (A5), now done; see [stream limits](stream-limits.md).
+- #623: a process-wide stream cap (A5), now done; see [limits](../architecture/stream-limits.md).
 - #624: sizing self-hosted machines, including Caddy's per-stream memory.
 
 ## Reproducing it
@@ -196,7 +196,7 @@ XDG_DATA_HOME=/root/caddy-data caddy run --config Caddyfile
 RIBBITTO_MAX_STREAMS=60000 RIBBITTO_ADDR=127.0.0.1:8080 RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:9090 ribbitto serve
 ```
 
-Run each series as [load client](load-client.md#a-ceiling-search) shows, with
+Run each series as [client](../architecture/load-client.md#a-ceiling-search) shows, with
 `-tokens /root/loadtest.json -metrics http://127.0.0.1:9090 -setup 5m -drain
 60s -dial-concurrency 256`:
 - *active:* `-rate 10 -duration 30s` at 500, 1,000, 2,000, 3,000, 5,000,
@@ -220,5 +220,5 @@ curl -fsS 'http://127.0.0.1:9090/debug/pprof/heap' -o /tmp/server-heap.pprof
 wait
 ```
 
-Inspect files with `go tool pprof`; [development metrics](dev-metrics.md#capturing-profiles)
+Inspect files with `go tool pprof`; [metrics](../architecture/dev-metrics.md#capturing-profiles)
 explains sampling and deadlines.

@@ -2,14 +2,14 @@
 
 End-to-end results of #219: the server restarts with every stream open while
 posts continue, and every client reconnects and replays from its
-`Last-Event-ID`. The harness is in [restart](load-restart.md), the
-reconnect model, receipts and comparison in [load client](load-client.md),
-and the expected set in [seed data](../seed-data.md#expected-messages-after-a-load-run).
+`Last-Event-ID`. The harness is in [restart](../architecture/load-restart.md), the
+reconnect model, receipts and comparison in [client](../architecture/load-client.md),
+and the expected set in [fixtures](../seed-data.md#expected-messages-after-a-load-run).
 
 ## Run of 2026-10-08
 
 **Machine:** the disposable, loopback-only container of #216's run
-([load results](load-results.md#run-of-2026-10-07)), with the same database
+([results](load-results.md#run-of-2026-10-07)), with the same database
 and fixtures. The binaries were linux/arm64 builds of `main` at 4cdb4aa;
 pgx's default pool of 10 connections and `RIBBITTO_MAX_STREAMS=5000`.
 
@@ -65,7 +65,7 @@ the next posts, so with a later sequence; nothing was posted twice.
 
 No exit overran the 10 s `-exit-deadline`. This verifies A7's fix (#297,
 #316) under load: with thousands of streams open and posts in flight, the
-process exits within 80 ms ([load testing](load-testing.md#assumptions-and-dispositions)).
+process exits within 80 ms ([tests](../architecture/load-testing.md#assumptions-and-dispositions)).
 
 ### Client recovery
 
@@ -100,7 +100,7 @@ incomplete for any of the three, and no stream was reset.
   continue until observation ends; the final watermark is the last post,
   1/rate (0.1 s) before the end: 39.9 s after SIGTERM (19.9 s for sanity and F),
   plus delivery. #219 used outage recovery and post latencies for catch-up.
-  [Live again](load-restart.md#client-recovery-and-replay-load) (#668) would give
+  [Recovery](../architecture/load-restart.md#client-recovery-and-replay-load) (#668) would give
   catch-up instead of 39.9 / 19.9 s; FullyCaughtUp stays. #219 was not rerun.
 - **Post-to-receipt latency over the whole run** stayed in #216's range: p50
   28–30 ms and p95 44–79 ms at 3,000 streams, 43 / 80 ms at 5,000. Every
@@ -187,7 +187,7 @@ None open: #667 (receipt memory) and #668 (live again) are done.
 
 ## Reproducing it
 
-In the container of [load results](load-results.md#reproducing-it), with
+In the container of [results](load-results.md#reproducing-it), with
 `RIBBITTO_DATABASE_URL` pointing at its `ribbitto` database on `127.0.0.1`
 and no other server on `127.0.0.1:8080` (the harness refuses an occupied
 address), run, for A (outputs go outside any Git checkout: `seed -expected`

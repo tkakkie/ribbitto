@@ -65,12 +65,64 @@
     // clock cannot move performance.now(). setTimeout's delay is capped at
     // 2^31 - 1 ms, under a session's 30 days, so long waits are chained.
     const deadline = expires - rendered;
+    let stopped = false, timer, dirty = false, composing = false, at = 0, text = "";
+    const stop = () => { stopped = true; dirty = false; clearTimeout(timer); };
+    const read = (key) => {
+      try { return JSON.parse(storage.getItem(key)); } catch { return null; }
+    };
+    const form = document.getElementById("message-composer");
+    const body = document.getElementById("message-body");
+    const key = prefix + member + ":" + session + ":" + form?.dataset.draftChannel + ":" + (form?.dataset.draftTopic || "feed");
+    const trim = (limit, except) => {
+      const entries = Object.keys(storage).filter((k) => {
+        const match = draft.exec(k);
+        return k !== except && match?.[1] === member && match[2] === session;
+      }).map((k) => [k, read(k)?.at || 0]);
+      entries.sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      for (const [k] of entries.slice(0, Math.max(0, entries.length - limit))) storage.removeItem(k);
+    };
+    const save = () => {
+      clearTimeout(timer);
+      if (performance.now() >= deadline) stop();
+      if (stopped || composing || !dirty) return;
+      dirty = false;
+      try {
+        // Best effort: another tab may write between this read and setItem,
+        // or update an entry after trim selects it. Neither race is repaired.
+        if (read(key)?.at >= at) return;
+        trim(49, key);
+        storage.setItem(key, JSON.stringify({ member, session, expires, text, at }));
+        trim(50);
+      } catch {
+        // A stored copy may be lost; the textarea and sending remain usable.
+      }
+    };
+    const edited = () => {
+      if (stopped) return;
+      if (performance.now() >= deadline) { stop(); return; }
+      // Snapshot the input, not a later save or a send's textarea cleanup.
+      at = Math.max(Date.now(), at + 1);
+      text = body.value;
+      if (!text.trim() || [...text].length > 4000) text = "";
+      dirty = true;
+      clearTimeout(timer);
+      if (!composing) timer = setTimeout(save, 300);
+    };
+    if (body && form?.hasAttribute("hx-post") && draft.test(key)) {
+      body.addEventListener("input", edited);
+      body.addEventListener("compositionstart", () => { composing = true; clearTimeout(timer); });
+      body.addEventListener("compositionend", () => { composing = false; edited(); });
+      window.addEventListener("pagehide", save);
+      document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+    }
+    window.addEventListener("storage", (event) => { if (event.key === "ribbitto.signed-out.v1") stop(); });
     const expire = () => {
       const left = deadline - performance.now();
       if (left > 0) {
         setTimeout(expire, Math.min(left, 2 ** 31 - 1));
         return;
       }
+      stop();
       try {
         for (const key of Object.keys(storage)) {
           if (draft.exec(key)?.[2] === session) storage.removeItem(key);

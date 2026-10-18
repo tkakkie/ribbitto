@@ -110,45 +110,55 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (the pattern check).
-`message-drafts-v2.js` cleans up on the sign-in page (#1178) and on
-organisation pages (#1181); saving and restoring (#1162) and the sidebar
-marker (#1177) are planned: a page restores only its own member and
-session's unexpired entries, writes only before its session's deadline, and
-only shows or hides a server-rendered sidebar marker.
+`message-drafts-v3.js` cleans up (#1178, #1181) and saves latest feed/topic
+input (#1186), never on `?before=`/`?around=`. Restore, confirmed-send clearing
+(#1162) and sidebar markers (#1177) remain planned. Sent text stays until
+another edit or cleanup (decision 37's temporary plaintext copy).
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
-  canonical lower-case UUIDs; the session is its id, a UUIDv7, and the place
-  the literal `feed` or the topic's ID.
-- **Value:** JSON `{member, session, expires, text, at}`; at most 50 entries
-  per member and session (best effort across tabs, #1186), each kept 7 days
-  after its last edit (`at`).
-- **Notice:** `ribbitto.signed-out.v1`, without content; its value is the
-  horizon that wrote it, so each write fires a `storage` event in other tabs.
-- **Millisecond rule:** a cleanup removes an entry only if its session's
-  48-bit millisecond prefix (the first 12 hex digits) is strictly before its
-  horizon's, plus every `ribbitto.draft.v1:` key without that format. Entries
-  in the horizon's millisecond stay until expiry or a later cleanup, so a
-  stale page never removes a newer session's entry, and never reads another
-  session's value.
-- **Sign-in page:** the form's `data-drafts-horizon` is a `uuidv7()` from
-  PostgreSQL (`identity.SessionHorizon`, the clock of session ids), rendered
-  only for signed-out requests, including `POST /signin`'s error renders.
-  With it the script cleans up, then writes the notice, once per document
-  load, never on a back-forward cache restore. A storage error leaves the
-  page working.
-- **Organisation pages:** the channel and channel list pages render on
-  `#organization-stream` `data-session` (the session's id, never its token
-  or hash), `data-session-expires` and `data-rendered-at` (Unix
-  milliseconds) beside `data-member`. Once per document load the script
-  decides each key under the prefix by the first rule that applies: without
-  the format, or with the page's session and another member, removed;
-  another session's, removed if its millisecond is before the page's, else
-  kept unread; the page's own, the only values read, removed if not JSON,
-  lacking or mistyping a field, differing from the key and page in member,
-  session or expiry, over 4,000 code points, or with `at` 7 days old or more
-  than a day ahead. At the deadline (expiry minus render time, timed with
-  `performance.now()` from the document's time origin) an open page removes
-  its own session's keys unread.
+  canonical lower-case UUIDs; session is its UUIDv7 id, place is `feed` or
+  the topic's ID.
+- **Value:** JSON `{member, session, expires, text, at}`; `expires` and `at`
+  are Unix milliseconds. Bounds: 4,000 code points and 50 entries per member
+  and session. Retention uses last edit (`at`), checked only at document load.
+- **Saving:** latest htmx forms carry `data-draft-channel` and optional
+  `data-draft-topic`, outside state swaps. Snapshots use tab-monotonic input
+  times, never save times; debounce 300 ms, flush on `pagehide`/hidden, and
+  wait for `compositionend`. Clean tabs never flush. Blank/over-limit input
+  and future clearing write empty-text tombstones with the edit's time,
+  never delete keys. Tombstones restore nothing,
+  count toward 50, and leave only by eviction, session ending or retention.
+- **Races and cap:** a read just before writing skips equal/later stored
+  edits, leaving the tab clean. Own entries sort by oldest edit time then
+  key: other entries trim to 49 before insertion, all to 50 after every write.
+  Both rules are best effort against observed values: overlapping reads may
+  leave older text; eviction may remove a concurrent update. Neither is
+  repaired. The textarea stays; only the next input saves again, never a
+  clean lifecycle flush. Foreign values stay unread and keys unwritten.
+- **Stopping:** sign-out notices and the deadline cancel pending saves and
+  stop writes until reload; each save checks the deadline. Storage errors
+  leave typing and sending usable.
+- **Notice:** `ribbitto.signed-out.v1` holds the horizon, without content;
+  each write fires a `storage` event in other tabs.
+- **Millisecond rule:** cleanup removes malformed `ribbitto.draft.v1:` keys
+  and entries whose session's 48-bit millisecond prefix (first 12 hex digits)
+  strictly precedes its horizon's. Foreign sessions in the same millisecond
+  or later stay unread: a stale page cannot remove a newer session's entry.
+- **Sign-in page:** `data-drafts-horizon` is PostgreSQL's `uuidv7()`
+  (`identity.SessionHorizon`, the session-id clock), present only when
+  signed out, including sign-in errors. Cleanup then notice run once per
+  document load, never on back-forward cache restore. Storage errors leave
+  the page usable.
+- **Organisation pages:** channel/list pages' `#organization-stream` has
+  `data-session` (id, never token/hash), `data-session-expires` and
+  `data-rendered-at` (Unix milliseconds) beside `data-member`. Once per load,
+  the first matching rule decides each draft key: malformed or own session
+  with another member, removed; foreign session, removed if earlier by the
+  millisecond rule, else unread; own values, removed if invalid JSON, fields
+  missing/mistyped, member/session/expiry mismatched, over 4,000 code points,
+  or `at` at least 7 days old or over a day ahead. At the deadline (expiry
+  minus render time, using `performance.now()` from the document's time
+  origin) the open page removes its own session's keys unread.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
   where the browser supports it (Chromium); the sign-in page covers the rest.
 

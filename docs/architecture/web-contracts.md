@@ -41,8 +41,9 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-sent-body` | `#message-composer-state` | an htmx 409 with a verified typed prefix, unquoted | only the request text's prefix verified by the keyed message's typed-body proof; the help then shows no error |
   | `data-unconfirmed`, `data-not-sent`, `data-still-unconfirmed`, `data-recovered`, `data-repeat`, `data-busy`, `data-capacity` | `#message-send-alert` | latest composers | localised alert texts |
   | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-edit`, `data-pending-edit-help`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
+  | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
   | `data-drafts-horizon` | the sign-in form | signed-out renders only | UUIDv7; stored drafts of sessions from earlier milliseconds are removed ([drafts](web-composer.md#drafts)) |
-  | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the drafts cleanup's horizon and deadline ([drafts](web-composer.md#drafts)) |
+  | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the draft key's session, cleanup horizon and deadline for stopping writes ([drafts](web-composer.md#drafts)) |
 
   Member identity, selected topic and the resync trigger are specified in the
   [sidebar script contract](web-javascript.md#javascript).

@@ -74,11 +74,12 @@ malformed keys, cross-tab notices, blocked scripts, failed sign-out and
 signed-in errors. `TestBrowser/drafts-org` checks both organisation pages
 (#1181): stale sessions keep newer/same-millisecond entries unread; later
 sessions or members remove earlier ones; malformed values and expired own
-sessions are removed. Pending markup, replacement and recovery are checked
-below. Planned: #1162 tests a controlled interleaving: a tab of an earlier session writes
-  after a later session's page has loaded and cleaned, and the later session
-  never restores that text. It also tests sign-out with two tabs open and a
-  debounced save pending.
+sessions are removed. `TestDraftComposerPlace` checks latest/history attributes.
+`TestBrowser/drafts-save` gates timers: debounce/reset/cancellation, monotonic
+edit time, flush, IME, tombstones, code points, equal/later edits, cap orders/ties,
+post-write trim and isolated owner predicates. Overlaps pin loss/recovery.
+Cases cover sign-out stopping before cleanup, separate cleanup, stale-session
+writes, expiry guards, pre-script storage errors, typing/sending and 200/422 swaps.
 
 ### Shared browser tests
 
@@ -92,10 +93,8 @@ swaps, removal of the moved first-unread message's divider, preservation on
 other moves, and abort/400 followed by another request. Ordered IDs detect duplicates and gaps; waits use DOM/lifecycle gates.
 The panel-sheet reading checks use a named observation window,
 `noReadWindow`, when no POST is expected.
-Script-disabled tabs wait for document readiness without page-side event
-listeners; `navigateLoaded` provides this for the message-time and
-panel-sheet tests. rod's `WaitLoad` listens in page JavaScript, so it hangs
-there if the load is still pending (#1129).
+Script-disabled tabs use `navigateLoaded` for readiness; rod’s `WaitLoad`
+needs page JavaScript and can hang (#1129).
 
 Composer cases run real signal/post handlers with request and DOM gates: IME,
 input throttling, draft isolation, independent in-flight signals, 422/retry,

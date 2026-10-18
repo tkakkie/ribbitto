@@ -53,7 +53,7 @@ func ComposerQuote(page ChannelPage, oob bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if page.Quote != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1\"><div class=\"min-w-0 flex-1\"><p class=\"truncate text-caption\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1\"><div id=\"composer-quote-description\" class=\"min-w-0 flex-1\"><p class=\"truncate text-caption\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -104,8 +104,13 @@ func ComposerQuote(page ChannelPage, oob bool) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div id=\"composer-quote-description\"></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

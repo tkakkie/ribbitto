@@ -34,7 +34,7 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   disabled; `aria-describedby` also names its visible localised explanation.
   Edit focuses the restored text's end. At 10 items,
   a localised capacity alert retains the draft, `aria-invalid` and
-  `aria-describedby="message-help composer-quote"`. Arrival announces in `#message-status`.
+  `aria-describedby`. Arrival announces in `#message-status`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -85,16 +85,16 @@ the right field, and run neither JavaScript nor `hx-*`.
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
-The empty `#message-status` has `role="status"`, `aria-live="polite"` and
-`aria-relevant="additions"`. History and paging stay outside live regions.
-Only live appends announce stream-only text, and "Copy link" its
-confirmation (#1159). History, prepends and duplicate
-replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
-Latest feeds/topics have a separate visible `#typing-status`, localized and
-polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
-it stays outside history and composer replacement, with no keyboard stop.
+`#message-status` is empty, with `role="status"`, `aria-live="polite"` and
+`aria-relevant="additions"`. It announces only live appends' stream-only text and
+"Copy link" confirmation (#1159), keeping 10 entries. History, paging,
+prepends, duplicate replacements and pruning stay silent.
+A reset hold shows `#stream-stopped`, a localised status with a plain reload link, keeping focus.
+Latest feeds/topics' `#typing-status` is visible, localised and polite with
+`aria-atomic="true"`, outside history and composer swaps. Content swaps keep
+region and focus, without a tab stop.
 The textarea is never replaced (#1173): it keeps drafts and text typed while a
-post is in flight, keeps `aria-describedby="message-help composer-quote"` and takes
+post is in flight, keeps `aria-describedby` and takes
 `aria-invalid` from every swapped state (`"false"` on pending success).
 Help shows errors or guidance; focus left on the disabled send button
 returns to it. Pending sends queue ([contract](architecture/web-composer.md#composer)).
@@ -123,7 +123,7 @@ stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
 it suits all three, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
-where the click put it; other clicks inside leave it open. Those three are
+where the click put it; a click inside leaves it open except for Quote. Those three are
 the browser's own. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks each at desktop and
 phone width.
@@ -138,9 +138,28 @@ browser decides through `:focus-visible` whether to show a ring; tested
 Chrome shows none. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
 
-Side-panel focus rules are in [panel accessibility](accessibility-panels.md).
+A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
+when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
+header control has `aria-current="true"`. Its close link, and Escape through
+`side-panel-v3.js`, return to the conversation; Escape acts only with focus
+in the panel or on nothing and no popover open, so Escape in the composer
+never closes the panel (a draft is still lost by leaving the page). After that close, focus returns to the control that opened the panel:
+its id crosses the page load in `sessionStorage`.
 
-The composer quote chip describes the textarea with its author and one-line excerpt.
-Quote and Remove quote focus the textarea after the chip swap; Quote closes its
-actions popover on activation. Without scripts both buttons submit a GET to the
-conversation with `#message-composer`; removal loses unsent text.
+Below 1200 px the panel covers the conversation and is a modal dialog,
+one model for the overlay and the phone's sheet (#972,
+[side panels](ui-components.md#side-panels)). The script gives it
+`role="dialog"` and `aria-modal="true"` and makes everything else on the
+page inert (the app bar, the sidebar or list, and the conversation), so
+neither focus nor a pointer reaches them; focus left behind moves to the
+heading. Tab from the last stop, and Shift-Tab from the first stop or the
+heading, wrap inside the dialog. Widening the window to 1200 px removes the
+role, `aria-modal` and `inert`, leaving the complementary `<aside>`;
+crossing 852 px either way keeps the modal. The dimmed `#panel-backdrop`,
+over the whole page, is a close link for a pointer only (`tabindex="-1"`,
+`aria-hidden="true"`); the close link and Escape serve the keyboard and
+assistive technology, and focus returns to the opener after any of the
+three. The modal semantics come with the script: without JavaScript the
+panel is a page whose close link and member paging work.
+`testPanelSheetBrowser` checks this through the accessibility tree at both
+widths, with the sheet's height, scrolling and the reading pause.

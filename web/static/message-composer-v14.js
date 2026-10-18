@@ -40,6 +40,13 @@
       return;
     }
     if (event.target.id !== "message-composer") return;
+    // Quote shares the composer's htmx lock; guard the pending/plain paths too,
+    // before either can submit stale quote state or clear the draft.
+    if (document.getElementById("quote-form")?.classList.contains("htmx-request")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;

@@ -5,7 +5,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 - **DOM ids are a contract.** Templates define ids used by `hx-target`,
   `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `composer-quote-description`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`, `stream-stopped`,
   `message-pending`, `message-pending-template`, `message-pending-body`, `message-pending-edit-help` (template; clones append their send UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `mention-listbox` and `mention-option-<hex>` for mention candidates,

@@ -54,7 +54,7 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   visible. Storage order follows send order on uninterrupted success or a
   successful same-key Retry, but may differ after Remove or Edit.
   A 200 swaps the composer state and out-of-band typing form, sets
-  `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote"` and the
+  `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
   Its `data-posted-message` associates
   the item with delivery. A `MutationObserver` removes a
@@ -82,8 +82,8 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   it to its own form and clears the composer's mark; emptying the restored
   text clears it and takes a fresh UUID.
   Editing a known refusal clears any stale composer mark.
-  An unused key posts normally; an equivalent validated body under a used key
-  returns the stored message; a different body gets the pending 409 above.
+  An unused key posts normally; a body matching the [retry rule](posting.md)
+  under a used key returns the stored message; a different body gets the pending 409 above.
   Pending sends bypass prefix removal, the ordinary send alert, ordinary
   failure classification and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
@@ -91,6 +91,16 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   on 422. Scoped by the server to the authorised membership; never in a
   stream payload. On a pending send the script replaces it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
+- **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
+  `data-state`, the composer's request class and #1179's failure alert. Queued, sending
+  and failed items hold reload; confirmed items do not. Retry success, Remove
+  or Edit can release it: Edit's restored text is a draft. Each dispatched
+  request has a 30 s timeout; queues, retries and failed text can extend the hold.
+- **Quote chip:** `#composer-quote-description` holds only the quoted author
+  and excerpt and stays present, empty, without a quote. Quote and Remove
+  quote focus the textarea after the chip swap; Quote closes its actions
+  popover. Without scripts both submit a GET with `#message-composer`;
+  removal loses unsent text.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

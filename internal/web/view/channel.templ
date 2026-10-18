@@ -228,6 +228,10 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
+					<p id="stream-stopped" role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
+						{ i18n.T(ctx, "stream.stopped") }
+						<a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "stream.reload") }</a>
+					</p>
 					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
@@ -305,7 +309,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-drafts-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -393,7 +397,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 		}
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-drafts-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -453,7 +457,7 @@ templ pendingMessage(page ChannelPage) {
 			// Keep the empty failure status exposed without adding a flex gap.
 			<div>
 				<p data-pending-body id="message-pending-body" dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
-				<form data-pending-form hx-trigger="pending-send" method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt="find button" hx-request={ `{"timeout":30000}` }>
+				<form data-pending-form hx-trigger="pending-send" method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt={ `find button[type="submit"]:not([form])` } hx-request={ `{"timeout":30000}` }>
 					<input type="hidden" name="body"/>
 					<input type="hidden" name="idempotency_key"/>
 					<input type="hidden" name="composer"/>
@@ -494,7 +498,7 @@ templ messageComposer(page ChannelPage) {
 			hx-post={ conversationURL(page) }
 			hx-target="#message-composer-state"
 			hx-swap="outerHTML"
-			hx-disabled-elt="find button"
+			hx-disabled-elt={ `find button[type="submit"]:not([form])` }
 			hx-sync="this:drop"
 			// htmx sets no timeout of its own: a hung send would never end.
 			hx-request={ `{"timeout":30000}` }
@@ -504,7 +508,7 @@ templ messageComposer(page ChannelPage) {
 		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

@@ -15,12 +15,12 @@ from importing `internal/identity`, `internal/org` or
 in both languages, with `HX-Request: true`. It checks `hx-target` ids in
 the requesting page, `hx-select` matches in the response, and every
 `hx-select-oob` match in the response and its destination id in the page.
-Selection may use response-only ids. The selector helper supports `#id`, `#id > tag` and comma-separated lists;
+Selection may use response-only ids. Selectors support `#id`, `#id > tag` and comma-separated lists;
 new syntax needs test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
-`hx-disabled-elt="find button"` and `hx-sync="this:drop"`
-are not swap selectors. The real sibling typing form is checked for its POST
-route, matching action/method, generation-only controls, no-swap and empty 204;
+`hx-disabled-elt='find button[type="submit"]:not([form])'` and `hx-sync="this:drop"`
+are not swap selectors. The sibling typing form is checked for its POST
+route, action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
 
 The data attributes in the [DOM contract](web-contracts.md) are asserted on the elements that
@@ -83,7 +83,7 @@ below. Planned: #1162 tests a controlled interleaving: a tab of an earlier sessi
 ### Shared browser tests
 
 `TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared
-browser suite. Its stream cases run the embedded `message-stream-v12.js`, vendored htmx and SSE extension
+browser suite. Its stream cases run the embedded `message-stream-v13.js`, vendored htmx and SSE extension
 in headless Chrome through go-rod. A test server renders
 `ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
@@ -172,7 +172,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v12.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v13.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

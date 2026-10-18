@@ -50,7 +50,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   except a 409, which names the stored message and, when the text starts
   with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
-  success sets it to `"false"` and keeps `aria-describedby="message-help composer-quote"`.
+  success sets it to `"false"` and keeps `aria-describedby="message-help composer-quote-description"`.
   Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
@@ -67,7 +67,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - `#quote-form` is a page-level GET to the current conversation and composer
   fragment; htmx posts it to the channel's `/quote`, swapping `#composer-quote`.
   Each shared menu submits only `name="quote"` and the message UUID. The chip
-  lives inside the composer, describes its textarea and submits a hidden `quote`.
+  lives inside the composer, submits a hidden `quote`, and describes the textarea
+  through `#composer-quote-description` (author/excerpt only; empty without a quote).
   Quoted post responses refresh it out of band: re-read on 422/409, empty on
   success. Unquoted pending responses leave it alone.
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).

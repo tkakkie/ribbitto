@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -62,6 +64,9 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 		}
 		frames <- realtime.Outgoing{ID: seq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", entry)))}
 	}
+	quoteHolds, postHolds := make(chan chan struct{}, 1), make(chan chan struct{}, 1)
+	stop := make(chan struct{})
+	var posts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/organizations/acme/events" {
 			w.Header().Set("Content-Type", "text/event-stream")
@@ -80,6 +85,24 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 				}
 			}
 		}
+		if scripts && r.Method == "POST" && (r.URL.Path == feed || r.URL.Path == feed+"/quote") {
+			holds := quoteHolds
+			if r.URL.Path == feed {
+				posts.Add(1)
+				holds = postHolds
+			}
+			select {
+			case release := <-holds:
+				select {
+				case <-release:
+				case <-stop:
+					return
+				case <-r.Context().Done():
+					return
+				}
+			default:
+			}
+		}
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
 		handler.ServeHTTP(w, r)
 		if scripts && r.Method == "POST" && r.URL.Path == feed {
@@ -92,6 +115,7 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 		}
 	}))
 	defer server.Close()
+	defer close(stop)
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	defer page.MustClose()
 	page.MustSetViewport(width, 844, 1, width < 768)
@@ -103,10 +127,29 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 	}
 	page.MustNavigate(server.URL + feed).MustWaitLoad()
 	page.MustEval(`() => window.quoteVisit = true`)
-	choose := func(message conversation.Message) {
+	choose := func(message conversation.Message, hold bool) {
 		t.Helper()
+		release := make(chan struct{})
+		if hold {
+			quoteHolds <- release
+		}
 		page.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, message.ID)).MustClick()
 		page.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, message.ID)).MustClick()
+		if hold {
+			page.MustWait(`() => document.getElementById('quote-form').classList.contains('htmx-request')`)
+			page.MustElement("#message-body").MustFocus()
+			page.Keyboard.MustType(input.Enter)
+			if problem := page.MustEval(`() => {
+ const b = document.getElementById('message-body');
+ if (b.value !== 'quoted answer') return 'Enter cleared the draft during quote selection';
+ if (document.querySelector('#message-pending > li')) return 'Enter queued a post during quote selection';
+ if (b.form.classList.contains('htmx-request')) return 'Enter posted during quote selection';
+ return '';
+}`).Str(); problem != "" {
+				t.Fatal(problem)
+			}
+			close(release)
+		}
 		page.MustElement(`#composer-quote input[name=quote]`)
 		page.MustWait(`id => document.querySelector('#composer-quote input').value === id`, realtime.FormatPayloadID(message.ID))
 		if scripts {
@@ -116,22 +159,53 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 			}
 		}
 	}
-	choose(first)
+	choose(first, false)
 	page.MustElement("#composer-quote button").MustClick()
 	page.MustWait(`() => !document.querySelector('#composer-quote input')`)
 	if scripts {
+		page.MustWait(`() => document.activeElement.id === 'message-body'`)
+
 		second = post("live original")
 		emit(second.EventSeq)
 		page.MustElement("#" + view.MessageDOMID(second.ID))
 	}
-	choose(second)
-	page.MustElement("#message-body").MustInput("quoted answer")
-	page.MustElement(`#message-composer button[aria-label]`).MustClick()
+	if scripts {
+		page.MustElement("#message-body").MustInput("quoted answer")
+		// Exercise both the empty-chip pending path and an existing quoted send.
+		choose(first, true)
+	}
+	choose(second, scripts)
+	if !scripts {
+		page.MustElement("#message-body").MustInput("quoted answer")
+	}
+	release := make(chan struct{})
+	if scripts {
+		postHolds <- release
+	}
+	page.MustElement(`#message-composer button[type="submit"]:not([form])`).MustClick()
+	if scripts {
+		page.MustWait(`() => document.getElementById('message-composer').classList.contains('htmx-request')`)
+		if problem := page.MustEval(`() => {
+ const send = document.querySelector('#message-composer button[type="submit"]:not([form])');
+ if (!send.disabled) return 'Send is enabled during a quoted post';
+ if (document.querySelector('#composer-quote button').disabled) return 'Remove quote was disabled instead of Send';
+ return '';
+}`).Str(); problem != "" {
+			t.Fatal(problem)
+		}
+		close(release)
+	}
 	page.MustElement("#message-items figure blockquote").MustWaitVisible()
 	if got := page.MustElement("#message-items figure blockquote").MustText(); got != second.Body {
 		t.Fatalf("posted quote %q", got)
 	}
 	page.MustWait(`() => !document.querySelector('#composer-quote input')`)
+	if scripts {
+		page.MustWait(`() => !document.querySelector('#message-composer button[type="submit"]:not([form])').disabled && !document.getElementById('message-composer').classList.contains('htmx-request')`)
+		if got := posts.Load(); got != 1 {
+			t.Fatalf("posts = %d, want only the deliberate quoted send", got)
+		}
+	}
 	if scripts && !page.MustEval(`() => window.quoteVisit && !location.search`).Bool() {
 		t.Fatal("posting navigated")
 	}

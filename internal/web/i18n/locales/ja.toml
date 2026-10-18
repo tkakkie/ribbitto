@@ -426,3 +426,9 @@ other = "引用"
 
 ["message.quote_remove"]
 other = "引用を削除"
+
+["stream.stopped"]
+other = "未送信のメッセージがあるため、リアルタイム更新を停止して待機しています。"
+
+["stream.reload"]
+other = "今すぐ再読み込み"

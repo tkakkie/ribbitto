@@ -25,8 +25,8 @@ func TestChannelMessageSchema(t *testing.T) {
 	channels, messages, history := postgres.NewChannelStore(pool, conversation.DefaultMaxChannels), postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
 	var nullable []string
 	requireNoError(t, pool.QueryRow(ctx, "SELECT array_agg(table_name || '.' || column_name ORDER BY table_name, column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
-	if !slices.Equal(nullable, []string{"channel.image", "message.idempotency_key", "message.moved_event_seq", "message.pinned_at", "message.pinned_by_member_id", "message.quote_text", "message.quoted_member_id", "message.quoted_message_id"}) {
-		t.Fatalf("nullable columns = %v, want channel image, idempotency key, move sequence, paired pin metadata and the quote", nullable)
+	if !slices.Equal(nullable, []string{"channel.image", "message.idempotency_key", "message.moved_event_seq", "message.pinned_at", "message.pinned_by_member_id", "message.quote_text", "message.quoted_member_id", "message.quoted_message_id", "message.typed_body_proof"}) {
+		t.Fatalf("nullable columns = %v, want channel image, idempotency key, move sequence, paired pin metadata, quote and typed-body proof", nullable)
 	}
 	account := identitytest.Account(t, pool, "a@b", "Author")
 	var orgs []kernel.ID
@@ -67,7 +67,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "\u2066abc\u2069 \u2068x\u2069", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := conversation.ValidateMessageBody(input)
 		requireNoError(t, err)
-		message, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, int64(len(posted)+1), nil, nil)
+		message, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, int64(len(posted)+1), nil, conversation.TypedBodyProof{}, nil)
 		requireNoError(t, err)
 		if message.Body != body || message.OrganizationID != organizationID || message.ChannelID != channel.ID || message.TopicID != channel.DefaultTopicID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
 			t.Fatalf("message round trip: %+v", message)
@@ -75,12 +75,12 @@ func TestChannelMessageSchema(t *testing.T) {
 		posted = append(posted, message)
 	}
 	// Equal sequences in different organisations are valid and must never leak.
-	_, err = messages.InsertMessage(ctx, other, foreign.ID, foreign.DefaultTopicID, members[1], "other", 1, nil, nil)
+	_, err = messages.InsertMessage(ctx, other, foreign.ID, foreign.DefaultTopicID, members[1], "other", 1, nil, conversation.TypedBodyProof{}, nil)
 	requireNoError(t, err)
 	// A newer message in a sibling channel must not appear in this channel's pages.
 	sibling, err := channels.CreateChannel(ctx, organizationID, "sibling", "")
 	requireNoError(t, err)
-	_, err = messages.InsertMessage(ctx, organizationID, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100, nil, nil)
+	_, err = messages.InsertMessage(ctx, organizationID, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100, nil, conversation.TypedBodyProof{}, nil)
 	requireNoError(t, err)
 	slices.Reverse(posted)
 	for _, tc := range []struct {
@@ -131,7 +131,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		})
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\u202ab", "a\u202bb", "a\u202cb", "a\u202db", "https://evil.example/\u202eexample.com", "a\x00b"} {
-		_, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, 200, nil, nil)
+		_, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, 200, nil, conversation.TypedBodyProof{}, nil)
 		var pgErr *pgconn.PgError
 		code := "23514"
 		if strings.ContainsRune(body, 0) {

@@ -1,6 +1,9 @@
 package conversationpg_test
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"testing"
 
@@ -41,14 +44,24 @@ func TestSendIdempotencyKey(t *testing.T) {
 		return service.Send(ctx, m, channelID, conversation.Send{Topic: topicID, Body: body, Key: &key})
 	}
 
-	first, err := send(alice, acme.Channel.ID, &topicA.ID, "hello")
+	first, err := send(alice, acme.Channel.ID, &topicA.ID, " hello\r\n")
 	if err != nil || first.Repeat || first.Topic != topicA.ID || first.Message.TopicID != topicA.ID {
 		t.Fatalf("first send: %+v, %v", first, err)
 	}
+	var proof []byte
 	var stored [16]byte
-	requireNoError(t, pool.QueryRow(ctx, "SELECT idempotency_key FROM message WHERE id = $1", first.Message.ID).Scan(&stored))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT idempotency_key, typed_body_proof FROM message WHERE id = $1", first.Message.ID).Scan(&stored, &proof))
 	if stored != key {
 		t.Fatal("the key was not stored")
+	}
+	digest := sha256.Sum256([]byte("hello"))
+	if len(proof) != 36 || binary.BigEndian.Uint32(proof[:4]) != 5 || !bytes.Equal(proof[4:], digest[:]) || !bytes.Equal(first.Message.TypedBodyProof[:], proof) {
+		t.Fatalf("proof not persisted and read back: %x, %x", proof, first.Message.TypedBodyProof)
+	}
+	read, err := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn).One(ctx, alice, acme.Channel.ID, first.Message.EventSeq)
+	requireNoError(t, err)
+	if read.TypedBodyProof != first.Message.TypedBodyProof {
+		t.Fatal("history read lost proof")
 	}
 	seq, messages := state(acme.OrganizationID)
 
@@ -57,7 +70,7 @@ func TestSendIdempotencyKey(t *testing.T) {
 	if err != nil || !again.Repeat || again.Message != first.Message || again.Topic != topicA.ID {
 		t.Fatalf("repeat: %+v, %v", again, err)
 	}
-	for name, body := range map[string]string{"another body": "changed", "another channel": "hello"} {
+	for name, body := range map[string]string{"another body": "changed", "same length": "world", "case": "Hello", "prefix": "hello more", "another channel": "hello"} {
 		channelID := acme.Channel.ID
 		if name == "another channel" {
 			channelID = other.ID
@@ -103,10 +116,17 @@ func TestSendIdempotencyKey(t *testing.T) {
 		t.Fatalf("next send after the move: %+v, %v", next, err)
 	}
 	// Branching's notice and unkeyed posts keep NULL.
+	_, err = service.Post(ctx, alice, acme.Channel.ID, "unkeyed")
+	requireNoError(t, err)
+	var unexpected int
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1 AND idempotency_key IS NULL AND typed_body_proof IS NOT NULL", acme.OrganizationID).Scan(&unexpected))
+	if unexpected != 0 {
+		t.Fatal("unkeyed post or notice stored a proof")
+	}
 	var keyed, unkeyed int
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(idempotency_key), count(*) - count(idempotency_key) FROM message WHERE organization_id = $1", acme.OrganizationID).Scan(&keyed, &unkeyed))
-	if keyed != 3 || unkeyed != 1 {
-		t.Fatalf("keyed rows %d, unkeyed %d; want 3 (alice twice, bob) and the notice", keyed, unkeyed)
+	if keyed != 3 || unkeyed != 2 {
+		t.Fatalf("keyed rows %d, unkeyed %d; want 3 (alice twice, bob) and two unkeyed rows", keyed, unkeyed)
 	}
 }
 

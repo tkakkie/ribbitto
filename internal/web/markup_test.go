@@ -760,6 +760,12 @@ func TestPagesMarkup(t *testing.T) {
 							}
 							continue
 						}
+						if attr(n, "id") == "stream-stopped" {
+							if _, hidden := attrOK(n, "hidden"); !hidden || attr(n, "role") != "status" || text(n) == "" || find(n, atom.A) == nil {
+								t.Error("stopped-updates status must start hidden with text and a reload link")
+							}
+							continue
+						}
 						if attr(n, "role") == "status" && attr(n, "id") != "typing-status" && attr(n, "id") != "message-sending" {
 							statusCount++
 							if attr(n, "id") != "message-status" || attr(n, "aria-live") != "polite" || attr(n, "aria-relevant") != "additions" || attr(n, "aria-atomic") != "false" || text(n) != "" {
@@ -775,7 +781,7 @@ func TestPagesMarkup(t *testing.T) {
 						}
 					}
 					if statusCount != 1 {
-						t.Error("channel must have exactly one live status region")
+						t.Error("channel must have exactly one message announcement status")
 					}
 				}
 				// The bottom navigation's Home (#970) is on the list page only, a

@@ -67,7 +67,7 @@ func (f *branchFake) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel
 	f.t.Fatal("branching read a quoted message")
 	return conversation.Message{}, nil
 }
-func (f *branchFake) InsertMessage(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64, *conversation.IdempotencyKey, *conversation.Quote) (conversation.Message, error) {
+func (f *branchFake) InsertMessage(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64, *conversation.IdempotencyKey, conversation.TypedBodyProof, *conversation.Quote) (conversation.Message, error) {
 	f.t.Fatal("branching called posting's mapped insert")
 	return conversation.Message{}, nil
 }

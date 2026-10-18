@@ -51,8 +51,8 @@ func (w Writer) GetDefaultTopic(ctx context.Context, organizationID, channelID k
 // reaches the insert and message_topic_fkey stays unmapped.
 // The unique index, not a lookup first, decides a repeated key, so the common
 // path costs no extra query under the organisation lock.
-func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey, quote *conversation.Quote) (conversation.Message, error) {
-	posted, err := w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, key, quote)
+func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote) (conversation.Message, error) {
+	posted, err := w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, key, proof, quote)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "message_idempotency_key_idx":
@@ -73,18 +73,21 @@ func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, to
 // foreign key: branching never translated them, so its failure stays a
 // server error rather than a 404 (R2 on #502).
 func (w Writer) InsertNotice(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
-	return w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, nil, nil)
+	return w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, nil, conversation.TypedBodyProof{}, nil)
 }
 
 // insert runs the query posting and branching share and wraps any error.
 // Every new message and notice is chat_v1 (decision 39): posting has checked
 // its references and branching has escaped its notice.
-func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey, quote *conversation.Quote) (conversation.Message, error) {
+func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote) (conversation.Message, error) {
 	params := sqlcgen.InsertMessageParams{
 		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicID: uuid(topicID),
 		MemberID: uuid(memberID), Body: body, Format: string(conversation.FormatChatV1), EventSeq: eventSeq,
 	}
 	if key != nil {
+		if proof != (conversation.TypedBodyProof{}) {
+			params.TypedBodyProof = proof[:]
+		}
 		params.IdempotencyKey = pgtype.UUID{Bytes: *key, Valid: true}
 	}
 	if quote != nil {

@@ -12,7 +12,8 @@ enhancement, not full parity.
   branching, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
-  keyboard shortcuts (Enter to send), local-time display, pending own posts on feeds/topics and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
+  keyboard shortcuts (Enter to send), local-time display, own-mention outlines,
+  pending own posts on feeds/topics and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
 
 ## Go handlers

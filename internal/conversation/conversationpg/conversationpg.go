@@ -68,14 +68,18 @@ func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }
 
-// newTxRunner supplies the runner for channel creation, posting and branching
-// to own their transaction over pool.
+// commitLimit matches unread's five-second limit, leaving room within the
+// server's ten-second shutdown grace for a COMMIT or ROLLBACK to finish.
+const commitLimit = 5 * time.Second
+
+// newTxRunner supplies channel creation, posting, branching and pinning with
+// a bounded commit independent of request cancellation; fn still follows ctx.
 func newTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
 
 type txRunner struct{ pool *pgxpool.Pool }
 
 func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
-	return platform.InTx(ctx, r.pool, fn)
+	return platform.InTxDetachedCommit(ctx, r.pool, commitLimit, fn)
 }
 
 // writerIn returns posting's and branching's writes bound to the caller's

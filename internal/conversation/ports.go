@@ -37,8 +37,11 @@ type AccountDirectoryIn func(platform.Snapshot) AccountDirectory
 // case owns the boundary, the writers only bind to the Tx they are given.
 type TxRunner interface {
 	// InTx runs fn in a new transaction. It commits when fn returns nil
-	// and rolls back otherwise, returning fn's error as is. A failed commit,
-	// such as event_log's deferred gap check, is returned too.
+	// and rolls back otherwise, returning fn's error as is. The wiring commits
+	// independently of ctx with a bounded limit; fn still follows ctx. A failed
+	// commit, such as event_log's deferred gap check, is returned too. An error
+	// may wrap platform.ErrCommitUnknown when the outcome is unknown. Callers
+	// treat every error as not confirmed and never raise on it.
 	InTx(ctx context.Context, fn func(platform.Tx) error) error
 }
 

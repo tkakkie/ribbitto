@@ -12,8 +12,9 @@ sequenceDiagram
   A->>DB: UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
   A->>DB: INSERT message (event_seq = n)
   A->>DB: INSERT event_log (seq = n, event data)
-  A->>DB: COMMIT
-  A->>H: Notifier.Raise(organizationID, posted.EventSeq) (after commit)
+  A->>DB: COMMIT (independent five-second limit)
+  DB-->>A: confirmed commit
+  A->>H: Notifier.Raise(organizationID, posted.EventSeq)
 ```
 
 `conversation.Posting.Send` validates and owns the transaction through
@@ -32,6 +33,17 @@ notifications. `Post` calls it only after the runner commits; `serve` wires
 `realtime.Hub` to it. A channel outside the caller's organisation fails the
 scoped topic lookup and rolls the sequence back with it. Composite foreign
 keys also enforce the message's organisation scope.
+
+The shared `conversationpg` runner uses `platform.InTxDetachedCommit` for
+posting, branching, pinning and channel creation. Work follows the request;
+only COMMIT and ROLLBACK ignore its cancellation, each bounded by five seconds.
+Posting, branching and pinning return success and raise on a confirmed commit
+even after request cancellation.
+`platform.ErrCommitUnknown` returns an error without raising: a rollback can
+leave sequence N available for the next commit, whose raise must still wake
+streams at N−1. The watermark tick catches up any unconfirmed commit that did
+succeed. Retrying with the same idempotency key deduplicates a committed post
+through the repeated-send path below.
 
 - **Take the sequence number first.** The `UPDATE` (scoped to the
   organisation from the URL, `WHERE id = $1`) locks that organisation's row

@@ -3,7 +3,11 @@
 // logic. NewChannels binds channel lookups to the pool and capped creation
 // to its transaction; NewTopics binds the topic lookup to the pool.
 // DefaultChannelCreatorIn binds setup's default-channel write to org's transaction. NewPosting and
-// NewBrancher bind their writes to transactions over the pool; NewReader
+// NewBrancher bind their writes to transactions over the pool. Channel creation,
+// posting, branching and pinning detach COMMIT and ROLLBACK from request
+// cancellation with a five-second limit; their work still follows the request.
+// Posting, branching and pinning raise the hub only on a confirmed commit;
+// channel creation raises nothing. NewReader
 // binds conversation's reads to snapshots over the pool. Only page counts and
 // sidebar recounts get a local one-minute statement budget, unless the URL sets
 // statement_timeout. Bounded reads and seed's count-free pages keep the session

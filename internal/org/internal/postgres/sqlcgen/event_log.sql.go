@@ -70,7 +70,7 @@ func (q *Queries) GetEventSeq(ctx context.Context, id pgtype.UUID) (int64, error
 }
 
 const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
-SELECT id FROM organization WHERE id = $1 FOR UPDATE
+SELECT id FROM organization WHERE id = $1 FOR NO KEY UPDATE
 `
 
 func (q *Queries) LockEventRetentionOrganization(ctx context.Context, id pgtype.UUID) error {

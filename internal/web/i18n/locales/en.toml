@@ -405,3 +405,12 @@ other = "Wait for pending messages, or remove them, before trying this send agai
 
 ["message.capacity"]
 other = "You have 10 pending messages. Wait for delivery or remove one to send another."
+
+["mention.label"]
+other = "Mention candidates"
+
+["mention.empty"]
+other = "No members found."
+
+["mention.count"]
+other = "Members found: %d"

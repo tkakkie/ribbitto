@@ -64,6 +64,13 @@ func NewSidebarResyncRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 32, 32, 0)
 }
 
+// NewMentionRateLimiter returns initial, unmeasured candidate-search limits:
+// 4/s, burst 8, and two concurrent requests per member to bound lookup work
+// while allowing short bursts as the member types.
+func NewMentionRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 4, 8, 2)
+}
+
 // NewMemberRateLimiterWithBudget supplies an explicit trusted budget, including
 // for fixtures whose intentional request sequences exceed production limits.
 // Rate and burst must be positive; concurrent zero leaves slots unlimited.

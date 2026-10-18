@@ -12,6 +12,7 @@ and gets the route's answer for a malformed value below, never a redirect
 
 | Route | Result |
 |---|---|
+| `GET /organizations/{slug}/mention-candidates?q=` | Search through `org.MemberSearch` with the resolved membership; no-store listbox fragment (at most 8 member options), including an empty list for no matches. Independent per-member admission answers empty 429 with `Retry-After: 1` |
 | `GET /organizations/{slug}/` | 303 to `conversation.Channels.Default`, found by `is_default`; a missing default is logged and answers 500 |
 | `GET /organizations/{slug}/channels` | The channel list page (#969): the sidebar as the page, nesting the topics of `?channel=<channel-id>` or else the default channel, with a sidebar-only stream; a malformed query or a malformed, unknown or other organisation's channel answers 404. The list is the page's `<main>`; below the `desk` breakpoint it fills the screen above the bottom navigation, and at desktop width a block beside it asks the member to open a channel |
 | `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page and `?around=<event_seq>` the older page holding that position; a bound that is not one positive integer, both bounds, or a malformed query, answers 400 |

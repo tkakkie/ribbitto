@@ -43,7 +43,7 @@ message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
 A message may quote one earlier message of the same channel
-([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, the action and chip *planned*: #1160, #1161). The quote stores the
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, action and chip since #1160, selection planned: #1161). The quote stores the
 quoted message's ID, its author's member ID and a text snapshot that the
 server copies or, for a selection, checks against the original's extracted
 text, in the posting transaction. The snapshot belongs to the quoting

@@ -72,7 +72,7 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v13.js` loads with the response nonce on channel pages.
+`message-composer-v14.js` loads with the response nonce on channel pages.
 Key handling maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses native submission through `requestSubmit`. The latest-page form uses

@@ -40,6 +40,13 @@
       return;
     }
     if (event.target.id !== "message-composer") return;
+    // Quote shares the composer's htmx lock; guard the pending/plain paths too,
+    // before either can submit stale quote state or clear the draft.
+    if (document.getElementById("quote-form")?.classList.contains("htmx-request")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
@@ -56,7 +63,7 @@
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) {
+    if (form.elements.quote || !text || [...text].length > 4000) {
       if (list.firstElementChild || pendingRequests.size) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -124,7 +131,15 @@
     }
     reconcile();
   });
+  document.addEventListener("htmx:configRequest", (event) => {
+    if (event.target.id !== "quote-form") return;
+    // Closing the popover restores focus, clearing htmx's remembered button.
+    // The native submit event retains it, including for live-delivered menus.
+    const button = event.detail.triggeringEvent?.submitter;
+    if (button?.name) event.detail.parameters[button.name] = button.value;
+  });
   document.addEventListener("click", (event) => {
+    event.target.closest('[form="quote-form"]')?.closest("[popover]")?.hidePopover();
     const edit = event.target.closest("[data-pending-edit]");
     if (!edit && !event.target.closest("[data-pending-remove]")) return;
     const body = document.getElementById("message-body");
@@ -249,6 +264,10 @@
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
+    if (state.id === "composer-quote") {
+      document.getElementById("message-body").focus({ preventScroll: true });
+      return;
+    }
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
@@ -293,7 +312,7 @@
     // button in flight, and Chrome then moves its focus to the body at the
     // next frame.
     const active = document.activeElement;
-    if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
+    if (active === body.form.querySelector('button[type="submit"]:not([form])') || active === document.body) body.focus({ preventScroll: true });
   });
   const completePending = (event, pending) => {
     const status = event.detail.xhr.status;

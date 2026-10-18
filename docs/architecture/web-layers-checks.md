@@ -15,12 +15,12 @@ from importing `internal/identity`, `internal/org` or
 in both languages, with `HX-Request: true`. It checks `hx-target` ids in
 the requesting page, `hx-select` matches in the response, and every
 `hx-select-oob` match in the response and its destination id in the page.
-Selection may use response-only ids. The selector helper supports `#id`, `#id > tag` and comma-separated lists;
+Selection may use response-only ids. Selectors support `#id`, `#id > tag` and comma-separated lists;
 new syntax needs test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
-`hx-disabled-elt="find button"` and `hx-sync="this:drop"`
-are not swap selectors. The real sibling typing form is checked for its POST
-route, matching action/method, generation-only controls, no-swap and empty 204;
+`hx-disabled-elt='find button[type="submit"]:not([form])'` and `hx-sync="this:drop"`
+are not swap selectors. The sibling typing form is checked for its POST
+route, action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
 
 The data attributes in the [DOM contract](web-contracts.md) are asserted on the elements that
@@ -35,10 +35,9 @@ and `LiveMessageItem` alone in both languages and applies the fragment
 markup rules.
 `TestPagesMarkup` also checks the composer fragments returned by handlers.
 
-`TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain
-link or form with the same URL and HTTP method (`fallback_test.go`). URL
-comparison is structural; paging success uses positive cursors in
-`TestMessagePagingHandler`.
+`TestPagesMarkup` checks plain fallbacks (`fallback_test.go`): matching URL/method,
+except the read-only quote form's conversation GET and channel chip POST (#1160).
+URLs compare structurally; `TestMessagePagingHandler` checks paging success.
 
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
 errors (422) for feeds and topics; an HX topic fragment targets the posted

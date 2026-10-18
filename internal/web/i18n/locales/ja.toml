@@ -421,6 +421,12 @@ other = "該当するメンバーはいません。"
 ["mention.count"]
 other = "%d 人のメンバーが見つかりました。"
 
+["message.quote"]
+other = "引用"
+
+["message.quote_remove"]
+other = "引用を削除"
+
 ["stream.stopped"]
 other = "未送信のメッセージがあるため、リアルタイム更新を停止して待機しています。"
 

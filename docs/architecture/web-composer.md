@@ -9,7 +9,7 @@ the sending glue and feed/topic pending items below exist; the parts marked
 *planned* await their issues.
 
 The ordinary path applies to idle feed/topic sends with blank
-text or over 4,000 code points after line-ending
+text, a selected quote, or over 4,000 code points after line-ending
 normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 
 - **Ordinary sending** (input glue, #1173): the textarea stays usable while a post is
@@ -45,7 +45,7 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
   FIFO dispatch sends one form at a time, after classifying its predecessor.
   An ordinary request blocks composer submits; pending items or requests block
-  invalid ordinary submits, so the two forms' requests never overlap.
+  quoted or invalid ordinary submits, so the two forms' requests never overlap.
   A Not sent item lets later items continue; Retry moves it to the list and
   queue's end. An unknown outcome pauses later items (still showing Sending).
   Its same-key Retry keeps its place; success resumes dispatch. A refused retry
@@ -54,7 +54,7 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   visible. Storage order follows send order on uninterrupted success or a
   successful same-key Retry, but may differ after Remove or Edit.
   A 200 swaps the composer state and out-of-band typing form, sets
-  `aria-invalid="false"` and keeps `aria-describedby="message-help"` and the
+  `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
   Its `data-posted-message` associates
   the item with delivery. A `MutationObserver` removes a
@@ -96,6 +96,11 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   and failed items hold reload; confirmed items do not. Retry success, Remove
   or Edit can release it: Edit's restored text is a draft. Each dispatched
   request has a 30 s timeout; queues, retries and failed text can extend the hold.
+- **Quote chip:** `#composer-quote-description` holds only the quoted author
+  and excerpt and stays present, empty, without a quote. Quote and Remove
+  quote focus the textarea after the chip swap; Quote closes its actions
+  popover. Without scripts both submit a GET with `#message-composer`;
+  removal loses unsent text.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

@@ -8,6 +8,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`,
   `message-pending`, `message-pending-template`, `message-pending-body` (template; clones append their fresh UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `mention-listbox` and `mention-option-<hex>` for mention candidates,
   `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
@@ -20,6 +21,8 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
+  | `data-query`, `data-count` | `#mention-listbox` | always | query as received and localized result count for the picker's polite status; empty results use the no-members text |
+  | `data-member-id`, `data-handle` | mention option | always | canonical member UUID and handle, in search order |
   | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
   | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
   | `data-pin-control` | pin form | always | message ID |

@@ -96,6 +96,16 @@ func TestChatV1PostingAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 
+	if w := post(feed, url.Values{"body": {"@everyone"}}, false); w.Code != http.StatusSeeOther {
+		t.Fatalf("literal everyone: %d %s", w.Code, w.Body.String())
+	}
+	if _, body, format := latest(); body != "@everyone" || format != string(conversation.FormatChatV1) || conversation.ParseChatV1(body)[0].Lines[0][0].Kind != conversation.InlineText {
+		t.Fatalf("everyone became a reference: %q (%s)", body, format)
+	}
+	if page := serveForm(h, "GET", feed, owner, nil); !strings.Contains(page.Body.String(), `class="whitespace-pre-wrap">@everyone</p>`) {
+		t.Fatal("everyone did not render literally")
+	}
+
 	// An unknown and another organisation's member: the same status and
 	// message, the same answer once the echoed draft is normalised, and
 	// nothing about the foreign member; no message is written.

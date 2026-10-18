@@ -600,6 +600,7 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
 	cases := []markupCase{
+		{name: "mention candidates", route: "GET /organizations/{slug}/mention-candidates", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/mention-candidates?q=alice", cookie: true},
 		{name: "invalid image", route: "POST /organizations/{slug}/channels/{channelID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
 		{name: "invalid topic image", route: "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
 		{name: "members", route: "GET /organizations/{slug}/channels/{channelID}/members", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "/members", cookie: true},
@@ -722,7 +723,7 @@ func TestPagesMarkup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				fragment := c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
+				fragment := c.route == "GET /organizations/{slug}/mention-candidates" || c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
 				for _, problem := range checkMarkup(doc, !fragment) {
 					t.Error(problem)
 				}

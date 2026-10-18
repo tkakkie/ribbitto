@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 // Services are the use cases the handlers call.
 type Services struct {
+	RequestLogger *slog.Logger // nil: use the process logger
 	Database      Pinger       // nil: readiness answers 503
 	ShuttingDown  func() bool  // nil: no shutdown signal (tests)
 	MemberSearch  MemberSearch // nil: mention candidates answer 404
@@ -156,14 +158,14 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.Handle("GET /healthz", middleware.LogRoute("GET /healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
-	})
-	mux.HandleFunc("GET /readyz", readiness(services.Database, services.ShuttingDown))
+	})))
+	mux.Handle("GET /readyz", middleware.LogRoute("GET /readyz", readiness(services.Database, services.ShuttingDown)))
 	// Every method reaches this handler, so even a refusal carries the
 	// static headers; the method check is explicit rather than left to the
 	// file server.
-	mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/static/", middleware.LogRoute("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Static files bypass SecurityHeaders. An SVG opened directly is a
 		// document on this origin, so it gets no script, no loads and a
 		// sandbox; pages using a file as <img>, <use>, a script or a
@@ -193,11 +195,15 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			r.Header.Del("Range")
 		}
 		http.FileServerFS(assets).ServeHTTP(w, r)
-	})))
-	// Outermost: reject cross-origin state changes before anything else runs.
+	}))))
+	// Before routing: reject cross-origin state changes after logging is installed.
 	// It lets GET, HEAD and OPTIONS through, so every route that changes
 	// state must be a POST.
-	return http.NewCrossOriginProtection().Handler(middleware.LimitBody(mux)), *routes.patterns, nil
+	logger := services.RequestLogger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return middleware.RequestLog(logger, http.NewCrossOriginProtection().Handler(middleware.LimitBody(mux))), *routes.patterns, nil
 }
 
 func stylesheetURLForAssets(assets fs.FS) (string, error) {
@@ -237,18 +243,18 @@ type sessionMux struct {
 func (m sessionMux) Handle(pattern string, handler http.Handler) {
 	*m.patterns = append(*m.patterns, pattern)
 	session := middleware.Session(m.sessions, handler)
-	m.ServeMux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m.ServeMux.Handle(pattern, middleware.LogRoute(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Include session and authorization work in typing acceptance deadlines.
 		r = r.WithContext(context.WithValue(r.Context(), handlingStartKey{}, time.Now()))
 		session.ServeHTTP(w, r)
-	}))
+	})))
 }
 
 // HandleFuncWithoutSession registers an HTML route that must decide whether
 // it is open before any session lookup (setup, sign-up).
 func (m sessionMux) HandleFuncWithoutSession(pattern string, f func(http.ResponseWriter, *http.Request)) {
 	*m.patterns = append(*m.patterns, pattern)
-	m.ServeMux.HandleFunc(pattern, f)
+	m.ServeMux.Handle(pattern, middleware.LogRoute(pattern, http.HandlerFunc(f)))
 }
 
 // HandleFunc registers f for pattern behind the session middleware.

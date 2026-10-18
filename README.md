@@ -69,6 +69,8 @@ drops the databases and ports of registry entries whose worktrees are gone.
 See [worktree environments](docs/worktree-env.md) for configuration overrides and capacity measurement.
 The server never migrates on startup.
 
+Request logs: [fields and privacy](docs/architecture/request-flow.md).
+
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
 `10.0.0.2/32`; several are comma-separated), so that the sign-in, sign-up and

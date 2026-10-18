@@ -116,10 +116,9 @@ history uses plain forms. `message-composer-v15.js` handles quote focus and
 [growth anchoring](ui-composer.md), and guards Enter for 100 ms after
 `compositionend`, when IMEs may clear `isComposing`.
 
-The viewport also requests `interactive-widget=resizes-content`: supporting
-browsers resize the existing `h-dvh` frame for the keyboard, leaving the
-composer outside the message pane. No keyboard JavaScript is added;
-browsers that ignore the key still need device/emulation verification.
+The viewport requests `interactive-widget=resizes-content` for supporting
+browsers. The composer script also uses the visual viewport for iOS Safari's
+keyboard; [composer growth](ui-composer.md) covers sizing and the `dvh` fallback.
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

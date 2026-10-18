@@ -196,6 +196,47 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 			check("preset grows on load", `() => document.getElementById('message-body').clientHeight >= 82 ? '' : 'preset did not grow'`)
 			page.MustSetViewport(size[0], size[1]-50, 1, false)
 			check("newest on viewport resize", newest)
+			if size[0] == 390 && size[1] == 600 {
+				// A synthetic visual viewport leaves layout/dvh unchanged, like
+				// Safari's keyboard. It does not emulate native keyboard panning.
+				page.MustSetViewport(size[0], size[1], 1, false)
+				page.MustEvalOnNewDocument(`(() => {
+					const viewport = location.search.includes('noViewport') ? undefined :
+						Object.assign(new EventTarget(), {height: 540, offsetTop: 0});
+					Object.defineProperty(window, 'visualViewport', {value: viewport});
+				})()`)
+				page.MustNavigate(server.URL).MustWaitLoad()
+				check("visual viewport on load", `() => document.documentElement.style.getPropertyValue('--composer-viewport-h') === '540px' ? '' : 'height missing'`)
+				page.MustElement("#message-body").MustInput(strings.Repeat("paste\n", 20) + "last line")
+				const visible = `() => {
+					const v = visualViewport, b = document.getElementById('message-body'), r = b.getBoundingClientRect();
+					const label = document.querySelector('label[for="message-body"]').getBoundingClientRect();
+					const cap = Math.max(82, Math.min(v.height / 2, v.height - 337 - 34));
+					if (innerHeight !== 600 || b.clientHeight !== Math.floor(cap) || b.clientHeight > v.height / 2) return 'visual cap ' + b.clientHeight + '/' + cap;
+					if (label.top < v.offsetTop || r.top < v.offsetTop || r.bottom > v.offsetTop + v.height) return 'composer outside visible viewport';
+					if (b.scrollHeight <= b.clientHeight || b.scrollHeight - b.scrollTop - b.clientHeight > parseFloat(getComputedStyle(b).paddingBottom) + 1) return 'inner scroll/caret hidden';
+					return '';
+				}`
+				check("initial visual cap", visible)
+				page.MustEval(`() => { visualViewport.height = 270; visualViewport.offsetTop = 120; visualViewport.dispatchEvent(new Event('resize')); }`)
+				check("keyboard cap and caret", visible)
+				check("newest after keyboard shrink", newest)
+				page.MustEval(`() => { visualViewport.offsetTop = 0; visualViewport.dispatchEvent(new Event('scroll')); }`)
+				check("keyboard pan", visible)
+				check("newest after keyboard pan", newest)
+				page.MustEval(`() => { visualViewport.height = 540; visualViewport.dispatchEvent(new Event('resize')); }`)
+				check("keyboard expands", visible)
+				check("newest after keyboard expansion", newest)
+				page.MustNavigate(server.URL + "?noViewport").MustWaitLoad()
+				set(strings.Repeat("fallback\n", 100))
+				check("no visual viewport uses dvh", `() => {
+					const b = document.getElementById('message-body');
+					return !document.documentElement.style.getPropertyValue('--composer-viewport-h') &&
+						b.clientHeight === Math.floor(Math.max(82, Math.min(innerHeight / 2, innerHeight - 337 - 34))) &&
+						b.scrollHeight > b.clientHeight ? '' : 'dvh fallback failed';
+				}`)
+				check("newest without visual viewport", newest)
+			}
 		})
 	}
 }

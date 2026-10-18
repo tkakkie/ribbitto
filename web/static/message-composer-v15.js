@@ -1,4 +1,20 @@
 (() => {
+  // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
+  const viewport = window.visualViewport;
+  const updateViewport = () => {
+    const style = document.documentElement.style;
+    for (const [name, value] of [["--composer-viewport-h", viewport?.height], ["--composer-viewport-top", viewport?.offsetTop]]) {
+      const next = value === undefined ? "" : value + "px";
+      if (style.getPropertyValue(name) === next) continue;
+      if (next) style.setProperty(name, next);
+      else style.removeProperty(name);
+    }
+  };
+  updateViewport();
+  viewport?.addEventListener("resize", updateViewport);
+  viewport?.addEventListener("scroll", updateViewport);
+  window.addEventListener("resize", updateViewport);
+  window.addEventListener("orientationchange", updateViewport);
   const pendingRequests = new Set();
   let rememberPost = () => {};
   // An edited send keeps its identity even when another queue response swaps

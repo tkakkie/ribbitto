@@ -12,8 +12,8 @@ templ layout(stylesheetURL, title string) {
 			// cover lets env(safe-area-inset-*) report the insets, which the
 			// bottom navigation and composer pad by; app.css insets the
 			// body from the sides as the default fit did (docs/ui-code.md).
-			// Supporting browsers resize the h-dvh frame with the keyboard,
-			// keeping its composer outside the independently scrolling list.
+			// Supporting browsers resize for the keyboard; the composer script
+			// uses the visual viewport where this request is ignored.
 			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"/>
 			<meta name="theme-color" media="(prefers-color-scheme: light)" content="#edf4f2"/>
 			<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1514"/>

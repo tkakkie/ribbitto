@@ -334,7 +334,7 @@ templ channelFrame(page ChannelPage) {
 			hx-ext="sse"
 			sse-connect={ streamURL(page) }
 		}
-		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
+		class={ "flex h-conversation-viewport gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
 		if page.EventCursor != nil {
 			<form id="sidebar-resync" hidden method="post" action={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-post={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-trigger="sidebar-resync" hx-sync="this:drop" hx-swap="none"></form>

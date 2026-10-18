@@ -114,10 +114,9 @@ The list keeps 128 px (`h-32`), a few short messages.
 Here `#conversation` scrolls as a whole (`short:overflow-y-auto`)
 and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
 composer, history and stream scripts move, so they need no change. The
-frame keeps `h-dvh`: a frame of `min-h-dvh` would let the desktop sidebar
-and a panel beside the conversation grow to their content and stop
-scrolling themselves, while this leaves the sidebar, app bar, panels and
-list page as they are.
+frame uses `h-conversation-viewport` (`dvh` without the visual viewport).
+A minimum height would let the sidebar and adjacent panel grow to their
+content and stop scrolling themselves.
 
 Two things differ there. A covering move form would scroll away from the
 composer with the conversation, so the form follows the list in the column

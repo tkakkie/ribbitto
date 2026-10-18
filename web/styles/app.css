@@ -252,13 +252,19 @@
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }
 
+/* Keep the frame's bottom at the visible bottom even when Safari pans the
+   visual viewport. Its list/textarea ResizeObserver handles the new layout. */
+@utility h-conversation-viewport {
+  height: calc(var(--composer-viewport-h, 100dvh) + var(--composer-viewport-top, 0px));
+}
+
 /* Three lines win over the list's 128 px reserve. The column deductions
    (rounded up from the layout) include that reserve; see docs/ui-composer.md.
    rows=3 remains the fallback when field-sizing is unsupported or fixed. */
 @utility max-h-composer {
-  max-height: max(5.125rem, min(50dvh, calc(100dvh - 22.0625rem)));
+  max-height: max(5.125rem, min(calc(var(--composer-viewport-h, 100dvh) / 2), calc(var(--composer-viewport-h, 100dvh) - 22.0625rem)));
   @variant max-desk {
-    max-height: max(5.125rem, min(50dvh, calc(100dvh - 21.0625rem - env(safe-area-inset-bottom))));
+    max-height: max(5.125rem, min(calc(var(--composer-viewport-h, 100dvh) / 2), calc(var(--composer-viewport-h, 100dvh) - 21.0625rem - env(safe-area-inset-bottom))));
   }
   @variant short {
     max-height: 5.125rem;

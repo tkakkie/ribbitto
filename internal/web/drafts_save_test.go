@@ -170,6 +170,26 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		return result
 	}
+	waitState := func(t *testing.T, p *rod.Page, name, condition, diagnostic string) {
+		t.Helper()
+		if err := step(t, p, name).Wait(rod.Eval(condition)); err != nil {
+			diag := p.Context(context.Background()).Timeout(time.Second)
+			defer diag.CancelTimeout()
+			state, diagnosticErr := diag.Eval(diagnostic)
+			if diagnosticErr != nil {
+				t.Fatalf("%s: %v; state unavailable: %v", name, err, diagnosticErr)
+			}
+			t.Fatalf("%s: %v; state: %s", name, err, state.Value.Str())
+		}
+	}
+	closed := make(map[proto.TargetTargetID]bool)
+	closePage := func(t *testing.T, p *rod.Page) {
+		t.Helper()
+		if !closed[p.TargetID] {
+			step(t, p.Context(context.Background()), "close draft page").MustClose()
+			closed[p.TargetID] = true
+		}
+	}
 	open := func(t *testing.T, topic bool, inject string) *rod.Page {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -185,7 +205,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("create draft page: %v", err)
 		}
 		p = p.Context(ctx)
-		t.Cleanup(func() { step(t, p.Context(context.Background()), "close draft page").MustClose() })
+		t.Cleanup(func() { closePage(t, p) })
 		// Only the drafts debounce is gated, including cancellation. Lifecycle
 		// events and clocks are controlled independently of focus and real sleeps.
 		step(t, p, "install draft controls").MustEvalOnNewDocument(`(() => {
@@ -200,6 +220,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    window.draftHidden = false; Object.defineProperty(document, 'hidden', {get: () => draftHidden});
    window.draftUUID = crypto.randomUUID?.bind(crypto); Object.defineProperty(crypto, 'randomUUID', {value: undefined, configurable:true});
    window.sendEvents = []; window.sentEvents = []; window.sendErrors = 0; window.restoreInputs = 0; window.typingRequests = 0;
+   window.compositionActive = false;
+   document.addEventListener('compositionstart', () => compositionActive = true, true);
+   document.addEventListener('compositionend', () => compositionActive = false, true);
    document.addEventListener('message-sending', e => sendEvents.push(e.detail));
    document.addEventListener('message-sent', e => sentEvents.push(e.detail));
    document.addEventListener('htmx:sendError', () => sendErrors++);
@@ -253,14 +276,18 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		step(t, to, "propagate barrier removal").MustWait(`key => localStorage.getItem(key) === null`, marker)
 	}
 
+	restored := func(t *testing.T, p *rod.Page, want string) {
+		t.Helper()
+		step(t, p, "await restored textarea").MustWait(`want => document.querySelector('#message-body')?.value === want`, want)
+		run(t, p, `check(restoreInputs === 0 && typingRequests === 0 && document.activeElement === restoreFocus, 'restore fired input, typing or focus');`)
+	}
 	reload := func(t *testing.T, p *rod.Page, want string) {
 		t.Helper()
 		step(t, p, "reload composer").MustReload()
 		// Poll the current document instead of awaiting a load promise in a
 		// context the reload can replace (as in navigateLoaded).
-		step(t, p, "load reloaded composer").MustWait(`() => document.readyState === 'complete'`)
-		step(t, p, "await restored textarea").MustWait(`want => document.querySelector('#message-body')?.value === want`, want)
-		run(t, p, `check(restoreInputs === 0 && typingRequests === 0 && document.activeElement === restoreFocus, 'restore fired input, typing or focus');`)
+		waitState(t, p, "load reloaded composer", `() => document.readyState === 'complete'`, `() => JSON.stringify({readyState:document.readyState, href:location.href, composer:!!document.querySelector('#message-composer'), unfinished:performance.getEntriesByType('resource').filter(r => r.responseEnd === 0).slice(0,20).map(r => r.name)})`)
+		restored(t, p, want)
 	}
 	for _, mode := range []string{"reload", "switch", "compositionend", "pagehide", "plain-422", "deadline"} {
 		t.Run("restore/"+mode, func(t *testing.T) {
@@ -363,6 +390,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 					other := open(t, false, "")
 					run(t, other, `edit('D', editNow+10000); releaseDrafts();`)
 					syncStorage(t, other, p)
+					closePage(t, other)
 					want = "D"
 				}
 				if mode == "reload-held" {
@@ -383,10 +411,12 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				}
 				step(t, p, "await send request completion").MustWait(`() => !document.querySelector('#message-composer.htmx-request') && !document.querySelector('[data-pending-form].htmx-request')`)
 				if mode == "composition" {
+					// Settle clears response routing before this delayed IME confirmation.
+					step(t, p, "await send response settle during composition").MustWait(`() => swaps === 1`)
 					run(t, p, `check(sentEvents.length === 0 || sendEvents[0].inPlace === false, 'sent before composition removal'); document.querySelector('#message-body').dispatchEvent(new Event('compositionend',{bubbles:true})); releaseDrafts();`)
 				}
 				if status == 200 {
-					step(t, p, "await confirmation event").MustWait(`() => sentEvents.length === 1 && sentEvents[0].key === sendEvents[0].key && !!sentEvents[0].message`)
+					waitState(t, p, "await confirmation event", `() => sentEvents.length === 1 && sentEvents[0].key === sendEvents[0].key && !!sentEvents[0].message`, `() => JSON.stringify({sendEvents, sentEvents, state:document.querySelector('#message-composer-state')?.dataset, compositionActive, pending:[...document.querySelectorAll('[data-pending-form]')].map(f => ({...f.dataset, key:f.elements.idempotency_key.value, item:f.closest('li').dataset}))})`)
 				} else {
 					run(t, p, `check(sentEvents.length === 0, 'failure emitted success');`)
 				}
@@ -453,7 +483,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			step(t, p, "await A confirmation retaining B").MustWait(`() => sentEvents.length===1 && sentEvents[0].key===sendEvents[0].key && entry()?.text==='B'`)
 			run(t, p, `document.querySelector('#message-body').dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:'unknown',message:'x'}})); check(entry().text==='B','unknown key cleared B');`)
 			copy := open(t, false, "")
-			reload(t, copy, "B")
+			// A fresh document restores B while its original POST remains held.
+			restored(t, copy, "B")
+			closePage(t, copy)
 			want, reply := "B", browserReply{status: 500}
 			if success {
 				want = ""

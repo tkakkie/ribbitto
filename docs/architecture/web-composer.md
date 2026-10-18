@@ -16,9 +16,9 @@ so do contexts without `crypto.randomUUID()`.
   (htmx request parameters) only if still a textarea prefix, via
   `setRangeText("", 0, length, "preserve")`: caret/selection stay on
   remaining text; no `input` fires, hence no typing signal.
-  During IME composition it waits for `compositionend`, keeping
-  one removal per textarea in a `WeakMap`. Every answer copies state
-  `data-invalid` to textarea `aria-invalid`.
+  A `WeakMap` defers removal until `compositionend`, retaining the confirmation
+  ID before stream settle consumes it. Answers copy `data-invalid` to textarea
+  `aria-invalid`.
 - **Ordinary failures** (#1179) keep the text and the key; `#message-send-alert` says
   which. 400/404/413/422 reject before any write; 429 by spec:
   *not sent*, or with the mark, *this retry was refused and the

@@ -389,7 +389,9 @@
       if (state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
       return;
     }
-    const sentEvent = () => { if (state.dataset.postedMessage) sendEvent("message-sent", { key: event.detail.requestConfig.formData.get("idempotency_key"), message: state.dataset.postedMessage }); };
+    // The stream consumes this attribute at settle, possibly before IME ends.
+    const message = state.dataset.postedMessage;
+    const sentEvent = () => { if (message) sendEvent("message-sent", { key: event.detail.requestConfig.formData.get("idempotency_key"), message }); };
     const status = event.detail.xhr.status;
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");

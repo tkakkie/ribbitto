@@ -244,6 +244,7 @@
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);
+    // Guard against a future ordinary-send path retaining an edited key.
     if (!pending && [200, 409].includes(event.detail.xhr.status)) restoredKey = null;
     if (restoredKey) body.form.elements.idempotency_key.value = restoredKey;
     if (pending) {

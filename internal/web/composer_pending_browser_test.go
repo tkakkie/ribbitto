@@ -1072,6 +1072,9 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 			if page.MustEval(`() => {const b=document.getElementById('message-body');return b.value!==window.draft || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help' || document.querySelector('[data-pending-form]').dataset.state!=='confirmed';}`).Bool() {
 				t.Fatal("pending answer changed the composer or did not confirm the item")
 			}
+			if page.MustEval(`key => document.getElementById('message-composer').elements.idempotency_key.value===key`, first.values.Get("idempotency_key")).Bool() {
+				t.Fatal("successful resend kept the original key in the composer")
+			}
 			own := streamTestMessages(kernel.ID{2}, 52)[0]
 			own.Body, own.Text = strings.TrimSpace(edited), strings.TrimSpace(edited)
 			events <- realtime.Outgoing{ID: 52, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(own)))}
@@ -1083,6 +1086,21 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 			if page.MustEval(`n => document.querySelectorAll('#message-items > li').length!==n`, want).Bool() {
 				t.Fatal("resend did not leave exactly the expected message identities")
 			}
+			nextBody := page.MustEval(`() => document.getElementById('message-body').value`).Str()
+			page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+			next := receivePending(t, page, posts)
+			if next.values.Get("body") != nextBody || next.values.Get("idempotency_key") == "" || next.values.Get("idempotency_key") == first.values.Get("idempotency_key") || next.values.Get("idempotency_key") == resend.values.Get("idempotency_key") {
+				t.Fatal("following message did not send different text with a new key")
+			}
+			next.reply <- pendingAnswer(t, kernel.ID{53})
+			page.MustWait(`n => window.answers===n`, answers+1)
+			if page.MustEval(`() => document.getElementById('message-body').value!=='' || document.querySelector('[data-pending-form]').dataset.state!=='confirmed' || window.ordinaryRequests!==0`).Bool() {
+				t.Fatal("following message did not post normally")
+			}
+			delivered := streamTestMessages(kernel.ID{2}, 53)[0]
+			delivered.Body, delivered.Text = strings.TrimSpace(nextBody), strings.TrimSpace(nextBody)
+			events <- realtime.Outgoing{ID: 53, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(delivered)))}
+			page.MustWait(`n => !document.querySelector('#message-pending > li') && document.querySelectorAll('#message-items > li').length===n`, want+1)
 		})
 	}
 	t.Run("edit-resumes-and-frees-slot", func(t *testing.T) {

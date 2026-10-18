@@ -29,7 +29,8 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   key is marked in `data-unconfirmed-key`. Only a 200 or a 409 follows the
   key lookup; both bring a new key, and the mark goes
   exactly when the key changes. A 409 carries `data-sent-body`, and omits
-  its error, only when the retried text started with the stored body: the
+  its error, only in the same channel, with neither the stored nor the retried
+  text quoted, and when the retried text started with the stored body: the
   script removes that body under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
   the text stays with the error.

@@ -128,8 +128,8 @@ language too.
 
 Latest feeds/topics empty the composer into pending items (#1156, #1188, #1174,
 #1180). All states count toward 10 slots per tab; overflow keeps text with a
-notice. Delivery, move-out, Remove/Edit free slots; Retry reuses its slot.
-FIFO requests never overlap ordinary sends ([contract](../architecture/web-composer.md#composer)).
+localised notice. Delivery, move-out, Remove/Edit free slots; Retry reuses its slot.
+FIFO requests run one at a time and never overlap ordinary sends.
 Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
 Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
 success and same-key Retry preserve storage order.
@@ -157,8 +157,8 @@ Retry. Pending 409 shows `message.error.repeat`. Malformed keys get 400;
 absent keys post without deduplication. Failed enhanced sends (#1179) keep text and
 key: 400/404/413/422/429 mean not sent unless an earlier send is unconfirmed;
 network errors, 30 s timeouts, other 4xx except 409 and 5xx are unconfirmed.
-Retries cannot post twice. Ordinary 409 may recover a stored prefix
-([composer contract](../architecture/web-composer.md#composer)).
+Retries cannot post twice. Ordinary 409 recovers a stored prefix only under the
+[composer conditions](../architecture/web-composer.md#composer).
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

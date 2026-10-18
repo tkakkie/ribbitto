@@ -75,12 +75,12 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   must name a symbol in that sprite. `TestTemplateIcons` also checks every
   literal `Icon` call in templates, including ones outside the page fixtures.
 
-**Checking a UI change in a browser:** use only the keyboard (Tab order,
-Enter, Space, Escape closes what opened); check visible focus and a colour-vision
-simulation (Chrome DevTools, *Rendering → Emulate vision deficiencies*) to see
-that no information is lost. Automated checks cover only part of accessibility:
-reference targets exist, but may describe the wrong field. They execute neither
-JavaScript nor `hx-*`.
+**Checking a UI change in a browser**, before the pull request says what
+was checked: use only the keyboard (Tab order, Enter, Space, Escape closes
+what opened); check visible focus and a colour-vision simulation (Chrome
+DevTools, *Rendering → Emulate vision deficiencies*) to see that no information
+is lost. Automated checks verify reference targets exist, not that they describe
+the right field, and run neither JavaScript nor `hx-*`.
 
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty

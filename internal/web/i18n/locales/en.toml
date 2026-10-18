@@ -432,3 +432,6 @@ other = "Live updates have stopped. Waiting for unsent messages."
 
 ["stream.reload"]
 other = "Reload now"
+
+["mention.help"]
+other = "Type @ to find a member. Use arrow keys to choose, Enter or Tab to insert, and Escape to close."

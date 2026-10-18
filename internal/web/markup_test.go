@@ -749,7 +749,7 @@ func TestPagesMarkup(t *testing.T) {
 					}
 				}
 				if find(doc, atom.Ol) != nil {
-					statusCount := 0
+					statusCount, mentionCount := 0, 0
 					for n := range doc.Descendants() {
 						if _, ok := attrOK(n, "data-announcement"); ok {
 							t.Error("history must not carry announcement text")
@@ -763,6 +763,13 @@ func TestPagesMarkup(t *testing.T) {
 						if attr(n, "id") == "stream-stopped" {
 							if _, hidden := attrOK(n, "hidden"); !hidden || attr(n, "role") != "status" || text(n) == "" || find(n, atom.A) == nil {
 								t.Error("stopped-updates status must start hidden with text and a reload link")
+							}
+							continue
+						}
+						if attr(n, "id") == "mention-status" {
+							mentionCount++
+							if _, hidden := attrOK(n, "hidden"); hidden || attr(n, "role") != "status" || attr(n, "aria-live") != "polite" || attr(n, "aria-atomic") != "true" || text(n) != "" {
+								t.Error("mention count must start exposed, empty and polite")
 							}
 							continue
 						}
@@ -782,6 +789,9 @@ func TestPagesMarkup(t *testing.T) {
 					}
 					if statusCount != 1 {
 						t.Error("channel must have exactly one message announcement status")
+					}
+					if mentionCount != 1 {
+						t.Error("channel must have exactly one mention count status")
 					}
 				}
 				// The bottom navigation's Home (#970) is on the list page only, a

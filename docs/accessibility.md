@@ -7,7 +7,12 @@ rules marked ✓; a new route fails the test until it has a rendered case.
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` and a name (its text, or `aria-label` when it has none); a link is
   an `<a href>`. Never a `div` or `span` with `role="button"` or a click
-  handler.
+  handler. Listbox options are the exception: the composer keeps focus in its
+  textarea (textbox), with `aria-autocomplete="list"`, `aria-controls` and an
+  open list's `aria-activedescendant` naming its `aria-selected="true"` option.
+  Options have at least 44 px height below `desk`; a separate polite status
+  announces the server-rendered count. Arrow keys wrap, Enter/Tab insert,
+  Escape dismisses until the query changes; pointer selection keeps focus.
 - **Pages are titled.** ✓ Every page's `<title>` names the page first and
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
   or the channel and organisation (`general · Acme · ribbitto`); the channel

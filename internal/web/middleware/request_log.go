@@ -36,19 +36,25 @@ func RequestLog(logger *slog.Logger, next http.Handler) http.Handler {
 		state := &requestLog{id: rand.Text(), route: "unmatched"}
 		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, state))
 		response := &logResponse{ResponseWriter: w}
+		completed := false
 		defer func() {
 			status := response.status
 			if status == 0 {
 				status = http.StatusOK
+				if !completed {
+					status = http.StatusInternalServerError
+				}
 			}
 			logger.InfoContext(r.Context(), "request", "request_id", state.id,
 				"method", r.Method, "route", state.route, "status", status,
 				"duration", time.Since(started))
 		}()
 		next.ServeHTTP(response, r)
+		completed = true
 	})
 }
 
+// logResponse accepts losing io.ReaderFrom's sendfile optimization for small static files.
 type logResponse struct {
 	http.ResponseWriter
 	status int
@@ -58,12 +64,10 @@ type logResponse struct {
 func (w *logResponse) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *logResponse) WriteHeader(status int) {
-	if w.status == 0 {
-		if status >= 200 || status == http.StatusSwitchingProtocols {
-			w.status = status
-		}
-		w.ResponseWriter.WriteHeader(status)
+	if w.status == 0 && (status >= 200 || status == http.StatusSwitchingProtocols) {
+		w.status = status
 	}
+	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *logResponse) Write(body []byte) (int, error) {

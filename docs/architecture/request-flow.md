@@ -66,7 +66,12 @@ The write deadline does not cancel the handler's context. Independent
 
 Outermost first:
 
-1. `middleware.RequestLog`: assigns a server-generated ID in context and logs
+1. `middleware.LimitBody`: every request body is capped at 64 KiB. It must see
+   the server's real writer so an oversized body closes the connection. Reading
+   past the cap fails with `*http.MaxBytesError`, which handlers answer with 413;
+   a route that answers without reading the body (a closed route's 404) is
+   unaffected. It never answers itself, so every request is still logged.
+2. `middleware.RequestLog`: assigns a server-generated ID in context and logs
    once when the handler returns (streams log when they end). The only request
    fields are `request_id`, method, registered route pattern, status and duration.
    `middleware.LogRoute` captures patterns at inner registration, including
@@ -74,14 +79,10 @@ Outermost first:
    Unknown paths/methods, mux redirects and pre-routing rejections use
    `unmatched`, never a raw path. Bodies, headers, queries and client addresses
    are excluded. `Unwrap` preserves ResponseController stream operations.
-2. `http.CrossOriginProtection` on every route. It rejects cross-origin
+3. `http.CrossOriginProtection` on every route. It rejects cross-origin
    requests using `Sec-Fetch-Site`, or `Origin` against `Host`, but lets GET,
    HEAD and OPTIONS through — so **every route that changes state is a
    POST**, and GET handlers never change state.
-3. `middleware.LimitBody`: every request body is capped at 64 KiB. Reading
-   past it fails with `*http.MaxBytesError`, which handlers answer with 413;
-   a route that answers without reading the body (a closed route's 404) is
-   unaffected.
 4. On everything except `/static/`, `/healthz` and `/readyz`: security headers
    ([`rendering.md`](rendering.md#content-security-policy)), then i18n.
    `/static/` sets its own `nosniff` and restrictive CSP.

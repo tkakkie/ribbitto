@@ -156,6 +156,29 @@ func TestRequestLogEarlyRejection(t *testing.T) {
 	}
 }
 
+func TestRequestLogOversizedBodyClosesConnection(t *testing.T) {
+	var logs bytes.Buffer
+	server := httptest.NewServer(loggedHandler(t, &logs))
+	defer server.Close()
+	resp, err := server.Client().Post(server.URL+"/signin", "application/x-www-form-urlencoded",
+		strings.NewReader(strings.Repeat("x", middleware.MaxBodyBytes+1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	// Wait for the server's handler goroutine before reading its log buffer.
+	server.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", resp.StatusCode)
+	}
+	if !resp.Close {
+		t.Fatal("oversized body response did not close the connection")
+	}
+	if record := requestRecord(t, &logs); record["status"] != float64(413) || record["route"] != "POST /signin" {
+		t.Fatal(record)
+	}
+}
+
 func TestRequestLogStream(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var logs bytes.Buffer

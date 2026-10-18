@@ -3,6 +3,8 @@
 // signed-in account, the request body limit, and rate limits on authentication
 // forms, typing signals, reads, channel creation, branching, posting, pin changes
 // and sidebar resyncs.
+// LimitBody sees the server's real writer first, then RequestLog wraps
+// CrossOriginProtection so even pre-routing rejections are logged.
 // Request logs allow only ID, method, registered pattern, status and duration;
 // streams log on completion. Unwrap preserves ResponseController operations.
 // Authentication limits count by client key: the peer address or, behind a

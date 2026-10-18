@@ -196,14 +196,16 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 		}
 		http.FileServerFS(assets).ServeHTTP(w, r)
 	}))))
-	// Before routing: reject cross-origin state changes after logging is installed.
-	// It lets GET, HEAD and OPTIONS through, so every route that changes
-	// state must be a POST.
+	// LimitBody must see the server's real writer so oversized bodies close the
+	// connection. It never answers itself, so RequestLog still logs every request.
+	// CrossOriginProtection lets GET, HEAD and OPTIONS through, so every route
+	// that changes state must be a POST.
 	logger := services.RequestLogger
 	if logger == nil {
+		// Install the RIBBITTO_LOG_FORMAT logger before NewHandler, or pass Services.RequestLogger.
 		logger = slog.Default()
 	}
-	return middleware.RequestLog(logger, http.NewCrossOriginProtection().Handler(middleware.LimitBody(mux))), *routes.patterns, nil
+	return middleware.LimitBody(middleware.RequestLog(logger, http.NewCrossOriginProtection().Handler(mux))), *routes.patterns, nil
 }
 
 func stylesheetURLForAssets(assets fs.FS) (string, error) {

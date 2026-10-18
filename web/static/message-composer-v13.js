@@ -70,8 +70,6 @@
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
     sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
-    if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
-    delete form.dataset.unconfirmedKey;
     restoredKey = null;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
@@ -134,8 +132,6 @@
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
       body.form.elements.idempotency_key.value = restoredKey;
-      if (form.dataset.unconfirmed) body.form.dataset.unconfirmedKey = restoredKey;
-      else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
     }
     event.target.closest("li").remove();
@@ -228,7 +224,6 @@
     if (event.target.id !== "message-body") return;
     if (restoredKey && event.target.value === "") {
       restoredKey = null;
-      delete event.target.form.dataset.unconfirmedKey;
       event.target.form.elements.idempotency_key.value = crypto.randomUUID();
     }
     updateEdits();

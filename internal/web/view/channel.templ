@@ -64,8 +64,11 @@ type ChannelPage struct {
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
 	// Quote is the selected original; QuoteUpdate limits swaps to quoted sends.
-	Quote       *Message
-	QuoteUpdate bool
+	Quote *Message
+	// QuoteText is present even for an empty submitted part; nil means whole.
+	QuoteText    *string
+	QuoteInvalid bool
+	QuoteUpdate  bool
 	// IdempotencyKey is the composer's key for one send (decision 37 (b));
 	// like Composer, a 422 keeps the submitted value or its absence.
 	IdempotencyKey *string

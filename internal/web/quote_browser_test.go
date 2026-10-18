@@ -24,7 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width int) {
+func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width int, part bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	pool := pgtest.New(t)
@@ -116,8 +116,13 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 	}))
 	defer server.Close()
 	defer close(stop)
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	page, closePage := boundedPage(t, browser, ctx, "quote page")
+	defer closePage()
+	page = page.WithPanic(func(v any) { t.Fatal(v) })
+	if part {
+		testPartialQuoteBrowser(t, page, server.URL+feed, first, scripts, width)
+		return
+	}
 	page.MustSetViewport(width, 844, 1, width < 768)
 	if !scripts {
 		router := page.HijackRequests()
@@ -209,4 +214,72 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 	if scripts && !page.MustEval(`() => window.quoteVisit && !location.search`).Bool() {
 		t.Fatal("posting navigated")
 	}
+}
+
+// Each invocation has its own server and limiter and makes only one post.
+func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original conversation.Message, scripts bool, width int) {
+	step := pageStep(page.GetContext(), page)
+	tabTo := func(p *rod.Page, selector string) {
+		for range 100 {
+			if p.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
+				return
+			}
+			p.Keyboard.MustType(input.Tab)
+		}
+		panic("Tab did not reach " + selector)
+	}
+	step(t, "part setup: viewport, touch emulation and script policy installed", func(p *rod.Page) {
+		p.MustSetViewport(width, 844, 1, width < 768)
+		if err := (proto.EmulationSetTouchEmulationEnabled{Enabled: width < 768}).Call(p); err != nil {
+			panic(err)
+		}
+		if !scripts {
+			if err := (proto.EmulationSetScriptExecutionDisabled{Value: true}).Call(p); err != nil {
+				panic(err)
+			}
+		}
+	})
+	step(t, "part navigation: original page body is visible", func(p *rod.Page) {
+		if err := navigateLoaded(p, url); err != nil {
+			panic(err)
+		}
+		p.MustElement("#body-" + view.MessageDOMID(original.ID)).MustWaitVisible()
+	})
+	step(t, "keyboard menu: Enter opens the original's actions", func(p *rod.Page) {
+		tabTo(p, fmt.Sprintf(`[popovertarget="message-actions-%x"]`, original.ID))
+		p.Keyboard.MustType(input.Enter)
+		p.MustElement(fmt.Sprintf(`#message-actions-%x`, original.ID)).MustWaitVisible()
+	})
+	step(t, "keyboard Quote: whole chip appears with no part textarea", func(p *rod.Page) {
+		tabTo(p, fmt.Sprintf(`#message-actions-%x [name=quote]`, original.ID))
+		p.Keyboard.MustType(input.Enter)
+		p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
+	})
+	step(t, "keyboard Quote only part: textarea contains the full original", func(p *rod.Page) {
+		tabTo(p, `#composer-quote [name=part]`)
+		p.Keyboard.MustType(input.Enter)
+		p.MustWait(`() => document.getElementById('quote-text')?.value === 'page original'`)
+		if !scripts && p.MustEval(`() => location.search.includes('quote_text') || !location.search.includes('part=')`).Bool() {
+			panic("plain part GET must carry only the ID")
+		}
+	})
+	step(t, "keyboard edit: quoted text is shortened to original", func(p *rod.Page) {
+		tabTo(p, "#quote-text")
+		p.Keyboard.MustType(input.Home, input.Delete, input.Delete, input.Delete, input.Delete, input.Delete)
+		p.MustWait(`() => document.getElementById('quote-text').value === 'original'`)
+	})
+	step(t, "keyboard compose: unique answer entered", func(p *rod.Page) {
+		tabTo(p, "#message-body")
+		p.MustInsertText("partial keyboard answer")
+		p.MustWait(`() => document.getElementById('message-body').value === 'partial keyboard answer'`)
+	})
+	step(t, "keyboard send: unique answer has exactly the part, author and original link", func(p *rod.Page) {
+		tabTo(p, `#message-composer button[type=submit]:not([form])`)
+		p.Keyboard.MustType(input.Enter)
+		p.MustWait(`href => [...document.querySelectorAll('#message-items > li')].some(item =>
+ item.querySelector('[id^="body-message-"]')?.textContent === 'partial keyboard answer' &&
+ item.querySelector('figure blockquote')?.textContent === 'original' &&
+ item.querySelector('figure figcaption')?.textContent.includes('@owner') &&
+ item.querySelector('figure a')?.getAttribute('href') === href)`, view.MessageURL("acme", original.ID))
+	})
 }

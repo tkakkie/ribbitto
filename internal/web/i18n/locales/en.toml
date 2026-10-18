@@ -438,3 +438,12 @@ other = "Reload now"
 
 ["mention.help"]
 other = "Type @ to find a member. Use arrow keys to choose, Enter or Tab to insert, and Escape to close."
+
+["message.quote_part"]
+other = "Quote only part"
+
+["message.quote_text"]
+other = "Quoted text"
+
+["message.error.quote"]
+other = "Enter a non-empty part of the original message (up to 4000 characters)."

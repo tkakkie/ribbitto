@@ -330,15 +330,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
-	if _, present := r.URL.Query()["quote"]; present && r.Method == http.MethodGet {
+	if (r.URL.Query().Has("quote") || r.URL.Query().Has("part")) && r.Method == http.MethodGet {
 		if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
 			return
 		}
-		var ok bool
-		page.Quote, ok = p.readQuote(w, r, m, id, r.URL.Query())
-		if !ok {
+		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) {
 			return
 		}
+	}
+	if page.QuoteInvalid {
+		status = http.StatusUnprocessableEntity
 	}
 	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" {
@@ -418,7 +419,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		key = new(conversation.IdempotencyKey(parsed))
 	}
-	// A message of this channel to quote whole (decision 38); posting checks
+	// A message of this channel to quote (decision 38); posting checks
 	// its organisation and channel.
 	var quote *kernel.ID
 	if submitted, present := r.PostForm["quote"]; present {
@@ -429,12 +430,16 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		quote = &parsed
 	}
+	var quoteText *string
+	if r.PostForm.Has("quote_text") {
+		quoteText = new(r.PostForm.Get("quote_text"))
+	}
 	body := r.PostForm.Get("body")
 	var composer *string
 	if _, present := r.PostForm["composer"]; present {
 		composer = new(r.PostForm.Get("composer"))
 	}
-	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, UnknownMember: view.UnknownMember(r.Context())})
+	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, QuoteText: quoteText, UnknownMember: view.UnknownMember(r.Context())})
 	posted := sent.Message
 	// A repeat closes the generation in the requested place it was issued
 	// for, not in the topic branching may have moved the message into.
@@ -498,9 +503,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
 	_, page.QuoteUpdate = r.PostForm["quote"]
 	if page.BodyError != "" {
-		var ok bool
-		page.Quote, ok = p.readQuote(w, r, m, c.ID, r.PostForm)
-		if !ok {
+		if !p.readQuote(w, r, m, c.ID, r.PostForm, &page) {
 			return
 		}
 	}

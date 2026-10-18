@@ -95,7 +95,7 @@ and tests) refuses references and handle candidates as a server error. The store
 its notice (`EscapeChatV1`), so a topic name is never markup or a reference.
 
 **Quotes** ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
-`Send.Quote` names a message to quote whole. Before the transaction, `Send`
+`Send.Quote` names a message to quote; `Send.QuoteText` selects a part when non-nil. Before the transaction, `Send`
 reads it through conversation's `ReadStore` (`GetMessages`, scoped to the
 membership's organisation and the posting channel) in a snapshot of its own,
 with the members a `chat_v1` original references, so the organisation lock
@@ -107,7 +107,9 @@ own text, never its quote: `Entry.Text` with references as `@handle` or
 empty one as `ErrInvalidBody`. Missing, another organisation's and another
 channel's originals are one `ErrQuoteNotFound` (web: 404), which rolls back
 the sequence; so does an original deleted before the insert, through
-`message_quoted_message_fkey`. A repeat compares the quote too.
+`message_quoted_message_fkey`. `ValidateQuotePart` checks a supplied part
+against `Entry.Text` after that scoped read and stores its normalised text.
+A repeat compares the quote too, including a submitted part's text.
 
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional

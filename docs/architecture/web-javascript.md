@@ -89,6 +89,8 @@ htmx sends resync requests. The markup contract is in
   Composer submits pause while the quote form is processing, before either
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
+- Partial quoting uses the same submitter glue for `name="part"`; the server
+  renders the editable text. Page-selection enhancement remains planned (#1161).
 - `message-drafts-v3.js` saves composer input after 300 ms or lifecycle flush,
   using the input's monotonic edit time. Blank/over-limit text writes tombstones;
   the 4,000-code-point/50-entry bounds apply from the first write. Equal/later

@@ -76,8 +76,10 @@ type Send struct {
 	Cursor *int64
 	// Key makes a repeated send return the first message; nil posts without it.
 	Key *IdempotencyKey
-	// Quote is a message of the channel to quote whole (decision 38), or nil.
+	// Quote is a message of the channel to quote (decision 38), or nil.
 	Quote *kernel.ID
+	// QuoteText selects a part; nil copies the whole extracted body.
+	QuoteText *string
 	// UnknownMember stands in the quote's text for a member the quoted
 	// chat_v1 message references and the directory did not return.
 	UnknownMember string
@@ -110,7 +112,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	// or checking expansion. The unique index still decides concurrent sends.
 	tokens := handleTokens(body)
 	if s.Key != nil && p.members != nil && len(tokens) > 0 {
-		sent, err := p.repeat(ctx, m, channelID, body, s.Quote, s.Topic, kernel.ID{}, *s.Key)
+		sent, err := p.repeat(ctx, m, channelID, body, s.Quote, s.QuoteText, s.Topic, kernel.ID{}, *s.Key)
 		if !errors.Is(err, ErrMessageNotFound) {
 			return sent, err
 		}
@@ -174,7 +176,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			if err != nil {
 				return err
 			}
-			if quote, err = quoteOf(original, quoted, s.UnknownMember); err != nil {
+			if quote, err = quoteOf(original, quoted, s.UnknownMember, s.QuoteText); err != nil {
 				return err
 			}
 		}
@@ -209,7 +211,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if errors.Is(err, ErrPostKeyTaken) && s.Key != nil {
 		// The rollback returned the sequence (no holes); read the stored
 		// message in a transaction of its own.
-		return p.repeat(ctx, m, channelID, typed, s.Quote, s.Topic, requested, *s.Key)
+		return p.repeat(ctx, m, channelID, typed, s.Quote, s.QuoteText, s.Topic, requested, *s.Key)
 	}
 	if err != nil {
 		return Sent{}, fmt.Errorf("posting message: %w", err)
@@ -252,7 +254,7 @@ func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID,
 
 // repeat answers a send whose key the author already stored. The topic is
 // not compared: branching may have moved the message since.
-func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, topicID *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
+func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, quoteText *string, topicID *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
 	var stored Message
 	err := p.runner.InTx(ctx, func(tx platform.Tx) error {
 		var err error
@@ -283,6 +285,15 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 	sent := Sent{Message: stored, Topic: requested, Repeat: true}
 	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, quote) {
 		return sent, ErrPostKeyReused
+	}
+	if quoteText != nil && stored.Quote != nil {
+		part, err := ValidateMessageBody(*quoteText)
+		if err != nil {
+			return sent, fmt.Errorf("%w: quote part: %w", ErrInvalidBody, err)
+		}
+		if part != stored.Quote.Text {
+			return sent, ErrPostKeyReused
+		}
 	}
 	return sent, nil
 }
@@ -335,8 +346,12 @@ func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID
 // plain_text body as stored, a chat_v1 body's extraction with references
 // resolved at quote time. The text must pass a body's checks after trimming,
 // so an extraction with nothing left is refused like an invalid body.
-func quoteOf(original Message, references map[kernel.ID]Reference, unknown string) (*Quote, error) {
-	text, err := ValidateMessageBody(Entry{Message: original, References: references}.Text(unknown))
+func quoteOf(original Message, references map[kernel.ID]Reference, unknown string, part *string) (*Quote, error) {
+	extracted := Entry{Message: original, References: references}.Text(unknown)
+	text, err := ValidateMessageBody(extracted)
+	if part != nil {
+		text, err = ValidateQuotePart(*part, extracted)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: quoted text: %w", ErrInvalidBody, err)
 	}

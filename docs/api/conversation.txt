@@ -271,7 +271,8 @@ type Send struct // Send is one composer submission.
   field Body string
   field Cursor *int64 // Cursor is the page's applied-and-shown cursor; nil reads only the new message.
   field Key *IdempotencyKey // Key makes a repeated send return the first message; nil posts without it.
-  field Quote *github.com/tkakkie/ribbitto/internal/kernel.ID // Quote is a message of the channel to quote whole (decision 38), or nil.
+  field Quote *github.com/tkakkie/ribbitto/internal/kernel.ID // Quote is a message of the channel to quote (decision 38), or nil.
+  field QuoteText *string // QuoteText selects a part; nil copies the whole extracted body.
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID
   field UnknownMember string // UnknownMember stands in the quote's text for a member the quoted chat_v1 message references and the directory did not return.
 type Sent struct // Sent is what a send produced.
@@ -319,6 +320,7 @@ type TypedBodyProof [36]byte // TypedBodyProof records the normalized typed body
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
 func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole body source text.
+func ValidateQuotePart(value string, original string) (string, error) // ValidateQuotePart normalizes a part under the body rules and requires it to occur in the original's extracted text, supplied after a scoped read.
 func ValidateTopicName(value string) (string, error) // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode code points, the same rule as channel names (docs/domain/topics.md).
 type Writer interface // Writer is posting's and branching's reads and writes in the caller's transaction, on validated values.
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.

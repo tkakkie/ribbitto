@@ -2,9 +2,9 @@
 
 **Decided** (#1153, approved by the maintainer). Text extraction and two of
 its users (the pins excerpt and the live announcement) exist (#1204), and so
-does quoting a whole message: storing, posting and showing it (#1176). Not
-implemented yet: the "Quote" action and the composer chip (#1160), and
-quoting a selection (#1161).
+stores, posts and shows whole quotes (#1176), with the Quote action and
+composer chip (#1160), and editable parts (#1161). Page text selection
+remains planned (#1161).
 The body format, its rendering and how a pasted message URL renders belong to
 #1171 ([decision 39](39-message-bodies-use-a-small-frozen-markup.md):
 rendering and extraction exist), which adds its format's extraction rule under the contract below.

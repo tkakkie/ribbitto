@@ -6,7 +6,8 @@
 // NewBrancher bind their writes to transactions over the pool. Channel creation,
 // posting, branching and pinning detach COMMIT and ROLLBACK from request
 // cancellation with a five-second limit; their work still follows the request.
-// Only confirmed commits raise the hub. NewReader
+// Posting, branching and pinning raise the hub only on a confirmed commit;
+// channel creation raises nothing. NewReader
 // binds conversation's reads to snapshots over the pool. Their runners and
 // own-module bindings are unexported; EventKinds registers the event routers
 // with realtime alongside PinEventKinds for pin invalidations. MessageSequencesIn binds channel bounds and message existence to

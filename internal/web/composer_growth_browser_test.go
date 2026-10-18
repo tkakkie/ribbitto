@@ -52,6 +52,12 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 							return
 						}
 					}
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/quote"):
+					response := snapshot
+					if r.FormValue("quote") != "" {
+						response.Quote = &snapshot.Messages[0]
+					}
+					templ.Handler(view.ComposerQuote(response, false)).ServeHTTP(w, r)
 				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/typing"):
 					w.WriteHeader(http.StatusNoContent)
 				case r.Method == http.MethodPost:
@@ -69,6 +75,9 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 					response := snapshot
 					if r.URL.Query().Has("ordinary") {
 						response.IdempotencyKey = nil
+					}
+					if r.URL.Query().Has("quote") {
+						response.Quote = &snapshot.Messages[0]
 					}
 					if r.URL.Query().Has("preset") {
 						response.Body = "preset\nsecond\nthird\nfourth"
@@ -197,9 +206,59 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 			page.MustSetViewport(size[0], size[1]-50, 1, false)
 			check("newest on viewport resize", newest)
 			if size[0] == 390 && size[1] == 600 {
+				page.MustSetViewport(size[0], size[1], 1, false)
+				const quoteSpace = `() => {
+					const b = document.getElementById('message-body'), l = document.getElementById('message-list');
+					if (b.clientHeight < 82) return 'less than three lines: ' + b.clientHeight;
+					if (l.clientHeight < 128) return 'list reserve lost: ' + l.clientHeight;
+					const q = document.getElementById('composer-quote').getBoundingClientRect().height;
+					const extra = q ? q + parseFloat(getComputedStyle(b.form).rowGap) : 0;
+					const cap = Math.max(82, Math.min(innerHeight / 2, innerHeight - 337 - 34 - extra));
+					if (b.scrollHeight > b.clientHeight && b.clientHeight !== Math.floor(cap)) return 'quote cap ' + b.clientHeight + '/' + cap;
+					return '';
+				}`
+				for _, query := range []string{"", "?quote"} {
+					page.MustNavigate(server.URL + query).MustWaitLoad()
+					set("first\nsecond\nthird")
+					check("three lines on load "+query, quoteSpace)
+					set(strings.Repeat("capped\n", 100))
+					check("quote cap on load "+query, quoteSpace)
+				}
+				setQuote := func(quoted bool) {
+					// Submit without scrolling an offscreen message action into view.
+					page.MustEval(`quoted => {
+						const button = document.querySelector(quoted ? '#message-items [name=quote]' : '#composer-quote button');
+						document.getElementById('quote-form').requestSubmit(button);
+					}`, quoted)
+					page.MustWait(`quoted => !!document.querySelector('#composer-quote input') === quoted && !document.querySelector('.htmx-settling')`, quoted)
+					settle()
+				}
+				setQuote(false)
+				// Three lines resize the list on chip swaps; capped text trades
+				// textarea space for the chip. Both must retain the same anchor.
+				for _, text := range []string{"first\nsecond\nthird", strings.Repeat("capped\n", 100)} {
+					set(text)
+					for _, atEnd := range []bool{true, false} {
+						page.MustEval(`end => { const l = document.getElementById('message-list'); l.scrollTop = end ? l.scrollHeight : 500; }`, atEnd)
+						settle()
+						quoteAnchor := page.MustEval(`end => {
+							const r = document.getElementById('message-list').getBoundingClientRect();
+							const items = [...document.querySelectorAll('#message-items > li')];
+							const item = end ? items.at(-1) : items.find(i => i.getBoundingClientRect().bottom > r.top);
+							return {id: item.id, end, offset: end ? item.getBoundingClientRect().bottom - r.bottom : item.getBoundingClientRect().top - r.top};
+						}`, atEnd)
+						for _, quoted := range []bool{true, false} {
+							setQuote(quoted)
+							check(fmt.Sprintf("quote=%t newest=%t anchor", quoted, atEnd), `a => {
+								const r = document.getElementById('message-list').getBoundingClientRect(), i = document.getElementById(a.id).getBoundingClientRect();
+								return Math.abs((a.end ? i.bottom - r.bottom : i.top - r.top) - a.offset) <= 1 ? '' : 'quote moved reader by more than 1 px';
+							}`, quoteAnchor)
+							check("space after quote swap", quoteSpace)
+						}
+					}
+				}
 				// A synthetic visual viewport leaves layout/dvh unchanged, like
 				// Safari's keyboard. It does not emulate native keyboard panning.
-				page.MustSetViewport(size[0], size[1], 1, false)
 				page.MustEvalOnNewDocument(`(() => {
 					const viewport = location.search.includes('noViewport') ? undefined :
 						Object.assign(new EventTarget(), {height: 540, offsetTop: 0});

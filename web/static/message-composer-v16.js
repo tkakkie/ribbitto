@@ -265,6 +265,20 @@
     }
   };
   const body = document.getElementById("message-body");
+  let quoteResized = false;
+  const updateQuoteHeight = () => {
+    if (!body) return;
+    const quote = document.getElementById("composer-quote");
+    const height = quote?.getBoundingClientRect().height || 0;
+    // A visible chip adds one flex gap as well as its own height.
+    const next = (height ? height + parseFloat(getComputedStyle(body.form).rowGap) : 0) + "px";
+    if (body.form.style.getPropertyValue("--composer-quote-h") === next) return;
+    body.form.style.setProperty("--composer-quote-h", next);
+    // Measuring a removed chip can briefly grow the list and clamp its scroll,
+    // even when the updated cap brings the list back to the same height.
+    quoteResized = true;
+  };
+  updateQuoteHeight();
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));
@@ -303,9 +317,11 @@
     rememberPost = () => { height = pane.clientHeight; remember(); };
     // A resize can clamp scrollTop before its scroll event. Keep the state
     // from the old height until the observer has restored the reader.
-    pane.addEventListener("scroll", () => { if (pane.clientHeight === height) remember(); });
+    pane.addEventListener("scroll", () => { if (!quoteResized && pane.clientHeight === height) remember(); });
     const resize = new ResizeObserver(() => {
-      if (pane.clientHeight !== height) {
+      updateQuoteHeight();
+      if (pane.clientHeight !== height || quoteResized) {
+        quoteResized = false;
         height = pane.clientHeight;
         // Native resize scrolling need not equal a clamp of the old top.
         // Restore the saved intent instead of treating that motion as a reader scroll.
@@ -319,7 +335,7 @@
       if (body) revealEnd(body);
     });
     resize.observe(pane);
-    if (body) resize.observe(body);
+    if (body) { resize.observe(body); resize.observe(body.form); }
     document.addEventListener("htmx:afterSwap", (event) => {
       if (event.target.id === "message-composer-state" && event.target.dataset.postedMessage) settling = true;
     });
@@ -338,6 +354,7 @@
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
     if (state.id === "composer-quote") {
+      updateQuoteHeight();
       document.getElementById("message-body").focus({ preventScroll: true });
       return;
     }

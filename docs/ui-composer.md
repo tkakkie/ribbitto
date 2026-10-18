@@ -7,13 +7,12 @@ text all grow it; successful sends clear only the sent text.
 
 `max-h-composer` caps it at **max(three lines, min(half the visible viewport,
 the height leaving the list 128 px))**. Three lines are 82 px including
-padding and always win when space is short. Without a quote chip, the column outside the
-textarea and list is 225 px from `desk`, 209 px below it, rounded up;
-the cap subtracts those plus 128 px (353 / 337 px). Below `desk` it also
-subtracts `env(safe-area-inset-bottom)`, matching the composer's padding.
-The keyboard normally covers that inset; retaining both conservatively
-reserves the padding without keyboard detection. Past the cap the textarea
-scrolls inside. A quote chip uses extra space without changing the cap.
+padding and always win when space is short. The cap subtracts the column
+budget (225 px from `desk`, 209 px below, including label/buttons), 128 px,
+and `--composer-quote-h` (measured chip plus flex gap). Load, chip swaps and
+composer resizes refresh that deduction. Below `desk` it also subtracts
+`env(safe-area-inset-bottom)` to reserve the composer padding conservatively,
+even with a keyboard. Past the cap the textarea scrolls inside.
 After input and textarea resizing, the script scrolls a focused,
 collapsed caret at the end to the bottom using the updated layout; other
 caret positions and selections keep native scrolling. Below `short:` the cap
@@ -30,9 +29,10 @@ list/textarea observer; no second scroll handler is needed.
 
 The composer script remembers whether `#message-list` is at its newest
 message (gap at most 2 px), or its first visible item and offset. On a list
-resize it keeps that place, including keyboard or window resizing; shrinking
+resize it keeps that place, including quote, keyboard or window resizing; shrinking
 can clamp the position when there is too little content below it. Scroll
-events at a changed height cannot replace the saved position before restoration;
+events at a changed height cannot replace the saved position before restoration.
+Chip measurements hold that anchor even if the final list height is unchanged;
 native resize scrolling does not cancel it. One resize observer restores the
 list before revealing the end caret. After htmx settles, a microtask records
 history/stream scrolling, including the stream's successful-post scroll, so

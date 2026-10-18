@@ -72,7 +72,7 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v15.js` loads with the response nonce on channel pages.
+`message-composer-v16.js` loads with the response nonce on channel pages.
 It anchors the list during [composer growth](../ui-composer.md) and handles
 [quote focus and locking](web-javascript.md#javascript).
 Enter sends via `requestSubmit`; Shift+Enter inserts a newline.

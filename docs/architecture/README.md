@@ -65,4 +65,5 @@ Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 - [`docs/database.md`](../database.md) — local database, migrations; [`docs/database-tests.md`](../database-tests.md) — integration tests and fixtures; [`docs/seed-data.md`](../seed-data.md) — development seed data
 - [`docs/worktree-env.md`](../worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
+- [Database locales](../database-locales.md) — cluster initialization and collation upgrades
 - [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are: the index of [`decisions/`](../decisions/)

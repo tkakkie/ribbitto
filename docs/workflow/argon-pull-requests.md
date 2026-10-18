@@ -101,7 +101,7 @@ failed, timed-out or empty run does not count
 
 ## Mutation evidence
 
-Under the [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code),
+Under the [handoff rule](running-other-ai.md#handoff-of-another-ais-code),
 where its pull request needs deliberate-defect evidence (a test-only pull
 request or a regression test for an adversarial finding, [reviewing](reviewing.md), or
 its issue's *Done when*), Claude prepares it on CI with as few runs as

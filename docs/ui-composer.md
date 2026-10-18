@@ -20,9 +20,13 @@ is three lines and the conversation still scrolls as a whole
 The composer script remembers whether `#message-list` is at its newest
 message (gap at most 2 px), or its first visible item and offset. On a list
 resize it keeps that place, including keyboard or window resizing; shrinking
-can clamp the position when there is too little content below it. Successful
-posts yield to the stream script's scroll to the posted message. Checking a
-message keeps the grown composer's space behind the move form.
+can clamp the position when there is too little content below it. Scroll
+events at a changed height cannot replace the saved position before restoration;
+native resize scrolling does not cancel it. One resize observer restores the
+list before revealing the end caret. After htmx settles, a microtask records
+history/stream scrolling, including the stream's successful-post scroll, so
+it takes precedence over resizing. Checking a message keeps the grown
+composer's space behind the move form.
 
 Without `field-sizing` support, `rows="3"` keeps the old 82 px box with
 inner scrolling; the 44 px phone minimum still applies. No sizing script

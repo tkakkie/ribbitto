@@ -234,7 +234,6 @@
     }
   };
   const body = document.getElementById("message-body");
-  if (body) new ResizeObserver(() => revealEnd(body)).observe(body);
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));
@@ -264,7 +263,7 @@
       const top = pane.getBoundingClientRect().top;
       const item = [...pane.querySelectorAll("#message-items > li, #message-pending > li")]
         .find(item => item.getBoundingClientRect().bottom > top);
-      position = { scrollTop: pane.scrollTop, newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
+      position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
         item, offset: item ? item.getBoundingClientRect().top - top : 0 };
     };
     remember();
@@ -272,27 +271,33 @@
     // A resize can clamp scrollTop before its scroll event. Keep the state
     // from the old height until the observer has restored the reader.
     pane.addEventListener("scroll", () => { if (pane.clientHeight === height) remember(); });
-    new ResizeObserver(() => {
-      if (pane.clientHeight === height) return;
-      height = pane.clientHeight;
-      // A stream/history scroll in this frame also wins. Only the old
-      // position or its unavoidable clamp belongs to the resize itself.
-      const clamped = Math.max(0, Math.min(position.scrollTop, pane.scrollHeight - height));
-      if (!settling && Math.abs(pane.scrollTop - clamped) <= 1) {
-        if (position.newest) pane.scrollTop = pane.scrollHeight;
-        else if (position.item?.isConnected) pane.scrollTop +=
-          position.item.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.offset;
+    const resize = new ResizeObserver(() => {
+      if (pane.clientHeight !== height) {
+        height = pane.clientHeight;
+        // Native resize scrolling need not equal a clamp of the old top.
+        // Restore the saved intent instead of treating that motion as a reader scroll.
+        if (!settling) {
+          if (position.newest) pane.scrollTop = pane.scrollHeight;
+          else if (position.item?.isConnected) pane.scrollTop +=
+            position.item.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.offset;
+        }
+        remember();
       }
-      remember();
-    }).observe(pane);
+      if (body) revealEnd(body);
+    });
+    resize.observe(pane);
+    if (body) resize.observe(body);
     document.addEventListener("htmx:afterSwap", (event) => {
       if (event.target.id === "message-composer-state" && event.target.dataset.postedMessage) settling = true;
     });
     document.addEventListener("htmx:afterSettle", (event) => {
+      // History restores and the stream's afterSettleCallback scroll run
+      // synchronously after this listener. Save their result before resizing.
+      if (pane.contains(event.target)) queueMicrotask(rememberPost);
       if (event.target.id !== "message-composer-state" || !settling) return;
       // The stream's scrollPosted runs in this same settle event. Its scroll
       // wins even when clearing the sent text also resizes the pane.
-      requestAnimationFrame(() => { height = pane.clientHeight; remember(); settling = false; });
+      queueMicrotask(() => { rememberPost(); settling = false; });
     });
   }
   // Responses replace only #message-composer-state (#1173): the textarea

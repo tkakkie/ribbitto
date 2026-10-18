@@ -279,6 +279,8 @@
     quoteResized = true;
   };
   updateQuoteHeight();
+  // The first measurement is the initial layout, not a change to restore from.
+  quoteResized = false;
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));

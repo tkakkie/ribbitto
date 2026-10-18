@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestCleanup(t *testing.T) {
@@ -314,9 +316,7 @@ func removeChildren(t *testing.T, o options) {
 }
 
 func TestObserverSampling(t *testing.T) {
-	if os.Getenv("RIBBITTO_TEST_DATABASE_URL") == "" && os.Getenv("RIBBITTO_REQUIRE_DB") != "1" {
-		t.Skip("admin configuration unset")
-	}
+	pgtest.AdminURL(t)
 	helper, err := filepath.Abs("../../bin/ai-db")
 	if err != nil {
 		t.Fatal(err)

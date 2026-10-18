@@ -132,6 +132,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 		{"", organizationID, conversation.ErrInvalidChannelName, "23514"},
 		{strings.Repeat("a", 81), organizationID, conversation.ErrInvalidChannelName, "23514"},
 		{"taken", organizationID, conversation.ErrChannelNameTaken, ""},
+		{"TAKEN", organizationID, conversation.ErrChannelNameTaken, ""},
 		{"unknown", kernel.ID{0xee}, nil, "23503"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,6 +150,34 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM channel), (SELECT count(*) FROM topic)").Scan(&channels, &topics))
 	if channels != 1 || topics != 1 {
 		t.Fatalf("rows after failed creates = %d channels, %d topics; want 1 each", channels, topics)
+	}
+}
+
+func TestChannelNameUniquenessPerOrganization(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
+	other := orgtest.Organization(t, pool, "other", "other", 0)
+	store := postgres.NewChannelStore(pool, conversation.DefaultMaxChannels)
+	_, err := store.CreateDefaultChannelForTest(ctx, acme, "Announcements")
+	requireNoError(t, err)
+	_, err = store.CreateDefaultChannelForTest(ctx, other, "general")
+	requireNoError(t, err)
+	foreign, err := store.CreateChannel(ctx, other, "announcements", "")
+	requireNoError(t, err)
+	if foreign.OrganizationID != other || foreign.Name != "announcements" {
+		t.Fatalf("other organisation's case twin = %+v", foreign)
+	}
+	for _, name := range []string{"announcements", "Announcements", "ANNOUNCEMENTS"} {
+		t.Run(name, func(t *testing.T) {
+			_, err := store.CreateChannel(ctx, other, name, "")
+			// Exact identity prevents leaking PostgreSQL's detail (organisation
+			// IDs or conflicting names), including any other organisation's data.
+			if err != conversation.ErrChannelNameTaken {
+				t.Fatalf("error = %v, want only ErrChannelNameTaken", err)
+			}
+		})
 	}
 }
 

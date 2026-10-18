@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 // TestMain lets a test run this binary as the command itself, so the
@@ -126,13 +128,7 @@ func TestHealthFailures(t *testing.T) {
 
 // The success path and a failing statement need the real server.
 func TestHealthAndStatementWithDatabase(t *testing.T) {
-	url := os.Getenv("RIBBITTO_TEST_DATABASE_URL")
-	if url == "" {
-		if os.Getenv("RIBBITTO_REQUIRE_DB") == "1" {
-			t.Fatal("RIBBITTO_TEST_DATABASE_URL is required")
-		}
-		t.Skip("admin configuration unset")
-	}
+	pgtest.AdminURL(t)
 	dir, env := t.TempDir(), without(os.Environ())
 	if stdout, stderr, code := command(t, dir, env, "", "health"); code != 0 || stdout != "PostgreSQL reachable\n" || stderr != "" {
 		t.Fatalf("health: exit %d, stdout %q, stderr %q", code, stdout, stderr)

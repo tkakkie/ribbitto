@@ -22,7 +22,10 @@ also requires account email and display name to be NFC.
   normalisation, no composition rules. Spaces are not trimmed and compatibility
   characters (fullwidth/halfwidth) stay distinct; this is not NFKC.
 - **Organisation name:** 1–100 characters after normalisation.
-- **Channel name:** as organisation names, but 1–80 characters.
+- **Channel name:** as organisation names, but 1–80 characters; unique per
+  organisation ignoring case using PostgreSQL `lower(name)`
+  ([`channels.md`](channels.md#identity-and-names)). Case-only twins return
+  the same duplicate-name error as exact matches.
 - **Topic name:** as channel names; unique per channel ignoring case, and
   the default topic has none ([`topics.md`](topics.md)).
 - **Message body:** plain text, 1–4000 code points ([`messages.md`](messages.md)).

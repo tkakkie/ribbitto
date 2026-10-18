@@ -29,7 +29,6 @@
 | channel_organization_id_not_null | n | NOT NULL organization_id |
 | channel_organization_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT |
 | channel_pkey | PRIMARY KEY | PRIMARY KEY (id) |
-| channel_organization_id_name_key | UNIQUE | UNIQUE (organization_id, name) |
 | channel_organization_id_id_key | UNIQUE | UNIQUE (organization_id, id) |
 | channel_default_topic_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED |
 
@@ -38,9 +37,9 @@
 | Name | Definition |
 | ---- | ---------- |
 | channel_pkey | CREATE UNIQUE INDEX channel_pkey ON public.channel USING btree (id) |
-| channel_organization_id_name_key | CREATE UNIQUE INDEX channel_organization_id_name_key ON public.channel USING btree (organization_id, name) |
 | channel_organization_id_id_key | CREATE UNIQUE INDEX channel_organization_id_id_key ON public.channel USING btree (organization_id, id) |
 | channel_default_idx | CREATE UNIQUE INDEX channel_default_idx ON public.channel USING btree (organization_id) WHERE is_default |
+| channel_name_idx | CREATE UNIQUE INDEX channel_name_idx ON public.channel USING btree (organization_id, lower(name)) |
 
 ## Relations
 

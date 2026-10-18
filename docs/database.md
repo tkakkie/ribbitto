@@ -1,8 +1,7 @@
 # Database development
 
-**Keep it current:** update this file when configuration or the migration
-workflow changes; the integration-test setup is in
-[database tests](database-tests.md).
+**Keep it current:** update for configuration or migration changes.
+See [database tests](database-tests.md) and [database locales](database-locales.md).
 
 `RIBBITTO_DATABASE_URL` configures both the server and the explicit
 `migrate up|down|status` command. The server checks connectivity but never
@@ -111,6 +110,8 @@ big-endian byte length followed by SHA-256 of the normalized typed body.
 A CHECK requires NULL or 36 bytes. No default or backfill: legacy rows stay
 NULL. Keyed posts store it atomically with body/key; unkeyed posts and notices
 store NULL. Down drops it. See [retry rules](architecture/posting.md).
+
+[Migration 00020: channel names](channel-name-upgrade.md).
 
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start

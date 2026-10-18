@@ -90,14 +90,15 @@ flowchart LR
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 
-Unread may import conversation's root (store: value types only), never
-conversely in production. Operations stay injected through consumer-owned
-interfaces (decision 27, #1303). The [manifest](../../module_imports_test.go)
-governs imports; [dependencies](../dependencies.md) lists actual edges.
+The [manifest](../../module_imports_test.go) lets unread import only
+conversation's root; conversation never imports unread in production
+([dependencies](../dependencies.md)).
 
-This keeps domain rules and use cases testable without a database or HTTP,
-with authorization in one place. Use cases return plain structs; only `web`
-renders HTML, allowing a JSON API without changing use cases.
+Why this shape: the domain and the use cases stay testable without a
+database or HTTP; authorization lives in exactly one place, so a new
+endpoint or a real-time path cannot quietly skip it; and because use cases
+return plain structs and only `web` renders HTML, a JSON API can be added
+next to the HTML handlers later without touching the use cases.
 
 `serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
 uses goose's `database/sql` handle.

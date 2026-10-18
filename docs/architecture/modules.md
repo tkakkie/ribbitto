@@ -15,13 +15,15 @@ A wiring package exports its use-case constructors, the `Tx`- and `Snapshot`-bou
 
 `<module>pg`'s constructors take the pool and the use cases' other dependencies (a clock, the shared hasher, a canceller) and return the use cases. Its `Tx`- or `Snapshot`-taking factories implement other modules' consumer interfaces. The consumer owns those interfaces and their factory types; their result types are the provider root's where it exports one (for example `org.DirectoryEntry`), never a duplicate (K7 on #502). Where a provider's factory returns its own store type (`identitypg.AccountCreatorIn`, `orgpg.SequenceIn`, `realtimepg.AppenderIn`, `conversationpg.DefaultChannelCreatorIn`), a closure in the composition root adapts it to the consumer's factory type. A wiring package may import its own module's root and store, and the roots of modules whose interfaces it implements. It may not import other wiring or stores; only `cmd/*` and tests import it. Roots and stores follow the [module manifest](../../module_imports_test.go).
 
-Unread may import conversation's root for its public API and shared value
-types; unread's store may import it only for value types (decision 27,
-amended through #1303). Conversation's production packages never import
-unread. Neither module may import the other's store, wiring or internals.
+The manifest allows unread's root, store and wiring to import conversation's
+root only, never its children, store, wiring, fixture package or org
+(decision 27, amended through #1303). Conversation's production packages never
+import unread. `TestUnreadConversationImports` and
+`TestConversationDoesNotImportUnread` check these boundaries. Unread's store
+uses conversation's root for value types only by convention, checked in review.
 Operations remain injected through consumer-owned interfaces. Their shared
-read-range value is `conversation.SequenceRange`; migrating `unread.Range`
-continues in the second pull request for #1303.
+read-range value is `conversation.SequenceRange`; `unread.Range` remains for
+write paths and channel gaps, with migration tracked in #1303.
 
 A cross-module flow's root use case owns its transaction through an injected runner (`org.TxRunner` for setup and sign-up, `conversation.TxRunner` for posting, branching and pinning). Org's wiring uses `platform.InTx`; conversation's runner (also channel creation and repeated-send lookups) and unread's reading use `platform.InTxDetachedCommit`: work follows the request, but COMMIT and ROLLBACK each have an independent five-second limit within the server's ten-second shutdown grace. Posting, branching and pinning raise the hub only on confirmed commit success; an unknown outcome returns an error without raising ([posting](posting.md)). Channel creation raises nothing. The use case passes the runner's `Tx` to the factories it was given; stores bind to the `Tx` they are given and never open, commit or roll back. A use case reading several modules owns its snapshot the same way, through an injected runner (`conversation.SnapshotRunner` for the page snapshot, `One` and `Many`; `org.SnapshotRunner` for member search) over `platform.InSnapshot` (only conversation page counts and sidebar recounts use its local statement-budget variant, unless the URL sets `statement_timeout`), and passes its `Snapshot` to its factories.
 

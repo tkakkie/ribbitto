@@ -24,15 +24,17 @@
   tables and only refers to these, such as reactions, unread or search, is
   its own module depending on `conversation`'s API. A feature that does both
   is split along that line.
-- **Unread dependency** (amended through issue #1303). `unread` may import
-  only `conversation`'s root for its public API and shared value types;
-  unread's store may use that root only for value types. Neither may import
-  conversation's store, wiring or other internals. The reverse production
-  edge, from any conversation package to unread, stays forbidden.
+- **Unread dependency** (amended through issue #1303). The manifest allows
+  unread's root, store and wiring to import conversation's root only, never
+  its children, store, wiring, fixture package or org. Conversation's
+  production packages never import unread. `TestUnreadConversationImports`
+  and `TestConversationDoesNotImportUnread` check these boundaries.
+  Unread's store uses conversation's root for value types only by convention,
+  checked in review.
   Cross-module operations still use decision 26's consumer-owned interfaces
   and injected transaction- or snapshot-bound factories. Read ranges at the
-  seam use `conversation.SequenceRange`; the migration from `unread.Range`
-  is split across the two pull requests for #1303. Conversation keeps
+  seam use `conversation.SequenceRange`; `unread.Range` remains for write
+  paths and channel gaps, with migration tracked in #1303. Conversation keeps
   `ChannelUnread`, whose `Count` and `CountWithFirstUnread` serve different
   callers. Behaviour, SQL ownership and transaction boundaries do not change.
 - **Graph and order.** `unread` → `conversation` → `identity`, `org`,

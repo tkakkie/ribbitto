@@ -7,6 +7,8 @@ updates:
       - "/tools/tbls"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       templ:
         patterns:
@@ -15,3 +17,5 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

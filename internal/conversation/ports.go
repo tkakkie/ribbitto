@@ -58,10 +58,11 @@ type Writer interface {
 	// (GetDefaultTopic or GetTopic). Another organisation's channel is
 	// ErrChannelNotFound and another organisation's member org.ErrNotFound.
 	// A non-nil key the author already stored in the organisation is
-	// ErrPostKeyTaken; the transaction is then rolled back. A non-nil quote
+	// ErrPostKeyTaken; the transaction is then rolled back. Proof is stored
+	// atomically with a key; its zero value means unverifiable. A non-nil quote
 	// is stored with it; an original deleted since QuotedMessage is
 	// ErrQuoteNotFound.
-	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, quote *Quote) (Message, error)
+	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error)
 	// QuotedMessage returns the channel's message with the ID, or
 	// ErrQuoteNotFound when it is missing or in another organisation or channel.
 	QuotedMessage(ctx context.Context, organizationID, channelID, id kernel.ID) (Message, error)

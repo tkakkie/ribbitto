@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -30,7 +31,7 @@ func TestFirstMessageAfterScope(t *testing.T) {
 		{other.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, other.MemberID, 4},
 		{f.OrganizationID, sibling.ID, f.Channel.DefaultTopicID, f.MemberID, 5},
 	} {
-		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq, nil, nil)
+		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq, nil, conversation.TypedBodyProof{}, nil)
 		requireNoError(t, err)
 	}
 	requireNoError(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {

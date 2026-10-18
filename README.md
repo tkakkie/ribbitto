@@ -172,6 +172,7 @@ cursor above the restored log gets `reset` and reloads the page
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md) · [Database tests](docs/database-tests.md)
+- [Message paging plan measurements](docs/message-paging-plans.md)
 
 ## Contributing
 

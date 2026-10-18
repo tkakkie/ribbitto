@@ -132,7 +132,7 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 docs or `make vuln`, which CI runs separately.
 
 The Argon launcher's Go tests run with the other command tests in
-`make check`. CI also runs
+`make check`. CI's separate `vuln` job runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

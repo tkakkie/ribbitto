@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 // fakeServer records statements and keeps the set of databases, so the
@@ -479,12 +481,7 @@ func TestRelease(t *testing.T) {
 // The real server: a reservation creates and migrates the database, and a
 // release drops only that one.
 func TestReserveWithDatabase(t *testing.T) {
-	if os.Getenv("RIBBITTO_TEST_DATABASE_URL") == "" {
-		if os.Getenv("RIBBITTO_REQUIRE_DB") == "1" {
-			t.Fatal("RIBBITTO_TEST_DATABASE_URL is required")
-		}
-		t.Skip("admin configuration unset")
-	}
+	url := pgtest.AdminURL(t)
 	_, linked, _ := worktreeFixture(t)
 	db := &server{}
 	defer db.close()
@@ -496,7 +493,7 @@ func TestReserveWithDatabase(t *testing.T) {
 	if count, err := db.query("SELECT count(*) FROM pg_database WHERE datname='" + name + "'"); err != nil || count != "1" {
 		t.Fatalf("database after reserve: %q, %v", count, err)
 	}
-	stdout, stderr, code := command(t, linked, append(without(os.Environ()), "RIBBITTO_TEST_DATABASE_URL="+os.Getenv("RIBBITTO_TEST_DATABASE_URL")), "", "run", "env")
+	stdout, stderr, code := command(t, linked, append(without(os.Environ()), "RIBBITTO_TEST_DATABASE_URL="+url), "", "run", "env")
 	if code != 0 || !strings.Contains(stdout, "/"+name) {
 		t.Fatalf("run after reserve: exit %d, %s", code, stderr)
 	}

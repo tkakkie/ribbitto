@@ -30,6 +30,8 @@ streams end to end (`TestStreamEndpoints`, against the organisation endpoint).
 Do not point this variable at a production server.
 Tests skip only when the variable is unset; an empty or broken value fails.
 `RIBBITTO_REQUIRE_DB=1` also makes an unset URL fail, as required in CI.
+Tests that need the admin URL directly use `pgtest.AdminURL(t)` to apply the
+same skip-or-require rule as the database helpers.
 
 ```sh
 RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/conversation/...

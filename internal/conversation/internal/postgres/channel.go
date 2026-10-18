@@ -51,8 +51,8 @@ func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return conversation.Channel{}, conversation.ErrChannelLimit
-	// The unique constraint, not a lookup first, decides between concurrent creators.
-	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "channel_organization_id_name_key":
+	// The unique index, not a lookup first, decides between concurrent creators.
+	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "channel_name_idx":
 		return conversation.Channel{}, conversation.ErrChannelNameTaken
 	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "channel_name_"):
 		return conversation.Channel{}, fmt.Errorf("%w: %w", conversation.ErrInvalidChannelName, err)

@@ -359,7 +359,7 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			for _, cmd := range sqlwalk.List(n["cmds"]) {
 				sub := sqlwalk.Node(cmd, "AlterTableCmd")["subtype"]
 				switch sub {
-				case "AT_AddColumn", "AT_SetNotNull", "AT_AddConstraint":
+				case "AT_AddColumn", "AT_SetNotNull", "AT_AddConstraint", "AT_DropConstraint":
 				default:
 					return fmt.Errorf("unsupported migration ALTER TABLE %v", sub)
 				}

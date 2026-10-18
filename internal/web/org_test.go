@@ -400,7 +400,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}{
 		{"channel organisation", globexChannel, globexFixture.DefaultTopicID},
 		{"topic organisation", globexChannel, globexFixture.DefaultTopicID},
-		{"channel", acmeChannel, conversationtest.Channel(t, pool, acme, "Other", false).DefaultTopicID},
+		{"channel", acmeChannel, conversationtest.Channel(t, pool, acme, "Typing scope", false).DefaultTopicID},
 		{"topic", acmeChannel, kernel.ID{99}},
 	} {
 		t.Run("typing/"+scope.name, func(t *testing.T) {

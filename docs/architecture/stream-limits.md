@@ -52,7 +52,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   both values: sharing a key makes a smaller capacity a valid choice (#692).
   Live keys fit in the derived capacity, but connecting and disconnecting
   members can still cause eviction and misses.
-  [#671 measured](stream-authorization-results.md#benchmark-2026-10-09)
+  [#671 measured](../measurements/stream-authorization-results.md#benchmark-2026-10-09)
   churn past 10,000 distinct entries: hit rate fell to 0.905 at 11,000 and
   0.647 at 15,000. Each miss loaded a membership, and the pool limited delivery
   again (15,000 failed with p95 13.9 s).
@@ -90,7 +90,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   a newer durable level requires another read. This is single-process:
   shared member invalidation and subscription/reconnect coordination are needed
   across processes; bounded recovery additionally needs revisions or replay.
-  [Short measurements](read-advance-results.md) isolate matching tabs from total
+  [Short measurements](../measurements/read-advance-results.md) isolate matching tabs from total
   connections: unrelated members do no read-induced work. They establish no ceiling.
   Publication has no queue; zero-subscriber reads pay transaction cost but retain
   no registry entry. Unknown-COMMIT recounts may precede persistence; [reconnect limits](unread-writes.md) still apply.

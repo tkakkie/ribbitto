@@ -2,7 +2,7 @@
 
 Keeping #262's guarantee without a query per connection/event (#622).
 **Maintainer, 2026-10-08: (a2), triggers mandatory** ([Decision](#decision)).
-Implemented by #669/#670 and [measured by #671](stream-authorization-results.md):
+Implemented by #669/#670 and [measured by #671](../measurements/stream-authorization-results.md):
 fresh shared epochs and bounded cached allows; misses reload independently.
 Cancellation fails closed. The comparison preserves pre-#670 reasoning.
 
@@ -24,7 +24,7 @@ Cancellation fails closed. The comparison preserves pre-#670 reasoning.
   End to end at 10 posts/s with pgx's default pool of 10, 7,000 streams pass
   (7,015 queries per post) and 10,000 fail (p95 2.8 s over HTTP/1.1, 4.3 s
   through Caddy over HTTP/2); a 40-connection pool fails at 15,000
-  ([load results](load-results.md)).
+  ([load results](../measurements/load-results.md)).
 - **What revokes access:** nothing in the application yet. No code removes a
   member, changes a role, or renames or deletes an organisation, and every
   channel is public. Only direct SQL removes a membership, as #262's
@@ -177,7 +177,7 @@ About 15 shared queries per post end to end, plus the epoch reads: a few
 per organisation **when the checks overlap**, up to `N` when they are
 staggered. Misses reload independently; denies are never cached.
 
-**Measured** (#671, [results](stream-authorization-results.md)):
+**Measured** (#671, [results](../measurements/stream-authorization-results.md)):
 - **Stream cost:** in the unstaggered ladders, queries per post
   stay at 16 to 46, not `N + 10`, up to 10,000; the highest passing step rose from 2,000 to 30,000
   (one member) and 11,000 (distinct members, past the cache's capacity).

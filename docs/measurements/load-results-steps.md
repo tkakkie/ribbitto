@@ -9,7 +9,7 @@ Steps are listed in run order:
 - **Reruns:** the reruns sampled CPU per interval.
 - **Pool 40:** the server used `pool_max_conns=40`.
 - **A4:** the A4 steps posted short and worst-case bodies
-  ([load testing](load-testing.md#measurements-216-2026-10-07)).
+  ([load testing](../architecture/load-testing.md#measurements-216-2026-10-07)).
 
 Server snapshots are #218's counters, cumulative since that server started:
 - **Before:** read before the page request;

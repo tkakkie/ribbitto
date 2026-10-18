@@ -143,7 +143,7 @@ No per-connection send queue (decision 23):
 ## Deciding whether to build it
 
 What #671 measured with cached allows
-([results](stream-authorization-results.md)):
+([results](../measurements/stream-authorization-results.md)):
 
 - **Benchmark:** with one member, 16 to 27 queries per post from 1,000 to
   30,000 streams; 40,000 failed with the pool never empty, and the benchmark
@@ -162,7 +162,7 @@ second read. Unchanged per connection: a wake for every connection of the
 organisation (until the interest index), the render-cache lookup,
 `MayReceive`, the write and flush, the goroutine and its buffers. Queries
 per post fall by a few at most, and the pool was not the limit; any gain is
-CPU and lock contention, which no run has measured. On present evidence it
+CPU and lock contention, which no run measured. On present evidence it
 is not expected to move the measured limits by itself.
 
 **Evidence that should decide:**

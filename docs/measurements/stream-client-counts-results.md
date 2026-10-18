@@ -1,6 +1,6 @@
 # Client unread count cost (#1047)
 
-The default sidebar mode of [TestStreamCost](stream-cost.md) now follows
+The default sidebar mode of [TestStreamCost](../architecture/stream-cost.md) now follows
 [decision 34](../decisions/34-live-unread-counts.md). It uses author-only post
 triggers, current-channel move triggers, the production `RecountLimit` and
 `UnreadRenderer` selection in `Stream.Run`. Test adapters mirror only wiring

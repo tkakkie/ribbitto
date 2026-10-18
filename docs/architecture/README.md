@@ -37,23 +37,14 @@ Read the file for the area you change:
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
-| [`stream-authorization-contention.md`](stream-authorization-contention.md) | the cached-allow check's lock and wake contention (#703): what changed, and the ceilings and profiles before and after |
-| [`stream-authorization-results.md`](stream-authorization-results.md) | what #670's cached allows cost, measured by #671: epoch reads, hit rate, queries and latency, and what hit the limit first |
 | [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
 | [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
 | [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
-| [`sidebar-counts-history.md`](sidebar-counts-history.md) | the stopped sidebar-recount investigation (#812–#957), its findings, and why client-side counts replaced it |
-| [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
-| [`read-advance-results.md`](read-advance-results.md) | short read-advance costs, member isolation, matched posting/branching unions and #711 acceptance |
-| [`stream-sidebar-results.md`](stream-sidebar-results.md) | measured cost of live sidebar recounts per stream with distinct members (#812) |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
-| [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
-| [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
-| [`load-results-restart.md`](load-results-restart.md) | reconnect storm results: restarting with every stream open, exit time, recovery, replay and the comparison |
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, pending own posts, the idempotency key, drafts and the send key |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
@@ -68,6 +59,7 @@ Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 
 ## See also
 
+- [Measurements](../measurements/README.md) — load tests, benchmarks and investigation results
 - [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`entities.md`](../domain/entities.md), [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)
 - [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
 - [`docs/database.md`](../database.md) — local database, migrations; [`docs/database-tests.md`](../database-tests.md) — integration tests and fixtures; [`docs/seed-data.md`](../seed-data.md) — development seed data

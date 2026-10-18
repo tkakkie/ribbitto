@@ -411,3 +411,12 @@ other = "編集"
 
 ["message.edit.unavailable"]
 other = "編集中の文章を消してから編集してください。"
+
+["mention.label"]
+other = "メンション候補"
+
+["mention.empty"]
+other = "該当するメンバーはいません。"
+
+["mention.count"]
+other = "%d 人のメンバーが見つかりました。"

@@ -138,7 +138,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.MemberSearch, services.MentionLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -182,6 +182,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Run(route.method+" "+path+" member", func(t *testing.T) {
 			w := get(route.method, path, aliceToken, now)
 			switch route.method + " " + route.path {
+			case "GET /mention-candidates":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="mention-listbox"`) {
+					t.Fatalf("candidates: %d %s", w.Code, w.Body.String())
+				}
 			case "GET /{$}":
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))

@@ -411,3 +411,12 @@ other = "Edit"
 
 ["message.edit.unavailable"]
 other = "Clear the text you are writing to edit this message."
+
+["mention.label"]
+other = "Mention candidates"
+
+["mention.empty"]
+other = "No members found."
+
+["mention.count"]
+other = "Members found: %d"

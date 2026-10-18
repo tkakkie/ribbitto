@@ -608,8 +608,8 @@ func testStreamCap(t *testing.T, hub *realtime.Hub, occupiedAccount kernel.ID) {
 	if seen != -1 || reads.Load() != 0 || hub.Connections() != 1 {
 		t.Fatal("refusal registered a stream, re-checked the session or read events")
 	}
-	// Both accepted and refused streams are no-store; Content-Type shows
-	// whether the request reached SSE setup.
+	// Both outcomes are no-store; the 429 and the counters above show the
+	// request never reached SSE setup.
 	if w.Code != http.StatusTooManyRequests || strings.Contains(w.Body.String(), "data:") || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
 		t.Fatalf("over the cap: status %d, type %q; want 429 before streaming", w.Code, w.Header().Get("Content-Type"))
 	}

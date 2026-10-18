@@ -1,7 +1,7 @@
 # Rendering and assets
 
 templ components live in `internal/web/view`. Assets embedded from
-`web/static` are immutable; the stylesheet URL carries the CSS's SHA-256.
+`web/static` are cached as immutable; the stylesheet URL carries the CSS's SHA-256.
 In development (`make dev`, `RIBBITTO_DEV_ASSETS=web/static`), disk assets
 and a per-request hash make rebuilt CSS appear without restarting.
 
@@ -29,7 +29,7 @@ default-src 'self'; script-src 'nonce-<nonce>'; style-src 'self'; img-src 'self'
 ```
 
 Even same-origin scripts require the nonce: `script-src` has no `'self'`.
-This limits HTML injection. The middleware also sends:
+This is defence in depth against HTML injection. The middleware also sends:
 
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: same-origin`
@@ -47,7 +47,7 @@ as `<img>`, `<use>`, a script or a stylesheet does not apply its own policy;
 `TestBrowser/static-headers` checks that icons and illustrations
 still paint. Caddy owns `Strict-Transport-Security` in deployment.
 
-The layout's `htmx-config` sets `allowEval: false`, `allowScriptTags: false`
+The layout's `htmx-config` meta tag sets `allowEval: false`, `allowScriptTags: false`
 and `includeIndicatorStyles: false`, disabling attribute evaluation, swapped
 scripts and inline indicator styles. Keep scripts and styles external;
 never use inline scripts, `hx-on` or other attribute scripts.

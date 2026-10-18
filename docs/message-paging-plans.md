@@ -10,23 +10,23 @@ other workloads remain untested.
 
 ## Method and reproduction
 
-Measured SQL in the Codex sandbox using a disposable test database. PostgreSQL
-was **18.6**, Debian 18.6-1.pgdg13+2, Linux aarch64 (GCC 14.2.0). Settings:
-shared_buffers 128 MiB, work_mem 4 MiB, effective_cache_size 4 GiB,
+Measured in the Codex sandbox on a disposable database. PostgreSQL
+was **18.6**, Debian 18.6-1.pgdg13+2, Linux aarch64 (GCC 14.2.0). Settings: shared_buffers 128 MiB, work_mem 4 MiB, effective_cache_size 4 GiB,
 random_page_cost 4, jit on, max_parallel_workers_per_gather 2. Only
 plan_cache_mode changed. Goose applied all migrations through 00019.
 
-The busy channel has 1,000,000 messages, including 200 sparse-topic messages,
-one every 5,000 messages. Another organisation/channel has 100,000 messages.
-Bodies are about 150 characters; quote/pin fields are NULL. Sequences 1–2
-precede the messages. The boundary models historical events past retention,
-without backfill or disabled triggers. Each organisation has one member; no
+One organisation has one busy channel of 1,000,000 messages, including 200
+sparse-topic messages, one every 5,000. The original run also held an unqueried
+100,000-message organisation. Bodies are ~150 characters; quote/pin fields
+are NULL. Sequences 1–2 precede the messages. The boundary models events past
+retention, without backfill or disabled triggers. One member; no
 concurrent writes.
 
 `psql` was unavailable in the sandbox. A temporary Go driver used pgx v5.11.0's
 simple protocol to issue SQL, and goose v3.29.0 to apply the real migrations.
-Each phase used a separate connection. Equivalent psql SQL follows; use only a
-throwaway database. From the repository root:
+Only the driver used a connection per phase. The psql form below was not run as
+psql; keep every phase in one session, because the setup is temporary. Use only
+a throwaway database. From the repository root:
 
 ```sh
 psql '<local test database>' -v ON_ERROR_STOP=1 \
@@ -35,15 +35,15 @@ goose -dir db/migrations postgres '<throwaway database>' up
 psql '<throwaway database>' -v ON_ERROR_STOP=1
 ```
 
-Seed the throwaway database; the account hash is an unusable fixture:
+Seed it; the account hash is an unusable fixture:
 
 ```sql
 CREATE TEMP TABLE fixture AS
 SELECT md5('org' || g)::uuid AS org, md5('channel' || g)::uuid AS channel,
        md5('member' || g)::uuid AS member, md5('main' || g)::uuid AS main,
        md5('sparse' || g)::uuid AS sparse,
-       CASE g WHEN 1 THEN 1000000 ELSE 100000 END AS n
-FROM generate_series(1, 2) AS g;
+       1000000 AS n
+FROM generate_series(1, 1) AS g;
 BEGIN;
 INSERT INTO organization (id, slug, name, event_seq, event_log_boundary_seq)
 SELECT org, 'paging-' || n, 'Paging measurement', n + 2, n + 2 FROM fixture;
@@ -68,10 +68,10 @@ FROM fixture CROSS JOIN LATERAL generate_series(1, n) AS i;
 ANALYZE;
 ```
 
-These are the parameterised queries, using the source's `SELECT *` (the driver
-used sqlc's equivalent explicit column expansion). Parameters: organisation,
+These are the parameterised queries with the source's `SELECT *` (the driver
+used sqlc's explicit columns). Parameters: organisation,
 channel, nullable topic, cursor, limit. First-page means a NULL before cursor.
-Limits match history's 51 rows (including the older-page sentinel) and
+Limits match history's 51 rows (with the older-page sentinel) and
 around-message's 25 newer rows.
 
 ```sql
@@ -114,8 +114,7 @@ SELECT 'EXPLAIN (GENERIC_PLAN, FORMAT JSON) ' || sql FROM queries ORDER BY name
 
 Phase B: prepare, force each mode, and execute the same parameters. For each
 case, discard repetition 0 and retain repetitions 1–5, alternating generic then
-custom. The working set exceeds shared_buffers; scans evict pages despite
-warm-up. No cache flushes were used.
+custom. The working set exceeds shared_buffers; no cache flushes were used.
 
 ```sql
 SELECT format('PREPARE %I(uuid,uuid,uuid,bigint,bigint) AS %s', name, sql)
@@ -129,8 +128,8 @@ ORDER BY r, name DESC, pos, mode DESC
 \gexec
 ```
 
-Phase C: reset prepared statements for each isolated case under auto. Each
-EXPLAIN ANALYZE counts as one execution. Inspect counters at 5, 6 and 15 and
+Phase C: reset prepared statements per isolated case under auto; each
+EXPLAIN ANALYZE is one execution. Inspect counters at 5, 6 and 15 and
 plans from 6 onward:
 
 ```sql
@@ -147,7 +146,7 @@ GROUP BY e.label, e.name, q.sql
 \gexec
 ```
 
-Mixed phase: cycle through four before and two after cases, 20 executions each:
+Mixed phase: cycle four before and two after cases, 20 executions each:
 
 ```sql
 DEALLOCATE ALL;
@@ -164,8 +163,8 @@ ORDER BY r, name DESC
 \gexec
 ```
 
-Afterwards drop the measurement database. The database and temporary driver, SQL
-and raw outputs were removed after this run.
+Afterwards drop the measurement database; the original run's database, driver,
+SQL and raw outputs were removed.
 
 ```psql
 \connect '<local test database>'
@@ -174,7 +173,7 @@ DROP DATABASE ribbitto_1300_paging;
 
 ## Results
 
-All plans were Limit → Index Scan, without sorting, one scan loop. Real indexes:
+All plans were Limit → Index Scan, without sorting, one scan loop. Indexes:
 
 | Code | Index | Keys |
 |---|---|---|
@@ -183,7 +182,7 @@ All plans were Limit → Index Scan, without sorting, one scan loop. Real indexe
 | U | message_organization_id_event_seq_key | organization_id, event_seq (unique) |
 
 O, Cn, Tn and S mean organisation, channel, topic and sequence predicates.
-Generic shapes matched EXPLAIN GENERIC_PLAN and forced EXECUTE; custom shapes
+Generic shapes matched EXPLAIN GENERIC_PLAN and forced EXECUTE; custom ones
 came from EXECUTE.
 
 | Statement / parameters | Generic index conditions; filter | Custom index conditions; filter |
@@ -195,10 +194,10 @@ came from EXECUTE.
 | After / feed | C: O, Cn, S > cursor; nullable topic guard | U: O, S > cursor; Cn |
 | After / topic | C: O, Cn, S > cursor; nullable topic guard | T: O, Tn, S > cursor; Cn |
 
-Custom feed plans chose U rather than C with this one-channel-per-organisation
-distribution; both indexes remained available. Generic before cannot seek the
-cursor or topic; after retains its unguarded sequence condition but cannot seek
-the topic.
+Custom feed plans chose U rather than C because the organisation has one
+channel; both indexes remained available. Organisations with many channels were
+not measured, and walking U with a channel filter could cost more there. Generic before cannot seek the cursor or topic; after retains
+its unguarded sequence condition but cannot seek the topic.
 
 Times are median EXPLAIN **Execution Time** in ms over five retained runs
 (planning excluded). Buffers are shared hits/reads at Limit, and filter removals
@@ -222,8 +221,8 @@ generic/custom. Every before run returned 51 rows; every after run returned 25.
 | Topic after | Cu | T | 0.026 | 28 / 0 | 0 |
 
 The generic feed-before range was 60.615–107.468 ms; topic-before was
-73.145–74.864 ms. Absolute timings depend on cache state and this test server;
-filter counts and missing index conditions explain the extra work independently.
+73.145–74.864 ms. Absolute timings depend on cache state and server;
+filter counts and missing index conditions explain the extra work.
 
 Under **auto on PostgreSQL 18.6**, all six isolated cases had these counters
 (generic/custom): execution 5 = **0/5**, 6 = **0/6**, 15 = **0/15**. Both mixed
@@ -231,11 +230,12 @@ statements had 0/5, 0/6 and **0/20**. Plans on execution 6 and later retained
 the custom shapes above. Five custom executions therefore did not imply a
 switch. Generic estimated total Limit costs were 15,647.85 (before) and
 14,524.63 (after), versus 10.08–199.27 for custom plans with these parameters;
-the unknown limit also contributes to generic estimates. Median forced custom
-planning time was 0.034–0.114 ms across cases.
+the unknown limit also affects generic estimates. Auto compares generic cost
+with average custom cost, so a small channel could reverse this margin. Median forced custom planning time was
+0.034–0.114 ms across cases.
 
-The forced-plan hazard is confirmed, but the suspected default-cache regression
-was not reproduced. Splitting feed/topic and first/before queries would remove
+The forced-plan hazard is confirmed; the suspected default-cache regression was
+not reproduced. Splitting feed/topic and first/before queries would remove
 the guards if a future workload demonstrates auto choosing a harmful generic
 plan. A pool-wide force_custom_plan would affect every prepared query and is not
 supported by these results.

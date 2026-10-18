@@ -12,3 +12,7 @@ SELECT id, display_name FROM account WHERE id = ANY(sqlc.arg(account_ids)::uuid[
 
 -- name: SetAccountSendKey :execrows
 UPDATE account SET send_key = $2 WHERE id = $1;
+
+-- name: RehashPassword :exec
+UPDATE account SET password_hash = sqlc.arg(new_hash)
+WHERE id = sqlc.arg(id) AND password_hash = sqlc.arg(old_hash);

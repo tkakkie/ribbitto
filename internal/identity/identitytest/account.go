@@ -16,3 +16,11 @@ func Account(t *testing.T, pool *pgxpool.Pool, email, name string) kernel.ID {
 	}
 	return id
 }
+
+// SetDisplayName changes an account's display name.
+func SetDisplayName(t *testing.T, pool *pgxpool.Pool, accountID kernel.ID, name string) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), "UPDATE account SET display_name=$2 WHERE id=$1", accountID, name); err != nil {
+		t.Fatalf("setting display name: %v", err)
+	}
+}

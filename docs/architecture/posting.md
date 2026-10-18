@@ -58,7 +58,16 @@ keys also enforce the message's organisation scope.
   read `organization.event_seq` and raise the value to that (#236).
 
 **Member references** ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md#member-references)).
-`Send` parses the validated body as `chat_v1` and, if it holds references,
+`Send` scans typed `@handle` tokens once in the parser's eligible source
+runs, including bold/italic delimiters, with their source positions
+([names](../domain/names.md#typed-mentions)).
+It lists the membership organisation's members once through
+`ListSearchMembers`, using org's existing handle-ordered query and matching
+in Go; without a candidate it never lists. Unknown, foreign and reserved
+handles stay literal. Conversion stores only member IDs; the converted body
+passes `ValidateMessageBody` again before writing, so expansion past 4,000
+code points answers 422 `ErrInvalidBody` with the length message and draft kept.
+`Send` parses the result as `chat_v1` and, if it holds references,
 looks them all up in one batch through org's directory
 (`LookupMembers`, scoped to the membership's organisation) in a snapshot of
 its own, before the transaction, so the organisation lock never waits on it.
@@ -66,8 +75,10 @@ A reference the directory does not return, missing or another
 organisation's, is `ErrUnknownReference` (wrapping `ErrInvalidBody`): web
 answers 422 with one message and keeps the draft. A member who leaves
 between the check and the insert shows as the placeholder, like any later
-leaver. `NewPagePosting` takes the directory; posting without one (seeding
-and tests) refuses any reference as a server error. The store inserts
+leaver. Handle listing and reference checking use separate snapshots. A member
+who leaves between them makes the typed handle answer 422 like any unknown
+reference. `NewPagePosting` takes the directory; posting without one (seeding
+and tests) refuses references and handle candidates as a server error. The store inserts
 `format = 'chat_v1'` for posts and branching's notices; branching escapes
 its notice (`EscapeChatV1`), so a topic name is never markup or a reference.
 
@@ -89,19 +100,33 @@ the sequence; so does an original deleted before the insert, through
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
 cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
-delegate to it. The insert stores the key, and the partial unique index
-`message_idempotency_key_idx` on (organisation, author, key) decides a repeat,
-not a lookup first. Its `23505` becomes `ErrPostKeyTaken`, which rolls back
+delegate to it. Only a keyed body with a valid handle candidate and an available
+member directory gets a scoped preflight key lookup using the same tokens
+in a separate read transaction, before conversion, expansion or reference checks.
+A found message resolves the requested composer topic without taking a sequence.
+Ordinary keyed posts retain the insert-first path. The insert stores the key
+and `typed_body_proof` of the normalized typed input atomically with the converted
+body, and the partial unique index `message_idempotency_key_idx` on
+(organisation, author, key) still decides concurrent sends. Its `23505` becomes `ErrPostKeyTaken`, which rolls back
 the transaction with its `event_seq` increment (no holes). `Send` then reads
 the stored message by the membership's organisation, author and key in a
 short transaction of its own (`Writer.KeyedMessage`) and returns it with no
 event and no notification. The organisation lock serialises two sends with
-one key, so the second always sees the first's row. A repeat whose validated
-body, quote or channel differs returns `ErrPostKeyReused` with the stored message:
+one key, so the second always sees the first's row. A repeat compares the
+whole normalized typed body by its stored proof
+(4-byte big-endian byte length and SHA-256 digest). For legacy rows without a
+proof, only an exact stored-body match with no member reference is equal
+(`plain_text`, or `chat_v1` with none). A prefix is never a whole-body retry.
+The proof compares typed input independently of the converted body, so a rename
+or handle reassignment cannot retarget a retry.
+A repeat whose typed body, quote or channel differs returns
+`ErrPostKeyReused` with the stored message:
 it is not a retry, and its text must not be dropped. The topic is not
 compared, because branching may have moved the message. `Sent.Topic` is the
-requested place resolved before the insert; a repeat's composer and typing
-stay there.
+place resolved for the request; a repeat's composer and typing stay there. An unquoted enhanced 409 in the same channel can recover only the
+new request's prefix verified by `Message.TypedBodyPrefix`: its first stored-length
+bytes must hash to the stored digest. Only that typed prefix is offered as
+`data-sent-body`; missing proof or a mismatch keeps the error and draft.
 
 The channel page reads its channel, sidebar, history and both author batches
 in one `REPEATABLE READ READ ONLY` transaction owned by `conversation.Reader`

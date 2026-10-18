@@ -21,8 +21,9 @@
 // snapshots, which also serve the channel list page, read fresh bounded lists,
 // counts and their event sequence without history or directories.
 // Member lookups return org's directory entries, not copies. Posting stores
-// chat_v1 after checking a body's member references in org's directory, in a
-// snapshot before its transaction; branching's notice is escaped chat_v1. A message's
+// chat_v1 after converting typed handles and checking member references
+// through org's directory, in separate listing and reference-check
+// snapshots before its transaction; branching's notice is escaped chat_v1. A message's
 // format column is never updated; history and pins reads parse chat_v1 bodies
 // and resolve their member references in the authors' organisation-scoped
 // batches, and Entry.Text is a message's plain text in either format. A quote

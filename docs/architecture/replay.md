@@ -134,15 +134,16 @@ sequenceDiagram
   of events as duplicates.
 - A cursor below `organization.event_log_boundary_seq` or above the committed
   `organization.event_seq` gets one `reset` and the loop returns without
-  advancing it or sending later events. The upper check covers a browser
-  whose cursor is ahead of the log after a restore made with ribbitto stopped
+  advancing it or sending later events. The upper check covers cursors ahead
+  of the log after a stopped restore
   ([Restoring a backup](../../README.md#restoring-a-backup)); rolling the
-  database back under a running process is not supported. Each batch,
-  including on open streams and cache hits, checks both bounds; a sequence
-  gap anywhere in a batch also resets, before any of it is delivered. Both
-  bounds are inclusive, even with an empty log; at `event_seq` the stream waits normally.
-  The versioned message-stream script listens for `reset` on htmx's source,
-  closes it and reloads the page; this is SSE glue with no separate request.
+  database back under a running process is unsupported. Every batch, including
+  on open streams and cache hits, checks both inclusive bounds, even on an
+  empty log; at `event_seq` it waits. Any gap resets before delivering the batch.
+  The message-stream script closes htmx's source on `reset`, then reloads after
+  0–5 s jitter when no send, queue or failed text is at stake
+  ([guard](web-javascript.md#javascript)). A status offers a reload link while
+  held; confirmed items do not hold it.
 
 ## Vanished messages
 

@@ -62,11 +62,15 @@ text around it. A blank-looking display name — including one stored before
 this rule — is converted to an empty name by web when building the channel
 page, members panel and message view models, and shown as `@handle` alone.
 Channel message authors use the same component for the page and stream.
-Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md); mentions (#1311)
-will be these) store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
+Member references in `chat_v1` bodies ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md))
+store only the member's UUID and show the current `Display name @handle` through `view.MemberName`,
 resolved through org's directory in the URL's organisation; a member who
 cannot be resolved shows a localised placeholder, never the UUID or another
 organisation's name.
+Only resolved references carry `data-member-id` in HTML. The browser matches
+it to the viewer's member ID and outlines their own mentions (#1313),
+including live posts, replay, older messages and moves; the server render is
+shared by all readers.
 The channel page resolves member IDs (authors and references) to handles and
 account IDs through org, then looks up display names through identity, in
 two batches. The members
@@ -87,8 +91,31 @@ display-name parts rank equally first, then other substrings; ties use handle
 order. Empty queries (including `@`) return the first 8 by handle.
 Reserved words (`all`, `everyone`, `here`, `channel`) are ordinary search text:
 only members whose names contain them can match; there are no group candidates.
-The route/fragment (#1310), typed-handle conversion (#1311), composer picker
-(#1312) and own-mention highlighting (#1313) are separate work.
+`GET /organizations/{slug}/mention-candidates?q=` serves the search as a
+no-store listbox fragment, behind membership and an independent per-member
+[rate limit](../architecture/rate-limits.md#member-admission-for-mention-candidates).
+The planned composer picker (#1312) will insert typed `@handle` text.
+
+## Typed mentions
+
+Posting converts `@handle`, ignoring ASCII case, in eligible source runs:
+at the start of a line or after whitespace or `(`. It takes the maximal run
+of ASCII letters, digits, `_`, `.` and `-`, strips trailing punctuation, and
+validates the whole handle; it never falls back to a shorter prefix.
+Bold/italic delimiters remain in these runs, so paired underscores cannot
+split a handle; `*` ends a handle. Trailing punctuation stays outside.
+Code spans, closed fences, escapes, URLs and e-mail addresses stay literal;
+an unclosed fence is ordinary text. Only the URL organisation's members
+resolve, through org's existing handle-ordered listing, fetched once only
+when needed. Unknown, foreign and reserved handles stay literal, with no error.
+
+Resolution happens at posting: if members swap handles between a pick and
+send, the mention follows the handle. Storage keeps only the resolved ID;
+later renames show the current name. A same-key retry verifies the normalized
+typed input's stored byte length and SHA-256 digest, without resolving today's
+owner again. Different typed input, including another handle or casing, channel
+or quote returns 409. Recovery removes only a prefix verified by that proof;
+without it the draft stays ([posting](../architecture/posting.md)).
 
 ## Handles
 
@@ -100,6 +127,6 @@ Kelvin sign U+212A must not become `k`), then ASCII letters are lower-cased.
 Members that existed before handles got `member-<n>`, numbered per
 organisation in id order.
 
-A handle can change safely, since nothing refers to it: a member changes
+A handle can change safely, since stored references use IDs: a member changes
 only their own (`org.HandleChanger`), and a released handle is free for anyone at
 once.

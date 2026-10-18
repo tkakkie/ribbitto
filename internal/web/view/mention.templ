@@ -1,0 +1,24 @@
+package view
+
+import (
+	"encoding/hex"
+	"fmt"
+
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// MentionCandidates is the replaceable listbox; its count text is for the
+// picker's separate polite status, keeping non-options outside the listbox.
+templ MentionCandidates(query string, members []Member) {
+	{{ count := i18n.T(ctx, "mention.empty") }}
+	if len(members) > 0 {
+		{{ count = fmt.Sprintf(i18n.T(ctx, "mention.count"), len(members)) }}
+	}
+	<ul id="mention-listbox" role="listbox" aria-label={ i18n.T(ctx, "mention.label") } data-query={ query } data-count={ count }>
+		for _, member := range members {
+			<li role="option" id={ "mention-option-" + hex.EncodeToString(member.ID[:]) } data-member-id={ idValue(member.ID) } data-handle={ member.Handle } aria-selected="false">
+				@MemberName(member.DisplayName, member.Handle)
+			</li>
+		}
+	</ul>
+}

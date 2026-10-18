@@ -40,10 +40,13 @@ var inlineKinds = map[conversation.InlineKind]view.BodyKind{
 func viewInlines(entry conversation.Entry, nodes []conversation.BodyInline) []view.BodyInline {
 	out := make([]view.BodyInline, len(nodes))
 	for i, node := range nodes {
-		// Only a reference has a Member; an unresolved one gets no names.
+		// An unresolved reference's UUID must not reach the view or HTML.
 		member := entry.References[node.Member]
 		out[i] = view.BodyInline{Kind: inlineKinds[node.Kind], Text: node.Text, Children: viewInlines(entry, node.Children),
 			DisplayName: memberDisplayName(member.DisplayName), Handle: member.Handle}
+		if member.Handle != "" {
+			out[i].MemberID = node.Member
+		}
 	}
 	return out
 }

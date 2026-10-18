@@ -2,9 +2,42 @@ package conversation
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 )
+
+// TypedBodyProof records the normalized typed body's byte length (big-endian
+// uint32) and SHA-256 digest. The zero value means no proof, as on legacy rows.
+type TypedBodyProof [4 + sha256.Size]byte
+
+func proveTypedBody(body string) TypedBodyProof {
+	var proof TypedBodyProof
+	binary.BigEndian.PutUint32(proof[:4], uint32(len(body)))
+	digest := sha256.Sum256([]byte(body))
+	copy(proof[4:], digest[:])
+	return proof
+}
+
+// TypedBodyPrefix returns only a prefix verified against the original typed
+// input. Stored member IDs cannot reconstruct handles after a rename.
+func (m Message) TypedBodyPrefix(typed string) string {
+	length := int(binary.BigEndian.Uint32(m.TypedBodyProof[:4]))
+	if length <= 0 || length > len(typed) || proveTypedBody(typed[:length]) != m.TypedBodyProof {
+		return ""
+	}
+	return typed[:length]
+}
+
+func (m Message) sameTypedBody(body string) bool {
+	if m.TypedBodyProof != (TypedBodyProof{}) {
+		return proveTypedBody(body) == m.TypedBodyProof
+	}
+	// A legacy reference does not prove the original typed body.
+	// Literal bodies still allow exact comparison without a proof.
+	return m.Body == body && (m.Format == FormatPlainText || len(appendReferences(nil, ParseChatV1(m.Body))) == 0)
+}
 
 // IdempotencyKey is a composer's key for one send (decision 37 (b)): a
 // random UUID, its own type because kernel.ID values are UUIDv7 that

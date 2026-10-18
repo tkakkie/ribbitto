@@ -405,3 +405,30 @@ other = "送信待ちのメッセージを待つか削除してから、もう�
 
 ["message.capacity"]
 other = "送信待ちのメッセージが10件あります。届くのを待つか、1件削除してから送信してください。"
+
+["message.edit"]
+other = "編集"
+
+["message.edit.unavailable"]
+other = "編集中の文章を消してから編集してください。"
+
+["mention.label"]
+other = "メンション候補"
+
+["mention.empty"]
+other = "該当するメンバーはいません。"
+
+["mention.count"]
+other = "%d 人のメンバーが見つかりました。"
+
+["message.quote"]
+other = "引用"
+
+["message.quote_remove"]
+other = "引用を削除"
+
+["stream.stopped"]
+other = "未送信のメッセージがあるため、リアルタイム更新を停止して待機しています。"
+
+["stream.reload"]
+other = "今すぐ再読み込み"

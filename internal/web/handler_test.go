@@ -521,6 +521,12 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 			s.Reading = readCall(func(context.Context) error { return nil })
 			s.SignalLimits = s.ReadLimits
 		},
+		"mentions without limiter":          func(s *Services) { s.MentionLimits = nil },
+		"mentions sharing typing limiter":   func(s *Services) { s.SignalLimits = s.MentionLimits },
+		"mentions sharing read limiter":     func(s *Services) { s.ReadLimits = s.MentionLimits },
+		"mentions sharing create limiter":   func(s *Services) { s.CreateLimits = s.MentionLimits },
+		"mentions sharing resync limiter":   func(s *Services) { s.ResyncLimits = s.MentionLimits },
+		"mentions sharing branch limiter":   func(s *Services) { s.BranchLimits = s.MentionLimits },
 		"branch without limiter":            func(s *Services) { s.BranchLimits = nil },
 		"branch sharing typing limiter":     func(s *Services) { s.SignalLimits = s.BranchLimits },
 		"branch sharing read limiter":       func(s *Services) { s.BranchLimits = s.ReadLimits },

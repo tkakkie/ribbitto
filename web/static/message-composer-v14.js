@@ -1,5 +1,19 @@
 (() => {
   const pendingRequests = new Set();
+  // An edited send keeps its identity even when another queue response swaps
+  // the hidden controls. Only sending or emptying this text releases it.
+  let restoredKey = null;
+  const updateEdits = () => {
+    const body = document.getElementById("message-body");
+    const occupied = body.value !== "" || composing.has(body);
+    for (const form of pendingForms()) {
+      const edit = form.querySelector("[data-pending-edit]");
+      const help = form.querySelector("[data-pending-edit-help]");
+      edit.disabled = occupied || form.dataset.state !== "failed";
+      help.hidden = !occupied;
+      edit.setAttribute("aria-describedby", form.closest("li").querySelector("[data-pending-body]").id + (occupied ? " " + help.id : ""));
+    }
+  };
   const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];
   const dispatch = () => {
     if (pendingRequests.size || document.getElementById("message-composer")?.classList.contains("htmx-request")) return;
@@ -26,6 +40,13 @@
       return;
     }
     if (event.target.id !== "message-composer") return;
+    // Quote shares the composer's htmx lock; guard the pending/plain paths too,
+    // before either can submit stale quote state or clear the draft.
+    if (document.getElementById("quote-form")?.classList.contains("htmx-request")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
@@ -42,7 +63,7 @@
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) {
+    if (form.elements.quote || !text || [...text].length > 4000) {
       if (list.firstElementChild || pendingRequests.size) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -55,11 +76,15 @@
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
-    sending.elements.idempotency_key.value = crypto.randomUUID();
+    sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
+    if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
+    delete form.dataset.unconfirmedKey;
+    restoredKey = null;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
     shownBody.textContent = text;
     shownBody.id += "-" + sending.elements.idempotency_key.value;
+    sending.querySelector("[data-pending-edit-help]").id += "-" + sending.elements.idempotency_key.value;
     for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
     sending.dataset.state = "queued";
     list.append(item);
@@ -68,6 +93,7 @@
     body.focus({ preventScroll: true });
     say("");
     reconcile();
+    updateEdits();
     item.scrollIntoView({ block: "nearest" });
     htmx.process(sending);
     dispatch();
@@ -105,9 +131,30 @@
     }
     reconcile();
   });
+  document.addEventListener("htmx:configRequest", (event) => {
+    if (event.target.id !== "quote-form") return;
+    // Closing the popover restores focus, clearing htmx's remembered button.
+    // The native submit event retains it, including for live-delivered menus.
+    const button = event.detail.triggeringEvent?.submitter;
+    if (button?.name) event.detail.parameters[button.name] = button.value;
+  });
   document.addEventListener("click", (event) => {
-    if (!event.target.closest("[data-pending-remove]")) return;
+    event.target.closest('[form="quote-form"]')?.closest("[popover]")?.hidePopover();
+    const edit = event.target.closest("[data-pending-edit]");
+    if (!edit && !event.target.closest("[data-pending-remove]")) return;
+    const body = document.getElementById("message-body");
+    if (edit) {
+      const form = edit.closest("form");
+      if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
+      body.value = form.elements.body.value;
+      restoredKey = form.elements.idempotency_key.value;
+      body.form.elements.idempotency_key.value = restoredKey;
+      if (form.dataset.unconfirmed) body.form.dataset.unconfirmedKey = restoredKey;
+      else delete body.form.dataset.unconfirmedKey;
+      body.setSelectionRange(body.value.length, body.value.length);
+    }
     event.target.closest("li").remove();
+    updateEdits();
     say("");
     reconcile();
     dispatch();
@@ -160,7 +207,9 @@
     if (alert) alert.textContent = name ? alert.dataset[name] : "";
   };
   document.addEventListener("compositionstart", (event) => {
-    if (event.target.id === "message-body") composing.add(event.target);
+    if (event.target.id !== "message-body") return;
+    composing.add(event.target);
+    updateEdits();
   });
   document.addEventListener("compositionend", (event) => {
     const body = event.target;
@@ -171,6 +220,7 @@
       pendingRemoval.get(body)();
       pendingRemoval.delete(body);
     }
+    updateEdits();
   });
   const command = (event) => {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;
@@ -189,6 +239,15 @@
     const form = document.getElementById("typing-form");
     if (form && event.target.value.trim()) htmx.trigger(form, "typing-input");
   };
+  document.addEventListener("input", (event) => {
+    if (event.target.id !== "message-body") return;
+    if (restoredKey && event.target.value === "") {
+      restoredKey = null;
+      delete event.target.form.dataset.unconfirmedKey;
+      event.target.form.elements.idempotency_key.value = crypto.randomUUID();
+    }
+    updateEdits();
+  });
   document.addEventListener("input", signal);
   document.addEventListener("compositionend", signal);
   // A message's URL (decision 36) lands on the message its fragment names,
@@ -205,10 +264,17 @@
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
+    if (state.id === "composer-quote") {
+      document.getElementById("message-body").focus({ preventScroll: true });
+      return;
+    }
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);
+    // Guard against a future ordinary-send path retaining an edited key.
+    if (!pending && [200, 409].includes(event.detail.xhr.status)) restoredKey = null;
+    if (restoredKey) body.form.elements.idempotency_key.value = restoredKey;
     if (pending) {
       const item = pending.closest("li");
       item.dataset.postedMessage = state.dataset.postedMessage;
@@ -231,7 +297,7 @@
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");
       say("");
-      afterComposition(body, () => removeSent(body, sent));
+      afterComposition(body, () => { removeSent(body, sent); updateEdits(); });
     }
     // A 409 names the stored message for this key. The server sends its body
     // only when the retried text started with it: the earlier answer was
@@ -246,7 +312,7 @@
     // button in flight, and Chrome then moves its focus to the body at the
     // next frame.
     const active = document.activeElement;
-    if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
+    if (active === body.form.querySelector('button[type="submit"]:not([form])') || active === document.body) body.focus({ preventScroll: true });
   });
   const completePending = (event, pending) => {
     const status = event.detail.xhr.status;
@@ -268,6 +334,7 @@
     pending.querySelector("[role=status]").textContent = alert.dataset[name];
     pending.querySelector("[data-pending-actions]").hidden = false;
     pending.closest("li").querySelector("[data-pending-sending]").hidden = true;
+    updateEdits();
   };
   // Every failure keeps the text and the key, so sending again repeats this
   // send (decision 37 (b)). Only a 200 or a 409 comes after the server's key

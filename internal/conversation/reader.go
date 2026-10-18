@@ -12,18 +12,24 @@ import (
 // Reader owns page, sidebar, single-message and batch snapshots across conversation,
 // org, identity and unread through factories bound to the same read-only snapshot.
 type Reader struct {
-	runner   SnapshotRunner
-	reads    ReadStoreIn
-	members  MemberDirectoryIn
-	accounts AccountDirectoryIn
-	cursor   EventCursorIn
-	counts   PageCountsIn
+	runner      SnapshotRunner
+	countRunner SnapshotRunner
+	reads       ReadStoreIn
+	members     MemberDirectoryIn
+	accounts    AccountDirectoryIn
+	cursor      EventCursorIn
+	counts      PageCountsIn
 }
 
 // NewReader builds the snapshot use case with conversation's reads and the
 // member, account, cursor and count factories supplied by the composition root.
-func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader {
-	return &Reader{runner: runner, reads: reads, members: members, accounts: accounts, cursor: cursor, counts: counts}
+// countRunner is used only for page and sidebar counts. Nil counts omits that
+// work and uses runner for all snapshots, such as seed's expected-history export.
+func NewReader(runner, countRunner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader {
+	if counts == nil {
+		countRunner = runner
+	}
+	return &Reader{runner: runner, countRunner: countRunner, reads: reads, members: members, accounts: accounts, cursor: cursor, counts: counts}
 }
 
 func (s *Reader) history(snapshot platform.Snapshot, reads ReadStore) historyReader {
@@ -60,7 +66,7 @@ func (s *Reader) Around(ctx context.Context, m org.Membership, channelID kernel.
 }
 
 func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, read func(historyReader) (Page, error), withPins bool) (page ChannelPage, err error) {
-	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+	err = s.countRunner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
 		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, topicID)
 		if err != nil {

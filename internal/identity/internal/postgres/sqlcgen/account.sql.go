@@ -98,6 +98,22 @@ func (q *Queries) LookupDisplayNames(ctx context.Context, accountIds []pgtype.UU
 	return items, nil
 }
 
+const rehashPassword = `-- name: RehashPassword :exec
+UPDATE account SET password_hash = $1
+WHERE id = $2 AND password_hash = $3
+`
+
+type RehashPasswordParams struct {
+	NewHash string
+	ID      pgtype.UUID
+	OldHash string
+}
+
+func (q *Queries) RehashPassword(ctx context.Context, arg RehashPasswordParams) error {
+	_, err := q.db.Exec(ctx, rehashPassword, arg.NewHash, arg.ID, arg.OldHash)
+	return err
+}
+
 const setAccountSendKey = `-- name: SetAccountSendKey :execrows
 UPDATE account SET send_key = $2 WHERE id = $1
 `

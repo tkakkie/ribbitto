@@ -136,7 +136,7 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	set := func(value string) {
 		t.Helper()
 		step(fmt.Sprintf("set composer %q", value))
-		page.MustEval(`value => { const b = document.getElementById('message-body'), caret = value.includes('|') ? value.indexOf('|') : value.length; b.focus(); b.value = value.replace('|', ''); b.setSelectionRange(caret, caret); b.dispatchEvent(new Event('input', {bubbles:true})); }`, value)
+		page.MustEval(`value => { const b = document.getElementById('message-body'), caret = value.includes('|') ? value.indexOf('|') : value.length; b.value = value.replace('|', ''); b.setSelectionRange(caret, caret); b.focus(); b.dispatchEvent(new Event('input', {bubbles:true})); }`, value)
 	}
 	openings := 0
 	opened := func(query string, count int) {
@@ -192,6 +192,10 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	set("@")
 	opened("", 8)
+	step("picker surface keeps textarea focus")
+	if !page.MustEval(`() => ['pointerdown', 'mousedown'].every(type => { const e = new Event(type, {bubbles:true, cancelable:true}); document.getElementById('mention-picker').dispatchEvent(e); return e.defaultPrevented; })`).Bool() {
+		steps.fail("picker surface press was not prevented")
+	}
 	first := page.MustElement(`#mention-listbox [aria-selected=true]`).MustAttribute("id")
 	press("ArrowUp wraps to last option", input.ArrowUp)
 	page.MustWait(`() => document.querySelector('#mention-listbox').lastElementChild.getAttribute('aria-selected') === 'true'`)
@@ -221,11 +225,32 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	set("@tom")
 	opened("tom", 1)
+	step("blur closes picker")
+	page.MustEval(`() => document.getElementById('message-body').blur()`)
+	closed()
+	step("refocus reopens the same query")
+	page.MustEval(`() => document.getElementById('message-body').focus()`)
+	opened("tom", 1)
 	step("click candidate")
 	steps.device(page, "click candidate", func(p *rod.Page) { p.MustElement(`#mention-listbox [role=option]`).MustClick() })
 	closed()
 	if page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@tomoya " || !page.MustEval(`() => document.activeElement.id === 'message-body'`).Bool() {
 		steps.fail("mouse pick failed")
+	}
+	for _, key := range []input.Key{input.Tab, input.Enter} {
+		set("")
+		set("@tom")
+		opened("tom", 1)
+		before := page.MustEval(`() => window.mentionInputs`).Int()
+		step("Shift+" + key.Info().Code + " does not pick")
+		steps.device(page, "dispatch shifted key", func(p *rod.Page) { p.KeyActions().Press(input.ShiftLeft).Type(key).Release(input.ShiftLeft).MustDo() })
+		value, inputs := "@tom", before
+		if key == input.Enter {
+			value, inputs = "@tom\n", before+1
+		}
+		if !page.MustEval(`(value, inputs) => document.getElementById('message-body').value === value && window.mentionInputs === inputs && window.mentionSubmits === 0`, value, inputs).Bool() {
+			steps.fail("shifted key picked or sent")
+		}
 	}
 	// Exercise each allowed boundary on its own, including Go's Unicode spaces.
 	for _, value := range []string{"@tom", "x @tom", "x\t@tom", "x\n@tom", "x\u0085@tom", "x\u3000@tom", "(@tom", "`code` @tom", "\\` @tom", "```go\ncode\n```\n@tom", "x\n加藤 @tom| suffix"} {
@@ -289,7 +314,8 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		steps.fail("stale pick inserted")
 	}
 	set("@zzmissing")
-	opened("zzmissing", 0)
+	step("empty query hides picker but announces no members")
+	page.MustWait(`() => { const b = document.getElementById('message-body'), l = document.getElementById('mention-listbox'); return document.getElementById('mention-picker').hidden && l.dataset.query === 'zzmissing' && !l.querySelector('[role=option]') && !b.hasAttribute('aria-activedescendant') && !!l.dataset.count && document.getElementById('mention-status').textContent === l.dataset.count; }`)
 	press("empty results allow Tab navigation", input.Tab)
 	closed()
 	if page.MustEval(`() => document.activeElement.id === 'message-body'`).Bool() {

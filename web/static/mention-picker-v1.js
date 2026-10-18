@@ -52,7 +52,7 @@
       close();
       return;
     }
-    picker.hidden = false;
+    picker.hidden = !options().length;
     status.textContent = list().dataset.count;
     activate(0);
   };
@@ -88,7 +88,8 @@
     if (!composing) update();
   });
   document.addEventListener("selectionchange", () => { if (document.activeElement === body) update(); });
-  body.addEventListener("blur", close);
+  body.addEventListener("blur", () => { query = null; dismissed = null; close(); });
+  body.addEventListener("focus", update);
   // The composer clears the textarea on send without an input event, so the
   // remembered query would make the same "@name" typed next a no-op.
   document.addEventListener("submit", (event) => {
@@ -110,8 +111,8 @@
   document.addEventListener("keydown", (event) => {
     if (event.target !== body || composing || event.isComposing || event.keyCode === 229 || (event.key === "Enter" && event.timeStamp - ended < 100) || picker.hidden) return;
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { close(); return; }
+    if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
     if (!["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(event.key)) return;
-    if (event.key !== "Escape" && !options().length) { close(); return; }
     event.preventDefault();
     event.stopImmediatePropagation();
     if (event.key === "Escape") { dismissed = token()?.value ?? null; close(); return; }
@@ -122,9 +123,9 @@
     const items = options(), active = items.findIndex(option => option.getAttribute("aria-selected") === "true");
     if (items.length) activate((active + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length);
   }, true);
-  picker.addEventListener("pointerdown", (event) => {
-    if (event.target.closest('[role="option"]')) event.preventDefault();
-  });
+  for (const type of ["pointerdown", "mousedown"]) {
+    picker.addEventListener(type, (event) => event.preventDefault());
+  }
   picker.addEventListener("click", (event) => {
     if (!composing) pick(event.target.closest('[role="option"]'));
   });

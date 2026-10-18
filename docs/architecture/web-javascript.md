@@ -77,7 +77,7 @@ htmx sends resync requests. The markup contract is in
   other-organisation references carry no ID. Quote snapshots remain plain text.
 - `mention-picker-v1.js` owns only the active token, dismissal and selection.
   It triggers the server-rendered search form, rejects stale results and picks,
-  and captures Enter before composer sending. Its token boundary mirrors posting;
+  and captures plain Enter/Tab before sending/navigation. Its token boundary mirrors posting;
   code checks are conservative. It suppresses IME keys and the 100 ms commit Enter,
   retaining textarea focus with listbox ARIA ([composer](web-composer.md#composer)).
 - `message-composer-v16.js` preserves the list's newest position or visible item

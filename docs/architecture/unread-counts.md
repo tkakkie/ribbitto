@@ -4,8 +4,9 @@ How read state is stored and counted (what that costs is in
 [unread count costs](unread-count-costs.md), writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
-Feed, topic and branch-notice reads, visible-page POSTs, posting writes and
-sidebar counts are current. The rules are in
+The move column, read-state tables, range store, feed, topic and branch-notice
+reads, the visible-page reading POSTs, posting writes and channel and topic counts
+and their sidebar display are current. The rules are in
 [unread](../domain/unread.md).
 
 ## Storage

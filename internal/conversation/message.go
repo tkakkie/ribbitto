@@ -42,6 +42,8 @@ type Message struct {
 	Format                                           Format
 	EventSeq                                         int64
 	CreatedAt                                        time.Time
+	// TypedBodyProof verifies the whole normalized typed body on keyed retries.
+	TypedBodyProof TypedBodyProof
 	// Pinned is the message's current pin state, the same for every member.
 	Pinned bool
 	// Quote is the earlier message this one quotes, or nil.

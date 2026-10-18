@@ -112,9 +112,9 @@ every width (#974).
 Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid
 iOS focus zoom (#973, #1120). The send button stays 44 × 44 px.
 Only latest feed and topic pages are enhanced;
-history submissions remain plain forms. `message-composer-v14.js`
-also guards Enter within 100 ms of `compositionend`, since phone IMEs can
-clear `isComposing` before the confirming keydown.
+history uses plain forms. `message-composer-v15.js` handles quote focus and
+[growth anchoring](ui-composer.md), and guards Enter for 100 ms after
+`compositionend`, when IMEs may clear `isComposing`.
 
 The viewport also requests `interactive-widget=resizes-content`: supporting
 browsers resize the existing `h-dvh` frame for the keyboard, leaving the

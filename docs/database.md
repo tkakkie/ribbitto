@@ -80,19 +80,16 @@ and the index.
 Migration 00015 adds nullable `message.idempotency_key` (uuid) and the partial
 unique index `message_idempotency_key_idx` on `(organization_id, member_id,
 idempotency_key) WHERE idempotency_key IS NOT NULL` (#1155). Existing rows and
-notices stay NULL, so the index starts empty; building it still scans
-`message` and blocks writes while `migrate up` runs, which is acceptable at
-current sizes (no `CONCURRENTLY`, which would need goose's `NO TRANSACTION`).
-Keys live as long as their message: there is no cleanup. Down drops the index
-and the column.
+notices stay NULL. The index scans `message` and blocks writes during upgrade,
+acceptable at current sizes; `CONCURRENTLY` would need goose's `NO TRANSACTION`.
+Keys live as long as their message. Down drops the index and column.
 
 Migration 00016 adds `message.format` (text, not null, default `plain_text`)
 with the CHECK `message_format_check` allowing `plain_text` and `chat_v1`
 ([decision 39](decisions/39-message-bodies-use-a-small-frozen-markup.md)).
-Existing rows become `plain_text` through the default without a table
-rewrite; checking the CHECK still scans `message` while `migrate up` runs. No
-query updates a stored row's format; posting and branching's notices insert
-`chat_v1` (#1203), so the default only covers older rows.
+Existing rows become `plain_text` without a table rewrite; the CHECK scans
+`message` during upgrade. Stored formats never change: posting and notices
+insert `chat_v1` (#1203), so the default covers only older rows.
 Down drops the column.
 
 Migration 00017 adds `account.send_key` (text, not null, default `enter`)
@@ -103,14 +100,18 @@ CHECK scans `account` while `migrate up` runs. Down drops the column.
 
 Migration 00018 adds a message's quote (#1176,
 [decision 38](decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)):
-nullable `quoted_message_id`, `quoted_member_id` and `quote_text`, the text
-under `body`'s three CHECKs, and `message_quote_check` (author and text
-together, the message ID only with them). `UNIQUE (organization_id, id)` on
-`message` lets `message_quoted_message_fkey` reference the original in the
-same organisation with `ON DELETE SET NULL (quoted_message_id)`;
-`message_quoted_member_fkey` references `member`. The unique index and the
-partial index `message_quoted_message_idx` (for deleting an original) are
-built while `migrate up` holds `message`. Down drops them with the columns.
+nullable `quoted_message_id`, `quoted_member_id` and `quote_text` (under the
+body CHECKs). `message_quote_check` pairs author/text and requires both with
+an ID. `UNIQUE (organization_id, id)` supports `message_quoted_message_fkey`
+with `ON DELETE SET NULL (quoted_message_id)`; `message_quoted_member_fkey`
+references `member`. The unique and partial `message_quoted_message_idx`
+indexes build under the upgrade's table lock. Down drops them and the columns.
+
+Migration 00019 adds nullable `message.typed_body_proof` (bytea): a 4-byte
+big-endian byte length followed by SHA-256 of the normalized typed body.
+A CHECK requires NULL or 36 bytes. No default or backfill: legacy rows stay
+NULL. Keyed posts store it atomically with body/key; unkeyed posts and notices
+store NULL. Down drops it. See [retry rules](architecture/posting.md).
 
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
@@ -180,13 +181,11 @@ make migrate
 make schema-docs
 ```
 
-tbls is pinned in its own module, `tools/tbls/go.mod`, to isolate its
-dependencies from templ and sqlc. `make schema-docs` runs
-`go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist` from the repository
-root.
-`.tbls.yml` selects Markdown with Mermaid diagrams, without Graphviz or
-`schema.json`. The command replaces all of `docs/schema/`, so keep
-hand-written documentation elsewhere. Commit the
-generated directory with schema changes. CI migrates a fresh PostgreSQL 18
-database, regenerates the whole directory and requires
+tbls is pinned in `tools/tbls/go.mod`, isolating its dependencies from templ
+and sqlc. `make schema-docs` runs
+`go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist` at the repository root.
+`.tbls.yml` selects Markdown/Mermaid, without Graphviz or `schema.json`.
+It replaces `docs/schema/`; keep hand-written docs elsewhere and
+commit the generated directory with schema changes. CI migrates a fresh
+PostgreSQL 18 database, regenerates it and requires
 `git status --porcelain docs/schema` to be empty, including untracked files.

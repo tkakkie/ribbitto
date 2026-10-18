@@ -23,7 +23,7 @@ func TestMessageQuoteSchema(t *testing.T) {
 	globex := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	writer, reads := postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
 	insert := func(f conversationtest.OrganizationFixture, seq int64, quote *conversation.Quote) (conversation.Message, error) {
-		return writer.InsertMessage(ctx, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID, "body", seq, nil, quote)
+		return writer.InsertMessage(ctx, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID, "body", seq, nil, conversation.TypedBodyProof{}, quote)
 	}
 	original, err := insert(acme, 10, nil)
 	requireNoError(t, err)

@@ -34,7 +34,7 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   disabled; `aria-describedby` also names its visible localised explanation.
   Edit focuses the restored text's end. At 10 items,
   a localised capacity alert retains the draft, `aria-invalid` and
-  `aria-describedby="message-help"`. Arrival announces in `#message-status`.
+  `aria-describedby`. Arrival announces in `#message-status`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -85,16 +85,16 @@ the right field, and run neither JavaScript nor `hx-*`.
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
-The empty `#message-status` has `role="status"`, `aria-live="polite"` and
-`aria-relevant="additions"`. History and paging stay outside live regions.
-Only live appends announce stream-only text, and "Copy link" its
-confirmation (#1159). History, prepends and duplicate
-replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
-Latest feeds/topics have a separate visible `#typing-status`, localized and
-polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
-it stays outside history and composer replacement, with no keyboard stop.
+`#message-status` is empty, with `role="status"`, `aria-live="polite"` and
+`aria-relevant="additions"`. It announces only live appends' stream-only text and
+"Copy link" confirmation (#1159), keeping 10 entries. History, paging,
+prepends, duplicate replacements and pruning stay silent.
+A reset hold shows `#stream-stopped`, a localised status with a plain reload link, keeping focus.
+Latest feeds/topics' `#typing-status` is visible, localised and polite with
+`aria-atomic="true"`, outside history and composer swaps. Content swaps keep
+region and focus, without a tab stop.
 The textarea is never replaced (#1173): it keeps drafts and text typed while a
-post is in flight, keeps `aria-describedby="message-help"` and takes
+post is in flight, keeps `aria-describedby` and takes
 `aria-invalid` from every swapped state (`"false"` on pending success).
 Help shows errors or guidance; focus left on the disabled send button
 returns to it. Pending sends queue ([contract](architecture/web-composer.md#composer)).
@@ -123,7 +123,7 @@ stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
 it suits all three, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
-where the click put it; a click inside never closes it. Those three are
+where the click put it; a click inside leaves it open except for Quote. Those three are
 the browser's own. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks each at desktop and
 phone width.

@@ -109,6 +109,7 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			check("resting height", `want => { const b = document.getElementById('message-body');
 				return b.clientHeight === want && b.scrollHeight === b.clientHeight ? '' : 'height/scroll ' + b.clientHeight + '/' + b.scrollHeight; }`, rest)
+			restingHeight := page.MustEval(`() => document.getElementById('message-body').clientHeight`).Int()
 			// Compare with the actual old layout, including the safe area, rather
 			// than deriving the floor's permitted list height from the new CSS.
 			page.MustEval(`() => document.getElementById('message-body').style.fieldSizing = 'fixed'`)
@@ -174,8 +175,8 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 			set(strings.Repeat("invalid\n", 600))
 			page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
 			page.MustWait(`() => document.getElementById('message-body').getAttribute('aria-invalid') === 'true' && !document.querySelector('.htmx-settling')`)
-			check("422 retains grown draft", `() => { const b = document.getElementById('message-body');
-				return b.value.startsWith('invalid\n') && b.clientHeight >= 82 ? '' : 'draft lost'; }`)
+			check("422 retains grown draft", `rest => { const b = document.getElementById('message-body');
+				return b.value.startsWith('invalid\n') && b.clientHeight >= 82 && b.clientHeight > rest ? '' : 'draft lost or height reset'; }`, restingHeight)
 			set("posted\nsecond\nthird")
 			page.MustEval(`() => { document.getElementById('message-list').scrollTop = 0; document.getElementById('message-composer').requestSubmit(); }`)
 			page.MustWait(`() => document.getElementById('message-body').value === '' && !!document.querySelector('#message-pending [data-state="confirmed"]') && !document.querySelector('.htmx-settling')`)

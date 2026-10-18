@@ -24,7 +24,7 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
-| `MentionCandidates`, `mentionPicker` | `internal/web/view/mention.templ` | textbox/listbox completion on every composer; htmx replaces the whole list, options keep textarea focus, capture-phase Enter picks, and token starts mirror posting ([contract](architecture/web-composer.md#composer)) |
+| `mentionPicker` | `internal/web/view/mention.templ` | the composer's @-picker listbox ([contract](architecture/web-composer.md#composer)) |
 | `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line body excerpt, hidden ID and 44 px Remove quote; empty without selection; `message-composer-v16.js` restores textarea focus |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
@@ -34,7 +34,7 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
   anything that changes state is a submit button in a form, even when it
-  should look like a link. Listbox options follow the [textbox rule](accessibility.md).
+  should look like a link.
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
@@ -87,8 +87,7 @@ breakpoints ([`ui-code.md`](ui-code.md#dimension-tokens)) place it (#972):
 - **Below `desk`** a bottom sheet: fixed to the bottom edge, full width,
   rounded only at the top, above the bottom safe area. Its height comes from
   `sheetHeight(panel)`: members and the overview at most 80 %
-  (`max-desk:max-h-4/5`), so a later full-height panel needs no new
-  structure. The sheet scrolls itself, with `overscroll-contain`.
+  (`max-desk:max-h-4/5`). The sheet scrolls itself, with `overscroll-contain`.
 
 Below `wide` the overlay and the sheet are one modal: `#panel-backdrop` dims
 the whole page in `scrim`, a link to the close URL that only a pointer

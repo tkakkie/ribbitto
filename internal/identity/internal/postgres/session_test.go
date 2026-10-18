@@ -192,3 +192,29 @@ func TestSessionHorizon(t *testing.T) {
 		t.Fatalf("horizon %x, later session %x", horizon, session)
 	}
 }
+
+// Only the account predicate protects these sessions; the excluded id belongs
+// to the first account, so removing account_id alone must fail this test.
+func TestDeleteOtherSessionsAccountIsolation(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now, nil)
+	first := identitytest.Account(t, pool, "first@example.com", "First")
+	other := identitytest.Account(t, pool, "other@example.com", "Other")
+	token, _, err := sessions.Create(t.Context(), first)
+	requireNoError(t, err)
+	_, current, err := sessions.Resolve(t.Context(), token)
+	requireNoError(t, err)
+	others := make([]string, 2)
+	for i := range others {
+		others[i], _, err = sessions.Create(t.Context(), other)
+		requireNoError(t, err)
+	}
+	requireNoError(t, sessions.DeleteOthers(t.Context(), first, current.ID))
+	for _, token := range others {
+		account, _, err := sessions.Resolve(t.Context(), token)
+		if err != nil || account.ID != other {
+			t.Fatalf("other account's session: %+v, %v", account, err)
+		}
+	}
+}

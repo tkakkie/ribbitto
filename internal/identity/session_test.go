@@ -92,6 +92,24 @@ func (f *fakeStore) DeleteExpiredSessions(_ context.Context, before time.Time) e
 	return f.err
 }
 
+func (f *fakeStore) DeleteOtherSessions(_ context.Context, accountID, currentID kernel.ID) ([]kernel.ID, error) {
+	if f.mutationErr != nil && !f.commitOnError {
+		return nil, f.mutationErr
+	}
+	var ended []kernel.ID
+	for hash, session := range f.sessions {
+		id := sessionID([]byte(hash))
+		if session.accountID == accountID && id != currentID {
+			delete(f.sessions, hash)
+			ended = append(ended, id)
+		}
+	}
+	if f.mutationErr != nil {
+		return nil, f.mutationErr
+	}
+	return ended, nil
+}
+
 func (f *fakeStore) SessionHorizon(context.Context) (kernel.ID, error) { return kernel.ID{}, f.err }
 
 func TestSessions(t *testing.T) {
@@ -175,13 +193,72 @@ func TestSessionsStoreErrors(t *testing.T) {
 
 // canceller records the IDs and forwards cancellation to real streams.
 type canceller struct {
-	ended []kernel.ID
-	hub   *realtime.Hub
+	ended    []kernel.ID
+	accounts []kernel.ID
+	hub      *realtime.Hub
 }
 
 func (c *canceller) CancelSession(id kernel.ID) {
 	c.ended = append(c.ended, id)
 	c.hub.CancelSession(id)
+}
+
+func (c *canceller) CancelAccount(id kernel.ID) {
+	c.accounts = append(c.accounts, id)
+	c.hub.CancelAccount(id)
+}
+
+func TestDeleteOthersCancelsStreams(t *testing.T) {
+	broken := errors.New("store unavailable")
+	for _, tt := range []struct {
+		name   string
+		err    error
+		commit bool
+	}{
+		{"success", nil, false},
+		{"rollback", broken, false},
+		{"commit then error", broken, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeStore{sessions: map[string]fakeSession{}}
+			cancel := &canceller{hub: realtime.NewHub()}
+			sessions := identity.NewSessions(store, time.Now, cancel)
+			accountID := kernel.ID{1}
+			streams := make([]context.Context, 2)
+			ids := make([]kernel.ID, 2)
+			for i := range streams {
+				token, _, err := sessions.Create(t.Context(), accountID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, current, err := sessions.Resolve(t.Context(), token)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[i] = current.ID
+				stream, unregister, err := cancel.hub.Register(t.Context(), realtime.Connection{Account: accountID, Session: current.ID}, 2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(unregister)
+				streams[i] = stream
+			}
+			store.mutationErr, store.commitOnError = tt.err, tt.commit
+			if err := sessions.DeleteOthers(t.Context(), accountID, ids[0]); !errors.Is(err, tt.err) {
+				t.Fatalf("DeleteOthers = %v, want %v", err, tt.err)
+			}
+			if streams[1].Err() == nil || (streams[0].Err() != nil) != (tt.err != nil) {
+				t.Fatalf("stream errors: current %v, other %v", streams[0].Err(), streams[1].Err())
+			}
+			if tt.err != nil {
+				if len(cancel.accounts) != 1 || cancel.accounts[0] != accountID || len(cancel.ended) != 0 {
+					t.Fatalf("account cancellation = %v, session cancellation = %v", cancel.accounts, cancel.ended)
+				}
+			} else if len(cancel.ended) != 1 || cancel.ended[0] != ids[1] || len(cancel.accounts) != 0 {
+				t.Fatalf("session cancellation = %v, account cancellation = %v", cancel.ended, cancel.accounts)
+			}
+		})
+	}
 }
 
 func TestSessionsEndStreamsFailClosed(t *testing.T) {

@@ -183,6 +183,8 @@ contract, never on one proxy's behaviour.
   proxy, all clients then share the proxy's key and may be rate-limited
   together. That is kept as the default, because it is safer than believing
   an untrusted header.
+  Authentication requests with this header from loopback or private peers
+  warn once per `AuthLimits`, without logging addresses.
 - Addresses and CIDRs are compared in their IPv4 form when they are
   IPv4-mapped; an IPv4-mapped CIDR in `RIBBITTO_TRUSTED_PROXIES` needs a
   prefix length of at least `/96`, or startup fails.

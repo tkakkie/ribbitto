@@ -75,8 +75,11 @@ templ accountMenu(page ChannelPage) {
 			@MemberName(page.DisplayName, page.Handle)
 			{ "· " + i18n.T(ctx, "org.role." + page.Role) }
 		</p>
-		<div class="mt-3">
+		<div class="mt-3 flex flex-col items-start gap-3">
 			@SignOutButton()
+			<form method="post" action="/signout/others">
+				@submitButton(buttonSecondary, "signout.others.submit")
+			</form>
 		</div>
 	</div>
 }

@@ -15,7 +15,11 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -28,6 +32,7 @@ type fakeSignIn struct {
 	signedOut  []string
 	horizon    kernel.ID
 	horizonErr error
+	otherIDs   []kernel.ID
 }
 
 func (f *fakeSignIn) SignIn(_ context.Context, _, _, previous string) (string, time.Time, error) {
@@ -41,6 +46,50 @@ func (f *fakeSignIn) SignIn(_ context.Context, _, _, previous string) (string, t
 func (f *fakeSignIn) SignOut(_ context.Context, token string) error {
 	f.signedOut = append(f.signedOut, token)
 	return f.err
+}
+
+func (f *fakeSignIn) SignOutOthers(_ context.Context, accountID, currentID kernel.ID) error {
+	f.otherIDs = append(f.otherIDs, accountID, currentID)
+	return f.err
+}
+
+func TestSignOutOthers(t *testing.T) {
+	for _, tt := range []struct {
+		name, cookie, origin, location string
+		err                            error
+		status                         int
+		called                         bool
+	}{
+		{"signed in", "live", "", "/", nil, 303, true},
+		{"signed out", "", "", "/signin", nil, 303, false},
+		{"stale", "stale", "", "/signin", nil, 303, false},
+		{"store error", "live", "", "", errors.New("store unavailable"), 500, true},
+		{"cross origin", "live", "https://attacker.example", "", nil, 403, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &fakeSignIn{err: tt.err}
+			r := httptest.NewRequest(http.MethodPost, "/signout/others", nil)
+			if tt.cookie != "" {
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: tt.cookie})
+			}
+			r.Header.Set("Origin", tt.origin)
+			w := httptest.NewRecorder()
+			newSignInHandler(t, service).ServeHTTP(w, r)
+			if w.Code != tt.status || w.Header().Get("Location") != tt.location {
+				t.Fatalf("status %d, Location %q", w.Code, w.Header().Get("Location"))
+			}
+			if _, sent := w.Header()["Clear-Site-Data"]; sent {
+				t.Fatal("sent Clear-Site-Data")
+			}
+			if tt.called {
+				if len(service.otherIDs) != 2 || service.otherIDs[0] != (kernel.ID{1}) || service.otherIDs[1] != (kernel.ID{0x51}) {
+					t.Fatalf("SignOutOthers ids = %v", service.otherIDs)
+				}
+			} else if len(service.otherIDs) != 0 {
+				t.Fatal("called SignOutOthers")
+			}
+		})
+	}
 }
 
 func (f *fakeSignIn) SessionHorizon(context.Context) (kernel.ID, error) {
@@ -235,5 +284,56 @@ func TestSignOut(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if !strings.Contains(w.Body.String(), `<form method="post" action="/signout">`) || !strings.Contains(w.Body.String(), "Alice") {
 		t.Fatalf("signed-in home page lacks the sign-out form: %s", w.Body.String())
+	}
+}
+
+// Authentication and cancellation use the real store, middleware and hub.
+func TestSignOutOthersAgainstPostgreSQL(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	hub := realtime.NewHub()
+	sessions := identitypg.NewSessions(pool, time.Now, hub)
+	accountID := identitytest.Account(t, pool, "sessions@example.com", "Sessions")
+	tokens := make([]string, 2)
+	streams := make([]context.Context, 2)
+	for i := range tokens {
+		token, _, err := sessions.Create(t.Context(), accountID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tokens[i] = token
+		_, session, err := sessions.Resolve(t.Context(), token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stream, unregister, err := hub.Register(t.Context(), realtime.Connection{Account: accountID, Session: session.ID}, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(unregister)
+		streams[i] = stream
+	}
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, testServices(func(s *Services) {
+		s.Sessions, s.SignIn = sessions, identity.NewSignIn(nil, nil, sessions)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := serveForm(handler, http.MethodPost, "/signout/others", tokens[0], nil)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" || len(w.Header().Values("Set-Cookie")) != 0 || len(w.Header().Values("Clear-Site-Data")) != 0 {
+		t.Fatalf("sign-out response: %d, %v", w.Code, w.Header())
+	}
+	if streams[0].Err() != nil || !errors.Is(context.Cause(streams[1]), realtime.ErrSessionEnded) {
+		t.Fatalf("stream causes: current %v, other %v", context.Cause(streams[0]), context.Cause(streams[1]))
+	}
+	for i, want := range []int{http.StatusSeeOther, http.StatusOK} {
+		w := serveForm(handler, http.MethodGet, "/signin", tokens[i], nil)
+		if w.Code != want {
+			t.Fatalf("session %d next request: %d, want %d", i, w.Code, want)
+		}
 	}
 }

@@ -70,6 +70,9 @@ other = "Signed in as"
 ["signout.submit"]
 other = "Sign out"
 
+["signout.others.submit"]
+other = "Sign out of other sessions"
+
 ["signin.title"]
 other = "Sign in to ribbitto"
 

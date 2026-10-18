@@ -18,6 +18,7 @@ import (
 type SignInService interface {
 	SignIn(ctx context.Context, email, password, previousToken string) (string, time.Time, error)
 	SignOut(ctx context.Context, token string) error
+	SignOutOthers(ctx context.Context, accountID, currentID kernel.ID) error
 	SessionHorizon(ctx context.Context) (kernel.ID, error)
 }
 
@@ -90,5 +91,18 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 		// covers the whole registrable domain, nor "cache" or "*".
 		w.Header().Set("Clear-Site-Data", `"storage"`)
 		http.Redirect(w, r, "/signin", http.StatusSeeOther)
+	})
+	routes.HandleFunc("POST /signout/others", func(w http.ResponseWriter, r *http.Request) {
+		account, signedIn := middleware.Account(r.Context())
+		current, resolved := middleware.CurrentSession(r.Context())
+		if !signedIn || !resolved {
+			http.Redirect(w, r, "/signin", http.StatusSeeOther)
+			return
+		}
+		if err := service.SignOutOthers(r.Context(), account.ID, current.ID); err != nil {
+			serverError(w, r, "signing out of other sessions", err)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 }

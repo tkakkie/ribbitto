@@ -108,6 +108,11 @@ func (s *SignIn) SignOut(ctx context.Context, token string) error {
 	return s.sessions.Delete(ctx, token)
 }
 
+// SignOutOthers ends the account's other sessions, keeping the resolved current one.
+func (s *SignIn) SignOutOthers(ctx context.Context, accountID, currentID kernel.ID) error {
+	return s.sessions.DeleteOthers(ctx, accountID, currentID)
+}
+
 // SessionHorizon returns a UUIDv7 generated now by the clock that stamps
 // session ids, so every session created after it returns has a millisecond
 // prefix at or after the horizon's. The signed-out sign-in page removes only

@@ -7,12 +7,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` and a name (its text, or `aria-label` when it has none); a link is
   an `<a href>`. Never a `div` or `span` with `role="button"` or a click
-  handler. Listbox options are the exception: the composer keeps focus in its
-  textarea (textbox), with `aria-autocomplete="list"`, `aria-controls` and an
-  open list's `aria-activedescendant` naming its `aria-selected="true"` option.
-  Options have at least 44 px height below `desk`; a separate polite status
-  announces the server-rendered count. Arrow keys wrap, Enter/Tab insert,
-  Escape dismisses until the query changes; pointer selection keeps focus.
+  handler. Listbox options are the exception (the composer's @-picker): the
+  textarea keeps focus, `aria-activedescendant` names the option, and options
+  are at least 44 px tall below `desk` ([contract](architecture/web-composer.md#composer)).
 - **Pages are titled.** ✓ Every page's `<title>` names the page first and
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
   or the channel and organisation (`general · Acme · ribbitto`); the channel
@@ -39,7 +36,7 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   disabled; `aria-describedby` also names its visible localised explanation.
   Edit focuses the restored text's end. At 10 items,
   a localised capacity alert retains the draft, `aria-invalid` and
-  `aria-describedby`. Arrival announces in `#message-status`.
+  `aria-describedby`.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -128,8 +125,7 @@ stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
 it suits all three, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
-where the click put it; a click inside leaves it open except for Quote. Those three are
-the browser's own. Without JavaScript, Tab can still move behind an open
+where the click put it; a click inside leaves it open except for Quote. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks each at desktop and
 phone width.
 
@@ -138,9 +134,7 @@ line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's
 own popover focusing, so also without JavaScript), because below `desk` the
 sheet covers the bottom navigation's button that opened it (#1102). Text
 rather than sign-out, so a repeated Enter or Space acts on nothing and the
-menu stays open; Tab then reaches sign-out. After a pointer opening the
-browser decides through `:focus-visible` whether to show a ring; tested
-Chrome shows none. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
+menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
@@ -148,7 +142,7 @@ when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
 header control has `aria-current="true"`. Its close link, and Escape through
 `side-panel-v3.js`, return to the conversation; Escape acts only with focus
 in the panel or on nothing and no popover open, so Escape in the composer
-never closes the panel (a draft is still lost by leaving the page). After that close, focus returns to the control that opened the panel:
+never closes the panel. After that close, focus returns to the control that opened the panel:
 its id crosses the page load in `sessionStorage`.
 
 Below 1200 px the panel covers the conversation and is a modal dialog,

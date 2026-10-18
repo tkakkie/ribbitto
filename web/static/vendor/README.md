@@ -4,6 +4,11 @@ JavaScript files are copied unchanged from the pinned npm tarballs below.
 htmx loads before its SSE and idiomorph extensions.
 No npm installation or JavaScript build step is needed.
 
+When updating a vendored JavaScript file, update its pinned SHA-256 in
+[`vendor_test.go`](../vendor_test.go) and this README in the same pull
+request. The test covers only `vendor/*.js`. The sprite's SHA-256 below
+is the source tarball's hash, checked by `tools/buildicons`.
+
 ## `htmx-2.0.7.min.js`
 
 - Version: `2.0.7`

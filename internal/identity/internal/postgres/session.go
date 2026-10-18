@@ -109,6 +109,21 @@ func (s *SessionStore) DeleteSession(ctx context.Context, tokenHash []byte) (end
 	return ids[0].Bytes, true, nil
 }
 
+// DeleteOtherSessions deletes the account's sessions except currentID in one statement.
+func (s *SessionStore) DeleteOtherSessions(ctx context.Context, accountID, currentID kernel.ID) ([]kernel.ID, error) {
+	ids, err := s.queries.DeleteOtherSessions(ctx, sqlcgen.DeleteOtherSessionsParams{
+		AccountID: uuid(accountID), ID: uuid(currentID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	ended := make([]kernel.ID, len(ids))
+	for i, id := range ids {
+		ended[i] = id.Bytes
+	}
+	return ended, nil
+}
+
 // DeleteExpiredSessions deletes sessions that expired before the given time.
 func (s *SessionStore) DeleteExpiredSessions(ctx context.Context, before time.Time) error {
 	if err := s.queries.DeleteExpiredSessions(ctx, pgtype.Timestamptz{Time: before, Valid: true}); err != nil {

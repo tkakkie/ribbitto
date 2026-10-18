@@ -5,7 +5,7 @@
   let restoredKey = null;
   const updateEdits = () => {
     const body = document.getElementById("message-body");
-    const occupied = body.value !== "" || composing.has(body);
+    const occupied = body.value !== "";
     for (const form of pendingForms()) {
       const edit = form.querySelector("[data-pending-edit]");
       const help = form.querySelector("[data-pending-edit-help]");
@@ -70,7 +70,6 @@
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
     sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
-    restoredKey = null;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
     shownBody.textContent = text;
@@ -128,7 +127,7 @@
     const body = document.getElementById("message-body");
     if (edit) {
       const form = edit.closest("form");
-      if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
+      if (form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
       body.form.elements.idempotency_key.value = restoredKey;

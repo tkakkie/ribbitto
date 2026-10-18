@@ -117,10 +117,14 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			select {
 			case reply := <-request.reply:
 				if reply.status == -1 {
-					conn, _, err := http.NewResponseController(w).Hijack()
-					if err == nil {
-						_ = conn.Close()
+					// An empty response can be retried by Chromium into the gate.
+					// Headers followed by a truncated body fail the original XHR.
+					w.Header().Set("Content-Length", "1")
+					w.WriteHeader(http.StatusOK)
+					if err := http.NewResponseController(w).Flush(); err != nil {
+						t.Error(err)
 					}
+					panic(http.ErrAbortHandler)
 				} else {
 					w.WriteHeader(reply.status)
 					_, _ = w.Write(reply.body)
@@ -195,9 +199,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    const now = performance.now.bind(performance); window.elapsed = 0; performance.now = () => now() + elapsed;
    window.draftHidden = false; Object.defineProperty(document, 'hidden', {get: () => draftHidden});
    window.draftUUID = crypto.randomUUID?.bind(crypto); Object.defineProperty(crypto, 'randomUUID', {value: undefined, configurable:true});
-   window.sendEvents = []; window.sentEvents = []; window.restoreInputs = 0; window.typingRequests = 0;
+   window.sendEvents = []; window.sentEvents = []; window.sendErrors = 0; window.restoreInputs = 0; window.typingRequests = 0;
    document.addEventListener('message-sending', e => sendEvents.push(e.detail));
    document.addEventListener('message-sent', e => sentEvents.push(e.detail));
+   document.addEventListener('htmx:sendError', () => sendErrors++);
    document.addEventListener('input', e => { if (e.target.id === 'message-body') restoreInputs++; });
    document.addEventListener('htmx:beforeRequest', e => { if (e.target.id === 'typing-form') typingRequests++; });
    document.addEventListener('readystatechange', () => { if(document.readyState === 'interactive') window.restoreFocus = document.activeElement; });
@@ -251,7 +256,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	reload := func(t *testing.T, p *rod.Page, want string) {
 		t.Helper()
 		step(t, p, "reload composer").MustReload()
-		step(t, p, "load reloaded composer").MustWaitLoad()
+		// Poll the current document instead of awaiting a load promise in a
+		// context the reload can replace (as in navigateLoaded).
+		step(t, p, "load reloaded composer").MustWait(`() => document.readyState === 'complete'`)
 		step(t, p, "await restored textarea").MustWait(`want => document.querySelector('#message-body')?.value === want`, want)
 		run(t, p, `check(restoreInputs === 0 && typingRequests === 0 && document.activeElement === restoreFocus, 'restore fired input, typing or focus');`)
 	}
@@ -371,6 +378,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 					}
 				}
 				release(reply)
+				if mode == "network" {
+					step(t, p, "await send network error").MustWait(`() => sendErrors === 1`)
+				}
 				step(t, p, "await send request completion").MustWait(`() => !document.querySelector('#message-composer.htmx-request') && !document.querySelector('[data-pending-form].htmx-request')`)
 				if mode == "composition" {
 					run(t, p, `check(sentEvents.length === 0 || sendEvents[0].inPlace === false, 'sent before composition removal'); document.querySelector('#message-body').dispatchEvent(new Event('compositionend',{bubbles:true})); releaseDrafts();`)

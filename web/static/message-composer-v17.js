@@ -68,12 +68,6 @@
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
-    if (event.target.classList.contains("htmx-request")) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      say("busy");
-      return;
-    }
     const template = document.getElementById("message-pending-template");
     const inPlace = () => sendEvent("message-sending", { key: event.target.elements.idempotency_key?.value, body: event.target.elements.body.value, inPlace: true });
     if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) { inPlace(); return; }
@@ -81,10 +75,10 @@
     const list = document.getElementById("message-pending");
     // Both forms replace the same state; a stale ordinary answer must not
     // overwrite a pending send's fresh generation and key.
-    if (list.children.length >= 10) {
+    if (form.classList.contains("htmx-request") || list.children.length >= 10) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      say("capacity");
+      say(list.children.length >= 10 ? "capacity" : "busy");
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();

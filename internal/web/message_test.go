@@ -512,8 +512,8 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before=", "Jump to the newest"}, false, channelURL, "", channelURL},
 		{"older page", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest ribbits</a>`}, nil, false, channelURL, "", ""},
 		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest ribbits</a>`}, nil, true, channelURL, "", ""},
-		{"oldest page", "?before=8", false, 200, 8, []string{`Jump to the newest ribbits</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"Load older ribbits", "hx-get="}, false, channelURL, "", ""},
-		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"Load older ribbits", "hx-get="}, true, channelURL, "", ""},
+		{"oldest page", "?before=8", false, 200, 8, []string{`Jump to the newest ribbits</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"Load older ribbits"}, false, channelURL, "", ""},
+		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"Load older ribbits"}, true, channelURL, "", ""},
 		{"zero", "?before=0", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"negative", "?before=-3", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"not a number", "?before=abc", false, 400, -1, nil, nil, false, channelURL, "", ""},
@@ -579,6 +579,15 @@ func TestMessagePagingHandler(t *testing.T) {
 			page, err := html.Parse(strings.NewReader(body))
 			if err != nil {
 				t.Fatal(err)
+			}
+			if got, ok := idAttribute(t, page, "mention-search", "hx-get"); !ok || got != "/organizations/acme/mention-candidates" {
+				t.Fatal("every composer must search the URL organisation's members")
+			}
+			// With no older messages, only mention search may make an HX GET.
+			for n := range page.Descendants() {
+				if !tt.older && attr(n, "hx-get") != "" && attr(n, "id") != "mention-search" {
+					t.Errorf("unexpected history request: %s", attr(n, "hx-get"))
+				}
 			}
 			oldest := "0"
 			if tt.older {

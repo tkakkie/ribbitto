@@ -16,9 +16,22 @@ templ MentionCandidates(query string, members []Member) {
 	}
 	<ul id="mention-listbox" role="listbox" aria-label={ i18n.T(ctx, "mention.label") } data-query={ query } data-count={ count }>
 		for _, member := range members {
-			<li role="option" id={ "mention-option-" + hex.EncodeToString(member.ID[:]) } data-member-id={ idValue(member.ID) } data-handle={ member.Handle } aria-selected="false">
+			<li role="option" id={ "mention-option-" + hex.EncodeToString(member.ID[:]) } data-member-id={ idValue(member.ID) } data-handle={ member.Handle } aria-selected="false" class="min-h-6 max-desk:min-h-11 cursor-pointer px-3 py-2 wrap-anywhere hover:bg-hover aria-selected:bg-selected aria-selected:text-on-selected aria-selected:font-semibold">
 				@MemberName(member.DisplayName, member.Handle)
 			</li>
 		}
 	</ul>
+}
+
+// mentionPicker keeps searches outside both the composer form and its swaps.
+templ mentionPicker(page ChannelPage) {
+	<div class="relative">
+		<div id="mention-picker" hidden class="absolute bottom-full left-0 z-30 w-full max-h-48 overflow-y-auto overscroll-contain rounded-xl border border-border-strong bg-surface text-fg shadow-popover">
+			<form id="mention-search" hidden method="get" action={ "/organizations/" + page.Organization.Slug + "/mention-candidates" } hx-get={ "/organizations/" + page.Organization.Slug + "/mention-candidates" } hx-trigger="mention-query delay:120ms" hx-sync="this:replace" hx-target="#mention-listbox" hx-swap="outerHTML">
+				<input type="hidden" name="q"/>
+			</form>
+			@MentionCandidates("", nil)
+		</div>
+	</div>
+	<p id="mention-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></p>
 }

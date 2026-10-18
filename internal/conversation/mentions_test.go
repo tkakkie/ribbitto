@@ -27,6 +27,8 @@ func TestPostingTypedHandles(t *testing.T) {
 		{name: "repeated, case insensitive", body: "@ToMoYa (@tomoya)", want: ref + " (" + ref + ")", lists: 1},
 		{name: "punctuation", body: "@tomoya.", want: ref + ".", lists: 1},
 		{name: "quote", body: "> @tomoya", want: "> " + ref, lists: 1},
+		{name: "quote without space", body: ">@tomoya", want: ">" + ref, lists: 1},
+		{name: "double quote marker is literal", body: ">>@tomoya", want: ">>@tomoya"},
 		{name: "underscore", body: "@tom_oya", want: ref, handle: "tom_oya", lists: 1},
 		{name: "unclosed delimiter is literal", body: "@tom._oya", want: ref, handle: "tom._oya", lists: 1},
 		{name: "paired underscore after prefix", body: "_hi @tom_.oya_", want: "_hi " + ref + "_", handle: "tom_.oya", others: []string{"tom"}, lists: 1},

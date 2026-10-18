@@ -94,12 +94,13 @@ only members whose names contain them can match; there are no group candidates.
 `GET /organizations/{slug}/mention-candidates?q=` serves the search as a
 no-store listbox fragment, behind membership and an independent per-member
 [rate limit](../architecture/rate-limits.md#member-admission-for-mention-candidates).
-The planned composer picker (#1312) will insert typed `@handle` text.
+The composer picker inserts typed `@handle` text ([interaction](../architecture/web-composer.md#composer)).
 
 ## Typed mentions
 
 Posting converts `@handle`, ignoring ASCII case, in eligible source runs:
-at the start of a line or after whitespace or `(`. It takes the maximal run
+at line start (including after a column-zero `>` and one optional space),
+or after Unicode whitespace or `(`. It takes the maximal run
 of ASCII letters, digits, `_`, `.` and `-`, strips trailing punctuation, and
 validates the whole handle; it never falls back to a shorter prefix.
 Bold/italic delimiters remain in these runs, so paired underscores cannot

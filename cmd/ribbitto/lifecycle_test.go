@@ -142,7 +142,8 @@ func (s recordingShutdown) Shutdown(context.Context) error { s.record("http"); r
 func (s recordingShutdown) Close() error                   { s.record("forced"); return nil }
 
 func TestServeFailureCleanupOrder(t *testing.T) {
-	url := pgtest.AdminURL(t)
+	pool := pgtest.New(t)
+	url := schemaTestURL(t, pool)
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +198,8 @@ func (s failedShutdown) Shutdown(context.Context) error { return s.err }
 func (s failedShutdown) Close() error                   { return nil }
 
 func TestServeCollectsServerFailures(t *testing.T) {
-	url := pgtest.AdminURL(t)
+	pool := pgtest.New(t)
+	url := schemaTestURL(t, pool)
 	for _, failed := range []string{"application", "metrics", "both"} {
 		for _, trigger := range []string{"failure", "signal ready", "signal wins", "startup failure", "shutdown failure"} {
 			t.Run(failed+"/"+trigger, func(t *testing.T) {

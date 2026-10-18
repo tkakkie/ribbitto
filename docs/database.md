@@ -1,14 +1,16 @@
 # Database development
 
-**Keep it current:** update for configuration or migration changes.
+**Keep current:** configuration and migrations.
 See [database tests](database-tests.md) and [database locales](database-locales.md).
 
 `RIBBITTO_DATABASE_URL` configures both the server and the explicit
-`migrate up|down|status` command. The server checks connectivity but never
-applies migrations. `.env.example` contains the local Compose URLs; export
-them into the shell as shown in the README. `.env` is ignored by Git.
+`migrate up|down|status` command. Before serving, the server checks connectivity
+and refuses a schema older than its newest embedded migration, naming
+`ribbitto migrate up` as the remedy. Equal or newer schemas allow binary rollbacks.
+Startup never applies migrations. `.env.example` has the local Compose URLs;
+export them as in the README. Git ignores `.env`.
 
-See [worktree environments](worktree-env.md) for per-worktree dev databases, ports, health checks and cleanup.
+See [worktree environments](worktree-env.md) for databases, ports and cleanup.
 
 ## Recount capacity
 
@@ -16,16 +18,16 @@ See [pool sizing, timeouts and recount capacity](recount-capacity.md).
 
 ## Database workflow
 
-`make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for its
-health check. Its password is for development only. `make db-down` stops
-it without deleting the named volume at `/var/lib/postgresql`.
+`make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for health.
+Its password is development-only. `make db-down` keeps the named volume
+at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
 It is owned by `internal/platform/postgres`; only its packages and their
 tests may import it. Other tests that need an older schema migrate through
-`pgtest.NewMigrator`. The runner uses goose and pgx's
-`database/sql` adapter without global configuration. The first
-migration creates `organization`; goose also maintains its version table.
+`pgtest.NewMigrator`. Goose uses pgx's `database/sql` adapter and a PostgreSQL
+session advisory lock to serialize migration runs, without global configuration.
+Goose maintains its version table; migration 00001 creates `organization`.
 
 Migration 00007 adds realtime's `event_log`, keyed by `(organization_id, seq)`,
 with `kind`, nullable `audience_member_id`, JSONB `data` and `created_at`.
@@ -66,8 +68,8 @@ and enforce the member, channel and topic relationships; ranges and floors
 reference their channel lock row. Down drops the three tables.
 
 Migration 00013 adds nullable `channel.image` (text), an illustration key.
-Existing rows stay NULL; web picks a stable image from the channel ID for
-NULL or unknown keys. Down drops the column.
+Web picks a stable image from the channel ID for NULL or unknown keys.
+Down drops the column.
 
 Migration 00014 adds nullable `message.pinned_by_member_id` and `pinned_at`.
 A CHECK pairs their nullability; the pinner references `(organization_id, id)`
@@ -147,8 +149,7 @@ holds `max(10,000, this limit)` allows; an explicit capacity below this limit
 is kept and logs a warning at start. See
 [stream resource limits](architecture/stream-limits.md) for the rule and the sizing evidence.
 
-Integration tests, `pgtest` and the module test fixtures are in
-[database tests](database-tests.md).
+See [database tests](database-tests.md) for `pgtest` and module fixtures.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
 `sqlc.yaml` has one entry per module: `db/queries/identity/`,
@@ -168,8 +169,7 @@ and the two reviewed access exemptions are described with table ownership in
 
 ## Development seed data
 
-Filling a development database with synthetic conversations, and its
-safety rules, is in [`seed-data.md`](seed-data.md).
+See [`seed-data.md`](seed-data.md) for synthetic conversations and safety rules.
 
 ## Generated schema reference
 

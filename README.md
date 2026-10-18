@@ -51,23 +51,25 @@ make api                   # regenerates docs/api/ after a module API or doc-com
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
-Use `/readyz` for a readiness healthcheck: it pings PostgreSQL with a one-second
+Use `/readyz` for readiness: it pings PostgreSQL with a one-second
 timeout and returns 503 if unavailable or shutting down. Use `/healthz` for
-liveness; it always returns 200 while the process can answer requests.
+liveness (200). The schema check runs before these endpoints start, not per probe.
 
 For parallel worktrees, optionally run `make ai-env` after `make db-up`.
 It migrates a separate dev database and allocates app/metrics ports in
-`.env.local`; the Make targets above then use those values instead of
-`RIBBITTO_DATABASE_URL`. Start other commands with
+`.env.local`, overriding `RIBBITTO_DATABASE_URL` for Make targets. Start other
+commands with
 `./bin/ai-db run <command>` (built by `make bin/ai-db`) to use that configuration.
-Commands use the worktree root even from a subdirectory. Git worktree IDs
-keep databases across moves and symlink spellings. Local database names and
-ports must match the registry; reruns keep free ports and replace busy ones.
+Commands resolve the worktree root; Git worktree IDs keep databases across moves
+and symlink spellings. Database names and ports must match the registry; reruns
+replace busy ports.
 `make ai-health` checks the shared admin connection without printing credentials.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
 drops the databases and ports of registry entries whose worktrees are gone.
 See [worktree environments](docs/worktree-env.md) for configuration overrides and capacity measurement.
-The server never migrates on startup.
+Startup refuses schemas older than the embedded migrations: run
+`ribbitto migrate up` first. It never migrates automatically. Equal and newer
+schemas are accepted for binary rollbacks.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example

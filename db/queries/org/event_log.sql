@@ -3,7 +3,7 @@
 SELECT event_log_boundary_seq, event_seq FROM organization WHERE id = $1;
 
 -- name: LockEventRetentionOrganization :exec
-SELECT id FROM organization WHERE id = $1 FOR UPDATE;
+SELECT id FROM organization WHERE id = $1 FOR NO KEY UPDATE;
 
 -- name: RaiseEventLogBoundary :exec
 -- greatest: the boundary never goes down (realtime.RetentionBoundary).

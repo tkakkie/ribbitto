@@ -66,8 +66,8 @@ func RetentionBoundaryIn(tx platform.Tx) RetentionBoundary {
 // RetentionBoundary writes organization's replay boundary for retention.
 type RetentionBoundary struct{ queries *sqlcgen.Queries }
 
-// LockForRetention locks the organisation's row, the same lock posting's
-// event_seq increment takes, so a batch never interleaves with a commit.
+// LockForRetention takes FOR NO KEY UPDATE to serialise a batch with event_seq
+// writers while allowing foreign-key inserts into child tables.
 func (b RetentionBoundary) LockForRetention(ctx context.Context, organizationID kernel.ID) error {
 	if err := b.queries.LockEventRetentionOrganization(ctx, uuid(organizationID)); err != nil {
 		return fmt.Errorf("locking organization for retention: %w", err)

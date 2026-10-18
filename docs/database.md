@@ -3,14 +3,13 @@
 **Keep current:** configuration and migrations.
 See [database tests](database-tests.md) and [database locales](database-locales.md).
 
-`RIBBITTO_DATABASE_URL` configures both the server and the explicit
-`migrate up|down|status` command. Before serving, the server checks connectivity
-and refuses a schema older than its newest embedded migration, naming
-`ribbitto migrate up` as the remedy. Equal or newer schemas allow binary rollbacks.
-Startup never applies migrations. `.env.example` has the local Compose URLs;
-export them as in the README. Git ignores `.env`.
+`RIBBITTO_DATABASE_URL` configures the server and explicit
+`migrate up|down|status` command. Before serving, the server checks connectivity and
+rejects schemas older than its newest embedded migration: run `ribbitto migrate up`.
+Equal/newer schemas allow binary rollbacks; startup never applies migrations.
+`.env.example` has local Compose URLs; export them as in the README. Git ignores `.env`.
 
-See [worktree environments](worktree-env.md) for databases, ports and cleanup.
+See [worktree environments](worktree-env.md) for per-worktree dev databases, ports, health checks and cleanup.
 
 ## Recount capacity
 
@@ -19,15 +18,15 @@ See [pool sizing, timeouts and recount capacity](recount-capacity.md).
 ## Database workflow
 
 `make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for health.
-Its password is development-only. `make db-down` keeps the named volume
-at `/var/lib/postgresql`.
+Its password is for dev only. `make db-down` stops it, keeping the named
+volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
-It is owned by `internal/platform/postgres`; only its packages and their
-tests may import it. Other tests that need an older schema migrate through
-`pgtest.NewMigrator`. Goose uses pgx's `database/sql` adapter and a PostgreSQL
-session advisory lock to serialize migration runs, without global configuration.
-Goose maintains its version table; migration 00001 creates `organization`.
+`internal/platform/postgres` owns it; only its packages and their tests may
+import it. Other tests migrate older schemas through `pgtest.NewMigrator`.
+Goose uses pgx's `database/sql` adapter without globals;
+its PostgreSQL session advisory lock serializes migration runs.
+The first migration creates `organization`; goose also maintains its version table.
 
 Migration 00007 adds realtime's `event_log`, keyed by `(organization_id, seq)`,
 with `kind`, nullable `audience_member_id`, JSONB `data` and `created_at`.
@@ -68,8 +67,8 @@ and enforce the member, channel and topic relationships; ranges and floors
 reference their channel lock row. Down drops the three tables.
 
 Migration 00013 adds nullable `channel.image` (text), an illustration key.
-Web picks a stable image from the channel ID for NULL or unknown keys.
-Down drops the column.
+Existing rows stay NULL; web picks a stable image from the channel ID for
+NULL or unknown keys. Down drops the column.
 
 Migration 00014 adds nullable `message.pinned_by_member_id` and `pinned_at`.
 A CHECK pairs their nullability; the pinner references `(organization_id, id)`
@@ -149,7 +148,7 @@ holds `max(10,000, this limit)` allows; an explicit capacity below this limit
 is kept and logs a warning at start. See
 [stream resource limits](architecture/stream-limits.md) for the rule and the sizing evidence.
 
-See [database tests](database-tests.md) for `pgtest` and module fixtures.
+[Database tests](database-tests.md) covers integration tests, `pgtest` and module fixtures.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
 `sqlc.yaml` has one entry per module: `db/queries/identity/`,
@@ -186,6 +185,6 @@ and sqlc. `make schema-docs` runs
 `go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist` at the repository root.
 `.tbls.yml` selects Markdown/Mermaid, without Graphviz or `schema.json`.
 It replaces `docs/schema/`; keep hand-written docs elsewhere and
-commit the generated directory with schema changes. CI migrates a fresh
+commit it with schema changes. CI migrates a fresh
 PostgreSQL 18 database, regenerates it and requires
 `git status --porcelain docs/schema` to be empty, including untracked files.

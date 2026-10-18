@@ -10,8 +10,9 @@ import (
 )
 
 func TestServeSchema(t *testing.T) {
-	// A later handler error proves the version check permits startup without
-	// opening a listener or launching maintenance workers.
+	// A later, unrelated startup error proves the schema check lets startup
+	// proceed without opening listeners or launching maintenance workers.
+	// Deliberately avoid depending on that error's text.
 	t.Setenv("RIBBITTO_DEV_ASSETS", t.TempDir()+"/missing")
 	for _, state := range []string{"never migrated", "behind", "equal", "ahead"} {
 		t.Run(state, func(t *testing.T) {
@@ -28,12 +29,13 @@ func TestServeSchema(t *testing.T) {
 					}
 				}
 			}
-			want := "ribbitto migrate up"
-			if state == "equal" || state == "ahead" {
-				want = "reading stylesheet"
+			err := serve(t.Context(), schemaTestURL(t, pool))
+			if err == nil {
+				t.Fatal("serve succeeded, want a startup error")
 			}
-			if err := serve(t.Context(), schemaTestURL(t, pool)); err == nil || !strings.Contains(err.Error(), want) {
-				t.Fatalf("serve error = %v, want %q", err, want)
+			wantMigration := state == "never migrated" || state == "behind"
+			if strings.Contains(err.Error(), "ribbitto migrate up") != wantMigration {
+				t.Fatalf("serve error = %v, want migration instruction: %t", err, wantMigration)
 			}
 		})
 	}

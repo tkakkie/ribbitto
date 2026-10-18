@@ -101,5 +101,5 @@ endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching the use cases.
 
-`serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); the schema
-check adapts it to goose's `database/sql` API. `migrate` has its own handle.
+`serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
+uses goose's `database/sql` handle. Schema checks adapt the pool to goose's API.

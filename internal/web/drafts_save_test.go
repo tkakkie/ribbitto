@@ -107,7 +107,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		t.Cleanup(cancel)
 		p := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-		t.Cleanup(p.MustClose)
+		t.Cleanup(func() { p.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
 		// Only the drafts debounce is gated, including cancellation. Lifecycle
 		// events and clocks are controlled independently of focus and real sleeps.
 		p.MustEvalOnNewDocument(`(() => {
@@ -131,7 +131,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    window.hide = () => dispatchEvent(new Event('pagehide'));
    window.entry = () => JSON.parse(localStorage.getItem(draftKey));
    window.snapshot = () => JSON.stringify(Object.entries(localStorage).sort());
-  })()` + inject)
+  })();
+` + inject)
 		path := view.ChannelURL("acme", place.Channel)
 		if topic {
 			path = view.ConversationURL("acme", place.Channel, &place.Topic)
@@ -142,6 +143,19 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		return p
 	}
 	run := func(t *testing.T, p *rod.Page, code string) { t.Helper(); p.MustEval(`() => { ` + code + ` }`) }
+	// Sequential CDP evaluations do not order storage propagation to another
+	// tab. A unique marker also orders a remove/restore whose final snapshot
+	// equals the reader's old one; waiting for that snapshot alone could pass early.
+	storageSync := 0
+	syncStorage := func(t *testing.T, from, to *rod.Page) {
+		t.Helper()
+		const marker = "ribbitto.test-storage-barrier"
+		storageSync++
+		want := from.MustEval(`(key, value) => { localStorage.setItem(key, value); return snapshot(); }`, marker, storageSync).Str()
+		to.MustWait(`want => snapshot() === want`, want)
+		from.MustEval(`key => localStorage.removeItem(key)`, marker)
+		to.MustWait(`key => localStorage.getItem(key) === null`, marker)
+	}
 	t.Run("saving", func(t *testing.T) {
 		p := open(t, false, "")
 		run(t, p, `localStorage.clear(); hide(); flush(); check(!entry(), 'clean page wrote');
@@ -164,9 +178,14 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		t.Run(mode, func(t *testing.T) {
 			a, b := open(t, false, ""), open(t, false, "")
 			run(t, a, `localStorage.clear(); edit('A', editNow + 100);`)
-			b.MustEval(`(mode, aAt) => { edit('B', editNow + 1000); flush(); if (mode === 'deletion' || mode === 'over-limit') { edit(mode === 'deletion' ? ' ' : '🐸'.repeat(4001), editNow + 1); flush(); } if (mode === 'equal') { const e = entry(); e.at = aAt; localStorage.setItem(draftKey, JSON.stringify(e)); } }`, mode, a.MustEval(`() => editNow`).Num())
+			syncStorage(t, a, b)
+			b.MustEval(`(mode, aAt) => { edit('B', mode === 'equal' ? aAt : editNow + 1000); flush();
+    check(entry().text === 'B' && (mode !== 'equal' || entry().at === aAt), 'B save or equal input time');
+    if (mode === 'deletion' || mode === 'over-limit') { edit(mode === 'deletion' ? ' ' : '🐸'.repeat(4001), editNow + 1); flush(); } }`, mode, a.MustEval(`() => editNow`).Num())
+			syncStorage(t, b, a)
 			run(t, a, `const winner = localStorage.getItem(draftKey); releaseDrafts(); check(localStorage.getItem(draftKey) === winner, 'older/equal save won');
     localStorage.removeItem(draftKey); hide(); flush(); check(!entry(), 'skipped save stayed dirty'); localStorage.setItem(draftKey, winner);`)
+			syncStorage(t, a, b)
 			if mode == "overlap" {
 				// Both reads could have preceded either write: apply A's stale write.
 				b.MustEval(`at => { const older = {...entry(), text:'A', at}; localStorage.setItem(draftKey, JSON.stringify(older));
@@ -183,6 +202,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			run(t, a, `localStorage.clear(); edit('A', editNow + 100); flush(); const e = entry(); localStorage.clear();
     for (let n=1; n<=49; n++) localStorage.setItem(draftKey.replace(/feed$/, '00000000-0000-0000-0000-' + n.toString(16).padStart(12,'0')), JSON.stringify({...e, text:'', at:e.at - 1000}));
     edit('A', editNow + 1);`)
+			syncStorage(t, a, b)
 			run(t, b, `edit('B', editNow + 1000);`)
 			for _, p := range []*rod.Page{a, b} {
 				run(t, p, `const set = Storage.prototype.setItem; Storage.prototype.setItem = function(k, v) {
@@ -193,8 +213,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				first, second = b, a
 			}
 			run(t, first, `releaseDrafts(); check(Object.keys(localStorage).length === 50, 'first cap');`)
+			syncStorage(t, first, second)
 			run(t, second, `releaseDrafts(); check(Object.keys(localStorage).length === 50 && entry().text, 'second cap');
     check(!Object.keys(localStorage).some(k => k.endsWith('00000000-0000-0000-0000-000000000001')), 'oldest tie');`)
+			syncStorage(t, second, first)
 			run(t, first, `check(entry().text, 'other new entry evicted');`)
 		})
 	}
@@ -254,7 +276,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		// A selected K before B updated it; apply A's removal and insertion.
 		k := b.MustEval(`() => oldest`).Str()
 		run(t, b, `edit('B newer', editNow + 1000); flush();`)
+		syncStorage(t, b, a)
 		a.MustEval(`k => { localStorage.removeItem(k); edit('A', editNow + 2000); flush(); check(!localStorage.getItem(k) && Object.keys(localStorage).length === 50, 'eviction race'); }`, k)
+		syncStorage(t, a, b)
 		run(t, b, `hide(); check(!entry() && document.querySelector('#message-body').value === 'B newer', 'clean evicted tab wrote');
    edit('B recovered', editNow + 1); releaseDrafts(); check(entry().text === 'B recovered' && Object.keys(localStorage).length === 50, 'eviction recovery');`)
 	})
@@ -303,6 +327,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		})
 		b := open(t, false, "")
 		run(t, a, `releaseDrafts(); check(entry().text === 'pending old session', 'stale write missing');`)
+		syncStorage(t, a, b)
 		b.MustNavigate(b.MustInfo().URL).MustWaitLoad()
 		run(t, b, `check(!Object.keys(localStorage).some(k => k.includes('`+session+`')), 'later load kept stale entry');`)
 	})

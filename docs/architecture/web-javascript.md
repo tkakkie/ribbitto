@@ -124,7 +124,7 @@ IME composition; it never overwrites a draft. It removes that item, frees its
 slot and resumes a paused queue. Otherwise the visible, disabled button
 describes why. The restored key survives other responses' state swaps;
 sending transfers it to the pending form, and emptying the textarea renews it.
-Unused keys post normally; equivalent validated bodies return the stored ID;
+Unused keys post normally; bodies matching the [retry rule](posting.md) return the stored ID;
 a different body under a used key gets 409 and a fresh key for Retry.
 Topic pending items settle by confirmed ID, response topic/applied sequence, or a subsequent
 move from the shown topic; the script retains no move history

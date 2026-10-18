@@ -11,7 +11,7 @@
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 8 |  | BASE TABLE |
-| [public.message](public.message.md) | 16 |  | BASE TABLE |
+| [public.message](public.message.md) | 17 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
@@ -124,6 +124,7 @@ erDiagram
   uuid quoted_message_id FK
   uuid quoted_member_id FK
   text quote_text
+  bytea typed_body_proof
 }
 "public.event_log" {
   uuid organization_id FK

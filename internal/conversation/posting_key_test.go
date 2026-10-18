@@ -58,13 +58,14 @@ func (s *keyedStore) GetTopic(_ context.Context, _, channelID, id kernel.ID) (co
 func (s *keyedStore) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel.ID) (conversation.Message, error) {
 	panic("unexpected QuotedMessage")
 }
-func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, _ *conversation.Quote) (conversation.Message, error) {
+func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, _ *conversation.Quote) (conversation.Message, error) {
 	s.tx.inserted++
-	m := conversation.Message{ID: kernel.ID{byte(s.tx.inserted)}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, EventSeq: seq}
+	m := conversation.Message{ID: kernel.ID{byte(s.tx.inserted)}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, Format: conversation.FormatChatV1, EventSeq: seq}
 	if key == nil {
 		s.tx.unkeyed++
 		return m, nil
 	}
+	m.TypedBodyProof = proof
 	scope := keyScope{organizationID, memberID, *key}
 	if _, taken := s.tx.keyed[scope]; taken {
 		return conversation.Message{}, conversation.ErrPostKeyTaken
@@ -111,6 +112,9 @@ func TestPostingIdempotencyKey(t *testing.T) {
 		{name: "repeat, normalised body", second: alice, channel: feed, body: " hello\r\n", wantRepeat: true, wantMessages: 1, wantRequested: kernel.ID{0x63}},
 		{name: "repeat after a move", second: alice, channel: feed, body: "hello", moved: true, wantRepeat: true, wantMessages: 1, wantRequested: kernel.ID{0x63}},
 		{name: "repeat from a topic", second: alice, channel: feed, topic: &topic, body: "hello", wantRepeat: true, wantMessages: 1, wantRequested: topic},
+		{name: "same length different text", second: alice, channel: feed, body: "world", wantRepeat: true, wantErr: conversation.ErrPostKeyReused, wantMessages: 1, wantRequested: kernel.ID{0x63}},
+		{name: "case differs", second: alice, channel: feed, body: "Hello", wantRepeat: true, wantErr: conversation.ErrPostKeyReused, wantMessages: 1, wantRequested: kernel.ID{0x63}},
+		{name: "prefix only", second: alice, channel: feed, body: "hello more", wantRepeat: true, wantErr: conversation.ErrPostKeyReused, wantMessages: 1, wantRequested: kernel.ID{0x63}},
 		{name: "another body", second: alice, channel: feed, body: "changed", wantRepeat: true, wantErr: conversation.ErrPostKeyReused, wantMessages: 1, wantRequested: kernel.ID{0x63}},
 		{name: "another channel", second: alice, channel: other, body: "hello", wantRepeat: true, wantErr: conversation.ErrPostKeyReused, wantMessages: 1, wantRequested: kernel.ID{0x68}},
 		{name: "another member", second: bob, channel: feed, body: "hello", wantMessages: 2, wantRequested: kernel.ID{0x63}},
@@ -128,7 +132,7 @@ func TestPostingIdempotencyKey(t *testing.T) {
 			if !tt.unkeyed {
 				sendKey = &key
 			}
-			first, err := p.Send(t.Context(), alice, feed, conversation.Send{Body: "hello", Key: sendKey})
+			first, err := p.Send(t.Context(), alice, feed, conversation.Send{Body: " hello\r\n", Key: sendKey})
 			if err != nil || first.Repeat {
 				t.Fatalf("first send: %+v, %v", first, err)
 			}

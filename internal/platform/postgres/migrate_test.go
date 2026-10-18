@@ -47,27 +47,29 @@ func TestMigrations(t *testing.T) {
 		format   bool
 		sendKey  bool
 		quote    bool
+		proof    bool
 	}{
-		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, false, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, false, false, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", false, false, false, false, false, false, false, false, false, false, false, false},
-		{"down", false, "pending", false, false, false, false, false, false, false, false, false, false, false, false},
-		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true},
+		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", false, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", false, "pending", false, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true},
 	} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
@@ -96,7 +98,7 @@ func TestMigrations(t *testing.T) {
 		if err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'channel' AND column_name = 'image')").Scan(&present); err != nil || present != step.image {
 			t.Fatalf("after %s: channel.image present = %t, want %t: %v", step.command, present, step.image, err)
 		}
-		for column, want := range map[string]bool{"pinned_at": step.pins, "pinned_by_member_id": step.pins, "idempotency_key": step.key, "format": step.format, "quoted_message_id": step.quote, "quoted_member_id": step.quote, "quote_text": step.quote} {
+		for column, want := range map[string]bool{"pinned_at": step.pins, "pinned_by_member_id": step.pins, "idempotency_key": step.key, "format": step.format, "quoted_message_id": step.quote, "quoted_member_id": step.quote, "quote_text": step.quote, "typed_body_proof": step.proof} {
 			if err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'message' AND column_name = $1)", column).Scan(&present); err != nil || present != want {
 				t.Fatalf("after %s: message.%s present = %t, want %t: %v", step.command, column, present, want, err)
 			}

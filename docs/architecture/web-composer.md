@@ -82,8 +82,8 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   it to its own form and clears the composer's mark; emptying the restored
   text clears it and takes a fresh UUID.
   Editing a known refusal clears any stale composer mark.
-  An unused key posts normally; an equivalent validated body under a used key
-  returns the stored message; a different body gets the pending 409 above.
+  An unused key posts normally; a body matching the [retry rule](posting.md)
+  under a used key returns the stored message; a different body gets the pending 409 above.
   Pending sends bypass prefix removal, the ordinary send alert, ordinary
   failure classification and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by

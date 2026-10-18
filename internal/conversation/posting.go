@@ -106,6 +106,10 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if err != nil {
 		return Sent{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 	}
+	var proof TypedBodyProof
+	if s.Key != nil {
+		proof = proveTypedBody(body)
+	}
 	if err := p.checkReferences(ctx, m.Organization.ID, body); err != nil {
 		return Sent{}, err
 	}
@@ -158,7 +162,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 				return err
 			}
 		}
-		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key, quote)
+		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key, proof, quote)
 		if err != nil {
 			return err
 		}
@@ -243,7 +247,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return Sent{}, fmt.Errorf("finding repeated message: %w", err)
 	}
 	sent := Sent{Message: stored, Topic: requested, Repeat: true}
-	if stored.Body != body || stored.ChannelID != channelID || !sameQuote(stored.Quote, quote) {
+	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, quote) {
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil

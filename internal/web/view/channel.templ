@@ -63,6 +63,9 @@ type ChannelPage struct {
 	Pins []Pin
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
+	// Quote is the selected original; QuoteUpdate limits swaps to quoted sends.
+	Quote       *Message
+	QuoteUpdate bool
 	// IdempotencyKey is the composer's key for one send (decision 37 (b));
 	// like Composer, a 422 keeps the submitted value or its absence.
 	IdempotencyKey *string
@@ -296,7 +299,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v13.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v14.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -429,6 +432,9 @@ templ unreadDivider(seq, firstUnread int64) {
 // textarea, so text typed while the post was in flight stays (#1173).
 templ MessageComposer(page ChannelPage) {
 	@composerState(page)
+	if page.QuoteUpdate {
+		@ComposerQuote(page, true)
+	}
 	@typingForm(page, true)
 }
 
@@ -469,6 +475,17 @@ templ pendingMessage(page ChannelPage) {
 // The textarea and the send button stay outside every swap: only the state
 // is replaced, and the button alone is disabled while a post is in flight.
 templ messageComposer(page ChannelPage) {
+	<form id="quote-form" hidden method="get" action={ conversationURL(page) + "#message-composer" } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/quote" } hx-target="#composer-quote" hx-swap="outerHTML" hx-sync="#message-composer:drop">
+		if page.Before > 0 {
+			<input type="hidden" name="before" value={ fmt.Sprint(page.Before) }/>
+		}
+		if page.Around > 0 {
+			<input type="hidden" name="around" value={ fmt.Sprint(page.Around) }/>
+		}
+		if !latest(page) {
+			<input type="hidden" name="unread" value={ fmt.Sprint(page.FirstUnread) }/>
+		}
+	</form>
 	<form
 		id="message-composer"
 		method="post"
@@ -484,9 +501,10 @@ templ messageComposer(page ChannelPage) {
 		}
 		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3"
 	>
+		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

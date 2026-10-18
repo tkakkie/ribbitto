@@ -338,7 +338,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 		}
 		ordinary.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{BodyError: "message.error.body", Composer: new("generation"), IdempotencyKey: new(ordinary.values.Get("idempotency_key")), EventCursor: new(int64(42))})))}
 		page.MustWait(`() => document.getElementById('message-body').getAttribute('aria-invalid')==='true' && !document.querySelector('#message-composer.htmx-request')`)
-		if !page.MustHas(`#message-body[aria-describedby="message-help"]`) {
+		if !page.MustHas(`#message-body[aria-describedby="message-help composer-quote"]`) {
 			t.Fatal("422 did not retain the error description")
 		}
 		page.MustEval(`() => { const b=document.getElementById('message-body'); b.value='valid'; b.form.requestSubmit(); }`)
@@ -352,7 +352,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 		page.MustWait(`() => window.answers===1`)
 		if problem := page.MustEval(`() => {
  const b=document.getElementById('message-body'), f=b.form, typing=document.getElementById('typing-form');
- if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help') return 'pending success lost field accessibility state';
+ if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help composer-quote') return 'pending success lost field accessibility state';
  if(document.querySelector('#message-composer-state[data-invalid], #message-help[role=alert]') || document.getElementById('message-help')?.textContent!==window.help) return 'pending success retained stale field errors';
  if(f.elements.composer.value!=='fresh' || typing.elements.composer.value!=='fresh' || f.elements.idempotency_key.value!=='00000000-0000-4000-8000-000000000002') return 'pending success did not renew state';
  return '';
@@ -373,7 +373,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 		page.MustWait(`() => window.answers===1`)
 		if problem := page.MustEval(`() => {
  const b=document.getElementById('message-body');
- if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help') return 'pending success lost field accessibility state';
+ if(b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help composer-quote') return 'pending success lost field accessibility state';
  if(document.querySelector('#message-composer-state[data-invalid], #message-help[role=alert]') || document.getElementById('message-help')?.textContent!==window.help) return 'pending success did not restore ordinary help';
  return '';
 }`).Str(); problem != "" {
@@ -396,7 +396,7 @@ func testPendingComposerPage(t *testing.T, browser *rod.Browser, topic bool) {
 		page.MustWait(`() => !document.querySelector('#message-composer.htmx-request')`)
 		if problem := page.MustEval(`() => {
  const b=document.getElementById('message-body'), help=document.getElementById('message-help');
- if(b.getAttribute('aria-invalid')!=='true' || b.getAttribute('aria-describedby')!=='message-help') return '422 lost the error description after pending success';
+ if(b.getAttribute('aria-invalid')!=='true' || b.getAttribute('aria-describedby')!=='message-help composer-quote') return '422 lost the error description after pending success';
  if(!document.querySelector('#message-composer-state[data-invalid]') || help?.getAttribute('role')!=='alert' || help.textContent!=='Enter 1–4000 characters without control characters or directional embeddings and overrides.') return '422 did not render the field error';
  return '';
 }`).Str(); problem != "" {
@@ -847,7 +847,7 @@ func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
       const b=document.getElementById('message-body'), a=document.getElementById('message-send-alert');
       const bodies=[...document.querySelectorAll('[data-pending-body]')];
       return b.value!=='eleventh' || a.textContent!==a.dataset.capacity || !a.textContent ||
-       b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help' ||
+       b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help composer-quote' ||
        bodies.length!==10 || new Set(bodies.map(b=>b.id)).size!==10 ||
        [...document.querySelectorAll('[data-pending-form] button')].some(b=>!document.getElementById(b.getAttribute('aria-describedby')));
      }`).Bool() {
@@ -1095,7 +1095,7 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 				answers++
 			}
 			page.MustWait(`n => window.answers===n`, answers)
-			if page.MustEval(`() => {const b=document.getElementById('message-body');return b.value!==window.draft || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help' || document.querySelector('[data-pending-form]').dataset.state!=='confirmed';}`).Bool() {
+			if page.MustEval(`() => {const b=document.getElementById('message-body');return b.value!==window.draft || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help composer-quote' || document.querySelector('[data-pending-form]').dataset.state!=='confirmed';}`).Bool() {
 				t.Fatal("pending answer changed the composer or did not confirm the item")
 			}
 			if page.MustEval(`key => document.getElementById('message-composer').elements.idempotency_key.value===key`, first.values.Get("idempotency_key")).Bool() {
@@ -1181,7 +1181,7 @@ func testPendingEditBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		next.reply <- pendingAnswer(t, kernel.ID{51})
 		third := receivePending(t, page, posts)
-		if page.MustEval(`key => {const b=document.getElementById('message-body');return b.value!=='queued 0' || b.form.elements.idempotency_key.value!==key || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help';}`, first.values.Get("idempotency_key")).Bool() {
+		if page.MustEval(`key => {const b=document.getElementById('message-body');return b.value!=='queued 0' || b.form.elements.idempotency_key.value!==key || b.getAttribute('aria-invalid')!=='false' || b.getAttribute('aria-describedby')!=='message-help composer-quote';}`, first.values.Get("idempotency_key")).Bool() {
 			t.Fatal("another send's state swap replaced the restored key or text")
 		}
 		page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)

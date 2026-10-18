@@ -50,6 +50,7 @@ func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messa
 		{http.MethodPost, "/channels/{channelID}/topics/{topicID}", handlers.show},
 		{http.MethodPost, "/channels/{channelID}", handlers.show},
 		{http.MethodPost, "/channels/{channelID}/branch", handlers.branch},
+		{http.MethodPost, "/channels/{channelID}/quote", handlers.quote},
 		{http.MethodPost, "/channels/{channelID}/messages/{messageID}/pin", handlers.pin},
 		{http.MethodPost, "/channels/{channelID}/messages/{messageID}/unpin", handlers.unpin},
 		{http.MethodPost, "/channels/{channelID}/read", handlers.read},

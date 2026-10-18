@@ -38,6 +38,19 @@ func checkFallbackURLs(doc *html.Node) []string {
 					}
 				}
 			}
+			// Quote reads no state; its plain GET and private-text-ready POST
+			// deliberately have different routes (#1160).
+			if n.DataAtom == atom.Form && attr(n, "id") == "quote-form" {
+				plain, err := url.Parse(fallback)
+				if err == nil {
+					channel, _, _ := strings.Cut(plain.Path, "/topics/")
+					if plainMethod == "get" && method == "post" && plain.Fragment == "message-composer" && plain.RawQuery == "" && enhanced == channel+"/quote" {
+						continue
+					}
+				}
+				problems = append(problems, "quote form must GET its conversation/composer and POST its channel's chip route")
+				continue
+			}
 			if plainMethod != method || !sameFallbackURL(enhanced, fallback) {
 				problems = append(problems, fmt.Sprintf("<%s hx-%s=%q> has no matching plain HTML URL/method (got %s %q)", n.Data, method, enhanced, plainMethod, fallback))
 			}
@@ -75,6 +88,9 @@ func TestCheckFallbackURLs(t *testing.T) {
 		name, markup string
 		problems     int
 	}{
+		{"quote fallback", `<form id="quote-form" action="/organizations/acme/channels/id/topics/topic#message-composer" method="get" hx-post="/organizations/acme/channels/id/quote"></form>`, 0},
+		{"quote wrong channel", `<form id="quote-form" action="/organizations/acme/channels/id#message-composer" method="get" hx-post="/organizations/acme/channels/other/quote"></form>`, 1},
+		{"quote wrong method", `<form id="quote-form" action="/organizations/acme/channels/id#message-composer" method="post" hx-post="/organizations/acme/channels/id/quote"></form>`, 1},
 		{"plain HTML", `<a href="/x">Open</a>`, 0},
 		{"paging fixture", `<a href="/x?before=0" hx-get="/x?before=0">Older</a>`, 0},
 		{"query order", `<a href="/x?a=1&amp;b=2" hx-get="/x?b=2&amp;a=1">Open</a>`, 0},

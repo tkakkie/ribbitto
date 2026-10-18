@@ -56,7 +56,7 @@
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) {
+    if (form.elements.quote || !text || [...text].length > 4000) {
       if (list.firstElementChild || pendingRequests.size) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -125,6 +125,7 @@
     reconcile();
   });
   document.addEventListener("click", (event) => {
+    event.target.closest('[form="quote-form"]')?.closest("[popover]")?.hidePopover();
     const edit = event.target.closest("[data-pending-edit]");
     if (!edit && !event.target.closest("[data-pending-remove]")) return;
     const body = document.getElementById("message-body");
@@ -249,6 +250,10 @@
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
+    if (state.id === "composer-quote") {
+      document.getElementById("message-body").focus({ preventScroll: true });
+      return;
+    }
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
@@ -293,7 +298,7 @@
     // button in flight, and Chrome then moves its focus to the body at the
     // next frame.
     const active = document.activeElement;
-    if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
+    if (active === body.form.querySelector('button[type="submit"]:not([form])') || active === document.body) body.focus({ preventScroll: true });
   });
   const completePending = (event, pending) => {
     const status = event.detail.xhr.status;

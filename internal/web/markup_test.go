@@ -600,6 +600,7 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
 	cases := []markupCase{
+		{name: "empty quote chip", route: "POST /organizations/{slug}/channels/{channelID}/quote", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/quote", cookie: true},
 		{name: "mention candidates", route: "GET /organizations/{slug}/mention-candidates", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/mention-candidates?q=alice", cookie: true},
 		{name: "invalid image", route: "POST /organizations/{slug}/channels/{channelID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
 		{name: "invalid topic image", route: "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
@@ -723,7 +724,7 @@ func TestPagesMarkup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				fragment := c.route == "GET /organizations/{slug}/mention-candidates" || c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
+				fragment := c.route == "POST /organizations/{slug}/channels/{channelID}/quote" || c.route == "GET /organizations/{slug}/mention-candidates" || c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
 				for _, problem := range checkMarkup(doc, !fragment) {
 					t.Error(problem)
 				}
@@ -856,11 +857,7 @@ func checkFieldError(t *testing.T, doc, field *html.Node) *html.Node {
 	id := attr(field, "aria-describedby")
 	if id != "" {
 		for n := range doc.Descendants() {
-			if attr(n, "id") == id {
-				if attr(n, "role") != "alert" {
-					t.Errorf("%s: description %q is not an alert", attr(field, "name"), id)
-					return nil
-				}
+			if slices.Contains(strings.Fields(id), attr(n, "id")) && attr(n, "role") == "alert" {
 				return n
 			}
 		}
@@ -974,6 +971,7 @@ func TestComponentsMarkup(t *testing.T) {
 			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
 			Body:      "<script>bad()</script>\nمرحبا", Text: "<script>bad()</script>\nمرحبا",
 		})},
+		{"ComposerQuote", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "author", Body: "<script>bad()</script>"}}, false)},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
 		{"Avatar", view.Avatar(kernel.ID{1}, "田中", "author")},

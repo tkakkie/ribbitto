@@ -328,6 +328,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
+	if _, present := r.URL.Query()["quote"]; present && r.Method == http.MethodGet {
+		if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
+			return
+		}
+		var ok bool
+		page.Quote, ok = p.readQuote(w, r, m, id, r.URL.Query())
+		if !ok {
+			return
+		}
+	}
 	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" {
 		place := history.Current.DefaultTopicID
@@ -477,6 +487,14 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // fragment's typing form signals there and its generation is scoped to it,
 // while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
+	_, page.QuoteUpdate = r.PostForm["quote"]
+	if page.BodyError != "" {
+		var ok bool
+		page.Quote, ok = p.readQuote(w, r, m, c.ID, r.PostForm)
+		if !ok {
+			return
+		}
+	}
 	if r.Header.Get("HX-Request") == "true" {
 		place := c.DefaultTopicID
 		if topic != nil {

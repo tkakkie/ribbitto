@@ -420,3 +420,9 @@ other = "該当するメンバーはいません。"
 
 ["mention.count"]
 other = "%d 人のメンバーが見つかりました。"
+
+["message.quote"]
+other = "引用"
+
+["message.quote_remove"]
+other = "引用を削除"

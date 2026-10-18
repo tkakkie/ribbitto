@@ -35,10 +35,9 @@ and `LiveMessageItem` alone in both languages and applies the fragment
 markup rules.
 `TestPagesMarkup` also checks the composer fragments returned by handlers.
 
-`TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain
-link or form with the same URL and HTTP method (`fallback_test.go`). URL
-comparison is structural; paging success uses positive cursors in
-`TestMessagePagingHandler`.
+`TestPagesMarkup` checks plain fallbacks (`fallback_test.go`): matching URL/method,
+except the read-only quote form's conversation GET and channel chip POST (#1160).
+URLs compare structurally; `TestMessagePagingHandler` checks paging success.
 
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
 errors (422) for feeds and topics; an HX topic fragment targets the posted

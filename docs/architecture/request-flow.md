@@ -38,6 +38,12 @@ the home page.
 Every route under `/organizations/{slug}/` and its result is listed in
 [`routes.md`](routes.md).
 
+Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
+its channel, reads one ID through `conversation.Reader.Many`, and returns only
+`#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
+uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
+messages get the posting route's plain 404, without their text.
+
 ## Server timeouts
 
 In `newServer` (`cmd/ribbitto`):

@@ -135,7 +135,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
+		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
 	}
 
 	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.MemberSearch, services.MentionLimits)
@@ -223,6 +223,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				// Pin runs before unpin, so each member request changes the state.
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.MessageURL("acme", linked.ID) || pinned(t) != strings.HasSuffix(route.path, "/pin") {
 					t.Fatalf("pin: %d %s, pinned %v", w.Code, w.Header().Get("Location"), pinned(t))
+				}
+			case "POST /channels/{channelID}/quote":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="composer-quote"`) || !strings.Contains(w.Body.String(), "linked message") {
+					t.Fatalf("chip: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels/{channelID}/topics/{topicID}/typing":
 				if w.Code != 204 || w.Body.Len() != 0 {

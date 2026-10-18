@@ -43,13 +43,11 @@ A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
-A message may quote one earlier message of the same channel
-([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, the action and chip *planned*: #1160, #1161). The quote stores the
-quoted message's ID, its author's member ID and a text snapshot that the
-server copies or, for a selection, checks against the original's extracted
-text, in the posting transaction. The snapshot belongs to the quoting
-message and stays as posted when the original is edited, moved or deleted;
-deletion sets only the quoted message ID to null. A quote is not a reply.
+A message may quote one earlier message in its channel
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
+Whole-message action/chip: #1160; selection planned: #1161. Posting stores the
+original and author IDs and a snapshot, retained through edits, moves and
+deletion (which nulls only the original ID). A quote is not a reply.
 
 Channel pins reference the current message; their permissions, limits
 and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890 and #1205).
@@ -125,6 +123,11 @@ kept in the shared stream render cache, is the same for every reader of one
 language too.
 
 ## Posting from the channel page
+
+Quote selects an original from its menu. The author/excerpt
+chip re-reads on 422 and clears on success. Without scripts `?quote=<UUID>`
+selects it; removal loses unsent text. Quoted sends wait for pending sends,
+use the ordinary path and omit drafts.
 
 Latest feeds/topics empty the composer into pending items (#1156, #1188, #1174,
 #1180). All states count toward 10 slots per tab; overflow keeps text with a

@@ -1,0 +1,25 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+// ComposerQuote stays inside the form while post responses renew its state.
+templ ComposerQuote(page ChannelPage, oob bool) {
+	<div
+		id="composer-quote"
+		hidden?={ page.Quote == nil }
+		if oob {
+			hx-swap-oob="outerHTML"
+		}
+	>
+		if page.Quote != nil {
+			<div class="flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1">
+				<div class="min-w-0 flex-1">
+					<p class="truncate text-caption">@MemberName(page.Quote.DisplayName, page.Quote.Handle)</p>
+					<p dir="auto" class="truncate text-caption text-muted">{ page.Quote.Body }</p>
+				</div>
+				<input type="hidden" name="quote" value={ idValue(page.Quote.ID) }/>
+				<button type="submit" form="quote-form" class="min-h-11 shrink-0 px-2 text-muted hover:text-fg">{ i18n.T(ctx, "message.quote_remove") }</button>
+			</div>
+		}
+	</div>
+}

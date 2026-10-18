@@ -131,8 +131,13 @@ func openEndpointIn(ctx context.Context, t *testing.T, b acceptanceBrowser, endp
 		close(events)
 		return events, response.StatusCode, response.ProtoMajor
 	}
-	if got := response.Header.Get("Content-Type"); got != "text/event-stream; charset=utf-8" || response.Header.Get("Cache-Control") != "no-cache" {
-		t.Fatalf("stream headers: %v", response.Header)
+	for _, tt := range []struct{ header, want string }{
+		{"Content-Type", "text/event-stream; charset=utf-8"},
+		{"Cache-Control", "no-store"},
+	} {
+		if got := response.Header.Get(tt.header); got != tt.want {
+			t.Fatalf("%s = %q, want %q", tt.header, got, tt.want)
+		}
 	}
 	go func() {
 		defer close(events)

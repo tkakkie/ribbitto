@@ -88,7 +88,7 @@ func TestAuthLimitsProxyWarningNilLogger(t *testing.T) {
 			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 
 			limits := &AuthLimits{}
-			limiter := NewRateLimiter(Limit{Burst: 2, Every: time.Minute}, time.Now)
+			limiter := NewNetworkRateLimiter(Limit{Burst: 2, Every: time.Minute}, Limit{}, time.Now)
 			if name == "constructor" {
 				limits = NewAuthLimits(nil, time.Now, nil)
 				limiter = limits.SignIn
@@ -126,7 +126,7 @@ func TestAuthLimitsProxyWarningConcurrent(t *testing.T) {
 
 func TestRateLimiter(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	l := NewRateLimiter(Limit{Burst: 3, Every: 10 * time.Second}, func() time.Time { return now })
+	l := NewNetworkRateLimiter(Limit{Burst: 3, Every: 10 * time.Second}, Limit{}, func() time.Time { return now })
 	a, b := netip.MustParsePrefix("192.0.2.1/32"), netip.MustParsePrefix("192.0.2.2/32")
 	for i := range 3 {
 		if !l.Allow(a) {
@@ -147,7 +147,7 @@ func TestRateLimiter(t *testing.T) {
 
 func TestRateLimiterBoundedMemory(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	l := NewRateLimiter(Limit{Burst: 2, Every: time.Minute}, func() time.Time { return now })
+	l := NewNetworkRateLimiter(Limit{Burst: 2, Every: time.Minute}, Limit{}, func() time.Time { return now })
 	l.max = 2
 	a, b, c := netip.MustParsePrefix("192.0.2.1/32"), netip.MustParsePrefix("192.0.2.2/32"), netip.MustParsePrefix("192.0.2.3/32")
 	l.Allow(a)

@@ -66,14 +66,12 @@ func TestChannelCounts(t *testing.T) {
 
 	for _, tc := range []struct {
 		name            string
-		useRead         bool
 		firstUnread     bool
 		wantFirstUnread bool
 		rangesErr       error
 		counterErr      error
 		wantErr         string
 	}{
-		{name: "Read passes firstUnread true", useRead: true, wantFirstUnread: true},
 		{name: "ReadWithFirstUnread true", firstUnread: true, wantFirstUnread: true},
 		{name: "ReadWithFirstUnread false", firstUnread: false, wantFirstUnread: false},
 		{name: "ranges error", firstUnread: true, rangesErr: failure, wantErr: "loading channel count ranges: "},
@@ -83,13 +81,7 @@ func TestChannelCounts(t *testing.T) {
 			ranges := &fakeChannelRanges{states: states, err: tc.rangesErr}
 			counter := &fakeChannelCounter{counts: map[kernel.ID]int64{firstCh: 4, thirdCh: 1}, first: map[kernel.ID]int64{firstCh: 6}, err: tc.counterErr}
 			counts := NewChannelCounts(func(platform.Snapshot) ChannelRanges { return ranges }, func(platform.Snapshot) ChannelCounter { return counter })
-			var got map[kernel.ID]ChannelCount
-			var err error
-			if tc.useRead {
-				got, err = counts.Read(t.Context(), platform.Snapshot{}, org, member, joined, channels)
-			} else {
-				got, err = counts.ReadWithFirstUnread(t.Context(), platform.Snapshot{}, org, member, joined, channels, tc.firstUnread)
-			}
+			got, err := counts.ReadWithFirstUnread(t.Context(), platform.Snapshot{}, org, member, joined, channels, tc.firstUnread)
 			if ranges.org != org || ranges.member != member || ranges.joined != joined || !slices.Equal(ranges.ids, wantIDs) {
 				t.Fatalf("ranges args=(%v, %v, %d, %v), want (%v, %v, %d, %v)", ranges.org, ranges.member, ranges.joined, ranges.ids, org, member, joined, wantIDs)
 			}

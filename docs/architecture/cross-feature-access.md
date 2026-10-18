@@ -138,7 +138,7 @@ factories return concrete stores; unread owns `ChannelMessages`, `TopicMessages`
 without a range converter.
 
 Posting from a page uses conversation's `PostReadWriterIn`, injected by
-the composition root. After taking org's sequence, `PostFromPage`
+the composition root. After taking org's sequence, `Posting.Send` with a cursor
 validates the page cursor against the pre-post limit and inserts the message.
 Conversation supplies the channel predecessor and checks the topic for posts
 or moves strictly between the cursor and the new sequence. `unread.PostReads` chooses

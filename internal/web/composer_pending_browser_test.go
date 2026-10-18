@@ -858,7 +858,7 @@ func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
 				}
 				next.reply <- browserReply{status: 500, body: []byte("pause")}
 			})
-			for _, mode := range []string{"not-sent-retry-last", "unknown-committed", "unknown-not-committed", "unknown-remove", "identical-delayed", "identical-lost", "identical-replay"} {
+			for _, mode := range []string{"not-sent-retry-last", "rate-limited-retry-last", "unknown-committed", "unknown-not-committed", "unknown-remove", "identical-delayed", "identical-lost", "identical-replay"} {
 				t.Run(mode, func(t *testing.T) {
 					page, events, posts, _ := pendingBrowser(t, browser, topic)
 					if mode == "identical-lost" {
@@ -913,8 +913,11 @@ func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
 					}
 					unknown := strings.HasPrefix(mode, "unknown-") || mode == "identical-lost"
 					status := 200
-					if mode == "not-sent-retry-last" {
+					if mode == "not-sent-retry-last" || mode == "rate-limited-retry-last" {
 						status = 422
+						if mode == "rate-limited-retry-last" {
+							status = 429
+						}
 					}
 					if strings.HasPrefix(mode, "unknown-") {
 						status = 500
@@ -950,7 +953,7 @@ func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
 					if second.values.Get("body") != bodies[1] || first.values.Get("idempotency_key") == second.values.Get("idempotency_key") {
 						t.Fatal("FIFO body or independent key differs")
 					}
-					if mode == "not-sent-retry-last" {
+					if mode == "not-sent-retry-last" || mode == "rate-limited-retry-last" {
 						page.MustElement("[data-pending-actions] button[type=submit]").MustClick()
 						if page.MustEval(`() => document.querySelector('#message-pending > li')!==window.nodes[1] || window.requests!==2 || document.activeElement!==document.getElementById('message-body')`).Bool() || len(posts) != 0 {
 							t.Fatal("Not sent retry did not move to the list/dispatch tail")
@@ -970,7 +973,7 @@ func testPendingQueueBrowser(t *testing.T, browser *rod.Browser) {
 						answers++
 					}
 					page.MustWait(`n => window.answers===n`, answers)
-					if mode == "not-sent-retry-last" {
+					if mode == "not-sent-retry-last" || mode == "rate-limited-retry-last" {
 						retry := receivePending(t, page, posts)
 						if retry.values.Encode() != first.values.Encode() {
 							t.Fatal("Not sent retry changed the original send")

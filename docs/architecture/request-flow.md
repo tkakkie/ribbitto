@@ -7,9 +7,10 @@ sequenceDiagram
   participant A as use case (module root)
   participant P as PostgreSQL store (module)
   B->>W: HTTP request (/organizations/{slug}/…)
-  W->>W: parse and validate input, resolve session → account
+  W->>W: resolve session → account
+  W->>A: resolve member of {slug}, authorize
+  W->>W: member admission where limited, then parse and validate input
   W->>A: call use case with plain arguments
-  A->>A: resolve member of {slug}, authorize
   A->>P: repository calls inside one transaction
   P-->>A: domain values
   A-->>W: plain result struct

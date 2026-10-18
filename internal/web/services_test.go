@@ -40,6 +40,8 @@ func testServices(overrides ...func(*Services)) Services {
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
 	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
+	s.PostLimits = middleware.NewPostRateLimiter(time.Now)
+	s.PinLimits = middleware.NewPinRateLimiter(time.Now)
 	s.Branching = testBrancher(&fakeBranchWriter{})
 	for _, override := range overrides {
 		override(&s)
@@ -79,6 +81,8 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
 	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
+	s.PostLimits = middleware.NewPostRateLimiter(time.Now)
+	s.PinLimits = middleware.NewPinRateLimiter(time.Now)
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
 			accountCreator,

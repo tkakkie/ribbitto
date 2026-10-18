@@ -1,5 +1,6 @@
 # Posting a message
 
+HTTP sends first pass [member admission](member-admission.md), including keyed retries.
 Durable events and the event log they are written to: [real time](realtime.md#durable-event-log).
 
 ```mermaid

@@ -55,6 +55,8 @@ type channelPages struct {
 	limiter          *middleware.MemberRateLimiter
 	createLimit      *middleware.MemberRateLimiter
 	branchLimit      *middleware.MemberRateLimiter
+	postLimit        *middleware.MemberRateLimiter
+	pinLimit         *middleware.MemberRateLimiter
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
@@ -366,6 +368,13 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 }
 
 func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
+	release, admitted := p.postLimit.Admit(m.Organization.ID, m.Member.ID)
+	if !admitted {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+	defer release()
 	c, err := p.channels.Get(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)

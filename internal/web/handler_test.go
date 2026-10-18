@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -493,6 +494,25 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	// so it still fails for that reason alone when another becomes required.
 	if _, err := NewHandler("", catalogues, testServices()); err != nil {
 		t.Fatalf("NewHandler rejected the default services: %v", err)
+	}
+	for _, pin := range []bool{false, true} {
+		for i := range 7 {
+			s := testServices()
+			others := []*middleware.MemberRateLimiter{nil, s.SignalLimits, s.ReadLimits, s.CreateLimits, s.ResyncLimits, s.BranchLimits, s.PostLimits}
+			// Supply a real typing limiter so every alias case differs from nil.
+			others[1] = middleware.NewMemberRateLimiter(time.Now)
+			s.SignalLimits = others[1]
+			if pin {
+				s.PinLimits = others[i]
+			} else if i < 6 {
+				s.PostLimits = others[i]
+			} else {
+				continue // Post/pin sharing is checked by the pin case.
+			}
+			if _, err := NewHandler("", catalogues, s); err == nil {
+				t.Errorf("accepted missing/shared limiter: pin=%t other=%d", pin, i)
+			}
+		}
 	}
 	for name, missing := range map[string]func(*Services){
 		"stream without lifetime": func(s *Services) { s.Stream = &Streaming{} },

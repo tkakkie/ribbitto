@@ -6,6 +6,10 @@ each flow that calls it
 Storage, the API between the modules and what the counts cost are in
 [unread counts](unread-counts.md); the rules are in [unread](../domain/unread.md).
 
+Write ranges use `conversation.SequenceRange`. Unread owns `ChannelMessages`
+and `TopicMessages`; conversation's wiring returns concrete transaction-bound
+stores that satisfy them directly, without a range converter.
+
 The current store locks `channel_read` (inserting it if missing), then unions
 the join prefix before the new range. Concurrent writes queue and commute; none
 removes a read message. A savepoint recovers concurrent row creation. A

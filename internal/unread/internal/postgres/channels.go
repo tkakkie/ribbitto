@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -37,14 +38,14 @@ func (r channelRanges) Read(ctx context.Context, organizationID, memberID kernel
 	if err != nil {
 		return nil, fmt.Errorf("reading channel ranges: %w", err)
 	}
-	stored := make(map[kernel.ID][]unread.Range)
+	stored := make(map[kernel.ID][]conversation.SequenceRange)
 	for _, row := range rows {
-		stored[row.ChannelID.Bytes] = append(stored[row.ChannelID.Bytes], unread.Range{Lo: row.Lo, Hi: row.Hi})
+		stored[row.ChannelID.Bytes] = append(stored[row.ChannelID.Bytes], conversation.SequenceRange{Lo: row.Lo, Hi: row.Hi})
 	}
 	for id, state := range states {
 		ranges := stored[id]
 		if len(ranges) == 0 {
-			state.Gaps = []unread.Range{{Lo: state.Prefix, Hi: math.MaxInt64}}
+			state.Gaps = []conversation.SequenceRange{{Lo: state.Prefix, Hi: math.MaxInt64}}
 		} else {
 			state.Prefix = ranges[0].Hi
 			for i, span := range ranges {
@@ -56,7 +57,7 @@ func (r channelRanges) Read(ctx context.Context, organizationID, memberID kernel
 				if i+1 < len(ranges) {
 					hi = ranges[i+1].Lo
 				}
-				state.Gaps = append(state.Gaps, unread.Range{Lo: span.Hi, Hi: hi})
+				state.Gaps = append(state.Gaps, conversation.SequenceRange{Lo: span.Hi, Hi: hi})
 			}
 		}
 		states[id] = state

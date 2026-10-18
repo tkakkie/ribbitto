@@ -108,22 +108,22 @@ func readStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
 }
 
 // MessageSequencesIn binds conversation's channel bounds to the caller's transaction.
-func MessageSequencesIn(tx platform.Tx) conversation.MessageSequences {
+func MessageSequencesIn(tx platform.Tx) *postgres.MessageSequences {
 	return postgres.MessageSequencesIn(tx)
 }
 
 // TopicReadCandidatesIn binds topic unread bounds to the caller's transaction.
-func TopicReadCandidatesIn(tx platform.Tx) conversation.TopicReadCandidates {
+func TopicReadCandidatesIn(tx platform.Tx) *postgres.TopicReadCandidates {
 	return postgres.TopicReadCandidatesIn(tx)
 }
 
 // ChannelUnreadIn binds capped channel counts to the caller's snapshot.
-func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
+func ChannelUnreadIn(s platform.Snapshot) *postgres.ChannelUnread {
 	return postgres.ChannelUnreadIn(s)
 }
 
 // TopicUnreadIn binds topic counts to the caller's snapshot.
-func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
+func TopicUnreadIn(s platform.Snapshot) *postgres.TopicUnread {
 	return postgres.TopicUnreadIn(s)
 }
 

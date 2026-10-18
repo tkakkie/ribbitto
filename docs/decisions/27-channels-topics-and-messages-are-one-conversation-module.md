@@ -33,10 +33,9 @@
   checked in review.
   Cross-module operations still use decision 26's consumer-owned interfaces
   and injected transaction- or snapshot-bound factories. Read ranges at the
-  seam use `conversation.SequenceRange`; `unread.Range` remains for write
-  paths and channel gaps, with migration tracked in #1303. Conversation keeps
-  `ChannelUnread`, whose `Count` and `CountWithFirstUnread` serve different
-  callers. Behaviour, SQL ownership and transaction boundaries do not change.
+  seam, writes and channel gaps use `conversation.SequenceRange`. Conversation
+  exposes concrete stores through its wiring; unread owns the message and count
+  interfaces. Behaviour, SQL ownership and transaction boundaries do not change.
 - **Graph and order.** `unread` → `conversation` → `identity`, `org`,
   `realtime`; the rest of decision 26's graph is unchanged. Setup's default channel,
   `org`'s sequence and members, `identity`'s authors and `realtime`'s

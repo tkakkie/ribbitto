@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -12,7 +13,7 @@ import (
 // Gap bounds are inclusive Lo and exclusive Hi; a truncated set has no open gap.
 type ChannelReadState struct {
 	Prefix int64
-	Gaps   []Range
+	Gaps   []conversation.SequenceRange
 }
 
 // ChannelRanges reads the first ranges of the sidebar's channels in one statement.
@@ -24,6 +25,8 @@ type ChannelRanges interface {
 type ChannelRangesIn func(platform.Snapshot) ChannelRanges
 
 // ChannelCounter counts messages through a snapshot-bound conversation API.
+// Channels must be unique; build the parallel gap arrays together. Bounds
+// are inclusive Lo and exclusive Hi. No member/author filter applies.
 type ChannelCounter interface {
 	CountWithFirstUnread(context.Context, kernel.ID, []kernel.ID, []kernel.ID, []int64, []int64, bool) (map[kernel.ID]int64, map[kernel.ID]int64, error)
 }

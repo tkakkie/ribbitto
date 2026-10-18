@@ -27,12 +27,12 @@ import (
 
 // mergeBeforeCoverage is the union from c283544^, with identical SQL and locks,
 // but without #834's sorting/subtraction. Only valid fixture inputs reach it.
-func mergeBeforeCoverage(ctx context.Context, w *Writer, s unread.Scope, joined int64, r unread.Range) error {
+func mergeBeforeCoverage(ctx context.Context, w *Writer, s unread.Scope, joined int64, r conversation.SequenceRange) error {
 	p := scopeParams(s)
 	if err := w.lock(ctx, p); err != nil {
 		return err
 	}
-	for _, added := range []unread.Range{{Lo: 0, Hi: joined + 1}, r} {
+	for _, added := range []conversation.SequenceRange{{Lo: 0, Hi: joined + 1}, r} {
 		lower := added.Lo
 		previous, err := w.queries.RangePredecessor(ctx, sqlcgen.RangePredecessorParams{OrganizationID: p.OrganizationID, ChannelID: p.ChannelID, MemberID: p.MemberID, Lo: added.Lo})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -64,7 +64,7 @@ type mergeCostAdapter struct {
 
 func (a mergeCostAdapter) Merge(ctx context.Context, o, c, m kernel.ID, joined, lo, hi int64) error {
 	s := unread.Scope{OrganizationID: o, ChannelID: c, MemberID: m}
-	r := unread.Range{Lo: lo, Hi: hi}
+	r := conversation.SequenceRange{Lo: lo, Hi: hi}
 	if a.baseline {
 		return mergeBeforeCoverage(ctx, a.writer, s, joined, r)
 	}
@@ -152,13 +152,13 @@ func TestReadMergeCost(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						var ranges []unread.Range
+						var ranges []conversation.SequenceRange
 						rows, err := pool.Query(t.Context(), "SELECT lo,hi FROM read_range WHERE organization_id=$1 ORDER BY lo", f.OrganizationID)
 						if err != nil {
 							t.Fatal(err)
 						}
 						for rows.Next() {
-							var r unread.Range
+							var r conversation.SequenceRange
 							if err := rows.Scan(&r.Lo, &r.Hi); err != nil {
 								rows.Close()
 								t.Fatal(err)
@@ -176,7 +176,7 @@ func TestReadMergeCost(t *testing.T) {
 						if flow == "branching" {
 							hi = upper + 3
 						}
-						if !slices.Equal(ranges, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 3, Hi: hi}}) {
+						if !slices.Equal(ranges, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 3, Hi: hi}}) {
 							t.Fatalf("%s arm=%d persisted union=%v want hi=%d", flow, arm, ranges, hi)
 						}
 						if iteration >= 2 {

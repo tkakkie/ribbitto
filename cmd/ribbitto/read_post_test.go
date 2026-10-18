@@ -26,10 +26,10 @@ func TestReadingRollback(t *testing.T) {
 	pool, scope := feedFixture(t)
 	reading := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil)
 	for _, existing := range []bool{false, true} {
-		want := []unread.Range{}
+		want := []conversation.SequenceRange{}
 		if existing {
 			feedRequire(t, reading.Feed(t.Context(), scope, 1, 2))
-			want = []unread.Range{{Lo: 0, Hi: 3}}
+			want = []conversation.SequenceRange{{Lo: 0, Hi: 3}}
 		}
 		// The missing topic fails after preparation writes the lock and join prefix.
 		if err := reading.Topic(t.Context(), unread.TopicScope{Scope: scope}, 1, 3); err == nil {
@@ -125,7 +125,7 @@ func TestReadPost(t *testing.T) {
 				if tc.method == "GET" && strings.Contains(w.Body.String(), `id="read-form"`) {
 					t.Fatal("older or unauthorized page offers a read form")
 				}
-				feedRanges(t, pool, scope, []unread.Range{})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{})
 				acceptanceCount(t, pool, 0, "SELECT count(*) FROM channel_read")
 				acceptanceCount(t, pool, 0, "SELECT count(*) FROM topic_read_floor")
 			})
@@ -134,7 +134,7 @@ func TestReadPost(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("latest GET: %d %s", w.Code, w.Body.String())
 		}
-		feedRanges(t, pool, scope, []unread.Range{})
+		feedRanges(t, pool, scope, []conversation.SequenceRange{})
 		acceptanceCount(t, pool, 0, "SELECT count(*) FROM channel_read")
 		acceptanceCount(t, pool, 0, "SELECT count(*) FROM topic_read_floor")
 	}
@@ -158,7 +158,7 @@ func TestReadPost(t *testing.T) {
 		if w.Code != want || (!tc.hx && w.Header().Get("Location") != tc.base) {
 			t.Fatalf("read: %d %s", w.Code, w.Body.String())
 		}
-		feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: tc.end}})
+		feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: tc.end}})
 		acceptanceCount(t, pool, 1, "SELECT count(*) FROM channel_read")
 		// The topic POST (run first) raised only its own topic's floor; the
 		// other topic's message 3 stayed outside its [0, 3) range.
@@ -169,6 +169,6 @@ func TestReadPost(t *testing.T) {
 		if w.Code != 400 {
 			t.Fatalf("future cursor: %d", w.Code)
 		}
-		feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: tc.end}})
+		feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: tc.end}})
 	}
 }

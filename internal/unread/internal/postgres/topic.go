@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/internal/postgres/sqlcgen"
 )
@@ -18,7 +19,7 @@ import (
 // transaction. The caller must roll back that transaction on any error.
 type TopicWrite struct {
 	Prefix, Floor int64
-	Ranges        []unread.Range
+	Ranges        []conversation.SequenceRange
 	w             *Writer
 	scope         sqlcgen.LockChannelReadParams
 	topic         pgtype.UUID
@@ -26,7 +27,7 @@ type TopicWrite struct {
 }
 
 // ReadState returns the prepared prefix, floor and read ranges above the prefix.
-func (p *TopicWrite) ReadState() (int64, int64, []unread.Range) {
+func (p *TopicWrite) ReadState() (int64, int64, []conversation.SequenceRange) {
 	return p.Prefix, p.Floor, p.Ranges
 }
 
@@ -40,7 +41,7 @@ func (w *Writer) Prepare(ctx context.Context, scope unread.TopicScope, joinedEve
 	if err := w.lock(ctx, s); err != nil {
 		return nil, err
 	}
-	if err := w.merge(ctx, s, unread.Range{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
+	if err := w.merge(ctx, s, conversation.SequenceRange{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
 		return nil, err
 	}
 	rs, err := w.queries.TopicReadRanges(ctx, sqlcgen.TopicReadRangesParams(s))
@@ -49,7 +50,7 @@ func (w *Writer) Prepare(ctx context.Context, scope unread.TopicScope, joinedEve
 	}
 	p := &TopicWrite{w: w, scope: s, topic: pgtype.UUID{Bytes: scope.TopicID, Valid: true}, Prefix: rs[0].Hi}
 	for _, r := range rs[1:] {
-		p.Ranges = append(p.Ranges, unread.Range{Lo: r.Lo, Hi: r.Hi})
+		p.Ranges = append(p.Ranges, conversation.SequenceRange{Lo: r.Lo, Hi: r.Hi})
 	}
 	p.Floor, err = w.queries.TopicReadFloor(ctx, sqlcgen.TopicReadFloorParams{OrganizationID: s.OrganizationID, ChannelID: s.ChannelID, MemberID: s.MemberID, TopicID: p.topic})
 	p.hasFloor = err == nil
@@ -70,12 +71,12 @@ func (p *TopicWrite) Add(ctx context.Context, los, his []int64, cursor int64) er
 	if cursor < 0 || cursor == math.MaxInt64 {
 		return unread.ErrInvalidCursor
 	}
-	rs := make([]unread.Range, len(los))
+	rs := make([]conversation.SequenceRange, len(los))
 	for i := range los {
 		if los[i] < 0 || his[i] <= los[i] {
 			return fmt.Errorf("adding topic ranges: invalid bounds")
 		}
-		rs[i] = unread.Range{Lo: los[i], Hi: his[i]}
+		rs[i] = conversation.SequenceRange{Lo: los[i], Hi: his[i]}
 	}
 	rs = coalesce(rs)
 	los, his = bounds(rs)
@@ -87,7 +88,7 @@ func (p *TopicWrite) Add(ctx context.Context, los, his []int64, cursor int64) er
 	removed := make([]int64, len(touched))
 	for i, r := range touched {
 		removed[i] = r.Lo
-		rs = append(rs, unread.Range{Lo: r.Lo, Hi: r.Hi})
+		rs = append(rs, conversation.SequenceRange{Lo: r.Lo, Hi: r.Hi})
 	}
 	if err = p.w.queries.DeleteBatchRanges(ctx, sqlcgen.DeleteBatchRangesParams{OrganizationID: s.OrganizationID, ChannelID: s.ChannelID, MemberID: s.MemberID, Los: removed}); err != nil {
 		return fmt.Errorf("deleting batch read ranges: %w", err)
@@ -113,8 +114,8 @@ func (p *TopicWrite) Add(ctx context.Context, los, his []int64, cursor int64) er
 	return nil
 }
 
-func coalesce(rs []unread.Range) []unread.Range {
-	slices.SortFunc(rs, func(a, b unread.Range) int {
+func coalesce(rs []conversation.SequenceRange) []conversation.SequenceRange {
+	slices.SortFunc(rs, func(a, b conversation.SequenceRange) int {
 		return cmp.Compare(a.Lo, b.Lo)
 	})
 	result := rs[:0]
@@ -128,7 +129,7 @@ func coalesce(rs []unread.Range) []unread.Range {
 	return result
 }
 
-func bounds(rs []unread.Range) (los, his []int64) {
+func bounds(rs []conversation.SequenceRange) (los, his []int64) {
 	los, his = make([]int64, len(rs)), make([]int64, len(rs))
 	for i, r := range rs {
 		los[i], his[i] = r.Lo, r.Hi

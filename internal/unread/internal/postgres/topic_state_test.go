@@ -28,7 +28,7 @@ func TestTopicState(t *testing.T) {
 			selected := f.Channel.DefaultTopicID
 			want := unread.TopicReadState{Prefix: 6, Floors: map[kernel.ID]int64{a: 5, b: 5, selected: 5}}
 			if stored {
-				seedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}})
+				seedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}})
 				seedFloor(t, pool, scope, selected, 18)
 				want.Prefix, want.Ranges = 11, []conversation.SequenceRange{{Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}}
 				want.Floors = map[kernel.ID]int64{a: 10, b: 10, selected: 18}
@@ -74,7 +74,7 @@ func TestTopicStateScope(t *testing.T) {
 					otherTopic = kernel.ID{1}
 				}
 				if source == "ranges" {
-					seedRanges(t, pool, other, []unread.Range{{Lo: 0, Hi: 50}, {Lo: 60, Hi: 70}})
+					seedRanges(t, pool, other, []conversation.SequenceRange{{Lo: 0, Hi: 50}, {Lo: 60, Hi: 70}})
 				} else {
 					seedRanges(t, pool, other, nil)
 					seedFloor(t, pool, other, otherTopic, 99)
@@ -96,7 +96,7 @@ func TestTopicStateScope(t *testing.T) {
 func TestTopicStateStatementCount(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "statements", "general")
-	seedRanges(t, pool, scopeOf(f), []unread.Range{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}})
+	seedRanges(t, pool, scopeOf(f), []conversation.SequenceRange{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}})
 	seedFloor(t, pool, scopeOf(f), f.Channel.DefaultTopicID, 18)
 	counter := platform.NewQueryCounter()
 	config := pool.Config()

@@ -155,7 +155,7 @@ func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
 type branchReadWriter struct{ ranges unread.RangeWriter }
 
 func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
+	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
 }
 
 // These fixtures exercise the reader's existing history and directory behavior.

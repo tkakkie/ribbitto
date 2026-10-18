@@ -89,6 +89,14 @@
   });
   document.addEventListener("selectionchange", () => { if (document.activeElement === body) update(); });
   body.addEventListener("blur", close);
+  // The composer clears the textarea on send without an input event, so the
+  // remembered query would make the same "@name" typed next a no-op.
+  document.addEventListener("submit", (event) => {
+    if (event.target.id !== "message-composer") return;
+    query = null;
+    dismissed = null;
+    close();
+  }, true);
   document.addEventListener("htmx:beforeSwap", (event) => {
     if (event.detail.target?.id === "mention-listbox") close();
   });

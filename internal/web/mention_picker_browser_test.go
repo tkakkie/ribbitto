@@ -27,6 +27,16 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
+type mentionPickerResponse struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *mentionPickerResponse) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
 func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
@@ -62,11 +72,18 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	stop := make(chan struct{})
 	var searches, posts atomic.Int32
+	var lastSearch atomic.Value
+	lastSearch.Store("none")
 	feed := view.ChannelURL("acme", f.Channel.ID)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
 		if strings.HasSuffix(r.URL.Path, "/mention-candidates") {
 			searches.Add(1)
+			query := r.URL.Query().Get("q")
+			lastSearch.Store(fmt.Sprintf("query %q pending", query))
+			response := &mentionPickerResponse{ResponseWriter: w, status: http.StatusOK}
+			w = response
+			defer func() { lastSearch.Store(fmt.Sprintf("query %q status %d", query, response.status)) }()
 			if delay, ok := delays[r.URL.Query().Get("q")]; ok {
 				// Repeated queries must not panic and drop the HTTP connection.
 				delay.started.Do(func() { close(delay.held) })
@@ -121,10 +138,39 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		step(fmt.Sprintf("set composer %q", value))
 		page.MustEval(`value => { const b = document.getElementById('message-body'), caret = value.includes('|') ? value.indexOf('|') : value.length; b.focus(); b.value = value.replace('|', ''); b.setSelectionRange(caret, caret); b.dispatchEvent(new Event('input', {bubbles:true})); }`, value)
 	}
+	openings := 0
 	opened := func(query string, count int) {
 		t.Helper()
-		step(fmt.Sprintf("open query %q with %d options", query, count))
-		page.MustWait(`(q, n) => !document.getElementById('mention-picker').hidden && document.getElementById('mention-listbox').dataset.query === q && document.querySelectorAll('#mention-listbox [role=option]').length === n`, query, count)
+		openings++
+		step(fmt.Sprintf("open query %q with %d options (#%d)", query, count, openings))
+		poll := time.NewTicker(25 * time.Millisecond)
+		defer poll.Stop()
+		// Keep the last snapshot: the step's context is unusable after timeout.
+		state := "no DOM snapshot"
+		for {
+			result, err := page.Eval(`(q, n) => {
+   const b = document.getElementById('message-body'), l = document.getElementById('mention-listbox');
+   const hidden = document.getElementById('mention-picker')?.hidden;
+   const options = document.querySelectorAll('#mention-listbox [role=option]').length;
+   return {matches: hidden === false && l?.dataset.query === q && options === n,
+    hidden, listbox: l?.outerHTML, query: l?.dataset.query, count: l?.dataset.count, options,
+    activeElement: document.activeElement?.id, value: b?.value,
+    selectionStart: b?.selectionStart, selectionEnd: b?.selectionEnd,
+    activeDescendant: b?.getAttribute('aria-activedescendant'), mentionInputs: window.mentionInputs};
+  }`, query, count)
+			if err != nil {
+				steps.fail(fmt.Sprintf("expected query %q / %d options: %v; last DOM: %s; searches=%d; last search=%v", query, count, err, state, searches.Load(), lastSearch.Load()))
+			}
+			state = result.Value.JSON("", "")
+			if result.Value.Get("matches").Bool() {
+				break
+			}
+			select {
+			case <-poll.C:
+			case <-page.GetContext().Done():
+				steps.fail(fmt.Sprintf("expected query %q / %d options: %v; last DOM: %s; searches=%d; last search=%v", query, count, page.GetContext().Err(), state, searches.Load(), lastSearch.Load()))
+			}
+		}
 		if problem := page.MustEval(`() => {
    const b = document.getElementById('message-body'), l = document.getElementById('mention-listbox');
    const selected = l.querySelectorAll('[aria-selected=true]');

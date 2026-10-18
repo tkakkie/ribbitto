@@ -238,7 +238,7 @@ func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID
 	return conversation.Topic{ID: id, OrganizationID: org, ChannelID: channel}, nil
 }
 
-func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, _ *conversation.Quote) (conversation.Message, error) {
+func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, _ *conversation.Quote) (conversation.Message, error) {
 	if _, taken := w.keyed[[3][16]byte{org, member, keyBytes(key)}]; key != nil && taken {
 		return conversation.Message{}, conversation.ErrPostKeyTaken
 	}
@@ -247,7 +247,7 @@ func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic
 		return conversation.Message{}, w.err
 	}
 	w.inserts++
-	posted := conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}
+	posted := conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, TypedBodyProof: proof, EventSeq: seq}
 	if w.returned != nil {
 		posted = *w.returned
 	}

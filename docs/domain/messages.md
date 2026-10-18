@@ -1,7 +1,6 @@
 # Messages
 
-What a message is, which bodies are accepted and how bodies are shown. Read
-this before changing message validation, storage or rendering.
+Message identity, accepted bodies and rendering. Read before changing them.
 
 **Keep it current:** update this file in the same pull request whenever
 these rules change.
@@ -14,13 +13,12 @@ and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
 
-A message posted from a composer may also store that composer's
-**idempotency key**, a random UUID the server renders into the form
+A composer send may store a random UUID **idempotency key**
 ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
-An organisation and author have at most one message per key; another member
-or organisation may use the same key for their own message. The key grants
-nothing, is never shown to anyone else and lives as long as its message.
-Branching's notices and messages posted without a key have none.
+Unique per organisation/author, it grants nothing, is hidden from others
+and lives with its message. Keyed posts store `typed_body_proof`: the
+normalized typed body's 4-byte big-endian byte length and SHA-256 (36 bytes).
+No backfill: legacy proofs stay NULL; unkeyed posts and notices have neither.
 
 Bodies are stored with a `format`, and the stored body is the source of truth.
 A stored message is never reinterpreted, and rendered HTML is at most a
@@ -45,7 +43,7 @@ message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
 A message may quote one earlier message of the same channel
-([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, the action and chip *planned*: #1160, #1161). The quote stores the
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, action and chip since #1160, selection planned: #1161). The quote stores the
 quoted message's ID, its author's member ID and a text snapshot that the
 server copies or, for a selection, checks against the original's extracted
 text, in the posting transaction. The snapshot belongs to the quoting
@@ -127,39 +125,40 @@ language too.
 
 ## Posting from the channel page
 
-Enhanced latest feeds/topics show pending items and empty the composer
-(#1156, #1188, #1174).
-All states count toward 10 items per tab; an eleventh send keeps its text
-with a localised notice. Delivery, move-out or Remove free slots; Retry uses
-its existing slot. Requests run singly in FIFO order. Not sent retries go
-last; unknown outcomes pause until same-key Retry succeeds or Remove.
-Remove permits late, visible commits out of order; uninterrupted success and
-same-key Retry preserve storage order. Ordinary and pending requests never overlap
-([contract](../architecture/web-composer.md#composer)).
-Idle blank/over-limit sends (4,000 code points after normalisation and trimming)
-or sends without `crypto.randomUUID()` use the ordinary path: the textarea
-stays usable; success removes only the sent prefix (#1173); 422 keeps text
-with a field error. The stream delivers real items, including replay.
-Older pages and scriptless posts use 303 on success and full-page 422 errors.
-Organisation and channel resolve before posting; non-members get 404.
+Latest feeds/topics empty the composer into pending items (#1156, #1188, #1174,
+#1180). All states count toward 10 slots per tab; overflow keeps text with a notice.
+Delivery, move-out, Remove/Edit free slots; Retry reuses its slot.
+FIFO requests run one at a time and never overlap ordinary sends.
+Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
+Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
+success and same-key Retry preserve storage order.
+Edit restores text/key and uncertainty to an empty composer, focuses
+its end and removes the item; otherwise it is disabled with a description.
+State swaps and refusals retain the key and uncertainty; emptying renews the
+key and clears uncertainty. Pending responses keep text; failures never swap it.
+Idle blank/over-limit sends, or without
+`crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
+(#1173); 422 keeps text and a field error. The textarea stays usable.
+The stream delivers real items and replay. Older/scriptless posts
+use 303 on success and full-page 422 errors. Organisation and channel resolve
+before posting; non-members get 404.
 
-Enter sends, Shift+Enter adds a newline; IME composition never sends.
-The help names formatting. Pages open at the newest message. Live delivery
-follows only at the bottom, except the sender's response ID scrolls its
-message into view once, in either response/delivery order and after reconnect.
-Focus stays in the composer. Live appends announce; replay replaces IDs silently.
+Enter sends (except during IME); Shift+Enter adds a newline. Help names formatting.
+Pages start at newest; live delivery follows only at the bottom. The sender's
+response ID scrolls once in either delivery order and after reconnect. Focus
+stays in the composer. Live appends announce; replay replaces IDs silently.
 
-A **repeated send** (the same key after a lost response or double submission)
-posts nothing: success names the original message, even after branching,
-while the composer stays on the requested feed or topic. The same key with
-other text, another quote or another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
-again posts it. A malformed key answers 400; a form without one posts without
-deduplication. A failed enhanced send (#1179) keeps text and key:
-400/404/413/422/429 mean not sent, unless its earlier send is unconfirmed;
-network errors, 30 s timeouts, other 4xx except 409 and 5xx are unconfirmed.
-Retries cannot post twice. An htmx 409 in the same channel, unquoted on both
-sides, removes the stored body instead of the error if it starts the sent
-text and, re-checked, the textarea.
+**Repeated sends** compare whole normalized typed bodies by proof. Legacy
+NULL-proof rows require exact stored text without references (`plain_text`,
+or `chat_v1` with none). A prefix is not a retry. Unused keys post normally.
+Equal retries return the stored message without writing, even after a move
+or handle change; the composer stays on the requested feed/topic. Different typed text, quote or
+channel gets 409 and a fresh key for Retry; pending 409 shows `message.error.repeat`.
+Malformed keys get 400; absent keys disable deduplication. Enhanced failures
+(#1179) keep text/key: 400/404/413/422/429 mean not sent unless an earlier send is
+unconfirmed; network errors, 30 s timeouts, other 4xx except 409 and 5xx are
+unconfirmed. Retries cannot post twice. Ordinary 409 recovers only a proven typed
+prefix under the [composer conditions](../architecture/web-composer.md#composer).
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

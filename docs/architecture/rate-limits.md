@@ -42,7 +42,7 @@ Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process. These authentication network limits are unchanged by
-the separate member limiters below; an authentication identity-side layer
+member budgets ([posts/pins](member-admission.md)); an identity-side layer
 is tracked in #99.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted

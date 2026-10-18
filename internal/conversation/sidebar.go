@@ -24,7 +24,7 @@ type SidebarSnapshot struct {
 // snapshot, including its organisation event sequence, without history or
 // directories. Membership is resolved by org; the channel and optional topic are checked in the snapshot.
 func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID) (sidebar SidebarSnapshot, err error) {
-	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+	err = s.countRunner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		loaded, err := loadSidebarContext(ctx, s.reads(snapshot), m.Organization.ID, channelID, topicID)
 		if err != nil {
 			return err

@@ -1,5 +1,36 @@
 (() => {
+  // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
+  const viewport = window.visualViewport;
+  const updateViewport = () => {
+    const style = document.documentElement.style;
+    for (const [name, value] of [["--composer-viewport-h", viewport?.height], ["--composer-viewport-top", viewport?.offsetTop]]) {
+      const next = value === undefined ? "" : value + "px";
+      if (style.getPropertyValue(name) === next) continue;
+      if (next) style.setProperty(name, next);
+      else style.removeProperty(name);
+    }
+  };
+  updateViewport();
+  viewport?.addEventListener("resize", updateViewport);
+  viewport?.addEventListener("scroll", updateViewport);
+  window.addEventListener("resize", updateViewport);
+  window.addEventListener("orientationchange", updateViewport);
   const pendingRequests = new Set();
+  let rememberPost = () => {};
+  // An edited send keeps its identity even when another queue response swaps
+  // the hidden controls. Only sending or emptying this text releases it.
+  let restoredKey = null;
+  const updateEdits = () => {
+    const body = document.getElementById("message-body");
+    const occupied = body.value !== "" || composing.has(body);
+    for (const form of pendingForms()) {
+      const edit = form.querySelector("[data-pending-edit]");
+      const help = form.querySelector("[data-pending-edit-help]");
+      edit.disabled = occupied || form.dataset.state !== "failed";
+      help.hidden = !occupied;
+      edit.setAttribute("aria-describedby", form.closest("li").querySelector("[data-pending-body]").id + (occupied ? " " + help.id : ""));
+    }
+  };
   const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];
   const dispatch = () => {
     if (pendingRequests.size || document.getElementById("message-composer")?.classList.contains("htmx-request")) return;
@@ -26,6 +57,13 @@
       return;
     }
     if (event.target.id !== "message-composer") return;
+    // Quote shares the composer's htmx lock; guard the pending/plain paths too,
+    // before either can submit stale quote state or clear the draft.
+    if (document.getElementById("quote-form")?.classList.contains("htmx-request")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const stream = document.getElementById("organization-stream");
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
@@ -42,7 +80,7 @@
       return;
     }
     const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (!text || [...text].length > 4000) {
+    if (form.elements.quote || !text || [...text].length > 4000) {
       if (list.firstElementChild || pendingRequests.size) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -55,11 +93,15 @@
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
-    sending.elements.idempotency_key.value = crypto.randomUUID();
+    sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
+    if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
+    delete form.dataset.unconfirmedKey;
+    restoredKey = null;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
     shownBody.textContent = text;
     shownBody.id += "-" + sending.elements.idempotency_key.value;
+    sending.querySelector("[data-pending-edit-help]").id += "-" + sending.elements.idempotency_key.value;
     for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
     sending.dataset.state = "queued";
     list.append(item);
@@ -68,7 +110,9 @@
     body.focus({ preventScroll: true });
     say("");
     reconcile();
+    updateEdits();
     item.scrollIntoView({ block: "nearest" });
+    rememberPost();
     htmx.process(sending);
     dispatch();
   }, true);
@@ -105,9 +149,30 @@
     }
     reconcile();
   });
+  document.addEventListener("htmx:configRequest", (event) => {
+    if (event.target.id !== "quote-form") return;
+    // Closing the popover restores focus, clearing htmx's remembered button.
+    // The native submit event retains it, including for live-delivered menus.
+    const button = event.detail.triggeringEvent?.submitter;
+    if (button?.name) event.detail.parameters[button.name] = button.value;
+  });
   document.addEventListener("click", (event) => {
-    if (!event.target.closest("[data-pending-remove]")) return;
+    event.target.closest('[form="quote-form"]')?.closest("[popover]")?.hidePopover();
+    const edit = event.target.closest("[data-pending-edit]");
+    if (!edit && !event.target.closest("[data-pending-remove]")) return;
+    const body = document.getElementById("message-body");
+    if (edit) {
+      const form = edit.closest("form");
+      if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
+      body.value = form.elements.body.value;
+      restoredKey = form.elements.idempotency_key.value;
+      body.form.elements.idempotency_key.value = restoredKey;
+      if (form.dataset.unconfirmed) body.form.dataset.unconfirmedKey = restoredKey;
+      else delete body.form.dataset.unconfirmedKey;
+      body.setSelectionRange(body.value.length, body.value.length);
+    }
     event.target.closest("li").remove();
+    updateEdits();
     say("");
     reconcile();
     dispatch();
@@ -160,7 +225,9 @@
     if (alert) alert.textContent = name ? alert.dataset[name] : "";
   };
   document.addEventListener("compositionstart", (event) => {
-    if (event.target.id === "message-body") composing.add(event.target);
+    if (event.target.id !== "message-body") return;
+    composing.add(event.target);
+    updateEdits();
   });
   document.addEventListener("compositionend", (event) => {
     const body = event.target;
@@ -171,6 +238,7 @@
       pendingRemoval.get(body)();
       pendingRemoval.delete(body);
     }
+    updateEdits();
   });
   const command = (event) => {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;
@@ -189,6 +257,40 @@
     const form = document.getElementById("typing-form");
     if (form && event.target.value.trim()) htmx.trigger(form, "typing-input");
   };
+  // Native caret scrolling can precede field-sizing layout, including a
+  // select-all replacement at the cap. Reveal the end using the final size.
+  const revealEnd = (body) => {
+    if (document.activeElement === body && body.selectionStart === body.value.length && body.selectionEnd === body.value.length) {
+      body.scrollTop = body.scrollHeight;
+    }
+  };
+  const body = document.getElementById("message-body");
+  let quoteResized = false;
+  const updateQuoteHeight = () => {
+    if (!body) return;
+    const quote = document.getElementById("composer-quote");
+    const height = quote?.getBoundingClientRect().height || 0;
+    // A visible chip adds one flex gap as well as its own height.
+    const next = (height ? height + parseFloat(getComputedStyle(body.form).rowGap) : 0) + "px";
+    if (body.form.style.getPropertyValue("--composer-quote-h") === next) return;
+    body.form.style.setProperty("--composer-quote-h", next);
+    // Measuring a removed chip can briefly grow the list and clamp its scroll,
+    // even when the updated cap brings the list back to the same height.
+    quoteResized = true;
+  };
+  updateQuoteHeight();
+  // The first measurement is the initial layout, not a change to restore from.
+  quoteResized = false;
+  document.addEventListener("input", (event) => {
+    if (event.target.id !== "message-body") return;
+    requestAnimationFrame(() => revealEnd(event.target));
+    if (restoredKey && event.target.value === "") {
+      restoredKey = null;
+      delete event.target.form.dataset.unconfirmedKey;
+      event.target.form.elements.idempotency_key.value = crypto.randomUUID();
+    }
+    updateEdits();
+  });
   document.addEventListener("input", signal);
   document.addEventListener("compositionend", signal);
   // A message's URL (decision 36) lands on the message its fragment names,
@@ -201,14 +303,70 @@
     if (list) list.scrollTop = list.scrollHeight;
   };
   newest();
+  const pane = document.getElementById("message-list");
+  if (pane) {
+    let height = pane.clientHeight, position, settling = false;
+    const remember = () => {
+      const top = pane.getBoundingClientRect().top;
+      let item;
+      for (const candidate of pane.querySelectorAll("#message-items > li, #message-pending > li")) {
+        if (candidate.getBoundingClientRect().bottom > top) { item = candidate; break; }
+      }
+      position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
+        item, offset: item ? item.getBoundingClientRect().top - top : 0 };
+    };
+    remember();
+    rememberPost = () => { height = pane.clientHeight; remember(); };
+    // A resize can clamp scrollTop before its scroll event. Keep the state
+    // from the old height until the observer has restored the reader.
+    pane.addEventListener("scroll", () => { if (!quoteResized && pane.clientHeight === height) remember(); });
+    const resize = new ResizeObserver(() => {
+      updateQuoteHeight();
+      if (pane.clientHeight !== height || quoteResized) {
+        quoteResized = false;
+        height = pane.clientHeight;
+        // Native resize scrolling need not equal a clamp of the old top.
+        // Restore the saved intent instead of treating that motion as a reader scroll.
+        if (!settling) {
+          if (position.newest) pane.scrollTop = pane.scrollHeight;
+          else if (position.item?.isConnected) pane.scrollTop +=
+            position.item.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.offset;
+        }
+        remember();
+      }
+      if (body) revealEnd(body);
+    });
+    resize.observe(pane);
+    if (body) { resize.observe(body); resize.observe(body.form); }
+    document.addEventListener("htmx:afterSwap", (event) => {
+      if (event.target.id === "message-composer-state" && event.target.dataset.postedMessage) settling = true;
+    });
+    document.addEventListener("htmx:afterSettle", (event) => {
+      // History restores and the stream's afterSettleCallback scroll run
+      // synchronously after this listener. Save their result before resizing.
+      if (pane.contains(event.target)) queueMicrotask(rememberPost);
+      if (event.target.id !== "message-composer-state" || !settling) return;
+      // The stream's scrollPosted runs in this same settle event. Its scroll
+      // wins even when clearing the sent text also resizes the pane.
+      queueMicrotask(() => { rememberPost(); settling = false; });
+    });
+  }
   // Responses replace only #message-composer-state (#1173): the textarea
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
+    if (state.id === "composer-quote") {
+      updateQuoteHeight();
+      document.getElementById("message-body").focus({ preventScroll: true });
+      return;
+    }
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);
+    // Guard against a future ordinary-send path retaining an edited key.
+    if (!pending && [200, 409].includes(event.detail.xhr.status)) restoredKey = null;
+    if (restoredKey) body.form.elements.idempotency_key.value = restoredKey;
     if (pending) {
       const item = pending.closest("li");
       item.dataset.postedMessage = state.dataset.postedMessage;
@@ -231,7 +389,7 @@
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");
       say("");
-      afterComposition(body, () => removeSent(body, sent));
+      afterComposition(body, () => { removeSent(body, sent); updateEdits(); });
     }
     // A 409 names the stored message for this key. The server sends its body
     // only when the retried text started with it: the earlier answer was
@@ -246,7 +404,7 @@
     // button in flight, and Chrome then moves its focus to the body at the
     // next frame.
     const active = document.activeElement;
-    if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
+    if (active === body.form.querySelector('button[type="submit"]:not([form])') || active === document.body) body.focus({ preventScroll: true });
   });
   const completePending = (event, pending) => {
     const status = event.detail.xhr.status;
@@ -268,6 +426,7 @@
     pending.querySelector("[role=status]").textContent = alert.dataset[name];
     pending.querySelector("[data-pending-actions]").hidden = false;
     pending.closest("li").querySelector("[data-pending-sending]").hidden = true;
+    updateEdits();
   };
   // Every failure keeps the text and the key, so sending again repeats this
   // send (decision 37 (b)). Only a 200 or a 409 comes after the server's key

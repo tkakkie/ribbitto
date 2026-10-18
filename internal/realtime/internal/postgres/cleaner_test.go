@@ -212,7 +212,8 @@ func TestEventRetentionBatches(t *testing.T) {
 			config := pool.Config()
 			config.ConnConfig.Tracer = retentionCommitTracer{committed: func() {
 				states = append(states, retentionState(t, pool, org))
-				if interrupt {
+				// The listing's read-only commit precedes the first batch.
+				if interrupt && len(states) == 2 {
 					cancel()
 				}
 			}}
@@ -220,12 +221,12 @@ func TestEventRetentionBatches(t *testing.T) {
 			requireNoError(t, err)
 			defer cleaning.Close()
 			err = newCleaner(cleaning).ExpireEvents(ctx, retentionCutoff)
-			want := [][2]int64{{1000, 1502}, {2000, 502}, {2501, 1}, {2501, 1}}
+			want := [][2]int64{{0, 2502}, {1000, 1502}, {2000, 502}, {2501, 1}, {2501, 1}}
 			if interrupt {
 				if !errors.Is(err, context.Canceled) {
 					t.Fatalf("cleanup = %v, want cancellation", err)
 				}
-				want = want[:1]
+				want = want[:2]
 			} else {
 				requireNoError(t, err)
 			}

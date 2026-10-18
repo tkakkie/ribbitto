@@ -7,6 +7,8 @@ the page's snapshot (`conversation.Reader.Overview`, #889) are implemented,
 and so are the generic channel-state writer seam (#891), pins-only snapshot
 source and consumer renderer filter (#892). Production registers the pin router and wires the web source (#1205).
 
+HTTP pin/unpin requests first pass [member admission](member-admission.md).
+
 ## Durable invalidation, current display
 
 **Delivery.** A durable `pins.changed` kind

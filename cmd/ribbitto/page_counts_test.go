@@ -123,7 +123,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 							t.Fatalf("%s statements=%d, want 1", name, trace.names[name])
 						}
 					}
-					wantStatements := int64(12)
+					wantStatements := int64(12) // pgtest pools have no application timeout default
 					if strings.HasPrefix(kind, "topic") {
 						wantStatements = 13
 					}

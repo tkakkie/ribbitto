@@ -5,7 +5,9 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -239,6 +241,92 @@ CREATE CONSTRAINT TRIGGER commit_probe AFTER INSERT ON commit_probe
 			t.Fatalf("rejected commit = %v, want the server's error and no row", err)
 		}
 	})
+}
+
+func TestSnapshotStatementTimeout(t *testing.T) {
+	t.Parallel()
+	base := pgtest.NewEmpty(t)
+	for _, tt := range []struct {
+		name, value, options, inside, outside string
+		local                                 bool
+	}{
+		{name: "default", inside: "1min", outside: "30s", local: true},
+		{name: "disabled", value: "0", inside: "0", outside: "0"},
+		{name: "shorter", value: "10s", inside: "10s", outside: "10s"},
+		{name: "explicit default", value: "30s", inside: "30s", outside: "30s"},
+		{name: "marker spelling", value: "30000ms", inside: "30s", outside: "30s"},
+		{name: "startup options", options: "-c statement_timeout=10s", inside: "10s", outside: "10s"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(base.Config().ConnString())
+			requireNoError(t, err)
+			u.Path = "/" + base.Config().ConnConfig.Database
+			q := u.Query()
+			q.Del("statement_timeout")
+			q.Del("options")
+			q.Set("pool_max_conns", "1") // Restoration must reuse the same session.
+			if tt.value != "" {
+				q.Set("statement_timeout", tt.value)
+			}
+			if tt.options != "" {
+				q.Set("options", tt.options)
+			}
+			u.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
+			counter := postgres.NewQueryCounter()
+			pool, err := postgres.OpenPool(t.Context(), u.String(), counter)
+			requireNoError(t, err)
+			t.Cleanup(pool.Close)
+			if tt.local {
+				_, err := base.Exec(t.Context(), "CREATE TABLE snapshot_probe (id int)")
+				requireNoError(t, err)
+				requireNoError(t, postgres.InSnapshotWithStatementTimeout(t.Context(), pool, time.Minute, func(s postgres.Snapshot) error {
+					// SET LOCAL must not freeze the snapshot before the first data read.
+					_, err := base.Exec(t.Context(), "INSERT INTO snapshot_probe VALUES (1)")
+					requireNoError(t, err)
+					var n int
+					requireNoError(t, pgxbridge.Snapshot(s).QueryRow(t.Context(), "SELECT count(*) FROM snapshot_probe").Scan(&n))
+					if n != 1 {
+						t.Fatalf("first read saw %d rows, want the intervening commit", n)
+					}
+					return nil
+				}))
+			}
+			for _, rollback := range []bool{false, true} {
+				failure := errors.New("roll back snapshot")
+				before := counter.Counts()
+				err := postgres.InSnapshotWithStatementTimeout(t.Context(), pool, time.Minute, func(s postgres.Snapshot) error {
+					var got string
+					requireNoError(t, pgxbridge.Snapshot(s).QueryRow(t.Context(), "SELECT current_setting('statement_timeout')").Scan(&got))
+					if got != tt.inside {
+						t.Fatalf("inside snapshot = %q, want %q", got, tt.inside)
+					}
+					if rollback {
+						return failure
+					}
+					return nil
+				})
+				var wantErr error
+				if rollback {
+					wantErr = failure
+				}
+				if !errors.Is(err, wantErr) {
+					t.Fatalf("snapshot error = %v, want %v", err, wantErr)
+				}
+				wantQueries := int64(1)
+				if tt.local {
+					wantQueries++
+				}
+				if got := counter.Counts().Queries - before.Queries; got != wantQueries {
+					t.Fatalf("snapshot queries = %d, want %d", got, wantQueries)
+				}
+				var got string
+				requireNoError(t, pool.QueryRow(t.Context(), "SELECT current_setting('statement_timeout')").Scan(&got))
+				if got != tt.outside {
+					t.Fatalf("after snapshot (rollback=%t) = %q, want %q", rollback, got, tt.outside)
+				}
+			}
+		})
+	}
 }
 
 func TestInSnapshot(t *testing.T) {

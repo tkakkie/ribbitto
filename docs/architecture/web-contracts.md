@@ -5,8 +5,8 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 - **DOM ids are a contract.** Templates define ids used by `hx-target`,
   `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`,
-  `message-pending`, `message-pending-template`, `message-pending-body` (template; clones append their fresh UUID), `message-empty`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `composer-quote-description`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`, `stream-stopped`,
+  `message-pending`, `message-pending-template`, `message-pending-body`, `message-pending-edit-help` (template; clones append their send UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `mention-listbox` and `mention-option-<hex>` for mention candidates,
   `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
@@ -38,9 +38,9 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-unread-count` | every sidebar badge, including the heading badge | always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-unconfirmed-key` | `#message-composer` | after a send could not be confirmed | that send's key, until the key changes ([composer](web-composer.md#composer)) |
   | `data-posted-topic`, `data-posted-seq` | `#message-composer-state` | with `data-posted-message` | posted message's topic ID and posting sequence, including repeats; read once for topic pending removal |
-  | `data-sent-body` | `#message-composer-state` | an htmx 409 whose text starts with it, unquoted | the stored body of the requester's message the key names; the help then shows no error |
+  | `data-sent-body` | `#message-composer-state` | an htmx 409 with a verified typed prefix, unquoted | only the request text's prefix verified by the keyed message's typed-body proof; the help then shows no error |
   | `data-unconfirmed`, `data-not-sent`, `data-still-unconfirmed`, `data-recovered`, `data-repeat`, `data-busy`, `data-capacity` | `#message-send-alert` | latest composers | localised alert texts |
-  | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
+  | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-edit`, `data-pending-edit-help`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
   | `data-drafts-horizon` | the sign-in form | signed-out renders only | UUIDv7; stored drafts of sessions from earlier milliseconds are removed ([drafts](web-composer.md#drafts)) |
   | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the drafts cleanup's horizon and deadline ([drafts](web-composer.md#drafts)) |
 

@@ -110,3 +110,25 @@ func TestBlankLookingNames(t *testing.T) {
 		}
 	}
 }
+
+func TestPasswordNFCLength(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, want string
+		valid             bool
+	}{
+		{"below minimum after composition", strings.Repeat("a", 13) + "e\u0301", "", false},
+		{"minimum after composition", strings.Repeat("a", 14) + "e\u0301", strings.Repeat("a", 14) + "é", true},
+		{"maximum after composition", strings.Repeat("a", 127) + "e\u0301", strings.Repeat("a", 127) + "é", true},
+		{"above maximum after composition", strings.Repeat("a", 128) + "e\u0301", "", false},
+		// NFC can also expand a single code point (U+0344) into two marks.
+		{"minimum after expansion", strings.Repeat("q", 13) + "\u0344", strings.Repeat("q", 13) + "\u0308\u0301", true},
+		{"above maximum after expansion", strings.Repeat("q", 127) + "\u0344", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := identity.ValidatePassword(tc.input)
+			if (err == nil) != tc.valid || got != tc.want {
+				t.Fatalf("got %q, %v; want %q, valid = %t", got, err, tc.want, tc.valid)
+			}
+		})
+	}
+}

@@ -9,7 +9,7 @@ the sending glue and feed/topic pending items below exist; the parts marked
 *planned* await their issues.
 
 The ordinary path applies to idle feed/topic sends with blank
-text or over 4,000 code points after line-ending
+text, a selected quote, or over 4,000 code points after line-ending
 normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
 
 - **Ordinary sending** (input glue, #1173): the textarea stays usable while a post is
@@ -29,31 +29,33 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   key is marked in `data-unconfirmed-key`. Only a 200 or a 409 follows the
   key lookup; both bring a new key, and the mark goes
   exactly when the key changes. A 409 carries `data-sent-body`, and omits
-  its error, only when the retried text started with the stored body: the
-  script removes that body under the same rules (*the earlier message was
+  its error, only in the same channel, with neither the stored nor the retried
+  text quoted, and when the stored typed-body byte length and SHA-256 digest
+  verify that prefix of the retry text (without resolving handles): the
+  script removes that prefix under the same rules (*the earlier message was
   sent*), or says the 409's error if the start was edited since. Otherwise
-  the text stays with the error.
-- **Pending own posts** (#1156, #1188, #1174):
+  the text stays with the error, including legacy rows without a proof.
+- **Pending own posts** (#1156, #1188, #1174, #1180):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
   after `#message-items`. The item's own htmx form holds the original text,
   key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. Each queued form also gets its own
-  fresh UUID. Up to 10 items per tab count in every state, including failures
+  focus and takes `crypto.randomUUID()`. Each queued form gets a fresh UUID
+  unless restored by Edit. Up to 10 items per tab count in every state, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
-  the next text; Retry takes no slot. Delivery, move-out and Remove free slots.
+  the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
   FIFO dispatch sends one form at a time, after classifying its predecessor.
   An ordinary request blocks composer submits; pending items or requests block
-  invalid ordinary submits, so the two forms' requests never overlap.
+  quoted or invalid ordinary submits, so the two forms' requests never overlap.
   A Not sent item lets later items continue; Retry moves it to the list and
   queue's end. An unknown outcome pauses later items (still showing Sending).
   Its same-key Retry keeps its place; success resumes dispatch. A refused retry
-  keeps the pause while the earlier outcome is unknown. Remove resumes without
-  resolving that request: it may commit later, and its real delivery stays
+  keeps the pause while the earlier outcome is unknown. Remove and Edit resume
+  without resolving that request: it may commit later, and its real delivery stays
   visible. Storage order follows send order on uninterrupted success or a
-  successful same-key Retry, but may differ after Remove.
+  successful same-key Retry, but may differ after Remove or Edit.
   A 200 swaps the composer state and out-of-band typing form, sets
-  `aria-invalid="false"` and keeps `aria-describedby="message-help"` and the
+  `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
   Its `data-posted-message` associates
   the item with delivery. A `MutationObserver` removes a
@@ -71,13 +73,36 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   text and key, including after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
   the item and text; an uncertain committed post can still arrive later.
-  Pending sends bypass prefix removal, the ordinary send alert, the
-  unconfirmed-key mark and 409 cleanup.
+  Edit is available on either failure only with an empty composer outside IME
+  composition; otherwise it stays visible but disabled with an associated
+  localised explanation. It never overwrites a draft. It restores the raw
+  text, key and any unconfirmed mark, focuses the textarea with the caret at
+  the end, then removes the item. The key follows that text across state swaps
+  until sent or emptied; its unconfirmed mark waits in the composer's
+  `data-unconfirmed-key` for either sending path. A pending resend transfers
+  it to its own form and clears the composer's mark; emptying the restored
+  text clears it and takes a fresh UUID.
+  Editing a known refusal clears any stale composer mark.
+  An unused key posts normally; a body matching the [retry rule](posting.md)
+  under a used key returns the stored message; a different body gets the pending 409 above.
+  Pending sends bypass prefix removal, the ordinary send alert, ordinary
+  failure classification and 409 cleanup.
 - **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
   the server fresh on the initial render, after success and with 409, kept
   on 422. Scoped by the server to the authorised membership; never in a
   stream payload. On a pending send the script replaces it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
+- **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
+  `data-state`, the composer's request class and #1179's failure alert. Queued, sending
+  and failed items hold reload; confirmed items do not. Retry success, Remove
+  or Edit can release it: Edit's restored text is a draft. Each dispatched
+  request has a 30 s timeout; queues, retries and failed text can extend the hold.
+- **Quote chip:** `#composer-quote-description` holds only the quoted author
+  and excerpt and stays present, empty, without a quote. Quote and Remove
+  quote focus the textarea after the chip swap; Quote closes its actions
+  popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
+  the existing resize observer preserves the reader on chip changes. Without
+  scripts both submit a GET with `#message-composer`; removal loses unsent text.
 - **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.

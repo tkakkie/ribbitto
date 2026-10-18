@@ -2,6 +2,7 @@ package conversationpg
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -52,8 +53,12 @@ func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, eve
 }
 
 // NewReader builds the page, single-message and batch use case over the pool.
+// Nil counts skips count work and its local statement budget.
 func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn, counts conversation.PageCountsIn) *conversation.Reader {
-	return conversation.NewReader(newSnapshotRunner(pool), readStoreIn, members, accounts, cursor, counts)
+	// Page and sidebar counts cap candidates, but fragmented read sets and
+	// above-floor filtering can scan history. Only these count snapshots need
+	// longer than the pool default; explicit URL statement timeouts still win.
+	return conversation.NewReader(newSnapshotRunner(pool), snapshotRunner{pool: pool, statementTimeout: time.Minute}, readStoreIn, members, accounts, cursor, counts)
 }
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
@@ -63,30 +68,37 @@ func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }
 
-// newTxRunner supplies the runner for channel creation, posting and branching
-// to own their transaction over pool.
+// commitLimit matches unread's five-second limit, leaving room within the
+// server's ten-second shutdown grace for a COMMIT or ROLLBACK to finish.
+const commitLimit = 5 * time.Second
+
+// newTxRunner supplies channel creation, posting, branching and pinning with
+// a bounded commit independent of request cancellation; fn still follows ctx.
 func newTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
 
 type txRunner struct{ pool *pgxpool.Pool }
 
 func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
-	return platform.InTx(ctx, r.pool, fn)
+	return platform.InTxDetachedCommit(ctx, r.pool, commitLimit, fn)
 }
 
 // writerIn returns posting's and branching's writes bound to the caller's
 // transaction; it is a conversation.WriterIn.
 func writerIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
 
-// newSnapshotRunner returns the snapshot runner the page snapshot, One and
-// Many own their read through, over pool.
+// newSnapshotRunner keeps bounded reads and posting validation on the session
+// budget, without an extra statement to configure it.
 func newSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
 	return snapshotRunner{pool: pool}
 }
 
-type snapshotRunner struct{ pool *pgxpool.Pool }
+type snapshotRunner struct {
+	pool             *pgxpool.Pool
+	statementTimeout time.Duration
+}
 
 func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error {
-	return platform.InSnapshot(ctx, r.pool, fn)
+	return platform.InSnapshotWithStatementTimeout(ctx, r.pool, r.statementTimeout, fn)
 }
 
 // readStoreIn returns conversation's reads bound to the caller's snapshot;

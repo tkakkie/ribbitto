@@ -73,6 +73,28 @@ func TestLockForRetentionBlocksEventSequence(t *testing.T) {
 	}))
 }
 
+func TestLockForRetentionBlocksRetention(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	id := orgtest.Organization(t, pool, "retention", "Retention", 1)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	requireNoError(t, platform.InTx(ctx, pool, func(holder platform.Tx) error {
+		requireNoError(t, postgres.RetentionBoundaryIn(holder).LockForRetention(ctx, id))
+		err := platform.InTx(ctx, pool, func(cleaner platform.Tx) error {
+			_, err := pgxbridge.Tx(cleaner).Exec(ctx, "SET LOCAL lock_timeout = '200ms'")
+			requireNoError(t, err)
+			return postgres.RetentionBoundaryIn(cleaner).LockForRetention(ctx, id)
+		})
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+			t.Fatalf("retention lock under retention lock = %v, want lock timeout (55P03)", err)
+		}
+		return nil
+	}))
+}
+
 func TestCommittedSequences(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

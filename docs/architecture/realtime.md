@@ -95,8 +95,10 @@ start) need not follow `seq` (#430); expired rows above that row wait for a
 later run. Each batch reads only the organisation's 1,000 lowest sequences
 under the lock and deletes the expired run at their start, so the work under
 the lock stays bounded. Each batch reads after acquiring the organisation lock,
-so concurrent cleaners see committed progress. That organisation's
-`event_seq` writers still wait; errors or the one-minute run timeout preserve all
+so concurrent cleaners see committed progress. Every update of that organisation's
+row still waits, including `event_seq` writes, `member_access_changed`'s
+`access_epoch` reset on member deletion or role change, and another cleaner's
+boundary raise; errors or the one-minute run timeout preserve all
 committed batches for the next hourly tick. Messages,
 their sequences and read state are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,

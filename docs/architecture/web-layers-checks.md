@@ -75,12 +75,12 @@ signed-in errors. `TestBrowser/drafts-org` checks both organisation pages
 (#1181): stale sessions keep newer/same-millisecond entries unread; later
 sessions or members remove earlier ones; malformed values and expired own
 sessions are removed. `TestDraftComposerPlace` checks latest/history attributes.
-`TestBrowser/drafts-save` gates debounce/reset/cancellation, monotonic edit time,
-flush, IME, tombstones, code points, equal/later edits, cap orders/ties,
-post-write trim and scope. Overlaps pin loss/recovery; cross-tab reads
-await unique storage markers.
-Cases cover sign-out stopping/cleanup, stale sessions, expiry guards, storage
-errors, typing/sending and 200/422 swaps.
+`TestBrowser/drafts-save` gates debounce/cancellation, edit times, lifecycle/IME,
+tombstones, bounds, cap ties, trim/scope, overlap loss/recovery, expiry,
+errors/swaps. Markers order cross-tab reads.
+Restore covers navigation, IME/pagehide, 422 precedence, ended sessions and no
+input/typing/focus. Held sends cover outcomes, edits, two-tab writes, queues and
+Retry with saved/unsaved/no newer text.
 
 ### Shared browser tests
 

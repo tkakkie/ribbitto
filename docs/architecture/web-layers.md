@@ -13,7 +13,7 @@ enhancement, not full parity.
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), local-time display, own-mention outlines,
-  pending own posts on feeds/topics and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
+  pending own posts on feeds/topics and drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
 
 ## Go handlers
@@ -58,9 +58,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v16.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v17.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
-  including after composer replacement; it never adds one.
+  including after composer replacement; it never adds one. Its textarea events
+  `message-sending` and `message-sent` bind draft snapshots and confirmation to
+  each send's idempotency identity ([contract](web-javascript.md#javascript)).
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
 - SSE uses explicit fragments shared with full-page rendering. `MessageItem`

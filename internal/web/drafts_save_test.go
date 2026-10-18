@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -86,10 +87,49 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	handler, _, _, place := composerHandler(t, true, setup)
 	feedHandler, _, _, _ := composerHandler(t, false, setup)
-	var noticeOnly atomic.Bool
+	var noticeOnly, holdPosts atomic.Bool
+	type postGate struct {
+		done     chan struct{}
+		requests chan pendingRequest
+	}
+	var gate atomic.Pointer[postGate]
+	stop := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/signin" {
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		}
+		if holdPosts.Load() && r.Method == "POST" && strings.Contains(r.URL.Path, "/channels/") && !strings.HasSuffix(r.URL.Path, "/typing") && !strings.HasSuffix(r.URL.Path, "/read") {
+			if err := r.ParseForm(); err != nil {
+				t.Error(err)
+				return
+			}
+			request := pendingRequest{r.PostForm, make(chan browserReply, 1)}
+			current := gate.Load()
+			select {
+			case current.requests <- request:
+			case <-current.done:
+				return
+			case <-stop:
+				return
+			case <-r.Context().Done():
+				return
+			}
+			select {
+			case reply := <-request.reply:
+				if reply.status == -1 {
+					conn, _, err := http.NewResponseController(w).Hijack()
+					if err == nil {
+						_ = conn.Close()
+					}
+				} else {
+					w.WriteHeader(reply.status)
+					_, _ = w.Write(reply.body)
+				}
+			case <-current.done:
+			case <-stop:
+			case <-r.Context().Done():
+			}
+			return
 		}
 		if noticeOnly.Load() && r.URL.Path == "/signout" {
 			// Even Chromium's response-header cleanup must not mask the
@@ -110,7 +150,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			feedHandler.ServeHTTP(w, r)
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(stop) })
 	step := func(t *testing.T, p *rod.Page, name string) *rod.Page {
 		t.Helper()
 		bounded := p.Timeout(3 * time.Second).WithPanic(func(v any) { t.Fatalf("%s: %v", name, v) })
@@ -153,7 +194,13 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    window.editNow = Date.now(); Date.now = () => editNow;
    const now = performance.now.bind(performance); window.elapsed = 0; performance.now = () => now() + elapsed;
    window.draftHidden = false; Object.defineProperty(document, 'hidden', {get: () => draftHidden});
-   Object.defineProperty(crypto, 'randomUUID', {value: undefined});
+   window.draftUUID = crypto.randomUUID?.bind(crypto); Object.defineProperty(crypto, 'randomUUID', {value: undefined, configurable:true});
+   window.sendEvents = []; window.sentEvents = []; window.restoreInputs = 0; window.typingRequests = 0;
+   document.addEventListener('message-sending', e => sendEvents.push(e.detail));
+   document.addEventListener('message-sent', e => sentEvents.push(e.detail));
+   document.addEventListener('input', e => { if (e.target.id === 'message-body') restoreInputs++; });
+   document.addEventListener('htmx:beforeRequest', e => { if (e.target.id === 'typing-form') typingRequests++; });
+   document.addEventListener('readystatechange', () => { if(document.readyState === 'interactive') window.restoreFocus = document.activeElement; });
    window.swaps = 0; window.signals = 0;
    document.addEventListener('htmx:afterSwap', e => { if (e.target.id === 'message-composer-state') window.swapStatus = e.detail.xhr.status; });
    document.addEventListener('htmx:afterSettle', e => { if (e.target.id === 'message-composer-state') swaps++; });
@@ -162,7 +209,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    window.edit = (text, at) => { editNow = at; const b = document.querySelector('#message-body'); b.value = text; b.dispatchEvent(new Event('input', {bubbles:true})); };
    window.flush = () => { draftHidden = true; document.dispatchEvent(new Event('visibilitychange')); draftHidden = false; };
    window.hide = () => dispatchEvent(new Event('pagehide'));
-   window.entry = () => JSON.parse(localStorage.getItem(draftKey));
+   window.scope = () => { const f=document.querySelector('#message-composer').dataset, p=document.querySelector('#organization-stream').dataset; return 'ribbitto.draft.v1:'+p.member+':'+p.session+':'+f.draftChannel+':'+(f.draftTopic || 'feed'); };
+   window.entry = () => JSON.parse(localStorage.getItem(scope()));
    window.snapshot = () => JSON.stringify(Object.entries(localStorage).sort());
   })();
 ` + inject)
@@ -172,8 +220,14 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		step(t, p, "navigate to composer").MustNavigate(server.URL + path)
 		step(t, p, "load composer").MustWaitLoad()
+		step(t, p, "await composer textarea").MustElement("#message-body")
 		eval(t, p, "read draft scope", `() => { const f = document.querySelector('#message-composer').dataset, p = document.querySelector('#organization-stream').dataset;
    window.draftKey = 'ribbitto.draft.v1:' + p.member + ':' + p.session + ':' + f.draftChannel + ':' + (f.draftTopic || 'feed'); }`)
+		if holdPosts.Load() {
+			current := &postGate{make(chan struct{}), make(chan pendingRequest, 8)}
+			gate.Store(current)
+			t.Cleanup(func() { close(current.done) })
+		}
 		return p
 	}
 	run := func(t *testing.T, p *rod.Page, code string) {
@@ -192,6 +246,213 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		step(t, to, "propagate storage snapshot").MustWait(`want => snapshot() === want`, want)
 		eval(t, from, "remove storage barrier", `key => localStorage.removeItem(key)`, marker)
 		step(t, to, "propagate barrier removal").MustWait(`key => localStorage.getItem(key) === null`, marker)
+	}
+
+	reload := func(t *testing.T, p *rod.Page, want string) {
+		t.Helper()
+		step(t, p, "reload composer").MustReload()
+		step(t, p, "load reloaded composer").MustWaitLoad()
+		step(t, p, "await restored textarea").MustWait(`want => document.querySelector('#message-body')?.value === want`, want)
+		run(t, p, `check(restoreInputs === 0 && typingRequests === 0 && document.activeElement === restoreFocus, 'restore fired input, typing or focus');`)
+	}
+	for _, mode := range []string{"reload", "switch", "compositionend", "pagehide", "plain-422", "deadline"} {
+		t.Run("restore/"+mode, func(t *testing.T) {
+			p := open(t, false, "")
+			run(t, p, `localStorage.clear(); edit('feed draft', editNow);`)
+			switch mode {
+			case "compositionend":
+				run(t, p, `const b=document.querySelector('#message-body'); b.dispatchEvent(new Event('compositionstart')); edit('日本', ++editNow); b.dispatchEvent(new Event('compositionend',{bubbles:true})); releaseDrafts();`)
+			case "pagehide":
+				run(t, p, `check(pendingDrafts()===1,'missing pending pagehide save'); hide(); check(entry().text==='feed draft','pagehide did not flush before pause');`)
+			default:
+				run(t, p, `releaseDrafts();`)
+			}
+			switch mode {
+			case "switch":
+				step(t, p, "switch to topic").MustNavigate(server.URL + view.ConversationURL("acme", place.Channel, &place.Topic))
+				step(t, p, "load topic").MustWaitLoad()
+				step(t, p, "await separate empty topic draft").MustWait(`() => document.querySelector('#message-body')?.value === ''`)
+				run(t, p, `edit('topic draft', ++editNow); releaseDrafts();`)
+				step(t, p, "switch back to feed").MustNavigate(server.URL + view.ChannelURL("acme", place.Channel))
+				step(t, p, "load feed").MustWaitLoad()
+				reload(t, p, "feed draft")
+				topic := open(t, true, "")
+				step(t, topic, "await separate restored topic draft").MustWait(`() => document.querySelector('#message-body')?.value === 'topic draft'`)
+			case "plain-422":
+				run(t, p, `const f=document.querySelector('#message-composer'); f.removeAttribute('hx-post'); document.querySelector('#message-body').value='invalid\u0001body';`)
+				nav := step(t, p, "submit plain invalid body")
+				wait := nav.WaitNavigation(proto.PageLifecycleEventNameLoad)
+				nav.MustEval(`() => document.querySelector('#message-composer').submit()`)
+				wait()
+				step(t, p, "await server-rendered body saved over draft").MustWait(`() => document.querySelector('#message-body')?.value === 'invalid\u0001body' && entry()?.text === 'invalid\u0001body'`)
+			case "deadline":
+				step(t, p, "install expired load clock").MustEvalOnNewDocument(`document.addEventListener('readystatechange', () => { if(document.readyState === 'interactive') elapsed=31*86400000; });`)
+				reload(t, p, "")
+			case "compositionend":
+				reload(t, p, "日本")
+			default:
+				reload(t, p, "feed draft")
+			}
+		})
+	}
+	// The server gate outlives navigation; each acquired request is released
+	// before page cleanup even on assertion failure. No CDP route owns a POST.
+	nextPost := func(t *testing.T) (pendingRequest, func(browserReply)) {
+		t.Helper()
+		select {
+		case req := <-gate.Load().requests:
+			var once sync.Once
+			release := func(reply browserReply) { once.Do(func() { req.reply <- reply }) }
+			t.Cleanup(func() { release(browserReply{status: 500}) })
+			return req, release
+		case <-time.After(3 * time.Second):
+			t.Fatal("await held composer POST")
+			return pendingRequest{}, nil
+		}
+	}
+	for _, pending := range []bool{false, true} {
+		for _, mode := range []string{"success", "422", "404", "429", "500", "network", "reload-held", "typing-success", "typing-failure", "tab-write", "composition"} {
+			t.Run(fmt.Sprintf("results/pending=%t/%s", pending, mode), func(t *testing.T) {
+				holdPosts.Store(true)
+				defer holdPosts.Store(false)
+				inject := ""
+				if pending {
+					inject = `Object.defineProperty(crypto,'randomUUID',{value:draftUUID});`
+				}
+				p := open(t, false, inject)
+				run(t, p, `localStorage.clear(); edit('A', editNow); releaseDrafts(); edit('B', ++editNow); document.querySelector('#message-composer').requestSubmit(); check(entry().text === 'B' && pendingDrafts() === 0 && sendEvents.length === 1 && sendEvents[0].body === 'B', 'send snapshot/event');`)
+				req, release := nextPost(t)
+				eval(t, p, "check send identity and path", `(key, pending) => check(sendEvents[0].key === key && sendEvents[0].inPlace === !pending, 'send key/path')`, req.values.Get("idempotency_key"), pending)
+				want, status := "", 200
+				switch mode {
+				case "422":
+					status = 422
+				case "404":
+					status = 404
+				case "429":
+					status = 429
+				case "500", "typing-failure":
+					status = 500
+				case "network":
+					status = -1
+				}
+				if status != 200 {
+					want = "B"
+				}
+				if strings.HasPrefix(mode, "typing-") || mode == "composition" {
+					if mode == "composition" {
+						run(t, p, `document.querySelector('#message-body').dispatchEvent(new Event('compositionstart',{bubbles:true}));`)
+					}
+					eval(t, p, "type during held send", `pending => edit(pending ? 'C' : 'BC', ++editNow)`, pending)
+					if mode != "composition" {
+						run(t, p, `releaseDrafts();`)
+					}
+					want = "C"
+					if status != 200 && !pending {
+						want = "BC"
+					}
+				}
+				if mode == "tab-write" {
+					other := open(t, false, "")
+					run(t, other, `edit('D', editNow+10000); releaseDrafts();`)
+					syncStorage(t, other, p)
+					want = "D"
+				}
+				if mode == "reload-held" {
+					reload(t, p, "B")
+					release(browserReply{status: 500})
+					return
+				}
+				reply := pendingAnswer(t, place.Channel)
+				if status != 200 {
+					reply = browserReply{status: status}
+					if status == 422 {
+						reply.body = []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{})))
+					}
+				}
+				release(reply)
+				step(t, p, "await send request completion").MustWait(`() => !document.querySelector('#message-composer.htmx-request') && !document.querySelector('[data-pending-form].htmx-request')`)
+				if mode == "composition" {
+					run(t, p, `check(sentEvents.length === 0 || sendEvents[0].inPlace === false, 'sent before composition removal'); document.querySelector('#message-body').dispatchEvent(new Event('compositionend',{bubbles:true})); releaseDrafts();`)
+				}
+				if status == 200 {
+					step(t, p, "await confirmation event").MustWait(`() => sentEvents.length === 1 && sentEvents[0].key === sendEvents[0].key && !!sentEvents[0].message`)
+				} else {
+					run(t, p, `check(sentEvents.length === 0, 'failure emitted success');`)
+				}
+				// Pending composition intentionally holds its own edit until compositionend.
+				run(t, p, `releaseDrafts();`)
+				step(t, p, "await result draft value").MustWait(`want => entry()?.text === want`, want)
+				reload(t, p, want)
+			})
+		}
+	}
+	for _, mode := range []string{"success", "failure", "reload-held", "save-pending", "unedited"} {
+		t.Run("retry/"+mode, func(t *testing.T) {
+			holdPosts.Store(true)
+			defer holdPosts.Store(false)
+			p := open(t, false, `Object.defineProperty(crypto,'randomUUID',{value:draftUUID});`)
+			run(t, p, `localStorage.clear(); edit('A',editNow); document.querySelector('#message-composer').requestSubmit();`)
+			first, release := nextPost(t)
+			release(browserReply{status: 500})
+			step(t, p, "await failed pending item").MustWait(`() => document.querySelector('[data-pending-form]')?.dataset.state === 'failed' && !document.querySelector('[data-pending-form].htmx-request')`)
+			want := "C"
+			if mode == "unedited" {
+				want = ""
+			} else {
+				run(t, p, `edit('C',++editNow);`)
+				if mode != "save-pending" {
+					run(t, p, `releaseDrafts();`)
+				}
+			}
+			step(t, p, "submit pending Retry").MustEval(`() => document.querySelector('[data-pending-form]').requestSubmit()`)
+			retry, release := nextPost(t)
+			if retry.values.Get("idempotency_key") != first.values.Get("idempotency_key") {
+				t.Fatal("Retry changed send identity")
+			}
+			run(t, p, `check(sendEvents.length === 1, 'Retry emitted message-sending'); releaseDrafts();`)
+			if mode == "reload-held" {
+				reload(t, p, want)
+				release(browserReply{status: 500})
+				return
+			}
+			reply := pendingAnswer(t, place.Channel)
+			if mode == "failure" {
+				reply = browserReply{status: 500}
+			}
+			release(reply)
+			step(t, p, "await Retry outcome").MustWait(`() => !document.querySelector('[data-pending-form].htmx-request')`)
+			step(t, p, "await Retry draft and textarea").MustWait(`want => entry()?.text === want && document.querySelector('#message-body').value === want`, want)
+			reload(t, p, want)
+		})
+	}
+
+	for _, success := range []bool{false, true} {
+		t.Run(fmt.Sprintf("queue/success=%t", success), func(t *testing.T) {
+			holdPosts.Store(true)
+			defer holdPosts.Store(false)
+			p := open(t, false, `Object.defineProperty(crypto,'randomUUID',{value:draftUUID});`)
+			run(t, p, `localStorage.clear(); edit('A',editNow); document.querySelector('#message-composer').requestSubmit();`)
+			first, releaseA := nextPost(t)
+			run(t, p, `edit('B',++editNow); document.querySelector('#message-composer').requestSubmit(); check(entry().text==='B','queued B snapshot');`)
+			releaseA(pendingAnswer(t, place.Channel))
+			second, releaseB := nextPost(t)
+			if first.values.Get("idempotency_key") == second.values.Get("idempotency_key") {
+				t.Fatal("queue reused send identity")
+			}
+			step(t, p, "await A confirmation retaining B").MustWait(`() => sentEvents.length===1 && sentEvents[0].key===sendEvents[0].key && entry()?.text==='B'`)
+			run(t, p, `document.querySelector('#message-body').dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:'unknown',message:'x'}})); check(entry().text==='B','unknown key cleared B');`)
+			copy := open(t, false, "")
+			reload(t, copy, "B")
+			want, reply := "B", browserReply{status: 500}
+			if success {
+				want = ""
+				reply = pendingAnswer(t, place.Channel)
+			}
+			releaseB(reply)
+			step(t, p, "await B result").MustWait(`() => !document.querySelector('[data-pending-form].htmx-request')`)
+			reload(t, p, want)
+		})
 	}
 	t.Run("saving", func(t *testing.T) {
 		p := open(t, false, "")
@@ -347,8 +608,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    releaseDrafts(); edit('after sign-out', editNow + 1); flush(); hide(); check(snapshot() === before && pendingDrafts() === 0, 'ended session wrote');`)
 	})
 	t.Run("sign-out cleanup", func(t *testing.T) {
-		p := open(t, false, "")
-		run(t, p, `localStorage.clear(); edit('ended session', editNow); flush();`)
+		p, other := open(t, false, ""), open(t, false, "")
+		run(t, other, `localStorage.clear(); edit('ended session', editNow); flush(); edit('pending at sign-out', ++editNow); window.notified=false; addEventListener('storage',e=>{if(e.key==='ribbitto.signed-out.v1') notified=true;});`)
 		signOut := step(t, p, "submit sign-out and load sign-in")
 		wait := signOut.WaitNavigation(proto.PageLifecycleEventNameLoad)
 		signOut.MustElement(`form[action="/signout"]`).MustEval(`function() { this.requestSubmit(); }`)
@@ -360,23 +621,38 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatal("sign-out did not reach sign-in")
 		}
 		run(t, p, `check(!Object.keys(localStorage).some(k => k.startsWith('ribbitto.draft.v1:')), 'sign-out cleanup');`)
+		step(t, other, "await sign-out notice in pending tab").MustWait(`() => notified`)
+		run(t, other, `releaseDrafts(); hide(); check(pendingDrafts()===0, 'sign-out left save pending');`)
+		previous := login.Load()
+		later := *previous
+		later.session = "019a1b2c-3d50-7000-8000-000000000000"
+		login.Store(&later)
+		defer login.Store(previous)
+		fresh := open(t, false, "")
+		reload(t, fresh, "")
 	})
-	t.Run("later session interleaving", func(t *testing.T) {
-		a := open(t, false, "")
-		run(t, a, `localStorage.clear(); edit('pending old session', editNow + 100);`)
-		next := *login.Load()
-		next.session = "019a1b2c-3d50-7000-8000-000000000000"
-		login.Store(&next)
-		t.Cleanup(func() {
-			login.Store(&draftsLogin{"08000000-0000-0000-0000-000000000000", session, time.Now().Add(30 * 24 * time.Hour)})
+	for _, oldFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("later session interleaving/old-first=%t", oldFirst), func(t *testing.T) {
+			a := open(t, false, "")
+			run(t, a, `localStorage.clear(); edit('pending old session', editNow + 100);`)
+			if oldFirst {
+				run(t, a, `releaseDrafts();`)
+			}
+			next := *login.Load()
+			next.session = "019a1b2c-3d50-7000-8000-000000000000"
+			login.Store(&next)
+			t.Cleanup(func() {
+				login.Store(&draftsLogin{"08000000-0000-0000-0000-000000000000", session, time.Now().Add(30 * 24 * time.Hour)})
+			})
+			b := open(t, false, "")
+			step(t, b, "await empty later-session composer").MustWait(`() => document.querySelector('#message-body')?.value === ''`)
+			run(t, a, `edit('pending old session', ++editNow); releaseDrafts(); check(entry().text === 'pending old session', 'stale write missing');`)
+			syncStorage(t, a, b)
+			step(t, b, "reload later session").MustNavigate(step(t, b, "read later-session URL").MustInfo().URL)
+			step(t, b, "load later session").MustWaitLoad()
+			run(t, b, `check(!Object.keys(localStorage).some(k => k.includes('`+session+`')) && document.querySelector('#message-body').value === '', 'later load restored stale entry');`)
 		})
-		b := open(t, false, "")
-		run(t, a, `releaseDrafts(); check(entry().text === 'pending old session', 'stale write missing');`)
-		syncStorage(t, a, b)
-		step(t, b, "reload later session").MustNavigate(step(t, b, "read later-session URL").MustInfo().URL)
-		step(t, b, "load later session").MustWaitLoad()
-		run(t, b, `check(!Object.keys(localStorage).some(k => k.includes('`+session+`')), 'later load kept stale entry');`)
-	})
+	}
 	t.Run("expiry", func(t *testing.T) {
 		p := open(t, false, "")
 		run(t, p, `localStorage.clear(); edit('saved', editNow); flush(); edit('pending', editNow + 1); elapsed = 31*86400000; expireDrafts();

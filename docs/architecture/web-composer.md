@@ -116,10 +116,10 @@ so do contexts without `crypto.randomUUID()`.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v3.js` cleans up (#1178, #1181), saves latest feed/topic
-input (#1186), never `?before=`/`?around=`. Restore, confirmed-send clearing
-(#1162) and sidebar markers (#1177) are planned. Sent text stays until
-edit or cleanup (decision 37's temporary plaintext copy).
+`message-drafts-v4.js` cleans up (#1178, #1181), saves (#1186) and restores
+feed/topic text (#1162), never history. Restore keeps focus and emits no
+input/typing; server-rendered text wins. See [send events](web-javascript.md#javascript).
+Sidebar markers (#1177) are planned; lost responses can leave posted drafts.
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
@@ -130,7 +130,7 @@ edit or cleanup (decision 37's temporary plaintext copy).
   `data-draft-topic`, outside state swaps. Snapshots use tab-monotonic edit
   times, never save times; 300 ms debounce, `pagehide`/hidden flush;
   wait for `compositionend`. Clean tabs never flush. Blank/over-limit input
-  and future clearing write empty-text tombstones at edit time,
+  and confirmed blank text write empty-text tombstones at edit time,
   never delete keys. Tombstones restore nothing, count toward 50,
   leave only by eviction, session end or retention.
 - **Races and cap:** pre-write reads skip equal/later stored edits, leaving

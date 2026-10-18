@@ -125,23 +125,22 @@ language too.
 
 ## Posting from the channel page
 
-Latest feeds/topics empty the composer into pending items (#1156, #1188, #1174,
-#1180). All states count toward 10 slots per tab; overflow keeps text with a notice.
-Delivery, move-out, Remove/Edit free slots; Retry reuses its slot.
-FIFO requests run one at a time and never overlap ordinary sends.
-Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
-Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
-success and same-key Retry preserve storage order.
-Edit restores text/key and uncertainty to an empty composer, focuses
+Latest feeds/topics empty the composer into pending items. All states count
+toward 10 slots per tab; overflow keeps text with a notice. Delivery, move-out,
+Remove/Edit free slots; Retry reuses its slot. FIFO requests never overlap
+ordinary sends. Not sent retries go last; unknown outcomes pause until same-key
+Retry succeeds, Remove or Edit. Remove/Edit allow late commits out of order;
+uninterrupted success and same-key Retry preserve storage order.
+Edit restores text/key and uncertainty to an empty composer outside IME, focuses
 its end and removes the item; otherwise it is disabled with a description.
-State swaps and refusals retain the key and uncertainty; emptying renews the
-key and clears uncertainty. Pending responses keep text; failures never swap it.
-Idle blank/over-limit sends, or without
-`crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
-(#1173); 422 keeps text and a field error. The textarea stays usable.
-The stream delivers real items and replay. Older/scriptless posts
-use 303 on success and full-page 422 errors. Organisation and channel resolve
-before posting; non-members get 404.
+Identity/uncertainty survive swaps and refusals until emptying renews the key.
+Pending responses and failures keep text.
+Idle blank/over-limit sends, or without `crypto.randomUUID()`, use the ordinary
+path: success removes the sent prefix; 422 keeps text and a field error. Older/scriptless posts use 303 on success and full-page 422 errors. Organisation and channel
+resolve before posting; non-members get 404.
+
+[Device drafts](../architecture/web-composer.md#drafts) restore per feed/topic
+within the session. Send confirmation preserves newer text; Retry never snapshots.
 
 Enter sends (except during IME); Shift+Enter adds a newline. Help names formatting.
 Pages start at newest; live delivery follows only at the bottom. The sender's

@@ -80,7 +80,7 @@ htmx sends resync requests. The markup contract is in
   and captures plain Enter/Tab before sending/navigation. Its token boundary mirrors posting;
   code checks are conservative. It suppresses IME keys and the 100 ms commit Enter,
   retaining textarea focus with listbox ARIA ([composer](web-composer.md#composer)).
-- `message-composer-v16.js` preserves the list's newest position or visible item
+- `message-composer-v17.js` preserves the list's newest position or visible item
   during [composer growth](../ui-composer.md), reveals the end caret after layout,
   and gives successful-post scrolling precedence. It closes Quote's popover and focuses the
   textarea after a chip swap. At `htmx:configRequest` it copies the native
@@ -89,11 +89,21 @@ htmx sends resync requests. The markup contract is in
   Composer submits pause while the quote form is processing, before either
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
-- `message-drafts-v3.js` saves composer input after 300 ms or lifecycle flush,
+- `message-drafts-v4.js` saves composer input after 300 ms or lifecycle flush,
   using the input's monotonic edit time. Blank/over-limit text writes tombstones;
   the 4,000-code-point/50-entry bounds apply from the first write. Equal/later
   stored edits win against the observed read; eviction is also best effort.
   Sign-out notices and the session deadline stop writes and cancel pending saves.
+  Restore reads only this member/session/place before the deadline, without
+  input, typing or focus events; a server-rendered body wins and is saved.
+  Bubbling `message-sending` on the textarea carries `{key, body, inPlace}`
+  before emptying; Retry emits none. It snapshots immediately and cancels debounce.
+  `message-sent` carries `{key, message}` after applying a posted-message state
+  and removing the ordinary sent prefix (after composition ends if needed).
+  This tab's unchanged last write can become current text or a tombstone:
+  the matching send's snapshot, or typing after that send when in place.
+  Later sends, pending-path edits and other tabs' writes survive; failures and
+  unknown keys do nothing.
   [Drafts](web-composer.md#drafts) defines the races and cleanup rules.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the

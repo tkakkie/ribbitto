@@ -20,7 +20,7 @@ enhancement, not full parity.
 
 Handlers in `internal/web` validate requests, call use cases, convert results
 to view models, and choose the status, component and full page or fragment. They never build HTML strings
-(`AGENTS.md`); plain-text responses such as `/healthz` are not HTML.
+(`AGENTS.md`); plain-text responses such as `/healthz` and `/readyz` are not HTML.
 
 ## templ
 

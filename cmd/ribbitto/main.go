@@ -134,6 +134,7 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
 		recountLimit:          limit,
 		authorizationCapacity: authorizationCapacity,
+		shuttingDown:          func() bool { return ctx.Err() != nil || lifetime.stopping.Load() },
 	})
 	if err != nil {
 		return err
@@ -248,6 +249,7 @@ func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http
 }
 
 type handlerConfig struct {
+	shuttingDown          func() bool
 	recountLimit          *realtime.RecountLimit
 	maxChannels           int32
 	authorizationCapacity int
@@ -328,6 +330,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
+		Database: pool, ShuttingDown: config.shuttingDown,
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:    setupService,

@@ -74,7 +74,7 @@ Outermost first:
    past it fails with `*http.MaxBytesError`, which handlers answer with 413;
    a route that answers without reading the body (a closed route's 404) is
    unaffected.
-3. On everything except `/static/` and `/healthz`: security headers
+3. On everything except `/static/`, `/healthz` and `/readyz`: security headers
    ([`rendering.md`](rendering.md#content-security-policy)), then i18n.
    `/static/` sets its own `nosniff` and restrictive CSP.
 4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
@@ -88,3 +88,11 @@ Outermost first:
    and the cookie is cleared; a store error answers 500 and keeps the
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
+
+`GET /healthz` is liveness: always 200 `ok`. `GET /readyz` checks readiness
+with a one-second database pool ping; failure, timeout, a missing pinger or
+shutdown returns 503 `unavailable`, without internal details. Both bypass
+sessions, authentication and rate limits and touch no organisation data.
+Readiness checks `Services.ShuttingDown` before and after the ping. Production
+wiring reads the signal context and the lifecycle's atomic stopping flag,
+set before stream cleanup or HTTP draining begins.

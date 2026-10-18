@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -38,6 +39,7 @@ func TestHandler(t *testing.T) {
 	}{
 		{"/", http.StatusOK},
 		{"/healthz", http.StatusOK},
+		{"/readyz", http.StatusServiceUnavailable},
 		{"/static/css/app.css", http.StatusOK},
 		{"/static/vendor/htmx-2.0.7.min.js", http.StatusOK},
 		{"/static/vendor/htmx-ext-sse-2.2.4.min.js", http.StatusOK},
@@ -65,6 +67,88 @@ func TestHandler(t *testing.T) {
 					t.Error("response differs from embedded asset")
 				}
 			}
+		})
+	}
+}
+
+type fakePinger func(context.Context) error
+
+func (p fakePinger) Ping(ctx context.Context) error { return p(ctx) }
+
+func TestReadiness(t *testing.T) {
+	for _, name := range []string{"success", "database down", "timeout", "late success", "shutdown", "shutdown during ping", "nil pinger", "canceled request"} {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopping, calls := name == "shutdown", 0
+				var pingContext context.Context
+				var database Pinger = fakePinger(func(ctx context.Context) error {
+					calls++
+					pingContext = ctx
+					deadline, ok := ctx.Deadline()
+					if !ok || deadline.After(time.Now().Add(time.Second)) {
+						t.Fatal("ping needs a timeout of at most one second")
+					}
+					switch name {
+					case "database down":
+						return errors.New("connection refused: sensitive connection details")
+					case "timeout", "canceled request":
+						<-ctx.Done()
+						return ctx.Err()
+					case "late success":
+						<-ctx.Done()
+					case "shutdown during ping":
+						stopping = true
+					}
+					return nil
+				})
+				if name == "nil pinger" {
+					database = nil
+				}
+				resolver := &countingResolver{}
+				catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				handler, err := NewHandler("", catalogues, testServices(func(s *Services) {
+					s.Database, s.ShuttingDown, s.Sessions = database, func() bool { return stopping }, resolver
+				}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, path := range []string{"/readyz", "/healthz"} {
+					r := httptest.NewRequest(http.MethodGet, path, nil)
+					r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "some-token"})
+					if name == "canceled request" {
+						ctx, cancel := context.WithCancel(r.Context())
+						cancel()
+						r = r.WithContext(ctx)
+					}
+					w := httptest.NewRecorder()
+					handler.ServeHTTP(w, r)
+					status, body := http.StatusOK, "ok\n"
+					if path == "/readyz" && name != "success" {
+						status, body = http.StatusServiceUnavailable, "unavailable\n"
+					}
+					if w.Code != status || w.Body.String() != body {
+						t.Errorf("%s: status = %d, body = %q; want %d, %q", path, w.Code, w.Body.String(), status, body)
+					}
+					for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Set-Cookie", "Vary", "Retry-After"} {
+						if value := w.Header().Get(header); value != "" {
+							t.Errorf("%s: unexpected %s = %q", path, header, value)
+						}
+					}
+				}
+				wantCalls := 1
+				if name == "shutdown" || name == "nil pinger" {
+					wantCalls = 0
+				}
+				if calls != wantCalls || resolver.calls != 0 {
+					t.Errorf("ping calls = %d, session lookups = %d; want %d, 0", calls, resolver.calls, wantCalls)
+				}
+				if pingContext != nil && pingContext.Err() == nil {
+					t.Error("ping context was not released")
+				}
+			})
 		})
 	}
 }
@@ -573,6 +657,7 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 		{http.MethodPost, "/", http.StatusMethodNotAllowed, 0},
 		// Routes outside the HTML middleware never look the session up.
 		{http.MethodGet, "/healthz", http.StatusOK, 0},
+		{http.MethodGet, "/readyz", http.StatusServiceUnavailable, 0},
 		{http.MethodGet, "/static/css/app.css", http.StatusOK, 0},
 		// A registered page does, so the outage shows as 500 there.
 		{http.MethodGet, "/", http.StatusInternalServerError, 1},

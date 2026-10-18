@@ -1,0 +1,52 @@
+package main
+
+import (
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+)
+
+func TestServeSchema(t *testing.T) {
+	// A later, unrelated startup error proves the schema check lets startup
+	// proceed without opening listeners or launching maintenance workers.
+	// Deliberately avoid depending on that error's text.
+	t.Setenv("RIBBITTO_DEV_ASSETS", t.TempDir()+"/missing")
+	for _, state := range []string{"never migrated", "behind", "equal", "ahead"} {
+		t.Run(state, func(t *testing.T) {
+			pool := pgtest.NewEmpty(t)
+			if state != "never migrated" {
+				m := pgtest.NewMigrator(t, pool)
+				m.Up(t.Context())
+				if state == "behind" {
+					m.Down(t.Context())
+				}
+				if state == "ahead" {
+					if _, err := pool.Exec(t.Context(), "INSERT INTO goose_db_version (version_id, is_applied) SELECT max(version_id) + 1, true FROM goose_db_version"); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			err := serve(t.Context(), schemaTestURL(t, pool))
+			if err == nil {
+				t.Fatal("serve succeeded, want a startup error")
+			}
+			wantMigration := state == "never migrated" || state == "behind"
+			if strings.Contains(err.Error(), "ribbitto migrate up") != wantMigration {
+				t.Fatalf("serve error = %v, want migration instruction: %t", err, wantMigration)
+			}
+		})
+	}
+}
+
+func schemaTestURL(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	databaseURL, err := url.Parse(pgtest.AdminURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	databaseURL.Path = "/" + pool.Config().ConnConfig.Database
+	return databaseURL.String()
+}

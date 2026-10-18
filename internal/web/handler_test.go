@@ -132,7 +132,7 @@ func TestReadiness(t *testing.T) {
 					if w.Code != status || w.Body.String() != body {
 						t.Errorf("%s: status = %d, body = %q; want %d, %q", path, w.Code, w.Body.String(), status, body)
 					}
-					for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Set-Cookie", "Vary", "Retry-After"} {
+					for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Cross-Origin-Opener-Policy", "Permissions-Policy", "Set-Cookie", "Vary", "Retry-After"} {
 						if value := w.Header().Get(header); value != "" {
 							t.Errorf("%s: unexpected %s = %q", path, header, value)
 						}
@@ -193,6 +193,11 @@ func TestStaticHeaders(t *testing.T) {
 				}
 				if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'; sandbox" {
 					t.Errorf("Content-Security-Policy = %q", got)
+				}
+				for _, header := range []string{"Cross-Origin-Opener-Policy", "Permissions-Policy"} {
+					if got := w.Header().Get(header); got != "" {
+						t.Errorf("unexpected %s = %q", header, got)
+					}
 				}
 				if tt.code == http.StatusMethodNotAllowed && w.Header().Get("Allow") != "GET, HEAD" {
 					t.Errorf("Allow = %q", w.Header().Get("Allow"))
@@ -383,9 +388,11 @@ func responseNonce(t *testing.T, w *httptest.ResponseRecorder) string {
 		t.Fatalf("nonce must encode 32 random bytes: %q (%v)", nonce, err)
 	}
 	for name, want := range map[string]string{
-		"Content-Security-Policy": "default-src 'self'; script-src 'nonce-" + nonce + "'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		"X-Content-Type-Options":  "nosniff",
-		"Referrer-Policy":         "same-origin",
+		"Content-Security-Policy":    "default-src 'self'; script-src 'nonce-" + nonce + "'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+		"X-Content-Type-Options":     "nosniff",
+		"Referrer-Policy":            "same-origin",
+		"Cross-Origin-Opener-Policy": "same-origin",
+		"Permissions-Policy":         "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 	} {
 		if got := w.Header().Get(name); got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)

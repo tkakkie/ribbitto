@@ -1,9 +1,9 @@
 # Packages and allowed imports
 
-Package responsibilities and allowed imports. See the [feature map](features.md)
-and [architecture index](README.md).
+Responsibilities and imports; see the [feature map](features.md) and
+[architecture index](README.md).
 
-**Keep current:** update this file with responsibility or import changes.
+**Keep current:** responsibilities and imports.
 
 `cmd/ribbitto` is the server composition root: it reads configuration,
 builds the concrete implementations and wires them together. `cmd/seed` is
@@ -42,7 +42,7 @@ library; Make asks it for the versioned paths and invokes it on first use.
 | Package | Responsibility | May import from this module |
 |---|---|---|
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
-| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`, which also migrates one to a version), and the opaque `Tx` and `Snapshot` with `InTx`, `InTxDetachedCommit` (a commit bounded by its own limit, not the request) and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
+| `internal/platform/postgres` | The pool, the migration connection, locked runner and startup schema check, statement counting for development metrics, test databases (`pgtest`, which also migrates one to a version), and the opaque `Tx` and `Snapshot` with `InTx`, `InTxDetachedCommit` (a commit bounded by its own limit, not the request) and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
 | `internal/identity` | The `identity` module's root: accounts, the email, password and display-name rules, password hashing, sessions, signing in and the display-name directory. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in, the snapshot-bound directory (`AccountsIn`) and the transaction-bound account creator (`AccountCreatorIn`). Named functions in the composition roots and web's tests adapt the creator to org's factory and prove that it fits `org.AccountCreator`. See [`docs/api/identity.txt`](../api/identity.txt) for identifiers. | [manifest](../../module_imports_test.go) |
 | `internal/realtime` | The `realtime` module's root, real-time delivery (M3): the hub's latest sequences, ephemeral generations and connection registry with process and per-account caps, the per-connection delivery loop, shared reads, the watermark check and event retention; presence and typing delivery are implemented. Declares the durable event types. Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). See [`docs/api/realtime.txt`](../api/realtime.txt) for identifiers. | [manifest](../../module_imports_test.go) |
 | `internal/org` | The `org` module: organisations, memberships, the **only** authorization logic, name/slug/handle rules and handle changes, member directory/search, `member.joined`, event sequence and cursor/retention bounds, transaction-owning setup and sign-up. Its store, `internal/org/internal/postgres`, runs `db/queries/org/` on its own `sqlcgen`; its wiring, `orgpg`, builds use cases and binds stores to callers' transactions or snapshots. See [`docs/api/org.txt`](../api/org.txt) for identifiers. `orgpg.EventCursorInTx` serves unread's feed transaction. `orgpg.SequenceIn` serves conversation's posting, branching and pinning transactions; `MembersIn` and `EventCursorIn` serve its snapshot. | [manifest](../../module_imports_test.go) |
@@ -54,8 +54,8 @@ library; Make asks it for the versioned paths and invokes it on first use.
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript, vendored JavaScript, SVG icons, brand images and channel illustrations. | — |
 
-A package's sub-packages may import each other, apart from the store,
-wiring and fixture rules. [Modules](modules.md) states the test-only
+Sub-packages may import each other, apart from the store, wiring and fixture
+rules. [Modules](modules.md) states the test-only
 fixture rule. The [module manifest and Go tests](../../module_imports_test.go)
 check module imports; depguard retains the other boundaries;
 [import checks](import-checks.md) lists those rules, fixture enforcement
@@ -95,11 +95,11 @@ flowchart LR
 conversation's root; conversation never imports unread in production
 ([dependencies](../dependencies.md)).
 
-Why this shape: the domain and the use cases stay testable without a
-database or HTTP; authorization lives in exactly one place, so a new
+The domain and use cases stay testable without a database or HTTP; authorization
+lives in exactly one place, so a new
 endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching the use cases.
 
 `serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
-uses goose's `database/sql` handle.
+uses goose's `database/sql` handle. Schema checks adapt the pool to goose's API.

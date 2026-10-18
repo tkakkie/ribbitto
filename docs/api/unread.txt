@@ -74,7 +74,7 @@ type Scope struct // Scope identifies one member's read state in one channel.
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
 type TopicCounter interface // TopicCounter counts messages through a snapshot-bound conversation API.
-  func (TopicCounter).CountWithFirstUnread(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, [][2]int64, *github.com/tkakkie/ribbitto/internal/kernel.ID, bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error)
+  func (TopicCounter).CountWithFirstUnread(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, []github.com/tkakkie/ribbitto/internal/conversation.SequenceRange, *github.com/tkakkie/ribbitto/internal/kernel.ID, bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error)
 type TopicCounterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) TopicCounter // TopicCounterIn binds topic counts to the caller's snapshot.
 type TopicCounts struct // TopicCounts combines topic state and message counts in two snapshot statements.
   func (*TopicCounts).Read(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, scope Scope, joined int64, listed []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // Read returns capped counts and the selected topic's uncapped first unread sequence (zero if none).
@@ -87,7 +87,7 @@ type TopicRead func(context.Context, github.com/tkakkie/ribbitto/internal/platfo
 type TopicReadState struct // TopicReadState contains the prefix end, read ranges above it and topic floors.
   field Floors map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Prefix int64
-  field Ranges []Range
+  field Ranges []github.com/tkakkie/ribbitto/internal/conversation.SequenceRange
 type TopicScope struct // TopicScope identifies one topic within a member's channel read state.
   field Scope Scope
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID

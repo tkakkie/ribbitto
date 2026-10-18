@@ -34,8 +34,8 @@ default-src 'self'; script-src 'nonce-<nonce>'; style-src 'self'; img-src 'self'
 There is no `'self'` in `script-src`: even same-origin external scripts
 require the response's nonce. This is defence in depth against HTML
 injection. HTML responses also send `X-Content-Type-Options: nosniff` and
-`Referrer-Policy: same-origin`; `/static/` and `/healthz` bypass this
-middleware. The static handler sends its own `X-Content-Type-Options: nosniff`
+`Referrer-Policy: same-origin`; `/static/`, `/healthz` and `/readyz` bypass it.
+The static handler sends `X-Content-Type-Options: nosniff`
 and `Content-Security-Policy: default-src 'none'; sandbox` on every response,
 found or not, including the explicit 405 (`Allow: GET, HEAD`) for any other
 method (#937): an SVG opened directly is a document on this origin, so

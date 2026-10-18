@@ -23,6 +23,8 @@ import (
 
 // Services are the use cases the handlers call.
 type Services struct {
+	Database      Pinger       // nil: readiness answers 503
+	ShuttingDown  func() bool  // nil: no shutdown signal (tests)
 	MemberSearch  MemberSearch // nil: mention candidates answer 404
 	MentionLimits *middleware.MemberRateLimiter
 	Typing        *typing.State
@@ -157,6 +159,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
+	mux.HandleFunc("GET /readyz", readiness(services.Database, services.ShuttingDown))
 	// Every method reaches this handler, so even a refusal carries the
 	// static headers; the method check is explicit rather than left to the
 	// file server.

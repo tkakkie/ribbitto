@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -52,7 +53,7 @@ func (r topicStateReader) Read(ctx context.Context, scope unread.Scope, joined i
 			if row.Value == 0 {
 				state.Prefix = row.Hi
 			} else {
-				state.Ranges = append(state.Ranges, unread.Range{Lo: row.Value, Hi: row.Hi})
+				state.Ranges = append(state.Ranges, conversation.SequenceRange{Lo: row.Value, Hi: row.Hi})
 			}
 		} else {
 			state.Floors[ids[row.TopicN-1].Bytes] = row.Value

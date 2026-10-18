@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -18,6 +19,7 @@ type shutdownServer interface {
 // Its context deliberately outlives the signal context: streams must receive
 // ErrShutdown before service cancellation can race their request contexts.
 type serviceLifecycle struct {
+	stopping    atomic.Bool
 	ctx         context.Context
 	cancel      context.CancelFunc
 	stopStreams func()
@@ -36,6 +38,7 @@ func newServiceLifecycle(parent context.Context, hub *realtime.Hub, closePool fu
 }
 
 func (l *serviceLifecycle) close() error {
+	l.stopping.Store(true)
 	l.stopStreams()
 	l.cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), l.grace)

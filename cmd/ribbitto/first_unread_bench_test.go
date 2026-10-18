@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -93,16 +94,16 @@ func TestFirstUnreadBench(t *testing.T) {
  SELECT $1,$2,$3,$4,'other',s FROM generate_series($5::bigint,$5::bigint+1999) s`, f.OrganizationID, f.Channel.ID, id, f.MemberID, tc.history*3+int64(i)*2000)
 			}
 			exec("ANALYZE message")
-			read := [][2]int64{{start + 1, start + 1000}}
+			read := []conversation.SequenceRange{{Lo: start + 1, Hi: start + 1000}}
 			switch tc.name {
 			case "no-moves", "all-unread", "early-unread", "dense-moves":
 				read = nil
 			case "all-read":
-				read = [][2]int64{{start, start + 1000}}
+				read = []conversation.SequenceRange{{Lo: start, Hi: start + 1000}}
 			case "fragmented":
 				read = nil
 				for i := int64(0); i < 10000; i++ {
-					read = append(read, [2]int64{2 + i*2, 3 + i*2})
+					read = append(read, conversation.SequenceRange{Lo: 2 + i*2, Hi: 3 + i*2})
 				}
 			}
 			floors := make([]int64, len(ids))

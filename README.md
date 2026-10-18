@@ -40,7 +40,7 @@ set -a; . ./.env; set +a    # export configuration; the binary does not load .en
 make db-up                 # starts PostgreSQL and waits for health
 make migrate               # DIRECTION=up|down|status
 make seed ARGS='-messages 100' # optional development fixtures
-go run ./cmd/ribbitto       # http://localhost:8080; health at /healthz
+go run ./cmd/ribbitto       # http://localhost:8080; readiness at /readyz, liveness at /healthz
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
@@ -50,6 +50,10 @@ make deps                  # regenerates docs/dependencies.md after an import ch
 make api                   # regenerates docs/api/ after a module API or doc-comment change
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
+
+Use `/readyz` for a readiness healthcheck: it pings PostgreSQL with a one-second
+timeout and returns 503 if unavailable or shutting down. Use `/healthz` for
+liveness; it always returns 200 while the process can answer requests.
 
 For parallel worktrees, optionally run `make ai-env` after `make db-up`.
 It migrates a separate dev database and allocates app/metrics ports in
@@ -132,7 +136,7 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 docs or `make vuln`, which CI runs separately.
 
 The Argon launcher's Go tests run with the other command tests in
-`make check`. CI also runs
+`make check`. CI's separate `vuln` job runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

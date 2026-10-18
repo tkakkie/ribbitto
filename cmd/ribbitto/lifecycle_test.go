@@ -5,13 +5,13 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"testing/synctest"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -124,6 +124,7 @@ func (s recordingShutdown) Shutdown(context.Context) error { s.record("http"); r
 func (s recordingShutdown) Close() error                   { s.record("forced"); return nil }
 
 func TestServeFailureCleanupOrder(t *testing.T) {
+	url := pgtest.AdminURL(t)
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +151,7 @@ func TestServeFailureCleanupOrder(t *testing.T) {
 			}
 			var order []string
 			record := func(step string) { order = append(order, step) }
-			err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
+			err := serveWithLifecycle(ctx, url, func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
 				l := newServiceLifecycle(ctx, hub, func() { record("pool"); closePool() })
 				if failure == "normal shutdown" {
 					cancel()
@@ -178,6 +179,7 @@ func (s failedShutdown) Shutdown(context.Context) error { return s.err }
 func (s failedShutdown) Close() error                   { return nil }
 
 func TestServeCollectsServerFailures(t *testing.T) {
+	url := pgtest.AdminURL(t)
 	for _, failed := range []string{"application", "metrics", "both"} {
 		for _, trigger := range []string{"failure", "signal ready", "signal wins", "startup failure", "shutdown failure"} {
 			t.Run(failed+"/"+trigger, func(t *testing.T) {
@@ -191,7 +193,7 @@ func TestServeCollectsServerFailures(t *testing.T) {
 				defer cancel()
 				failures := map[string]error{"application": errors.New("application failed"), "metrics": errors.New("metrics failed")}
 				shutdownErr := errors.New("shutdown failed")
-				err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
+				err := serveWithLifecycle(ctx, url, func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
 					l := newServiceLifecycle(ctx, hub, closePool)
 					if trigger == "shutdown failure" {
 						l.servers = append(l.servers, failedShutdown{shutdownErr})

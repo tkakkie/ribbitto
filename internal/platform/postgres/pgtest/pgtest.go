@@ -97,15 +97,33 @@ func (m *Migrator) require(err error, format string, args ...any) {
 	}
 }
 
-func adminConnection(t *testing.T) *pgx.Conn {
+// AdminURL returns RIBBITTO_TEST_DATABASE_URL, skipping when it is unset.
+// RIBBITTO_REQUIRE_DB=1 makes an unset URL fail, so CI cannot silently skip
+// database tests. A set but empty value always fails the test.
+func AdminURL(t *testing.T) string {
 	t.Helper()
 	url, set := os.LookupEnv("RIBBITTO_TEST_DATABASE_URL")
-	if !set && os.Getenv("RIBBITTO_REQUIRE_DB") != "1" {
+	url, skip, err := resolveAdminURL(url, set, os.Getenv("RIBBITTO_REQUIRE_DB"))
+	if skip {
 		t.Skip("RIBBITTO_TEST_DATABASE_URL is unset")
 	}
-	if url == "" {
-		t.Fatal("RIBBITTO_TEST_DATABASE_URL must be set and nonempty")
+	require(t, err)
+	return url
+}
+
+func resolveAdminURL(url string, set bool, requireDB string) (string, bool, error) {
+	if !set && requireDB != "1" {
+		return "", true, nil
 	}
+	if url == "" {
+		return "", false, fmt.Errorf("RIBBITTO_TEST_DATABASE_URL must be set and nonempty")
+	}
+	return url, false, nil
+}
+
+func adminConnection(t *testing.T) *pgx.Conn {
+	t.Helper()
+	url := AdminURL(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	conn, err := pgx.Connect(ctx, url)

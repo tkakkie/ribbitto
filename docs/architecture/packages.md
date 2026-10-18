@@ -14,13 +14,14 @@ authorization and history reads for a load run's expected messages. It never
 imports `db/migrations`; the database must already be migrated.
 `cmd/loadgen` is a development-only HTTP client and run-file comparator; it imports no application
 packages. See [load client](load-client.md) for limits and usage.
-`cmd/devdb` is a development-only database helper for worktree configuration
-and capacity observation through `bin/ai-db --observe`, used by `cmd/capacity`.
-It imports only `internal/platform/postgres` from
-this module to reuse the migration runner; credentials stay in the environment.
+`cmd/devdb` configures worktree databases and observes capacity through
+`bin/ai-db --observe` for `cmd/capacity`. It imports
+`internal/platform/postgres` for migrations; its tests use
+`internal/platform/postgres/pgtest` for the admin URL rule. Credentials stay in
+the environment.
 `cmd/capacity` runs two uncached required-DB checks and cleans up their sessions.
-It imports only `internal/platform/postgres/pgtest` from this module to report
-`pgtest.MaxConns`; it does not configure pools.
+It imports only `internal/platform/postgres/pgtest` for `pgtest.MaxConns`
+and the tests' admin URL rule; it does not configure pools.
 `cmd/dev` supervises the Tailwind and templ watchers in separate sessions,
 including templ's server in another process group, and confirms descendant
 cleanup on shutdown. It imports no application packages; `bin/ai-db run`

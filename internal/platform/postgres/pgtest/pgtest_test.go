@@ -12,6 +12,37 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func TestResolveAdminURL(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		url       string
+		set       bool
+		requireDB string
+		wantURL   string
+		wantSkip  bool
+		wantError string
+	}{
+		{name: "unset", wantSkip: true},
+		{name: "unset not required", requireDB: "0", wantSkip: true},
+		{name: "unset required", requireDB: "1", wantError: "RIBBITTO_TEST_DATABASE_URL must be set and nonempty"},
+		{name: "empty", set: true, wantError: "RIBBITTO_TEST_DATABASE_URL must be set and nonempty"},
+		{name: "empty required", set: true, requireDB: "1", wantError: "RIBBITTO_TEST_DATABASE_URL must be set and nonempty"},
+		{name: "configured", url: "configured-admin-url", set: true, wantURL: "configured-admin-url"},
+		{name: "configured required", url: "configured-admin-url", set: true, requireDB: "1", wantURL: "configured-admin-url"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			url, skip, err := resolveAdminURL(tc.url, tc.set, tc.requireDB)
+			message := ""
+			if err != nil {
+				message = err.Error()
+			}
+			if url != tc.wantURL || skip != tc.wantSkip || message != tc.wantError {
+				t.Fatalf("resolveAdminURL() = (%q, %t, %q), want (%q, %t, %q)", url, skip, message, tc.wantURL, tc.wantSkip, tc.wantError)
+			}
+		})
+	}
+}
+
 func TestIsolationAndCleanup(t *testing.T) {
 	admin := adminConnection(t)
 	names := make(chan string, 2)

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -29,7 +30,7 @@ func TestTopicState(t *testing.T) {
 			if stored {
 				seedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}})
 				seedFloor(t, pool, scope, selected, 18)
-				want.Prefix, want.Ranges = 11, []unread.Range{{Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}}
+				want.Prefix, want.Ranges = 11, []conversation.SequenceRange{{Lo: 12, Hi: 13}, {Lo: 14, Hi: 16}}
 				want.Floors = map[kernel.ID]int64{a: 10, b: 10, selected: 18}
 			}
 			require(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {

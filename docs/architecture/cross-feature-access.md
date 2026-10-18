@@ -124,7 +124,16 @@ so the upper bound is its sequence plus one. Org's resolved membership carries
 the persisted join sequence. The adapter calls `Writer.Merge` after the notice
 insert and before its event append, on the branching transaction. Only the
 brancher's notice is added; moved messages and other members' read sets stay put.
-No module imports the other or queries its tables.
+The manifest allows unread's root, store and wiring to import conversation's
+root only, never its children, store, wiring, fixture package or org.
+Conversation's production packages never import unread. These boundaries are
+checked by `TestUnreadConversationImports` and `TestConversationDoesNotImportUnread`.
+Unread's store uses conversation's root for value types only by convention,
+checked in review. Neither module queries the other's tables.
+Consumer-owned interfaces and injected factories preserve these boundaries
+(decision 27, amended through #1303). Topic counts accept
+`conversation.SequenceRange`; `unread.Range` remains for write paths and
+channel gaps, with migration and adapter removal tracked in #1303.
 
 Posting from a page uses conversation's `PostReadWriterIn`, injected by
 the composition root. After taking org's sequence, `PostFromPage`

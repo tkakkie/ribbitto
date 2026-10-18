@@ -3,6 +3,7 @@ package unread
 import (
 	"context"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -11,7 +12,7 @@ import (
 // A topic without a stored floor has floor Prefix - 1.
 type TopicReadState struct {
 	Prefix int64
-	Ranges []Range
+	Ranges []conversation.SequenceRange
 	Floors map[kernel.ID]int64
 }
 

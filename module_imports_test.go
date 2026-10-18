@@ -31,7 +31,7 @@ func moduleManifest() []module {
 			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message"}},
 		{root: "internal/presence", mayImport: []string{"realtime"}, ownsTables: []string{}},
 		{root: "internal/typing", mayImport: []string{"realtime"}, ownsTables: []string{}},
-		{root: "internal/unread", store: "internal/unread/internal/postgres", wiring: "internal/unread/unreadpg", ownsTables: []string{"channel_read", "read_range", "topic_read_floor"}},
+		{root: "internal/unread", store: "internal/unread/internal/postgres", wiring: "internal/unread/unreadpg", mayImport: []string{"conversation"}, ownsTables: []string{"channel_read", "read_range", "topic_read_floor"}},
 	}
 }
 
@@ -290,6 +290,54 @@ func TestModuleImportFixtures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestUnreadConversationImports(t *testing.T) {
+	modules := moduleManifest()
+	for _, from := range []string{"internal/unread", "internal/unread/internal/postgres", "internal/unread/unreadpg"} {
+		t.Run(from, func(t *testing.T) {
+			if !importAllowed(modules, from, "source.go", "internal/conversation") {
+				t.Fatal("unread must be allowed to import conversation's root")
+			}
+			for _, to := range []string{
+				"internal/conversation/child",
+				"internal/conversation/internal/postgres",
+				"internal/conversation/internal/postgres/sqlcgen",
+				"internal/conversation/conversationpg",
+				"internal/conversation/conversationpg/child",
+				"internal/conversation/conversationtest",
+				"internal/org",
+			} {
+				if importAllowed(modules, from, "source.go", to) {
+					t.Errorf("forbidden import %s", to)
+				}
+			}
+		})
+	}
+	for _, from := range []string{"internal/conversation", "internal/conversation/internal/postgres", "internal/conversation/internal/postgres/sqlcgen", "internal/conversation/conversationpg", "internal/conversation/conversationtest", "internal/conversation/child"} {
+		if importAllowed(modules, from, "source.go", "internal/unread") {
+			t.Errorf("%s must not import unread", from)
+		}
+	}
+}
+
+func TestConversationDoesNotImportUnread(t *testing.T) {
+	// External tests may wire unread into conversation's consumer interfaces;
+	// production packages must stay acyclic, even if the manifest is relaxed.
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedImports}, "./internal/conversation/...")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) == 0 || packages.PrintErrors(pkgs) != 0 {
+		t.Fatal("loading conversation packages")
+	}
+	for _, pkg := range pkgs {
+		for path := range pkg.Imports {
+			if within(path, "github.com/tkakkie/ribbitto/internal/unread") {
+				t.Errorf("%s: forbidden reverse import %s", pkg.PkgPath, path)
+			}
+		}
 	}
 }
 

@@ -85,13 +85,15 @@ flowchart LR
   store --> identity & platform & kernel
   presence[internal/presence] --> kernel & realtime
   typing[internal/typing] --> kernel & realtime
-  unread[internal/unread] --> kernel & platform
+  unread[internal/unread] --> conversation & kernel & platform
   unreadpg[unread/unreadpg] --> unread & ustore[unread/internal/postgres] & platform
-  ustore --> unread & platform & kernel
+  ustore --> unread & conversation & platform & kernel
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 
-The diagram illustrates selected dependencies; the [manifest](../../module_imports_test.go) governs module imports; [`docs/dependencies.md`](../dependencies.md) lists the actual ones.
+[Manifest](../../module_imports_test.go) lets unread import only
+conversation's root; conversation never imports unread in production
+([dependencies](../dependencies.md)).
 
 Why this shape: the domain and the use cases stay testable without a
 database or HTTP; authorization lives in exactly one place, so a new

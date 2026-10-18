@@ -104,15 +104,14 @@ func agyEnvironment(parent []string, home, tmp string) []string {
 		if !ok {
 			continue
 		}
-		switch {
-		case name == "PATH": // agy and its sandbox helpers need executable lookup.
+		switch name {
+		case "PATH": // agy and its sandbox helpers need executable lookup.
 			env = append(env, value)
-		case name == "LANG", name == "LC_ALL", name == "LC_COLLATE", name == "LC_CTYPE",
-			name == "LC_MESSAGES", name == "LC_MONETARY", name == "LC_NUMERIC", name == "LC_TIME",
-			name == "LC_ADDRESS", name == "LC_IDENTIFICATION", name == "LC_MEASUREMENT",
-			name == "LC_NAME", name == "LC_PAPER", name == "LC_TELEPHONE": // Preserve POSIX/glibc locale selection.
+		case "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC",
+			"LC_TIME", "LC_ADDRESS", "LC_IDENTIFICATION", "LC_MEASUREMENT", "LC_NAME", "LC_PAPER",
+			"LC_TELEPHONE": // Preserve POSIX/glibc locale selection.
 			env = append(env, value)
-		case name == "USER", name == "LOGNAME": // macOS keychain fallback needs the account name.
+		case "USER", "LOGNAME": // macOS keychain fallback needs the account name.
 			env = append(env, value)
 		}
 	}

@@ -3,8 +3,10 @@ package conversationpg_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,8 +16,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
-// commitTrace cancels at COMMIT's entry, after the use case's callback has
-// succeeded. The transaction's writes must still use the request context.
+// commitTrace hooks COMMIT after the use case's callback has succeeded.
 type commitTrace func(*pgx.Conn)
 
 func (f commitTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
@@ -32,40 +33,62 @@ func TestPostingCommitCancellation(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		unknown bool
+		stall   string
 	}{
-		{name: "confirmed commit raises once"},
-		{name: "unknown commit does not raise", unknown: true},
+		{name: "confirmed commit raises once", stall: "0.5"},
+		{name: "unknown commit does not raise", unknown: true, stall: "30"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := pgtest.New(t)
 			acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
-			if tc.unknown {
-				// Like the platform runner tests, stall COMMIT in a deferred
-				// trigger until the detached limit expires without a reply.
-				_, err := pool.Exec(t.Context(), `CREATE FUNCTION stall_commit() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN PERFORM pg_sleep(30); RETURN NULL; END $$;
+			check, stop := context.WithTimeout(t.Context(), 10*time.Second)
+			defer stop()
+			// Cancel while the server is finishing COMMIT: the short stall
+			// permits confirmation; the long one outlasts the detached limit.
+			// pgx also sends a server cancel during timeout cleanup. Only the
+			// confirmed probe tolerates it, so the old runner still stores a row.
+			_, err := pool.Exec(check, fmt.Sprintf(`CREATE FUNCTION stall_commit() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_sleep(%s);
+  RETURN NULL;
+EXCEPTION WHEN query_canceled THEN
+  IF %t THEN RAISE; END IF;
+  RETURN NULL;
+END $$;
 CREATE CONSTRAINT TRIGGER stall_commit AFTER INSERT ON message
-DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stall_commit();`)
-				requireNoError(t, err)
-			}
-			ctx, cancel := context.WithCancel(t.Context())
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stall_commit();`, tc.stall, tc.unknown))
+			requireNoError(t, err)
+			ctx, cancel := context.WithCancel(check)
 			defer cancel()
 			var pid uint32
+			var timer *time.Timer
+			defer func() {
+				if timer != nil {
+					timer.Stop()
+				}
+			}()
 			commits := 0
 			config := pool.Config()
 			config.ConnConfig.Tracer = commitTrace(func(conn *pgx.Conn) {
 				pid = conn.PgConn().PID()
 				commits++
-				cancel()
+				if tc.unknown {
+					cancel()
+				} else {
+					// Entry cancellation would stop the old runner sending COMMIT.
+					timer = time.AfterFunc(100*time.Millisecond, cancel)
+				}
 			})
-			traced, err := pgxpool.NewWithConfig(t.Context(), config)
+			traced, err := pgxpool.NewWithConfig(check, config)
 			requireNoError(t, err)
 			t.Cleanup(traced.Close)
 			// End the stalled transaction before pgtest drops its database;
 			// the server may still be running after pgx closes its connection.
 			t.Cleanup(func() {
 				if tc.unknown && pid != 0 {
-					_, err := pool.Exec(context.Background(), "SELECT pg_terminate_backend($1)", pid)
+					cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_, err := pool.Exec(cleanup, "SELECT pg_terminate_backend($1)", pid)
 					requireNoError(t, err)
 				}
 			})
@@ -84,8 +107,12 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stall_commit();`)
 				}
 				return
 			}
+			// The old runner returns before the server finishes. Wait for its
+			// sequence lock to release before checking whether the row exists.
+			_, waitErr := pool.Exec(check, "SELECT 1 FROM organization WHERE id = $1 FOR UPDATE", acme.OrganizationID)
+			requireNoError(t, waitErr)
 			var messages int
-			requireNoError(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM message WHERE organization_id = $1", acme.OrganizationID).Scan(&messages))
+			requireNoError(t, pool.QueryRow(check, "SELECT count(*) FROM message WHERE organization_id = $1", acme.OrganizationID).Scan(&messages))
 			if err != nil || messages != 1 || posted.EventSeq != 2 {
 				t.Errorf("post after cancellation: error=%v, messages=%d, sequence=%d; want success, 1, 2", err, messages, posted.EventSeq)
 			}

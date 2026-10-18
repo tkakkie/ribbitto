@@ -18,7 +18,7 @@ func TestTypedBodyProofMigration(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "proof", "general")
 	_, err := pool.Exec(ctx, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'legacy', 1)", f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID)
 	requireNoError(t, err)
-	migrator.Up(ctx)
+	migrator.UpTo(ctx, 19)
 	var missing bool
 	requireNoError(t, pool.QueryRow(ctx, "SELECT typed_body_proof IS NULL FROM message").Scan(&missing))
 	if !missing {
@@ -37,7 +37,7 @@ func TestTypedBodyProofMigration(t *testing.T) {
 	if present {
 		t.Fatal("down kept typed_body_proof")
 	}
-	migrator.Up(ctx)
+	migrator.UpTo(ctx, 19)
 	requireNoError(t, pool.QueryRow(ctx, "SELECT typed_body_proof IS NULL FROM message").Scan(&missing))
 	if !missing {
 		t.Fatal("up invented proof")

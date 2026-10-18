@@ -69,5 +69,5 @@ topic and the conflict rule must be decided together. Ordinary branching
 still follows [topics](topics.md#branching).
 
 Cross-channel replies are out of scope. Reply notifications belong with
-mentions (#117). Editing and deleting messages are separate work; this
+mentions (future notification work). Editing and deleting messages are separate work; this
 decision specifies only the placeholder once deletion exists.

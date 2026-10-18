@@ -30,6 +30,10 @@ columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail.
 
+Org's `ListSearchMembers` reads only `member`, with `WHERE organization_id = $1
+ORDER BY handle` using the existing `(organization_id, handle)` unique index.
+Search resolves display names through identity's directory, without a foreign join.
+
 Plain INSERT VALUES and INSERT SELECT with at most one source pass:
 a same-statement CTE or a FROM `unnest` of parameters (below). Each joined
 table needs its scope. INSERT refuses subqueries in VALUES, RETURNING or SELECT,

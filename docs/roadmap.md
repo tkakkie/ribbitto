@@ -146,7 +146,7 @@ old one. Roughly in this order:
    - *Composer:* reliable sending (no duplicate posts, the text kept when
      sending fails, the sending state and the post shown before the
      server answers) → an input that grows and a send-key setting →
-     mentions (#117) → links to one message → quoting, including a
+     mentions (#117, #1310–#1313) → links to one message → quoting, including a
      selection → device drafts (#1162; #88 cross-device).
 3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
    (#880; rules agreed, implementation after M6), reply chains

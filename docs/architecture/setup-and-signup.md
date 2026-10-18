@@ -52,7 +52,7 @@ to `/` with 303. Setup and sign-in share the process's single password hasher.
 display name, handle, email and password keep their rules and keys; setup also
 validates organisation name and slug. Both flows share the store mapping for
 invalid email and handle. Each flow checks its gate, then every
-field, then hashes. `SignUp.Open` gates registration and the sign-in link on
+field, then hashes the NFC password returned by identity validation. `SignUp.Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
 the process hasher. Through the injected `TxRunner`, the root owns one
 transaction: read the setup organisation, take its sequence first, create

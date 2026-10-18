@@ -20,17 +20,26 @@ var ErrInvalidCredentials = errors.New("invalid email or password")
 // ErrNoAccount is what an AccountStore returns for an unknown email.
 var ErrNoAccount = errors.New("no such account")
 
-// AccountStore finds accounts for signing in.
+// AccountStore finds accounts and migrates legacy password hashes at sign-in.
 type AccountStore interface {
 	// AccountCredentials returns the ID and stored password hash of the
 	// account with this normalised email, or ErrNoAccount.
 	AccountCredentials(ctx context.Context, email string) (accountID kernel.ID, passwordHash string, err error)
+	// RehashPassword replaces oldHash only if it is still current. A stale
+	// hash is a no-op, so concurrent credential changes are never overwritten.
+	RehashPassword(ctx context.Context, accountID kernel.ID, oldHash, newHash string) error
+}
+
+type signInHasher interface {
+	Hash(context.Context, string) (string, error)
+	Verify(context.Context, string, string) (bool, error)
+	verifyDummy(context.Context, string) error
 }
 
 // SignIn signs accounts in and out.
 type SignIn struct {
 	accounts AccountStore
-	hasher   *Hasher
+	hasher   signInHasher
 	sessions *Sessions
 }
 
@@ -48,26 +57,46 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	if err != nil || password == "" {
 		return "", time.Time{}, ErrInvalidInput
 	}
+	normalized := normalizePassword(password)
 	accountID, hash, err := s.accounts.AccountCredentials(ctx, email)
 	if errors.Is(err, ErrNoAccount) {
-		// Do one Argon2id verification as for a real account, which makes
-		// timing-based discovery of accounts much harder. Timing is not
-		// identical when a stored hash uses other parameters than the
-		// current ones.
-		if err := s.hasher.verifyDummy(ctx, password); err != nil {
+		// Match a known account's verification count regardless of result.
+		// Stored hashes with older parameters may still cost differently.
+		if err := s.hasher.verifyDummy(ctx, normalized); err != nil {
 			return "", time.Time{}, err
+		}
+		if normalized != password {
+			if err := s.hasher.verifyDummy(ctx, password); err != nil {
+				return "", time.Time{}, err
+			}
 		}
 		return "", time.Time{}, ErrInvalidCredentials
 	}
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("finding account: %w", err)
 	}
-	ok, err := s.hasher.Verify(ctx, password, hash)
+	ok, err := s.hasher.Verify(ctx, normalized, hash)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("verifying password: %w", err)
 	}
-	if !ok {
+	legacyOK := false
+	if normalized != password {
+		// Always verify both, even when NFC succeeds, so the count reveals
+		// neither the result nor whether this account has a legacy hash.
+		legacyOK, err = s.hasher.Verify(ctx, password, hash)
+		if err != nil {
+			return "", time.Time{}, fmt.Errorf("verifying legacy password: %w", err)
+		}
+	}
+	if !ok && !legacyOK {
 		return "", time.Time{}, ErrInvalidCredentials
+	}
+	if !ok && legacyOK {
+		// Migration is best effort: failure must not lock out a valid legacy
+		// password. No errors or credentials are logged by this package.
+		if newHash, err := s.hasher.Hash(ctx, normalized); err == nil {
+			_ = s.accounts.RehashPassword(ctx, accountID, hash, newHash)
+		}
 	}
 	// One transaction creates the new session and ends the one the browser
 	// sent; an uncertain outcome still ends the previous session's streams.

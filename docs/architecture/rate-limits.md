@@ -147,7 +147,8 @@ active-slot rules above apply. Responses use `Cache-Control: no-store`.
 
 ## Reverse proxies
 
-Any reverse proxy meeting this contract works.
+Any reverse proxy meeting this contract works; security depends only on the
+contract, never on one proxy's behaviour.
 
 - `RIBBITTO_TRUSTED_PROXIES` lists the **proxy peers trusted to forward the
   client address to ribbitto**, not trusted networks. It is comma-separated

@@ -249,10 +249,7 @@ func TestMentionRenameAgainstPostgreSQL(t *testing.T) {
 		if _, err := orgpg.NewHandleChanger(pool).ChangeHandle(ctx, &identity.Account{ID: account}, "acme", names.handle); err != nil {
 			t.Fatal(err)
 		}
-		// No display-name change use case exists yet; emulate that identity write.
-		if _, err := pool.Exec(ctx, "UPDATE account SET display_name=$2 WHERE id=$1", account, names.name); err != nil {
-			t.Fatal(err)
-		}
+		identitytest.SetDisplayName(t, pool, account, names.name)
 		page := serveForm(h, "GET", view.ChannelURL("acme", f.Channel.ID), cookie, nil)
 		if page.Code != 200 {
 			t.Fatalf("page: %d", page.Code)

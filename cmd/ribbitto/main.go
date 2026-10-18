@@ -353,7 +353,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		ResyncLimits:  middleware.NewSidebarResyncRateLimiter(time.Now),
 		BranchLimits:  middleware.NewBranchRateLimiter(time.Now),
 		MemberSearch:  newMemberSearch(pool),
-		MentionLimits: middleware.NewMemberRateLimiterWithBudget(time.Now, 4, 8, 2),
+		MentionLimits: middleware.NewMentionRateLimiter(time.Now),
 	})
 	if err != nil {
 		return nil, nil, err

@@ -19,6 +19,7 @@ func TestPostingTypedHandles(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, want string
 		handle           string
+		others           []string
 		foreignOnly      bool
 		lists            int
 		listErr, wantErr error
@@ -28,6 +29,14 @@ func TestPostingTypedHandles(t *testing.T) {
 		{name: "quote", body: "> @tomoya", want: "> " + ref, lists: 1},
 		{name: "underscore", body: "@tom_oya", want: ref, handle: "tom_oya", lists: 1},
 		{name: "unclosed delimiter is literal", body: "@tom._oya", want: ref, handle: "tom._oya", lists: 1},
+		{name: "paired underscore after prefix", body: "_hi @tom_.oya_", want: "_hi " + ref + "_", handle: "tom_.oya", others: []string{"tom"}, lists: 1},
+		{name: "paired underscores inside handle", body: "@tom._a_.oya", want: ref, handle: "tom._a_.oya", others: []string{"tom"}, lists: 1},
+		{name: "two handles crossing delimiters", body: "@tom._oya @bob_.smith", want: ref + " <@" + realtime.FormatPayloadID(kernel.ID{0xc2}) + ">", handle: "tom._oya", others: []string{"tom", "bob_.smith", "bob"}, lists: 1},
+		{name: "handle inside bold with italic", body: "**@tom._oya _hi_**", want: "**@tom._oya _hi_**", handle: "tom._oya", others: []string{"tom"}},
+		{name: "single letter before underscore", body: "_hi @j_.doe_", want: "_hi " + ref + "_", handle: "j_.doe", lists: 1},
+		{name: "only prefix exists", body: "_hi @tom_.oya_", want: "_hi @tom_.oya_", handle: "tom", lists: 1},
+		{name: "after italic", body: "_x_ @tomoya", want: "_x_ " + ref, lists: 1},
+		{name: "after bold", body: "**b** @tomoya", want: "**b** " + ref, lists: 1},
 		{name: "dot and hyphen", body: "(@tom-oya.dev).", want: "(" + ref + ").", handle: "tom-oya.dev", lists: 1},
 		{name: "bold text run", body: "**hi @tomoya**", want: "**hi " + ref + "**", lists: 1},
 		{name: "code span", body: "`@tomoya`", want: "`@tomoya`"},
@@ -47,6 +56,12 @@ func TestPostingTypedHandles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &postingFake{t: t, topic: kernel.ID{6}}
 			d := &referenceDirectory{t: t, err: tc.listErr, handle: tc.handle, members: map[kernel.ID][]kernel.ID{{1}: {member}, {9}: {{0xb1}}}}
+			d.handles = make(map[kernel.ID]string)
+			for i, handle := range tc.others {
+				id := kernel.ID{byte(0xc1 + i)}
+				d.members[kernel.ID{1}] = append(d.members[kernel.ID{1}], id)
+				d.handles[id] = handle
+			}
 			if tc.foreignOnly {
 				delete(d.members, kernel.ID{1})
 			}

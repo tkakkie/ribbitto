@@ -15,7 +15,8 @@ import (
 )
 
 // handleTokens uses the parser's source runs, so posting and replay share
-// its decisions about blocks, escapes, code and links, without extracting text.
+// its exclusions for blocks, escapes, code and links, without extracting text.
+// Bold/italic delimiters stay in the runs so underscores cannot split handles.
 func handleTokens(body string) []textRun {
 	var runs, tokens []textRun
 	parseChatV1(body, &runs)
@@ -45,8 +46,7 @@ func handleTokens(body string) []textRun {
 	return tokens
 }
 
-func (p *Posting) convertHandles(ctx context.Context, organizationID kernel.ID, body string) (string, error) {
-	tokens := handleTokens(body)
+func (p *Posting) convertHandles(ctx context.Context, organizationID kernel.ID, body string, tokens []textRun) (string, error) {
 	if len(tokens) == 0 {
 		return body, nil
 	}

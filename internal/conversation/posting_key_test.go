@@ -211,7 +211,7 @@ func TestPostingPreflightReads(t *testing.T) {
 		reads int
 	}{
 		{"hello", true, 0}, {"@tomoya", false, 0}, {"hi @tomoya", true, 1},
-		{"@unknown", true, 1}, {"@everyone @x", true, 0},
+		{"@unknown", true, 1}, {"_hi @j_.doe_", true, 1}, {"@everyone @x", true, 0},
 		{"`@tomoya`", true, 0}, {"\\@tomoya", true, 0},
 		{"https://example.org/@tomoya a@tomoya.dev", true, 0},
 	} {
@@ -272,5 +272,28 @@ func TestTypedReplayScope(t *testing.T) {
 				t.Fatalf("lookups %+v, want %+v", s.lookups, want)
 			}
 		})
+	}
+}
+
+func TestTypedReplayRequiresDirectory(t *testing.T) {
+	s := &keyedStore{state: keyedState{seq: map[kernel.ID]int64{}, keyed: map[keyScope]conversation.Message{}}}
+	d := &referenceDirectory{t: t, members: map[kernel.ID][]kernel.ID{}}
+	p := conversation.NewPagePosting(s,
+		func(platform.Tx) conversation.Writer { return s },
+		func(platform.Tx) conversation.EventSequence { return s },
+		func(platform.Tx) conversation.EventAppender { return s },
+		nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil, nil)
+	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+	send := conversation.Send{Body: "@unknown", Key: new(conversation.NewIdempotencyKey())}
+	if _, err := p.Send(t.Context(), m, kernel.ID{3}, send); err != nil {
+		t.Fatal(err)
+	}
+	p = conversation.NewPosting(s,
+		func(platform.Tx) conversation.Writer { return s },
+		func(platform.Tx) conversation.EventSequence { return s },
+		func(platform.Tx) conversation.EventAppender { return s }, nil)
+	got, err := p.Send(t.Context(), m, kernel.ID{3}, send)
+	if err == nil || errors.Is(err, conversation.ErrInvalidBody) || got != (conversation.Sent{}) || len(s.lookups) != 1 {
+		t.Fatalf("directory-less replay: %+v, error %v, lookups %v", got, err, s.lookups)
 	}
 }

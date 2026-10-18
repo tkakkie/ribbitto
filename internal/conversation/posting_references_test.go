@@ -24,6 +24,7 @@ type referenceDirectory struct {
 	lookups [][]kernel.ID
 	lists   int
 	handle  string
+	handles map[kernel.ID]string
 }
 
 func (d *referenceDirectory) ListSearchMembers(_ context.Context, organizationID kernel.ID) ([]org.ListedMember, error) {
@@ -37,7 +38,11 @@ func (d *referenceDirectory) ListSearchMembers(_ context.Context, organizationID
 		handle = "tomoya"
 	}
 	for _, id := range d.members[organizationID] {
-		members = append(members, org.ListedMember{ID: id, DirectoryEntry: org.DirectoryEntry{Handle: handle}})
+		memberHandle := handle
+		if h, ok := d.handles[id]; ok {
+			memberHandle = h
+		}
+		members = append(members, org.ListedMember{ID: id, DirectoryEntry: org.DirectoryEntry{Handle: memberHandle}})
 	}
 	return members, d.err
 }

@@ -60,15 +60,19 @@ func ParseChatV1(body string) []BodyBlock {
 	return parseChatV1(body, nil)
 }
 
-// textRun locates unescaped plain text in the source, before extraction.
+// textRun locates source eligible for handles, including bold/italic delimiters.
+// Escapes, code, member references and autolinks are excluded.
 // line is the content's start, after any block quote marker.
 type textRun struct{ start, end, line int }
 
 func parseChatV1(body string, runs *[]textRun) []BodyBlock {
 	lines := strings.Split(body, "\n")
-	offsets := make([]int, len(lines)+1)
-	for i, line := range lines {
-		offsets[i+1] = offsets[i] + len(line) + 1
+	var offsets []int
+	if runs != nil {
+		offsets = make([]int, len(lines)+1)
+		for i, line := range lines {
+			offsets[i+1] = offsets[i] + len(line) + 1
+		}
 	}
 	// closing[i] is the first line from i on that is exactly a fence, so an
 	// opening line without one costs a lookup instead of a scan of the rest.
@@ -96,7 +100,11 @@ func parseChatV1(body string, runs *[]textRun) []BodyBlock {
 			blocks = append(blocks, BodyBlock{Kind: kind})
 		}
 		last := &blocks[len(blocks)-1]
-		last.Lines = append(last.Lines, parseInline(content, offsets[i]+len(lines[i])-len(content), runs))
+		offset := 0
+		if runs != nil {
+			offset = offsets[i] + len(lines[i]) - len(content)
+		}
+		last.Lines = append(last.Lines, parseInline(content, offset, runs))
 	}
 	return blocks
 }
@@ -135,7 +143,6 @@ func fenceOpening(line string) (string, bool) {
 type inlineFrame struct {
 	kind  InlineKind
 	delim string
-	start int
 	nodes []BodyInline
 }
 
@@ -166,11 +173,6 @@ func parseInline(line string, offset int, runs *[]textRun) []BodyInline {
 	// Delimiters still open at the end of the line are literal.
 	for top := len(p.stack) - 1; top > 0; top-- {
 		frame, parent := p.stack[top], &p.stack[top-1]
-		if runs != nil {
-			for j := frame.start; j < frame.start+len(frame.delim); j++ {
-				plain[j] = true
-			}
-		}
 		parent.nodes = append(append(parent.nodes, BodyInline{Kind: InlineText, Text: frame.delim}), frame.nodes...)
 	}
 	for i := 0; i < len(plain); i++ {
@@ -224,6 +226,7 @@ func (p *inlineParser) step(i int) int {
 }
 
 func (p *inlineParser) delimiter(i int, kind InlineKind, delim string) {
+	p.literal = true // Delimiters must not split a typed handle at an underscore.
 	before, _ := utf8.DecodeLastRuneInString(p.line[:i])
 	after, _ := utf8.DecodeRuneInString(p.line[i+len(delim):])
 	hasBefore, hasAfter := i > 0, i+len(delim) < len(p.line)
@@ -242,10 +245,9 @@ func (p *inlineParser) delimiter(i int, kind InlineKind, delim string) {
 		p.add(BodyInline{Kind: kind, Children: mergeText(frame.nodes)})
 	case canOpen && top < 2: // two open delimiters at most
 		p.flush()
-		p.stack = append(p.stack, inlineFrame{kind: kind, delim: delim, start: i})
+		p.stack = append(p.stack, inlineFrame{kind: kind, delim: delim})
 	default:
 		// Includes a closer matching a deeper delimiter (crossing).
-		p.literal = true
 		p.text.WriteString(delim)
 	}
 }

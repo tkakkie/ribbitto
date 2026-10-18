@@ -98,9 +98,12 @@ The planned composer picker (#1312) will insert typed `@handle` text.
 
 ## Typed mentions
 
-Posting converts `@handle`, ignoring ASCII case, only in the parser's plain
-text: at the start of a line or after whitespace or `(`, followed by a valid
-handle ending in a letter or digit. Trailing punctuation stays outside.
+Posting converts `@handle`, ignoring ASCII case, in eligible source runs:
+at the start of a line or after whitespace or `(`. It takes the maximal run
+of ASCII letters, digits, `_`, `.` and `-`, strips trailing punctuation, and
+validates the whole handle; it never falls back to a shorter prefix.
+Bold/italic delimiters remain in these runs, so paired underscores cannot
+split a handle; `*` ends a handle. Trailing punctuation stays outside.
 Code spans, closed fences, escapes, URLs and e-mail addresses stay literal;
 an unclosed fence is ordinary text. Only the URL organisation's members
 resolve, through org's existing handle-ordered listing, fetched once only

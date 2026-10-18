@@ -57,8 +57,9 @@ keys also enforce the message's organisation scope.
   read `organization.event_seq` and raise the value to that (#236).
 
 **Member references** ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md#member-references)).
-`Send` first converts typed `@handle` tokens in the parser's plain-text
-runs, with their source positions ([names](../domain/names.md#typed-mentions)).
+`Send` scans typed `@handle` tokens once in the parser's eligible source
+runs, including bold/italic delimiters, with their source positions
+([names](../domain/names.md#typed-mentions)).
 It lists the membership organisation's members once through
 `ListSearchMembers`, using org's existing handle-ordered query and matching
 in Go; without a candidate it never lists. Unknown, foreign and reserved
@@ -73,7 +74,9 @@ A reference the directory does not return, missing or another
 organisation's, is `ErrUnknownReference` (wrapping `ErrInvalidBody`): web
 answers 422 with one message and keeps the draft. A member who leaves
 between the check and the insert shows as the placeholder, like any later
-leaver. `NewPagePosting` takes the directory; posting without one (seeding
+leaver. Handle listing and reference checking use separate snapshots. A member
+who leaves between them makes the typed handle answer 422 like any unknown
+reference. `NewPagePosting` takes the directory; posting without one (seeding
 and tests) refuses references and handle candidates as a server error. The store inserts
 `format = 'chat_v1'` for posts and branching's notices; branching escapes
 its notice (`EscapeChatV1`), so a topic name is never markup or a reference.
@@ -96,8 +99,8 @@ the sequence; so does an original deleted before the insert, through
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
 cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
-delegate to it. Only a keyed body with a valid handle candidate (the same
-`chat_v1` token function used by conversion) gets a scoped preflight key lookup
+delegate to it. Only a keyed body with a valid handle candidate and an available
+member directory gets a scoped preflight key lookup using the same tokens
 in a separate read transaction, before conversion, expansion or reference checks.
 A found message resolves the requested composer topic without taking a sequence.
 Ordinary keyed posts retain the insert-first path. The insert stores the key

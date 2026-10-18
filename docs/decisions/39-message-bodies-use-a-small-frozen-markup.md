@@ -131,8 +131,9 @@ A token holds the member's UUID only, never a handle or name.
 ## Composer input
 
 The composer keeps typed `@handle` text. At posting the server uses this
-parser's plain-text runs and source positions to resolve handles, ignoring
-case, within the URL organisation. Code, escapes, URLs and e-mail addresses
+parser's eligible source runs and positions to resolve handles, ignoring
+case, within the URL organisation. Bold/italic delimiters remain in these
+runs: paired underscores never split a handle into a shorter prefix. Code, escapes, URLs and e-mail addresses
 are not mentions. Unknown, foreign and reserved handles stay literal. The
 result stores `<@{member UUID}>` only and passes the reference check and the
 4,000-code-point limit again. This changes no stored grammar or existing row.

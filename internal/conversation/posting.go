@@ -108,7 +108,8 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	}
 	// A replay is compared with typed text before resolving today's handles
 	// or checking expansion. The unique index still decides concurrent sends.
-	if s.Key != nil && len(handleTokens(body)) > 0 {
+	tokens := handleTokens(body)
+	if s.Key != nil && p.members != nil && len(tokens) > 0 {
 		sent, err := p.repeat(ctx, m, channelID, body, s.Quote, s.Topic, kernel.ID{}, *s.Key)
 		if !errors.Is(err, ErrMessageNotFound) {
 			return sent, err
@@ -119,7 +120,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if s.Key != nil {
 		proof = proveTypedBody(typed)
 	}
-	if body, err = p.convertHandles(ctx, m.Organization.ID, body); err != nil {
+	if body, err = p.convertHandles(ctx, m.Organization.ID, body, tokens); err != nil {
 		return Sent{}, err
 	}
 	if body, err = ValidateMessageBody(body); err != nil {

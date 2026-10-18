@@ -91,7 +91,7 @@ flowchart LR
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 
-The [manifest](../../module_imports_test.go) lets unread import only
+[Manifest](../../module_imports_test.go) lets unread import only
 conversation's root; conversation never imports unread in production
 ([dependencies](../dependencies.md)).
 

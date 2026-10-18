@@ -79,6 +79,35 @@ func TestAuthLimitsProxyWarning(t *testing.T) {
 	}
 }
 
+func TestAuthLimitsProxyWarningNilLogger(t *testing.T) {
+	for _, name := range []string{"constructor", "zero value"} {
+		t.Run(name, func(t *testing.T) {
+			var logs bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+
+			limits := &AuthLimits{}
+			limiter := NewRateLimiter(Limit{Burst: 2, Every: time.Minute}, time.Now)
+			if name == "constructor" {
+				limits = NewAuthLimits(nil, time.Now, nil)
+				limiter = limits.SignIn
+			}
+			r := httptest.NewRequest("POST", "/signin", nil)
+			r.RemoteAddr = "127.0.0.1:1234"
+			r.Header.Set("X-Forwarded-For", "203.0.113.9")
+			for range 2 {
+				if !limits.Allow(limiter, r) {
+					t.Fatal("request within the burst refused")
+				}
+			}
+			if got := logs.String(); strings.Count(got, "level=WARN") != 1 || strings.Count(got, "\n") != 1 {
+				t.Fatalf("want exactly one warning with a nil logger, got %q", got)
+			}
+		})
+	}
+}
+
 func TestAuthLimitsProxyWarningConcurrent(t *testing.T) {
 	var logs bytes.Buffer
 	limits := NewAuthLimits(nil, time.Now, slog.New(slog.NewTextHandler(&logs, nil)))

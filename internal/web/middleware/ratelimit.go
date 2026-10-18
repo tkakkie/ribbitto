@@ -269,9 +269,12 @@ type AuthLimits struct {
 	proxyWarning sync.Once
 }
 
-// NewAuthLimits returns the limits; now is time.Now outside tests and logger
-// must be non-nil. Share one instance across authentication routes.
+// NewAuthLimits returns the limits; now is time.Now outside tests. A nil
+// logger uses slog.Default(). Share one instance across authentication routes.
 func NewAuthLimits(trusted []netip.Prefix, now func() time.Time, logger *slog.Logger) *AuthLimits {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	signIn := Limit{Burst: signInBurst, Every: signInEvery}
 	signInNetwork := Limit{Burst: signInNetworkBurst, Every: signInNetworkEvery}
 	once := Limit{Burst: onceBurst, Every: onceEvery}
@@ -294,7 +297,11 @@ func (a *AuthLimits) Allow(limiter *RateLimiter, r *http.Request) bool {
 			a.proxyWarning.Do(func() {
 				// Keep this diagnostic static: forwarded addresses are untrusted
 				// and neither they nor the peer belong in the log.
-				a.logger.Warn("RIBBITTO_TRUSTED_PROXIES is empty; authentication clients may share a proxy's rate limit; see docs/architecture/rate-limits.md#reverse-proxies")
+				logger := a.logger
+				if logger == nil {
+					logger = slog.Default()
+				}
+				logger.Warn("RIBBITTO_TRUSTED_PROXIES is empty; authentication clients may share a proxy's rate limit; see docs/architecture/rate-limits.md#reverse-proxies")
 			})
 		}
 	}

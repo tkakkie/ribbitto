@@ -152,8 +152,8 @@ contract, never on one proxy's behaviour.
 
 - `RIBBITTO_TRUSTED_PROXIES` lists the **proxy peers trusted to forward the
   client address to ribbitto**, not trusted networks. It is comma-separated
-  CIDRs, with `/32` or `/128` for one address; bare addresses and invalid
-  CIDRs fail startup.
+  CIDRs, with `/32` or `/128` for a single address; a bare address fails at
+  startup, and so does an invalid CIDR.
 - Forwarded client addresses are not trusted by default. If the request's
   immediate peer is not in the list, `X-Forwarded-For` is ignored and the
   peer address is the key. Only when the peer is a trusted proxy is the
@@ -174,21 +174,23 @@ contract, never on one proxy's behaviour.
   proxy is listed as its own `/32` or `/128`. A broader CIDR is fine only
   when every peer that can reach ribbitto from it may be trusted as a
   forwarding proxy. Otherwise a client inside it can write its own key.
-- **Several proxies:** preferably, the proxy directly in front of ribbitto
-  resolves and forwards the client address, and ribbitto trusts only it. If
-  it merely appends the previous proxy's address, every client behind that
-  proxy shares one key; trusting several controlled hops explicitly is also
-  allowed.
+- **Several proxies:** the recommended setup is for the proxy directly in
+  front of ribbitto to resolve the client address and forward it, and for
+  ribbitto to trust only that proxy. If it merely appends the previous
+  proxy's address, every client behind that proxy shares one key. Trusting
+  several controlled hops explicitly is also allowed.
 - **Empty (the default):** `X-Forwarded-For` is never trusted. Behind a
   proxy, all clients then share the proxy's key and may be rate-limited
-  together; this default is safer than trusting an untrusted header.
+  together. That is kept as the default, because it is safer than believing
+  an untrusted header.
   Authentication requests with this header from loopback or private peers
   warn once per `AuthLimits`, without logging addresses.
 - Addresses and CIDRs are compared in their IPv4 form when they are
   IPv4-mapped; an IPv4-mapped CIDR in `RIBBITTO_TRUSTED_PROXIES` needs a
   prefix length of at least `/96`, or startup fails.
 
-The official self-hosting setup will use Caddy under this contract. Caddy
-reads the client address from the left unless `trusted_proxies_strict` is
-set, so the shipped configuration must set it or overwrite the header.
-Examples for other proxies can be added against the same contract.
+The official self-hosting setup will use Caddy as one configuration that
+meets this contract. Caddy reads the client address from the left unless
+`trusted_proxies_strict` is set, so the shipped configuration must set it or
+overwrite the header. Examples for other proxies can be added against the
+same contract.

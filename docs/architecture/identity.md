@@ -38,6 +38,12 @@ Their handlers replace sessions as a separate step after account creation.
   `identity.ErrNoSession`, meaning signed out; a store error stays an error, so
   a database outage is not mistaken for a sign-out.
 - **Delete** (sign-out): the row goes, so the token stops working at once.
+  `DeleteOthers` receives the account and current session ids resolved by
+  middleware, never request fields. One account-scoped DELETE excludes the
+  current id and returns every deleted id. The account menu posts to
+  `POST /signout/others`: success redirects 303 to `/`, signed out redirects
+  303 to `/signin`, and a store error answers 500. It never sends
+  `Clear-Site-Data`, since the current session and its drafts stay.
 - **Open streams** (#207): `Resolve` also returns the session's id and
   expiry, which the session middleware puts on the request. `Delete` and
   `Replace` resolve the incoming token before changing sessions. After success,
@@ -50,7 +56,11 @@ Their handlers replace sessions as a separate step after account creation.
   sign-out and replacement creation; an operational lookup error aborts
   without changing sessions or cancelling streams. This extra lookup happens
   only when ending or replacing a session, including setup and sign-up,
-  whose availability-first routing stays unchanged.
+  whose availability-first routing stays unchanged. `DeleteOthers` calls
+  `CancelSession` for each returned id. On a mutation error, ids may be
+  missing even after a commit, so it calls `CancelAccount` instead: all the
+  account's streams end, including the current session's. Reconnection
+  re-checks the surviving session; other accounts are untouched.
 - **Clean-up:** `ribbitto serve` deletes expired rows at start and then
   hourly until shutdown. Expired sessions are already rejected; this only
   keeps the table small.

@@ -591,11 +591,10 @@ func TestPagesMarkup(t *testing.T) {
 		s := withSignUp(true, nil)()
 		s.Setup = &fakeSetup{open: true, err: org.ErrSetupToken}
 		now := func() time.Time { return time.Unix(0, 0) }
-		s.Limits = &middleware.AuthLimits{
-			SignIn: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-			SignUp: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-			Setup:  middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-		}
+		s.Limits = middleware.NewAuthLimits(nil, now, slog.New(slog.DiscardHandler))
+		s.Limits.SignIn = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
+		s.Limits.SignUp = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
+		s.Limits.Setup = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
 		return s
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
@@ -661,7 +660,7 @@ func TestPagesMarkup(t *testing.T) {
 		return s
 	}, method: "POST", path: view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + "/pin", cookie: true, status: http.StatusConflict, alerts: 1})
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
+	noPage := []string{"POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "POST /signout/others", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

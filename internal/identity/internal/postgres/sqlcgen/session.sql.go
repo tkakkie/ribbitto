@@ -35,6 +35,35 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt pgtype.Ti
 	return err
 }
 
+const deleteOtherSessions = `-- name: DeleteOtherSessions :many
+DELETE FROM session WHERE account_id = $1 AND NOT (id = $2) RETURNING id
+`
+
+type DeleteOtherSessionsParams struct {
+	AccountID pgtype.UUID
+	ID        pgtype.UUID
+}
+
+func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessionsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteOtherSessions, arg.AccountID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :many
 DELETE FROM session WHERE token_hash = $1 RETURNING id
 `

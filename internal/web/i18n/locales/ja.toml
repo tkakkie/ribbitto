@@ -70,6 +70,9 @@ other = "サインイン中:"
 ["signout.submit"]
 other = "サインアウト"
 
+["signout.others.submit"]
+other = "他のセッションからサインアウト"
+
 ["signin.title"]
 other = "ribbittoにサインイン"
 

@@ -1,12 +1,128 @@
 package middleware
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestAuthLimitsProxyWarning(t *testing.T) {
+	for _, tt := range []struct {
+		name, remote, trusted string
+		header, warn          bool
+	}{
+		{"loopback IPv4", "127.0.0.1:1234", "", true, true},
+		{"loopback IPv6", "[::1]:1234", "", true, true},
+		{"private 10", "10.0.0.2:1234", "", true, true},
+		{"private 172", "172.16.0.2:1234", "", true, true},
+		{"private 192", "192.168.0.2:1234", "", true, true},
+		{"private IPv6", "[fd00::2]:1234", "", true, true},
+		{"mapped loopback", "[::ffff:127.0.0.1]:1234", "", true, true},
+		{"trusted configured", "10.0.0.2:1234", "10.0.0.2/32", true, false},
+		{"trusted other peer", "10.0.0.2:1234", "10.0.0.3/32", true, false},
+		{"public IPv4", "198.51.100.7:1234", "", true, false},
+		{"public IPv6", "[2001:db8::7]:1234", "", true, false},
+		{"no header", "127.0.0.1:1234", "", false, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			trusted, err := ParseTrustedProxies(tt.trusted)
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+			limits := NewAuthLimits(trusted, func() time.Time { return now }, slog.New(slog.NewTextHandler(&logs, nil)))
+			r := httptest.NewRequest("POST", "/signin", nil)
+			r.RemoteAddr = tt.remote
+			const forwarded = "203.0.113.9, untrusted-header-marker"
+			if tt.header {
+				r.Header.Set("X-Forwarded-For", forwarded)
+			}
+			for _, limiter := range []*RateLimiter{limits.SignIn, limits.SignUp, limits.Setup} {
+				for i := range 20 {
+					if got, want := limits.Allow(limiter, r), i < limiter.limit.Burst; got != want {
+						t.Fatalf("attempt %d: allowed %v, want %v", i+1, got, want)
+					}
+				}
+			}
+			if !tt.warn {
+				if logs.Len() != 0 {
+					t.Fatalf("unexpected warning: %s", &logs)
+				}
+				// A non-qualifying request must not consume the warning.
+				limits.Trusted = nil
+				r.RemoteAddr = "127.0.0.1:1234"
+				r.Header.Set("X-Forwarded-For", forwarded)
+				limits.Allow(limits.SignIn, r)
+			}
+			got := logs.String()
+			if strings.Count(got, "level=WARN") != 1 || strings.Count(got, "\n") != 1 {
+				t.Fatalf("want exactly one warning, got %q", got)
+			}
+			for _, want := range []string{"RIBBITTO_TRUSTED_PROXIES", "docs/architecture/rate-limits.md#reverse-proxies"} {
+				if !strings.Contains(got, want) {
+					t.Errorf("warning missing %q: %s", want, got)
+				}
+			}
+			for _, private := range []string{tt.remote, peerAddr(r).String(), forwarded, "203.0.113.9", "untrusted-header-marker"} {
+				if strings.Contains(got, private) {
+					t.Errorf("warning contains request data %q", private)
+				}
+			}
+		})
+	}
+}
+
+func TestAuthLimitsProxyWarningNilLogger(t *testing.T) {
+	for _, name := range []string{"constructor", "zero value"} {
+		t.Run(name, func(t *testing.T) {
+			var logs bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+
+			limits := &AuthLimits{}
+			limiter := NewRateLimiter(Limit{Burst: 2, Every: time.Minute}, time.Now)
+			if name == "constructor" {
+				limits = NewAuthLimits(nil, time.Now, nil)
+				limiter = limits.SignIn
+			}
+			r := httptest.NewRequest("POST", "/signin", nil)
+			r.RemoteAddr = "127.0.0.1:1234"
+			r.Header.Set("X-Forwarded-For", "203.0.113.9")
+			for range 2 {
+				if !limits.Allow(limiter, r) {
+					t.Fatal("request within the burst refused")
+				}
+			}
+			if got := logs.String(); strings.Count(got, "level=WARN") != 1 || strings.Count(got, "\n") != 1 {
+				t.Fatalf("want exactly one warning with a nil logger, got %q", got)
+			}
+		})
+	}
+}
+
+func TestAuthLimitsProxyWarningConcurrent(t *testing.T) {
+	var logs bytes.Buffer
+	limits := NewAuthLimits(nil, time.Now, slog.New(slog.NewTextHandler(&logs, nil)))
+	r := httptest.NewRequest("POST", "/signin", nil)
+	r.RemoteAddr = "127.0.0.1:1234"
+	r.Header.Set("X-Forwarded-For", "")
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Go(func() { limits.Allow(limits.SignIn, r) })
+	}
+	wg.Wait()
+	if got := logs.String(); strings.Count(got, "level=WARN") != 1 || strings.Count(got, "\n") != 1 {
+		t.Fatalf("want exactly one warning for concurrent requests with an empty header, got %q", got)
+	}
+}
 
 func TestRateLimiter(t *testing.T) {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
@@ -130,7 +246,7 @@ func sixtyFour(i int) netip.Prefix {
 // re-probing them to keep them alive.
 func TestSignInNetworkCannotFillTable(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	for range 2 {
 		for i := range maxBuckets {
 			l.Allow(sixtyFour(i))
@@ -145,7 +261,7 @@ func TestSignInNetworkCannotFillTable(t *testing.T) {
 // The /64s of one /48 together get the /48's budget, not one each.
 func TestSignInNetworkBudget(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	admitted := 0
 	for i := range 3600 {
 		if l.Allow(sixtyFour(i)) {
@@ -164,7 +280,7 @@ func TestSignInNetworkBudget(t *testing.T) {
 func TestRefusedRequestTakesNothing(t *testing.T) {
 	t0 := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 	now := t0
-	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	a := sixtyFour(0)
 	l.Allow(a) // a: 4 tokens left
 	for i := 1; i < 10; i++ {
@@ -218,7 +334,7 @@ func TestNetworkChurn(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-			l := tt.pick(NewAuthLimits(nil, func() time.Time { return now }))
+			l := tt.pick(NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)))
 			l.max = 40
 			window := time.Duration(tt.limit.Burst) * tt.limit.Every
 			var admitted []netip.Prefix
@@ -307,7 +423,7 @@ func TestTrustedProxyContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-			limits := NewAuthLimits(trusted, func() time.Time { return now })
+			limits := NewAuthLimits(trusted, func() time.Time { return now }, slog.New(slog.DiscardHandler))
 			allowed := 0
 			for i := range 10 {
 				r := httptest.NewRequest("POST", "/signin", nil)

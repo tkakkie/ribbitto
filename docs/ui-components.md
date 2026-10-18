@@ -3,8 +3,7 @@
 Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
 Writing rules: [`ui-code.md`](ui-code.md).
 
-**Keep it current:** update this file in the same pull request when a
-shared component is added or changes.
+**Keep it current:** update this file with shared component changes.
 
 ## Shared components
 

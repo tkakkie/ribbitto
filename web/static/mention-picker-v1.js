@@ -7,25 +7,24 @@
   let composing = false, ended = -Infinity, query = null, dismissed = null, ready = false;
   const list = () => document.getElementById("mention-listbox");
   const options = () => [...list().querySelectorAll('[role="option"]')];
-  // Mirror conversation.handleTokens' line-start/Unicode-space/'(' boundary.
+  // Mirror conversation.handleTokens' content-start/Unicode-space/'(' boundary.
   // Code detection is deliberately conservative; posting remains authoritative.
   const token = () => {
     if (composing || body.selectionStart !== body.selectionEnd) return null;
     const text = body.value.slice(0, body.selectionStart);
     const start = text.lastIndexOf("@");
     if (start < 0) return null;
-    const before = text.slice(0, start), value = text.slice(start + 1);
-    if ((before && !/[\p{White_Space}(]$/u.test(before)) || /\p{White_Space}/u.test(value)) return null;
+    const lines = text.slice(0, start).split("\n"), value = text.slice(start + 1);
+    const line = lines.at(-1).replace(/^> ?/, "");
+    if ((line && !/[\p{White_Space}(]$/u.test(line)) || /\p{White_Space}/u.test(value)) return null;
     // An opening parenthesis can also be part of an autolink's path.
-    if (/(?:^|[\p{White_Space}(])https?:\/\/[^\p{White_Space}<>"\u2066-\u2069\u200e\u200f\u061c]*$/u.test(before)) return null;
-    const lines = before.split("\n");
+    if (/(?:^|[\p{White_Space}(])https?:\/\/[^\p{White_Space}<>"\u2066-\u2069\u200e\u200f\u061c]*$/u.test(line)) return null;
     let fence = false;
     for (const line of lines.slice(0, -1)) {
       if (fence ? line === "```" : /^```[A-Za-z0-9+#.-]{0,20}$/.test(line)) fence = !fence;
     }
     if (fence) return null;
     let code = false;
-    const line = lines.at(-1);
     for (let i = 0; i < line.length; i++) {
       if (line[i] === "\\") i++;
       else if (line[i] === "`") code = !code;

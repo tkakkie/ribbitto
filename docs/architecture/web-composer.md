@@ -104,12 +104,12 @@ normalisation and trimming. Contexts without `crypto.randomUUID()` also use it.
   the existing resize observer preserves the reader on chip changes. Without
   scripts both submit a GET with `#message-composer`; removal loses unsent text.
 - **Mention picker:** `mention-picker-v1.js` enhances all composers.
-  Sibling `#mention-search` uses htmx's 120 ms debounce,
+  `#mention-search` uses htmx's 120 ms debounce,
   replace sync and `outerHTML` into `#mention-listbox`. Only matching `data-query`
   responses open; picks recheck the token. Empty results hide the picker;
   `#mention-status` announces no members. `@` requests eight members.
-  Token starts mirror posting: line start, Unicode space or `(`, never escapes,
-  URLs or email; conservative code-span/fence checks leave posting authoritative.
+  Token starts mirror posting: line start, lone column-zero `>`, Unicode space or `(`;
+  no escapes, URLs or email. Code-span/fence checks are conservative.
   Plain Enter/Tab pick; modified keys pass through except Ctrl/Cmd+Enter closes
   and follows the send setting. Blur forgets dismissal; refocus searches.
   Composition hides the picker; Enter has a 100 ms guard after commit.

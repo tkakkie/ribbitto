@@ -258,6 +258,12 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		set(value)
 		opened("tom", 1)
 	}
+	// Quote content starts after one column-zero marker; quoted fences are inline.
+	for _, value := range []string{">@to", "> @to", "a\n>@to", ">```go\n>@to", ">```\n>@to", ">`code` @to"} {
+		set("")
+		set(value)
+		opened("to", 1)
+	}
 	step("select composer text")
 	page.MustEval(`() => { const b = document.getElementById('message-body'); b.setSelectionRange(0, b.value.length); b.dispatchEvent(new Event('input', {bubbles:true})); }`)
 	closed()
@@ -269,7 +275,7 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		steps.fail("small touch targets")
 	}
 	// Cases visible to the picker from conversation.TestPostingTypedHandles.
-	for _, value := range []string{"plain", "x@tomoya", `\@tomoya`, "https://example.org/@tomoya", "https://example.org/(@tomoya", "a@tomoya.dev", "` @tomoya|`", "`@tomoya|`", "```\n@tomoya", "```go\n@tomoya", "```go\n@tomoya|\n```", "@tom oya", "@tom\toya", "@tom\u3000oya"} {
+	for _, value := range []string{">>@to", " >@to", "a>@to", ">` @to|`", "> `@to|`", ">https://example.org/(@to", "```go\n>```\n>@to", "plain", "x@tomoya", `\@tomoya`, "https://example.org/@tomoya", "https://example.org/(@tomoya", "a@tomoya.dev", "` @tomoya|`", "`@tomoya|`", "```\n@tomoya", "```go\n@tomoya", "```go\n@tomoya|\n```", "@tom oya", "@tom\toya", "@tom\u3000oya"} {
 		before := searches.Load()
 		set(value)
 		closed()

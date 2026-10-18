@@ -99,7 +99,8 @@ The composer picker inserts typed `@handle` text ([interaction](../architecture/
 ## Typed mentions
 
 Posting converts `@handle`, ignoring ASCII case, in eligible source runs:
-at the start of a line or after whitespace or `(`. It takes the maximal run
+at line start (including after a column-zero `>` and one optional space),
+or after Unicode whitespace or `(`. It takes the maximal run
 of ASCII letters, digits, `_`, `.` and `-`, strips trailing punctuation, and
 validates the whole handle; it never falls back to a shorter prefix.
 Bold/italic delimiters remain in these runs, so paired underscores cannot

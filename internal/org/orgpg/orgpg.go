@@ -53,6 +53,21 @@ func MembersIn(snapshot platform.Snapshot) org.Directory {
 	return postgres.NewDirectoryIn(snapshot)
 }
 
+// NewMemberSearch builds the organisation-scoped search with identity's directory.
+func NewMemberSearch(pool *pgxpool.Pool, accounts org.SearchAccountsIn) *org.MemberSearch {
+	return org.NewMemberSearch(snapshotRunner{pool}, searchMembersIn, accounts)
+}
+
+func searchMembersIn(snapshot platform.Snapshot) org.MemberSearchStore {
+	return postgres.NewDirectoryIn(snapshot)
+}
+
+type snapshotRunner struct{ pool *pgxpool.Pool }
+
+func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error {
+	return platform.InSnapshot(ctx, r.pool, fn)
+}
+
 // newTxRunner returns the transaction runner setup and sign-up own their
 // transaction through, over pool.
 func newTxRunner(pool *pgxpool.Pool) org.TxRunner { return txRunner{pool: pool} }

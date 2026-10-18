@@ -172,6 +172,37 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 	return items, nil
 }
 
+const listSearchMembers = `-- name: ListSearchMembers :many
+SELECT id, account_id, handle FROM member
+WHERE organization_id = $1 ORDER BY handle
+`
+
+type ListSearchMembersRow struct {
+	ID        pgtype.UUID
+	AccountID pgtype.UUID
+	Handle    string
+}
+
+func (q *Queries) ListSearchMembers(ctx context.Context, organizationID pgtype.UUID) ([]ListSearchMembersRow, error) {
+	rows, err := q.db.Query(ctx, listSearchMembers, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSearchMembersRow
+	for rows.Next() {
+		var i ListSearchMembersRow
+		if err := rows.Scan(&i.ID, &i.AccountID, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lookupMembers = `-- name: LookupMembers :many
 SELECT id, account_id, handle FROM member
 WHERE organization_id = $1 AND id = ANY($2::uuid[])

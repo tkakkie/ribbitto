@@ -101,3 +101,16 @@ func (s *Directory) ListMembers(ctx context.Context, organizationID kernel.ID, a
 	}
 	return result, nil
 }
+
+// ListSearchMembers reads public member identities in handle order for search.
+func (s *Directory) ListSearchMembers(ctx context.Context, organizationID kernel.ID) ([]org.ListedMember, error) {
+	rows, err := s.queries.ListSearchMembers(ctx, uuid(organizationID))
+	if err != nil {
+		return nil, fmt.Errorf("listing search members: %w", err)
+	}
+	result := make([]org.ListedMember, len(rows))
+	for i, row := range rows {
+		result[i] = org.ListedMember{ID: row.ID.Bytes, DirectoryEntry: org.DirectoryEntry{AccountID: row.AccountID.Bytes, Handle: row.Handle}}
+	}
+	return result, nil
+}

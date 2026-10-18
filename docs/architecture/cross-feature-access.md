@@ -50,6 +50,14 @@ page beside the panel supplies. All public channels include every
 organisation member today. The org query reads only its own member table;
 channel scope stays in conversation. A member-ID cursor only advances the
 organisation-scoped page and grants no access.
+`org.MemberSearch` owns a separate read-only snapshot: `org.ListSearchMembers`
+reads only that resolved membership's organisation, in handle order, then
+identity's `Directory.LookupDisplayNames` receives only the listed account IDs.
+`orgpg.NewMemberSearch` binds org's store; `newMemberSearch` in `cmd/ribbitto`
+injects `identitypg.AccountsIn`. Matching is linear in organisation membership
+and returns at most eight candidates; no account join, foreign read exemption,
+table write or new import edge is needed. A server-side filter is future work
+if organisations grow to thousands of members.
 `conversation.Reader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream

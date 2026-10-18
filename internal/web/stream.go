@@ -132,7 +132,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	// WriteHeader ends a stream that has started (accepted on #315).
 	header := w.Header()
 	header.Set("Content-Type", "text/event-stream; charset=utf-8")
-	header.Set("Cache-Control", "no-cache")
+	header.Set("Cache-Control", "no-store")
 	if context.Cause(ctx) != nil {
 		streamCancelled(w, r, ctx) // http.Error replaces the content type
 		return

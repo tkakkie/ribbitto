@@ -54,25 +54,33 @@ Long-running paths use the following budgets:
 - Stream replay reads indexed, organisation-scoped batches (normally 100 events)
   in separate snapshots. Catch-up across many batches does not extend one
   statement; replay keeps the 30 s default.
-- Conversation read snapshots, including page counts and sidebar recounts,
-  locally set a one-minute statement budget. Count candidates are capped, but
-  fragmented read sets and above-floor filtering can still scan history. This
-  also covers the same count work on ordinary pages. A pathological query still
-  fails after one minute; this is not an unlimited recount exemption.
+- Conversation page counts and sidebar recounts locally set a one-minute
+  statement budget unless the URL sets `statement_timeout`. Count candidates
+  are capped, but fragmented read sets and above-floor filtering can still scan
+  history. This also covers the same count work on ordinary pages. One minute
+  equals the 60 s HTTP write timeout: it is deliberately the ceiling, so a
+  pathological count can run up to the write deadline. Bounded `One`, `Many`,
+  `Locate`, pins-only and member-list snapshots keep the session budget without
+  an extra statement.
+- Unread's `Reading.Feed` and `Reading.Topic` use `InTxDetachedCommit` for bounded
+  mark-as-read writes, not recounts. Their bounded probes (`FirstMessageAfter`,
+  `HasMessages` and topic candidates) need no extension of the 30 s default.
 - Retention's initial organisation listing scans the whole event log, so only
-  that read snapshot locally sets one minute. Each subsequent transaction
-  processes at most 1,000 indexed rows and keeps the 30 s statement and 5 s lock
+  that read snapshot locally sets one minute unless the URL sets
+  `statement_timeout`. Each subsequent transaction processes at most 1,000
+  indexed rows and keeps the 30 s statement and 5 s lock
   defaults. The worker's existing one-minute context bounds the entire run;
   errors preserve committed batches for the next tick.
 - `cmd/seed` commits each use case separately, rather than bulk-loading in one
   statement. Its expected-message export reads history in 50-message pages and
-  skips unread counts (it shares the conversation reader's one-minute snapshots).
+  skips unread counts, so those snapshots keep the session budget.
   The overall command can exceed 30 s without any one write statement needing
   longer; no seed-specific override is needed.
 
-The one-minute read budgets use `SET LOCAL statement_timeout`, including when the URL
-sets another session default. They reset on commit or rollback. Other pool
-operations retain the configured session defaults.
+The one-minute read budgets use `SET LOCAL statement_timeout` only when ribbitto
+supplied the session default. Any explicit URL value, including `0` and values
+in `options`, skips the local setting. Local settings reset on commit or rollback;
+other operations retain the configured session defaults.
 
 ## Current computation sizing (#1046)
 

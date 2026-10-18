@@ -81,8 +81,9 @@ func TestSidebarSkipsFirstUnread(t *testing.T) {
 			reader := conversationpg.NewReader(traced, lookupMembers, lookupAccounts, eventCursor, pageCountsIn)
 			sidebar, err := reader.Sidebar(t.Context(), m, f.Channel.ID, &selected)
 			feedRequire(t, err)
-			if q := trace.Counts(); q.Queries != 10 || q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 {
-				t.Fatalf("recount statements/transaction = %+v, want 10/1/1/0", q)
+			// Raw pgtest pools skip the application's local timeout setting.
+			if q := trace.Counts(); q.Queries != 9 || q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 {
+				t.Fatalf("recount statements/transaction = %+v, want 9/1/1/0", q)
 			}
 			queries := trace.queries
 			if len(queries) != 2 {

@@ -15,6 +15,9 @@ func TestPoolTimeoutConfig(t *testing.T) {
 		optionOverrides bool
 	}{
 		{name: "defaults"},
+		{name: "disabled statement timeout", query: url.Values{"statement_timeout": {"0"}}},
+		{name: "explicit default", query: url.Values{"statement_timeout": {"30s"}}},
+		{name: "explicit marker spelling", query: url.Values{"statement_timeout": {"30000ms"}}},
 		{name: "query values", query: url.Values{
 			"statement_timeout": {"250ms"}, "lock_timeout": {"0"},
 			"idle_in_transaction_session_timeout": {"2min"},
@@ -43,7 +46,7 @@ func TestPoolTimeoutConfig(t *testing.T) {
 				t.Fatalf("options = %q, want %q", params["options"], tt.options)
 			}
 			for name, fallback := range map[string]string{
-				"statement_timeout": "30s", "lock_timeout": "5s",
+				"statement_timeout": "30000ms", "lock_timeout": "5s",
 				"idle_in_transaction_session_timeout": "60s",
 			} {
 				want := fallback
@@ -56,6 +59,9 @@ func TestPoolTimeoutConfig(t *testing.T) {
 				}
 				if explicit, present := q[name]; present {
 					want = explicit[0]
+					if name == "statement_timeout" && want == defaultStatementTimeout {
+						want = "30s"
+					}
 				}
 				if params[name] != want {
 					t.Errorf("%s = %q, want %q", name, params[name], want)

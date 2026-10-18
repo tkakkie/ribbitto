@@ -123,9 +123,9 @@ func TestPageCountsSnapshot(t *testing.T) {
 							t.Fatalf("%s statements=%d, want 1", name, trace.names[name])
 						}
 					}
-					wantStatements := int64(13) // includes the local statement budget
+					wantStatements := int64(12) // pgtest pools have no application timeout default
 					if strings.HasPrefix(kind, "topic") {
-						wantStatements = 14
+						wantStatements = 13
 					}
 					if q := trace.Counts(); q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 || q.Queries != wantStatements {
 						t.Fatalf("page transactions: %+v", q)

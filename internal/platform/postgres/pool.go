@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// defaultStatementTimeout identifies the budget supplied by this package. Explicit
+// URL values with this spelling are normalised below so they cannot opt in.
+const defaultStatementTimeout = "30000ms"
+
 // OpenPool connects the pgx pool that the sqlc queries use. Migrations keep
 // using Open's database/sql handle, which goose needs. A nil counter installs
 // no tracer at all, so the pool runs exactly as without metrics.
@@ -42,6 +46,9 @@ func parsePoolConfig(url string) (*pgxpool.Config, error) {
 		return nil, fmt.Errorf("parsing database configuration: %w", err)
 	}
 	params := config.ConnConfig.RuntimeParams
+	if params["statement_timeout"] == defaultStatementTimeout {
+		params["statement_timeout"] = "30s"
+	}
 	options := optionNames(params["options"])
 	for name := range params {
 		options[strings.ToLower(name)] = true
@@ -49,7 +56,7 @@ func parsePoolConfig(url string) (*pgxpool.Config, error) {
 	for name, value := range map[string]string{
 		// End slow queries before the HTTP write budget, even when
 		// WriteTimeout leaves the request context live.
-		"statement_timeout": "30s",
+		"statement_timeout": defaultStatementTimeout,
 		// Contended writes should fail well before the statement budget.
 		"lock_timeout": "5s",
 		// An abandoned transaction must not retain locks indefinitely, while

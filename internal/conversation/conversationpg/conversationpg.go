@@ -53,11 +53,12 @@ func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, eve
 }
 
 // NewReader builds the page, single-message and batch use case over the pool.
+// Nil counts skips count work and its local statement budget.
 func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn, counts conversation.PageCountsIn) *conversation.Reader {
 	// Page and sidebar counts cap candidates, but fragmented read sets and
-	// above-floor filtering can scan history. Extend only reader snapshots,
-	// leaving writes and posting's validation snapshots on the pool budget.
-	return conversation.NewReader(snapshotRunner{pool: pool, statementTimeout: time.Minute}, readStoreIn, members, accounts, cursor, counts)
+	// above-floor filtering can scan history. Only these count snapshots need
+	// longer than the pool default; explicit URL statement timeouts still win.
+	return conversation.NewReader(newSnapshotRunner(pool), snapshotRunner{pool: pool, statementTimeout: time.Minute}, readStoreIn, members, accounts, cursor, counts)
 }
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
@@ -81,8 +82,8 @@ func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
 // transaction; it is a conversation.WriterIn.
 func writerIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
 
-// newSnapshotRunner returns the snapshot runner the page snapshot, One and
-// Many own their read through, over pool.
+// newSnapshotRunner keeps bounded reads and posting validation on the session
+// budget, without an extra statement to configure it.
 func newSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
 	return snapshotRunner{pool: pool}
 }

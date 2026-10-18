@@ -84,7 +84,8 @@ func InSnapshot(ctx context.Context, pool *pgxpool.Pool, fn func(Snapshot) error
 
 // InSnapshotWithStatementTimeout is InSnapshot with a transaction-local
 // statement budget for work that needs longer than the pool default. A
-// nonpositive timeout keeps the session default.
+// nonpositive timeout or an explicit statement_timeout in the database URL
+// (including options) keeps the session setting.
 func InSnapshotWithStatementTimeout(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, fn func(Snapshot) error) error {
 	return inSnapshot(ctx, pool, timeout, fn)
 }
@@ -92,7 +93,7 @@ func InSnapshotWithStatementTimeout(ctx context.Context, pool *pgxpool.Pool, tim
 func inSnapshot(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, fn func(Snapshot) error) error {
 	options := pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}
 	return pgx.BeginTxFunc(ctx, pool, options, func(tx pgx.Tx) error {
-		if timeout > 0 {
+		if timeout > 0 && pool.Config().ConnConfig.RuntimeParams["statement_timeout"] == defaultStatementTimeout {
 			// SET does not establish the repeatable-read snapshot; a SELECT
 			// set_config would move it ahead of the caller's first data read.
 			if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL statement_timeout = '%dms'", max(1, timeout.Milliseconds()))); err != nil {

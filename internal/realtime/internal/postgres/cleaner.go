@@ -34,7 +34,8 @@ func (c *Cleaner) ExpireEvents(ctx context.Context, cutoff time.Time) error {
 	var organizations []pgtype.UUID
 	// The initial listing scans the whole event log (no created_at index),
 	// unlike the 1,000-row batches. Allow the worker's full one-minute budget
-	// for this read only; batch writes keep the pool's shorter limits.
+	// for this read only unless the URL sets statement_timeout; batch writes
+	// keep the pool's shorter limits.
 	err := platform.InSnapshotWithStatementTimeout(ctx, c.pool, time.Minute, func(s platform.Snapshot) error {
 		var err error
 		organizations, err = sqlcgen.New(pgxbridge.Snapshot(s)).OrganizationsWithExpiredEvents(ctx, expiry)

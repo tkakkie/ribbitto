@@ -356,10 +356,15 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			if n["objtype"] != "OBJECT_TABLE" {
 				return fmt.Errorf("unsupported migration ALTER object %v", n["objtype"])
 			}
-			for _, cmd := range sqlwalk.List(n["cmds"]) {
-				sub := sqlwalk.Node(cmd, "AlterTableCmd")["subtype"]
+			for _, raw := range sqlwalk.List(n["cmds"]) {
+				cmd := sqlwalk.Node(raw, "AlterTableCmd")
+				sub := cmd["subtype"]
 				switch sub {
-				case "AT_AddColumn", "AT_SetNotNull", "AT_AddConstraint", "AT_DropConstraint":
+				case "AT_AddColumn", "AT_SetNotNull", "AT_AddConstraint":
+				case "AT_DropConstraint":
+					if cmd["behavior"] == "DROP_CASCADE" {
+						return fmt.Errorf("unsupported migration ALTER TABLE DROP CONSTRAINT CASCADE")
+					}
 				default:
 					return fmt.Errorf("unsupported migration ALTER TABLE %v", sub)
 				}

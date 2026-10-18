@@ -16,8 +16,9 @@ Japanese included. Names are unique per organisation ignoring case, using
 PostgreSQL `lower(name)` (the unique index on `(organization_id, lower(name))`),
 only because channels sit flat under the organisation today, so two channels
 with one name would confuse people. If namespaces arrive (categories,
-projects), uniqueness can narrow to them, for example `(organization_id, parent_id, lower(name))`; nothing may rely on a name
-being unique across the organisation. A duplicate name is a user-facing
+projects), uniqueness can narrow to them, for example
+`(organization_id, parent_id, lower(name))`; nothing may rely on a name being
+unique across the organisation. A duplicate name is a user-facing
 error, including case-only twins such as `Announcements` and `announcements`.
 The same name in another organisation is allowed. General Unicode confusables
 remain outside this rule ([names](names.md)). Every member may create channels:

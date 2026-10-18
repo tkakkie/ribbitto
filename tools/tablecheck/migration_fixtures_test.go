@@ -109,6 +109,8 @@ func TestMigrationObjects(t *testing.T) {
 		{"set not null", "ALTER TABLE message ALTER COLUMN id SET NOT NULL", ""},
 		{"add constraint", "ALTER TABLE message ADD CONSTRAINT c CHECK(id > 0)", ""},
 		{"drop constraint", "ALTER TABLE message DROP CONSTRAINT c", ""},
+		{"drop constraint cascade", "ALTER TABLE message DROP CONSTRAINT c CASCADE", "unsupported migration ALTER TABLE DROP CONSTRAINT CASCADE"},
+		{"drop constraint restrict", "ALTER TABLE message DROP CONSTRAINT c RESTRICT", ""},
 		{"update backfill", "UPDATE message SET id=(SELECT id FROM message)", ""},
 		{"insert backfill", "INSERT INTO message SELECT id FROM message", ""},
 		{"backfill foreign read", "INSERT INTO message SELECT id FROM account", "foreign table account (write=false, owner=identity)"},

@@ -55,8 +55,9 @@ The expressions, operators, casts and relation shapes both SQL gates accept in
 production queries, and why, are in [query gate](query-gate.md).
 Migration Up sections have an explicit statement allowlist: CREATE TABLE,
 INDEX and SEQUENCE; ALTER TABLE ADD COLUMN, SET NOT NULL, ADD CONSTRAINT and
-DROP CONSTRAINT; UPDATE/INSERT backfills; functions and triggers (including
-constraint triggers).
+DROP CONSTRAINT without CASCADE; UPDATE/INSERT backfills; functions and triggers
+(including constraint triggers). DROP CONSTRAINT CASCADE fails with a named error
+because it could drop foreign keys on other tables.
 Every other kind fails with a named error, including RULE, views, policies,
 procedures, DO, EXECUTE, FOREIGN TABLE and table-creating SELECT INTO. Down
 sections are outside this gate. CREATE TABLE also refuses INHERITS, PARTITION OF,

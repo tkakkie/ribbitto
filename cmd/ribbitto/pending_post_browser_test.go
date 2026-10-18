@@ -99,7 +99,7 @@ func testPendingPostPage(t *testing.T, browser *rod.Browser, topic bool) {
 				cancel()
 				_ = router.Stop()
 			}()
-			page.MustEval(`() => {const b=document.getElementById('message-body'); window.cursor=document.getElementById('organization-stream').dataset.eventCursor; b.value='pending database post'; b.form.requestSubmit();}`)
+			page.MustEval(`() => {const b=document.getElementById('message-body'); window.cursor=document.getElementById('organization-stream').dataset.eventCursor; b.value='pending database post @owner'; b.form.requestSubmit();}`)
 			values := receivePendingPost(t, ctx, sent, "initial POST")
 			if values.Get("cursor") != page.MustEval(`() => window.cursor`).Str() {
 				t.Fatal("wrong shown cursor")
@@ -109,6 +109,9 @@ func testPendingPostPage(t *testing.T, browser *rod.Browser, topic bool) {
 				if page.MustEval(`before => {const s=document.getElementById('organization-stream');return JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor])!==before || document.querySelectorAll('#message-pending > li').length!==1;}`, before).Bool() || reads.Load() != initialReads {
 					t.Fatal("pending/response changed cursors, read, or disappeared")
 				}
+			}
+			if !strings.Contains(page.MustElement("#message-pending").MustText(), "pending database post @owner") {
+				t.Fatal("pending item changed the typed handle")
 			}
 			assertPhase()
 			release <- struct{}{}
@@ -127,12 +130,13 @@ func testPendingPostPage(t *testing.T, browser *rod.Browser, topic bool) {
 			waitPendingPost(t, page, "held stream delivery", `() => !!window.delivery`)
 			page.MustEval(`() => { window.holding=false; const old=window.delivery; document.getElementById('message-items').dispatchEvent(new CustomEvent('htmx:sseBeforeMessage',{bubbles:true,cancelable:true,detail:old.detail})); }`)
 			waitPendingPost(t, page, "stream replacement and read completion", `before => {const s=document.getElementById('organization-stream');return !document.querySelector('#message-pending > li') && !!s.dataset.appliedCursor && s.dataset.eventCursor===s.dataset.appliedCursor && JSON.stringify([s.dataset.eventCursor,s.dataset.appliedCursor])!==before && !document.querySelector('#read-form.htmx-request');}`, before)
+			storedBody := "pending database post <@" + realtime.FormatPayloadID(scope.MemberID) + ">"
 			var count int
 			var id kernel.ID
-			feedRequire(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, "pending database post").Scan(&count))
-			feedRequire(t, pool.QueryRow(ctx, "SELECT id FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, "pending database post").Scan(&id))
-			if page.MustElement("#body-"+view.MessageDOMID(id)).MustText() != "pending database post" {
-				t.Fatal("stream body differs from pending text")
+			feedRequire(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, storedBody).Scan(&count))
+			feedRequire(t, pool.QueryRow(ctx, "SELECT id FROM message WHERE organization_id=$1 AND channel_id=$2 AND body=$3", scope.OrganizationID, scope.ChannelID, storedBody).Scan(&id))
+			if page.MustElement("#body-"+view.MessageDOMID(id)).MustText() != "pending database post feed @owner" || page.MustEval(`id => !document.getElementById('body-'+id).querySelector('[data-member-id="'+document.getElementById('organization-stream').dataset.member+'"]')`, view.MessageDOMID(id)).Bool() {
+				t.Fatal("stream body lost the converted member reference")
 			}
 			if count != 1 || reads.Load() != initialReads+1 || page.MustEval(`id => document.querySelectorAll('#message-items > #'+id).length!==1`, view.MessageDOMID(id)).Bool() {
 				t.Fatal("delivery did not replace/read exactly once, or retry stored twice")

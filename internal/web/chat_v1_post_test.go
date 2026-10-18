@@ -13,10 +13,12 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -38,7 +40,8 @@ func TestChatV1PostingAgainstPostgreSQL(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "planning")
-	bob := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "bob@example.org", "Bob Example"), org.RoleMember, "bob", 1)
+	bobAccount := identitytest.Account(t, pool, "bob@example.org", "Bob Example")
+	bob := orgtest.Member(t, pool, f.OrganizationID, bobAccount, org.RoleMember, "bob", 1)
 	foreign := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	spy := orgtest.Member(t, pool, foreign.OrganizationID, identitytest.Account(t, pool, "spy@example.org", "Foreign Spy"), org.RoleMember, "spy", 1)
 	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
@@ -106,6 +109,58 @@ func TestChatV1PostingAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("everyone did not render literally")
 	}
 
+	key := conversation.NewIdempotencyKey().String()
+	form := url.Values{"body": {"hi @bob"}, "idempotency_key": {key}, "composer": {"submitted"}}
+	if w := post(feed, form, true); w.Code != http.StatusOK {
+		t.Fatalf("typed mention: %d %s", w.Code, w.Body.String())
+	}
+	first, body, _ := latest()
+	if body != "hi "+ref(bob) || strings.Contains(body, "bob") {
+		t.Fatalf("typed mention did not store only ID: %q", body)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM message").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orgpg.NewHandleChanger(pool).ChangeHandle(ctx, &identity.Account{ID: bobAccount}, "acme", "robert"); err != nil {
+		t.Fatal(err)
+	}
+	for _, reassign := range []bool{false, true} {
+		if reassign {
+			orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "newbob@example.org", "New Bob"), org.RoleMember, "bob", 1)
+		}
+		if w := post(feed, form, true); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `data-posted-message="`+view.MessageDOMID(first)+`"`) {
+			t.Fatalf("retry after rename/reassignment: %d %s", w.Code, w.Body.String())
+		}
+	}
+	for _, hx := range []bool{true, false} {
+		form.Set("body", "hi @robert")
+		w := post(feed, form, hx)
+		_, kept := composerForm(t, w)
+		if w.Code != http.StatusConflict || strings.Contains(w.Body.String(), "data-sent-body=") || !hx && kept.Get("body") != "hi @robert" {
+			t.Fatalf("conflict lost draft: %d %s", w.Code, w.Body.String())
+		}
+	}
+	form.Set("body", "hi @bob and more")
+	if w := post(feed, form, true); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `data-sent-body="hi @bob"`) {
+		t.Fatalf("conflict did not recover typed prefix: %d %s", w.Code, w.Body.String())
+	}
+	var afterCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM message").Scan(&afterCount); err != nil || afterCount != count {
+		t.Fatalf("retries wrote a second post: %d -> %d, %v", count, afterCount, err)
+	}
+	if id, body, _ := latest(); id != first || body != "hi "+ref(bob) {
+		t.Fatalf("retry changed first message: %v %q", id, body)
+	}
+	for _, hx := range []bool{true, false} {
+		draft := "@bob " + strings.Repeat("界", conversation.MaxMessageBodyLength-5)
+		w := post(feed, url.Values{"body": {draft}, "idempotency_key": {conversation.NewIdempotencyKey().String()}}, hx)
+		_, kept := composerForm(t, w)
+		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Enter 1–4000 characters") || !hx && kept.Get("body") != draft {
+			t.Fatalf("expanded limit did not keep draft: %d %s", w.Code, w.Body.String())
+		}
+	}
+
 	// An unknown and another organisation's member: the same status and
 	// message, the same answer once the echoed draft is normalised, and
 	// nothing about the foreign member; no message is written.
@@ -158,6 +213,30 @@ func TestChatV1PostingAgainstPostgreSQL(t *testing.T) {
 		}
 		if strings.Contains(page, "Foreign Spy") || strings.Contains(page, "@spy") || strings.Contains(page, "@unknown member") {
 			t.Errorf("notice for %q resolved a reference", name)
+		}
+	}
+	var unknownAnswer string
+	for _, handle := range []string{"@unknown", "@spy"} {
+		w := post(feed, url.Values{"body": {handle}}, false)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("literal handle: %d %s", w.Code, w.Body.String())
+		}
+		answer := w.Header().Get("Location") + w.Body.String()
+		if unknownAnswer != "" && answer != unknownAnswer {
+			t.Fatal("foreign and unknown handles answered differently")
+		}
+		unknownAnswer = answer
+		if _, body, _ := latest(); body != handle {
+			t.Fatalf("foreign or unknown handle converted: %q", body)
+		}
+	}
+
+	for _, hx := range []bool{true, false} {
+		if w := post(feed, url.Values{"body": {"@spy @unknown"}}, hx); hx && w.Code != http.StatusOK || !hx && w.Code != http.StatusSeeOther {
+			t.Fatalf("foreign handle: %d %s", w.Code, w.Body.String())
+		}
+		if _, body, _ := latest(); body != "@spy @unknown" {
+			t.Fatalf("foreign handle converted: %q", body)
 		}
 	}
 }

@@ -518,17 +518,17 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: channel, Topic: topic}, m.Member.ID))
 }
 
-// recovered returns the stored body when an enhanced retry's text starts
-// with it: the earlier answer was lost while the member typed on, and the
-// script removes the stored part instead of showing the 409's error (#1179).
+// recovered offers only a verified typed prefix: after a lost answer, the
+// script can remove the earlier input while keeping later typing (#1179).
+// Stored references cannot reconstruct that input after a handle rename.
 // A plain form, or text that no longer starts with it, keeps the error, as
 // does a quote on either side: a stored one may still be in the composer for
 // the rest, and a requested one would be dropped with the text.
 func recovered(enhanced bool, channel kernel.ID, body string, quoted bool, stored conversation.Message) string {
-	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil || !strings.HasPrefix(body, stored.Body) {
+	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil {
 		return ""
 	}
-	return stored.Body
+	return stored.TypedBodyPrefix(body)
 }
 
 // freshKey renders a new composer key: on every render but a 422, which

@@ -47,8 +47,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id, with
   `data-posted-topic` and `data-posted-seq` from that message (including repeats); errors omit them,
-  except a 409, which names the stored message and, when the text starts
-  with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
+  except a 409, which names the stored message. Unquoted htmx 409s in the same
+  channel offer only a retry-text prefix verified against the stored typed-body
+  proof (`data-sent-body`) instead of the error; legacy rows without proof keep the error and draft. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
   success sets it to `"false"` and keeps `aria-describedby="message-help composer-quote-description"`.
   Every composer has a hidden

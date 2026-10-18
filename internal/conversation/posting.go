@@ -33,7 +33,7 @@ func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, eve
 // NewPagePosting builds posting with read writes bound to its transaction,
 // and member references and quoted messages read through members and
 // quotes in a snapshot of their own. Posting built without members refuses
-// every body with a reference, and without quotes every quote.
+// every body with a reference or handle candidate, and without quotes every quote.
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, quotes ReadStoreIn, notifier Notifier) *Posting {
 	p := NewPosting(runner, writer, sequences, events, notifier)
 	p.reads, p.snapshots, p.members, p.quotes = reads, snapshots, members, quotes
@@ -88,7 +88,7 @@ type Sent struct {
 	// Message is the new message or, on a repeat or with ErrPostKeyReused,
 	// the author's stored one, wherever branching has moved it since.
 	Message Message
-	// Topic is the requested place: the topic resolved before the insert,
+	// Topic is the requested place, resolved before inserting or replaying,
 	// which a repeat's composer and typing stay on.
 	Topic kernel.ID
 	// Repeat reports that an earlier send with the key stored Message.
@@ -106,9 +106,25 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if err != nil {
 		return Sent{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 	}
+	// A replay is compared with typed text before resolving today's handles
+	// or checking expansion. The unique index still decides concurrent sends.
+	tokens := handleTokens(body)
+	if s.Key != nil && p.members != nil && len(tokens) > 0 {
+		sent, err := p.repeat(ctx, m, channelID, body, s.Quote, s.Topic, kernel.ID{}, *s.Key)
+		if !errors.Is(err, ErrMessageNotFound) {
+			return sent, err
+		}
+	}
+	typed := body
 	var proof TypedBodyProof
 	if s.Key != nil {
-		proof = proveTypedBody(body)
+		proof = proveTypedBody(typed)
+	}
+	if body, err = p.convertHandles(ctx, m.Organization.ID, body, tokens); err != nil {
+		return Sent{}, err
+	}
+	if body, err = ValidateMessageBody(body); err != nil {
+		return Sent{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 	}
 	if err := p.checkReferences(ctx, m.Organization.ID, body); err != nil {
 		return Sent{}, err
@@ -193,7 +209,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if errors.Is(err, ErrPostKeyTaken) && s.Key != nil {
 		// The rollback returned the sequence (no holes); read the stored
 		// message in a transaction of its own.
-		return p.repeat(ctx, m, channelID, body, s.Quote, requested, *s.Key)
+		return p.repeat(ctx, m, channelID, typed, s.Quote, s.Topic, requested, *s.Key)
 	}
 	if err != nil {
 		return Sent{}, fmt.Errorf("posting message: %w", err)
@@ -236,11 +252,29 @@ func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID,
 
 // repeat answers a send whose key the author already stored. The topic is
 // not compared: branching may have moved the message since.
-func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
+func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, topicID *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
 	var stored Message
 	err := p.runner.InTx(ctx, func(tx platform.Tx) error {
 		var err error
 		stored, err = p.writer(tx).KeyedMessage(ctx, m.Organization.ID, m.Member.ID, key)
+		if err == nil && requested == (kernel.ID{}) {
+			// This is a replay-only read transaction, with no sequence or writes.
+			// Keep the requested composer scope even if the message moved.
+			topic, lookupErr := p.writer(tx).GetDefaultTopic(ctx, m.Organization.ID, channelID)
+			if errors.Is(lookupErr, ErrTopicNotFound) {
+				return ErrChannelNotFound
+			}
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if topicID != nil {
+				topic, lookupErr = p.writer(tx).GetTopic(ctx, m.Organization.ID, channelID, *topicID)
+				if lookupErr != nil {
+					return lookupErr
+				}
+			}
+			requested = topic.ID
+		}
 		return err
 	})
 	if err != nil {

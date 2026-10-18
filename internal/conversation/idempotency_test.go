@@ -64,3 +64,16 @@ func TestSameTypedBody(t *testing.T) {
 		t.Fatalf("normalized input differs: %q, %v", normalized, err)
 	}
 }
+
+func TestTypedBodyPrefix(t *testing.T) {
+	const typed = "界 hi @tomoya"
+	m := Message{Body: "converted independently", TypedBodyProof: proveTypedBody(typed)}
+	for _, tc := range []struct{ body, want string }{
+		{typed + " more", typed}, {typed, typed}, {"界 hi @thomas more", ""},
+		{"界 hi @TOMOYA more", ""}, {"short", ""}, {m.Body + " more", ""},
+	} {
+		if got := m.TypedBodyPrefix(tc.body); got != tc.want {
+			t.Errorf("prefix(%q) = %q, want %q", tc.body, got, tc.want)
+		}
+	}
+}

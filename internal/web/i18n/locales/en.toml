@@ -406,6 +406,12 @@ other = "Wait for pending messages, or remove them, before trying this send agai
 ["message.capacity"]
 other = "You have 10 pending messages. Wait for delivery or remove one to send another."
 
+["message.edit"]
+other = "Edit"
+
+["message.edit.unavailable"]
+other = "Clear the text you are writing to edit this message."
+
 ["mention.label"]
 other = "Mention candidates"
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -25,16 +24,18 @@ func newFeedWriter() *unread.FeedWriter {
 // newTopicWriter binds the topic write to reading's transaction.
 func newTopicWriter() *unread.TopicWriter {
 	return unread.NewTopicWriter(
-		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
-			return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
-				return unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
-			}
-		},
+		topicPrepare,
 		func(tx platform.Tx) unread.TopicMessages {
 			return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
 		},
 		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
 	)
+}
+
+func topicPrepare(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
+	return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
+		return unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
+	}
 }
 
 type topicMessages struct {
@@ -74,41 +75,14 @@ func postReads(tx platform.Tx) conversation.PostReadWriter { return postReadWrit
 type postReadWriter struct{ tx platform.Tx }
 
 func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor *int64, lo, hi, floor int64) error {
-	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}
-	joined := m.Member.JoinedEventSeq
-	if cursor == nil {
-		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
-	}
-	if topic == nil {
-		if _, err := newFeedWriter().Read(ctx, w.tx, scope, joined, *cursor); err != nil {
-			return err
-		}
-		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
-	}
-	ts := unread.TopicScope{Scope: scope, TopicID: *topic}
-	// Capture preparation only after TopicWriter validates the cursor. Both
-	// unions retain the same channel lock in this posting transaction.
-	var prepared unread.PreparedTopic
-	writer := unread.NewTopicWriter(
-		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
-			return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
-				p, err := unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
-				prepared = p
-				return p, err
-			}
-		},
-		func(tx platform.Tx) unread.TopicMessages {
-			return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
-		},
-		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
-	)
-	if _, err := writer.Read(ctx, w.tx, ts, joined, *cursor); err != nil {
-		return err
-	}
-	// TopicWriter.Read prepares before every successful return; fail rather
-	// than panic if that ever changes.
-	if prepared == nil {
-		return errors.New("posting topic read: page write returned without preparing")
-	}
-	return prepared.Add(ctx, []int64{lo}, []int64{hi}, floor)
+	reads := unread.NewPostReads(func(tx platform.Tx) unread.RangeWriter { return unreadpg.WriterIn(tx) }, topicPrepare,
+		func() unread.FeedRead { return newFeedWriter().Read },
+		func(prepare unread.TopicPrepareIn) unread.TopicRead {
+			return unread.NewTopicWriter(prepare,
+				func(tx platform.Tx) unread.TopicMessages {
+					return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
+				},
+				func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) }).Read
+		})
+	return reads.Read(ctx, w.tx, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topic, cursor, unread.Range{Lo: lo, Hi: hi}, floor)
 }

@@ -39,7 +39,7 @@ lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus 
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
 older pages connect with only the sidebar interest. The injected `PageCountsIn`
-factory also binds unread's two list reads to that snapshot, including older
+factory binds `unread.PageCounts` to that snapshot, including older
 history pages; their plain results carry both count maps and
 first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
@@ -128,10 +128,11 @@ Posting from a page uses conversation's `PostReadWriterIn`, wired by
 `postReads` in `cmd/ribbitto`. After taking org's sequence, `PostFromPage`
 validates the page cursor against the pre-post limit and inserts the message.
 Conversation supplies the channel predecessor and checks the topic for posts
-or moves strictly between the cursor and the new sequence. The adapter calls
+or moves strictly between the cursor and the new sequence. `unread.PostReads` chooses
 `FeedWriter` or `TopicWriter`, then adds the own-message range and safe topic
-floor through unread's writer. Org is locked before `channel_read`; all reads,
-writes and the event append share posting's transaction.
+floor through unread's writer; the adapter only binds factories and membership.
+Org is locked before `channel_read`; all reads, writes and the event append
+share posting's transaction.
 
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to

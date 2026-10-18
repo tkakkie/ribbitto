@@ -31,13 +31,29 @@ var ErrInvalidCursor error // ErrInvalidCursor means the cursor is negative, unr
 type EventCursor interface // EventCursor reads org's committed event sequence.
   func (EventCursor).EventSeq(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventCursor // EventCursorIn binds org's cursor to the caller's transaction.
+type FeedRead func(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, Scope, int64, int64) (bool, error) // FeedRead writes a feed page in the caller's transaction.
 type FeedWriter struct // FeedWriter reads a channel through a cursor in the caller's transaction.
   func (*FeedWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joinedEventSeq int64, cursor int64) (bool, error) // Read unions the feed prefix through cursor with the member's persisted join prefix.
 func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *ChannelCounts // NewChannelCounts builds channel counts with snapshot-bound factories.
 func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor EventCursorIn) *FeedWriter // NewFeedWriter builds the feed write with transaction-bound factories.
+func NewPageCounts(channels func() PageChannelCounts, topics func() PageTopicCounts) *PageCounts // NewPageCounts builds page counting with snapshot-bound count factories.
+func NewPostReads(ranges RangeWriterIn, prepare TopicPrepareIn, feed func() FeedRead, topic func(TopicPrepareIn) TopicRead) *PostReads // NewPostReads builds post reads with transaction-bound factories.
 func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter, publisher ReadPublisher) *Reading // NewReading builds reading with transaction-bound writers and an optional publisher.
 func NewTopicCounts(state TopicStateReaderIn, messages TopicCounterIn) *TopicCounts // NewTopicCounts builds topic counts with snapshot-bound factories.
 func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
+type PageChannelCounts interface // PageChannelCounts supplies channel counts in a shared snapshot.
+  func (PageChannelCounts).ReadWithFirstUnread(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]ChannelCount, error)
+type PageCountResult struct // PageCountResult contains both count maps and the page's first unread sequences.
+  field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field FeedFirstUnread int64
+  field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field TopicFirstUnread int64
+type PageCounts struct // PageCounts combines channel and topic counts in the caller's snapshot.
+  func (*PageCounts).Read(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, scope Scope, joined int64, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (PageCountResult, error) // Read forwards selection and the first-unread choice to both count readers.
+type PageTopicCounts interface // PageTopicCounts supplies topic counts in a shared snapshot.
+  func (PageTopicCounts).ReadWithFirstUnread(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, Scope, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error)
+type PostReads struct // PostReads combines page reads and the author's own-message read.
+  func (*PostReads).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joined int64, topic *github.com/tkakkie/ribbitto/internal/kernel.ID, cursor *int64, own Range, floor int64) error // Read retains posting's organisation-first lock order and never completes tx.
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
   func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
   func (PreparedTopic).ReadState() (prefix int64, floor int64, ranges []Range) // ReadState returns the prefix, floor and read ranges above the prefix.
@@ -67,6 +83,7 @@ type TopicMessages interface // TopicMessages supplies unread message bounds thr
   func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []Range) ([]Range, error) // Ranges returns whole-channel neighbour bounds for this topic's unread messages.
 type TopicMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) TopicMessages // TopicMessagesIn binds conversation's candidate query to the caller's transaction.
 type TopicPrepareIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) func(context.Context, TopicScope, int64) (PreparedTopic, error) // TopicPrepareIn binds locked preparation to the caller's transaction.
+type TopicRead func(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, TopicScope, int64, int64) (bool, error) // TopicRead writes a topic page in the caller's transaction.
 type TopicReadState struct // TopicReadState contains the prefix end, read ranges above it and topic floors.
   field Floors map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Prefix int64

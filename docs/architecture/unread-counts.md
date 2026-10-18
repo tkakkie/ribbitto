@@ -41,8 +41,8 @@ tables. Page and independent sidebar snapshots (`conversation.Reader`) reach
 `unread` through an injected, snapshot-bound factory. Pages also reach org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
 `conversation`'s snapshot-bound message queries. The composition root supplies conversation's consumer-owned
-`PageCountsIn` factory. `PageCounter` adapts `newChannelCounts` and
-`newTopicCounts` using org's resolved `Membership.Member.JoinedEventSeq`;
+`PageCountsIn` factory. `unread.PageCounts` combines both count lists;
+the adapter supplies org's `Membership.Member.JoinedEventSeq` and converts results;
 unread never queries `member`. Feed, topic and `?before=` pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).

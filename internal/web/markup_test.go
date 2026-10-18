@@ -591,7 +591,7 @@ func TestPagesMarkup(t *testing.T) {
 		s := withSignUp(true, nil)()
 		s.Setup = &fakeSetup{open: true, err: org.ErrSetupToken}
 		now := func() time.Time { return time.Unix(0, 0) }
-		s.Limits = middleware.NewAuthLimits(nil, now, slog.Default())
+		s.Limits = middleware.NewAuthLimits(nil, now, slog.New(slog.DiscardHandler))
 		s.Limits.SignIn = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
 		s.Limits.SignUp = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
 		s.Limits.Setup = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)

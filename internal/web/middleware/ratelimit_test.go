@@ -217,7 +217,7 @@ func sixtyFour(i int) netip.Prefix {
 // re-probing them to keep them alive.
 func TestSignInNetworkCannotFillTable(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	l := NewAuthLimits(nil, func() time.Time { return now }, slog.Default()).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	for range 2 {
 		for i := range maxBuckets {
 			l.Allow(sixtyFour(i))
@@ -232,7 +232,7 @@ func TestSignInNetworkCannotFillTable(t *testing.T) {
 // The /64s of one /48 together get the /48's budget, not one each.
 func TestSignInNetworkBudget(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	l := NewAuthLimits(nil, func() time.Time { return now }, slog.Default()).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	admitted := 0
 	for i := range 3600 {
 		if l.Allow(sixtyFour(i)) {
@@ -251,7 +251,7 @@ func TestSignInNetworkBudget(t *testing.T) {
 func TestRefusedRequestTakesNothing(t *testing.T) {
 	t0 := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 	now := t0
-	l := NewAuthLimits(nil, func() time.Time { return now }, slog.Default()).SignIn
+	l := NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)).SignIn
 	a := sixtyFour(0)
 	l.Allow(a) // a: 4 tokens left
 	for i := 1; i < 10; i++ {
@@ -305,7 +305,7 @@ func TestNetworkChurn(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-			l := tt.pick(NewAuthLimits(nil, func() time.Time { return now }, slog.Default()))
+			l := tt.pick(NewAuthLimits(nil, func() time.Time { return now }, slog.New(slog.DiscardHandler)))
 			l.max = 40
 			window := time.Duration(tt.limit.Burst) * tt.limit.Every
 			var admitted []netip.Prefix
@@ -394,7 +394,7 @@ func TestTrustedProxyContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-			limits := NewAuthLimits(trusted, func() time.Time { return now }, slog.Default())
+			limits := NewAuthLimits(trusted, func() time.Time { return now }, slog.New(slog.DiscardHandler))
 			allowed := 0
 			for i := range 10 {
 				r := httptest.NewRequest("POST", "/signin", nil)

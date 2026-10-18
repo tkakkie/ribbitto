@@ -146,7 +146,7 @@ and per-process reset rules apply.
 ## Reverse proxies
 
 ribbitto works behind any reverse proxy (Caddy, nginx, HAProxy, Traefik…)
-meeting this contract; security is independent of the proxy.
+meeting this contract; security does not rely on any one proxy.
 
 - `RIBBITTO_TRUSTED_PROXIES` lists the **proxy peers trusted to forward the
   client address to ribbitto**, not trusted networks. It is comma-separated

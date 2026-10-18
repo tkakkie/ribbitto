@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -51,10 +52,13 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	type delayed struct{ held, release, answered chan struct{} }
-	delays := map[string]delayed{}
+	type delayed struct {
+		held, release, answered chan struct{}
+		started, finished       sync.Once
+	}
+	delays := map[string]*delayed{}
 	for _, q := range []string{"hold", "tomoy"} {
-		delays[q] = delayed{make(chan struct{}), make(chan struct{}), make(chan struct{})}
+		delays[q] = &delayed{held: make(chan struct{}), release: make(chan struct{}), answered: make(chan struct{})}
 	}
 	stop := make(chan struct{})
 	var searches, posts atomic.Int32
@@ -64,13 +68,14 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		if strings.HasSuffix(r.URL.Path, "/mention-candidates") {
 			searches.Add(1)
 			if delay, ok := delays[r.URL.Query().Get("q")]; ok {
-				close(delay.held)
+				// Repeated queries must not panic and drop the HTTP connection.
+				delay.started.Do(func() { close(delay.held) })
 				select {
 				case <-delay.release:
 				case <-stop:
 					return
 				}
-				defer close(delay.answered)
+				defer delay.finished.Do(func() { close(delay.answered) })
 			}
 		}
 		if r.Method == "POST" && r.URL.Path == feed {
@@ -85,8 +90,26 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}))
 	defer server.Close()
 	defer close(stop)
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	steps := newStepRunner(t, ctx, 5*time.Second)
+	page, closePage := boundedPage(t, browser, ctx, `mention-picker step "create page"`)
+	defer closePage()
+	page = page.WithPanic(steps.fail)
+	step := func(name string) { page = page.Context(steps.next(fmt.Sprintf("mention-picker step %q", name))) }
+	press := func(name string, key input.Key) {
+		t.Helper()
+		step(name)
+		steps.device(page, "dispatch keys", func(p *rod.Page) { p.Keyboard.MustType(key) })
+	}
+	await := func(name string, ch <-chan struct{}) {
+		t.Helper()
+		step(name)
+		select {
+		case <-ch:
+		case <-page.GetContext().Done():
+			steps.fail("waiting for delay channel: " + page.GetContext().Err().Error())
+		}
+	}
+	step("navigate and install observers")
 	page.MustNavigate(server.URL + feed).MustWaitLoad()
 	page.MustEval(`() => { window.mentionInputs = 0; window.mentionSubmits = 0;
   document.getElementById('message-body').addEventListener('input', () => window.mentionInputs++);
@@ -95,10 +118,12 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
  }`)
 	set := func(value string) {
 		t.Helper()
+		step(fmt.Sprintf("set composer %q", value))
 		page.MustEval(`value => { const b = document.getElementById('message-body'), caret = value.includes('|') ? value.indexOf('|') : value.length; b.focus(); b.value = value.replace('|', ''); b.setSelectionRange(caret, caret); b.dispatchEvent(new Event('input', {bubbles:true})); }`, value)
 	}
 	opened := func(query string, count int) {
 		t.Helper()
+		step(fmt.Sprintf("open query %q with %d options", query, count))
 		page.MustWait(`(q, n) => !document.getElementById('mention-picker').hidden && document.getElementById('mention-listbox').dataset.query === q && document.querySelectorAll('#mention-listbox [role=option]').length === n`, query, count)
 		if problem := page.MustEval(`() => {
    const b = document.getElementById('message-body'), l = document.getElementById('mention-listbox');
@@ -110,27 +135,27 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
    if(document.getElementById('mention-search').closest('#message-composer, #message-composer-state')) return 'search inside composer';
    return '';
   }`).Str(); problem != "" {
-			t.Fatal(problem)
+			steps.fail(problem)
 		}
 	}
 	closed := func() {
 		t.Helper()
 		if !page.MustEval(`() => document.getElementById('mention-picker').hidden && !document.getElementById('message-body').hasAttribute('aria-activedescendant') && !document.querySelector('#mention-listbox [aria-selected=true]') && document.getElementById('mention-status').textContent === ''`).Bool() {
-			t.Fatal("picker stayed open")
+			steps.fail("picker stayed open")
 		}
 	}
 	set("@")
 	opened("", 8)
 	first := page.MustElement(`#mention-listbox [aria-selected=true]`).MustAttribute("id")
-	page.Keyboard.MustType(input.ArrowUp)
+	press("ArrowUp wraps to last option", input.ArrowUp)
 	page.MustWait(`() => document.querySelector('#mention-listbox').lastElementChild.getAttribute('aria-selected') === 'true'`)
-	page.Keyboard.MustType(input.ArrowDown)
+	press("ArrowDown wraps to first option", input.ArrowDown)
 	if got := page.MustElement("#message-body").MustAttribute("aria-activedescendant"); got == nil || *got != *first {
-		t.Fatal("arrow keys did not wrap")
+		steps.fail("arrow keys did not wrap")
 	}
-	page.Keyboard.MustType(input.ArrowDown)
+	press("ArrowDown selects second option", input.ArrowDown)
 	page.MustWait(`() => document.querySelectorAll('#mention-listbox [role=option]')[1].getAttribute('aria-selected') === 'true'`)
-	page.Keyboard.MustType(input.Escape)
+	press("Escape dismisses picker", input.Escape)
 	closed()
 	set("@")
 	closed()
@@ -138,22 +163,23 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		set("hello (@tom")
 		opened("tom", 1)
 		before := page.MustEval(`() => window.mentionInputs`).Int()
-		page.Keyboard.MustType(key)
+		press("pick with "+key.Info().Code, key)
 		if page.MustEval(`() => window.mentionInputs`).Int() != before+1 {
-			t.Fatal("pick did not fire input")
+			steps.fail("pick did not fire input")
 		}
 		closed()
 		if got := page.MustEval(`() => { const b = document.getElementById('message-body'); return [b.value,b.selectionStart,b.selectionEnd,document.activeElement === b,window.mentionSubmits].join('|'); }`).Str(); got != "hello (@tomoya |15|15|true|0" {
-			t.Fatalf("pick: %s", got)
+			steps.fail(fmt.Sprintf("pick: %s", got))
 		}
 		set("")
 	}
 	set("@tom")
 	opened("tom", 1)
-	page.MustElement(`#mention-listbox [role=option]`).MustClick()
+	step("click candidate")
+	steps.device(page, "click candidate", func(p *rod.Page) { p.MustElement(`#mention-listbox [role=option]`).MustClick() })
 	closed()
 	if page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@tomoya " || !page.MustEval(`() => document.activeElement.id === 'message-body'`).Bool() {
-		t.Fatal("mouse pick failed")
+		steps.fail("mouse pick failed")
 	}
 	// Exercise each allowed boundary on its own, including Go's Unicode spaces.
 	for _, value := range []string{"@tom", "x @tom", "x\t@tom", "x\n@tom", "x\u0085@tom", "x\u3000@tom", "(@tom", "`code` @tom", "\\` @tom", "```go\ncode\n```\n@tom", "x\n加藤 @tom| suffix"} {
@@ -161,13 +187,15 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		set(value)
 		opened("tom", 1)
 	}
+	step("select composer text")
 	page.MustEval(`() => { const b = document.getElementById('message-body'); b.setSelectionRange(0, b.value.length); b.dispatchEvent(new Event('input', {bubbles:true})); }`)
 	closed()
+	step("change to phone viewport")
 	page.MustSetViewport(390, 844, 1, true)
 	set("@")
 	opened("", 8)
 	if !page.MustEval(`() => [...document.querySelectorAll('#mention-listbox [role=option]')].every(e => e.getBoundingClientRect().height >= 44)`).Bool() {
-		t.Fatal("small touch targets")
+		steps.fail("small touch targets")
 	}
 	// Cases visible to the picker from conversation.TestPostingTypedHandles.
 	for _, value := range []string{"plain", "x@tomoya", `\@tomoya`, "https://example.org/@tomoya", "https://example.org/(@tomoya", "a@tomoya.dev", "` @tomoya|`", "`@tomoya|`", "```\n@tomoya", "```go\n@tomoya", "```go\n@tomoya|\n```", "@tom oya", "@tom\toya", "@tom\u3000oya"} {
@@ -177,29 +205,23 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 		// Wait past the htmx debounce to prove invalid tokens send no search.
 		page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 150))`)
 		if searches.Load() != before {
-			t.Fatalf("search opened for %q", value)
+			steps.fail(fmt.Sprintf("search opened for %q", value))
 		}
 	}
 	// A late response must remain hidden even before the next search is sent.
 	set("@hold")
-	select {
-	case <-delays["hold"].held:
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
+	await("hold response requested", delays["hold"].held)
 	set("plain")
 	close(delays["hold"].release)
-	select {
-	case <-delays["hold"].answered:
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
+	await("hold response answered", delays["hold"].answered)
+	step("hidden late hold response swapped")
 	page.MustWait(`() => document.getElementById('mention-listbox').dataset.query === 'hold'`)
 	closed()
 	set("@tom")
 	opened("tom", 1)
 	// A delayed answer opens, then input changes just before the pick, before
 	// selectionchange can run. The pick must independently recheck its query.
+	step("arm stale pick listener")
 	page.MustEval(`() => { document.addEventListener('htmx:afterSwap', function stale(e) {
   if(e.detail.target?.id !== 'mention-listbox' || document.getElementById('mention-listbox').dataset.query !== 'tomoy') return;
   document.removeEventListener('htmx:afterSwap', stale);
@@ -207,109 +229,122 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
   b.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); window.stalePickChecked = document.getElementById('mention-picker').hidden ? 'closed' : 'open';
  }); }`)
 	set("@tomoy")
-	select {
-	case <-delays["tomoy"].held:
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
+	await("stale pick response requested", delays["tomoy"].held)
 	close(delays["tomoy"].release)
-	page.MustWait(`() => window.stalePickChecked`)
+	step("stale pick checked inside tomoy swap")
+	// Rod requires a Boolean result, not the recorded string's truthiness.
+	page.MustWait(`() => typeof window.stalePickChecked === 'string'`)
 	// Checked inside the handler: the changed query legitimately searches and
 	// reopens the list for "other" a moment later.
 	if page.MustEval(`() => window.stalePickChecked`).Str() != "closed" {
-		t.Fatal("stale pick left the picker open")
+		steps.fail("stale pick left the picker open")
 	}
 	if page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@other" {
-		t.Fatal("stale pick inserted")
+		steps.fail("stale pick inserted")
 	}
 	set("@zzmissing")
 	opened("zzmissing", 0)
-	page.Keyboard.MustType(input.Tab)
+	press("empty results allow Tab navigation", input.Tab)
 	closed()
 	if page.MustEval(`() => document.activeElement.id === 'message-body'`).Bool() {
-		t.Fatal("empty results trapped Tab")
+		steps.fail("empty results trapped Tab")
 	}
 	set("")
 	before := searches.Load()
+	step("flagged composing input sends no search")
 	page.MustEval(`() => { const b = document.getElementById('message-body'); b.value = '@tom'; b.dispatchEvent(new InputEvent('input', {bubbles:true, isComposing:true})); }`)
 	page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 150))`)
 	closed()
 	if searches.Load() != before {
-		t.Fatal("composing input searched")
+		steps.fail("composing input searched")
 	}
+	step("end synthetic composition")
 	page.MustEval(`() => document.getElementById('message-body').dispatchEvent(new CompositionEvent('compositionend', {bubbles:true}))`)
 	opened("tom", 1)
 	set("@")
 	opened("", 8)
+	step("start native IME composition")
 	if err := (proto.InputImeSetComposition{Text: "か", SelectionStart: 1, SelectionEnd: 1}).Call(page); err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	closed()
+	step("update native IME composition")
 	if err := (proto.InputImeSetComposition{Text: "かとう", SelectionStart: 3, SelectionEnd: 3}).Call(page); err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	enter := proto.InputDispatchKeyEvent{Type: proto.InputDispatchKeyEventTypeRawKeyDown, Key: "Enter", Code: "Enter", WindowsVirtualKeyCode: 13}
+	step("dispatch IME Enter " + string(enter.Type))
 	if err := enter.Call(page); err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
+	step("commit native IME text")
 	if err := (proto.InputInsertText{Text: "加藤"}).Call(page); err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	enter.Type = proto.InputDispatchKeyEventTypeKeyUp
+	step("dispatch IME Enter " + string(enter.Type))
 	if err := enter.Call(page); err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	opened("加藤", 1)
 	if got := page.MustElement(`#mention-listbox [role=option]`).MustText(); got != "加藤 智也 @tomoya" {
-		t.Fatalf("IME candidate: %q", got)
+		steps.fail(fmt.Sprintf("IME candidate: %q", got))
 	}
 	// Test the unflagged commit Enter at a fixed point inside the grace
 	// period, even when the browser driver takes longer than 100 ms.
+	step("suppress IME grace Enter and flagged keys")
 	page.MustEval(`() => { const e = new KeyboardEvent('keydown', {key:'Enter', bubbles:true}); Object.defineProperty(e, 'timeStamp', {value:window.mentionEnded + 50}); document.getElementById('message-body').dispatchEvent(e); }`)
 	page.MustEval(`() => { const b = document.getElementById('message-body'); for (const init of [{isComposing:true}, {keyCode:229}]) for (const key of ['ArrowDown','ArrowUp','Tab','Escape','Enter']) b.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles:true, ...init})); }`)
 	opened("加藤", 1)
 	if page.MustEval(`() => window.mentionSubmits`).Int() != 0 || posts.Load() != 0 || page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@加藤" {
-		t.Fatal("IME picked or sent")
+		steps.fail("IME picked or sent")
 	}
+	step("leave IME grace period")
 	page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 110))`)
-	page.Keyboard.MustType(input.Enter)
+	press("deliberate Enter picks after IME", input.Enter)
 	closed()
 	if page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@tomoya " {
-		t.Fatal("next Enter did not pick")
+		steps.fail("next Enter did not pick")
 	}
-	page.Keyboard.MustType(input.Enter)
+	press("Enter sends committed mention", input.Enter)
 	page.MustWait(`() => window.mentionSubmits === 1 && document.getElementById('message-body').value === ''`)
+	step("pending sends completed")
 	page.MustWait(`() => !document.querySelector('[data-pending-form][data-state=sending], [data-pending-form][data-state=queued]')`)
 	// Modified Enter closes without picking and reaches the existing send path.
 	for i, key := range []input.Key{input.ControlLeft, input.MetaLeft} {
 		set("@tom")
 		opened("tom", 1)
-		page.KeyActions().Press(key).Type(input.Enter).Release(key).MustDo()
+		step("send with " + key.Info().Code + "+Enter")
+		steps.device(page, "dispatch modified Enter", func(p *rod.Page) { p.KeyActions().Press(key).Type(input.Enter).Release(key).MustDo() })
 		closed()
 		page.MustWait(`n => window.mentionSubmits === n && document.getElementById('message-body').value === ''`, i+2)
+		step("pending sends completed")
 		page.MustWait(`() => !document.querySelector('[data-pending-form][data-state=sending], [data-pending-form][data-state=queued]')`)
 	}
+	step("verify stored IME and modified Enter posts")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
-	history, err := services.Messages.Page(ctx, m, f.Channel.ID, nil, nil)
+	history, err := services.Messages.Page(page.GetContext(), m, f.Channel.ID, nil, nil)
 	if err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	ref := "<@" + realtime.FormatPayloadID(member) + ">"
 	if len(history.Entries) != 3 || history.Entries[0].Body != ref || history.Entries[1].Body != "@tom" || history.Entries[2].Body != "@tom" {
-		t.Fatalf("IME reference or modified Enter: %+v", history.Entries)
+		steps.fail(fmt.Sprintf("IME reference or modified Enter: %+v", history.Entries))
 	}
 	// A deliberate pick then send persists #1311's member reference.
 	set("@tom")
 	opened("tom", 1)
-	page.Keyboard.MustType(input.Enter)
-	page.Keyboard.MustType(input.Enter)
+	press("deliberate Enter picks mention", input.Enter)
+	press("Enter sends fourth post", input.Enter)
 	page.MustWait(`() => window.mentionSubmits === 4 && document.getElementById('message-body').value === ''`)
+	step("pending sends completed")
 	page.MustWait(`() => !document.querySelector('[data-pending-form][data-state=sending], [data-pending-form][data-state=queued]')`)
-	history, err = services.Messages.Page(ctx, m, f.Channel.ID, nil, nil)
+	step("verify stored deliberate mention")
+	history, err = services.Messages.Page(page.GetContext(), m, f.Channel.ID, nil, nil)
 	if err != nil {
-		t.Fatal(err)
+		steps.fail(err)
 	}
 	if len(history.Entries) != 4 || history.Entries[3].Body != ref {
-		t.Fatalf("stored mention: %+v", history.Entries)
+		steps.fail(fmt.Sprintf("stored mention: %+v", history.Entries))
 	}
 }

@@ -204,7 +204,7 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
   if(e.detail.target?.id !== 'mention-listbox' || document.getElementById('mention-listbox').dataset.query !== 'tomoy') return;
   document.removeEventListener('htmx:afterSwap', stale);
   const b = document.getElementById('message-body'); b.value = '@other'; b.setSelectionRange(6,6);
-  b.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); window.stalePickChecked = true;
+  b.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); window.stalePickChecked = document.getElementById('mention-picker').hidden ? 'closed' : 'open';
  }); }`)
 	set("@tomoy")
 	select {
@@ -214,7 +214,11 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	close(delays["tomoy"].release)
 	page.MustWait(`() => window.stalePickChecked`)
-	closed()
+	// Checked inside the handler: the changed query legitimately searches and
+	// reopens the list for "other" a moment later.
+	if page.MustEval(`() => window.stalePickChecked`).Str() != "closed" {
+		t.Fatal("stale pick left the picker open")
+	}
 	if page.MustEval(`() => document.getElementById('message-body').value`).Str() != "@other" {
 		t.Fatal("stale pick inserted")
 	}

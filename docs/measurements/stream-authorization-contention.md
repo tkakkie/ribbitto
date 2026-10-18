@@ -4,8 +4,8 @@ What #703 changed in the cached-allow check, and what it measured. #695's
 profiles (on #696) found the check `org.(*Authorizer).streamMembership`
 to be the largest hotspot in both the benchmark and the server, ahead of the
 path a shared reader would remove. The rule of the
-[decision](stream-authorization.md#decision) does not change; the mechanics
-are in [stream limits](stream-limits.md).
+[decision](../architecture/stream-authorization.md#decision) does not change; the mechanics
+are in [stream limits](../architecture/stream-limits.md).
 
 - **Fewer lock acquisitions on a hit:**
   - The check captures the cached allow when it registers its `latest`
@@ -38,11 +38,11 @@ The highest passing step rose from 30,000 to at least 60,000, the ladder's
 last step. With distinct members, 5,000 and 10,000 passed both before and
 after, with p95 37 → 35 ms and 60 → 53 ms. This rerun stopped at 10,000, so
 it did not find the distinct-member ceiling. #671 found that ceiling to be
-the [cache's capacity](stream-limits.md).
+the [cache's capacity](../architecture/stream-limits.md).
 
 **Profiles at the same settings.** For the benchmark, one member at 30,000 streams,
 `-mutexprofilefraction=5`. For the server, #216's HTTP/1.1 active step at 15,000 streams, through
-the [development metrics](dev-metrics.md) listener at fraction 5, with 30 s
+the [development metrics](../architecture/dev-metrics.md) listener at fraction 5, with 30 s
 captures. Seconds are absolute; shares are of each profile's total.
 
 | Measure | Benchmark before | Benchmark after | Server before | Server after |

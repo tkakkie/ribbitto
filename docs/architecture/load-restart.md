@@ -2,7 +2,7 @@
 
 How [the load client](load-client.md) restarts a server it started itself, for
 #219's reconnect storm; its results are in
-[reconnect storm results](load-results-restart.md). The reconnect model,
+[reconnect storm results](../measurements/load-results-restart.md). The reconnect model,
 receipts and the run-file format are in the load client's page.
 
 `-server PATH` starts an owned child; repeat `-server-arg ARG` for arguments.

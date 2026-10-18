@@ -24,7 +24,7 @@ The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-la
 [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
 [`modules.md`](architecture/modules.md)) is done: `identity`, `realtime`,
 `org` and `conversation` are modules, and the old layers are gone. The
-load tests before M4 are done (#216, #219; [results](architecture/load-results.md)).
+load tests before M4 are done (#216, #219; [results](measurements/load-results.md)).
 
 ## M4
 

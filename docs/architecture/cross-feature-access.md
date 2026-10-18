@@ -4,7 +4,9 @@ How features read and write each other's data today: which stores accept a
 pool, a transaction or a snapshot, and how posting, history and the page
 snapshot reach org's and identity's data. The [feature map](features.md)
 lists each feature's packages and tables and the known exceptions; the
-[architecture index](README.md) lists the other files.
+[architecture index](README.md) lists the other files. Exported module contracts
+are indexed in the generated APIs for [conversation](../api/conversation.txt),
+[unread](../api/unread.txt), [org](../api/org.txt) and [identity](../api/identity.txt).
 
 Conversation's channel store accepts a pool or a caller-owned transaction.
 Its `CreateChannel` creates a non-default channel; only setup's
@@ -39,7 +41,7 @@ lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus 
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
 older pages connect with only the sidebar interest. The injected `PageCountsIn`
-factory also binds unread's two list reads to that snapshot, including older
+factory binds `unread.PageCounts` to that snapshot, including older
 history pages; their plain results carry both count maps and
 first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
@@ -53,7 +55,7 @@ organisation-scoped page and grants no access.
 `org.MemberSearch` owns a separate read-only snapshot: `org.ListSearchMembers`
 reads only that resolved membership's organisation, in handle order, then
 identity's `Directory.LookupDisplayNames` receives only the listed account IDs.
-`orgpg.NewMemberSearch` binds org's store; `newMemberSearch` in `cmd/ribbitto`
+`orgpg.NewMemberSearch` binds org's store; the composition root
 injects `identitypg.AccountsIn`. Matching is linear in organisation membership
 and returns at most eight candidates; no account join, foreign read exemption,
 table write or new import edge is needed. A server-side filter is future work
@@ -74,8 +76,8 @@ scoped by organisation, member and channel. Go derives the prefix and up to
 100 gaps, retaining the supplied join prefix without rows; the 101st range
 bounds the final gap and never opens one. `unread.ChannelCounts` deduplicates
 sidebar IDs before loading and builds parallel gap IDs and bounds together.
-`newChannelCounts` in `cmd/ribbitto` injects `conversationpg.ChannelUnreadIn`
-through unread's consumer interface, sharing that snapshot. Conversation's
+The composition root injects `conversationpg.ChannelUnreadIn`
+through unread's `ChannelCounterIn` factory, sharing that snapshot. Conversation's
 `CountChannelUnread` probes ordered gaps, caps each channel at 100 messages
 before counting, and returns its first unread sequence in the same statement.
 Only organisation and channel filter messages; the author is not the reader.
@@ -87,8 +89,8 @@ and requested topic floors without a ranges × topics product. Go deduplicates
 listed and selected IDs (at most 51), derives the prefix and supplies missing
 floors as `P − 1`. `unread.TopicCounts` builds ID/floor arrays together from
 that state and calls
-`conversationpg.TopicUnreadIn` through its consumer interface, injected by
-`newTopicCounts` in `cmd/ribbitto`. The snapshot-bound counter uses only message
+`conversationpg.TopicUnreadIn` through its `TopicCounterIn` factory, injected by
+the composition root. The snapshot-bound counter uses only message
 rows scoped by organisation, channel and topic and the supplied range values.
 Its two branches share a cap of 100; only the selected topic gets an uncapped
 first-unread lookup. The combined list takes two statements in the page snapshot, with no foreign-table seam.
@@ -100,13 +102,13 @@ savepoint around creation recovers a concurrent unique conflict; it never
 completes the caller's transaction. The caller supplies org's persisted join
 sequence; no message or foreign-table query runs in unread's store.
 `unread.FeedWriter` takes consumer-owned transaction factories, injected by
-`newFeedWriter` in `cmd/ribbitto`: `conversationpg.MessageSequencesIn` supplies
+the composition root: `conversationpg.MessageSequencesIn` supplies
 `FirstMessageAfter` through conversation's own `FirstChannelMessageAfter`
 sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 `orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
 a next message). The read POST owns that transaction (see [unread writes](unread-writes.md)).
-`unread.TopicWriter`, wired by `newTopicWriter`, validates org's cursor, then
+`unread.TopicWriter`, wired by the composition root, validates org's cursor, then
 prepares the locked prefix, ranges and floor before querying candidates and
 batch-adding their bounds and raising the floor, all in the caller's transaction.
 `conversationpg.TopicReadCandidatesIn` binds `TopicUnreadRangeBounds` to the
@@ -124,14 +126,15 @@ insert and before its event append, on the branching transaction. Only the
 brancher's notice is added; moved messages and other members' read sets stay put.
 No module imports the other or queries its tables.
 
-Posting from a page uses conversation's `PostReadWriterIn`, wired by
-`postReads` in `cmd/ribbitto`. After taking org's sequence, `PostFromPage`
+Posting from a page uses conversation's `PostReadWriterIn`, injected by
+the composition root. After taking org's sequence, `PostFromPage`
 validates the page cursor against the pre-post limit and inserts the message.
 Conversation supplies the channel predecessor and checks the topic for posts
-or moves strictly between the cursor and the new sequence. The adapter calls
+or moves strictly between the cursor and the new sequence. `unread.PostReads` chooses
 `FeedWriter` or `TopicWriter`, then adds the own-message range and safe topic
-floor through unread's writer. Org is locked before `channel_read`; all reads,
-writes and the event append share posting's transaction.
+floor through unread's writer; the adapter only binds factories and membership.
+Org is locked before `channel_read`; all reads, writes and the event append
+share posting's transaction.
 
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to

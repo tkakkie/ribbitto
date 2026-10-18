@@ -85,14 +85,14 @@ the right field, and run neither JavaScript nor `hx-*`.
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
-The empty `#message-status` has `role="status"`, `aria-live="polite"` and
-`aria-relevant="additions"`. History and paging stay outside live regions.
-Only live appends announce stream-only text, and "Copy link" its
-confirmation (#1159). History, prepends and duplicate
-replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
-Latest feeds/topics have a separate visible `#typing-status`, localized and
-polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
-it stays outside history and composer replacement, with no keyboard stop.
+`#message-status` is empty, with `role="status"`, `aria-live="polite"` and
+`aria-relevant="additions"`. It announces appends and "Copy link"
+confirmation (#1159), retaining 10 entries. History and paging stay outside
+live regions; prepends, duplicate replacements and pruning stay silent.
+A reset hold shows `#stream-stopped`, a localised status with a plain reload link, keeping focus.
+Latest feeds/topics' `#typing-status` is visible, localised and polite with
+`aria-atomic="true"`, outside history and composer swaps. Content swaps keep
+region and focus, without a tab stop.
 The textarea is never replaced (#1173): it keeps drafts and text typed while a
 post is in flight, keeps `aria-describedby="message-help"` and takes
 `aria-invalid` from every swapped state (`"false"` on pending success).

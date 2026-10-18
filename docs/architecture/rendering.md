@@ -132,17 +132,17 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v12.js` listens to the vendored SSE extension's
-`htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
-same-id replacement, settling synchronously so replay stays ordered and local
-timestamps are ready before scrolling. Only appends update the separate polite
+`message-stream-v13.js` listens to the vendored SSE extension's
+`htmx:sseBeforeMessage`. It passes server HTML to htmx for append or
+same-id replacement, settling synchronously to order replay and localise
+timestamps before scrolling. Only appends update the separate polite
 status with templ-rendered text; scrolling follows only when already at the
 bottom, except for the sender's own post. A successful composer fragment's
-`data-posted-message` names that message; the script keeps it as a pending
-scroll outside the composer and scrolls to the item once it is present,
-whether it arrived before the response, after it, or after a reconnect. Each
-pending scroll is used once; failed posts create none. It updates `sse-connect`'s `after` after applied deliveries and transport checkpoints so replacement
+`data-posted-message` keeps a pending scroll outside the composer until arrival,
+before or after the response or a reconnect. Each scroll runs once; failures
+create none. It updates `sse-connect`'s `after` after applied deliveries and transport checkpoints so replacement
 EventSources resume from the received id; native reconnects use Last-Event-ID.
+On `reset` it closes the source and holds reload for unsent text ([guard](web-javascript.md#javascript)).
 `messages-moved` carries a templ-rendered list of replacements. The script
 replaces feed IDs, removes source-topic IDs or inserts destination IDs in
 sequence order within the loaded range. The history control's bound is zero

@@ -225,6 +225,10 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
+					<p id="stream-stopped" role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
+						{ i18n.T(ctx, "stream.stopped") }
+						<a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "stream.reload") }</a>
+					</p>
 					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
@@ -302,7 +306,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-drafts-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -390,7 +394,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 		}
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-drafts-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

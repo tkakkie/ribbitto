@@ -67,7 +67,8 @@ ports must match the registry; reruns keep free ports and replace busy ones.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
 drops the databases and ports of registry entries whose worktrees are gone.
 See [worktree environments](docs/worktree-env.md) for configuration overrides and capacity measurement.
-The server never migrates on startup.
+Startup never migrates; schemas below its newest migration fail with
+`ribbitto migrate up`; equal/newer allow binary rollback.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example

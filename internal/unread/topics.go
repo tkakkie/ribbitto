@@ -10,6 +10,9 @@ import (
 )
 
 // TopicCounter counts messages through a snapshot-bound conversation API.
+// Topic IDs must be unique and paired with floors. Prefix is exclusive;
+// read ranges lie above it. Counts cap at 100; selected first unread is uncapped.
+// No member/author filter applies.
 type TopicCounter interface {
 	CountWithFirstUnread(context.Context, kernel.ID, kernel.ID, int64, []kernel.ID, []int64, []conversation.SequenceRange, *kernel.ID, bool) (map[kernel.ID]int64, int64, error)
 }

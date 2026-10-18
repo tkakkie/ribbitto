@@ -46,7 +46,7 @@ func TestPostingRead(t *testing.T) {
 			feedRequire(t, err)
 			var topic *kernel.ID
 			cursor, floor := int64(3), int64(7)
-			want := []unread.Range{{Lo: 0, Hi: 4}, {Lo: 7, Hi: 8}}
+			want := []conversation.SequenceRange{{Lo: 0, Hi: 4}, {Lo: 7, Hi: 8}}
 			if strings.HasPrefix(mode, "topic ") {
 				topic = &a.ID
 				want[0].Hi = 3
@@ -116,7 +116,7 @@ func TestPostingRead(t *testing.T) {
 				if floors != 0 || messages != 0 || events != 0 {
 					t.Errorf("rollback retained floors=%d messages=%d events=%d; want zero", floors, messages, events)
 				}
-				feedRanges(t, pool, s, []unread.Range{})
+				feedRanges(t, pool, s, []conversation.SequenceRange{})
 				var locks, committed int64
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM channel_read WHERE organization_id=$1 AND member_id=$2", s.OrganizationID, s.MemberID).Scan(&locks))
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT event_seq FROM organization WHERE id=$1", s.OrganizationID).Scan(&committed))
@@ -197,7 +197,7 @@ func TestHistoryPostingRead(t *testing.T) {
 				if w.Code != 400 {
 					t.Fatalf("cursor %v: status=%d, want 400", cursor, w.Code)
 				}
-				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 3}})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 3}})
 				topicFloor(t, pool, unread.TopicScope{Scope: scope, TopicID: topic}, 2)
 			}
 			w := request("POST", path, url.Values{"body": {"own post"}})
@@ -205,7 +205,7 @@ func TestHistoryPostingRead(t *testing.T) {
 				t.Fatalf("history post: %d %s", w.Code, w.Body.String())
 			}
 			// Only own message 7 is newly read; all messages 2–6 retain their state.
-			feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 3}, {Lo: 7, Hi: 8}})
+			feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 3}, {Lo: 7, Hi: 8}})
 			topicFloor(t, pool, unread.TopicScope{Scope: scope, TopicID: topic}, 2)
 			acceptanceCount(t, pool, 1, "SELECT count(*) FROM topic_read_floor")
 			acceptanceCount(t, pool, 1, "SELECT count(*) FROM message WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 AND event_seq=7", scope.OrganizationID, scope.ChannelID, scope.MemberID)

@@ -131,9 +131,11 @@ checked by `TestUnreadConversationImports` and `TestConversationDoesNotImportUnr
 Unread's store uses conversation's root for value types only by convention,
 checked in review. Neither module queries the other's tables.
 Consumer-owned interfaces and injected factories preserve these boundaries
-(decision 27, amended through #1303). Topic counts accept
-`conversation.SequenceRange`; `unread.Range` remains for write paths and
-channel gaps, with migration and adapter removal tracked in #1303.
+(decision 27, amended through #1303). All ranges use
+`conversation.SequenceRange`, including writes and channel gaps. Conversation's
+factories return concrete stores; unread owns `ChannelMessages`, `TopicMessages`,
+`ChannelCounter` and `TopicCounter`. The topic factory fits unread directly,
+without a range converter.
 
 Posting from a page uses conversation's `PostReadWriterIn`, injected by
 the composition root. After taking org's sequence, `PostFromPage`

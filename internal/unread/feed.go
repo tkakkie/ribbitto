@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -15,9 +16,9 @@ var ErrInvalidCursor = errors.New("invalid read cursor")
 
 // RangeWriter unions read ranges with the member's persisted join prefix.
 type RangeWriter interface {
-	Merge(context.Context, Scope, int64, Range) error
+	Merge(context.Context, Scope, int64, conversation.SequenceRange) error
 	// MergeCovered returns only newly covered intervals, excluding the join prefix.
-	MergeCovered(context.Context, Scope, int64, Range) ([]Range, error)
+	MergeCovered(context.Context, Scope, int64, conversation.SequenceRange) ([]conversation.SequenceRange, error)
 }
 
 // RangeWriterIn binds range writes to the caller's transaction.
@@ -25,6 +26,7 @@ type RangeWriterIn func(platform.Tx) RangeWriter
 
 // ChannelMessages supplies conversation's next message sequence; zero means none.
 type ChannelMessages interface {
+	// FirstMessageAfter returns the first sequence strictly above cursor, or zero.
 	FirstMessageAfter(context.Context, kernel.ID, kernel.ID, int64) (int64, error)
 	// HasMessages probes parallel half-open bounds in one scoped statement.
 	HasMessages(context.Context, kernel.ID, kernel.ID, []int64, []int64) (bool, error)
@@ -75,7 +77,7 @@ func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, join
 	if next == 0 {
 		next = cursor + 1
 	}
-	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, Range{Lo: 0, Hi: next})
+	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: 0, Hi: next})
 	if err != nil {
 		return false, fmt.Errorf("reading feed: %w", err)
 	}

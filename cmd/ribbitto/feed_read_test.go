@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
@@ -53,13 +54,13 @@ func feedFixture(t *testing.T) (*pgxpool.Pool, unread.Scope) {
 	return pool, unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 }
 
-func feedRanges(t *testing.T, pool *pgxpool.Pool, scope unread.Scope, want []unread.Range) {
+func feedRanges(t *testing.T, pool *pgxpool.Pool, scope unread.Scope, want []conversation.SequenceRange) {
 	t.Helper()
 	rows, err := pool.Query(t.Context(), "SELECT lo,hi FROM read_range WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 ORDER BY lo", scope.OrganizationID, scope.ChannelID, scope.MemberID)
 	feedRequire(t, err)
 	defer rows.Close()
-	got, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (unread.Range, error) {
-		var r unread.Range
+	got, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (conversation.SequenceRange, error) {
+		var r conversation.SequenceRange
 		err := row.Scan(&r.Lo, &r.Hi)
 		return r, err
 	})
@@ -86,7 +87,7 @@ func TestFeedRead(t *testing.T) {
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 				return checkedRead(t, tc.cursor > tc.joined)(newFeedWriter().Read(t.Context(), tx, scope, tc.joined, tc.cursor))
 			}))
-			feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: tc.end}})
+			feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: tc.end}})
 		})
 	}
 }
@@ -99,7 +100,7 @@ func TestFeedReadReorderedAndRollback(t *testing.T) {
 		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 			return checkedRead(t, i == 0)(feed.Read(t.Context(), tx, scope, 1, cursor))
 		}))
-		feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 6}})
+		feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 6}})
 	}
 	rollback := errors.New("caller rollback")
 	err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
@@ -111,7 +112,7 @@ func TestFeedReadReorderedAndRollback(t *testing.T) {
 	if !errors.Is(err, rollback) {
 		t.Fatal(err)
 	}
-	feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 6}})
+	feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 6}})
 }
 
 func TestFeedReadRefusesFutureCursor(t *testing.T) {
@@ -125,7 +126,7 @@ func TestFeedReadRefusesFutureCursor(t *testing.T) {
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
 	}
-	feedRanges(t, pool, scope, []unread.Range{})
+	feedRanges(t, pool, scope, []conversation.SequenceRange{})
 }
 
 func TestFeedReadConcurrent(t *testing.T) {
@@ -192,7 +193,7 @@ func TestFeedReadConcurrent(t *testing.T) {
 				}
 				close(release)
 				feedRequire(t, <-second)
-				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 6}})
+				feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: 6}})
 			})
 		}
 	}

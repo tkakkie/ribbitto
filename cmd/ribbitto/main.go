@@ -120,6 +120,10 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
+	if err := platform.CheckSchema(ctx, pool); err != nil {
+		pool.Close()
+		return err
+	}
 	hub := realtime.NewHubWithMaxStreams(streamCap)
 	computationLimit := max(1, int(pool.Config().MaxConns)/2)
 	limit := realtime.NewRecountLimit(computationLimit)

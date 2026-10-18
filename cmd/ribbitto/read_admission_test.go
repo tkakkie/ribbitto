@@ -242,7 +242,7 @@ CREATE TRIGGER admission_audit AFTER INSERT OR UPDATE OR DELETE ON topic_read_fl
 			}
 			for i, p := range tabs {
 				if p.topic == (kernel.ID{}) {
-					feedRanges(t, pool, p.scope, []unread.Range{{Lo: 0, Hi: p.cursor + 1}})
+					feedRanges(t, pool, p.scope, []conversation.SequenceRange{{Lo: 0, Hi: p.cursor + 1}})
 				} else {
 					var floor int64
 					feedRequire(t, pool.QueryRow(ctx, "SELECT floor_seq FROM topic_read_floor WHERE organization_id=$1 AND member_id=$2 AND topic_id=$3", f.OrganizationID, f.MemberID, p.topic).Scan(&floor))

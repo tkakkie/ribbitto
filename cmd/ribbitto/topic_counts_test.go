@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -18,7 +19,7 @@ func TestTopicCounts(t *testing.T) {
 	for _, tc := range []struct {
 		name                                        string
 		messages, prefix, floor, moved, want, first int64
-		read                                        []unread.Range
+		read                                        []conversation.SequenceRange
 	}{
 		{name: "count 0", messages: 1, prefix: 3, floor: 1},
 		{name: "count 1", messages: 1, prefix: 2, floor: 1, want: 1, first: 2},
@@ -26,8 +27,8 @@ func TestTopicCounts(t *testing.T) {
 		{name: "count 100 capped", messages: 150, prefix: 2, floor: 1, want: 100, first: 2},
 		{name: "both branches exceed shared cap", messages: 200, prefix: 2, floor: 101, moved: 100, want: 100, first: 2},
 		{name: "prefix read moved above floor stays read", messages: 1, prefix: 51, floor: 100, moved: 1},
-		{name: "first unread beyond 100 moved candidates", messages: 250, prefix: 2, floor: 251, moved: 250, want: 100, first: 3, read: []unread.Range{{Lo: 2, Hi: 3}}},
-		{name: "fragmented read set with prefix read moves", messages: 12, prefix: 5, floor: 8, moved: 7, want: 6, first: 5, read: []unread.Range{{Lo: 6, Hi: 7}, {Lo: 9, Hi: 10}, {Lo: 12, Hi: 13}}},
+		{name: "first unread beyond 100 moved candidates", messages: 250, prefix: 2, floor: 251, moved: 250, want: 100, first: 3, read: []conversation.SequenceRange{{Lo: 2, Hi: 3}}},
+		{name: "fragmented read set with prefix read moves", messages: 12, prefix: 5, floor: 8, moved: 7, want: 6, first: 5, read: []conversation.SequenceRange{{Lo: 6, Hi: 7}, {Lo: 9, Hi: 10}, {Lo: 12, Hi: 13}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pool := pgtest.New(t)
@@ -39,7 +40,7 @@ func TestTopicCounts(t *testing.T) {
 			scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 				w := unreadpg.WriterIn(tx)
-				if err := w.Merge(t.Context(), scope, 1, unread.Range{Lo: 0, Hi: tc.prefix}); err != nil {
+				if err := w.Merge(t.Context(), scope, 1, conversation.SequenceRange{Lo: 0, Hi: tc.prefix}); err != nil {
 					return err
 				}
 				for _, r := range tc.read {
@@ -91,7 +92,7 @@ func TestTopicCountsReadingOneTopicAndMovesTwice(t *testing.T) {
 	}
 	check("before reading A", 3, 2, 10)
 	feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		for _, r := range []unread.Range{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 15}} {
+		for _, r := range []conversation.SequenceRange{{Lo: 0, Hi: 11}, {Lo: 12, Hi: 13}, {Lo: 14, Hi: 15}} {
 			if err := unreadpg.WriterIn(tx).Merge(t.Context(), scope, 5, r); err != nil {
 				return err
 			}

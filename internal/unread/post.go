@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -29,7 +30,7 @@ func NewPostReads(ranges RangeWriterIn, prepare TopicPrepareIn, feed func() Feed
 
 // Read retains posting's organisation-first lock order and never completes tx.
 // The caller supplies resolved scope, join sequence and the own-message bounds.
-func (w *PostReads) Read(ctx context.Context, tx platform.Tx, scope Scope, joined int64, topic *kernel.ID, cursor *int64, own Range, floor int64) error {
+func (w *PostReads) Read(ctx context.Context, tx platform.Tx, scope Scope, joined int64, topic *kernel.ID, cursor *int64, own conversation.SequenceRange, floor int64) error {
 	if cursor == nil {
 		return w.ranges(tx).Merge(ctx, scope, joined, own)
 	}

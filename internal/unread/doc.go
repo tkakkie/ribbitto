@@ -1,8 +1,10 @@
 // Package unread owns channel_read, read_range and topic_read_floor
 // (decision 32). Read ranges name sequences so moving messages cannot change
-// read state. A per-member, per-channel lock serialises unions; a join prefix
-// makes pre-membership messages read. Feed and topic reads use injected transaction-bound
-// conversation and org queries; this module never reads message directly.
+// read state. Ranges use conversation.SequenceRange; this module owns the
+// message and count interfaces its injected factories return. A per-member,
+// per-channel lock serialises unions; a join prefix makes pre-membership messages
+// read. Feed and topic reads use injected transaction-bound conversation and org
+// queries; this module never reads message directly.
 // Feed and topic writers report actual newly read messages under that lock,
 // excluding implicit prefixes, empty coverage and floor-only writes. Reading
 // owns their transactions and synchronously calls a context-free publisher only

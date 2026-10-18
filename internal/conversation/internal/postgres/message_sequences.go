@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -15,13 +14,15 @@ import (
 )
 
 // MessageSequencesIn binds channel message bounds to the caller's transaction.
-func MessageSequencesIn(tx platform.Tx) conversation.MessageSequences {
-	return messageSequences{queries: sqlcgen.New(pgxbridge.Tx(tx))}
+func MessageSequencesIn(tx platform.Tx) *MessageSequences {
+	return &MessageSequences{queries: sqlcgen.New(pgxbridge.Tx(tx))}
 }
 
-type messageSequences struct{ queries *sqlcgen.Queries }
+// MessageSequences queries channel message bounds and existence in a caller-owned transaction.
+type MessageSequences struct{ queries *sqlcgen.Queries }
 
-func (m messageSequences) FirstMessageAfter(ctx context.Context, organizationID, channelID kernel.ID, cursor int64) (int64, error) {
+// FirstMessageAfter returns the first sequence strictly above cursor, or zero.
+func (m MessageSequences) FirstMessageAfter(ctx context.Context, organizationID, channelID kernel.ID, cursor int64) (int64, error) {
 	seq, err := m.queries.FirstChannelMessageAfter(ctx, sqlcgen.FirstChannelMessageAfterParams{
 		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), EventSeq: cursor,
 	})
@@ -34,7 +35,8 @@ func (m messageSequences) FirstMessageAfter(ctx context.Context, organizationID,
 	return seq, nil
 }
 
-func (m messageSequences) HasMessages(ctx context.Context, organizationID, channelID kernel.ID, los, his []int64) (bool, error) {
+// HasMessages probes parallel half-open bounds in one scoped statement.
+func (m MessageSequences) HasMessages(ctx context.Context, organizationID, channelID kernel.ID, los, his []int64) (bool, error) {
 	if len(los) != len(his) {
 		return false, fmt.Errorf("checking channel messages: unequal bound lengths")
 	}

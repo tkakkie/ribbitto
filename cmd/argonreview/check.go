@@ -69,7 +69,7 @@ func check(home, agy string, prepare func() error, s supervisor) (int, error) {
 		return 1, fmt.Errorf("creating the models listing: %w", err)
 	}
 	defer func() { _ = out.Close(); _ = os.Remove(out.Name()) }()
-	code, err := s.run(agy, []string{"models"}, withHome(home), home, out, os.Stderr)
+	code, err := s.run(agy, []string{"models"}, agyEnvironment(os.Environ(), home, ""), home, out, os.Stderr)
 	if err == nil && code != 0 {
 		err = fmt.Errorf("agy models exited with status %d", code)
 	}
@@ -89,11 +89,29 @@ func check(home, agy string, prepare func() error, s supervisor) (int, error) {
 	return 0, nil
 }
 
-// withHome is this process's environment with HOME set to home.
-func withHome(home string) []string {
+// agyEnvironment keeps operator credentials out of agy; its login token lives
+// in the dedicated HOME. Extending this allowlist requires a code change and
+// pull request, never an environment setting.
+func agyEnvironment(parent []string, home, tmp string) []string {
+	// HOME selects the dedicated sign-in and configuration; TMPDIR confines
+	// review caches to the workspace. Neither comes from the parent.
 	env := []string{"HOME=" + home}
-	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "HOME=") {
+	if tmp != "" {
+		env = append(env, "TMPDIR="+tmp)
+	}
+	for _, value := range parent {
+		name, _, ok := strings.Cut(value, "=")
+		if !ok {
+			continue
+		}
+		switch name {
+		case "PATH": // agy and its sandbox helpers need executable lookup.
+			env = append(env, value)
+		case "LANG", "LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC",
+			"LC_TIME", "LC_ADDRESS", "LC_IDENTIFICATION", "LC_MEASUREMENT", "LC_NAME", "LC_PAPER",
+			"LC_TELEPHONE": // Preserve POSIX/glibc locale selection.
+			env = append(env, value)
+		case "USER", "LOGNAME": // macOS keychain fallback needs the account name.
 			env = append(env, value)
 		}
 	}

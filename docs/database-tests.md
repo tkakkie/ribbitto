@@ -17,6 +17,9 @@ global caching. Cleanup closes the pool before dropping the database with
 `WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests,
 and `pgtest.NewMigrator(t, pool)` moves it to a version with `UpTo`, `Up`,
 `Down` and `DownTo`, failing the test on any error.
+Platform tests cover read-only startup checks for never-migrated, empty-table, zero,
+behind, equal and ahead versions, and concurrent `Migrate` calls gated at the version
+table to expose duplicate DDL when the session locker is absent.
 Both pools allow `pgtest.MaxConns` (16) connections, fixed rather than
 pgxpool's CPU-dependent default (at least 4), so a test behaves the same on a
 two-CPU CI runner as locally (#849); connections still open on demand. A test

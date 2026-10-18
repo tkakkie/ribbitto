@@ -102,6 +102,42 @@ func (noEvents) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.
 	return nil, errors.New("the stream must not start")
 }
 
+func testStreamHeaders(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := realtime.NewHub()
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+	seen := -1
+	var reads atomic.Int32
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+	r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", nil)
+	r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	for _, tt := range []struct{ header, want string }{
+		{"Content-Type", "text/event-stream; charset=utf-8"},
+		{"Cache-Control", "no-store"},
+		{"Cross-Origin-Opener-Policy", "same-origin"},
+		{"Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()"},
+	} {
+		t.Run(tt.header, func(t *testing.T) {
+			if got := w.Result().Header.Get(tt.header); got != tt.want {
+				t.Errorf("%s = %q, want %q", tt.header, got, tt.want)
+			}
+		})
+	}
+}
+
 // The middleware resolves the session, then it is deleted before the stream
 // registers: nothing would cancel the stream, so the second look must stop it
 // before anything is sent, and the registration must not outlive it.
@@ -569,9 +605,11 @@ func testStreamCap(t *testing.T, hub *realtime.Hub, occupiedAccount kernel.ID) {
 	}
 	t.Cleanup(unregister)
 	w := serveForm(handler, http.MethodGet, url, "live", nil)
-	if seen != -1 || reads.Load() != 0 || hub.Connections() != 1 || w.Header().Get("Cache-Control") != "no-store" {
-		t.Fatal("refusal registered a stream, re-checked the session, read events or set SSE headers")
+	if seen != -1 || reads.Load() != 0 || hub.Connections() != 1 {
+		t.Fatal("refusal registered a stream, re-checked the session or read events")
 	}
+	// Both outcomes are no-store; the 429 and the counters above show the
+	// request never reached SSE setup.
 	if w.Code != http.StatusTooManyRequests || strings.Contains(w.Body.String(), "data:") || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
 		t.Fatalf("over the cap: status %d, type %q; want 429 before streaming", w.Code, w.Header().Get("Content-Type"))
 	}
@@ -727,6 +765,7 @@ func TestStreamEndpoints(t *testing.T) {
 				name string
 				run  func(*testing.T)
 			}{
+				{"StreamHeaders", testStreamHeaders},
 				{"StreamRechecksTheSessionAfterRegistering", testStreamRechecksTheSessionAfterRegistering},
 				{"StreamCancelledBeforeTheFirstWrite", testStreamCancelledBeforeTheFirstWrite},
 				{"StreamCancelledBeforeTheFirstWriteOverHTTP", testStreamCancelledBeforeTheFirstWriteOverHTTP},

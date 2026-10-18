@@ -94,6 +94,9 @@ Outermost first:
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
 
+Before opening listeners, `serve` checks the schema once against its newest embedded migration
+([database development](../database.md)); probes never repeat the check.
+
 `GET /healthz` is liveness: always 200 `ok`. `GET /readyz` checks readiness
 with a one-second database pool ping; failure, timeout, a missing pinger or
 shutdown returns 503 `unavailable`, without internal details. Both bypass

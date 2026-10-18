@@ -59,7 +59,10 @@ The retention period defaults to seven days; see [database configuration](../dat
   session up again, so a sign-out in between still stops it. Deleting a
   session (sign-out, or a sign-in replacing it) cancels that session's
   streams at once; the stream's context ends when the session expires.
-  Other sessions of the account stay connected. The handler's private
+  Other sessions of the account stay connected for single-session sign-out.
+  [Signing out of other sessions](identity.md) ends those streams instead;
+  a mutation error cancels the whole account so reconnects re-check sessions.
+  The handler's private
   `openStream` helper owns registration, the re-check and the expiry deadline.
   It frees failed registrations; on success, the handler defers one cleanup
   function that cancels the expiry context, unregisters the stream and

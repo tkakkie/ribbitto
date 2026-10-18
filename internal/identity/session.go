@@ -39,6 +39,9 @@ type SessionStore interface {
 	// DeleteSession deletes the session with this hash, if there is one, and
 	// reports its id.
 	DeleteSession(ctx context.Context, tokenHash []byte) (ended kernel.ID, found bool, err error)
+	// DeleteOtherSessions deletes the account's sessions except currentID and
+	// reports their ids.
+	DeleteOtherSessions(ctx context.Context, accountID, currentID kernel.ID) ([]kernel.ID, error)
 	// ReplaceSession deletes the session with oldHash, if there is one, and
 	// stores the new session, atomically: either both happen or neither. It
 	// reports the deleted session's id.
@@ -53,6 +56,8 @@ type SessionStore interface {
 // have been deleted, such as open event streams. realtime.Hub satisfies it.
 type SessionCanceller interface {
 	CancelSession(sessionID kernel.ID)
+	// CancelAccount ends all the account's streams when deleted ids are unknown.
+	CancelAccount(accountID kernel.ID)
 }
 
 // Sessions creates, resolves and deletes server-side sessions.
@@ -163,6 +168,23 @@ func (s *Sessions) Delete(ctx context.Context, token string) error {
 		return fmt.Errorf("deleting session: %w", err)
 	}
 	s.ended(ended, found)
+	return nil
+}
+
+// DeleteOthers ends the account's sessions except currentID. Both ids must
+// come from the caller's resolved session. A mutation error cancels all of
+// the account's streams: the deletion may have committed without returning ids.
+func (s *Sessions) DeleteOthers(ctx context.Context, accountID, currentID kernel.ID) error {
+	ids, err := s.store.DeleteOtherSessions(ctx, accountID, currentID)
+	if err != nil {
+		if s.cancel != nil {
+			s.cancel.CancelAccount(accountID)
+		}
+		return fmt.Errorf("deleting other sessions: %w", err)
+	}
+	for _, id := range ids {
+		s.ended(id, true)
+	}
 	return nil
 }
 

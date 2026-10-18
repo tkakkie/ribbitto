@@ -44,6 +44,10 @@ func (f *draftsSignIn) SessionHorizon(context.Context) (kernel.ID, error) {
 	return *f.horizon.Load(), nil
 }
 
+func (f *draftsSignIn) SignOutOthers(context.Context, kernel.ID, kernel.ID) error {
+	return nil
+}
+
 // testDraftsBrowser covers the sign-in page's drafts cleanup and notice and
 // sign-out's Clear-Site-Data through the real sign-in routes (decision 37 (d)).
 func testDraftsBrowser(t *testing.T, browser *rod.Browser) {

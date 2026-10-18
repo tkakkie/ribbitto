@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -40,7 +42,11 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.Handle("GET /conversation", templ.Handler(view.ChannelScreen(css, conversation)))
 	mux.Handle("GET /list", templ.Handler(view.ChannelListScreen(css, list)))
-	server := httptest.NewServer(mux)
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(catalogues.Middleware(mux))
 	defer server.Close()
 	tab, closeTab := boundedPage(t, browser, ctx, "popover focus")
 	defer closeTab()
@@ -147,6 +153,13 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		// popover is left out: focus stays on its button, which it overlaps
 		// at the lower edge.
 		if c.popover == "account-menu" {
+			form := page.MustElement(`#account-menu form[action="/signout/others"]`)
+			if method := form.MustAttribute("method"); method == nil || *method != "post" {
+				t.Fatal("other-session action must POST")
+			}
+			if got := form.MustElement(`button[type="submit"]`).MustText(); got != "Sign out of other sessions" {
+				t.Fatalf("other-session action label = %q", got)
+			}
 			for _, key := range []struct {
 				name string
 				key  input.Key

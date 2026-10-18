@@ -11,8 +11,11 @@ padding and always win when space is short. The column outside the
 textarea and list is 225 px from `desk`, 209 px below it, rounded up;
 the cap subtracts those plus 128 px (353 / 337 px). Below `desk` it also
 subtracts `env(safe-area-inset-bottom)`. Past the cap the textarea scrolls
-inside, keeping the caret visible. Below `short:` the cap is three lines
-and the conversation still scrolls as a whole ([short heights](ui-components.md#short-heights)).
+inside. After input and textarea resizing, the script scrolls a focused,
+collapsed caret at the end to the bottom using the updated layout; other
+caret positions and selections keep native scrolling. Below `short:` the cap
+is three lines and the conversation still scrolls as a whole
+([short heights](ui-components.md#short-heights)).
 
 The composer script remembers whether `#message-list` is at its newest
 message (gap at most 2 px), or its first visible item and offset. On a list

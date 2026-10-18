@@ -226,8 +226,18 @@
     const form = document.getElementById("typing-form");
     if (form && event.target.value.trim()) htmx.trigger(form, "typing-input");
   };
+  // Native caret scrolling can precede field-sizing layout, including a
+  // select-all replacement at the cap. Reveal the end using the final size.
+  const revealEnd = (body) => {
+    if (document.activeElement === body && body.selectionStart === body.value.length && body.selectionEnd === body.value.length) {
+      body.scrollTop = body.scrollHeight;
+    }
+  };
+  const body = document.getElementById("message-body");
+  if (body) new ResizeObserver(() => revealEnd(body)).observe(body);
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
+    requestAnimationFrame(() => revealEnd(event.target));
     if (restoredKey && event.target.value === "") {
       restoredKey = null;
       delete event.target.form.dataset.unconfirmedKey;

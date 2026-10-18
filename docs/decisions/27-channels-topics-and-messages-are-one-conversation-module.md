@@ -24,8 +24,19 @@
   tables and only refers to these, such as reactions, unread or search, is
   its own module depending on `conversation`'s API. A feature that does both
   is split along that line.
-- **Graph and order.** `conversation` → `identity`, `org`, `realtime`; the
-  rest of decision 26's graph is unchanged. Setup's default channel,
+- **Unread dependency** (amended through issue #1303). `unread` may import
+  only `conversation`'s root for its public API and shared value types;
+  unread's store may use that root only for value types. Neither may import
+  conversation's store, wiring or other internals. The reverse production
+  edge, from any conversation package to unread, stays forbidden.
+  Cross-module operations still use decision 26's consumer-owned interfaces
+  and injected transaction- or snapshot-bound factories. Read ranges at the
+  seam use `conversation.SequenceRange`; the migration from `unread.Range`
+  is split across the two pull requests for #1303. Conversation keeps
+  `ChannelUnread`, whose `Count` and `CountWithFirstUnread` serve different
+  callers. Behaviour, SQL ownership and transaction boundaries do not change.
+- **Graph and order.** `unread` → `conversation` → `identity`, `org`,
+  `realtime`; the rest of decision 26's graph is unchanged. Setup's default channel,
   `org`'s sequence and members, `identity`'s authors and `realtime`'s
   operations stay injected, as before. Order: 0 kernel and platform →
   1 `identity` → 2 `realtime` → 3 `org` → 4 `conversation` (several pull

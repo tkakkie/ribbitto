@@ -84,19 +84,20 @@ flowchart LR
   store --> identity & platform & kernel
   presence[internal/presence] --> kernel & realtime
   typing[internal/typing] --> kernel & realtime
-  unread[internal/unread] --> kernel & platform
+  unread[internal/unread] --> conversation & kernel & platform
   unreadpg[unread/unreadpg] --> unread & ustore[unread/internal/postgres] & platform
-  ustore --> unread & platform & kernel
+  ustore --> unread & conversation & platform & kernel
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 
-The diagram illustrates selected dependencies; the [manifest](../../module_imports_test.go) governs module imports; [`docs/dependencies.md`](../dependencies.md) lists the actual ones.
+Unread may import conversation's root (store: value types only), never
+conversely in production. Operations stay injected through consumer-owned
+interfaces (decision 27, #1303). The [manifest](../../module_imports_test.go)
+governs imports; [dependencies](../dependencies.md) lists actual edges.
 
-Why this shape: the domain and the use cases stay testable without a
-database or HTTP; authorization lives in exactly one place, so a new
-endpoint or a real-time path cannot quietly skip it; and because use cases
-return plain structs and only `web` renders HTML, a JSON API can be added
-next to the HTML handlers later without touching the use cases.
+This keeps domain rules and use cases testable without a database or HTTP,
+with authorization in one place. Use cases return plain structs; only `web`
+renders HTML, allowing a JSON API without changing use cases.
 
 `serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
 uses goose's `database/sql` handle.

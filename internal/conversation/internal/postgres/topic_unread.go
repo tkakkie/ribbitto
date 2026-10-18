@@ -19,11 +19,11 @@ func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
 
 type topicUnread struct{ queries *sqlcgen.Queries }
 
-func (r topicUnread) Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
+func (r topicUnread) Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
 	return r.CountWithFirstUnread(ctx, organizationID, channelID, prefix, topics, floors, readSet, selected, true)
 }
 
-func (r topicUnread) CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
+func (r topicUnread) CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
 	if len(topics) != len(floors) {
 		return nil, 0, fmt.Errorf("counting topic unread: unequal topic arrays")
 	}
@@ -32,10 +32,10 @@ func (r topicUnread) CountWithFirstUnread(ctx context.Context, organizationID, c
 		ids[i] = uuid(id)
 	}
 	// Containment excludes prefix-read moves without a lower sequence bound.
-	readSet = append([][2]int64{{0, prefix}}, readSet...)
+	readSet = append([]conversation.SequenceRange{{Lo: 0, Hi: prefix}}, readSet...)
 	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(readSet))
 	for i, r := range readSet {
-		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: r[0], Valid: true}, Upper: pgtype.Int8{Int64: r[1], Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}
+		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: r.Lo, Valid: true}, Upper: pgtype.Int8{Int64: r.Hi, Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}
 	}
 	var selection pgtype.UUID
 	if selected != nil {

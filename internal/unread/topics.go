@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 // TopicCounter counts messages through a snapshot-bound conversation API.
 type TopicCounter interface {
-	CountWithFirstUnread(context.Context, kernel.ID, kernel.ID, int64, []kernel.ID, []int64, [][2]int64, *kernel.ID, bool) (map[kernel.ID]int64, int64, error)
+	CountWithFirstUnread(context.Context, kernel.ID, kernel.ID, int64, []kernel.ID, []int64, []conversation.SequenceRange, *kernel.ID, bool) (map[kernel.ID]int64, int64, error)
 }
 
 // TopicCounterIn binds topic counts to the caller's snapshot.
@@ -44,11 +45,7 @@ func (c *TopicCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snapsh
 	for id, floor := range state.Floors {
 		ids, floors = append(ids, id), append(floors, floor)
 	}
-	read := make([][2]int64, len(state.Ranges))
-	for i, r := range state.Ranges {
-		read[i] = [2]int64{r.Lo, r.Hi}
-	}
-	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, scope.OrganizationID, scope.ChannelID, state.Prefix, ids, floors, read, selected, firstUnread)
+	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, scope.OrganizationID, scope.ChannelID, state.Prefix, ids, floors, state.Ranges, selected, firstUnread)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading topic counts: %w", err)
 	}

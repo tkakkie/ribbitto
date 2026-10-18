@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -34,12 +35,12 @@ type fakeTopicCounter struct {
 	org, channel  kernel.ID
 	ids           []kernel.ID
 	floors        []int64
-	read          [][2]int64
+	read          []conversation.SequenceRange
 	selected      *kernel.ID
 	firstUnread   bool
 }
 
-func (f *fakeTopicCounter) CountWithFirstUnread(_ context.Context, org, channel kernel.ID, prefix int64, ids []kernel.ID, floors []int64, read [][2]int64, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
+func (f *fakeTopicCounter) CountWithFirstUnread(_ context.Context, org, channel kernel.ID, prefix int64, ids []kernel.ID, floors []int64, read []conversation.SequenceRange, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
 	f.called, f.org, f.channel, f.prefix = true, org, channel, prefix
 	f.ids, f.floors, f.read = slices.Clone(ids), slices.Clone(floors), slices.Clone(read)
 	f.selected, f.firstUnread = selected, firstUnread
@@ -54,10 +55,10 @@ func TestTopicCounts(t *testing.T) {
 	listed := []kernel.ID{firstTopic, secondTopic}
 	state := TopicReadState{
 		Prefix: 7,
-		Ranges: []Range{{Lo: 8, Hi: 11}, {Lo: 15, Hi: 19}},
+		Ranges: []conversation.SequenceRange{{Lo: 8, Hi: 11}, {Lo: 15, Hi: 19}},
 		Floors: map[kernel.ID]int64{firstTopic: 6, secondTopic: 14},
 	}
-	wantRead := [][2]int64{{8, 11}, {15, 19}}
+	wantRead := []conversation.SequenceRange{{Lo: 8, Hi: 11}, {Lo: 15, Hi: 19}}
 	wantCounts := map[kernel.ID]int64{firstTopic: 3, secondTopic: 1}
 	wantFirst := int64(16)
 

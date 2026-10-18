@@ -58,10 +58,29 @@ func NewBranchRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 1.0/6, 20, 0)
 }
 
+// NewPostRateLimiter returns provisional, unmeasured limits: burst 20,
+// then one token per second and four concurrent requests per member.
+func NewPostRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 1, 20, 4)
+}
+
+// NewPinRateLimiter returns provisional, unmeasured limits: burst 10,
+// then one token every two seconds per member.
+func NewPinRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 0.5, 10, 0)
+}
+
 // NewSidebarResyncRateLimiter returns an independent budget of 32/s, burst 32.
 // It covers 16 tabs retrying at the script's 8 s backoff cap with headroom.
 func NewSidebarResyncRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 32, 32, 0)
+}
+
+// NewMentionRateLimiter returns initial, unmeasured candidate-search limits:
+// 4/s, burst 8, and two concurrent requests per member to bound lookup work
+// while allowing short bursts as the member types.
+func NewMentionRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 4, 8, 2)
 }
 
 // NewMemberRateLimiterWithBudget supplies an explicit trusted budget, including

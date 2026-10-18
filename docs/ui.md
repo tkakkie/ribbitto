@@ -59,7 +59,8 @@ and the contrast table are in [`ui-colours.md`](ui-colours.md).
 | Spacing | `--spacing: 0.25rem` — a 4 px grid (`p-1` = 4 px, `p-4` = 16 px) |
 | Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px · `rounded-xl` 12 px (blocks) |
 | Shadow | `shadow-block` (blocks, cards) · `shadow-popover` (menus, dialogs) |
-| Focus | 2 px `brand` outline, 2 px offset, on `:focus-visible` |
+| Focus | 2 px solid `brand` outline, 2 px offset, on `:focus-visible` |
+| Own mention | 2 px dashed `brand` outline, no offset; distinct from keyboard focus |
 | Motion | durations 100 · 150 · 200 · 250 ms; easings `standard`, `decelerate` (entering), `accelerate` (leaving), after Fluent 2 |
 
 The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`)

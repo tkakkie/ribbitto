@@ -128,8 +128,20 @@ A token holds the member's UUID only, never a handle or name.
   naming another organisation's member UUID never shows that member's
   display name or handle on the page, in the stream or in extracted text.
 
-Mentions (#1311 converts them at posting) are stored only as these references,
-so #1311 lands with or after `chat_v1`'s implementation.
+## Composer input
+
+The composer keeps typed `@handle` text. At posting the server uses this
+parser's eligible source runs and positions to resolve handles, ignoring
+case, within the URL organisation. Bold/italic delimiters remain in these
+runs: paired underscores never split a handle into a shorter prefix. Code, escapes, URLs and e-mail addresses
+are not mentions. Unknown, foreign and reserved handles stay literal. The
+result stores `<@{member UUID}>` only and passes the reference check and the
+4,000-code-point limit again. This changes no stored grammar or existing row.
+A keyed send separately stores the normalized typed input's byte length and
+SHA-256 digest. A same-key retry verifies that proof without resolving handles
+again; different typed input is a conflict. Recovery offers only a prefix
+verified by that proof; legacy rows without it keep the draft
+([posting](../architecture/posting.md)). The body grammar stays frozen.
 
 ## Rendering and security
 
@@ -147,8 +159,11 @@ italic, link, code span, reference) is isolated in direction with
 
 Output is the same for every reader of one language (only the unresolved
 member placeholder is localised), so the shared render cache, keyed by
-language, stays valid; highlighting one's own mentions happens in the browser from a data
-attribute. Existing headers already help: `Referrer-Policy: same-origin`
+organisation, channel, sequence and language, stays valid. Highlighting one's
+own mentions happens in the browser
+(#1313): only resolved references carry `data-member-id`; unresolved UUIDs
+never reach the HTML. The viewer's ID comes from `#organization-stream`'s
+existing `data-member`. Existing headers already help: `Referrer-Policy: same-origin`
 and the CSP's `img-src 'self' data:`.
 
 **Why:** code, links and mentions need structure that plain text cannot

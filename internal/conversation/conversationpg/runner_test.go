@@ -2,6 +2,7 @@ package conversationpg
 
 import (
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestTxRunnerCommits(t *testing.T) {
 	channel := conversationtest.Channel(t, pool, organizationID, "general", false)
 	runner := newTxRunner(pool)
 	requireNoError(t, runner.InTx(ctx, func(tx platform.Tx) error {
-		_, err := writerIn(tx).InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, memberID, "hello", 1, nil, nil)
+		_, err := writerIn(tx).InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, memberID, "hello", 1, nil, conversation.TypedBodyProof{}, nil)
 		return err
 	}))
 	var n int

@@ -18,7 +18,9 @@ also requires account email and display name to be NFC.
   after normalisation.
 - **Display name:** 1–50 characters after normalisation, not blank-looking
   ([`names.md`](names.md#display-names)).
-- **Password:** 15–128 characters, preserved as entered, no composition rules.
+- **Password:** NFC before hashing or verifying; 15–128 code points after
+  normalisation, no composition rules. Spaces are not trimmed and compatibility
+  characters (fullwidth/halfwidth) stay distinct; this is not NFKC.
 - **Organisation name:** 1–100 characters after normalisation.
 - **Channel name:** as organisation names, but 1–80 characters.
 - **Topic name:** as channel names; unique per channel ignoring case, and

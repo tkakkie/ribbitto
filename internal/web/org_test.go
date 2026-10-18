@@ -98,6 +98,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	services := postgresServices(t, pool, sessions, "", false)
+	// This multi-route fixture intentionally posts more than the production burst.
+	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
 	state := typing.New(realtime.NewHub())
 	services.Typing = state
 	budgetTime := now
@@ -135,10 +137,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
+		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -182,6 +184,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Run(route.method+" "+path+" member", func(t *testing.T) {
 			w := get(route.method, path, aliceToken, now)
 			switch route.method + " " + route.path {
+			case "GET /mention-candidates":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="mention-listbox"`) {
+					t.Fatalf("candidates: %d %s", w.Code, w.Body.String())
+				}
 			case "GET /{$}":
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))
@@ -219,6 +225,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				// Pin runs before unpin, so each member request changes the state.
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.MessageURL("acme", linked.ID) || pinned(t) != strings.HasSuffix(route.path, "/pin") {
 					t.Fatalf("pin: %d %s, pinned %v", w.Code, w.Header().Get("Location"), pinned(t))
+				}
+			case "POST /channels/{channelID}/quote":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="composer-quote"`) || !strings.Contains(w.Body.String(), "linked message") {
+					t.Fatalf("chip: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels/{channelID}/topics/{topicID}/typing":
 				if w.Code != 204 || w.Body.Len() != 0 {

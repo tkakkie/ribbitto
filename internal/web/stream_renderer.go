@@ -75,8 +75,8 @@ func (r messageRenderer) RenderUnread(ctx context.Context, event realtime.Event)
 	})
 }
 
-// Render caching bounds: names shown in a live message can be up to
-// renderTTL old (the page always reads them fresh).
+// Render caching bounds: a cached live item can show an author's or member
+// reference's old name for at most renderTTL (pages read both fresh).
 const (
 	renderCapacity = 4096
 	renderTTL      = time.Minute

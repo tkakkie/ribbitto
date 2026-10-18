@@ -9,10 +9,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// MemberDirectory is the author lookup and bounded member listing the page
-// reader needs from org. Lookups omit missing and foreign members; both
+// MemberDirectory supplies org's author lookup, bounded page listing and
+// handle listing for posting. Lookups omit missing and foreign members;
 // reads return org's result types (no copies here).
 type MemberDirectory interface {
+	org.MemberSearchStore
 	// ListMembers returns a bounded ID-ordered page after the optional member ID.
 	ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error)
 	LookupMembers(ctx context.Context, organizationID kernel.ID, memberIDs []kernel.ID) (map[kernel.ID]org.DirectoryEntry, error)
@@ -61,10 +62,11 @@ type Writer interface {
 	// (GetDefaultTopic or GetTopic). Another organisation's channel is
 	// ErrChannelNotFound and another organisation's member org.ErrNotFound.
 	// A non-nil key the author already stored in the organisation is
-	// ErrPostKeyTaken; the transaction is then rolled back. A non-nil quote
+	// ErrPostKeyTaken; the transaction is then rolled back. Proof is stored
+	// atomically with a key; its zero value means unverifiable. A non-nil quote
 	// is stored with it; an original deleted since QuotedMessage is
 	// ErrQuoteNotFound.
-	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, quote *Quote) (Message, error)
+	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error)
 	// QuotedMessage returns the channel's message with the ID, or
 	// ErrQuoteNotFound when it is missing or in another organisation or channel.
 	QuotedMessage(ctx context.Context, organizationID, channelID, id kernel.ID) (Message, error)

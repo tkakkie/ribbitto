@@ -15,6 +15,9 @@ import (
 // ErrUnknownReference, references a member posting cannot find.
 var ErrInvalidBody = errors.New("invalid message body")
 
+// MaxMessageBodyLength bounds typed and stored bodies in Unicode code points.
+const MaxMessageBodyLength = 4000
+
 // ErrMessageNotFound means no message has the requested key in the caller's organisation
 // and channel, including when the message exists in another scope.
 var ErrMessageNotFound = errors.New("message not found")
@@ -42,6 +45,8 @@ type Message struct {
 	Format                                           Format
 	EventSeq                                         int64
 	CreatedAt                                        time.Time
+	// TypedBodyProof verifies the whole normalized typed body on keyed retries.
+	TypedBodyProof TypedBodyProof
 	// Pinned is the message's current pin state, the same for every member.
 	Pinned bool
 	// Quote is the earlier message this one quotes, or nil.
@@ -71,7 +76,7 @@ func ValidateMessageBody(value string) (string, error) {
 		return "", fmt.Errorf("message body contains forbidden control characters or separators")
 	}
 	value = strings.TrimSpace(value)
-	if length := utf8.RuneCountInString(value); length < 1 || length > 4000 {
+	if length := utf8.RuneCountInString(value); length < 1 || length > MaxMessageBodyLength {
 		return "", fmt.Errorf("message body must contain 1–4000 Unicode code points")
 	}
 	return value, nil

@@ -14,10 +14,12 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -122,6 +124,10 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		return out.Data
 	}
 	stream := func(lang string) []byte { return streamAs(m, lang) }
+	bobM := org.Membership{Organization: m.Organization, Member: org.Member{ID: bob, OrganizationID: f.OrganizationID}}
+	if got, other := stream("en"), streamAs(bobM, "en"); !bytes.Equal(got, other) {
+		t.Fatalf("two members' live HTML differs:\n%s\n%s", got, other)
+	}
 
 	ownerPage := page(f.AccountID)
 	got := item(ownerPage, rich.ID)
@@ -150,6 +156,19 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	if strings.Contains(string(ownerPage), "Foreign Spy") || strings.Contains(string(ownerPage), "@spy") {
 		t.Error("the page shows another organisation's member")
 	}
+	for _, markup := range []string{string(ownerPage), string(stream("en"))} {
+		if strings.Contains(markup, "data-own-mention=") {
+			t.Error("the server rendered a reader-dependent highlight")
+		}
+		for _, id := range []kernel.ID{spy, {0xee}} {
+			if strings.Contains(markup, realtime.FormatPayloadID(id)) {
+				t.Error("an unresolved UUID reached page or live HTML")
+			}
+		}
+	}
+	if strings.Count(got, "data-member-id=") != 2 || !strings.Contains(got, `data-member-id="`+realtime.FormatPayloadID(bob)+`"`) || !strings.Contains(got, `data-member-id="`+realtime.FormatPayloadID(blank)+`"`) {
+		t.Errorf("only resolved references must carry their member IDs:\n%s", got)
+	}
 	if ja := item(stream("ja"), rich.ID); strings.Count(ja, "@不明なメンバー") != 2 {
 		t.Errorf("Japanese placeholder:\n%s", ja)
 	}
@@ -170,7 +189,6 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("no live item")
 		return ""
 	}
-	bobM := org.Membership{Organization: m.Organization, Member: org.Member{ID: bob, OrganizationID: f.OrganizationID}}
 	wantText := "Hi @bob and @blank, see https://example.com/a.\nfrom @unknown member x<y\nfmt.Print(\"<b>\")\nunknown @unknown member"
 	if got, other := announcement(m, "en"), announcement(bobM, "en"); got != "New ribbit @owner: "+wantText || other != got {
 		t.Errorf("announcements differ or are not the resolved extraction:\n%q\n%q", got, other)
@@ -208,5 +226,73 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	wantPlain := `<p id="body-` + view.MessageDOMID(plain.ID) + `" dir="auto" class="whitespace-pre-wrap break-words text-title">**not bold** &lt;@` + realtime.FormatPayloadID(bob) + `&gt; https://example.com</p>`
 	if !strings.Contains(string(ownerPage), wantPlain) {
 		t.Errorf("plain_text body changed:\n%s", item(ownerPage, plain.ID))
+	}
+}
+
+// A reference stores the member ID, so renaming either name changes subsequent
+// reads, including a fresh live render, without changing the message body.
+func TestMentionRenameAgainstPostgreSQL(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	account := identitytest.Account(t, pool, "bob@example.org", "Bob Example")
+	bob := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "bob", 1)
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
+	s := postgresServices(t, pool, sessions, "", false)
+	m, err := s.Authz.Member(ctx, &identity.Account{ID: f.AccountID}, "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "hello <@" + realtime.FormatPayloadID(bob) + ">"
+	posted, err := s.Posting.PostToTopic(ctx, m, f.Channel.ID, nil, "hello @bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := NewHandler("", catalogues, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, _, err := sessions.Create(ctx, f.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, names := range []struct{ name, handle string }{{"Bob Example", "bob"}, {"Robert Renamed", "robert"}} {
+		if _, err := orgpg.NewHandleChanger(pool).ChangeHandle(ctx, &identity.Account{ID: account}, "acme", names.handle); err != nil {
+			t.Fatal(err)
+		}
+		identitytest.SetDisplayName(t, pool, account, names.name)
+		page := serveForm(h, "GET", view.ChannelURL("acme", f.Channel.ID), cookie, nil)
+		if page.Code != 200 {
+			t.Fatalf("page: %d", page.Code)
+		}
+		event := eventOf(t, f.OrganizationID, posted.EventSeq, conversation.KindPosted, conversation.Moved{ChannelID: f.Channel.ID, ToTopicID: posted.TopicID})
+		out, err := (messageRenderer{messages: s.Messages, membership: m, renders: newRenderCache(ctx)}).Render(ctx, event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, markup := range []string{page.Body.String(), string(out.Data)} {
+			doc, err := html.Parse(strings.NewReader(markup))
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for n := range doc.Descendants() {
+				if attr(n, "id") == "body-"+view.MessageDOMID(posted.ID) {
+					found = text(n) == "hello "+names.name+" @"+names.handle
+				}
+			}
+			if !found {
+				t.Fatalf("reference did not follow rename: %s", markup)
+			}
+		}
+	}
+	entry, err := s.Messages.One(ctx, m, f.Channel.ID, posted.EventSeq)
+	if err != nil || entry.Body != body {
+		t.Fatalf("stored reference changed: %+v, %v", entry, err)
 	}
 }

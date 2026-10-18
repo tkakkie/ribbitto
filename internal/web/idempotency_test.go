@@ -280,11 +280,35 @@ func TestIdempotencyKeyStaysOutOfStreams(t *testing.T) {
 // A retry that adds a quote is not the stored send: its 409 keeps the error
 // instead of removing the text and dropping the quote (#1179).
 func TestRecoveredNeedsAnUnquotedRetry(t *testing.T) {
-	stored := conversation.Message{ChannelID: kernel.ID{1}, Body: "hello"}
-	if got := recovered(true, kernel.ID{1}, "hello again", false, stored); got != "hello" {
-		t.Fatalf("unquoted retry recovered %q", got)
+	h, writer, _, m, _, path := keyedComposer(t, false)
+	key := conversation.NewIdempotencyKey()
+	keyedSend(t, h, path, url.Values{"body": {"hello"}, "idempotency_key": {key.String()}}, true, http.StatusOK)
+	stored := writer.keyed[[3][16]byte{m.Organization.ID, m.Member.ID, key}]
+	stored.ChannelID = kernel.ID{1}
+
+	for _, tc := range []struct {
+		name             string
+		enhanced, quoted bool
+		channel          kernel.ID
+		body, want       string
+	}{
+		{"verified", true, false, kernel.ID{1}, "hello again", "hello"},
+		{"quoted retry", true, true, kernel.ID{1}, "hello again", ""},
+		{"another channel", true, false, kernel.ID{2}, "hello again", ""},
+		{"plain form", false, false, kernel.ID{1}, "hello again", ""},
+		{"different prefix", true, false, kernel.ID{1}, "world again", ""},
+	} {
+		if got := recovered(tc.enhanced, tc.channel, tc.body, tc.quoted, stored); got != tc.want {
+			t.Errorf("%s recovered %q, want %q", tc.name, got, tc.want)
+		}
 	}
-	if got := recovered(true, kernel.ID{1}, "hello again", true, stored); got != "" {
-		t.Fatalf("quoted retry recovered %q", got)
+	stored.Quote = &conversation.Quote{}
+	if got := recovered(true, kernel.ID{1}, "hello again", false, stored); got != "" {
+		t.Fatalf("stored quote recovered %q", got)
+	}
+	stored.Quote = nil
+	stored.TypedBodyProof = conversation.TypedBodyProof{}
+	if got := recovered(true, kernel.ID{1}, "hello again", false, stored); got != "" {
+		t.Fatalf("unverified retry recovered %q", got)
 	}
 }

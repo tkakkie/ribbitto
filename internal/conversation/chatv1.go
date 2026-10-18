@@ -57,7 +57,23 @@ type BodyInline struct {
 // chat_v1's grammar (decision 39). Anything outside the grammar is literal
 // text, so every body parses. It runs in time linear in the body's length.
 func ParseChatV1(body string) []BodyBlock {
+	return parseChatV1(body, nil)
+}
+
+// textRun locates source eligible for handles, including bold/italic delimiters.
+// Escapes, code, member references and autolinks are excluded.
+// line is the content's start, after any block quote marker.
+type textRun struct{ start, end, line int }
+
+func parseChatV1(body string, runs *[]textRun) []BodyBlock {
 	lines := strings.Split(body, "\n")
+	var offsets []int
+	if runs != nil {
+		offsets = make([]int, len(lines)+1)
+		for i, line := range lines {
+			offsets[i+1] = offsets[i] + len(line) + 1
+		}
+	}
 	// closing[i] is the first line from i on that is exactly a fence, so an
 	// opening line without one costs a lookup instead of a scan of the rest.
 	closing := make([]int, len(lines)+1)
@@ -84,7 +100,11 @@ func ParseChatV1(body string) []BodyBlock {
 			blocks = append(blocks, BodyBlock{Kind: kind})
 		}
 		last := &blocks[len(blocks)-1]
-		last.Lines = append(last.Lines, parseInline(content))
+		offset := 0
+		if runs != nil {
+			offset = offsets[i] + len(lines[i]) - len(content)
+		}
+		last.Lines = append(last.Lines, parseInline(content, offset, runs))
 	}
 	return blocks
 }
@@ -127,21 +147,43 @@ type inlineFrame struct {
 }
 
 type inlineParser struct {
-	line  string
-	stack []inlineFrame
-	text  strings.Builder
+	line    string
+	stack   []inlineFrame
+	text    strings.Builder
+	literal bool
 }
 
-func parseInline(line string) []BodyInline {
+func parseInline(line string, offset int, runs *[]textRun) []BodyInline {
 	p := inlineParser{line: line, stack: make([]inlineFrame, 1, 3)}
+	var plain []bool
+	if runs != nil {
+		plain = make([]bool, len(line))
+	}
 	for i := 0; i < len(line); {
-		i = p.step(i)
+		p.literal = false
+		next := p.step(i)
+		if runs != nil && p.literal {
+			for j := i; j < next; j++ {
+				plain[j] = true
+			}
+		}
+		i = next
 	}
 	p.flush()
 	// Delimiters still open at the end of the line are literal.
 	for top := len(p.stack) - 1; top > 0; top-- {
 		frame, parent := p.stack[top], &p.stack[top-1]
 		parent.nodes = append(append(parent.nodes, BodyInline{Kind: InlineText, Text: frame.delim}), frame.nodes...)
+	}
+	for i := 0; i < len(plain); i++ {
+		if !plain[i] {
+			continue
+		}
+		start := i
+		for i < len(plain) && plain[i] {
+			i++
+		}
+		*runs = append(*runs, textRun{offset + start, offset + i, offset})
 	}
 	return mergeText(p.stack[0].nodes)
 }
@@ -178,11 +220,13 @@ func (p *inlineParser) step(i int) int {
 		return i + 1
 	}
 	_, size := utf8.DecodeRuneInString(line[i:])
+	p.literal = true
 	p.text.WriteString(line[i : i+size])
 	return i + size
 }
 
 func (p *inlineParser) delimiter(i int, kind InlineKind, delim string) {
+	p.literal = true // Delimiters must not split a typed handle at an underscore.
 	before, _ := utf8.DecodeLastRuneInString(p.line[:i])
 	after, _ := utf8.DecodeRuneInString(p.line[i+len(delim):])
 	hasBefore, hasAfter := i > 0, i+len(delim) < len(p.line)

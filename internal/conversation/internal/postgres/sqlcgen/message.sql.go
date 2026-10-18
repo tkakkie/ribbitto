@@ -50,7 +50,7 @@ func (q *Queries) FirstChannelMessageAfter(ctx context.Context, arg FirstChannel
 }
 
 const getKeyedMessage = `-- name: GetKeyedMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof FROM message
 WHERE organization_id = $1 AND member_id = $2 AND idempotency_key = $3
 `
 
@@ -80,12 +80,13 @@ func (q *Queries) GetKeyedMessage(ctx context.Context, arg GetKeyedMessageParams
 		&i.QuotedMessageID,
 		&i.QuotedMemberID,
 		&i.QuoteText,
+		&i.TypedBodyProof,
 	)
 	return i, err
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
 `
 
@@ -115,12 +116,13 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 		&i.QuotedMessageID,
 		&i.QuotedMemberID,
 		&i.QuoteText,
+		&i.TypedBodyProof,
 	)
 	return i, err
 }
 
 const getMessages = `-- name: GetMessages :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
 ORDER BY event_seq DESC
 `
@@ -157,6 +159,7 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 			&i.QuotedMessageID,
 			&i.QuotedMemberID,
 			&i.QuoteText,
+			&i.TypedBodyProof,
 		); err != nil {
 			return nil, err
 		}
@@ -170,9 +173,9 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 
 const insertMessage = `-- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, format, event_seq, idempotency_key,
-                     quoted_message_id, quoted_member_id, quote_text)
+                     quoted_message_id, quoted_member_id, quote_text, typed_body_proof)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text
+        $9, $10, $11, $12) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof
 `
 
 type InsertMessageParams struct {
@@ -187,6 +190,7 @@ type InsertMessageParams struct {
 	QuotedMessageID pgtype.UUID
 	QuotedMemberID  pgtype.UUID
 	QuoteText       pgtype.Text
+	TypedBodyProof  []byte
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error) {
@@ -202,6 +206,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		arg.QuotedMessageID,
 		arg.QuotedMemberID,
 		arg.QuoteText,
+		arg.TypedBodyProof,
 	)
 	var i Message
 	err := row.Scan(
@@ -221,6 +226,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		&i.QuotedMessageID,
 		&i.QuotedMemberID,
 		&i.QuoteText,
+		&i.TypedBodyProof,
 	)
 	return i, err
 }
@@ -245,7 +251,7 @@ func (q *Queries) LastChannelMessageBefore(ctx context.Context, arg LastChannelM
 }
 
 const listMessagesAfter = `-- name: ListMessagesAfter :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND event_seq > $4::bigint
@@ -293,6 +299,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 			&i.QuotedMessageID,
 			&i.QuotedMemberID,
 			&i.QuoteText,
+			&i.TypedBodyProof,
 		); err != nil {
 			return nil, err
 		}
@@ -305,7 +312,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 }
 
 const listMessagesBefore = `-- name: ListMessagesBefore :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format, quoted_message_id, quoted_member_id, quote_text, typed_body_proof FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND ($4::bigint IS NULL OR event_seq < $4::bigint)
@@ -353,6 +360,7 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 			&i.QuotedMessageID,
 			&i.QuotedMemberID,
 			&i.QuoteText,
+			&i.TypedBodyProof,
 		); err != nil {
 			return nil, err
 		}

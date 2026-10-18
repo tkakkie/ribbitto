@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -494,6 +495,25 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	if _, err := NewHandler("", catalogues, testServices()); err != nil {
 		t.Fatalf("NewHandler rejected the default services: %v", err)
 	}
+	for _, pin := range []bool{false, true} {
+		for i := range 7 {
+			s := testServices()
+			others := []*middleware.MemberRateLimiter{nil, s.SignalLimits, s.ReadLimits, s.CreateLimits, s.ResyncLimits, s.BranchLimits, s.PostLimits}
+			// Supply a real typing limiter so every alias case differs from nil.
+			others[1] = middleware.NewMemberRateLimiter(time.Now)
+			s.SignalLimits = others[1]
+			if pin {
+				s.PinLimits = others[i]
+			} else if i < 6 {
+				s.PostLimits = others[i]
+			} else {
+				continue // Post/pin sharing is checked by the pin case.
+			}
+			if _, err := NewHandler("", catalogues, s); err == nil {
+				t.Errorf("accepted missing/shared limiter: pin=%t other=%d", pin, i)
+			}
+		}
+	}
 	for name, missing := range map[string]func(*Services){
 		"stream without lifetime": func(s *Services) { s.Stream = &Streaming{} },
 		"read without limiter":    func(s *Services) { s.Reading, s.ReadLimits = readCall(func(context.Context) error { return nil }), nil },
@@ -501,6 +521,12 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 			s.Reading = readCall(func(context.Context) error { return nil })
 			s.SignalLimits = s.ReadLimits
 		},
+		"mentions without limiter":          func(s *Services) { s.MentionLimits = nil },
+		"mentions sharing typing limiter":   func(s *Services) { s.SignalLimits = s.MentionLimits },
+		"mentions sharing read limiter":     func(s *Services) { s.ReadLimits = s.MentionLimits },
+		"mentions sharing create limiter":   func(s *Services) { s.CreateLimits = s.MentionLimits },
+		"mentions sharing resync limiter":   func(s *Services) { s.ResyncLimits = s.MentionLimits },
+		"mentions sharing branch limiter":   func(s *Services) { s.BranchLimits = s.MentionLimits },
 		"branch without limiter":            func(s *Services) { s.BranchLimits = nil },
 		"branch sharing typing limiter":     func(s *Services) { s.SignalLimits = s.BranchLimits },
 		"branch sharing read limiter":       func(s *Services) { s.BranchLimits = s.ReadLimits },

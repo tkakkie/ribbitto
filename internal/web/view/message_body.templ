@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
@@ -34,12 +35,14 @@ type BodyBlock struct {
 // BodyInline is one inline node. Text is plain text, a code span or a link's
 // URL; Children are a bold or italic node's content. A member reference
 // carries the member's current names, its display name already converted
-// like an author's; an empty Handle means it could not be resolved.
+// like an author's; an empty Handle means it could not be resolved and
+// MemberID is empty too.
 type BodyInline struct {
 	Kind                BodyKind
 	Text                string
 	Children            []BodyInline
 	DisplayName, Handle string
+	MemberID            kernel.ID
 }
 
 // webURL is the link allow-list, checked again here although only the
@@ -112,7 +115,12 @@ templ bodyInlines(nodes []BodyInline) {
 					{ node.Text }
 				}
 			case BodyMember:
-				<bdi class="rounded-sm bg-selected px-1">
+				<bdi
+					if node.MemberID != (kernel.ID{}) {
+						data-member-id={ idValue(node.MemberID) }
+					}
+					class="rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-dashed data-own-mention:outline-brand"
+				>
 					if node.Handle == "" {
 						{ UnknownMember(ctx) }
 					} else {

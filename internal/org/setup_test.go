@@ -60,6 +60,7 @@ func TestRejectedSetup(t *testing.T) {
 // store transaction does; state reads remain outside the transaction.
 type setupTransaction struct {
 	org.RegistrationWriter
+	hash          string
 	steps         []string
 	fail          string
 	err, checkErr error
@@ -98,6 +99,7 @@ func (s *setupTransaction) NextEventSeq(_ context.Context, organizationID kernel
 	return 3, s.step("sequence")
 }
 func (s *setupTransaction) CreateAccount(_ context.Context, email, name, hash string) (kernel.ID, error) {
+	s.hash = hash
 	if email != "owner@example.org" || name != "Owner" || !strings.HasPrefix(hash, "$argon2id$") {
 		s.t.Fatal("bad normalized account or hash")
 	}
@@ -169,8 +171,13 @@ func TestSetupCompleteTransaction(t *testing.T) {
 					func(platform.Tx) org.EventAppender { return store },
 					func(platform.Tx) org.DefaultChannelCreator { return store }, hasher, "secret")
 				result, err := service.Complete(t.Context(), "secret", org.SetupInput{
-					OrganizationName: " Example ", Slug: "example", DisplayName: " Owner ", Handle: " Owner ", Email: " Owner@Example.org ", Password: "long enough password",
+					OrganizationName: " Example ", Slug: "example", DisplayName: " Owner ", Handle: " Owner ", Email: " Owner@Example.org ", Password: "long enough password e\u0301",
 				})
+				if err == nil {
+					if ok, err := hasher.Verify(t.Context(), "long enough password é", store.hash); err != nil || !ok {
+						t.Fatalf("setup did not hash NFC: %v", err)
+					}
+				}
 				wantOrder := order
 				for i, step := range order {
 					if step == tc.fail {

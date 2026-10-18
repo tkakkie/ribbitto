@@ -591,11 +591,10 @@ func TestPagesMarkup(t *testing.T) {
 		s := withSignUp(true, nil)()
 		s.Setup = &fakeSetup{open: true, err: org.ErrSetupToken}
 		now := func() time.Time { return time.Unix(0, 0) }
-		s.Limits = &middleware.AuthLimits{
-			SignIn: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-			SignUp: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-			Setup:  middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
-		}
+		s.Limits = middleware.NewAuthLimits(nil, now, slog.Default())
+		s.Limits.SignIn = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
+		s.Limits.SignUp = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
+		s.Limits.Setup = middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now)
 		return s
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}

@@ -37,7 +37,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	const setupToken = "m2-acceptance-setup-token-0123456789"
 	services := postgresServices(t, pool, sessions, setupToken, true)
 	// The real limits, as in production: the flow stays within them.
-	services.Limits = middleware.NewAuthLimits(nil, time.Now)
+	services.Limits = middleware.NewAuthLimits(nil, time.Now, slog.New(slog.NewTextHandler(&logs, nil)))
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

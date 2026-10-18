@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -263,10 +264,14 @@ type AuthLimits struct {
 	SignIn, SignUp, Setup *RateLimiter
 	// Trusted proxies whose X-Forwarded-For is believed (ClientKey).
 	Trusted []netip.Prefix
+
+	logger       *slog.Logger
+	proxyWarning sync.Once
 }
 
-// NewAuthLimits returns the limits; now is time.Now outside tests.
-func NewAuthLimits(trusted []netip.Prefix, now func() time.Time) *AuthLimits {
+// NewAuthLimits returns the limits; now is time.Now outside tests and logger
+// must be non-nil. Share one instance across authentication routes.
+func NewAuthLimits(trusted []netip.Prefix, now func() time.Time, logger *slog.Logger) *AuthLimits {
 	signIn := Limit{Burst: signInBurst, Every: signInEvery}
 	signInNetwork := Limit{Burst: signInNetworkBurst, Every: signInNetworkEvery}
 	once := Limit{Burst: onceBurst, Every: onceEvery}
@@ -276,11 +281,22 @@ func NewAuthLimits(trusted []netip.Prefix, now func() time.Time) *AuthLimits {
 		SignUp:  NewNetworkRateLimiter(once, onceNetwork, now),
 		Setup:   NewNetworkRateLimiter(once, onceNetwork, now),
 		Trusted: trusted,
+		logger:  logger,
 	}
 }
 
 // Allow reports whether the request's client may make one more attempt
 // against limiter.
 func (a *AuthLimits) Allow(limiter *RateLimiter, r *http.Request) bool {
+	if len(a.Trusted) == 0 && len(r.Header.Values("X-Forwarded-For")) > 0 {
+		peer := peerAddr(r)
+		if peer.IsLoopback() || peer.IsPrivate() {
+			a.proxyWarning.Do(func() {
+				// Keep this diagnostic static: forwarded addresses are untrusted
+				// and neither they nor the peer belong in the log.
+				a.logger.Warn("RIBBITTO_TRUSTED_PROXIES is empty; authentication clients may share a proxy's rate limit; see docs/architecture/rate-limits.md#reverse-proxies")
+			})
+		}
+	}
 	return limiter.Allow(ClientKey(r, a.Trusted))
 }

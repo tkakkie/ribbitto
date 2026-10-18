@@ -344,7 +344,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Branching:     branching,
 		Pinning:       conversationpg.NewPinning(pool, postingSequence, postingEvents, postingNotifier),
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),
-		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
+		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now, slog.Default()),
 		Stream:        stream,
 		Typing:        typingState,
 		SignalLimits:  middleware.NewMemberRateLimiter(time.Now),

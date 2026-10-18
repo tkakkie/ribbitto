@@ -56,14 +56,36 @@ func resetReload(t *testing.T, page *rod.Page) {
 
 func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 	// Isolate each predicate: another at-stake state must not mask its removal.
-	for _, state := range []string{"request", "alert", "queued", "sending", "failed", "unconfirmed", "confirmed", "draft"} {
-		t.Run(state, func(t *testing.T) {
+	for _, test := range []struct {
+		state string
+		holds bool
+	}{
+		{"request", true},
+		{"alert-unconfirmed", true},
+		{"alert-notSent", true},
+		{"alert-stillUnconfirmed", true},
+		{"alert-busy", false},
+		{"alert-capacity", false},
+		{"alert-recovered", false},
+		{"alert-repeat", false},
+		{"alert-other", false},
+		{"queued", true},
+		{"sending", true},
+		{"failed", true},
+		{"unconfirmed", true},
+		{"confirmed", false},
+		{"draft", false},
+	} {
+		t.Run(test.state, func(t *testing.T) {
 			page, events, _, _ := pendingBrowser(t, browser, false)
 			resetClock(page)
 			page.MustEval(`state=>{
     const form=document.getElementById('message-composer');
     if(state==='request') form.classList.add('htmx-request');
-    else if(state==='alert') document.getElementById('message-send-alert').textContent='kept failure';
+    else if(state.startsWith('alert-')) {
+     const alert=document.getElementById('message-send-alert');
+     alert.textContent=state==='alert-other'?'arbitrary text':alert.dataset[state.slice(6)];
+    }
     else if(state==='draft') form.elements.body.value='draft';
     else {
      const item=document.getElementById('message-pending-template').content.firstElementChild.cloneNode(true);
@@ -71,10 +93,10 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
      if(state==='unconfirmed') item.querySelector('form').dataset.unconfirmed='true';
      document.getElementById('message-pending').append(item);
     }
-   }`, state)
+   }`, test.state)
 			events <- realtime.Outgoing{Name: "reset"}
 			page.MustWait(`() => window.source.readyState===EventSource.CLOSED`)
-			if state != "confirmed" && state != "draft" {
+			if test.holds {
 				resetHeld(t, page)
 				page.MustEval(`() => {
      document.getElementById('message-composer').classList.remove('htmx-request');

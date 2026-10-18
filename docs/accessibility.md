@@ -86,9 +86,9 @@ The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
 `#message-status` is empty, with `role="status"`, `aria-live="polite"` and
-`aria-relevant="additions"`. It announces appends and "Copy link"
-confirmation (#1159), retaining 10 entries. History and paging stay outside
-live regions; prepends, duplicate replacements and pruning stay silent.
+`aria-relevant="additions"`. It announces only live appends' stream-only text and
+"Copy link" confirmation (#1159), keeping 10 entries. History, paging,
+prepends, duplicate replacements and pruning stay silent.
 A reset hold shows `#stream-stopped`, a localised status with a plain reload link, keeping focus.
 Latest feeds/topics' `#typing-status` is visible, localised and polite with
 `aria-atomic="true"`, outside history and composer swaps. Content swaps keep

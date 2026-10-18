@@ -32,10 +32,12 @@
     let timer = null;
     const notice = document.getElementById("stream-stopped");
     // Confirmed items await reload delivery; drafts do not hold reload.
-    const atStake = () =>
-      document.getElementById("message-composer")?.classList.contains("htmx-request") ||
-      document.getElementById("message-send-alert")?.textContent.trim() ||
-      document.querySelector('#message-pending [data-state="queued"], #message-pending [data-state="sending"], #message-pending [data-state="failed"]');
+    const atStake = () => {
+      const alert = document.getElementById("message-send-alert");
+      return document.getElementById("message-composer")?.classList.contains("htmx-request") ||
+        (alert?.textContent && ["unconfirmed", "notSent", "stillUnconfirmed"].some(name => alert.textContent === alert.dataset[name])) ||
+        document.querySelector('#message-pending [data-state="queued"], #message-pending [data-state="sending"], #message-pending [data-state="failed"]');
+    };
     const decide = () => {
       const held = Boolean(atStake());
       if (notice) notice.hidden = !held;

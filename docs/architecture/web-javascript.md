@@ -83,7 +83,7 @@ htmx sends resync requests. The markup contract is in
   without the API, or when copying fails, the link opens, as without
   JavaScript.
 - SSE `reset` closes htmx's event source. A DOM observer holds reload while
-  the composer has `htmx-request` or a nonempty send alert, or a pending form
+  the composer has `htmx-request` or #1179's failure alert, or a pending form
   is queued, sending or failed (including unconfirmed). A localised status
   offers a plain reload link. With nothing at stake, one uniform 0–5 s timer
   reloads for a fresh snapshot; new at-stake state cancels it, and firing

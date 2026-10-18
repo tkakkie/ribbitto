@@ -14,7 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
-// Member holds the names and presence shown in the members panel.
+// Member holds names and presence for member listings and mention candidates.
 type Member struct {
 	ID                  kernel.ID
 	DisplayName, Handle string

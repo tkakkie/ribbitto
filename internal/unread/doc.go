@@ -12,6 +12,8 @@
 // without a hub the publisher is nil. Transaction completion has an independent
 // limit; an unknown-commit recount may precede persistence, so reconnect remains
 // the repair for that race or a lost process-local publication.
+// Post reads choose feed or topic writes and reuse prepared topic state;
+// page counts combine both lists and first-unread in the caller's snapshot.
 // Posting and branching use only transaction-bound writers
 // and their durable message.posted notification, never the reading publisher.
 // Topic preparation and batch unions retain the channel lock in the caller's

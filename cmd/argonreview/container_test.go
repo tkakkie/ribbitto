@@ -1,0 +1,348 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+type fakeContainerRunner struct {
+	runFn func(context.Context, []string, []string, io.Writer, io.Writer) (int, error)
+}
+
+func (f fakeContainerRunner) run(ctx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
+	return f.runFn(ctx, args, env, stdout, stderr)
+}
+
+func containerFixture(t *testing.T) string {
+	t.Helper()
+	dir := resolved(t, t.TempDir())
+	gitT(t, dir, "init", "--quiet", "--template=")
+	write(t, filepath.Join(dir, "go.mod"), "module example.invalid/check\n\ngo 1.27.2\n")
+	write(t, filepath.Join(dir, "check.go"), "package check\n")
+	return dir
+}
+
+func TestContainerValidation(t *testing.T) {
+	for _, tc := range []struct {
+		pattern string
+		valid   bool
+	}{
+		{".", true}, {"./...", true}, {"./internal/foo/...", true}, {"./cmd/argonreview", true}, {"./a_b-c/x1", true},
+		{"-run", false}, {"-x", false}, {"a b", false}, {"../x", false}, {"./a/../b", false}, {"", false},
+		{"-foo", false}, {"/absolute", false}, {"./.../x", false}, {"./foo/.../..", false}, {"./a//b", false},
+		{"./a/", false}, {"./..", false}, {"./a/./b", false}, {"./a\nb", false}, {"./a;true", false}, {"all", false},
+	} {
+		t.Run(tc.pattern, func(t *testing.T) {
+			runner := fakeContainerRunner{func(context.Context, []string, []string, io.Writer, io.Writer) (int, error) {
+				t.Fatal("Docker reached during argument refusal")
+				return 0, nil
+			}}
+			err := validateContainerCheck("tree", "test", tc.pattern)
+			if (err == nil) != tc.valid {
+				t.Fatalf("validation %q: %v", tc.pattern, err)
+			}
+			if !tc.valid {
+				if _, err := runContainerCheck(context.Background(), "tree", "test", tc.pattern, runner); err == nil {
+					t.Fatal("invalid pattern accepted")
+				}
+			}
+		})
+	}
+	for _, tc := range []struct{ tree, check string }{{"", "build"}, {"tree", "shell"}, {"tree", "-x"}, {"tree", ""}, {"x\x00y", "test"}} {
+		if err := validateContainerCheck(tc.tree, tc.check, "./..."); err == nil {
+			t.Fatalf("accepted %q %q", tc.tree, tc.check)
+		}
+	}
+}
+
+func TestContainerDispatchAndTrust(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		code int
+	}{
+		{[]string{"container-check", "/tree", "build", "./..."}, 1},
+		{[]string{"container-check", "/tree", "vet", "."}, 1},
+		{[]string{"container-check", "/tree", "test", "./internal/foo/..."}, 1},
+		{[]string{"container-check"}, 2}, {[]string{"container-check", "/tree", "test"}, 2},
+		{[]string{"container-check", "/tree", "test", "./...", "extra"}, 2},
+		{[]string{"container-check", "/tree", "run", "./..."}, 2},
+		{[]string{"container-check", "/tree", "test", "-x"}, 2},
+		{[]string{"verify", "/tree", "test", "./..."}, 2},
+	} {
+		var out, stderr bytes.Buffer
+		if code := run(tc.args, nil, &out, &stderr); code != tc.code || out.Len() != 0 || stderr.Len() == 0 {
+			t.Fatalf("%v: %d, %q, %q", tc.args, code, out.String(), stderr.String())
+		}
+	}
+}
+
+func TestContainerArgumentsGolden(t *testing.T) {
+	for _, check := range []string{"build", "vet", "test"} {
+		t.Run(check, func(t *testing.T) {
+			for _, name := range []string{"GH_TOKEN", "RIBBITTO_DATABASE_URL", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "GOPATH", "GOMODCACHE", "GOENV", "HOME", "PATH"} {
+				t.Setenv(name, "dummy-excluded")
+			}
+			want := []string{
+				"run", "--pull=never", "--name", "argonreview-check-fixed",
+				"--network", "none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
+				"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
+				"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
+				"--mount", "type=bind,src=/var/cache/argonreview/go-mod,dst=/go/pkg/mod,readonly",
+				"--mount", "type=bind,src=/tmp/copy/tree,dst=/work", "-w", "/work",
+				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
+				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
+				"--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
+				"golang@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8", "go", check,
+			}
+			if check == "test" {
+				want = append(want, "-count=1", "-json")
+			}
+			want = append(want, "./...")
+			if got := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./..."); !reflect.DeepEqual(got, want) {
+				t.Fatalf("args:\n%q\nwant:\n%q", got, want)
+			}
+			if got, want := dockerEnvironment(), []string{"PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin", "HOME=/nonexistent", "DOCKER_CONFIG=/nonexistent", "DOCKER_HOST=unix:///var/run/docker.sock"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("Docker environment differs: %q", got)
+			}
+			if containerTimeout != 10*time.Minute || containerCleanupTimeout != 20*time.Second || containerOutputLimit != 4<<20 || containerFileLimit != 20000 || containerCopyLimit != 128<<20 {
+				t.Fatal("trusted limits changed")
+			}
+		})
+	}
+}
+
+func TestContainerGoVersion(t *testing.T) {
+	for _, tc := range []struct {
+		data  string
+		valid bool
+	}{
+		{"module x\n\ngo 1.27.2\n", true}, {"go\t1.27.2 // image\n", true},
+		{"go 1.27\n", false}, {"go 1.27.3\n", false}, {"module x\n", false}, {"go\n", false},
+		{"go 1.27.2\ngo 1.27.2\n", false}, {"go 1.27.2 extra\n", false},
+	} {
+		if err := checkContainerGoVersion([]byte(tc.data)); (err == nil) != tc.valid {
+			t.Fatalf("%q: %v", tc.data, err)
+		}
+	}
+	dir := containerFixture(t)
+	write(t, filepath.Join(dir, "go.mod"), "module x\ngo 1.27.3\n")
+	runner := fakeContainerRunner{func(context.Context, []string, []string, io.Writer, io.Writer) (int, error) {
+		t.Fatal("Docker ran for mismatched Go version")
+		return 0, nil
+	}}
+	if _, err := runContainerCheck(context.Background(), dir, "build", "./...", runner); err == nil || !strings.Contains(err.Error(), "go.mod") {
+		t.Fatalf("version mismatch: %v", err)
+	}
+}
+
+func TestContainerRunAndCleanup(t *testing.T) {
+	for _, tc := range []struct {
+		name                                                                     string
+		status                                                                   int
+		fail, timeout, interrupt, overflow, cleanupFail, stopFail, lateInterrupt bool
+	}{
+		{name: "success"}, {name: "nonzero", status: 1}, {name: "OOM", status: 137}, {name: "abnormal", status: -1},
+		{name: "runner error", fail: true}, {name: "timeout", timeout: true}, {name: "interrupt", interrupt: true},
+		{name: "output limit", overflow: true}, {name: "cleanup fails", fail: true, cleanupFail: true},
+		{name: "cleanup fails after success", cleanupFail: true}, {name: "stop fails", stopFail: true}, {name: "late interrupt", lateInterrupt: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := containerFixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.timeout {
+				var end context.CancelFunc
+				ctx, end = context.WithDeadline(ctx, time.Now().Add(2*time.Second))
+				defer end()
+			}
+			var copyDir, name string
+			var calls []string
+			runner := fakeContainerRunner{func(runCtx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
+				calls = append(calls, args[0])
+				if !reflect.DeepEqual(env, dockerEnvironment()) {
+					t.Fatal("environment changed")
+				}
+				if args[0] != "run" {
+					if runCtx.Err() != nil {
+						t.Fatal("cleanup reused canceled context")
+					}
+					if _, err := os.Stat(copyDir); err != nil {
+						t.Fatal("source removed before container cleanup")
+					}
+					want := []string{"stop", "--time", "2", name}
+					if args[0] == "rm" {
+						want = []string{"rm", "-f", name}
+					}
+					if !reflect.DeepEqual(args, want) {
+						t.Fatalf("cleanup %q", args)
+					}
+					if tc.lateInterrupt && args[0] == "rm" {
+						cancel()
+					}
+					if tc.stopFail && args[0] == "stop" {
+						return 1, errors.New("stop failed")
+					}
+					if tc.cleanupFail {
+						return 1, errors.New("daemon unavailable")
+					}
+					return 0, nil
+				}
+				name = args[3]
+				if !strings.HasPrefix(name, "argonreview-check-") || len(name) != len("argonreview-check-")+32 {
+					t.Fatalf("name %q", name)
+				}
+				for i, arg := range args {
+					if arg == "--mount" && strings.HasSuffix(args[i+1], ",dst=/work") {
+						copyDir = strings.TrimSuffix(strings.TrimPrefix(args[i+1], "type=bind,src="), ",dst=/work")
+					}
+				}
+				if copyDir == "" || strings.HasPrefix(copyDir, dir) {
+					t.Fatalf("mounted %q", copyDir)
+				}
+				if _, err := os.Stat(filepath.Join(copyDir, "go.mod")); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := os.Stat(filepath.Join(copyDir, ".git")); !os.IsNotExist(err) {
+					t.Fatalf("copied .git: %v", err)
+				}
+				if deadline, ok := runCtx.Deadline(); !ok || time.Until(deadline) > 10*time.Minute {
+					t.Fatal("no fixed wall-clock bound")
+				}
+				if tc.timeout {
+					<-runCtx.Done()
+					return -1, runCtx.Err()
+				}
+				if tc.interrupt {
+					cancel()
+					return -1, runCtx.Err()
+				}
+				if tc.fail {
+					return -1, errors.New("lost connection")
+				}
+				if tc.overflow {
+					_, _ = io.WriteString(stdout, strings.Repeat("x", containerOutputLimit-1))
+					_, _ = io.WriteString(stderr, "too much")
+					if runCtx.Err() == nil {
+						t.Fatal("excess output did not cancel run")
+					}
+				} else {
+					_, _ = io.WriteString(stdout, "compiler output")
+				}
+				return tc.status, nil
+			}}
+			report, err := runContainerCheck(ctx, dir, "build", "./...", runner)
+			success := tc.name == "success" || tc.name == "stop fails"
+			if strings.HasPrefix(report, "verified\n") != success {
+				t.Fatalf("report %q, err %v", report[:min(len(report), 300)], err)
+			}
+			want := []string{"run", "stop", "rm"}
+			if !reflect.DeepEqual(calls, want) {
+				t.Fatalf("calls %v, want %v", calls, want)
+			}
+			if _, err := os.Stat(filepath.Dir(copyDir)); !os.IsNotExist(err) {
+				t.Fatalf("copy left behind: %v", err)
+			}
+			if tc.overflow && (!strings.Contains(report, "output cut off") || len(report) > containerOutputLimit+400) {
+				t.Fatalf("unbounded report: %d", len(report))
+			}
+			if !strings.Contains(report, "Race detector was not run") || !strings.Contains(report, "database/browser tests are CI-only") {
+				t.Fatal("coverage limits absent")
+			}
+			if tc.cleanupFail && (err == nil || !strings.Contains(err.Error(), "cleanup unconfirmed")) {
+				t.Fatalf("cleanup failure hidden: %v", err)
+			}
+		})
+	}
+}
+
+func TestContainerNamesAreUnique(t *testing.T) {
+	dir := containerFixture(t)
+	names := map[string]bool{}
+	runner := fakeContainerRunner{func(_ context.Context, args, _ []string, _, _ io.Writer) (int, error) {
+		if args[0] != "run" {
+			return 0, nil
+		}
+		name := args[3]
+		if names[name] {
+			t.Fatal("container name reused")
+		}
+		names[name] = true
+		return 0, nil
+	}}
+	for range 2 {
+		if _, err := runContainerCheck(context.Background(), dir, "vet", ".", runner); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestContainerValidationCleanup(t *testing.T) {
+	// Observe only directories created by this invocation, without depending
+	// on Docker or the caller's TMPDIR. Existing /tmp entries stay untouched.
+	before, err := filepath.Glob("/tmp/argonreview-container-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []string{"missing go.mod", "wrong version", "refused name"} {
+		t.Run(tc, func(t *testing.T) {
+			tree := containerFixture(t)
+			switch tc {
+			case "missing go.mod":
+				if err := os.Remove(filepath.Join(tree, "go.mod")); err != nil {
+					t.Fatal(err)
+				}
+			case "wrong version":
+				write(t, filepath.Join(tree, "go.mod"), "go 1.27.1\n")
+			case "refused name":
+				write(t, filepath.Join(tree, "sub/AGENTS.md"), "refused")
+			}
+			runner := fakeContainerRunner{func(context.Context, []string, []string, io.Writer, io.Writer) (int, error) {
+				t.Fatal("Docker ran after refusal")
+				return 0, nil
+			}}
+			if _, err := runContainerCheck(context.Background(), tree, "test", "./...", runner); err == nil {
+				t.Fatal("validation passed")
+			}
+			after, err := filepath.Glob("/tmp/argonreview-container-*")
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("temporary copy left: %v, %v", after, err)
+			}
+		})
+	}
+}
+
+func TestContainerEndToEndVerdicts(t *testing.T) {
+	for _, tc := range []struct {
+		check, output, verdict string
+		status                 int
+	}{
+		{"build", "build output", "verified", 0}, {"vet", "vet output", "FAILED", 1},
+		{"test", containerEvents("p", "TestOne", "pass"), "verified", 0},
+		{"test", containerEvents("p", "TestDB", "skip"), "NOT VERIFIED: 1 skipped\np/TestDB", 0},
+		{"test", containerEvents("p", "TestOne", "pass"), "FAILED", 137},
+	} {
+		t.Run(fmt.Sprintf("%s/%s/%d", tc.check, tc.verdict, tc.status), func(t *testing.T) {
+			tree := containerFixture(t)
+			runner := fakeContainerRunner{func(_ context.Context, args, _ []string, stdout, _ io.Writer) (int, error) {
+				if args[0] == "run" {
+					_, _ = io.WriteString(stdout, tc.output)
+					return tc.status, nil
+				}
+				return 0, nil
+			}}
+			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner)
+			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
+				t.Fatalf("report %q, err %v", report, err)
+			}
+		})
+	}
+}

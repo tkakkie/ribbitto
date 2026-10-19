@@ -318,12 +318,17 @@ func scheduled(source string, specs []shard) error {
 			return fmt.Errorf("%s: the %s step's lines appear %d times, want once: %q", workflow, name, n, steps[name])
 		}
 	}
-	// Only the runner may invoke make check-test or choose its flags.
+	// Only the runner may invoke make check-test or choose its packages and flags.
 	if n := strings.Count(source, "make check-test"); n != 0 {
 		return fmt.Errorf("%s: make check-test runs in %d places, want 0", workflow, n)
 	}
-	if strings.Contains(source, "GO_TEST_FLAGS") || strings.Count(source, "go -C tools run ./testshard") != len(steps) {
-		return fmt.Errorf("%s: extra shard command or test flags", workflow)
+	for _, name := range []string{"GO_TEST_FLAGS", "GO_TEST_PACKAGES"} {
+		if strings.Contains(source, name) {
+			return fmt.Errorf("%s: found %s use outside testshard", workflow, name)
+		}
+	}
+	if n := strings.Count(source, "go -C tools run ./testshard"); n != len(steps) {
+		return fmt.Errorf("%s: found %d testshard invocations, want %d", workflow, n, len(steps))
 	}
 	return nil
 }

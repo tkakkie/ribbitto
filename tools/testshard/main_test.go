@@ -120,6 +120,11 @@ func TestScheduled(t *testing.T) {
 		{"cannot fail", strings.Replace(valid, `-run .. rest`, `-run .. rest || true`, 1), "rest step's lines appear 0 times"},
 		{"lines apart", strings.Replace(valid, `-run .. rest`, "-run ..\n rest", 1), "rest step's lines appear 0 times"},
 		{"another check-test", valid + "          make check-test GO_TEST_PACKAGES=./x\n", "runs in 1 places"},
+		{"package selection in another step", valid + "      - run: GO_TEST_PACKAGES=./x go test ./x\n", "found GO_TEST_PACKAGES use outside testshard"},
+		{"package selection in env", valid + "      - run: go test ./x\n        env:\n          GO_TEST_PACKAGES: ./x\n", "found GO_TEST_PACKAGES use outside testshard"},
+		{"test flags outside runner", valid + "      - run: export GO_TEST_FLAGS=-short\n", "found GO_TEST_FLAGS use outside testshard"},
+		{"extra shard invocation", valid + "      - run: go -C tools run ./testshard -run .. web\n", "found 3 testshard invocations, want 2"},
+		{"package selection only in a comment", valid + "      # GO_TEST_PACKAGES=./x\n", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := scheduled(tc.source, shards())

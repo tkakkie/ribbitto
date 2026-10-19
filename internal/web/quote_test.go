@@ -161,6 +161,23 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
+	assertPartAutofocus := func(w *httptest.ResponseRecorder, want bool) {
+		t.Helper()
+		doc, err := html.Parse(strings.NewReader(w.Body.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for n := range doc.Descendants() {
+			if attr(n, "id") == "quote-text" {
+				got := slices.ContainsFunc(n.Attr, func(a html.Attribute) bool { return a.Key == "autofocus" })
+				if got != want {
+					t.Fatalf("part autofocus = %t, want %t (status %d)", got, want, w.Code)
+				}
+				return
+			}
+		}
+		t.Fatal("missing part editor")
+	}
 	for _, hx := range []bool{false, true} {
 		if w := compose("", hx); w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) || strings.Contains(w.Body.String(), `name="quote_text"`) {
 			t.Fatalf("422 chip (htmx %t): %d %s", hx, w.Code, w.Body.String())
@@ -174,6 +191,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 			if w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), part+"</textarea>") {
 				t.Fatalf("422 part %q (htmx %t): %d %s", part, hx, w.Code, w.Body.String())
 			}
+			assertPartAutofocus(w, false)
 			if body != "" {
 				doc, err := html.Parse(strings.NewReader(w.Body.String()))
 				if err != nil {
@@ -219,8 +237,12 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 200 || strings.Contains(w.Body.String(), `name="quote_text"`) != tc.form.Has("part") || tc.form.Has("part") && !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;</textarea>") {
 					t.Fatalf("GET must ignore URL quote_text: %d %s", w.Code, w.Body.String())
 				}
+				if tc.form.Has("part") {
+					assertPartAutofocus(w, true)
+				}
 				continue
 			}
+			assertPartAutofocus(w, tc.status == http.StatusOK)
 			if w.Code != tc.status || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), tc.form.Get("quote_text")) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
 				t.Fatalf("%s %v: %d %s", method, tc.form, w.Code, w.Body.String())
 			}

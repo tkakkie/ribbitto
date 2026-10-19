@@ -74,7 +74,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   success. Unquoted pending responses leave it alone.
   `part=<UUID>` starts an editable part with the original's extracted text.
   A part chip submits `quote_text`, including empty text; whole chips omit it.
-  The chip, GET and posting paths answer 422 for empty or absent-from-original parts.
+  The chip and posting paths answer 422 for empty or absent-from-original parts.
   A future selection input in `#quote-form` must be disabled by default so whole
   Quote submits carry only the ID; no selection script is installed yet (#1161).
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).

@@ -337,9 +337,6 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) {
 			return
 		}
-		if page.QuoteInvalid {
-			status = http.StatusUnprocessableEntity
-		}
 	}
 	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" && !page.QuoteInvalid {

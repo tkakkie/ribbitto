@@ -297,7 +297,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return sent, ErrPostKeyReused
 	}
 	// A whole and a part equal to the whole are the same snapshot.
-	if quote != nil && s.QuoteText != nil && stored.Quote.Text != quote.Text {
+	if quote != nil && stored.Quote.Text != quote.Text {
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil

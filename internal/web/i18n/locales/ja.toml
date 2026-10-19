@@ -450,3 +450,6 @@ other = "元のメッセージの一部を4000文字以内で入力してくだ�
 
 ["sidebar.draft"]
 other = "下書き"
+
+["message.quote_selection"]
+other = "選択部分を引用"

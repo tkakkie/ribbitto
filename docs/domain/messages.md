@@ -41,10 +41,11 @@ message it answers; the link opens a paged reply-chain view
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
-Whole and editable part quotes are implemented; page selection is planned (#1161).
-The quote stores the original's ID, author member ID and text snapshot.
-In the posting transaction, absent `quote_text` copies the whole extraction;
-a present field, even empty, means part. `ValidateQuotePart` normalises with
+Selections extract text (`@handle`, newline per block); cut/unresolved
+mentions or unknown markup hide the button.
+Quotes store the original ID, author member ID and text snapshot.
+In the post transaction, absent `quote_text` copies the whole extraction;
+a present field, even empty, is a part. `ValidateQuotePart` normalises with
 the body rules and requires a substring of `Entry.Text`; invalid parts get 422.
 The snapshot belongs to the quoting message and survives edits, moves and
 deletion of the original; deletion nulls only its ID. A quote is not a reply.

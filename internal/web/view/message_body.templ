@@ -116,6 +116,7 @@ templ bodyInlines(nodes []BodyInline) {
 				}
 			case BodyMember:
 				<bdi
+					data-quote-handle={ node.Handle }
 					if node.MemberID != (kernel.ID{}) {
 						data-member-id={ idValue(node.MemberID) }
 					}

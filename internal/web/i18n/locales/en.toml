@@ -450,3 +450,6 @@ other = "Enter a non-empty part of the original message (up to 4000 characters).
 
 ["sidebar.draft"]
 other = "Draft"
+
+["message.quote_selection"]
+other = "Quote selection"

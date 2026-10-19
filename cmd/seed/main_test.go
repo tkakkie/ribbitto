@@ -15,14 +15,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -181,7 +180,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, nil)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
 		var channelID, topicID kernel.ID
 		var total int
@@ -305,15 +304,3 @@ func TestNewSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }

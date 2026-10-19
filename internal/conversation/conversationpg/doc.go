@@ -1,5 +1,5 @@
 // Package conversationpg wires conversation to PostgreSQL (decision 26).
-// Only composition roots (cmd/*) and tests import it; it holds no business
+// Only cmd/*, compose and tests import it; it holds no business
 // logic. NewChannels binds channel lookups to the pool and capped creation
 // to its transaction; NewTopics binds the topic lookup to the pool.
 // DefaultChannelCreatorIn binds setup's default-channel write to org's transaction. NewPosting and

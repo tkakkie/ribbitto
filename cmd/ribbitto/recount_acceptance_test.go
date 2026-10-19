@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -91,7 +92,7 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 			account := identitytest.Account(t, pool, "reader@example.org", "reader")
 			orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
-			posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
+			posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, nil)
 			_, err = posting.PostToTopic(t.Context(), m, f.Channel.ID, &topic.ID, "unread")
 			acceptanceOK(t, err)
 

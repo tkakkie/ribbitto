@@ -17,9 +17,13 @@ both fail `make check` on a violating import:
 - `identity`, `org`, `conversation`, `realtime`, `presence`, `typing` and `unread` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`;
-  `web` imports a module's root, never its store or wiring;
-- a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`, `unreadpg`) is imported only by `cmd/*` and tests,
+  `web` production imports a module's root, never its store, wiring or compose;
+- a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`, `unreadpg`) is imported only by `cmd/*`, `internal/compose` and tests,
   and its store only by its wiring and the store's own tests;
+- `internal/compose` is imported only by `cmd/*` and `_test.go` files,
+  enforced by the manifest test and depguard. It imports only module roots,
+  their wiring, `kernel` and `platform`; neither roots, stores nor wiring
+  import it. Web tests may import it under the test exception;
 - the manifest permits fixture imports only from test files and higher fixture
   packages; it fixes their root imports and direction, and keeps them off
   stores and wiring (decision 29);

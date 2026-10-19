@@ -41,17 +41,6 @@ func topicPrepare(tx platform.Tx) func(context.Context, unread.TopicScope, int64
 	}
 }
 
-// branchReads adapts unread's range writer to conversation's consumer interface.
-func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
-	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
-}
-
-type branchReadWriter struct{ ranges unread.RangeWriter }
-
-func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
-}
-
 // postReads binds the page and own-message writes to posting's transaction.
 func postReads(tx platform.Tx) conversation.PostReadWriter { return postReadWriter{tx: tx} }
 

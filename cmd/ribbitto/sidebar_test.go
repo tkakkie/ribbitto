@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -38,7 +39,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				feedRequire(t, err)
 				_, err = pool.Exec(t.Context(), "INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'pre-join',1)", f.OrganizationID, f.Channel.ID, selected, f.MemberID)
 				feedRequire(t, err)
-				posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+				posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 				initial, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "initial")
 				feedRequire(t, err)
 				_, err = posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "second")
@@ -47,7 +48,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				if selectedView {
 					topic = &selected
 				}
-				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn)
+				reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
 				page, err := reader.Page(t.Context(), m, f.Channel.ID, topic, nil)
 				feedRequire(t, err)
 				displaced := page.Topics[49].ID
@@ -64,7 +65,7 @@ func TestSidebarSnapshot(t *testing.T) {
 					feedRequire(t, err)
 					scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 					feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
-					branch, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil).Branch(t.Context(), m, f.Channel.ID,
+					branch, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(t.Context(), m, f.Channel.ID,
 						conversation.Branch{From: selected, Messages: []kernel.ID{initial.ID}, NewName: "aaa"}, func(conversation.Topic) string { return "notice" })
 					feedRequire(t, err)
 					moved = branch
@@ -76,7 +77,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				feedRequire(t, err)
 				defer traced.Close()
 				// Nil directory factories prove this read cannot load authors.
-				sidebar, err := conversationpg.NewReader(traced, nil, nil, eventCursor, pageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
+				sidebar, err := conversationpg.NewReader(traced, nil, nil, compose.EventCursor, pageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
 				feedRequire(t, err)
 				if !committed || sidebar.SnapshotSeq != *page.EventCursor || !reflect.DeepEqual(sidebar.Channels, page.Channels) || !reflect.DeepEqual(sidebar.Topics, page.Topics) ||
 					!reflect.DeepEqual(sidebar.ChannelCounts, page.ChannelCounts) || !reflect.DeepEqual(sidebar.TopicCounts, page.TopicCounts) ||
@@ -131,8 +132,8 @@ func TestSidebarScopes(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "sidebar", "general")
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "sidebar")
 	feedRequire(t, err)
-	reader := conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn)
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	reader := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	otherTopic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "other")
 	post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, nil, "unread")
 	feedRequire(t, err)

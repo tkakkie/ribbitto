@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -122,21 +123,23 @@ func TestReadPublicationConcurrent(t *testing.T) {
 // Guard the composition boundary too: a private publication in either adapter
 // bypasses Reading's commit contract and duplicates the durable notification.
 func TestReadAdaptersDoNotPublish(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
-	feedRequire(t, err)
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-		switch fn.Name.Name {
-		case "postReads", "branchReads", "Read", "Merge", "newFeedWriter", "newTopicWriter":
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				if selector, ok := n.(*ast.SelectorExpr); ok && (selector.Sel.Name == "ReadChanged" || selector.Sel.Name == "NewReading") {
-					t.Errorf("%s calls reading publication via %s", fn.Name.Name, selector.Sel.Name)
-				}
-				return true
-			})
+	for _, path := range []string{"read_adapters.go", "../../internal/compose/branch_reads.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		feedRequire(t, err)
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			switch fn.Name.Name {
+			case "postReads", "BranchReads", "Read", "Merge", "newFeedWriter", "newTopicWriter":
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					if selector, ok := n.(*ast.SelectorExpr); ok && (selector.Sel.Name == "ReadChanged" || selector.Sel.Name == "NewReading") {
+						t.Errorf("%s calls reading publication via %s", fn.Name.Name, selector.Sel.Name)
+					}
+					return true
+				})
+			}
 		}
 	}
 }
@@ -165,9 +168,11 @@ func TestReadAdaptersCommitAndNotify(t *testing.T) {
 			var steps []string
 			sequences := func(tx platform.Tx) conversation.EventSequence {
 				steps = append(steps, "sequence")
-				return postingSequence(tx)
+				return compose.PostingSequence(tx)
 			}
-			events := func(tx platform.Tx) conversation.EventAppender { return readAdapterEvents{postingEvents(tx), &steps} }
+			events := func(tx platform.Tx) conversation.EventAppender {
+				return readAdapterEvents{compose.PostingEvents(tx), &steps}
+			}
 			notifier := readAdapterNotifier(func(org kernel.ID, seq int64) {
 				steps = append(steps, "notify")
 				if org != scope.OrganizationID {
@@ -180,7 +185,7 @@ func TestReadAdaptersCommitAndNotify(t *testing.T) {
 			if kind == "branch" {
 				reads := func(tx platform.Tx) conversation.ReadRangeWriter {
 					steps = append(steps, "read")
-					return branchReads(tx)
+					return compose.BranchReads(tx)
 				}
 				_, err := conversationpg.NewBrancher(pool, sequences, events, reads, notifier).Branch(t.Context(), m, scope.ChannelID, conversation.Branch{From: topic, NewName: "branch", Messages: []kernel.ID{message}}, func(conversation.Topic) string { return "notice" })
 				feedRequire(t, err)
@@ -192,7 +197,7 @@ func TestReadAdaptersCommitAndNotify(t *testing.T) {
 					target = &topic
 				}
 				cursor := int64(2)
-				_, err := conversationpg.NewPagePosting(pool, sequences, events, reads, lookupMembers, notifier).Send(t.Context(), m, scope.ChannelID, conversation.Send{Topic: target, Body: "post", Cursor: &cursor})
+				_, err := conversationpg.NewPagePosting(pool, sequences, events, reads, compose.LookupMembers, notifier).Send(t.Context(), m, scope.ChannelID, conversation.Send{Topic: target, Body: "post", Cursor: &cursor})
 				feedRequire(t, err)
 			}
 			if !reflect.DeepEqual(steps, want) {

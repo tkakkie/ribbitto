@@ -42,6 +42,14 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge
               desc: Only stores under internal/postgres unwrap Tx and Snapshot; see decision 26.
+        compositionimporters:
+          list-mode: lax
+          files: ["$all", "!**/cmd/**/*.go", "!$test"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/compose$
+              desc: Only cmd/* and test files import compose (decision 26 amendment).
+            - pkg: github.com/tkakkie/ribbitto/internal/compose/
+              desc: Only cmd/* and test files import compose (decision 26 amendment).
         kernel:
           list-mode: lax
           files: ["**/internal/kernel/*.go", "**/internal/kernel/**/*.go", "!$test"]
@@ -63,6 +71,26 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/kernel$
+          deny: *non_html
+        composition:
+          list-mode: lax
+          files: ["**/internal/compose/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
+            - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/identity/identitypg$
+            - github.com/tkakkie/ribbitto/internal/realtime$
+            - github.com/tkakkie/ribbitto/internal/realtime/realtimepg$
+            - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/org/orgpg$
+            - github.com/tkakkie/ribbitto/internal/conversation$
+            - github.com/tkakkie/ribbitto/internal/conversation/conversationpg$
+            - github.com/tkakkie/ribbitto/internal/presence$
+            - github.com/tkakkie/ribbitto/internal/typing$
+            - github.com/tkakkie/ribbitto/internal/unread$
+            - github.com/tkakkie/ribbitto/internal/unread/unreadpg$
           deny: *non_html
         # Module imports live in module_imports_test.go. These rules retain
         # the separate HTML restriction, with the existing file exceptions.

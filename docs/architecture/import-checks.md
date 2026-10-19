@@ -23,7 +23,8 @@ both fail `make check` on a violating import:
 - `internal/compose` is imported only by `cmd/*` and `_test.go` files,
   enforced by the manifest test and depguard. It imports only module roots,
   their wiring, `kernel` and `platform`; neither roots, stores nor wiring
-  import it. Web tests may import it under the test exception;
+  import it. Its sub-packages follow these rules. Web tests may import it
+  under the test exception;
 - the manifest permits fixture imports only from test files and higher fixture
   packages; it fixes their root imports and direction, and keeps them off
   stores and wiring (decision 29);

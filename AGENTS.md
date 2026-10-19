@@ -43,7 +43,7 @@ covers measurement approval and caps.
 `cmd/ribbitto` and `cmd/seed` do the wiring, sharing adapters through
 `internal/compose` (composition only; no business logic or service layer).
 Only `cmd/*` and `_test.go` files import `compose`; it imports module roots,
-their wiring, `kernel` and `platform`.
+their wiring, `kernel` and `platform`. These rules include compose sub-packages.
 [`packages.md`](docs/architecture/packages.md) defines the import rules and
 the module manifest test (`module_imports_test.go`) checks the module rules;
 depguard keeps the non-module rules. Never break them.

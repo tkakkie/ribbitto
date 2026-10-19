@@ -74,7 +74,7 @@ linters:
           deny: *non_html
         composition:
           list-mode: lax
-          files: ["**/internal/compose/*.go", "!$test"]
+          files: ["**/internal/compose/*.go", "**/internal/compose/**/*.go", "!$test"]
           allow:
             - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/platform$

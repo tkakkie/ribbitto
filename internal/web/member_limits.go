@@ -13,6 +13,7 @@ type MemberLimits struct {
 }
 
 // MemberLimitsOption adjusts construction without accepting shared limiters.
+// Its zero value is a no-op.
 type MemberLimitsOption struct {
 	apply func(*MemberLimits)
 }
@@ -20,7 +21,7 @@ type MemberLimitsOption struct {
 // WithReadAdmission overrides the read clock and slot ceiling for trusted fixtures.
 func WithReadAdmission(now func() time.Time, concurrent int) MemberLimitsOption {
 	return MemberLimitsOption{func(l *MemberLimits) {
-		l.read = middleware.NewMemberRateLimiterWithBudget(now, 4, 16, concurrent)
+		l.read = middleware.NewReadRateLimiterWithConcurrency(now, concurrent)
 	}}
 }
 
@@ -33,7 +34,9 @@ func NewMemberLimits(now func() time.Time, options ...MemberLimitsOption) Member
 		branch: middleware.NewBranchRateLimiter(now), post: middleware.NewPostRateLimiter(now), pin: middleware.NewPinRateLimiter(now),
 	}
 	for _, option := range options {
-		option.apply(&l)
+		if option.apply != nil {
+			option.apply(&l)
+		}
 	}
 	return l
 }

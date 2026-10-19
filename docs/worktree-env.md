@@ -64,8 +64,8 @@ confirmed it (peak 38/100, no 53300). The shared server therefore keeps
 - To raise `-p` to 4 or more, first re-measure at that setting, then change
   `max_connections` and the default together.
 
-CI runs the rest shard in its own `test-rest` job beside the `checks` job,
-giving each test job its own PostgreSQL service. `tools/testshard` owns
+CI runs the rest shard in its own `test-rest` job beside `checks`.
+Each test job has its own PostgreSQL service. `tools/testshard` owns
 packages, browser selectors and Go test flags; `-run` passes these directly to
 `make check-test`. Browser slices must cover every selector of one total,
 with the first running all package tests and the others only `TestBrowser`.

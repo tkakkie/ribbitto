@@ -82,6 +82,22 @@ func ValidateMessageBody(value string) (string, error) {
 	return value, nil
 }
 
+// ErrInvalidQuotePart wraps ErrInvalidBody for an invalid quoted part.
+var ErrInvalidQuotePart = fmt.Errorf("%w: invalid quote part", ErrInvalidBody)
+
+// ValidateQuotePart normalizes a part under the body rules and requires it
+// to occur in the original's extracted text, supplied after a scoped read.
+func ValidateQuotePart(value, original string) (string, error) {
+	part, err := ValidateMessageBody(value)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrInvalidQuotePart, err)
+	}
+	if !strings.Contains(original, part) {
+		return "", fmt.Errorf("%w: absent from original", ErrInvalidQuotePart)
+	}
+	return part, nil
+}
+
 // isBidiEmbeddingOrOverride reports LRE, RLE, PDF, LRO and RLO (U+202A–U+202E).
 // They can make stored text read differently from how it is stored (for
 // example a spoofed URL), and Unicode discourages them in new text. The

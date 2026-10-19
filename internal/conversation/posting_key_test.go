@@ -60,9 +60,9 @@ func (s *keyedStore) GetTopic(_ context.Context, _, channelID, id kernel.ID) (co
 func (s *keyedStore) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel.ID) (conversation.Message, error) {
 	panic("unexpected QuotedMessage")
 }
-func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, _ *conversation.Quote) (conversation.Message, error) {
+func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote) (conversation.Message, error) {
 	s.tx.inserted++
-	m := conversation.Message{ID: kernel.ID{byte(s.tx.inserted)}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, Format: conversation.FormatChatV1, EventSeq: seq}
+	m := conversation.Message{ID: kernel.ID{byte(s.tx.inserted)}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, Format: conversation.FormatChatV1, EventSeq: seq, Quote: quote}
 	if key == nil {
 		s.tx.unkeyed++
 		return m, nil

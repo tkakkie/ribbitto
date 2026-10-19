@@ -15,10 +15,32 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 			<div class="flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1">
 				<div id="composer-quote-description" class="min-w-0 flex-1">
 					<p class="truncate text-caption">@MemberName(page.Quote.DisplayName, page.Quote.Handle)</p>
-					<p dir="auto" class="truncate text-caption text-muted">{ page.Quote.Body }</p>
+					if page.QuoteText != nil {
+						<label for="quote-text" class="text-caption">{ i18n.T(ctx, "message.quote_text") }</label>
+						<textarea
+							id="quote-text"
+							autofocus?={ !page.QuoteInvalid && page.BodyError == "" }
+							name="quote_text"
+							dir="auto"
+							rows="3"
+							class="min-h-11 w-full rounded-md border border-border bg-surface px-2 text-body max-desk:text-entry"
+							if page.QuoteInvalid {
+								aria-invalid="true"
+								aria-describedby="quote-error"
+							}
+						>{ *page.QuoteText }</textarea>
+						if page.QuoteInvalid {
+							<p id="quote-error" role="alert" class="text-caption text-muted">{ i18n.T(ctx, "message.error.quote") }</p>
+						}
+					} else {
+						<p dir="auto" class="truncate text-caption text-muted">{ page.Quote.Body }</p>
+					}
 				</div>
 				<input type="hidden" name="quote" value={ idValue(page.Quote.ID) }/>
 				<button type="submit" form="quote-form" class="min-h-11 shrink-0 px-2 text-muted hover:text-fg">{ i18n.T(ctx, "message.quote_remove") }</button>
+				if page.QuoteText == nil {
+					<button type="submit" form="quote-form" name="part" value={ idValue(page.Quote.ID) } class="min-h-11 px-2 text-caption">{ i18n.T(ctx, "message.quote_part") }</button>
+				}
 			</div>
 		} else {
 			<div id="composer-quote-description"></div>

@@ -77,7 +77,8 @@ func TestBrowser(t *testing.T) {
 	run("sidebar-scroll", testSidebarScrollBrowser)
 	for _, scripts := range []bool{true, false} {
 		for _, width := range []int{1280, 390} {
-			run(fmt.Sprintf("quote/scripts=%t/width=%d", scripts, width), func(t *testing.T, browser *rod.Browser) { testQuoteBrowser(t, browser, scripts, width) })
+			run(fmt.Sprintf("quote/scripts=%t/width=%d", scripts, width), func(t *testing.T, browser *rod.Browser) { testQuoteBrowser(t, browser, scripts, width, false) })
+			run(fmt.Sprintf("quote-part/scripts=%t/width=%d", scripts, width), func(t *testing.T, browser *rod.Browser) { testQuoteBrowser(t, browser, scripts, width, true) })
 		}
 	}
 	run("message-actions", testMessageActionsBrowser)

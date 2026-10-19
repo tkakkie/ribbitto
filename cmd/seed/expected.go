@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -112,9 +112,9 @@ func writeExpected(ctx context.Context, databaseURL, tokens, output string, afte
 		return fmt.Errorf("resolving expected membership: %w", err)
 	}
 	reader := conversationpg.NewReader(pool,
-		func(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) },
-		func(s platform.Snapshot) conversation.AccountDirectory { return identitypg.AccountsIn(s) },
-		func(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }, nil)
+		compose.LookupMembers,
+		compose.LookupAccounts,
+		compose.EventCursor, nil)
 	page, err := reader.Page(ctx, m, channel, nil, nil)
 	if err != nil {
 		return fmt.Errorf("reading latest expected page: %w", err)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -53,7 +54,7 @@ func TestTopicReadExamples(t *testing.T) {
 		}))
 		topicFloor(t, pool, s, cursor)
 	}
-	brancher := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
+	brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil)
 	move := func(t *testing.T, from, to string, seqs ...int64) {
 		var ids []kernel.ID
 		feedRequire(t, pool.QueryRow(t.Context(), "SELECT array_agg(id ORDER BY event_seq) FROM message WHERE organization_id=$1 AND event_seq=ANY($2::bigint[])", f.OrganizationID, seqs).Scan(&ids))

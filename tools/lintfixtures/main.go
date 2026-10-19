@@ -1,10 +1,11 @@
 // Command lintfixtures proves the lint configuration rejects what it must.
 // The fixtures in internal/lintfixture, built only with the lintfixture tag,
-// show that depguard rejects a module root importing pgxbridge and accepts a
-// store doing so, that staticcheck rejects ignored results even in generated
-// templates, that bodyclose rejects unclosed HTTP response bodies, that
-// sqlclosecheck rejects unused, unclosed pgx rows, and that nilerr rejects
-// returning nil after checking a non-nil error; plain lint never sees them.
+// show that depguard rejects pgxbridge in a module root, accepts it in a
+// store, and rejects web in compose sub-packages; staticcheck rejects ignored
+// results even in generated templates; bodyclose rejects unclosed HTTP
+// response bodies; sqlclosecheck rejects unused, unclosed pgx rows; nilerr
+// rejects returning nil after checking a non-nil error. Plain lint never
+// sees them.
 // sqlclosecheck only catches rows that are never used: once rows are read,
 // a missing Close passes lint, so keep defer rows.Close() after the query's
 // error check. make check runs it with the pinned golangci-lint and the
@@ -28,6 +29,7 @@ import (
 var expectations = []struct {
 	file, pattern, message string
 }{
+	{"lintfixture/internal/compose/sub/bad.go:", `internal/web.*is not allowed from list 'composition'.*\(depguard\)`, "depguard must reject web in a compose sub-package"},
 	{"lintfixture/bad.go:", `SA4017:.*TrimSpace`, "staticcheck must reject an ignored result in bad.go"},
 	{"lintfixture/bad_templ.go:", `SA4017:.*TrimSpace`, "staticcheck must reject an ignored result in bad_templ.go"},
 	{"lintfixture/bodyclose.go:", `response body must be closed.*\(bodyclose\)`, "bodyclose must reject an unclosed HTTP response body"},

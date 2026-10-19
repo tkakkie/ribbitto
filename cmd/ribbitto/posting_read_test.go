@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -60,12 +61,12 @@ func TestPostingRead(t *testing.T) {
 					feedRequire(t, err)
 				}
 			}
-			events := postingEvents
+			events := compose.PostingEvents
 			if strings.Contains(mode, "rollback") {
-				events = func(tx platform.Tx) conversation.EventAppender { return failingNoticeEvents{postingEvents(tx)} }
+				events = func(tx platform.Tx) conversation.EventAppender { return failingNoticeEvents{compose.PostingEvents(tx)} }
 			}
 			if mode == "topic rollback" || mode == "topic history rollback" {
-				events = func(tx platform.Tx) conversation.EventAppender { return failingPostAppend{postingEvents(tx)} }
+				events = func(tx platform.Tx) conversation.EventAppender { return failingPostAppend{compose.PostingEvents(tx)} }
 			}
 			if strings.HasSuffix(mode, "future cursor") {
 				cursor = 7
@@ -85,7 +86,7 @@ func TestPostingRead(t *testing.T) {
 			}
 			var steps []string
 			trace := &pageTrace{QueryCounter: platform.NewQueryCounter(), names: map[string]int{}, hook: func(name string) { steps = append(steps, name) }}
-			posting := conversationpg.NewPagePosting(readTracedPool(t, pool, trace), postingSequence, events, postReads, lookupMembers, nil)
+			posting := conversationpg.NewPagePosting(readTracedPool(t, pool, trace), compose.PostingSequence, events, postReads, compose.LookupMembers, nil)
 			if strings.HasSuffix(mode, "history rollback") {
 				_, err = posting.PostToTopic(t.Context(), m, s.ChannelID, topic, "own post")
 			} else {

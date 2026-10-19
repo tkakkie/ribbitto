@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -45,7 +46,7 @@ func newSidebarBranchFixture(t *testing.T) sidebarBranchFixture {
 	member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "branch")
 	acceptanceOK(t, err)
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, nil)
 	read, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "read moves")
 	acceptanceOK(t, err)
 	unreadPost, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "unread moves")

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -98,7 +99,7 @@ func TestExpected(t *testing.T) {
 	}
 	marker := "loadgen" + strings.Repeat("A", 26) + "0Z"
 	markers := map[uint64]string{}
-	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	posts := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	named := conversationtest.Topic(t, pool, m.Organization.ID, channel, "named").ID
 	if _, err := posts.PostToTopic(t.Context(), m, channel, &named, "outside the default topic"); err != nil {
 		t.Fatal(err)

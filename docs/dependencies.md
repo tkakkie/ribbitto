@@ -19,6 +19,7 @@ package, or SQL access to tables.
 ```text
 cmd/capacity -> internal/platform/postgres/pgtest
 cmd/devdb -> internal/platform/postgres
+cmd/ribbitto -> internal/compose
 cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity
@@ -36,6 +37,7 @@ cmd/ribbitto -> internal/unread/unreadpg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
+cmd/seed -> internal/compose
 cmd/seed -> internal/conversation
 cmd/seed -> internal/conversation/conversationpg
 cmd/seed -> internal/identity
@@ -44,9 +46,16 @@ cmd/seed -> internal/kernel
 cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
-cmd/seed -> internal/realtime/realtimepg
-cmd/seed -> internal/unread
-cmd/seed -> internal/unread/unreadpg
+internal/compose -> internal/conversation
+internal/compose -> internal/conversation/conversationpg
+internal/compose -> internal/identity/identitypg
+internal/compose -> internal/kernel
+internal/compose -> internal/org
+internal/compose -> internal/org/orgpg
+internal/compose -> internal/platform/postgres
+internal/compose -> internal/realtime/realtimepg
+internal/compose -> internal/unread
+internal/compose -> internal/unread/unreadpg
 internal/conversation -> internal/kernel
 internal/conversation -> internal/org
 internal/conversation -> internal/platform/postgres

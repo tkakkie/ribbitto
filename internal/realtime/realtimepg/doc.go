@@ -1,4 +1,4 @@
 // Package realtimepg wires realtime to its PostgreSQL store (decision 26).
-// Only composition roots (cmd/*) and tests import it; it holds no business
+// Only cmd/*, compose and tests import it; it holds no business
 // logic.
 package realtimepg

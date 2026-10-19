@@ -10,7 +10,7 @@ import (
 )
 
 // AccountCreatorIn returns identity's account creator bound to the caller's
-// transaction. Composition roots adapt it to org.AccountCreatorIn with a
+// transaction. Compose adapts it to org.AccountCreatorIn with a
 // named function.
 func AccountCreatorIn(tx platform.Tx) *postgres.AccountCreator { return postgres.AccountCreatorIn(tx) }
 

@@ -3,8 +3,6 @@
 Responsibilities and imports; see the [feature map](features.md) and
 [architecture index](README.md).
 
-**Keep current:** responsibilities and imports.
-
 `cmd/ribbitto` is the server composition root: it reads configuration,
 builds the concrete implementations and wires them together. `cmd/seed` is
 a second, development-only composition root: it wires PostgreSQL stores
@@ -41,12 +39,13 @@ library; Make asks it for the versioned paths and invokes it on first use.
 
 | Package | Responsibility | May import from this module |
 |---|---|---|
+| `internal/compose` | Shared adapters and composition only; no business logic or service layer. Only `cmd/*` and `_test.go` files import it. Sub-packages follow these rules. | module roots, wiring, `kernel`, `platform` |
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
 | `internal/platform/postgres` | The pool, the migration connection, locked runner and startup schema check, statement counting for development metrics, test databases (`pgtest`, which also migrates one to a version), and the opaque `Tx` and `Snapshot` with `InTx`, `InTxDetachedCommit` (a commit bounded by its own limit, not the request) and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
-| `internal/identity` | The `identity` module's root: accounts, the email, password and display-name rules, password hashing, sessions, signing in and the display-name directory. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in, the snapshot-bound directory (`AccountsIn`) and the transaction-bound account creator (`AccountCreatorIn`). Named functions in the composition roots and web's tests adapt the creator to org's factory and prove that it fits `org.AccountCreator`. See [`docs/api/identity.txt`](../api/identity.txt) for identifiers. | [manifest](../../module_imports_test.go) |
-| `internal/realtime` | The `realtime` module's root, real-time delivery (M3): the hub's latest sequences, ephemeral generations and connection registry with process and per-account caps, the per-connection delivery loop, shared reads, the watermark check and event retention; presence and typing delivery are implemented. Declares the durable event types. Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). See [`docs/api/realtime.txt`](../api/realtime.txt) for identifiers. | [manifest](../../module_imports_test.go) |
-| `internal/org` | The `org` module: organisations, memberships, the **only** authorization logic, name/slug/handle rules and handle changes, member directory/search, `member.joined`, event sequence and cursor/retention bounds, transaction-owning setup and sign-up. Its store, `internal/org/internal/postgres`, runs `db/queries/org/` on its own `sqlcgen`; its wiring, `orgpg`, builds use cases and binds stores to callers' transactions or snapshots. See [`docs/api/org.txt`](../api/org.txt) for identifiers. `orgpg.EventCursorInTx` serves unread's feed transaction. `orgpg.SequenceIn` serves conversation's posting, branching and pinning transactions; `MembersIn` and `EventCursorIn` serve its snapshot. | [manifest](../../module_imports_test.go) |
-| `internal/conversation` | The `conversation` module: channels, topics and messages with rules and errors, the membership-scoped topic lookup, channel creation, posting, branching and pinning owning their transactions, history and the page snapshot owning its snapshot, and the `message.posted`, `messages.moved` and `pins.changed` kinds it publishes. Owns `channel`, `topic` and `message`. Its store, `internal/conversation/internal/postgres`, runs `db/queries/conversation/` on its own `sqlcgen`; its wiring, `conversationpg`, builds use cases, binds stores to callers' transactions or snapshots and registers its routers. See [`docs/api/conversation.txt`](../api/conversation.txt) for identifiers. Concrete transaction-bound stores serve setup and unread; `SequenceRange` is the shared range value. | [manifest](../../module_imports_test.go) |
+| `internal/identity` | The `identity` module's root: accounts, the email, password and display-name rules, password hashing, sessions, signing in and the display-name directory. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in, the snapshot-bound directory (`AccountsIn`) and the transaction-bound account creator (`AccountCreatorIn`). `compose.AccountCreator` and remaining test adapters fit org's factory (`org.AccountCreator`). See [API](../api/identity.txt). | [manifest](../../module_imports_test.go) |
+| `internal/realtime` | The `realtime` module's root, real-time delivery (M3): the hub's latest sequences, ephemeral generations and connection registry with process and per-account caps, the per-connection delivery loop, shared reads, the watermark check and event retention; presence and typing delivery are implemented. Declares the durable event types. Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). See [API](../api/realtime.txt). | [manifest](../../module_imports_test.go) |
+| `internal/org` | The `org` module: organisations, memberships, the **only** authorization logic, name/slug/handle rules and handle changes, member directory/search, `member.joined`, event sequence and cursor/retention bounds, transaction-owning setup and sign-up. Its store, `internal/org/internal/postgres`, runs `db/queries/org/` on its own `sqlcgen`; its wiring, `orgpg`, builds use cases and binds stores to callers' transactions or snapshots. See [API](../api/org.txt). `orgpg.EventCursorInTx` serves unread's feed transaction. `orgpg.SequenceIn` serves conversation's posting, branching and pinning transactions; `MembersIn` and `EventCursorIn` serve its snapshot. | [manifest](../../module_imports_test.go) |
+| `internal/conversation` | The `conversation` module: channels, topics and messages with rules and errors, the membership-scoped topic lookup, channel creation, posting, branching and pinning owning their transactions, history and the page snapshot owning its snapshot, and the `message.posted`, `messages.moved` and `pins.changed` kinds it publishes. Owns `channel`, `topic` and `message`. Its store, `internal/conversation/internal/postgres`, runs `db/queries/conversation/` on its own `sqlcgen`; its wiring, `conversationpg`, builds use cases, binds stores to callers' transactions or snapshots and registers its routers. See [API](../api/conversation.txt). Concrete transaction-bound stores serve setup and unread; `SequenceRange` is the shared range value. | [manifest](../../module_imports_test.go) |
 | `internal/presence` | Memory-only online state, last-close grace expiry and bounded snapshots and ordered changes with a process/generation token and reset boundary. Constructed directly; web renders snapshots and live changes (#768). See [API](../api/presence.txt). | `kernel`, `realtime` (generation notifications) |
 | `internal/typing` | Memory-only channel/topic summaries, explicit starts/stops and bounded viewer-filtered reads ([contract](typing.md), [API](../api/typing.txt)); channel-stream lifetime, owner expiry, composer generations, web signals and delivery to stable page status regions are implemented. | `kernel`, `realtime` (generation notifications) |
 | `internal/unread` | Owns read state (decision 32). Its store locks member/channel state and unions `conversation.SequenceRange` values with the join prefix in the caller's transaction (`unreadpg.WriterIn`); it never reads messages. `unread.Reading` owns feed/topic transactions through an injected runner. Unread owns message and count interfaces; conversation's wiring returns concrete stores. See [API](../api/unread.txt). | [manifest](../../module_imports_test.go) |
@@ -54,7 +53,7 @@ library; Make asks it for the versioned paths and invokes it on first use.
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript, vendored JavaScript, SVG icons, brand images and channel illustrations. | — |
 
-Sub-packages may import each other, apart from the store, wiring and fixture
+Sub-packages may import each other, apart from the store, wiring, compose and fixture
 rules. [Modules](modules.md) states the test-only
 fixture rule. The [module manifest and Go tests](../../module_imports_test.go)
 check module imports; depguard retains the other boundaries;
@@ -64,7 +63,9 @@ and the `doc.go` requirement.
 ```mermaid
 flowchart LR
   cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & presence & typing & unread & unreadpg & platform[platform/postgres]
-  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & unread & unreadpg & platform & kernel
+  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & platform & kernel
+  cmd & seed --> compose[internal/compose]
+  compose --> conversation & conversationpg & org & orgpg & identitypg & realtimepg & unread & unreadpg & kernel & platform
   devdb[cmd/devdb] --> platform
   capacity[cmd/capacity] --> pgtest[platform/postgres/pgtest]
   web[internal/web] --> org & conversation & identity & kernel & realtime & presence & typing & unread & static[web/static]
@@ -95,11 +96,9 @@ flowchart LR
 conversation's root; conversation never imports unread in production
 ([dependencies](../dependencies.md)).
 
-The domain and use cases stay testable without a database or HTTP; authorization
-lives in exactly one place, so a new
-endpoint or a real-time path cannot quietly skip it; and because use cases
-return plain structs and only `web` renders HTML, a JSON API can be added
-next to the HTML handlers later without touching the use cases.
+Domain and use cases need no database or HTTP in tests. Central authorization
+prevents endpoints or real-time paths skipping it. Plain results and web-only
+HTML let a JSON API reuse the use cases.
 
 `serve` uses a `pgxpool.Pool` ([timeouts](../recount-capacity.md)); `migrate`
 uses goose's `database/sql` handle. Schema checks adapt the pool to goose's API.

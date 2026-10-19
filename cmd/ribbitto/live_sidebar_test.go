@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -101,7 +102,7 @@ func TestLiveSidebar(t *testing.T) {
 	defer unblock()
 	api, streams, hub := streamServersWithHub(t, traced)
 	owner, reader := sidebarBrowser(t, pool, api, f.AccountID), sidebarBrowser(t, pool, api, account)
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, hub)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, hub)
 	for range 101 {
 		_, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, nil, "cap")
 		acceptanceOK(t, err)

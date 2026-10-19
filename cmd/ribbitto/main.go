@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -296,9 +297,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	var setupService web.SetupService
 	if config.setupToken != "" {
 		setupService = orgpg.NewSetup(pool, hasher, config.setupToken,
-			accountCreator,
-			memberEvents,
-			defaultChannelCreator)
+			compose.AccountCreator,
+			compose.MemberEvents,
+			compose.DefaultChannelCreator)
 	}
 
 	catalogues, err := i18n.New(slog.Default())
@@ -328,33 +329,33 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		typingState = typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
 			RecountLimit: config.recountLimit,
-			Pins:         web.NewPinsSource(ctx, conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, nil)),
-			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), changes),
+			Pins:         web.NewPinsSource(ctx, conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)),
+			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn), changes),
 			Presence:     state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }
 			},
 			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state), realtime.InterestTyping: web.NewTypingOwner(typingState)}}
 	}
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, postingNotifier)
-	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, postingNotifier)
+	branching := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Database: pool, ShuttingDown: config.shuttingDown,
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:    setupService,
 		SignUp: orgpg.NewSignUp(pool, hasher, config.signupEnabled,
-			accountCreator,
-			memberEvents),
+			compose.AccountCreator,
+			compose.MemberEvents),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        conversationpg.NewTopics(pool),
-		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
+		Messages:      conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn),
 		Posting:       posting,
 		SidebarResync: sidebarResync,
 		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
 		Branching:     branching,
-		Pinning:       conversationpg.NewPinning(pool, postingSequence, postingEvents, postingNotifier),
+		Pinning:       conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, postingNotifier),
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now, slog.Default()),
 		Stream:        stream,
@@ -452,35 +453,6 @@ func signupEnabled(value string) (bool, error) {
 		return false, fmt.Errorf("RIBBITTO_SIGNUP must be on, off or empty")
 	}
 }
-
-// accountCreator binds identity's account creator to setup's and sign-up's transaction.
-func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
-
-// memberEvents binds realtime's appender to setup's and sign-up's transaction.
-func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
-func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
-	return conversationpg.DefaultChannelCreatorIn(tx)
-}
-
-// postingEvents binds realtime's appender to conversation's posting and branching transaction.
-func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// postingSequence binds org's sequence to conversation's posting and branching transaction.
-func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
 
 func maxChannelsConfiguration(value string) (int32, error) {
 	if value == "" {

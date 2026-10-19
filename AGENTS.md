@@ -40,7 +40,10 @@ covers measurement approval and caps.
 
 ## Layout and dependency direction
 
-`cmd/ribbitto` and `cmd/seed` do the wiring.
+`cmd/ribbitto` and `cmd/seed` do the wiring, sharing adapters through
+`internal/compose` (composition only; no business logic or service layer).
+Only `cmd/*` and `_test.go` files import `compose`; it imports module roots,
+their wiring, `kernel` and `platform`. These rules include compose sub-packages.
 [`packages.md`](docs/architecture/packages.md) defines the import rules and
 the module manifest test (`module_imports_test.go`) checks the module rules;
 depguard keeps the non-module rules. Never break them.
@@ -50,7 +53,7 @@ Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
   `internal/org`, `internal/conversation`, `internal/presence`,
   `internal/typing`, `internal/unread`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
-  `cmd/*` and tests. Exception: a module's fixture package (`<module>test`,
+  `cmd/*`, `compose` and tests. Exception: a module's fixture package (`<module>test`,
   decision 29) is imported only by `_test.go` files and by the fixture
   packages above it (`conversationtest` → `orgtest` → `identitytest`);
   production code never imports one.

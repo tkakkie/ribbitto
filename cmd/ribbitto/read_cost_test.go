@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -203,7 +204,7 @@ func readCostStep(t *testing.T, n, tabs int, mode string) {
 	a := conversationtest.Topic(t, fixture, f.OrganizationID, f.Channel.ID, "A")
 	b := conversationtest.Topic(t, fixture, f.OrganizationID, f.Channel.ID, "B")
 	owner := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "cost"}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
-	seed := conversationpg.NewPosting(fixture, postingSequence, postingEvents, nil)
+	seed := conversationpg.NewPosting(fixture, compose.PostingSequence, compose.PostingEvents, nil)
 	var cursor int64
 	for _, id := range []kernel.ID{a.ID, b.ID, a.ID, b.ID} {
 		msg, err := seed.PostToTopic(t.Context(), owner, f.Channel.ID, &id, "seed")
@@ -231,7 +232,7 @@ func readCostStep(t *testing.T, n, tabs int, mode string) {
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SHOW server_version").Scan(&version))
 	t.Logf("%s %s/%s CPUs=%d PostgreSQL=%s pool=10 active-readers=%d", runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), version, active)
 	pub := &readCostPublisher{times: make(map[kernel.ID]time.Duration)}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
 	hub := realtime.NewHub()
 	events := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, conversationpg.EventKinds()), hub, 1024, time.Minute)
 	auth := orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity)

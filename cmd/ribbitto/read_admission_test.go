@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
@@ -92,7 +93,7 @@ func TestReadAdmissionConvergence(t *testing.T) {
 			defer cancel()
 			f := conversationtest.OrganizationWithOwner(t, pool, "admission", "general")
 			member := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
-			posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+			posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 			type tab struct {
 				scope         unread.Scope
 				topic, target kernel.ID

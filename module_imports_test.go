@@ -69,12 +69,15 @@ func validateManifest(modules []module, exists func(string) bool, candidates []s
 
 func importAllowed(modules []module, from, file, to string) bool {
 	test := strings.HasSuffix(file, "_test.go")
+	if within(to, "internal/compose") && !test && !strings.HasPrefix(from, "cmd/") {
+		return false
+	}
 	for _, m := range modules {
 		// Depguard's inbound denies used raw prefixes, including similar names.
 		if m.store != "" && strings.HasPrefix(to, m.store) && from != m.wiring && !within(from, m.store) {
 			return false
 		}
-		if m.wiring != "" && strings.HasPrefix(to, m.wiring) && !test && !strings.HasPrefix(from, "cmd/") {
+		if m.wiring != "" && strings.HasPrefix(to, m.wiring) && !test && !strings.HasPrefix(from, "cmd/") && !within(from, "internal/compose") {
 			return false
 		}
 		if m.fixture != "" && strings.HasPrefix(to, m.fixture) && !test {
@@ -89,6 +92,17 @@ func importAllowed(modules []module, from, file, to string) bool {
 	}
 	if test || !strings.HasPrefix(to, "internal/") {
 		return true
+	}
+	if within(from, "internal/compose") {
+		if to == "internal/kernel" || within(to, "internal/platform") {
+			return true
+		}
+		for _, m := range modules {
+			if to == m.root || m.wiring != "" && to == m.wiring {
+				return true
+			}
+		}
+		return false
 	}
 	for _, m := range modules {
 		if !within(from, m.root) {
@@ -357,5 +371,67 @@ func TestMemoryOnlyManifest(t *testing.T) {
 				t.Fatalf("validateManifest = %v; valid = %t", err, tt.valid)
 			}
 		})
+	}
+}
+
+func TestComposeImports(t *testing.T) {
+	modules := moduleManifest()
+	for _, tt := range []struct {
+		from, file, to string
+		want           bool
+	}{
+		{"cmd/ribbitto", "main.go", "internal/compose", true},
+		{"cmd/seed", "main.go", "internal/compose", true},
+		{"internal/web", "services_test.go", "internal/compose", true},
+		{"internal/web", "services.go", "internal/compose", false},
+		{"internal/other", "source.go", "internal/compose", false},
+		{"internal/platform/postgres", "source.go", "internal/compose", false},
+		{"internal/compose", "adapters.go", "internal/kernel", true},
+		{"internal/compose", "adapters.go", "internal/platform/postgres", true},
+		{"internal/compose", "adapters.go", "internal/web", false},
+		{"cmd/ribbitto", "main.go", "internal/compose/sub", true},
+		{"cmd/seed", "main.go", "internal/compose/sub", true},
+		{"internal/web", "services_test.go", "internal/compose/sub", true},
+		{"internal/web", "services.go", "internal/compose/sub", false},
+		{"internal/other", "source.go", "internal/compose/sub", false},
+		{"internal/platform/postgres", "source.go", "internal/compose/sub", false},
+		{"internal/compose/sub", "adapters.go", "internal/kernel", true},
+		{"internal/compose/sub", "adapters.go", "internal/platform", true},
+		{"internal/compose/sub", "adapters.go", "internal/platform/postgres", true},
+		{"internal/compose/sub", "adapters.go", "internal/web", false},
+	} {
+		t.Run(tt.from+"/"+tt.file+"/"+tt.to, func(t *testing.T) {
+			if got := importAllowed(modules, tt.from, tt.file, tt.to); got != tt.want {
+				t.Errorf("allowed=%v, want %v", got, tt.want)
+			}
+		})
+	}
+	for _, m := range modules {
+		for _, from := range []string{m.root, m.store, m.wiring, m.fixture} {
+			if from == "" {
+				continue
+			}
+			for _, to := range []string{"internal/compose", "internal/compose/sub"} {
+				if importAllowed(modules, from, "source.go", to) {
+					t.Errorf("%s must not import %s", from, to)
+				}
+				if !importAllowed(modules, from, "source_test.go", to) {
+					t.Errorf("%s tests may import %s", from, to)
+				}
+			}
+		}
+		for _, to := range []string{m.root, m.wiring} {
+			if to == "" {
+				continue
+			}
+			for _, from := range []string{"internal/compose", "internal/compose/sub"} {
+				if !importAllowed(modules, from, "adapters.go", to) {
+					t.Errorf("%s may import %s", from, to)
+				}
+				if importAllowed(modules, from, "adapters.go", to+"/child") {
+					t.Errorf("%s must not import %s/child", from, to)
+				}
+			}
+		}
 	}
 }

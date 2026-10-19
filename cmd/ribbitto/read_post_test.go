@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
@@ -51,7 +52,7 @@ func TestReadPost(t *testing.T) {
 	other := conversationtest.Channel(t, pool, f.OrganizationID, "other", false)
 	topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "other topic")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
-	poster := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	poster := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	for _, place := range [][2]kernel.ID{{f.Channel.ID, f.Channel.DefaultTopicID}, {f.Channel.ID, topic.ID}, {other.ID, other.DefaultTopicID}, {f.Channel.ID, f.Channel.DefaultTopicID}} {
 		_, err := poster.PostToTopic(ctx, m, place[0], &place[1], "unread")
 		feedRequire(t, err)

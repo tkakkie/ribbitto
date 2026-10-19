@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -78,7 +79,7 @@ func TestSidebarSkipsFirstUnread(t *testing.T) {
 			traced, err := pgxpool.NewWithConfig(t.Context(), config)
 			feedRequire(t, err)
 			defer traced.Close()
-			reader := conversationpg.NewReader(traced, lookupMembers, lookupAccounts, eventCursor, pageCountsIn)
+			reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
 			sidebar, err := reader.Sidebar(t.Context(), m, f.Channel.ID, &selected)
 			feedRequire(t, err)
 			// Raw pgtest pools skip the application's local timeout setting.

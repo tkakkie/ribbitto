@@ -85,9 +85,10 @@ func TestDraftMarkerStreams(t *testing.T) {
 			t.Cleanup(cancel)
 			old, release := streams.subscribe(ctx)
 			t.Cleanup(release)
-			if ended == "cancelled" {
+			switch ended {
+			case "cancelled":
 				cancel()
-			} else if ended == "released" {
+			case "released":
 				release()
 			}
 			a, releaseA := streams.subscribe(t.Context())

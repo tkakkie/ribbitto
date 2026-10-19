@@ -292,7 +292,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 	}
 }
 
-// emptyPageCountsIn preserves TestReaderPaging's history-only query budget.
+// emptyPageCounter preserves TestReaderPaging's history-only query budget.
 // Unlike production counts it returns no counts and runs no unread queries.
 type emptyPageCounter struct{}
 

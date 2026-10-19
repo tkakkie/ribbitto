@@ -261,7 +261,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	}
 }
 
-// emptyPageCountsIn preserves TestM2AcceptanceAgainstPostgreSQL's history-only
+// emptyPageCounter preserves TestM2AcceptanceAgainstPostgreSQL's history-only
 // list assertions. Unlike production counts it supplies no unread dividers.
 type emptyPageCounter struct{}
 

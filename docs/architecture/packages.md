@@ -30,6 +30,7 @@ runs it; `issue` reviews issues; `copilot-check` checks Copilot follow-ups;
 `probe` runs on scratch repositories; `guard` is the tool hook. A failed or
 non-counting Copilot check falls back to the AI that did not write the
 change: Codex for Claude's, Claude for Codex's ([workflow](../workflow/copilot.md)).
+`implement-guard` enforces the trial's seven-tool file boundary.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

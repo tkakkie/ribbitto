@@ -17,6 +17,7 @@
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
+// implement-guard enforces the implementer trial's file boundary without a build check.
 package main
 
 import (
@@ -40,6 +41,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 2 && args[0] == "implement-guard" {
+		return implementGuard(args[1], stdin, stdout, stderr)
+	}
 	round := 1
 	approved := ""
 	if len(args) == 3 && args[0] == "copilot-check" && commitID.MatchString(args[2]) {
@@ -112,7 +116,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir>")
 	return 2
 }
 

@@ -44,6 +44,11 @@ func main() {
 }
 
 func run() error {
+	// Later constructors (NewHandler, NewAuthLimits and i18n.New) capture slog.Default().
+	if err := configureLogging(os.Getenv("RIBBITTO_LOG_FORMAT")); err != nil {
+		return err
+	}
+
 	// Stop on SIGTERM as well as Ctrl-C: container runtimes send SIGTERM and
 	// expect the process to shut down gracefully.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

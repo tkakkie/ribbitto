@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
 // Pinger checks database connectivity without reading organisation data.
@@ -31,7 +33,7 @@ func readiness(database Pinger, shuttingDown func() bool) http.HandlerFunc {
 		defer cancel()
 		if err := database.Ping(ctx); err != nil || ctx.Err() != nil {
 			// Driver errors may include connection credentials; log only the failure.
-			slog.ErrorContext(r.Context(), "readiness database ping failed")
+			slog.ErrorContext(r.Context(), "readiness database ping failed", "request_id", middleware.RequestID(r.Context()))
 			unavailable()
 			return
 		}

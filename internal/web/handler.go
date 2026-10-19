@@ -202,7 +202,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	// that changes state must be a POST.
 	logger := services.RequestLogger
 	if logger == nil {
-		// Install the RIBBITTO_LOG_FORMAT logger before NewHandler, or pass Services.RequestLogger.
+		// Capture the process logger, configured before construction by run.
 		logger = slog.Default()
 	}
 	return middleware.LimitBody(middleware.RequestLog(logger, http.NewCrossOriginProtection().Handler(mux))), *routes.patterns, nil

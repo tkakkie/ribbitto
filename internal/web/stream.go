@@ -139,7 +139,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	w.WriteHeader(http.StatusOK)
 	if err := send.write(ctx, func() error { return nil }); err != nil {
-		slog.WarnContext(r.Context(), "starting event stream", "err", err)
+		slog.WarnContext(r.Context(), "starting event stream", "err", err, "request_id", middleware.RequestID(r.Context()))
 		return
 	}
 
@@ -166,7 +166,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		// Neither the client nor the session went away: delivery failed.
 		// The browser reconnects with the last id it received, which is
 		// cursor or less.
-		slog.WarnContext(r.Context(), "event stream stopped", "cursor", cursor, "err", err)
+		slog.WarnContext(r.Context(), "event stream stopped", "cursor", cursor, "err", err, "request_id", middleware.RequestID(r.Context()))
 	}
 }
 

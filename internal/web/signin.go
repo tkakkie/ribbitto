@@ -38,7 +38,7 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 		// PostgreSQL, the clock of session ids, never this server's.
 		if _, signedIn := middleware.Account(r.Context()); !signedIn {
 			if horizon, err := service.SessionHorizon(r.Context()); err != nil {
-				slog.ErrorContext(r.Context(), "reading the drafts horizon", "err", err)
+				slog.ErrorContext(r.Context(), "reading the drafts horizon", "err", err, "request_id", middleware.RequestID(r.Context()))
 			} else {
 				form.Horizon = &horizon
 			}

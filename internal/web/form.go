@@ -26,7 +26,7 @@ func parseForm(w http.ResponseWriter, r *http.Request) bool {
 
 // serverError logs an unexpected error and answers 500 without details.
 func serverError(w http.ResponseWriter, r *http.Request, doing string, err error) {
-	slog.ErrorContext(r.Context(), doing, "err", err)
+	slog.ErrorContext(r.Context(), doing, "err", err, "request_id", middleware.RequestID(r.Context()))
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 

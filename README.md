@@ -40,7 +40,7 @@ set -a; . ./.env; set +a    # export configuration; the binary does not load .en
 make db-up                 # starts PostgreSQL and waits for health
 make migrate               # DIRECTION=up|down|status
 make seed ARGS='-messages 100' # optional development fixtures
-go run ./cmd/ribbitto       # http://localhost:8080; readiness at /readyz, liveness at /healthz
+go run ./cmd/ribbitto       # http://localhost:8080
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
@@ -65,10 +65,13 @@ keep databases across moves and symlink spellings. Local database names and
 ports must match the registry; reruns keep free ports and replace busy ones.
 `make ai-health` checks the shared admin connection without printing credentials.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
-drops the databases and ports of registry entries whose worktrees are gone.
+drops those of registry entries whose worktrees are gone.
 See [worktree environments](docs/worktree-env.md) for configuration overrides and capacity measurement.
 Startup never migrates; schemas below its newest migration fail with
 `ribbitto migrate up`; equal/newer allow binary rollback.
+
+Set `RIBBITTO_LOG_FORMAT=json` for JSON logs; empty keeps the default; other
+values prevent startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
@@ -161,11 +164,11 @@ value prevents startup. Sign-in links to registration only while it is open.
 
 ## Restoring a backup
 
-Restore the database only with ribbitto stopped: stop ribbitto, restore the
-database, then start ribbitto. The process keeps sequence state in memory (the
-real-time hub and its caches), so rolling the database back under a running
-process is not supported. After the restart, a browser that reconnects with a
-cursor above the restored log gets `reset` and reloads the page
+Stop ribbitto, restore the database, then start ribbitto. The process keeps
+sequence state in memory (the real-time hub and its caches), so rolling the
+database back under a running process is not supported. After the restart, a
+browser that reconnects with a cursor above the restored log gets `reset` and
+reloads the page
 ([replay](docs/architecture/replay.md#ordering-and-replay)).
 
 ## Documentation

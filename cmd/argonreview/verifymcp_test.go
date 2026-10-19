@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -78,6 +79,164 @@ func serveBytes(t *testing.T, input string) ([]mcpResponse, string) {
 	}
 	return readMCPResponses(t, out.String()), log.String()
 }
+func TestVerifyMCPSIGHUP(t *testing.T) {
+	ctx, stop := verifyMCPSignals(context.Background())
+	defer stop()
+	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("SIGHUP did not cancel the server context")
+	}
+}
+
+func TestVerifyMCPSIGPIPE(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"write", "serve"} {
+		t.Run(mode, func(t *testing.T) {
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = read.Close()
+			defer func() { _ = write.Close() }()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, executable, "-test.run=^TestVerifyMCPSIGPIPEHelper$")
+			cmd.Env = append(os.Environ(), "ARGONREVIEW_PIPE_HELPER="+mode)
+			cmd.Stdout = write
+			var log bytes.Buffer
+			cmd.Stderr = &log
+			if err := cmd.Run(); err != nil || !strings.Contains(log.String(), "EPIPE") {
+				t.Fatalf("helper: %v, stderr %s", err, &log)
+			}
+		})
+	}
+}
+
+func TestVerifyMCPSIGPIPEHelper(t *testing.T) {
+	mode := os.Getenv("ARGONREVIEW_PIPE_HELPER")
+	if mode == "" {
+		return // This test also runs normally, without acting as a subprocess.
+	}
+	ctx, stop := verifyMCPSignals(context.Background())
+	defer stop()
+	if mode == "write" {
+		if _, err := os.Stdout.Write([]byte("response\n")); !errors.Is(err, syscall.EPIPE) {
+			t.Fatalf("write: %v; want EPIPE", err)
+		}
+	} else {
+		var log bytes.Buffer
+		code := (verifyMCPServer{verifier: noVerify(t)}).serve(ctx, strings.NewReader(mcpInit+"\n"), os.Stdout, &log)
+		if code != 1 || !strings.Contains(log.String(), "writing MCP response:") || !strings.Contains(log.String(), syscall.EPIPE.Error()) {
+			t.Fatalf("closed stdout: exit %d, stderr %s", code, &log)
+		}
+	}
+	_, _ = fmt.Fprintln(os.Stderr, "EPIPE")
+	stop()
+	os.Exit(0) // Avoid the test harness writing its summary to the closed stdout.
+}
+
+func TestVerifyMCPPinnedPath(t *testing.T) {
+	dir := resolved(t, t.TempDir())
+	marker := filepath.Join(dir, "executed")
+	fake := filepath.Join(dir, "git")
+	write(t, fake, "#!/bin/sh\n/usr/bin/touch \""+marker+"\"\n")
+	if err := os.Chmod(fake, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if err := pinVerifyMCPPath(); err != nil {
+		t.Fatal(err)
+	}
+	path, err := exec.LookPath("git")
+	if err != nil || os.Getenv("PATH") != verifyMCPPath || !strings.Contains(":"+verifyMCPPath+":", ":"+filepath.Dir(path)+":") {
+		t.Fatalf("PATH %q resolves git to %q: %v", os.Getenv("PATH"), path, err)
+	}
+	if err := exec.Command("git", "--version").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("untrusted git executed: %v", err)
+	}
+}
+
+func TestVerifyMCPWorktreeRechecked(t *testing.T) {
+	for _, change := range []string{"symlink", "parent symlink", "missing", "file", "overlap"} {
+		t.Run(change, func(t *testing.T) {
+			source, base := resolved(t, t.TempDir()), resolved(t, t.TempDir())
+			tree := filepath.Join(base, "parent", "tree")
+			mkdir(t, tree)
+			in, send := io.Pipe()
+			out, recv := io.Pipe()
+			defer func() { _ = send.Close(); _ = out.Close() }()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var calls atomic.Int32
+			v := fakeVerifier(func(context.Context, string, string) (string, error) {
+				calls.Add(1)
+				return "verified", nil
+			})
+			var log bytes.Buffer
+			done := make(chan int, 1)
+			go func() {
+				done <- startVerifyMCP(ctx, []string{"--trusted-source", source, "--worktree", tree}, nil, func(string) error { return nil }, v, in, recv, &log)
+				_ = recv.Close()
+			}()
+			reader := bufio.NewReader(out)
+			exchange := func(line string) mcpResponse {
+				t.Helper()
+				if _, err := io.WriteString(send, line+"\n"); err != nil {
+					t.Fatal(err)
+				}
+				response, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatal(err)
+				}
+				return readMCPResponses(t, response)[0]
+			}
+			if exchange(mcpInit).Error != nil || exchange(mcpCall).Error != nil || calls.Load() != 1 {
+				t.Fatal("initial call failed")
+			}
+			if change == "overlap" {
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+				symlink(t, tree, source)
+			} else {
+				if err := os.Remove(tree); err != nil {
+					t.Fatal(err)
+				}
+				switch change {
+				case "symlink":
+					symlink(t, resolved(t, t.TempDir()), tree)
+				case "parent symlink":
+					if err := os.Remove(filepath.Dir(tree)); err != nil {
+						t.Fatal(err)
+					}
+					other := resolved(t, t.TempDir())
+					mkdir(t, filepath.Join(other, "tree"))
+					symlink(t, other, filepath.Dir(tree))
+				case "file":
+					write(t, tree, "not a directory")
+				}
+			}
+			if r := exchange(mcpCall); r.Error == nil || r.Error.Code != -32602 || calls.Load() != 1 {
+				t.Fatalf("changed tree accepted: %+v, calls %d", r, calls.Load())
+			}
+			_ = send.Close()
+			if code := <-done; code != 0 || !strings.Contains(log.String(), "checking worktree:") {
+				t.Fatalf("exit %d, stderr %s", code, &log)
+			}
+		})
+	}
+}
+
 func TestVerifyMCPProtocolErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name, line string
@@ -388,7 +547,15 @@ func TestVerifyMCPCallAndBusy(t *testing.T) {
 	var log bytes.Buffer
 	started := make(chan struct{})
 	release := make(chan struct{})
-	var calls atomic.Int32
+	var calls, checks atomic.Int32
+	var invalidWorktree atomic.Bool
+	checkWorktree := func() error {
+		checks.Add(1)
+		if invalidWorktree.Load() {
+			return errors.New("worktree changed")
+		}
+		return nil
+	}
 	verifier := fakeVerifier(func(ctx context.Context, c, p string) (string, error) {
 		calls.Add(1)
 		if c != "test" || p != "./..." {
@@ -403,7 +570,7 @@ func TestVerifyMCPCallAndBusy(t *testing.T) {
 	})
 	done := make(chan int, 1)
 	go func() {
-		done <- (verifyMCPServer{verifier: verifier}).serve(context.Background(), in, recv, &log)
+		done <- (verifyMCPServer{verifier: verifier, checkWorktree: checkWorktree}).serve(context.Background(), in, recv, &log)
 		_ = recv.Close()
 	}()
 	defer func() { _ = send.Close(); _ = out.Close() }()
@@ -429,6 +596,13 @@ func TestVerifyMCPCallAndBusy(t *testing.T) {
 	}
 	if r := exchange(`{"jsonrpc":"2.0","id":3,"method":"ping"}`); string(r.Result) != "{}" {
 		t.Fatal("ping blocked")
+	}
+	invalidWorktree.Store(true)
+	if r := exchange(strings.Replace(mcpCall, `"check":"test"`, `"check":"shell"`, 1)); r.Error == nil || r.Error.Code != -32602 || checks.Load() != 2 {
+		t.Fatal("worktree checked before argument validation")
+	}
+	if r := exchange(mcpCall); r.Error == nil || r.Error.Code != -32602 || checks.Load() != 3 {
+		t.Fatal("busy checked before worktree validation")
 	}
 	close(release)
 	line, err := reader.ReadString('\n')
@@ -510,7 +684,7 @@ func slowDocker(t *testing.T) string {
 	t.Helper()
 	dir := resolved(t, t.TempDir())
 	path := filepath.Join(dir, "docker")
-	write(t, path, "#!/bin/sh\ncase \"$1\" in run) sleep 600 & echo $! > \"$(dirname \"$0\")/pid\"; wait;; *) exit 0;; esac\n")
+	write(t, path, "#!/bin/sh\ndir=${0%/*}\ncase \"$1\" in run) sleep 600 & echo $! > \"$dir/pid.tmp\"; mv \"$dir/pid.tmp\" \"$dir/pid\"; wait;; *) exit 0;; esac\n")
 	if err := os.Chmod(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -565,17 +739,18 @@ func TestVerifyMCPShutdown(t *testing.T) {
 			defer cancel()
 			defer func() { _ = send.Close() }()
 			var finished atomic.Bool
+			verifierDone := make(chan struct{})
 			verifier := fakeVerifier(func(ctx context.Context, _, _ string) (string, error) {
 				_, err := (dockerRunner{ownGroup: true, path: dir}).run(ctx, []string{"run"}, []string{"PATH=/usr/bin:/bin"}, io.Discard, io.Discard)
 				finished.Store(true)
+				close(verifierDone)
 				return "verified\ndetails", err
 			})
-			limit := 30 * time.Second
-			if reason == "deadline" {
-				limit = 500 * time.Millisecond
-			}
+			deadline := make(chan struct{})
 			done := make(chan int, 1)
-			go func() { done <- (verifyMCPServer{verifier: verifier, callLimit: limit}).serve(ctx, in, &out, &log) }()
+			go func() {
+				done <- (verifyMCPServer{verifier: verifier, callLimit: time.Minute, callDeadline: deadline}).serve(ctx, in, &out, &log)
+			}()
 			_, _ = io.WriteString(send, mcpInit+"\n"+mcpCall+"\n")
 			waitFor(t, filepath.Join(dir, "pid"))
 			switch reason {
@@ -584,7 +759,14 @@ func TestVerifyMCPShutdown(t *testing.T) {
 			case "signal":
 				cancel()
 			case "deadline":
-				time.Sleep(700 * time.Millisecond)
+				// Expire only after Docker has recorded its child, then wait
+				// for cancellation to finish before sending EOF.
+				close(deadline)
+				select {
+				case <-verifierDone:
+				case <-time.After(10 * time.Second):
+					t.Fatal("deadline did not stop verifier")
+				}
 				_ = send.Close()
 			}
 			select {
@@ -622,7 +804,7 @@ func TestVerifyMCPShutdownGrace(t *testing.T) {
 	var out, log bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- (verifyMCPServer{verifier: v, grace: 30 * time.Millisecond}).serve(ctx, in, &out, &log)
+		done <- (verifyMCPServer{verifier: v, grace: time.Second}).serve(ctx, in, &out, &log)
 	}()
 	_, _ = io.WriteString(send, mcpInit+"\n"+mcpCall+"\n")
 	<-started

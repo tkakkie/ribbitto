@@ -26,6 +26,7 @@ const (
 	verifyResultLimit   = 48 << 10
 	verifyCallLimit     = containerTimeout + 2*containerCleanupTimeout + time.Minute
 	verifyShutdownGrace = 2*containerCleanupTimeout + 5*time.Second
+	verifyMCPPath       = "/usr/bin:/bin"
 	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path>"
 )
 
@@ -43,12 +44,34 @@ func (v containerVerifier) verify(ctx context.Context, check, pattern string) (s
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	environ := os.Environ()
+	if err := pinVerifyMCPPath(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "argonreview verify-mcp: pinning PATH: %v\n", err)
+		return 1
+	}
+	ctx, stop := verifyMCPSignals(context.Background())
 	defer stop()
-	return startVerifyMCP(ctx, args, os.Environ(), func(source string) error {
+	return startVerifyMCP(ctx, args, environ, func(source string) error {
 		info, ok := debug.ReadBuildInfo()
 		return checkTrustedSource(source, info, ok, git)
 	}, nil, stdin, stdout, stderr)
+}
+
+// Match containerGit's executable search path, including the stage-1 Git check.
+func pinVerifyMCPPath() error {
+	return os.Setenv("PATH", verifyMCPPath)
+}
+
+func verifyMCPSignals(parent context.Context) (context.Context, context.CancelFunc) {
+	// Catch SIGPIPE so broken stdio reaches the write-error cleanup path.
+	// Do not Ignore it: ignored signals survive exec into Docker and Git.
+	pipe := make(chan os.Signal, 1)
+	signal.Notify(pipe, syscall.SIGPIPE)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	return ctx, func() {
+		stop()
+		signal.Stop(pipe)
+	}
 }
 
 func checkTrustedSource(source string, info *debug.BuildInfo, ok bool, gitFn func(string, ...string) (string, error)) error {
@@ -116,6 +139,9 @@ func verifyEnvironment(environ []string) error {
 		}
 		seen[name] = true
 		switch name {
+		// The issue's contract allows the fixed Docker variables. The runner
+		// ignores them and hard-codes its own Docker environment; dropping
+		// them is a preflight #1433 decision.
 		case "PATH", "TMPDIR", "DOCKER_HOST", "DOCKER_CONFIG":
 		default:
 			return fmt.Errorf("environment variable %q is forbidden", name)
@@ -149,7 +175,15 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 	if v == nil {
 		v = containerVerifier{args[3], dockerRunner{ownGroup: true}, "/tmp"}
 	}
-	return (verifyMCPServer{verifier: v}).serve(ctx, stdin, stdout, stderr)
+	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
+		// Recheck because the worker can replace paths after startup. This
+		// narrows, but cannot eliminate, a swap before the runner's copy;
+		// the runner's own checks still apply.
+		if err := verifyRealDirectory(args[3]); err != nil {
+			return err
+		}
+		return verifyDisjointDirectories(args[1], args[3])
+	}}).serve(ctx, stdin, stdout, stderr)
 }
 
 func verifyResult(report string, runErr error, limited bool) (string, bool) {
@@ -334,7 +368,10 @@ func parseVerifyCall(raw []byte) (verifyArguments, error) {
 
 type verifyMCPServer struct {
 	verifier         verifier
+	checkWorktree    func() error
 	callLimit, grace time.Duration
+	// An injected deadline lets lifecycle tests expire a call after readiness.
+	callDeadline <-chan struct{}
 }
 type verifyCompletion struct {
 	report string
@@ -363,7 +400,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 	}
 	go readVerifyLines(stdin, events, stop)
 	encoder := json.NewEncoder(stdout)
-	initialized, notified := false, false
+	initialized := false
 	// Only this loop writes responses, including completion and shutdown results.
 	var flight *verifyFlight
 	var done <-chan verifyCompletion
@@ -463,7 +500,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 			if req.id == nil {
 				switch req.method {
 				case "notifications/initialized":
-					notified = true
+					_, _ = fmt.Fprintln(stderr, "verify-mcp: client initialized")
 				case "tools/call":
 					_, _ = fmt.Fprintln(stderr, "verify-mcp: ignored tools/call notification")
 				default:
@@ -517,6 +554,13 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					rpcError(req.id, -32602, "invalid verify arguments")
 					continue
 				}
+				if s.checkWorktree != nil {
+					if err := s.checkWorktree(); err != nil {
+						_, _ = fmt.Fprintf(stderr, "verify-mcp: checking worktree: %v\n", err)
+						rpcError(req.id, -32602, "invalid worktree")
+						continue
+					}
+				}
 				if flight != nil {
 					rpcError(req.id, -32600, "busy")
 					continue
@@ -526,6 +570,9 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 				flight = &verifyFlight{req.id, args, callCtx, cancel}
 				done = completed
 				deadline = callCtx.Done()
+				if s.callDeadline != nil {
+					deadline = s.callDeadline
+				}
 				go func() {
 					report, err := s.verifier.verify(callCtx, args.check, args.pattern)
 					completed <- verifyCompletion{report, err}
@@ -534,8 +581,5 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 				rpcError(req.id, -32601, "method not found")
 			}
 		}
-		// MCP clients need not send initialized before calling; retain the event
-		// without making it another gate that could strand a valid request.
-		_ = notified
 	}
 }

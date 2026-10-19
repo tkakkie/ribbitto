@@ -415,8 +415,8 @@
         if (sent) {
           const recovered = removeSent(body, sent);
           say(recovered ? "recovered" : "repeat");
-          if (recovered) sentEvent();
         }
+        sentEvent();
       });
     }
     // Focus on the send button returns to the textarea. htmx disables the

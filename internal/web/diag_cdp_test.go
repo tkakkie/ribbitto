@@ -4,6 +4,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"strings"
@@ -24,6 +25,15 @@ type diagCDP struct {
 	previous               string
 	budget                 context.Context
 	ring, errors, failures []string
+	kinds                  []string
+	ignoredContexts        int
+}
+
+type diagOutcome struct {
+	detail          string
+	kinds           []string
+	failed          bool
+	ignoredContexts int
 }
 
 func diagConnect(t *testing.T, url string, ctx context.Context, kill func()) *rod.Browser {
@@ -87,7 +97,13 @@ func (d *diagCDP) Call(ctx context.Context, session, method string, params inter
 	if strings.HasPrefix(method, "Accessibility.") {
 		d.record(fmt.Sprintf("response session=%s %s %s error=%v", session, method, res, err))
 	}
-	if err != nil {
+	if errors.Is(err, cdp.ErrCtxNotFound) {
+		// Rod's Evaluate polls through this ordinary context-replacement
+		// response. Count it without drowning the actionable errors.
+		d.mu.Lock()
+		d.ignoredContexts++
+		d.mu.Unlock()
+	} else if err != nil {
 		data, _ := json.Marshal(params)
 		line := fmt.Sprintf("call +%s..+%s session=%s %s params=%s error=%v", start.Round(time.Microsecond), time.Since(d.origin).Round(time.Microsecond), session, method, data, err)
 		if d.budget != nil && d.budget.Err() != nil {
@@ -95,6 +111,7 @@ func (d *diagCDP) Call(ctx context.Context, session, method string, params inter
 		}
 		d.mu.Lock()
 		d.errors = append(d.errors, line)
+		d.kinds = append(d.kinds, method+": "+err.Error())
 		if strings.Contains(err.Error(), "Inspected target navigated or closed") {
 			d.failures = append(d.failures, strings.Join(d.ring, "\n")+"\n"+line+"\n"+string(debug.Stack()))
 		}
@@ -116,27 +133,35 @@ func (d *diagCDP) Call(ctx context.Context, session, method string, params inter
 
 func diagScenario(t *testing.T, b *rod.Browser, report func(string)) *rod.Browser {
 	t.Helper()
+	return diagScenarioResult(t, b, func(out diagOutcome) { report(out.detail) })
+}
+
+func diagScenarioResult(t *testing.T, b *rod.Browser, report func(diagOutcome)) *rod.Browser {
+	t.Helper()
 	d := b.GetContext().Value(diagKey{}).(*diagCDP)
 	before := d.targets()
 	d.mu.Lock()
 	previous := d.previous
 	d.errors = nil
 	d.failures = nil
+	d.kinds = nil
+	d.ignoredContexts = 0
 	d.mu.Unlock()
 	d.record("BEGIN " + t.Name() + " predecessor=" + previous + " " + before)
 	// The pool release was registered first, so this runs after page cleanup.
 	t.Cleanup(func() {
 		after := d.targets()
 		d.mu.Lock()
-		summary := fmt.Sprintf("%s browser=%p origin=%s predecessor=%q failed=%t\n  before %s\n  after %s\n  CDP errors: %s", t.Name(), d, d.origin.UTC().Format(time.RFC3339Nano), previous, t.Failed(), before, after, strings.Join(d.errors, "\n"))
+		summary := fmt.Sprintf("%s browser=%p origin=%s predecessor=%q failed=%t ignored ErrCtxNotFound=%d\n  before %s\n  after %s\n  CDP errors: %s", t.Name(), d, d.origin.UTC().Format(time.RFC3339Nano), previous, t.Failed(), d.ignoredContexts, before, after, strings.Join(d.errors, "\n"))
 		if len(d.failures) > 0 {
 			summary += "\nAT FAILURE:\n" + strings.Join(d.failures, "\n") + "\nAFTER FAILURE:\n" + strings.Join(d.ring, "\n")
 		} else if t.Failed() {
 			summary += "\nRECENT EVENTS:\n" + strings.Join(d.ring, "\n")
 		}
 		d.previous = t.Name()
+		out := diagOutcome{detail: summary, kinds: append([]string(nil), d.kinds...), failed: t.Failed(), ignoredContexts: d.ignoredContexts}
 		d.mu.Unlock()
-		report(summary)
+		report(out)
 	})
 	return b.WithPanic(func(v any) { t.Fatal(v) })
 }

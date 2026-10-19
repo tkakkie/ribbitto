@@ -14,19 +14,73 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
+type diagProbeCell struct {
+	iterations, failures, ignoredContexts int
+	seen                                  map[string]bool
+	samples                               []string
+}
+
+func (c *diagProbeCell) add(out diagOutcome) {
+	c.iterations++
+	c.ignoredContexts += out.ignoredContexts
+	if out.failed {
+		c.failures++
+	}
+	kinds := out.kinds
+	if out.failed && len(kinds) == 0 {
+		kinds = []string{"assertion/cleanup (no CDP error)"}
+	}
+	if c.seen == nil {
+		c.seen = make(map[string]bool)
+	}
+	var first []string
+	for _, kind := range kinds {
+		if !c.seen[kind] && len(c.samples) < 3 {
+			c.seen[kind] = true
+			first = append(first, kind)
+		}
+	}
+	if len(first) > 0 {
+		c.samples = append(c.samples, "FIRST "+strings.Join(first, "; ")+"\n"+out.detail)
+	}
+}
+
 func TestBrowserFlakeProbe(t *testing.T) {
 	bin, ok := launcher.LookPath()
 	if !ok {
 		browserUnavailable(t, "no installed browser")
 	}
-	// The probe watchdog kills its browsers at 110 s, including stuck cleanup.
-	ctx, cancel := context.WithTimeout(context.WithValue(t.Context(), diagProbeBudget{}, true), 110*time.Second)
+	// This is a stress scheduling budget, not a longer scenario timeout. Kill
+	// all remaining browsers at 260 s, including any stuck SSE/server cleanup.
+	ctx, cancel := context.WithTimeout(context.WithValue(t.Context(), diagProbeBudget{}, true), 260*time.Second)
 	defer cancel()
+	scheduleUntil := time.Now().Add(235 * time.Second)
 	var mu sync.Mutex
-	var results []string
-	report := func(s string) { mu.Lock(); defer mu.Unlock(); results = append(results, s) }
-	run := func(t *testing.T, b *rod.Browser, scenario func(*testing.T, *rod.Browser)) {
-		b = diagScenario(t, b, report)
+	cells := make(map[string]*diagProbeCell)
+	var order []string
+	cell := func(name string) *diagProbeCell {
+		if cells[name] == nil {
+			cells[name] = &diagProbeCell{}
+			order = append(order, name)
+		}
+		return cells[name]
+	}
+	observe := func(t *testing.T, c *diagProbeCell) func(diagOutcome) {
+		out := diagOutcome{detail: t.Name() + ": launch/connect failed before observation"}
+		// Register before launch so fresh-browser teardown failures count too.
+		t.Cleanup(func() {
+			if t.Failed() && !out.failed {
+				out.detail += "\nFAILED outside scenario observation (launch/browser teardown)"
+			}
+			out.failed = t.Failed()
+			mu.Lock()
+			defer mu.Unlock()
+			c.add(out)
+		})
+		return func(value diagOutcome) { out = value }
+	}
+	run := func(t *testing.T, b *rod.Browser, report func(diagOutcome), scenario func(*testing.T, *rod.Browser)) {
+		b = diagScenarioResult(t, b, report)
 		scenario(t, b)
 	}
 	targets := []struct {
@@ -35,25 +89,30 @@ func TestBrowserFlakeProbe(t *testing.T) {
 	}{
 		{"arrival", testArrivalBrowser}, {"motion-touch", testMotionTouchBrowser}, {"stream-reset-alert-unconfirmed", diagResetAlert},
 	}
-	const n = 2
+	available := func(until time.Time) bool {
+		return ctx.Err() == nil && time.Now().Before(until) && time.Now().Before(scheduleUntil)
+	}
 	for _, mode := range []string{"fresh", "reused"} {
 		t.Run(mode, func(t *testing.T) {
 			for _, target := range targets {
+				cell(mode + "/" + target.name)
+			}
+			var reused *rod.Browser
+			if mode == "reused" && available(scheduleUntil) {
+				reused = launchScenarioBrowser(t, ctx, bin)
+			}
+			for _, target := range targets {
+				c := cell(mode + "/" + target.name)
 				t.Run(target.name, func(t *testing.T) {
-					var b *rod.Browser
-					if mode == "reused" && ctx.Err() == nil {
-						b = launchScenarioBrowser(t, ctx, bin)
-					}
-					for i := range n {
+					until := time.Now().Add(25 * time.Second)
+					for i := 0; available(until); i++ {
 						t.Run(fmt.Sprint(i), func(t *testing.T) {
-							if ctx.Err() != nil {
-								t.Error("probe scheduling budget exhausted")
-								return
-							}
+							report := observe(t, c)
+							b := reused
 							if mode == "fresh" {
 								b = launchScenarioBrowser(t, ctx, bin)
 							}
-							run(t, b, target.fn)
+							run(t, b, report, target.fn)
 						})
 					}
 				})
@@ -61,40 +120,56 @@ func TestBrowserFlakeProbe(t *testing.T) {
 		})
 	}
 	t.Run("pool", func(t *testing.T) {
-		if ctx.Err() != nil {
-			t.Error("probe scheduling budget exhausted")
+		neighbours := append(targets,
+			struct {
+				name string
+				fn   func(*testing.T, *rod.Browser)
+			}{"side-panel", testSidePanelBrowser},
+			struct {
+				name string
+				fn   func(*testing.T, *rod.Browser)
+			}{"sidebar-scroll", testSidebarScrollBrowser},
+			struct {
+				name string
+				fn   func(*testing.T, *rod.Browser)
+			}{"message-link", testMessageLinkBrowser})
+		counts := make([]*diagProbeCell, len(neighbours))
+		for i, n := range neighbours {
+			counts[i] = cell("pool/" + n.name)
+		}
+		until := time.Now().Add(60 * time.Second)
+		if !available(until) {
 			return
 		}
 		pool := make(chan *rod.Browser, 3)
 		for range 3 {
 			pool <- launchScenarioBrowser(t, ctx, bin)
 		}
-		neighbours := append(targets, struct {
-			name string
-			fn   func(*testing.T, *rod.Browser)
-		}{"side-panel", testSidePanelBrowser}, struct {
-			name string
-			fn   func(*testing.T, *rod.Browser)
-		}{"sidebar-scroll", testSidebarScrollBrowser}, struct {
-			name string
-			fn   func(*testing.T, *rod.Browser)
-		}{"message-link", testMessageLinkBrowser})
-		for i := range n {
-			for _, scenario := range neighbours {
-				t.Run(fmt.Sprintf("%d/%s", i, scenario.name), func(t *testing.T) {
-					t.Parallel()
-					b := <-pool
-					t.Cleanup(func() { pool <- b })
-					if ctx.Err() != nil {
-						t.Error("probe scheduling budget exhausted")
-						return
-					}
-					run(t, b, scenario.fn)
+		// Every wave has three independent browsers, even with go test -parallel=2.
+		// The first two waves explicitly overlap duplicates of both flaky cases;
+		// later waves retain the real sidebar/link/reset neighbours from TestBrowser.
+		waves := [][3]int{{0, 0, 1}, {1, 1, 0}, {2, 3, 4}, {5, 0, 1}}
+		for wave := 0; available(until); wave++ {
+			var wg sync.WaitGroup
+			for lane, index := range waves[wave%len(waves)] {
+				wg.Go(func() {
+					n := neighbours[index]
+					t.Run(fmt.Sprintf("%d/%d/%s", wave, lane, n.name), func(t *testing.T) {
+						b := <-pool
+						t.Cleanup(func() { pool <- b })
+						run(t, b, observe(t, counts[index]), n.fn)
+					})
 				})
 			}
+			wg.Wait()
 		}
 	})
-	t.Errorf("PROBE RESULT\nN=%d; fresh / one reused browser per target / pool of 3 with real neighbours\n%s", n, strings.Join(results, "\n\n"))
+	var results []string
+	for _, name := range order {
+		c := cells[name]
+		results = append(results, fmt.Sprintf("%s iterations=%d failures=%d ignored ErrCtxNotFound=%d\n%s", name, c.iterations, c.failures, c.ignoredContexts, strings.Join(c.samples, "\n\n")))
+	}
+	t.Errorf("PROBE RESULT\nfresh browser per iteration / one reused browser / pool of 3 with real neighbours\n25 s per fresh/reused target cell; 60 s shared pool; scheduling cap 235 s; kill watchdog 260 s; budgetEnded=%t\n%s", ctx.Err() != nil, strings.Join(results, "\n\n"))
 }
 
 // The alert-unconfirmed branch of testStreamResetBrowser, using its real

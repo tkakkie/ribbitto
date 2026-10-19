@@ -115,6 +115,7 @@ func TestBrowser(t *testing.T) {
 	run("drafts", testDraftsBrowser)
 	run("drafts-org", testOrgDraftsBrowser)
 	run("drafts-save", testSaveDraftsBrowser)
+	run("drafts-markers", testDraftMarkersBrowser)
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

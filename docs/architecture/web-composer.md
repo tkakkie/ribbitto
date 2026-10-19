@@ -114,7 +114,7 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v4.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+`message-drafts-v5.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
 restore (#1162), never history. Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.

@@ -144,10 +144,6 @@
         // Unsaved pending-path edits keep their timer and cannot be cleared.
         replaceSnapshot(sendKey, inPlace);
       });
-      body.addEventListener("message-pending-action", (event) => {
-        if (event.detail.kind === "edit") { edited(); save(); }
-        else if (event.detail.kind === "remove") replaceSnapshot(event.detail.key);
-      });
       body.addEventListener("input", edited);
       body.addEventListener("compositionstart", () => { composing = true; clearTimeout(timer); });
       body.addEventListener("compositionend", () => { composing = false; edited(); });

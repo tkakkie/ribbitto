@@ -62,6 +62,7 @@ func TestBrowser(t *testing.T) {
 			// the next scenario gets the browser only once this one's pages
 			// are closed, as when a subtest's cleanups ended before the next.
 			t.Cleanup(func() { pool <- browser })
+			browser = diagScenario(t, browser, func(s string) { t.Log(s) }) // DIAG(#1444)
 			scenario(t, browser)
 		})
 	})
@@ -641,7 +642,7 @@ func launchScenarioBrowser(t *testing.T, ctx context.Context, bin string) *rod.B
 		browserUnavailable(t, err.Error())
 	}
 	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(url).MustConnect()
+	browser := diagConnect(t, url, ctx, launch.Kill) // DIAG(#1444): restore rod.New().ControlURL(url).MustConnect().
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
 	return browser
 }

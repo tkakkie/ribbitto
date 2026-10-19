@@ -73,11 +73,11 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v17.js` loads with the response nonce on channel pages.
+`message-composer-v18.js` loads with the response nonce on channel pages.
 It anchors the list during [composer growth](../ui-composer.md) and handles
 [quote focus and locking](web-javascript.md#javascript).
-Enter sends via `requestSubmit`; Shift+Enter inserts a newline.
-IME composition (`isComposing` or keyCode 229) is ignored. The latest-page form uses
+`requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or
+100 ms after composition ends) never sends. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). Latest feeds/topics instead
 show a pending own post immediately ([contract](web-composer.md#composer));
 these rules apply to idle feeds/topics with blank or over-limit text

@@ -17,7 +17,8 @@ var ErrInvalidInput = errors.New("email and password required")
 // wrong. Callers must not tell the two apart.
 var ErrInvalidCredentials = errors.New("invalid email or password")
 
-// ErrNoAccount is what an AccountStore returns for an unknown email.
+// ErrNoAccount reports an unknown email at sign-in or a missing account
+// when updating its send-key preference.
 var ErrNoAccount = errors.New("no such account")
 
 // AccountStore finds accounts and migrates legacy password hashes at sign-in.

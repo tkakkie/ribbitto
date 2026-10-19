@@ -340,7 +340,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
-		Database: pool, ShuttingDown: config.shuttingDown,
+		Preferences:   identitypg.NewPreferences(pool),
+		SendKeyLimits: middleware.NewMemberRateLimiter(time.Now),
+		Database:      pool, ShuttingDown: config.shuttingDown,
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:    setupService,

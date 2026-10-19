@@ -35,8 +35,10 @@ func testServices(overrides ...func(*Services)) Services {
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
+	s.Preferences = identity.NewPreferences(&preferenceMemory{})
 	s.MemberSearch = &fakeMemberSearch{}
 	s.SidebarResync = &unread.Changes{}
+	s.SendKeyLimits = middleware.NewMemberRateLimiter(time.Now)
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
@@ -79,6 +81,8 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil),
 		Pinning:   conversationpg.NewPinning(pool, postingSequence, postingEvents, nil),
 	}
+	s.Preferences = identitypg.NewPreferences(pool)
+	s.SendKeyLimits = middleware.NewMemberRateLimiter(time.Now)
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)

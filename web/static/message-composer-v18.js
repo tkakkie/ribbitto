@@ -210,7 +210,7 @@
   });
   // Some phone IMEs end composition before dispatching the confirming Enter,
   // with neither isComposing nor 229. Keep that short event sequence local to
-  // its textarea; a later deliberate Enter still sends normally.
+  // its textarea; a later deliberate key follows the selected send mode.
   const compositionEnded = new WeakMap();
   // A post's success may arrive mid-composition, when rewriting the value
   // would break the composition: the sent text then waits for its end.
@@ -253,8 +253,15 @@
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;
     const ended = compositionEnded.get(event.target);
     if (ended !== undefined && event.timeStamp - ended < 100) return;
-    return event.shiftKey ? "newline" : "send";
+    const mode = document.getElementById("message-composer-state").dataset.sendKey;
+    return event.shiftKey || (mode === "modifier_enter" && !event.ctrlKey && !event.metaKey) ? "newline" : "send";
   };
+  const updateEnterHint = () => {
+    const state = document.getElementById("message-composer-state");
+    const body = document.getElementById("message-body");
+    if (state && body) body.setAttribute("enterkeyhint", state.dataset.sendKey === "modifier_enter" ? "enter" : "send");
+  };
+  updateEnterHint();
   const submit = (form) => form.requestSubmit();
   document.addEventListener("keydown", (event) => {
     if (event.target.id !== "message-body" || command(event) !== "send") return;
@@ -370,6 +377,7 @@
       return;
     }
     if (state.id !== "message-composer-state") return;
+    updateEnterHint();
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
     const pending = pendingForm(event);

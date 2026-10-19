@@ -18,7 +18,7 @@ var ErrInvalidEmail error // ErrInvalidEmail means the email violates an account
 var ErrInvalidHash error // ErrInvalidHash means a stored hash is malformed or outside the supported parameters.
 var ErrInvalidInput error // ErrInvalidInput means the email is not an address or the password is empty; nothing was looked up or hashed.
 var ErrInvalidSendKey error // ErrInvalidSendKey means the value names no send key; nothing was stored.
-var ErrNoAccount error // ErrNoAccount is what an AccountStore returns for an unknown email.
+var ErrNoAccount error // ErrNoAccount reports an unknown email at sign-in or a missing account when updating its send-key preference.
 var ErrNoSession error // ErrNoSession means a token is malformed, unknown, deleted or expired.
 type Hasher struct // Hasher hashes and verifies passwords with Argon2id.
   func (*Hasher).Hash(ctx context.Context, password string) (string, error) // Hash returns the PHC string of password with the default parameters.

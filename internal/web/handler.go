@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -65,6 +66,9 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	// Fail at start-up rather than panic on the first request.
 	if services.Sessions == nil || services.SignIn == nil || services.Authz == nil || services.Channels == nil || services.Topics == nil || services.Messages == nil || services.Posting == nil {
 		return nil, nil, errors.New("web: Services.Sessions, Services.SignIn, Services.Authz, Services.Channels, Services.Topics, Services.Messages and Services.Posting are required")
+	}
+	if posting, ok := services.Posting.(*conversation.Posting); ok && posting == nil {
+		return nil, nil, errors.New("web: Services.Posting is required")
 	}
 	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
 		return nil, nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")

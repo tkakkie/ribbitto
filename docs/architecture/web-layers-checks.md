@@ -6,15 +6,13 @@ The rules are in [`web-layers.md`](web-layers.md),
 
 ## How the rules are checked
 
-Checked by tools today: the layer imports (depguard), no `templ.Raw`
-(forbidigo), and the markup rules in `TestPagesMarkup` ([a11y]).
-The depguard `view` rule forbids non-test files in `internal/web/view`
-from importing `internal/identity`, `internal/org` or
-`internal/conversation`, including sub-packages.
-`TestPagesMarkup` also follows every `hx-get` and `hx-post` in each case,
-in both languages, with `HX-Request: true`. It checks `hx-target` ids in
-the requesting page, `hx-select` matches in the response, and every
-`hx-select-oob` match in the response and its destination id in the page.
+Tools check layer imports (depguard), no `templ.Raw` (forbidigo),
+and markup in `TestPagesMarkup` ([a11y]).
+Depguard forbids non-test `internal/web/view` imports of `internal/identity`,
+`internal/org` or `internal/conversation`, including sub-packages.
+`TestPagesMarkup` follows each case's `hx-get`/`hx-post` in both languages
+with `HX-Request: true`: `hx-target` ids in the requesting page, `hx-select`
+response matches, every `hx-select-oob` response match and page destination id.
 Selection may use response-only ids. Selectors support `#id`, `#id > tag` and comma-separated lists;
 new syntax needs test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
@@ -64,23 +62,25 @@ session-bound drafts, with their bounds and owner checks.
 
 ### Decision 37 checks
 
-Checks cover HTML generation (`textContent` for pending bodies), requests
-and standalone markup (`TestComponentsMarkup`). The
-`indexedDB` pattern stays in force in every application script until the
-first allowed use; its issue makes the check file-scoped, as `localStorage`
-is limited to `message-drafts-vN.js`. No checks change for decision 41.
-`TestBrowser/drafts` checks sign-in cleanup (#1178): millisecond boundaries,
-malformed keys, cross-tab notices, blocked scripts, failed sign-out and
-signed-in errors. `TestBrowser/drafts-org` checks both organisation pages
-(#1181): stale sessions keep newer/same-millisecond entries unread; later
-sessions or members remove earlier ones; malformed values and expired own
-sessions are removed. `TestDraftComposerPlace` checks latest/history attributes.
-`TestBrowser/drafts-save` gates debounce/reset/cancellation, monotonic edit time,
-flush, IME, tombstones, code points, equal/later edits, cap orders/ties,
-post-write trim and scope. Overlaps pin loss/recovery; cross-tab reads
-await unique storage markers.
-Cases cover sign-out stopping/cleanup, stale sessions, expiry guards, storage
-errors, typing/sending and 200/422 swaps.
+Checks: pending bodies' `textContent`, requests, markup
+(`TestComponentsMarkup`). Application scripts forbid `indexedDB` until its first
+allowed use scopes the check to its file, like `localStorage` for
+`message-drafts-vN.js`. Decision 41 changes no checks.
+`TestBrowser/drafts`: sign-in cleanup (#1178), millisecond boundaries,
+malformed keys, cross-tab notices, blocked scripts, failed sign-out, signed-in
+errors. `TestBrowser/drafts-org`: both organisation pages (#1181), stale sessions
+keep newer/same-millisecond entries unread; later sessions/members remove earlier
+ones; malformed values/expired own sessions removed. `TestDraftComposerPlace`:
+latest/history attributes.
+`TestBrowser/drafts-save`: debounce, edit times, lifecycle/IME, tombstones, bounds,
+cap ties, trim/scope, overlap recovery, expiry,
+errors/swaps. Markers order reads.
+Restore: navigation, IME/pagehide, 422, ended sessions, no input/typing/focus,
+own-key guards, future edits/deletions. Held sends: outcomes, edits, queues, busy drops,
+forced 409 swaps; rotated-key Retry/Remove after Edit/resend, success/failure;
+in-place 409 recovery; dirty cleanup keeps edit time/debounce against tab writes.
+Retry: saved/unsaved/no newer text, both save/response orders; Edit/Remove:
+queued success, tombstones, backspacing, newer text.
 
 ### Shared browser tests
 

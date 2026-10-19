@@ -48,17 +48,14 @@
     if (!new RegExp("^" + v7 + "$").test(page?.session) || !Number.isSafeInteger(expires) || !Number.isSafeInteger(rendered)) return;
     const { member, session } = page;
     const storage = window.localStorage;
-    sweep(storage, session, member, (value) => {
-      let entry;
-      try {
-        entry = JSON.parse(value);
-      } catch {
-        return false;
-      }
+    const valid = (entry) => {
       const now = Date.now();
       return entry?.member === member && entry.session === session && entry.expires === expires &&
         typeof entry.text === "string" && [...entry.text].length <= 4000 &&
         typeof entry.at === "number" && now - entry.at < 7 * day && entry.at - now <= day;
+    };
+    sweep(storage, session, member, (value) => {
+      try { return valid(JSON.parse(value)); } catch { return false; }
     });
     // The deadline counts from this document's time origin, which precedes
     // the render, so it never comes after the session's expiry; the device
@@ -66,6 +63,7 @@
     // 2^31 - 1 ms, under a session's 30 days, so long waits are chained.
     const deadline = expires - rendered;
     let stopped = false, timer, dirty = false, composing = false, at = 0, text = "";
+    let lastWrite, source, sending;
     const stop = () => { stopped = true; dirty = false; clearTimeout(timer); };
     const read = (key) => {
       try { return JSON.parse(storage.getItem(key)); } catch { return null; }
@@ -81,17 +79,19 @@
       entries.sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
       for (const [k] of entries.slice(0, Math.max(0, entries.length - limit))) storage.removeItem(k);
     };
-    const save = () => {
+    const save = (atSend = false) => {
       clearTimeout(timer);
       if (performance.now() >= deadline) stop();
-      if (stopped || composing || !dirty) return;
+      if (stopped || (composing && atSend !== true) || !dirty) return;
       dirty = false;
       try {
         // Best effort: another tab may write between this read and setItem,
         // or update an entry after trim selects it. Neither race is repaired.
         if (read(key)?.at >= at) return;
         trim(49, key);
-        storage.setItem(key, JSON.stringify({ member, session, expires, text, at }));
+        const value = JSON.stringify({ member, session, expires, text, at });
+        storage.setItem(key, value);
+        lastWrite = value;
         trim(50);
       } catch {
         // A stored copy may be lost; the textarea and sending remain usable.
@@ -101,6 +101,7 @@
       if (stopped) return;
       if (performance.now() >= deadline) { stop(); return; }
       // Snapshot the input, not a later save or a send's textarea cleanup.
+      source = null;
       at = Math.max(Date.now(), at + 1);
       text = body.value;
       if (!text.trim() || [...text].length > 4000) text = "";
@@ -109,6 +110,47 @@
       if (!composing) timer = setTimeout(save, 300);
     };
     if (body && form?.hasAttribute("hx-post") && draft.test(key)) {
+      // Another tab may have written since the sweep; check this read too.
+      const entry = read(key);
+      if (performance.now() < deadline) {
+        if (body.value) { at = typeof entry?.at === "number" ? entry.at : 0; edited(); save(); }
+        else if (valid(entry)) { at = entry.at; body.value = entry.text; }
+      }
+      body.addEventListener("message-sending", (event) => {
+        const { key: sendKey, body: raw, inPlace } = event.detail;
+        if (!sendKey || typeof raw !== "string") return;
+        edited();
+        text = raw.trim() && [...raw].length <= 4000 ? raw : "";
+        source = sendKey;
+        sending = { key: sendKey, inPlace };
+        at = Math.max(at, (read(key)?.at || 0) + 1);
+        save(true);
+      });
+      const replaceSnapshot = (sendKey, inPlace = false) => {
+        const eligible = source === sendKey || (inPlace && source === null);
+        // Prefix removal fires no input. Keep the edit time and debounce
+        // when another tab's write prevents immediate confirmation.
+        if (inPlace && source === null && dirty) {
+          text = body.value;
+          if (!text.trim() || [...text].length > 4000) text = "";
+        }
+        try {
+          if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
+          edited();
+          save();
+        } catch { /* Storage errors leave sending usable. */ }
+      };
+      body.addEventListener("message-sent", (event) => {
+        if (sending?.key !== event.detail.key) return;
+        const { key: sendKey, inPlace } = sending;
+        sending = null;
+        // Unsaved pending-path edits keep their timer and cannot be cleared.
+        replaceSnapshot(sendKey, inPlace);
+      });
+      body.addEventListener("message-pending-action", (event) => {
+        if (event.detail.kind === "edit") { edited(); save(); }
+        else if (event.detail.kind === "remove") replaceSnapshot(event.detail.key);
+      });
       body.addEventListener("input", edited);
       body.addEventListener("compositionstart", () => { composing = true; clearTimeout(timer); });
       body.addEventListener("compositionend", () => { composing = false; edited(); });

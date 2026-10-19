@@ -136,17 +136,17 @@ Enter and with Space at desktop and phone width.
 
 Quoting has a keyboard and screen-reader path: menu → Quote → Quote only
 part → edit the labelled textarea → send. It works without JavaScript or page
-selection. Both chip actions have 44 px targets. The optional "Quote selection"
-button follows the body, hidden (no tab stop or accessibility node) unless the
-whole selection is inside one body; below `desk` its target is 44 × 44 px.
-The selection survives the press.
+selection. Both chip actions have 44 px targets. "Quote selection" follows the
+body, hidden from focus and accessibility unless selected text stays in one
+body; its target is 44 × 44 px below `desk`. Pressing preserves selection.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
-(`autofocus` with `tabindex="-1"`). Its open header control has
-`aria-current="true"`. The close link and `side-panel-v3.js`'s Escape return
-to the conversation and focus the opener, whose id crosses the page load in
-`sessionStorage`. Escape acts only with focus in the panel or on nothing
-and no popover open, so it never closes the panel from the composer.
+(`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.
+The close link and `side-panel-v3.js`'s Escape return to the conversation.
+Escape acts only with focus in the panel or on nothing and no popover open;
+Escape in the composer keeps the panel. Closing focuses the opener, whose id
+crosses the load in `sessionStorage`. Session-bound device drafts return after
+panel navigation without input, typing or focus changes.
 
 Below 1200 px the panel covers the conversation as a modal dialog, sharing
 the overlay/phone sheet model (#972, [side panels](ui-components.md#side-panels)).

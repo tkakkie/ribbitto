@@ -15,6 +15,7 @@
   viewport?.addEventListener("scroll", updateViewport);
   window.addEventListener("resize", updateViewport);
   window.addEventListener("orientationchange", updateViewport);
+  const sendEvent = (name, detail) => document.getElementById("message-body").dispatchEvent(new CustomEvent(name, { bubbles: true, detail }));
   const pendingRequests = new Set();
   let rememberPost = () => {};
   // An edited send keeps its identity even when another queue response swaps
@@ -68,7 +69,11 @@
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
     const template = document.getElementById("message-pending-template");
-    if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) return;
+    const inPlace = () => sendEvent("message-sending", { key: event.target.elements.idempotency_key?.value, body: event.target.elements.body.value, inPlace: true });
+    if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) {
+      if (!event.target.classList.contains("htmx-request")) inPlace();
+      return;
+    }
     const form = event.target, body = form.elements.body;
     const list = document.getElementById("message-pending");
     // Both forms replace the same state; a stale ordinary answer must not
@@ -85,7 +90,7 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         say("busy");
-      }
+      } else inPlace();
       return;
     }
     event.preventDefault();
@@ -97,6 +102,8 @@
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;
     restoredKey = null;
+    // Correlate draft cleanup even after a 409 renews the request key.
+    sending.dataset.draftKey = sending.elements.idempotency_key.value;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
     shownBody.textContent = text;
@@ -105,6 +112,7 @@
     for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
     sending.dataset.state = "queued";
     list.append(item);
+    sendEvent("message-sending", { key: sending.elements.idempotency_key.value, body: body.value, inPlace: false });
     body.value = "";
     form.elements.idempotency_key.value = crypto.randomUUID();
     body.focus({ preventScroll: true });
@@ -161,8 +169,8 @@
     const edit = event.target.closest("[data-pending-edit]");
     if (!edit && !event.target.closest("[data-pending-remove]")) return;
     const body = document.getElementById("message-body");
+    const form = event.target.closest("form");
     if (edit) {
-      const form = edit.closest("form");
       if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
@@ -171,6 +179,7 @@
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
     }
+    sendEvent("message-pending-action", { key: form.dataset.draftKey, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -383,13 +392,17 @@
         }
       }
       reconcile();
+      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.dataset.draftKey, message: state.dataset.postedMessage });
       return;
     }
+    // The stream consumes this attribute at settle, possibly before IME ends.
+    const message = state.dataset.postedMessage;
+    const sentEvent = () => { if (message) sendEvent("message-sent", { key: event.detail.requestConfig.formData.get("idempotency_key"), message }); };
     const status = event.detail.xhr.status;
     if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");
       say("");
-      afterComposition(body, () => { removeSent(body, sent); updateEdits(); });
+      afterComposition(body, () => { removeSent(body, sent); updateEdits(); sentEvent(); });
     }
     // A 409 names the stored message for this key. The server sends its body
     // only when the retried text started with it: the earlier answer was
@@ -398,7 +411,13 @@
     if (status === 409) {
       const sent = state.dataset.sentBody;
       say("");
-      if (sent) afterComposition(body, () => say(removeSent(body, sent) ? "recovered" : "repeat"));
+      afterComposition(body, () => {
+        if (sent) {
+          const recovered = removeSent(body, sent);
+          say(recovered ? "recovered" : "repeat");
+          if (recovered) sentEvent();
+        }
+      });
     }
     // Focus on the send button returns to the textarea. htmx disables the
     // button in flight, and Chrome then moves its focus to the body at the

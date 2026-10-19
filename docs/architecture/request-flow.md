@@ -92,6 +92,9 @@ Outermost first:
    Unknown paths/methods, mux redirects and pre-routing rejections use
    `unmatched`, never a raw path. Bodies, headers, queries and client addresses
    are excluded. `Unwrap` preserves ResponseController stream operations.
+   Request-scoped error logs and stream warnings also include `request_id`,
+   explicitly read from context, so they can be matched to the completion log;
+   the once-only proxy notice and deduplicated i18n fallback warning do not.
 3. `http.CrossOriginProtection` on every route. It rejects cross-origin
    requests using `Sec-Fetch-Site`, or `Origin` against `Host`, but lets GET,
    HEAD and OPTIONS through — so **every route that changes state is a
@@ -110,6 +113,11 @@ Outermost first:
    and the cookie is cleared; a store error answers 500 and keeps the
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
+
+`run` configures logging before parsing commands or constructing services:
+`RIBBITTO_LOG_FORMAT=json` selects JSON on stderr; empty leaves the process
+logger untouched, and other values fail startup. `NewHandler`, `NewAuthLimits`
+and `i18n.New` capture that final `slog.Default()` during construction.
 
 Before opening listeners, `serve` checks the schema once against its newest embedded migration
 ([database development](../database.md)); probes never repeat the check.

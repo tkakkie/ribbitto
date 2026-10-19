@@ -41,9 +41,6 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # Its own cache (#1115) also restores Go's test result cache;
-      # this job's tests must run on every run as before.
-      GOFLAGS: -count=1
       RIBBITTO_TEST_DATABASE_URL: postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable
       RIBBITTO_REQUIRE_DB: "1"
       RIBBITTO_REQUIRE_BROWSER: "1"
@@ -86,17 +83,10 @@ jobs:
           fi
 
       # make check is check-static, check-test and check-tools in order;
-      # this job runs the first and the third, and
-      # the tests of every package the test jobs below do not
-      # (tools/testshard's "rest" shard). tools/download pins golangci-lint for
-      # both local checks and CI, invoked by the Makefile.
+      # this job runs the first and the third. tools/download pins
+      # golangci-lint for both local checks and CI, invoked by the Makefile.
       - name: check-static
         run: make check-static
-
-      # testshard owns the packages, selector and flags and propagates failure.
-      - name: check-test (rest)
-        run: |
-          go -C tools run ./testshard -run .. rest
 
       - name: check-tools
         run: make check-tools
@@ -134,6 +124,7 @@ jobs:
 
   # The slowest packages, one tools/testshard shard per job. testshard -check
   # (in make check) fails unless this matrix names each of its shards once.
+  # The remaining packages run in test-rest beside checks.
   test:
     strategy:
       fail-fast: false
@@ -172,11 +163,46 @@ jobs:
         run: |
           go -C tools run ./testshard -run .. "$SHARD"
 
+  test-rest:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ribbitto-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The restored Go cache also holds test results;
+      # this job's tests must run every time.
+      GOFLAGS: -count=1
+      RIBBITTO_TEST_DATABASE_URL: postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable
+      RIBBITTO_REQUIRE_DB: "1"
+      RIBBITTO_REQUIRE_BROWSER: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # testshard owns the packages, selector and flags and propagates failure.
+      - name: check-test (rest)
+        run: |
+          go -C tools run ./testshard -run .. rest
+
   # The required check. A job whose needs failed is skipped by default, and a
   # skipped job satisfies a required check, so this one always runs and
   # passes only when every job it needs succeeded.
   ci:
-    needs: [checks, test, vuln]
+    needs: [checks, test, test-rest, vuln]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -185,4 +211,4 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          printf '%s\n' "$NEEDS" | jq -e 'length == 3 and all(.[]; .result == "success")' > /dev/null
+          printf '%s\n' "$NEEDS" | jq -e 'length == 4 and all(.[]; .result == "success")' > /dev/null

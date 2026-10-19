@@ -74,6 +74,7 @@ check-test: db-health
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 
 check-tools: $(TEMPL)
+	go -C tools run ./languagecheck ..
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
@@ -92,6 +93,7 @@ check-tools: $(TEMPL)
 # templ formatting, the doc.go check, go vet, sourcecheck or the tests
 # (make check does), nor the schema docs or make vuln (CI does).
 prepush: $(TEMPL) $(TAILWIND)
+	go -C tools run ./languagecheck ..
 	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..

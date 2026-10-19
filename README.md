@@ -108,17 +108,17 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` must pass before a pull request; for code another AI wrote,
-green CI on the draft replaces it and must pass before review
+`make check` must pass before a pull request; for another AI's code,
+green CI on the draft replaces it before review
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test`, then `check-tools`. CI runs them in parallel;
-[`testshard -run`](tools/testshard/main.go) owns each shard's packages, selector
-and flags (`.github/workflows/ci.yml`). It
-checks formatting and internal packages' `doc.go` files through
+It runs `check-static`, `check-test`, then `check-tools`; CI runs them in parallel.
+[`testshard -run`](tools/testshard/main.go) owns CI's packages, selectors and flags.
+It checks formatting and internal packages' `doc.go` files through
 [`tools/formatcheck`](tools/formatcheck/main.go), then vets, lints,
 builds, runs the Go tests with the race detector (at `-p 2` by default; see
 [worktree-env.md](docs/worktree-env.md)), and checks the import
-graph, module API summaries and the documents. `tools/sourcecheck` enforces the
+graph, module API summaries, documents and tracked file kinds (`tools/languagecheck`).
+`tools/sourcecheck` enforces
 [product vocabulary](docs/domain/vocabulary.md) and
 [UI colour rules](docs/ui-colours.md#colour-tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 repository paths in backticks must exist. Placeholders and globs are skipped;
@@ -134,8 +134,8 @@ they describe history; their Markdown links and anchors are still checked.
 
 `make prepush` is a quick subset to run before pushing a follow-up commit: it
 regenerates templates, SQL and CSS and fails if that changes any file, then
-checks the API and dependency manifests, document sizes and lint, stopping at
-the first failure. It does not run Go or templ formatting, the `doc.go` check,
+checks the API and dependency manifests, document sizes, tracked file kinds and lint,
+stopping at failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.
 

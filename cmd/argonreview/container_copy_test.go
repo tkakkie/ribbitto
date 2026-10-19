@@ -66,12 +66,15 @@ func TestContainerCopySelection(t *testing.T) {
 }
 
 func TestContainerGitGolden(t *testing.T) {
+	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_NO_LAZY_FETCH", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_CONFIG_PARAMETERS"} {
+		t.Setenv(name, "hostile")
+	}
 	cmd := containerGit(context.Background(), "/tree", "ls-files", "--cached", "--others", "--exclude-standard", "-z")
-	want := []string{"/usr/bin/git", "-C", "/tree", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "ls-files", "--cached", "--others", "--exclude-standard", "-z"}
+	want := []string{"/usr/bin/git", "-C", "/tree", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never", "-c", "core.excludesFile=/dev/null", "ls-files", "--cached", "--others", "--exclude-standard", "-z"}
 	if !reflect.DeepEqual(cmd.Args, want) {
 		t.Fatalf("git args %q", cmd.Args)
 	}
-	if want := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}; !reflect.DeepEqual(cmd.Env, want) {
+	if want := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1"}; !reflect.DeepEqual(cmd.Env, want) {
 		t.Fatalf("git environment %q", cmd.Env)
 	}
 }
@@ -428,6 +431,139 @@ func TestContainerCopyRootGitTypes(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
 				t.Fatalf("root .git copied: %v", err)
+			}
+		})
+	}
+}
+
+func TestContainerGitPromisor(t *testing.T) {
+	tree := containerFixture(t)
+	marker := filepath.Join(t.TempDir(), "executed")
+	script := filepath.Join(t.TempDir(), "uploadpack")
+	write(t, script, "#!/bin/sh\ntouch '"+marker+"'\n")
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A local URL keeps even a regressed fixture independent of the network.
+	write(t, filepath.Join(tree, ".git/config"), "[core]\n repositoryformatversion = 1\n[extensions]\n partialClone = origin\n[remote \"origin\"]\n url = "+tree+"\n promisor = true\n partialclonefilter = blob:none\n uploadpack = "+script+"\n")
+	if _, err := listContainerFiles(context.Background(), tree); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("promisor uploadpack executed: %v", err)
+	}
+}
+
+func TestContainerGitTimeout(t *testing.T) {
+	tree := containerFixture(t)
+	fifo := filepath.Join(tree, ".git/info/exclude")
+	mkdir(t, filepath.Dir(fifo))
+	if err := unix.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Release a regressed, unbounded Git so the assertion fails without
+	// hanging the test process. No writer exists before the short deadline.
+	release := time.AfterFunc(time.Second, func() {
+		fd, err := unix.Open(fifo, unix.O_RDWR|unix.O_NONBLOCK, 0)
+		if err == nil {
+			closeFD(fd)
+		}
+	})
+	defer release.Stop()
+	_, err := listContainerFilesWithin(context.Background(), tree, 50*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "listing source files") {
+		t.Fatalf("hanging git did not fail with a listing deadline: %v", err)
+	}
+	if containerGitTimeout != 30*time.Second {
+		t.Fatal("trusted Git deadline changed")
+	}
+}
+
+func TestContainerModulePaths(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		allow bool
+	}{
+		{"go.mod", true}, {"go.sum", true}, {"GO.MOD", true}, {"GO.SUM", true},
+		{"tools/go.mod", true}, {"tools/go.sum", true}, {"tools/tbls/go.mod", true}, {"tools/tbls/go.sum", true},
+		{"go.work", false}, {"go.work.sum", false}, {"sub/go.work", false}, {"sub/go.work.sum", false},
+		{"GO.WORK", false}, {"sub/GO.WORK.SUM", false},
+		{"sub/go.mod", false}, {"sub/go.sum", false}, {"sub/GO.MOD", false}, {"sub/GO.SUM", false},
+		{"Tools/go.mod", false}, {"Tools/go.sum", false}, {"tools/GO.MOD", false}, {"tools/GO.SUM", false},
+		{"tools/x/go.mod", false}, {"tools/x/go.sum", false}, {"tools/tbls/sub/go.mod", false}, {"tools/tbls/sub/go.sum", false},
+		{".github/go.work", false}, {".github/go.work.sum", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := containerCopyPath(tc.name)
+			if (err == nil) != tc.allow {
+				t.Fatalf("path %q: %v; allow %v", tc.name, err, tc.allow)
+			}
+		})
+	}
+}
+
+func TestContainerEntryAllowed(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		mode  uint32
+		allow bool
+	}{
+		{"character device", unix.S_IFCHR, false}, {"block device", unix.S_IFBLK, false},
+		{"FIFO", unix.S_IFIFO, false}, {"socket", unix.S_IFSOCK, false}, {"symlink", unix.S_IFLNK, false},
+		{"regular", unix.S_IFREG, true}, {"directory", unix.S_IFDIR, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := containerEntryAllowed(tc.mode | 0o755); got != tc.allow {
+				t.Fatalf("mode %o: allowed %v; want %v", tc.mode, got, tc.allow)
+			}
+		})
+	}
+}
+
+func TestContainerNamesRefuseHardLinks(t *testing.T) {
+	for _, outside := range []bool{false, true} {
+		for _, name := range []string{"listed", "AGENTS.md", "bin/x", ".git"} {
+			t.Run(fmt.Sprintf("outside=%v/%s", outside, name), func(t *testing.T) {
+				tree := resolved(t, t.TempDir())
+				write(t, filepath.Join(tree, ".gitignore"), "bin/\n")
+				original := filepath.Join(tree, "original")
+				if outside {
+					original = filepath.Join(t.TempDir(), "original")
+				}
+				write(t, original, "must not copy")
+				linked := filepath.Join(tree, name)
+				mkdir(t, filepath.Dir(linked))
+				if err := os.Link(original, linked); err != nil {
+					t.Fatal(err)
+				}
+				list := func(context.Context, string) ([]string, error) { return []string{name}, nil }
+				err := copyContainerSource(context.Background(), tree, filepath.Join(t.TempDir(), "tree"), list, nil)
+				if err == nil || !strings.Contains(err.Error(), "hard links") {
+					t.Fatalf("hard-linked source accepted or wrong refusal: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestContainerStampRefusesHardLinks(t *testing.T) {
+	for _, stage := range []string{"before-open", "after-stat", "after-copy"} {
+		t.Run(stage, func(t *testing.T) {
+			tree := resolved(t, t.TempDir())
+			p := filepath.Join(tree, "file")
+			write(t, p, "content")
+			link := filepath.Join(t.TempDir(), "link")
+			list := func(context.Context, string) ([]string, error) { return []string{"file"}, nil }
+			hook := func(now, _ string) {
+				if now == stage {
+					if err := os.Link(p, link); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			err := copyContainerSource(context.Background(), tree, filepath.Join(t.TempDir(), "tree"), list, hook)
+			if err == nil || !strings.Contains(err.Error(), "hard links") {
+				t.Fatalf("hard link added during copy accepted or wrong refusal: %v", err)
 			}
 		})
 	}

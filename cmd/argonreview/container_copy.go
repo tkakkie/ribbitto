@@ -12,21 +12,35 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
+const containerGitTimeout = 30 * time.Second
+
+// A new nested module requires a one-line change here, using its exact lowercase path.
+const containerNestedModules = "\ntools/go.mod\ntools/go.sum\ntools/tbls/go.mod\ntools/tbls/go.sum\n"
+
 func containerGit(ctx context.Context, tree string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "/usr/bin/git", append([]string{"-C", tree, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)...)
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
+	cmd := exec.CommandContext(ctx, "/usr/bin/git", append([]string{"-C", tree, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never", "-c", "core.excludesFile=/dev/null"}, args...)...)
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1"}
 	cmd.WaitDelay = containerCleanupTimeout
 	return cmd
 }
 
 func listContainerFiles(ctx context.Context, tree string) ([]string, error) {
+	return listContainerFilesWithin(ctx, tree, containerGitTimeout)
+}
+
+func listContainerFilesWithin(parent context.Context, tree string, timeout time.Duration) ([]string, error) {
+	// Bound both Git commands even when metadata opens a FIFO or triggers a
+	// stalled helper. The caller's longer container deadline is insufficient.
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
 	prefix, err := containerGit(ctx, tree, "rev-parse", "--show-prefix").Output()
 	if err != nil {
-		return nil, fmt.Errorf("checking worktree root: %w", err)
+		return nil, fmt.Errorf("checking worktree root: %w", errors.Join(err, ctx.Err()))
 	}
 	if len(bytes.TrimSpace(prefix)) != 0 {
 		return nil, errors.New("worktree must be the repository root")
@@ -37,7 +51,7 @@ func listContainerFiles(ctx context.Context, tree string) ([]string, error) {
 	cmd := containerGit(ctx, tree, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
 	cmd.Stdout, cmd.Stderr = out.stdoutWriter(), out.stderrWriter()
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("listing source files: %w", err)
+		return nil, fmt.Errorf("listing source files: %w", errors.Join(err, ctx.Err()))
 	}
 	if out.over {
 		return nil, errors.New("source listing exceeds the output limit")
@@ -65,6 +79,12 @@ func containerCopyPath(name string) (omit bool, err error) {
 			return false, fmt.Errorf("unsafe source path %q", name)
 		}
 		switch strings.ToLower(part) {
+		case "go.work", "go.work.sum":
+			return false, fmt.Errorf("refused source path %q", name)
+		case "go.mod", "go.sum":
+			if i != 0 && !strings.Contains(containerNestedModules, "\n"+name+"\n") {
+				return false, fmt.Errorf("refused nested module path %q", name)
+			}
 		case ".git", ".github", "agents.md", "claude.md", ".gitattributes", ".gitmodules":
 			if i != 0 {
 				return false, fmt.Errorf("refused source path %q", name)
@@ -79,7 +99,7 @@ func containerCopyPath(name string) (omit bool, err error) {
 
 type containerSourceStamp struct {
 	info  os.FileInfo
-	ctime [2]int64
+	ctime unix.Timespec
 }
 
 func stampContainerSource(f *os.File) (containerSourceStamp, error) {
@@ -94,7 +114,10 @@ func stampContainerSource(f *os.File) (containerSourceStamp, error) {
 	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
 		return containerSourceStamp{}, fmt.Errorf("examining source change time: %w", err)
 	}
-	return containerSourceStamp{info, containerCTime(st)}, nil
+	if uint64(st.Nlink) != 1 {
+		return containerSourceStamp{}, errors.New("source regular file has multiple hard links")
+	}
+	return containerSourceStamp{info, st.Ctim}, nil
 }
 
 func sameContainerSource(a, b containerSourceStamp) bool {
@@ -123,6 +146,10 @@ func openContainerSource(root int, name string) (*os.File, error) {
 		fd = next
 	}
 	return os.NewFile(uintptr(fd), name), nil
+}
+
+func containerEntryAllowed(mode uint32) bool {
+	return mode&unix.S_IFMT == unix.S_IFREG || mode&unix.S_IFMT == unix.S_IFDIR
 }
 
 // Git hides nested repositories and empty/ignored directories. Inspect names
@@ -155,9 +182,16 @@ func checkContainerNames(ctx context.Context, root int) error {
 				if err := unix.Fstatat(fd, entry.Name(), &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 					return fmt.Errorf("inspecting source entry %q: %w", name, err)
 				}
-				if st.Mode&unix.S_IFMT != unix.S_IFDIR && st.Mode&unix.S_IFMT != unix.S_IFREG {
+				if !containerEntryAllowed(uint32(st.Mode)) {
 					return fmt.Errorf("source entry %q is not a regular file or directory", name)
 				}
+				if st.Mode&unix.S_IFMT == unix.S_IFREG && uint64(st.Nlink) != 1 {
+					return fmt.Errorf("source regular file %q has multiple hard links", name)
+				}
+				// Linked worktrees use a root .git file; ordinary repositories use
+				// a directory. Both are omitted, without descending. Their integrity
+				// is implement-check's job (#1434): compare with the saved copy
+				// before and after a run.
 				if prefix == "" && strings.EqualFold(entry.Name(), ".git") {
 					continue
 				}
@@ -215,9 +249,9 @@ func copyContainerSource(ctx context.Context, tree, dest string, list func(conte
 	if err := os.Mkdir(dest, 0o777); err != nil {
 		return fmt.Errorf("creating copied tree: %w", err)
 	}
-	// Chmod defeats a restrictive caller umask; the fixed container UID must
-	// be able to write build outputs in the disposable copy. Its private
-	// parent remains 0700. No source owner or special mode is preserved.
+	// Chmod defeats a restrictive caller umask and keeps directories removable
+	// during cleanup. The mount enforces read-only access for the container;
+	// the private parent stays 0700. No owner or special mode is preserved.
 	if err := os.Chmod(dest, 0o777); err != nil {
 		return fmt.Errorf("setting copied tree mode: %w", err)
 	}

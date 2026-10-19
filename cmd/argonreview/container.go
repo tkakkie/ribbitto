@@ -73,11 +73,14 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
 		"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
 		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
-		"--mount", "type=bind,src=" + copyDir + ",dst=/work",
-		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
+		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
+		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 		"--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
 		containerGoImage, "go", check}
+	if check == "build" {
+		args = append(args, "-o", "/dev/null")
+	}
 	if check == "test" {
 		args = append(args, "-count=1", "-json")
 	}
@@ -212,7 +215,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 			if cleanupErr == nil {
 				cleanupErr = fmt.Errorf("docker rm exited with status %d", status)
 			}
-			if code != 0 || runErr != nil {
+			if code == 125 || runErr != nil {
 				err = errors.Join(err, fmt.Errorf("container cleanup unconfirmed (docker run failed; container may never have existed): %w", cleanupErr))
 			} else {
 				err = errors.Join(err, fmt.Errorf("container removal failed: %w", cleanupErr))

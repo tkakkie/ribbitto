@@ -97,11 +97,14 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
 				"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
 				"--mount", "type=bind,src=/var/cache/argonreview/go-mod,dst=/go/pkg/mod,readonly",
-				"--mount", "type=bind,src=/tmp/copy/tree,dst=/work", "-w", "/work",
-				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
+				"--mount", "type=bind,src=/tmp/copy/tree,dst=/work,readonly", "-w", "/work",
+				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 				"--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
 				"golang@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8", "go", check,
+			}
+			if check == "build" {
+				want = append(want, "-o", "/dev/null")
 			}
 			if check == "test" {
 				want = append(want, "-count=1", "-json")
@@ -153,6 +156,7 @@ func TestContainerRunAndCleanup(t *testing.T) {
 		{name: "success"}, {name: "nonzero", status: 1}, {name: "OOM", status: 137}, {name: "abnormal", status: -1},
 		{name: "runner error", fail: true}, {name: "timeout", timeout: true}, {name: "interrupt", interrupt: true},
 		{name: "output limit", overflow: true}, {name: "cleanup fails", fail: true, cleanupFail: true},
+		{name: "cleanup fails after test failure", status: 1, cleanupFail: true},
 		{name: "run never created container", status: 125, cleanupFail: true},
 		{name: "cleanup fails after success", cleanupFail: true}, {name: "stop fails", stopFail: true}, {name: "late interrupt", lateInterrupt: true},
 	} {
@@ -205,8 +209,8 @@ func TestContainerRunAndCleanup(t *testing.T) {
 					t.Fatalf("name %q", name)
 				}
 				for i, arg := range args {
-					if arg == "--mount" && strings.HasSuffix(args[i+1], ",dst=/work") {
-						copyDir = strings.TrimSuffix(strings.TrimPrefix(args[i+1], "type=bind,src="), ",dst=/work")
+					if arg == "--mount" && strings.HasSuffix(args[i+1], ",dst=/work,readonly") {
+						copyDir = strings.TrimSuffix(strings.TrimPrefix(args[i+1], "type=bind,src="), ",dst=/work,readonly")
 					}
 				}
 				if copyDir == "" || strings.HasPrefix(copyDir, dir) {
@@ -263,7 +267,7 @@ func TestContainerRunAndCleanup(t *testing.T) {
 			}
 			if tc.cleanupFail {
 				want := "container removal failed"
-				if tc.fail || tc.status != 0 {
+				if tc.fail || tc.status == 125 {
 					want = "docker run failed; container may never have existed"
 				}
 				if err == nil || !strings.Contains(err.Error(), want) {
@@ -349,5 +353,32 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 				t.Fatalf("report %q, err %v", report, err)
 			}
 		})
+	}
+}
+
+func TestContainerSourceCleanupFailure(t *testing.T) {
+	tree := containerFixture(t)
+	runner := fakeContainerRunner{func(_ context.Context, args, _ []string, _, _ io.Writer) (int, error) {
+		if args[0] == "run" {
+			for _, arg := range args {
+				if !strings.HasSuffix(arg, ",dst=/work,readonly") {
+					continue
+				}
+				copyDir := strings.TrimSuffix(strings.TrimPrefix(arg, "type=bind,src="), ",dst=/work,readonly")
+				if err := os.Chmod(copyDir, 0o500); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Chmod(copyDir, 0o700); err != nil {
+						t.Error(err)
+					}
+				})
+			}
+		}
+		return 0, nil
+	}}
+	report, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "removing source copy") || !strings.HasPrefix(report, "FAILED: source cleanup failed\n") {
+		t.Fatalf("source cleanup failure: report %q, error %v", report, err)
 	}
 }

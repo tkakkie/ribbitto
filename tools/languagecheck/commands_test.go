@@ -24,6 +24,16 @@ func TestCommands(t *testing.T) {
 		{"shell assignment", "Makefile", "SHELL := /bin/bash\n", 1},
 		{"shell equals", "Makefile", "export SHELL = pwsh\n", 1},
 		{"make shell", "Makefile", "VALUE := $(shell python3.12 build.py)\n", 1},
+		{"recipe make shell", "Makefile", "target:\n\t@echo $(shell node build.js)\n", 1},
+		{"recipe make shell argument", "Makefile", "target:\n\t@echo $(shell echo node)\n", 0},
+		{"recipe make shell comment", "Makefile", "target:\n\t@echo ok # $(shell node build.js)\n", 1},
+		{"double colon assignment", "Makefile", "VALUE ::= $(shell node build.js)\n", 1},
+		{"double colon argument", "Makefile", "VALUE ::= $(shell echo node)\n", 0},
+		{"shell execution assignment", "Makefile", "VALUE != node build.js\n", 1},
+		{"shell execution argument", "Makefile", "VALUE != echo node\n", 0},
+		{"container action", ".github/workflows/ci.yml", "steps:\n  - uses: docker://example/image:latest\n", 1},
+		{"container action input", ".github/workflows/ci.yml", "steps:\n  - uses: example/action@v1\n    with:\n      uses: docker://example/image:latest\n", 0},
+		{"container action argument", ".github/workflows/ci.yml", "steps:\n  - run: echo docker://example/image:latest\n", 0},
 		{"make shell chain", "Makefile", "VALUE = $(shell go version; uv run build.py)\n", 1},
 		{"make allowed shell", "Makefile", "TOOL_PATHS := $(shell go -C tools run ./download -paths)\n", 0},
 		{"make shell arguments", "Makefile", "VALUE := $(shell echo python)\n", 0},
@@ -107,7 +117,10 @@ func TestWorkflowBlockHeaders(t *testing.T) {
 }
 
 func TestWorkflowRuntimeKeys(t *testing.T) {
-	for _, action := range []string{"actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "ruby/setup-ruby"} {
+	for _, action := range []string{"actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "ruby/setup-ruby",
+		"oven-sh/setup-bun", "denoland/setup-deno", "dtolnay/rust-toolchain",
+		"astral-sh/setup-uv", "pnpm/action-setup",
+	} {
 		t.Run(action, func(t *testing.T) {
 			for _, value := range []string{action + "@v1 # pinned", "'" + action + "@v1'"} {
 				source := "steps:\n  - uses: " + value + "\n"

@@ -2,10 +2,12 @@ package main
 
 import (
 	"path"
+	"regexp"
 	"strings"
 )
 
 const fuzzKind = "fuzz"
+const browserJavaScriptKind = "browser JavaScript"
 
 type rule struct {
 	pattern string
@@ -28,7 +30,8 @@ func rules() []rule {
 		{"internal/lintfixture/*.templ", "templ lint fixture"},
 		{"web/styles/*.css", "CSS source"},
 		{"web/static/css/*.css", "CSS output"},
-		{"web/static/*-v[0-9]*.js", "browser JavaScript"},
+		// The pattern follows web/static/javascript_test.go; the kind also checks its regexp.
+		{"web/static/*-v[0-9]*.js", browserJavaScriptKind},
 		{"web/static/brand/*.svg", "brand SVG"},
 		{"web/static/channel-images-v1/*.svg", "channel SVG"},
 		{"docs/**/*.md", "documentation"},
@@ -105,6 +108,9 @@ func allowedKind(name string) string {
 	for _, r := range table {
 		if match(strings.Split(r.pattern, "/"), parts) {
 			if r.kind == fuzzKind && path.Ext(name) != "" {
+				continue
+			}
+			if r.kind == browserJavaScriptKind && !regexp.MustCompile(`^.+-v[0-9]+\.js$`).MatchString(path.Base(name)) {
 				continue
 			}
 			return r.kind

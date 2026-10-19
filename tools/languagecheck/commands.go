@@ -29,6 +29,7 @@ func checkCommands(name string, source io.Reader) []string {
 		if name == "Makefile" {
 			if strings.HasPrefix(line, "\t") {
 				commands = append(commands, strings.TrimLeft(text, "@-+"))
+				commands = append(commands, makeShellCommands(text)...)
 			} else {
 				commands = makeCommands(text)
 			}
@@ -61,9 +62,14 @@ func checkCommands(name string, source io.Reader) []string {
 				if key == "uses" && step {
 					action := yamlScalar(text)
 					base, ref, _ := strings.Cut(action, "@")
+					if strings.HasPrefix(action, "docker://") {
+						problems = append(problems, fmt.Sprintf("%q:%d: unapproved container action %q", name, n, action))
+					}
 					if ref != "" {
 						switch base {
-						case "actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "ruby/setup-ruby":
+						case "actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "ruby/setup-ruby",
+							"oven-sh/setup-bun", "denoland/setup-deno", "dtolnay/rust-toolchain",
+							"astral-sh/setup-uv", "pnpm/action-setup":
 							problems = append(problems, fmt.Sprintf("%q:%d: unapproved runtime setup %q", name, n, action))
 						}
 					}
@@ -106,16 +112,21 @@ func yamlScalar(text string) string {
 
 func makeCommands(text string) []string {
 	// Restrict non-recipe scanning to simple assignments, excluding comments.
-	assignment := regexp.MustCompile(`^(?:(?:export|override)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*[:?+]?=[ \t]*(.*)$`).FindStringSubmatch(text)
+	assignment := regexp.MustCompile(`^(?:(?:export|override)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*(::=|[:?+!]?=)[ \t]*(.*)$`).FindStringSubmatch(text)
 	if assignment == nil {
 		return nil
 	}
-	value, _, _ := strings.Cut(assignment[2], "#")
+	value, _, _ := strings.Cut(assignment[3], "#")
 	var commands []string
-	if assignment[1] == "SHELL" {
+	if assignment[1] == "SHELL" || assignment[2] == "!=" {
 		commands = append(commands, value)
 	}
-	for _, shell := range regexp.MustCompile(`\$\([ \t]*shell[ \t]+([^)]*)\)`).FindAllStringSubmatch(value, -1) {
+	return append(commands, makeShellCommands(value)...)
+}
+
+func makeShellCommands(text string) []string {
+	var commands []string
+	for _, shell := range regexp.MustCompile(`\$\([ \t]*shell[ \t]+([^)]*)\)`).FindAllStringSubmatch(text, -1) {
 		commands = append(commands, shell[1])
 	}
 	return commands

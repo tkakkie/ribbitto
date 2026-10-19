@@ -17,8 +17,9 @@ exceptions. Directory entries below are direct-only unless stated otherwise:
 - Go throughout the repository, except fenced vendor and testdata directories.
 - SQL migrations directly in `db/migrations/`, queries one module directory
   below `db/queries/`; templ in `internal/web/view/` and `internal/lintfixture/`.
-- Versioned browser JavaScript (`*-v[0-9]*.js`) directly in `web/static/`; CSS in `web/styles/` and
-  `web/static/css/`; SVG in `web/static/brand/` and `web/static/channel-images-v1/`.
+- Versioned browser JavaScript (`<name>-v<N>.js`) directly in `web/static/`;
+  CSS in `web/styles/` and `web/static/css/`; SVG in `web/static/brand/` and
+  `web/static/channel-images-v1/`.
 - Markdown recursively in `docs/`, directly in the GitHub issue-template,
   instructions and prompts directories, and the named root instructions,
   index, README and pull request template.
@@ -65,7 +66,8 @@ working-tree files; missing files and read/list errors fail. Matching is
 case-sensitive and component-based. Symlinks and special files are refused;
 a shebang at the first two bytes is forbidden everywhere without exception.
 A small command-word scan checks Makefile recipes, simple `SHELL` assignments
-and literal `$(shell ...)` in simple assignments, plus workflow `run` steps.
+(including `::=`), `!=` command assignments and literal `$(shell ...)` in
+simple assignments and tab-indented recipes, plus workflow `run` steps.
 It refuses node/nodejs, npm/npx, python/pip, cargo/rustc, deno, bun, ruby,
 perl, bash/zsh/sh, yarn, pnpm, tsc/tsx, uv, poetry, php, java and
 dash/ksh/fish/pwsh, including optional digit-and-dot version suffixes.
@@ -75,14 +77,19 @@ It recognises simple command positions after control words (`if`, `then`,
 Workflow block scalars accept indentation/chomping indicators and comments.
 In ordinary block mappings, the scan checks direct step `uses` values for
 `actions/setup-node`, `actions/setup-python`, `actions/setup-java`,
-`actions/setup-ruby` and `ruby/setup-ruby` with an `@` reference, and checks
-direct step or `defaults.run` `shell` values for those runtime commands.
+`actions/setup-ruby`, `ruby/setup-ruby`, `oven-sh/setup-bun`,
+`denoland/setup-deno`, `dtolnay/rust-toolchain`,
+`astral-sh/setup-uv` and `pnpm/action-setup` with an `@` reference. It also
+refuses direct step `uses: docker://` actions and checks direct step or
+`defaults.run` `shell` values for those runtime commands.
 
 This is not a Make, YAML or shell parser. Review must cover indirect execution,
 scripts launched by name, runtime/dependency configuration, containers/images
 (including workflow `container:`/`image:`), backtick or quoted substitutions,
-wrapper options, nested Make expressions, YAML flow mappings and computed keys
-or values. These can evade the scan; an allowed path is not runtime approval.
+wrapper options, nested Make expressions, `target: ; cmd` one-line recipes,
+runtime setup actions beyond the exact names scanned above, YAML flow mappings
+and computed keys or values. These can evade the scan; an allowed path is not
+runtime approval.
 
 `make check` (through `check-tools`), `make prepush` and CI run the gate.
 CI's checkout includes `.git`, even with shallow history. This is different

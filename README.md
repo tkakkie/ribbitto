@@ -111,30 +111,32 @@ so local notes and tools do not change the output.
 `make check` must pass before a pull request; for another AI's code,
 green draft CI must pass before review instead
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test`, then `check-tools`. CI runs them in parallel;
-[`testshard -run`](tools/testshard/main.go) owns each shard's packages, selector
-and flags (`.github/workflows/ci.yml`). It
-checks formatting and internal packages' `doc.go` files through
-[`tools/formatcheck`](tools/formatcheck/main.go), then vets, lints,
-builds, runs the Go tests with the race detector (at `-p 2` by default; see
+It runs `check-static`, `check-test`, then `check-tools`. CI runs
+`check-static` and `check-tools` in `checks`, each named `testshard` shard
+in a parallel `test` matrix job and `rest` in `test-rest`
+(`.github/workflows/ci.yml`).
+[`testshard -run`](tools/testshard/main.go) owns test packages, selectors and flags.
+`make check` checks formatting and internal `doc.go` files via
+[`tools/formatcheck`](tools/formatcheck/main.go), vets, lints,
+builds, runs Go tests with `-race` (`-p 2` by default;
 [worktree-env.md](docs/worktree-env.md)), and checks the import
-graph, module API summaries, documents and file kinds. `tools/sourcecheck` enforces the
+graph, module API summaries and documents. `tools/sourcecheck` enforces
 [product vocabulary](docs/domain/vocabulary.md) and
 [UI colour rules](docs/ui-colours.md#colour-tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
-repository paths in backticks must exist. Placeholders and globs are skipped;
+paths in backticks must exist. Placeholders and globs are skipped;
 brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
-An existing path wins. Otherwise, a final dot-separated element that is a
-known extension (`go`, `md`, `sql`, `templ`, `toml`, `js`, `css`, `json`, `yml`,
+An existing path wins. Otherwise, a final dot-separated known extension
+(`go`, `md`, `sql`, `templ`, `toml`, `js`, `css`, `json`, `yml`,
 `yaml`, `txt`, `sh`) marks a missing file. Only other spans can be package
 selectors such as `package.Identifier` or `package.Type.Method`: every name
 after the package must be a valid Go identifier, exported or unexported, and
 the package directory must contain at least one regular `.go` file.
-Decision records are exempt from this path check because
-they describe history; their Markdown links and anchors are still checked.
+Historical decision records skip this path check; their Markdown links and
+anchors are still checked.
 
 `make prepush` is a quick subset to run before pushing a follow-up commit: it
 regenerates templates, SQL and CSS and fails if that changes any file, then
-checks the API and dependency manifests, document sizes, file kinds and lint, stopping at
+checks the API and dependency manifests, document sizes and lint, stopping at
 the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.

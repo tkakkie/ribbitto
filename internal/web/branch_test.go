@@ -2,56 +2,33 @@ package web
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
 )
 
-type fakeBranchWriter struct {
-	fakePostingWriter
-	got conversation.Branch
+type fakeBrancher struct {
+	membership org.Membership
+	channel    kernel.ID
+	got        conversation.Branch
+	err        error
 }
 
-func (s *fakeBranchWriter) GetTopic(_ context.Context, _, _, id kernel.ID) (conversation.Topic, error) {
-	if errors.Is(s.err, conversation.ErrTopicNotFound) {
-		return conversation.Topic{}, s.err
-	}
-	return conversation.Topic{ID: id}, nil
-}
-func (s *fakeBranchWriter) CreateTopic(_ context.Context, _, _ kernel.ID, name string) (conversation.Topic, error) {
-	if errors.Is(s.err, conversation.ErrBranchConflict) {
-		return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, nil
-	}
-	return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, s.err
-}
-func (s *fakeBranchWriter) MoveMessages(_ context.Context, _, _, from, to kernel.ID, ids []kernel.ID, _ int64) (int64, error) {
-	s.got = conversation.Branch{From: from, To: &to, Messages: ids}
-	if errors.Is(s.err, conversation.ErrBranchConflict) {
-		return 0, nil
-	}
-	return int64(len(ids)), s.err
-}
-func (s *fakeBranchWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
-	return conversation.Message{}, nil
-}
-func testBrancher(writer conversation.Writer) *conversation.Brancher {
-	return conversation.NewBrancher(fakeTxRunner{},
-		func(platform.Tx) conversation.Writer { return writer },
-		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} },
-		func(platform.Tx) conversation.ReadRangeWriter { return fakeBranchReads{} }, nil)
+func (f *fakeBrancher) Branch(_ context.Context, m org.Membership, channel kernel.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error) {
+	f.membership, f.channel, f.got = m, channel, b
+	return conversation.Topic{ID: kernel.ID{0x32}}, f.err
 }
 
 func TestBranchSelection(t *testing.T) {
@@ -73,16 +50,16 @@ func TestBranchSelection(t *testing.T) {
 		{"existing", []string{selection}, nil, 303, ""},
 		{"mixed", []string{selection, strings.Replace(selection, source, "32000000-0000-0000-0000-000000000000", 1)}, nil, 422, "topic.branch_mixed"},
 		{"stale", []string{selection}, conversation.ErrBranchConflict, 409, "topic.branch_conflict"},
-		{"name", []string{selection}, nil, 422, "topic.branch_name_invalid"},
+		{"name", []string{selection}, conversation.ErrInvalidTopicName, 422, "topic.branch_name_invalid"},
 		{"duplicate", []string{selection}, conversation.ErrTopicNameTaken, 422, "topic.branch_name_taken"},
-		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), nil, 422, "topic.branch_invalid"},
+		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), conversation.ErrInvalidBranch, 422, "topic.branch_invalid"},
 		{"out of scope", []string{selection}, conversation.ErrTopicNotFound, 404, ""},
 	} {
 		for _, hx := range []bool{false, true} {
 			for _, lang := range []string{"en", "ja"} {
 				t.Run(tt.name+"/"+lang+"/hx="+map[bool]string{false: "false", true: "true"}[hx], func(t *testing.T) {
-					store := &fakeBranchWriter{fakePostingWriter: fakePostingWriter{err: tt.err}}
-					handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Branching = testBrancher(store); s.Messages = populatedMessages() }))
+					store := &fakeBrancher{err: tt.err}
+					handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Branching = store; s.Messages = populatedMessages() }))
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -109,6 +86,21 @@ func TestBranchSelection(t *testing.T) {
 					}
 					if w.Code != status {
 						t.Fatalf("status %d, want %d: %s", w.Code, status, w.Body)
+					}
+					if tt.name != "mixed" {
+						wantBranch := conversation.Branch{From: kernel.ID{0x31}, Messages: []kernel.ID{{8}}, NewName: form.Get("name")}
+						if tt.name == "existing" {
+							wantBranch.To = &kernel.ID{0x32}
+						}
+						if tt.name == "too many" {
+							wantBranch.Messages = make([]kernel.ID, len(tt.selected))
+							for i := range wantBranch.Messages {
+								wantBranch.Messages[i] = kernel.ID{8}
+							}
+						}
+						if !reflect.DeepEqual(store.got, wantBranch) || store.channel != (kernel.ID{1}) || store.membership.Member.Handle != "alice" || store.membership.Organization.Slug != "acme" {
+							t.Fatalf("branch call: %+v", store)
+						}
 					}
 					if tt.status == 303 {
 						header := "Location"
@@ -149,14 +141,4 @@ func TestBranchSelection(t *testing.T) {
 			}
 		}
 	}
-}
-
-func (*fakeBranchWriter) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
-	return 0, nil
-}
-
-type fakeBranchReads struct{}
-
-func (fakeBranchReads) Merge(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64) error {
-	return nil
 }

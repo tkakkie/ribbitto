@@ -650,7 +650,13 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "bad\u202e"} {
 		for _, hx := range []bool{false, true} {
-			cases = append(cases, markupCase{name: fmt.Sprintf("composer invalid %d/htmx=%t", len(body), hx), route: "POST /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {body}}, status: 422, alerts: 1, htmx: hx})
+			cases = append(cases, markupCase{name: fmt.Sprintf("composer invalid %d/htmx=%t", len(body), hx), route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services {
+				s := signedIn(oneOrganisation{})()
+				poster := testPoster()
+				poster.bodyErrors = map[string]error{body: conversation.ErrInvalidBody}
+				s.Posting = poster
+				return s
+			}, method: "POST", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {body}}, status: 422, alerts: 1, htmx: hx})
 		}
 	}
 	cases = append(cases, markupCase{name: "composer posted", route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "POST", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {"sent"}}, htmx: true})
@@ -661,7 +667,14 @@ func TestPagesMarkup(t *testing.T) {
 		if method == "POST" {
 			status, alerts = 422, 1
 		}
-		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {""}}, status: status, alerts: alerts})
+		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services {
+			s := signedIn(oneOrganisation{})()
+			s.Messages = olderMessages()
+			poster := testPoster()
+			poster.bodyErrors = map[string]error{"": conversation.ErrInvalidBody}
+			s.Posting = poster
+			return s
+		}, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {""}}, status: status, alerts: alerts})
 	}
 	// Without JavaScript only a full channel renders a page; success is 303.
 	cases = append(cases, markupCase{name: "pin limit", route: "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/pin", services: func() Services {

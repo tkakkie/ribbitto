@@ -19,8 +19,10 @@ provide full parity.
 ## Go handlers
 
 Handlers in `internal/web` validate requests, call use cases, convert results
-to view models, and choose status, component and full page or fragment. They never
-build HTML strings (`AGENTS.md`); `/healthz` and `/readyz` return plain text.
+to view models, and choose status and full page or fragment. `Services.Posting`
+uses web's `Poster` interface (`Send`), like `Branching`; unit tests fake these
+seams, not conversation's storage ports. Handlers never build HTML strings;
+`/healthz` and `/readyz` return plain text.
 
 ## templ
 

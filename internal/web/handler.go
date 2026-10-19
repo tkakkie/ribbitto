@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -48,7 +47,7 @@ type Services struct {
 	Authz         Authorizer
 	Topics        TopicLookup
 	Messages      MessageReader
-	Posting       *conversation.Posting
+	Posting       Poster
 	Branching     Branching // nil: branching answers 404
 	Pinning       Pinning   // nil: pin and unpin answer 404
 	Channels      Channels

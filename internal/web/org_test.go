@@ -112,7 +112,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	place := typing.Place{Channel: acmeChannel, Topic: defaultTopic.ID}
 	// Every request for a message's URL names this valid, seeded message, so
 	// a 404 comes from authorisation, not from a malformed or unknown ID.
-	linked, err := services.Posting.PostToTopic(ctx, membership, acmeChannel, nil, "linked message")
+	linked, err := fixturePoster(pool).PostToTopic(ctx, membership, acmeChannel, nil, "linked message")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreignMessage, err := services.Posting.PostToTopic(ctx, globexMembership, globexChannel, nil, "foreign message")
+	foreignMessage, err := fixturePoster(pool).PostToTopic(ctx, globexMembership, globexChannel, nil, "foreign message")
 	if err != nil {
 		t.Fatal(err)
 	}

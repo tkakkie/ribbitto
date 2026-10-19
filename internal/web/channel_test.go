@@ -58,8 +58,12 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			selected := kernel.ID{3}
 			var lookups [][3]kernel.ID
-			writer := &fakePostingWriter{}
-			p := channelPages{postLimit: middleware.NewPostRateLimiter(time.Now), channels: &fakeChannels{}, posting: testPosting(writer), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
+			poster := testPoster()
+			poster.result.Topic = selected
+			if tt.body == "" {
+				poster.err = conversation.ErrInvalidBody
+			}
+			p := channelPages{postLimit: middleware.NewPostRateLimiter(time.Now), channels: &fakeChannels{}, posting: poster, topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
 			// A nil message reader makes any unnecessary history read fail.
 			path := view.ConversationURL("acme", kernel.ID{1}, &selected)
 			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader(url.Values{"body": {tt.body}, "cursor": {"0"}}.Encode()))
@@ -77,12 +81,12 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			fragment := strings.HasPrefix(w.Body.String(), composerFragment)
 			switch {
 			case tt.method == "POST" && tt.body != "":
-				if len(lookups) != 0 || writer.body != tt.body || fragment != tt.htmx || !tt.htmx && w.Header().Get("Location") != path {
+				if len(lookups) != 0 || len(poster.calls) != 1 || poster.calls[0].send.Body != tt.body || poster.calls[0].send.Topic == nil || *poster.calls[0].send.Topic != selected || poster.calls[0].channel != (kernel.ID{1}) || poster.calls[0].membership.Organization.ID != (kernel.ID{9}) || fragment != tt.htmx || !tt.htmx && w.Header().Get("Location") != path {
 					t.Fatal("post must answer without a separate topic lookup")
 				}
 			case len(lookups) != 1 || lookups[0] != ([3]kernel.ID{{9}, {1}, {3}}):
 				t.Fatalf("topic lookup scope: %v", lookups)
-			case tt.method == "POST" && (writer.body != "" || fragment != (tt.status == 422)):
+			case tt.method == "POST" && (len(poster.calls) != 1 || fragment != (tt.status == 422)):
 				t.Fatal("a refused topic must answer without a fragment or a write")
 			}
 		})

@@ -197,6 +197,7 @@ func TestPostAdmissionSlots(t *testing.T) {
 			want := 303
 			switch mode {
 			case "validation":
+				p.posting = &fakePoster{err: conversation.ErrInvalidBody}
 				body = "body="
 				want = 422
 			case "parse":
@@ -209,7 +210,7 @@ func TestPostAdmissionSlots(t *testing.T) {
 				p.channels = &fakeChannels{getErr: errors.New("offline")}
 				want = 500
 			case "error":
-				p.posting = testPosting(&fakePostingWriter{err: errors.New("offline")})
+				p.posting = &fakePoster{err: errors.New("offline")}
 				want = 500
 			case "panic":
 				p.channels = nil

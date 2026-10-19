@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -28,7 +27,7 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting *conversation.Posting, branching Branching, pinning Pinning, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter, resync SidebarResync, resyncLimit, branchLimit, postLimit, pinLimit *middleware.MemberRateLimiter, search MemberSearch, mentionLimit *middleware.MemberRateLimiter, preferences *identity.Preferences, preferenceLimit *middleware.MemberRateLimiter) []orgRoute {
+func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting Poster, branching Branching, pinning Pinning, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter, resync SidebarResync, resyncLimit, branchLimit, postLimit, pinLimit *middleware.MemberRateLimiter, search MemberSearch, mentionLimit *middleware.MemberRateLimiter, preferences *identity.Preferences, preferenceLimit *middleware.MemberRateLimiter) []orgRoute {
 	handlers := channelPages{typing: typingState, limiter: limiter, readLimit: readLimit, createLimit: createLimit, branchLimit: branchLimit, postLimit: postLimit, pinLimit: pinLimit, reading: reading, pages: pages, channels: channels, topics: topics, messages: messages, posting: posting, branching: branching, pinning: pinning, stream: stream}
 	if stream != nil {
 		handlers.renders = newRenderCache(stream.Lifetime)

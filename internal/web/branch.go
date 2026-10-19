@@ -15,6 +15,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
+// Poster sends a composer submission in the member's channel.
+type Poster interface {
+	Send(context.Context, org.Membership, kernel.ID, conversation.Send) (conversation.Sent, error)
+}
+
 // Branching moves selected messages to another topic of the channel.
 type Branching interface {
 	Branch(ctx context.Context, m org.Membership, channelID kernel.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)

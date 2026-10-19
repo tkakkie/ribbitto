@@ -38,7 +38,7 @@ func TestBranchAdmissionPostgreSQL(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			message, err := services.Posting.Post(t.Context(), m, f.Channel.ID, "moves repeatedly")
+			message, err := fixturePoster(pool).Post(t.Context(), m, f.Channel.ID, "moves repeatedly")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +112,7 @@ func TestBranchAdmissionScope(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Unix(1, 0)
-			p := channelPages{branching: testBrancher(&fakeBranchWriter{}), branchLimit: middleware.NewBranchRateLimiter(func() time.Time { return now })}
+			p := channelPages{branching: &fakeBrancher{}, branchLimit: middleware.NewBranchRateLimiter(func() time.Time { return now })}
 			request := func(m org.Membership, want int) {
 				t.Helper()
 				// Malformed forms spend admission but cannot reach branching.

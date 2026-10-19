@@ -68,7 +68,7 @@ type channelPages struct {
 	stream           *Streaming
 	renders          *realtime.Cache[renderKey, realtime.Outgoing]
 	messages         MessageReader
-	posting          *conversation.Posting
+	posting          Poster
 	pages            *pageRenderer
 	channels         Channels
 	overviewImageErr string // Set only on the request-local copy after a failed image change.

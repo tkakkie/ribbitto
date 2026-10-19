@@ -114,9 +114,12 @@ with the requested whole or part. A part equal to the whole extracted text
 is the same snapshot; switching either way to different text returns 409.
 
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
-Web posts through `conversation.Posting.Send`, which takes the optional
-cursor and the composer's `IdempotencyKey`; `PostToTopic` and `Post`
-delegate to it. Only a keyed body with a valid handle candidate and an available
+Web calls `Poster.Send` through `Services.Posting`; `*conversation.Posting`
+implements that seam. `Send` takes the optional cursor and composer's
+`IdempotencyKey`; `PostToTopic` and `Post` delegate to it. Web unit tests
+return canned `Sent` results/errors; conversation tests own transaction,
+sequence, event and deduplication assertions. Database fixtures keep a
+concrete poster for `PostToTopic` and `Post`. Only a keyed body with a valid handle candidate and an available
 member directory gets a scoped preflight key lookup using the same tokens
 in a separate read transaction, before conversion, expansion or reference checks.
 Before comparing, the repeat reads `Writer.QuotedMessage` in scope and

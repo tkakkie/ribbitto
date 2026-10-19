@@ -41,7 +41,7 @@ func testBranchFormBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatal(err)
 			}
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Branching = testBrancher(&fakeBranchWriter{})
+				s.Branching = &fakeBrancher{}
 				s.Messages = populatedMessages()
 			}))
 			if err != nil {

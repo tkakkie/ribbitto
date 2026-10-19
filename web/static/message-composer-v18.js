@@ -254,7 +254,7 @@
     const ended = compositionEnded.get(event.target);
     if (ended !== undefined && event.timeStamp - ended < 100) return;
     const mode = document.getElementById("message-composer-state").dataset.sendKey;
-    return event.shiftKey || (mode === "modifier_enter" && !event.ctrlKey && !event.metaKey) ? "newline" : "send";
+    return event.shiftKey || (mode === "modifier_enter" && !event.ctrlKey) ? "newline" : "send";
   };
   const updateEnterHint = () => {
     const state = document.getElementById("message-composer-state");

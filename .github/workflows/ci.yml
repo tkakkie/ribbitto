@@ -141,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [loadgen, web, realtime]
+        shard: [loadgen, cmd, web, realtime]
     runs-on: ubuntu-latest
     services:
       postgres:

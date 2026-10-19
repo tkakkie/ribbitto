@@ -67,7 +67,7 @@
   function update() {
     const selection = document.getSelection();
     current = selected(selection);
-    text = current ? serializeSelection(current, selection.getRangeAt(0)) : null;
+    text = current ? selection.toString() : null;
     if (!text?.trim()) current = null;
     for (const button of document.querySelectorAll(buttons)) button.hidden = !isSubmitter(button, current);
   }

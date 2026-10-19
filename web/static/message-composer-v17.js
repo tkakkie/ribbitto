@@ -390,7 +390,7 @@
         }
       }
       reconcile();
-      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
+      if (state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
       return;
     }
     // The stream consumes this attribute at settle, possibly before IME ends.

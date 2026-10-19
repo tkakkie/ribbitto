@@ -70,11 +70,14 @@ a shebang at the first two bytes is forbidden everywhere without exception.
 A small command-word scan checks Makefile recipes, simple `SHELL` assignments
 (including `::=`), `!=` command assignments and literal `$(shell ...)` in
 simple assignments and tab-indented recipes, plus workflow `run` steps.
+Recipe prefixes consume leading `@`, `-`, `+`, spaces and tabs together.
 Assignment comments follow Make's backslash escaping, independent of quotes;
 single-line YAML comments are stripped only outside single and double quotes.
+Empty shell quotes start a token, so an adjacent `#` is not a comment.
 Workflow mapping headers may have trailing comments, sequence dashes may have
-multiple spaces, and mapping keys may have surrounding spaces; quoted scalars
-decode doubled single quotes and escaped double quotes/backslashes only.
+multiple spaces, bare dashes and dash comments preserve the enclosing mapping,
+and mapping keys may have surrounding spaces; quoted scalars decode doubled
+single quotes and escaped double quotes/backslashes only.
 It refuses node/nodejs, npm/npx, python/pip, cargo/rustc, deno, bun, ruby,
 perl, bash/zsh/sh, yarn, pnpm, tsc/tsx, uv, poetry, php, java and
 dash/ksh/fish/pwsh, including optional digit-and-dot version suffixes.
@@ -91,8 +94,14 @@ In ordinary block mappings, the scan checks direct step `uses` values for
 refuses direct step `uses: docker://` actions and checks direct step or
 `defaults.run` `shell` values for those runtime commands.
 
-This is not a Make, YAML or shell parser. Review must cover indirect execution,
-scripts launched by name, runtime/dependency configuration, containers/images
+The command-word scan is a best-effort tripwire against accidental introduction
+of another runtime in the Makefile and workflow files, not a security boundary.
+A line scanner cannot prevent deliberate evasion through indirection, aliases,
+command substitution, scripts launched by name or shell tricks. The control for
+those is issue and pull request review, the file-kind table and the shebang ban.
+
+This is not a Make, YAML or shell parser. Review must also cover
+runtime/dependency configuration, containers/images
 (including workflow `container:`/`image:`), backtick or quoted substitutions,
 wrapper options, nested Make expressions, `target: ; cmd` one-line recipes,
 runtime setup actions beyond the exact names scanned above, YAML flow mappings

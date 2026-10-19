@@ -296,3 +296,122 @@ func TestWorkflowMappingSpacing(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkflowStepParents(t *testing.T) {
+	for _, tt := range []struct {
+		name, source string
+		findings     []string
+	}{
+		{"extra spaces after with", `jobs:
+  checks:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      -  uses: actions/setup-node@v4
+      -  uses: docker://node:20
+      -  run: go version
+         shell: bash
+`, []string{`:7: unapproved runtime setup "actions/setup-node@v4"`, `:8: unapproved container action "docker://node:20"`, `:10: unapproved runtime command "bash"`}},
+		{"comment on dash", `    steps:
+      - # step 1:
+          uses: actions/setup-node@v4
+          shell: bash
+`, []string{`:3: unapproved runtime setup "actions/setup-node@v4"`, `:4: unapproved runtime command "bash"`}},
+		{"extra spaces after env", "steps:\n  - run: go version\n    env:\n      MODE: test\n  -  uses: actions/setup-node@v4\n", []string{`:5: unapproved runtime setup "actions/setup-node@v4"`}},
+		{"bare dash after with", "jobs:\n  checks:\n    steps:\n    - uses: actions/checkout@v4\n      with:\n        persist-credentials: false\n    -\n        uses: actions/setup-node@v4\n        shell: bash\n", []string{`:8: unapproved runtime setup "actions/setup-node@v4"`, `:9: unapproved runtime command "bash"`}},
+		{"comment dash after env", "steps:\n- run: go version\n  env:\n    MODE: test\n- # step 2:\n    uses: docker://node:20\n    shell: bash\n", []string{`:6: unapproved container action "docker://node:20"`, `:7: unapproved runtime command "bash"`}},
+		{"ordinary ci steps", `jobs:
+  checks:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      - name: verify generated files
+        run: |
+          make generate
+          make css
+      - name: verify schema docs
+        env:
+          MODE: test
+        run: |
+          go version
+      - name: check-tools
+        run: make check-tools
+`, nil},
+		{"nested input sequences", "steps:\n  - uses: example/action@v1\n    with:\n      items:\n        -\n          uses: actions/setup-node@v4\n          shell: bash\n        - # input:\n          uses: docker://node:20\n          shell: python\n  -  run: go version\n", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkCommands(".github/workflows/ci.yml", strings.NewReader(tt.source))
+			if len(got) != len(tt.findings) {
+				t.Fatalf("got %v; want %v", got, tt.findings)
+			}
+			for i, finding := range tt.findings {
+				if !strings.Contains(got[i], finding) {
+					t.Errorf("got %q; want %q", got[i], finding)
+				}
+			}
+		})
+	}
+}
+
+func TestCommandEmptyQuoteTokens(t *testing.T) {
+	for _, tt := range []struct {
+		command string
+		count   int
+	}{
+		{`echo ""#; python build.py`, 1},
+		{`echo ''#; python build.py`, 1},
+		{`echo # python x`, 0},
+		{`echo "" # python x`, 0},
+		{`echo "#" ; go run ./x`, 0},
+		{`"" python build.py`, 0},
+	} {
+		t.Run(tt.command, func(t *testing.T) {
+			for _, file := range []string{"Makefile", ".github/workflows/ci.yml"} {
+				source := "target:\n\t" + tt.command + "\n"
+				if file != "Makefile" {
+					source = "steps:\n  - run: " + tt.command + "\n"
+				}
+				got := checkCommands(file, strings.NewReader(source))
+				if len(got) != tt.count {
+					t.Errorf("%s: got %v; want %d", file, got, tt.count)
+					continue
+				}
+				if tt.count > 0 && !strings.Contains(got[0], `runtime command "python"`) {
+					t.Errorf("%s: got %v; want python", file, got)
+				}
+			}
+		})
+	}
+}
+
+func TestMakeRecipePrefixes(t *testing.T) {
+	for _, tt := range []struct {
+		command string
+		count   int
+	}{
+		{"@ -python build.py", 1},
+		{"@ @python build.py", 1},
+		{"+\t- @python build.py", 1},
+		{"@go run ./x", 0},
+		{"- @go vet ./...", 0},
+	} {
+		t.Run(tt.command, func(t *testing.T) {
+			got := checkCommands("Makefile", strings.NewReader("target:\n\t"+tt.command+"\n"))
+			if len(got) != tt.count {
+				t.Fatalf("got %v; want %d", got, tt.count)
+			}
+			if tt.count > 0 && !strings.Contains(got[0], `runtime command "python"`) {
+				t.Errorf("got %v; want python", got)
+			}
+		})
+	}
+}

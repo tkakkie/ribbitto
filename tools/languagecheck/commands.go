@@ -28,7 +28,7 @@ func checkCommands(name string, source io.Reader) []string {
 		var commands []string
 		if name == "Makefile" {
 			if strings.HasPrefix(line, "\t") {
-				commands = append(commands, strings.TrimLeft(text, "@-+"))
+				commands = append(commands, strings.TrimLeft(text, "@-+ \t"))
 				commands = append(commands, makeShellCommands(text)...)
 			} else {
 				commands = makeCommands(text)
@@ -42,14 +42,21 @@ func checkCommands(name string, source io.Reader) []string {
 				// This line is part of the preceding run block.
 			} else {
 				runIndent = -1
-				if strings.HasPrefix(text, "- ") {
+				if text == "-" || strings.HasPrefix(text, "- ") {
 					trimmed := strings.TrimLeft(text[1:], " ")
 					if strings.HasPrefix(trimmed, "\t") {
 						continue // YAML sequence indentation cannot contain tabs.
 					}
+					// Drop the preceding item's children, keeping an indentless steps parent.
+					for len(parents) > 0 && parents[len(parents)-1].indent > indent {
+						parents = parents[:len(parents)-1]
+					}
 					// Sibling step keys align with the key after the dash.
 					indent += len(text) - len(trimmed)
 					text = trimmed
+					if text == "" || strings.HasPrefix(text, "#") {
+						continue
+					}
 				}
 				for len(parents) > 0 && parents[len(parents)-1].indent >= indent {
 					parents = parents[:len(parents)-1]
@@ -205,15 +212,18 @@ func runtimeCommands(line string) []string {
 	var word strings.Builder
 	quote := rune(0)
 	escaped := false
+	inWord := false
 	flush := func() {
-		if word.Len() > 0 {
+		if inWord {
 			words = append(words, word.String())
 			word.Reset()
+			inWord = false
 		}
 	}
 	for _, c := range line {
 		if escaped {
 			word.WriteRune(c)
+			inWord = true
 			escaped = false
 			continue
 		}
@@ -226,13 +236,15 @@ func runtimeCommands(line string) []string {
 				quote = 0
 			} else {
 				word.WriteRune(c)
+				inWord = true
 			}
 			continue
 		}
 		switch {
 		case c == '"' || c == '\'':
 			quote = c
-		case c == '#' && word.Len() == 0:
+			inWord = true
+		case c == '#' && !inWord:
 			goto done
 		case strings.ContainsRune(";&|()", c):
 			flush()
@@ -241,6 +253,7 @@ func runtimeCommands(line string) []string {
 			flush()
 		default:
 			word.WriteRune(c)
+			inWord = true
 		}
 	}
 done:

@@ -283,6 +283,7 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 	step(t, "part focus: editable part takes focus without another key", func(p *rod.Page) {
 		if !scripts {
 			// Without scripts the browser's own autofocus is not guaranteed in CI; reach it forward.
+			// The Go attribute assertion guards autofocus; this step proves keyboard reachability only.
 			tabTo(p, "#quote-text")
 		}
 		p.MustWait(`() => document.activeElement.id === 'quote-text'`)

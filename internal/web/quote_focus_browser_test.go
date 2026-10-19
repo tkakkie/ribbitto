@@ -24,31 +24,33 @@ func testQuoteFocusBrowser(t *testing.T, browser *rod.Browser, width int) {
 	const remove = `#composer-quote button:not([name])`
 	const part = `#composer-quote button[name=part]`
 	const send = `#message-composer button[type=submit]:not([form])`
-	cases := []struct {
+	type focusCase struct {
 		name, focus, want string
 		status            int
-	}{
-		{"whole", "#message-body", remove, 200},
-		{"whole-tab", remove, part, 0},
-		{"part", part, "#quote-text", 200},
-		{"part-tab-remove", "#quote-text", remove, 0},
-		{"remove-tab-body", remove, "#message-body", 0},
-		{"body-tab-send", "#message-body", send, 0},
-		{"remove", remove, "#message-body", 200},
+		partChip          bool
+	}
+	cases := []focusCase{
+		{"whole", "#message-body", remove, 200, false},
+		{"whole-tab", remove, part, 0, false},
+		{"part", part, "#quote-text", 200, false},
+		{"part-tab-remove", "#quote-text", remove, 0, true},
+		{"remove-tab-body", remove, "#message-body", 0, true},
+		{"body-tab-send", "#message-body", send, 0, true},
+		{"remove", remove, "#message-body", 200, false},
 	}
 	for _, status := range []int{422, 409} {
-		for _, control := range []struct{ name, selector string }{
-			{"caret", "#quote-text"}, {"selection", "#quote-text"}, {"body", "#message-body"},
-			{"remove", remove}, {"part", part}, {"disabled-send", send}, {"blurred-send", send}, {"send", send},
+		for _, control := range []struct {
+			name, selector string
+			partChip       bool
+		}{
+			{"caret", "#quote-text", true}, {"selection", "#quote-text", true}, {"body", "#message-body", true},
+			{"remove", remove, false}, {"part", part, false}, {"disabled-send", send, true}, {"blurred-send", send, true}, {"send", send, true},
 		} {
 			want := control.selector
 			if strings.HasSuffix(control.name, "send") {
 				want = "#message-body"
 			}
-			cases = append(cases, struct {
-				name, focus, want string
-				status            int
-			}{fmt.Sprintf("%d-%s", status, control.name), control.selector, want, status})
+			cases = append(cases, focusCase{fmt.Sprintf("%d-%s", status, control.name), control.selector, want, status, control.partChip})
 		}
 	}
 	for _, tc := range cases {
@@ -59,7 +61,7 @@ func testQuoteFocusBrowser(t *testing.T, browser *rod.Browser, width int) {
 			snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}},
 				Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001"), EventCursor: new(int64(42)),
 				Quote: &view.Message{ID: kernel.ID{2}, Body: "page original", Handle: "alice", DisplayName: "Alice"}}
-			if tc.status >= 400 && tc.focus != part && tc.focus != remove || strings.Contains(tc.name, "tab-") {
+			if tc.partChip {
 				snapshot.QuoteText = new("page original")
 			}
 			answer := snapshot

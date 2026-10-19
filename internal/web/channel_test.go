@@ -329,6 +329,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
+	// The list has no composer, so its script must be absent.
 	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v13.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v19.js"] {
 		t.Errorf("list page scripts %v", scripts)
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,6 +26,13 @@ import (
 )
 
 func TestBrowser(t *testing.T) {
+	var names []string
+	registerBrowserScenarios(func(name string, _ func(*testing.T, *rod.Browser)) { names = append(names, name) })
+	selector := os.Getenv("RIBBITTO_BROWSER_SHARD")
+	selected, err := browserShardNames(names, selector)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bin, found := launcher.LookPath()
 	if !found {
 		browserUnavailable(t, "no installed browser")
@@ -43,7 +51,10 @@ func TestBrowser(t *testing.T) {
 	for range browsers {
 		pool <- launchScenarioBrowser(t, ctx, bin)
 	}
-	run := func(name string, scenario func(*testing.T, *rod.Browser)) {
+	registerBrowserScenarios(func(name string, scenario func(*testing.T, *rod.Browser)) {
+		if !slices.Contains(selected, name) {
+			return
+		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			browser := <-pool
@@ -53,7 +64,20 @@ func TestBrowser(t *testing.T) {
 			t.Cleanup(func() { pool <- browser })
 			scenario(t, browser)
 		})
+	})
+	if selector == "" {
+		selector = "all"
 	}
+	line := fmt.Sprintf("browser shard %s: %d of %d scenarios\n", selector, len(selected), len(names))
+	t.Logf("%s", line)
+	if path := os.Getenv("RIBBITTO_BROWSER_COUNT_FILE"); path != "" {
+		if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+			t.Fatalf("writing browser count: %v", err)
+		}
+	}
+}
+
+func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) {
 	run("typing/indicator", testTypingIndicatorBrowser)
 	run("composer/send-key", testSendKeyBrowser)
 	run("composer/typing", testTypingComposerBrowser)

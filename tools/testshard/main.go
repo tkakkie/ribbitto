@@ -10,6 +10,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +36,9 @@ func shards() []shard {
 	return []shard{
 		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2"},
 		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2"},
-		{"web", []string{"./internal/web"}, "", "-p 2"},
+		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2"},
+		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run ^TestBrowser$"},
+		{"web-3/3", []string{"./internal/web"}, "3/3", "-p 2 -run ^TestBrowser$"},
 		{"realtime", []string{"./internal/realtime"}, "", "-p 2"},
 	}
 }
@@ -80,6 +85,9 @@ func run(root, name string, check, execute bool) error {
 		if err := covers(parts, all, specs); err != nil {
 			return err
 		}
+		if err := checkBrowserTests(root, specs); err != nil {
+			return err
+		}
 		source, err := os.ReadFile(filepath.Join(root, workflow))
 		if err != nil {
 			return fmt.Errorf("reading the workflow: %w", err)
@@ -97,10 +105,25 @@ func run(root, name string, check, execute bool) error {
 				s = candidate
 			}
 		}
+		dir, err := os.MkdirTemp("", "ribbitto-browser-count-*")
+		if err != nil {
+			return fmt.Errorf("creating browser count directory: %w", err)
+		}
+		defer os.RemoveAll(dir)
+		countFile := filepath.Join(dir, "count")
 		cmd := testCommand(root, s)
+		cmd.Env = append(cmd.Env, "RIBBITTO_BROWSER_COUNT_FILE="+countFile)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("running shard %s: %w", name, err)
+		runErr := cmd.Run()
+		if line, err := os.ReadFile(countFile); err == nil {
+			fmt.Print(string(line))
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("reading browser count: %w", err)
+		} else if s.browser != "" && runErr == nil {
+			return fmt.Errorf("shard %s succeeded without writing a browser scenario count", name)
+		}
+		if runErr != nil {
+			return fmt.Errorf("running shard %s: %w", name, runErr)
 		}
 		return nil
 	}
@@ -118,6 +141,57 @@ func testCommand(root string, s shard) *exec.Cmd {
 	// Workflow GOFLAGS must not narrow or cache a shard; -check does not read it.
 	cmd.Env = append(os.Environ(), "RIBBITTO_BROWSER_SHARD="+s.browser, "GOFLAGS=-count=1")
 	return cmd
+}
+
+// Read source rather than running package code: a renamed test otherwise makes
+// browser-only slices pass with "no tests to run". The totals file also drives
+// the web coverage test, so a new workflow total cannot miss that proof.
+func checkBrowserTests(root string, specs []shard) error {
+	for _, s := range specs {
+		if !strings.Contains(s.flags, "-run ^TestBrowser$") {
+			continue
+		}
+		dir := filepath.Join(root, s.packages[0])
+		totals, err := os.ReadFile(filepath.Join(dir, "testdata/browser-shard-totals.txt"))
+		if err != nil {
+			return fmt.Errorf("reading tested browser totals: %w", err)
+		}
+		_, n, _ := strings.Cut(s.browser, "/")
+		if !slices.Contains(strings.Fields(string(totals)), n) {
+			return fmt.Errorf("browser shard total %s has no coverage test", n)
+		}
+		files, err := filepath.Glob(filepath.Join(dir, "*_test.go"))
+		if err != nil {
+			return fmt.Errorf("listing browser tests: %w", err)
+		}
+		found := false
+		for _, path := range files {
+			file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+			if err != nil {
+				return fmt.Errorf("parsing browser tests: %w", err)
+			}
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Recv != nil || fn.Name.Name != "TestBrowser" || fn.Type.TypeParams != nil || fn.Type.Results != nil || len(fn.Type.Params.List) != 1 {
+					continue
+				}
+				param := fn.Type.Params.List[0]
+				ptr, ok := param.Type.(*ast.StarExpr)
+				if !ok || len(param.Names) != 1 || param.Names[0].Name != "t" {
+					continue
+				}
+				typ, ok := ptr.X.(*ast.SelectorExpr)
+				if ok {
+					pkg, ok := typ.X.(*ast.Ident)
+					found = found || ok && pkg.Name == "testing" && typ.Sel.Name == "T"
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s must declare func TestBrowser(t *testing.T) in a _test.go file", s.packages[0])
+		}
+	}
+	return nil
 }
 
 // Browser slices must form one complete set, with non-browser tests on the

@@ -84,16 +84,17 @@ queued success, tombstones, backspacing, newer text.
 
 ### Shared browser tests
 
-`TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared
-browser suite. Its stream cases run the embedded `message-stream-v13.js`, vendored htmx and SSE extension
-in headless Chrome through go-rod. A test server renders
-`ChannelScreen` and `MovedMessageItems` components without a database. Controlled
-SSE deliveries and history responses cover both topic sides, bounded
+`TestBrowser` scenarios are registered in `registerBrowserScenarios` in
+`internal/web/message_stream_browser_test.go`.
+`RIBBITTO_BROWSER_SHARD=k/n` runs one local shard; if shell-exported,
+`make check` silently runs a subset.
+Stream cases run the embedded `message-stream-v13.js`, vendored htmx and SSE extension
+in headless Chrome via go-rod, with database-free `ChannelScreen` and
+`MovedMessageItems` test servers. Controlled SSE and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, removal of the moved first-unread message's divider, preservation on
-other moves, and abort/400 followed by another request. Ordered IDs detect duplicates and gaps; waits use DOM/lifecycle gates.
-The panel-sheet reading checks use a named observation window,
-`noReadWindow`, when no POST is expected.
+other moves, and abort/400 then another request. IDs detect duplicates/gaps; waits use DOM/lifecycle gates.
+Panel-sheet checks use `noReadWindow` to observe that no POST occurs.
 Script-disabled tabs use `navigateLoaded` for readiness; rod’s `WaitLoad`
 needs page JavaScript and can hang (#1129).
 
@@ -119,11 +120,10 @@ The move form case runs the real branch handler with and without scripts:
 hidden and skipped by Tab with nothing checked, shown on Space with focus kept
 and the list's size unchanged, its errors, and a submitted move.
 
-Run `go test ./internal/web -run TestBrowser -v` with Chrome
-installed. No browser is downloaded. Missing or unlaunchable browsers skip
-locally; `RIBBITTO_REQUIRE_BROWSER=1` makes either fatal and is set in CI.
-The Go replay model retains only in-flight moves and models append,
-replacement and bounded insertion without sorting the list.
+`go test ./internal/web -run TestBrowser -v` uses installed Chrome, never downloading it.
+Missing or unlaunchable browsers skip locally; CI sets `RIBBITTO_REQUIRE_BROWSER=1` to fail.
+The Go replay model retains only in-flight moves, modeling append,
+replacement and bounded insertion without sorting.
 
 ### JavaScript pattern check
 

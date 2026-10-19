@@ -71,7 +71,7 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		case err != nil:
 			// Keep the cookie: a database outage must not sign everyone out.
-			slog.ErrorContext(r.Context(), "resolving session", "err", err)
+			slog.ErrorContext(r.Context(), "resolving session", "err", err, "request_id", RequestID(r.Context()))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		default:
 			// Pages for a signed-in account must not be stored by browsers or

@@ -130,10 +130,7 @@
         const eligible = source === sendKey || (inPlace && source === null);
         // Prefix removal fires no input. Keep the edit time and debounce
         // when another tab's write prevents immediate confirmation.
-        if (inPlace && source === null && dirty) {
-          text = body.value;
-          if (!text.trim() || [...text].length > 4000) text = "";
-        }
+        if (inPlace && source === null && dirty) edited();
         try {
           if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
           edited();

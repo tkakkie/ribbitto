@@ -6,11 +6,12 @@
 // LimitBody sees the server's real writer first, then RequestLog wraps
 // CrossOriginProtection so even pre-routing rejections are logged.
 // Request logs allow only ID, method, registered pattern, status and duration;
-// streams log on completion. Request-scoped errors and warnings explicitly
-// include the same request_id from context. Unwrap preserves ResponseController
-// operations. run configures RIBBITTO_LOG_FORMAT before constructors capture
-// slog.Default(): json selects JSON on stderr; empty leaves it untouched;
-// other values fail startup.
+// streams log on completion. Request-scoped error logs and stream warnings
+// explicitly include the same request_id from context; the once-only proxy
+// notice and deduplicated i18n fallback warning do not. Unwrap preserves
+// ResponseController operations. run configures RIBBITTO_LOG_FORMAT before
+// constructors capture slog.Default(): json selects JSON on stderr; empty
+// leaves it untouched; other values fail startup.
 // Authentication limits count by client key: the peer address or, behind a
 // trusted proxy, the rightmost untrusted X-Forwarded-For address; an IPv6
 // client counts as its /64, and its /48 is charged too. Authentication limits

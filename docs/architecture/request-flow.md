@@ -79,8 +79,9 @@ Outermost first:
    Unknown paths/methods, mux redirects and pre-routing rejections use
    `unmatched`, never a raw path. Bodies, headers, queries and client addresses
    are excluded. `Unwrap` preserves ResponseController stream operations.
-   Request-scoped error and warning logs also include `request_id`, explicitly
-   read from context, so they can be matched to the completion log.
+   Request-scoped error logs and stream warnings also include `request_id`,
+   explicitly read from context, so they can be matched to the completion log;
+   the once-only proxy notice and deduplicated i18n fallback warning do not.
 3. `http.CrossOriginProtection` on every route. It rejects cross-origin
    requests using `Sec-Fetch-Site`, or `Origin` against `Host`, but lets GET,
    HEAD and OPTIONS through — so **every route that changes state is a

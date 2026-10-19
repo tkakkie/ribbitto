@@ -70,7 +70,8 @@ See [worktree environments](docs/worktree-env.md) for configuration overrides an
 Startup never migrates; schemas below its newest migration fail with
 `ribbitto migrate up`; equal/newer allow binary rollback.
 
-Set `RIBBITTO_LOG_FORMAT=json` for JSON logs; empty keeps the default; other values prevent startup.
+Set `RIBBITTO_LOG_FORMAT=json` for JSON logs; empty keeps the default; other
+values prevent startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
@@ -164,9 +165,10 @@ value prevents startup. Sign-in links to registration only while it is open.
 ## Restoring a backup
 
 Stop ribbitto, restore the database, then start ribbitto. The process keeps
-sequence state in memory (the real-time hub and its caches), so rolling the database back under a running
-process is not supported. After the restart, a browser that reconnects with a
-cursor above the restored log gets `reset` and reloads the page
+sequence state in memory (the real-time hub and its caches), so rolling the
+database back under a running process is not supported. After the restart, a
+browser that reconnects with a cursor above the restored log gets `reset` and
+reloads the page
 ([replay](docs/architecture/replay.md#ordering-and-replay)).
 
 ## Documentation

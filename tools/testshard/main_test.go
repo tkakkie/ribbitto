@@ -18,7 +18,9 @@ func TestPartition(t *testing.T) {
 	for name, want := range map[string][]string{
 		"loadgen":  {"./cmd/loadgen", "./cmd/seed"},
 		"cmd":      {"./cmd/ribbitto"},
-		"web":      {"./internal/web"},
+		"web-1/3":  {"./internal/web"},
+		"web-2/3":  {"./internal/web"},
+		"web-3/3":  {"./internal/web"},
 		"realtime": {"./internal/realtime"},
 		rest:       {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
 	} {
@@ -93,7 +95,7 @@ func TestPick(t *testing.T) {
 
 func TestScheduled(t *testing.T) {
 	const (
-		matrix    = "        shard: [loadgen, cmd, web, realtime]\n"
+		matrix    = "        shard: [loadgen, cmd, web-1/3, web-2/3, web-3/3, realtime]\n"
 		restStep  = "          go -C tools run ./testshard -run .. rest\n"
 		shardStep = "          go -C tools run ./testshard -run .. \"$SHARD\"\n"
 		valid     = matrix + restStep + shardStep
@@ -102,8 +104,8 @@ func TestScheduled(t *testing.T) {
 		name, source, want string
 	}{
 		{"every shard once", valid, ""},
-		{"named shard omitted", strings.Replace(valid, "web, ", "", 1), "shard web 0 times"},
-		{"named shard repeated", strings.Replace(valid, "web, ", "web, web, ", 1), "shard web 2 times"},
+		{"named shard omitted", strings.Replace(valid, "web-2/3, ", "", 1), "shard web-2/3 0 times"},
+		{"named shard repeated", strings.Replace(valid, "web-2/3, ", "web-2/3, web-2/3, ", 1), "shard web-2/3 2 times"},
 		{"cmd shard omitted", strings.Replace(valid, "cmd, ", "", 1), "shard cmd 0 times"},
 		{"cmd shard repeated", strings.Replace(valid, "cmd, ", "cmd, cmd, ", 1), "shard cmd 2 times"},
 		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
@@ -241,11 +243,70 @@ func TestCommand(t *testing.T) {
 
 func TestRunPropagatesFailure(t *testing.T) {
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "make"), []byte("#!/bin/sh\nexit 7\n"), 0o700); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "make"), []byte("#!/bin/sh\n[ -z \"$REPORT_COUNT\" ] || printf 'browser shard 2/3: 40 of 120 scenarios\\n' > \"$RIBBITTO_BROWSER_COUNT_FILE\"\nexit \"$MAKE_EXIT\"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if err := run("../..", "web", false, true); err == nil || !strings.Contains(err.Error(), "running shard web: exit status 7") {
-		t.Fatalf("run = %v, want make failure", err)
+	for _, tc := range []struct{ shard, status, report, wantErr string }{
+		{"web-2/3", "0", "yes", ""},
+		{"web-2/3", "7", "yes", "running shard web-2/3: exit status 7"},
+		{"web-2/3", "7", "", "running shard web-2/3: exit status 7"},
+		{"web-2/3", "0", "", "shard web-2/3 succeeded without writing a browser scenario count"},
+		{"cmd", "0", "", ""},
+	} {
+		t.Run(tc.shard+"/"+tc.status+tc.report, func(t *testing.T) {
+			t.Setenv("MAKE_EXIT", tc.status)
+			t.Setenv("REPORT_COUNT", tc.report)
+			out, err := os.CreateTemp(t.TempDir(), "stdout")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer out.Close()
+			stdout := os.Stdout
+			os.Stdout = out
+			err = run("../..", tc.shard, false, true)
+			os.Stdout = stdout
+			if tc.wantErr == "" && err != nil || tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("run = %v, want %q", err, tc.wantErr)
+			}
+			line, err := os.ReadFile(out.Name())
+			want := ""
+			if tc.report != "" {
+				want = "browser shard 2/3: 40 of 120 scenarios\n"
+			}
+			if err != nil || string(line) != want {
+				t.Fatalf("count = %q, %v, want %q", line, err, want)
+			}
+		})
+	}
+}
+
+func TestCheckBrowserTests(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "internal/web")
+	if err := os.MkdirAll(filepath.Join(dir, "testdata"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, file, source, totals string }{
+		{"valid", "browser_test.go", "func TestBrowser(t *testing.T) {}", "3"},
+		{"renamed", "browser_test.go", "func TestRenamed(t *testing.T) {}", "3"},
+		{"not a test file", "browser.go", "func TestBrowser(t *testing.T) {}", "3"},
+		{"method", "browser_test.go", "func (s suite) TestBrowser(t *testing.T) {}", "3"},
+		{"wrong signature", "browser_test.go", "func TestBrowser(t testing.T) {}", "3"},
+		{"untested total", "browser_test.go", "func TestBrowser(t *testing.T) {}", "4"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(dir, tc.file)
+			if err := os.WriteFile(path, []byte("package web\nimport \"testing\"\n"+tc.source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Remove(path) })
+			if err := os.WriteFile(filepath.Join(dir, "testdata/browser-shard-totals.txt"), []byte(tc.totals), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkBrowserTests(root, browserShards()); (err == nil) != (tc.name == "valid") {
+				t.Fatalf("checkBrowserTests = %v", err)
+			}
+		})
 	}
 }

@@ -21,6 +21,7 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running Argon](running-argon.md#running-argon) | Trusted review launcher |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
+| [Argon verify](argon-verify.md) | Pending rule |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |
 | [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target, host measurements |
 
@@ -76,7 +77,8 @@ and [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
 ### Implementer Argon
 
 - [Shared gates](#shared-gates).
-- [Start gate, eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer).
+- [Start gate, eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer);
+  [verification](argon-verify.md).
 - For fixes: [closure verification](reviewing.md#closure-verification),
   [adversarial follow-up](reviewing.md#adversarial-follow-up-check),
   [Copilot](copilot.md#copilot-follow-up-check) and
@@ -111,7 +113,7 @@ and [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
   [Codex permissions and brief](running-other-ai.md#running-codex).
 - For Argon: [eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer),
   [pull requests](argon-pull-requests.md#argons-pull-requests),
-  [review launcher](running-argon.md#running-argon).
+  [review launcher](running-argon.md#running-argon), [verify](argon-verify.md).
 - Optional: [audit](#occasional-audit).
 
 - Mechanical subagent chores (waiting for CI, merge preparation, conflict

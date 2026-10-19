@@ -14,6 +14,12 @@
 // copilot-check checks Copilot follow-up changes at the pull request head (#1270);
 // probe runs the same pipeline on a local throwaway repository with a
 // trusted prompt and prints what agy did (#1071);
+// container-check <worktree> <build|vet|test> <package-pattern> copies Git's
+// tracked and non-ignored files without protected names or symlinks, then
+// runs one fixed Go command in a resource-limited, no-network container.
+// It needs the trusted build, the local Docker socket and a provisioned
+// /var/cache/argonreview/go-mod cache; skips never verify tests (#1429).
+// Race, cgo-dependent, database and browser checks remain CI-only;
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
@@ -41,6 +47,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "container-check" {
+		return containerCheckCommand(args[1:], stdout, stderr)
+	}
 	if len(args) == 2 && args[0] == "implement-guard" {
 		return implementGuard(args[1], stdin, stdout, stderr)
 	}

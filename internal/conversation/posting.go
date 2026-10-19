@@ -263,13 +263,10 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		var err error
 		if s.Quote != nil {
 			original, err := p.writer(tx).QuotedMessage(ctx, m.Organization.ID, channelID, *s.Quote)
-			if err != nil {
+			if err != nil && !errors.Is(err, ErrQuoteNotFound) {
 				return err
 			}
 			quote, err = quoteOf(original, references, s.UnknownMember, s.QuoteText)
-			if err != nil {
-				return err
-			}
 		}
 		stored, err = p.writer(tx).KeyedMessage(ctx, m.Organization.ID, m.Member.ID, key)
 		if err == nil && requested == (kernel.ID{}) {
@@ -300,7 +297,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return sent, ErrPostKeyReused
 	}
 	// A whole and a part equal to the whole are the same snapshot.
-	if quote != nil && stored.Quote.Text != quote.Text {
+	if quote != nil && s.QuoteText != nil && stored.Quote.Text != quote.Text {
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil

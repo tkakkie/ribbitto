@@ -337,9 +337,9 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) {
 			return
 		}
-		if page.QuoteInvalid {
-			status = http.StatusUnprocessableEntity
-		}
+	}
+	if page.QuoteInvalid {
+		status = http.StatusUnprocessableEntity
 	}
 	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" && !page.QuoteInvalid {
@@ -475,8 +475,6 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		bodyError := "message.error.body"
 		if errors.Is(err, conversation.ErrUnknownReference) {
 			bodyError = "message.error.reference"
-		} else if errors.Is(err, conversation.ErrInvalidQuotePart) {
-			bodyError = ""
 		}
 		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: bodyError, IdempotencyKey: kept})
 	case errors.Is(err, conversation.ErrPostKeyReused):

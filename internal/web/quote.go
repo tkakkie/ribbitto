@@ -37,7 +37,7 @@ func (p channelPages) readQuote(w http.ResponseWriter, r *http.Request, m org.Me
 	raw, present := values["quote"]
 	part, editing := values["part"]
 	if present && editing {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(w, "Unprocessable Entity", http.StatusUnprocessableEntity)
 		return false
 	}
 	if editing {

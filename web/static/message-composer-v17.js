@@ -179,7 +179,7 @@
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
     }
-    sendEvent("message-pending-action", { key: form.dataset.draftKey, kind: edit ? "edit" : "remove" });
+    sendEvent("message-pending-action", { key: form.elements.idempotency_key.value, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -392,7 +392,7 @@
         }
       }
       reconcile();
-      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.dataset.draftKey, message: state.dataset.postedMessage });
+      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
       return;
     }
     // The stream consumes this attribute at settle, possibly before IME ends.

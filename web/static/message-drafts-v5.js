@@ -76,7 +76,7 @@
     // never be read, even when they claim this page's owner and session.
     const own = (match) => match?.[1] === member && match[2] === session;
     const draftPlace = (match, entry) => valid(entry) && entry.text.trim() ? match.slice(3) : null;
-    const marked = (places, channel, topic, open) => !open && places.has(topic === "feed" ? channel : channel + ":" + topic);
+    const marked = (places, channel, topic, open) => places.has(topic === "feed" ? channel : channel + ":" + topic);
     const markers = (root = document.getElementById("sidebar-channels")) => {
       if (!root) return;
       const places = new Set();

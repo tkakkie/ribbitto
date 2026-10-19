@@ -53,7 +53,7 @@ func TestTopicCounts(t *testing.T) {
 			_, err = pool.Exec(t.Context(), "INSERT INTO topic_read_floor VALUES ($1,$2,$3,$4,$5)", f.OrganizationID, topic, f.MemberID, f.Channel.ID, tc.floor)
 			feedRequire(t, err)
 			feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-				got, first, err := newTopicCounts().Read(t.Context(), s, scope, 1, []kernel.ID{topic}, &topic)
+				got, first, err := newTopicCounts().ReadWithFirstUnread(t.Context(), s, scope, 1, []kernel.ID{topic}, &topic, true)
 				feedRequire(t, err)
 				if got[topic] != tc.want || first != tc.first {
 					t.Fatalf("count=%v first=%d; want %d/%d", got, first, tc.want, tc.first)
@@ -81,7 +81,7 @@ func TestTopicCountsReadingOneTopicAndMovesTwice(t *testing.T) {
 		t.Helper()
 		t.Run(name, func(t *testing.T) {
 			feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-				got, seq, err := newTopicCounts().Read(t.Context(), s, scope, 5, []kernel.ID{a, b}, &a)
+				got, seq, err := newTopicCounts().ReadWithFirstUnread(t.Context(), s, scope, 5, []kernel.ID{a, b}, &a, true)
 				feedRequire(t, err)
 				if got[a] != wantA || got[b] != wantB || seq != first {
 					t.Fatalf("counts=%v first=%d; want %d/%d/%d", got, seq, wantA, wantB, first)
@@ -169,7 +169,7 @@ func TestTopicCountsStatements(t *testing.T) {
 				t.Fatalf("%d topics: counts=%v statements=%d", n, got, counter.Counts().Queries-before)
 			}
 			before = counter.Counts().Queries
-			got, _, err = newTopicCounts().Read(t.Context(), s, unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}, 1, ids[:n-1], &ids[n-1])
+			got, _, err = newTopicCounts().ReadWithFirstUnread(t.Context(), s, unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}, 1, ids[:n-1], &ids[n-1], true)
 			feedRequire(t, err)
 			if len(got) != n || counter.Counts().Queries-before != 2 {
 				t.Fatalf("combined %d topics: counts=%v statements=%d", n, got, counter.Counts().Queries-before)

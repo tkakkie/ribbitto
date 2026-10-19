@@ -45,7 +45,7 @@ func TestChannelCounts(t *testing.T) {
 				feedRequire(t, err)
 			}
 			feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-				got, err := newChannelCounts().Read(t.Context(), s, f.OrganizationID, f.MemberID, tc.joined, []kernel.ID{channel.ID})
+				got, err := newChannelCounts().ReadWithFirstUnread(t.Context(), s, f.OrganizationID, f.MemberID, tc.joined, []kernel.ID{channel.ID}, true)
 				feedRequire(t, err)
 				if got[channel.ID] != (unread.ChannelCount{Count: tc.want, FirstUnread: tc.first}) {
 					t.Fatalf("counts=%v", got)
@@ -68,7 +68,7 @@ func TestChannelCountsFirstGapBeforeCap(t *testing.T) {
 	// The three unread messages in the first gap must survive the cap even
 	// though the later gap alone contains more than 100 unread messages.
 	feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-		got, err := newChannelCounts().Read(t.Context(), s, f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID})
+		got, err := newChannelCounts().ReadWithFirstUnread(t.Context(), s, f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID}, true)
 		feedRequire(t, err)
 		if got[f.Channel.ID] != (unread.ChannelCount{Count: 100, FirstUnread: 2}) {
 			t.Fatalf("counts=%v", got)
@@ -108,7 +108,7 @@ func TestChannelCountsStatementsAndDuplicate(t *testing.T) {
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				before := counter.Counts().Queries
-				got, err := newChannelCounts().Read(t.Context(), s, f.OrganizationID, f.MemberID, 1, tc.ids)
+				got, err := newChannelCounts().ReadWithFirstUnread(t.Context(), s, f.OrganizationID, f.MemberID, 1, tc.ids, true)
 				feedRequire(t, err)
 				if len(got) != tc.want || counter.Counts().Queries-before != 2 {
 					t.Fatalf("counts=%v, statements=%d", got, counter.Counts().Queries-before)
@@ -143,7 +143,7 @@ func TestChannelCountsScope(t *testing.T) {
  VALUES ($1,$2,$3,$4,'single-scope decoy',2)`, organization, channel, f.Channel.DefaultTopicID, f.MemberID)
 			feedRequire(t, err)
 			feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-				got, err := newChannelCounts().Read(t.Context(), s, f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID})
+				got, err := newChannelCounts().ReadWithFirstUnread(t.Context(), s, f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID}, true)
 				feedRequire(t, err)
 				if got[f.Channel.ID] != (unread.ChannelCount{}) {
 					t.Fatalf("single-scope decoy leaked: %v", got)
@@ -163,7 +163,7 @@ func TestChannelCountsMovedMessagesAndBranchNotice(t *testing.T) {
 	}))
 	check := func(want int64) {
 		feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-			got, err := newChannelCounts().Read(t.Context(), s, scope.OrganizationID, scope.MemberID, 1, []kernel.ID{scope.ChannelID})
+			got, err := newChannelCounts().ReadWithFirstUnread(t.Context(), s, scope.OrganizationID, scope.MemberID, 1, []kernel.ID{scope.ChannelID}, true)
 			feedRequire(t, err)
 			if got[scope.ChannelID] != (unread.ChannelCount{Count: want, FirstUnread: 3}) {
 				t.Fatalf("counts=%v", got)

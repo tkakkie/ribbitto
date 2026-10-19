@@ -64,7 +64,6 @@ func TestTopicCounts(t *testing.T) {
 
 	for _, tc := range []struct {
 		name            string
-		useRead         bool
 		selected        *kernel.ID
 		firstUnread     bool
 		wantFirstUnread bool
@@ -72,7 +71,6 @@ func TestTopicCounts(t *testing.T) {
 		counterErr      error
 		wantErr         string
 	}{
-		{name: "Read passes firstUnread true", useRead: true, selected: &secondTopic, wantFirstUnread: true},
 		{name: "ReadWithFirstUnread true", selected: &secondTopic, firstUnread: true, wantFirstUnread: true},
 		{name: "ReadWithFirstUnread false without selected", selected: nil, firstUnread: false, wantFirstUnread: false},
 		{name: "state error", selected: &firstTopic, firstUnread: true, stateErr: failure, wantErr: "loading topic count state: "},
@@ -82,14 +80,7 @@ func TestTopicCounts(t *testing.T) {
 			reader := &fakeTopicStateReader{state: state, err: tc.stateErr}
 			counter := &fakeTopicCounter{counts: wantCounts, first: wantFirst, err: tc.counterErr}
 			counts := NewTopicCounts(func(platform.Snapshot) TopicStateReader { return reader }, func(platform.Snapshot) TopicCounter { return counter })
-			var gotCounts map[kernel.ID]int64
-			var gotFirst int64
-			var err error
-			if tc.useRead {
-				gotCounts, gotFirst, err = counts.Read(t.Context(), platform.Snapshot{}, scope, joined, listed, tc.selected)
-			} else {
-				gotCounts, gotFirst, err = counts.ReadWithFirstUnread(t.Context(), platform.Snapshot{}, scope, joined, listed, tc.selected, tc.firstUnread)
-			}
+			gotCounts, gotFirst, err := counts.ReadWithFirstUnread(t.Context(), platform.Snapshot{}, scope, joined, listed, tc.selected, tc.firstUnread)
 			if reader.scope != scope || reader.joined != joined || !slices.Equal(reader.listed, listed) || reader.selected != tc.selected {
 				t.Fatalf("reader args=(%+v, %d, %v, %v), want (%+v, %d, %v, %v)", reader.scope, reader.joined, reader.listed, reader.selected, scope, joined, listed, tc.selected)
 			}

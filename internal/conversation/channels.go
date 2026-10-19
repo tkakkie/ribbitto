@@ -10,12 +10,10 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
-// ChannelStore reads and writes channels, always within one organisation. Lookups
-// return ErrChannelNotFound; CreateChannel returns ErrChannelNameTaken for a
-// duplicate and ErrChannelLimit at the cap. Transactional stores bind creation
-// through ChannelCreatorIn so locking precedes the guarded write.
+// ChannelStore looks up channels and changes their images within one organisation.
+// Lookups return ErrChannelNotFound; creation is bound through ChannelCreatorIn
+// so locking precedes the guarded write.
 type ChannelStore interface {
-	CreateChannel(ctx context.Context, organizationID kernel.ID, name, image string) (Channel, error)
 	SetChannelImage(ctx context.Context, organizationID, id kernel.ID, image string) error
 	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
 	GetDefaultChannel(ctx context.Context, organizationID kernel.ID) (Channel, error)
@@ -28,12 +26,8 @@ type Channels struct {
 	creator ChannelCreatorIn
 }
 
-// NewChannels returns a Channels.
-func NewChannels(store ChannelStore) *Channels {
-	return &Channels{store: store}
-}
-
 // ChannelCreator serializes creation before the guarded channel/default-topic write.
+// CreateChannel returns ErrChannelNameTaken for a duplicate and ErrChannelLimit at the cap.
 type ChannelCreator interface {
 	LockCreation(context.Context, kernel.ID) error
 	CreateChannel(context.Context, kernel.ID, string, string) (Channel, error)
@@ -64,21 +58,17 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 		return Channel{}, fmt.Errorf("%w: %w", ErrInvalidChannelName, err)
 	}
 	var created Channel
-	if s.runner == nil {
-		created, err = s.store.CreateChannel(ctx, m.Organization.ID, name, image)
-	} else {
-		err = s.runner.InTx(ctx, func(tx platform.Tx) error {
-			writer := s.creator(tx)
-			// A separate statement after the lock gets a fresh READ COMMITTED
-			// snapshot, including any creator that committed while we waited.
-			if err := writer.LockCreation(ctx, m.Organization.ID); err != nil {
-				return err
-			}
-			var err error
-			created, err = writer.CreateChannel(ctx, m.Organization.ID, name, image)
+	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
+		writer := s.creator(tx)
+		// A separate statement after the lock gets a fresh READ COMMITTED
+		// snapshot, including any creator that committed while we waited.
+		if err := writer.LockCreation(ctx, m.Organization.ID); err != nil {
 			return err
-		})
-	}
+		}
+		var err error
+		created, err = writer.CreateChannel(ctx, m.Organization.ID, name, image)
+		return err
+	})
 	if err != nil {
 		return Channel{}, fmt.Errorf("creating channel: %w", err)
 	}

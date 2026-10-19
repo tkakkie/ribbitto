@@ -52,13 +52,6 @@ func (p *Posting) PostToTopic(ctx context.Context, m org.Membership, channelID k
 	return sent.Message, err
 }
 
-// PostFromPage reads the composer scope through its applied-and-shown cursor
-// and the new message in the posting transaction.
-func (p *Posting) PostFromPage(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, body string, cursor int64) (Message, error) {
-	sent, err := p.Send(ctx, m, channelID, Send{Topic: topicID, Body: body, Cursor: &cursor})
-	return sent.Message, err
-}
-
 // ErrUnknownReference wraps ErrInvalidBody for a body referencing a member
 // the URL's organisation's directory did not return. A missing and another
 // organisation's member are the same error, so the answer reveals nothing

@@ -9,6 +9,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 // channelStore keeps channels per organisation, as the real store scopes them.
@@ -16,6 +17,8 @@ type channelStore struct {
 	channels map[kernel.ID][]conversation.Channel
 	created  []conversation.Channel
 }
+
+func (s *channelStore) LockCreation(context.Context, kernel.ID) error { return nil }
 
 func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name, image string) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
@@ -56,7 +59,11 @@ func TestChannels(t *testing.T) {
 	}
 	newService := func() (*conversation.Channels, *channelStore) {
 		s := &channelStore{channels: map[kernel.ID][]conversation.Channel{acme: {general}, globex: {secret}}}
-		return conversation.NewChannels(s), s
+		runner := &postingFake{t: t}
+		return conversation.NewTransactionalChannels(s, runner, func(tx platform.Tx) conversation.ChannelCreator {
+			runner.bound(tx)
+			return s
+		}), s
 	}
 
 	t.Run("create", func(t *testing.T) {

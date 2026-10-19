@@ -51,12 +51,6 @@ type bucket struct {
 	last time.Time
 }
 
-// NewRateLimiter returns a limiter with per-client buckets only; now is
-// time.Now outside tests.
-func NewRateLimiter(limit Limit, now func() time.Time) *RateLimiter {
-	return NewNetworkRateLimiter(limit, Limit{}, now)
-}
-
 // NewNetworkRateLimiter returns a limiter that also charges every IPv6
 // client's attempts to its /48, with the network limit.
 func NewNetworkRateLimiter(limit, network Limit, now func() time.Time) *RateLimiter {

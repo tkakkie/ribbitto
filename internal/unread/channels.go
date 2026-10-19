@@ -48,14 +48,9 @@ func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *Channe
 	return &ChannelCounts{ranges: ranges, messages: messages}
 }
 
-// Read counts the sidebar's channels across all topics. The caller supplies
-// resolved scope and org's persisted join sequence in the same snapshot.
-func (c *ChannelCounts) Read(ctx context.Context, s platform.Snapshot, organizationID, memberID kernel.ID, joined int64, channels []kernel.ID) (map[kernel.ID]ChannelCount, error) {
-	return c.ReadWithFirstUnread(ctx, s, organizationID, memberID, joined, channels, true)
-}
-
-// ReadWithFirstUnread retains selection and state loading while explicitly choosing
-// whether the message counter also computes first unread.
+// ReadWithFirstUnread counts the sidebar's channels across all topics, optionally
+// computing first unread. Scope and org's persisted join sequence come from the
+// caller's snapshot.
 func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snapshot, organizationID, memberID kernel.ID, joined int64, channels []kernel.ID, firstUnread bool) (map[kernel.ID]ChannelCount, error) {
 	ids := make([]kernel.ID, 0, len(channels))
 	seen := make(map[kernel.ID]bool, len(channels))

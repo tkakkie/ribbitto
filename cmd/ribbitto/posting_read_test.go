@@ -89,7 +89,7 @@ func TestPostingRead(t *testing.T) {
 			if strings.HasSuffix(mode, "history rollback") {
 				_, err = posting.PostToTopic(t.Context(), m, s.ChannelID, topic, "own post")
 			} else {
-				_, err = posting.PostFromPage(t.Context(), m, s.ChannelID, topic, "own post", cursor)
+				_, err = posting.Send(t.Context(), m, s.ChannelID, conversation.Send{Topic: topic, Body: "own post", Cursor: &cursor})
 			}
 			t.Logf("statements=%+v names=%v", trace.Counts(), steps)
 			switch mode {

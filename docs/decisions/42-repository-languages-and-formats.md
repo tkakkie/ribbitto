@@ -60,6 +60,7 @@ metacharacters in a tracked filename can be explained this way. Duplicate,
 untracked and already-allowed paths are stale and refused. Review verifies
 that the linked comment is the maintainer's and approves that exact path;
 the offline check cannot verify authorship.
+The exceptions file itself must be tracked before it can approve any path.
 
 The check reads NUL-separated tracked paths from git and the corresponding
 working-tree files; missing files and read/list errors fail. Matching is
@@ -68,12 +69,15 @@ a shebang at the first two bytes is forbidden everywhere without exception.
 A small command-word scan checks Makefile recipes, simple `SHELL` assignments
 (including `::=`), `!=` command assignments and literal `$(shell ...)` in
 simple assignments and tab-indented recipes, plus workflow `run` steps.
+Assignment comments follow Make's backslash escaping, independent of quotes;
+single-line YAML comments are stripped only outside single and double quotes.
 It refuses node/nodejs, npm/npx, python/pip, cargo/rustc, deno, bun, ruby,
 perl, bash/zsh/sh, yarn, pnpm, tsc/tsx, uv, poetry, php, java and
 dash/ksh/fish/pwsh, including optional digit-and-dot version suffixes.
 It recognises simple command positions after control words (`if`, `then`,
 `else`, `do`, `while`, `until`, `elif`, `!`, `{`), wrappers (`env`, `exec`,
 `command`, `sudo`, `time`, `nohup`, `xargs`) and `timeout <duration>`.
+Wrapper names also match by path basename; control words match only literally.
 Workflow block scalars accept indentation/chomping indicators and comments.
 In ordinary block mappings, the scan checks direct step `uses` values for
 `actions/setup-node`, `actions/setup-python`, `actions/setup-java`,

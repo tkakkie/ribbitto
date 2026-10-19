@@ -102,7 +102,26 @@ func checkCommands(name string, source io.Reader) []string {
 
 func yamlScalar(text string) string {
 	// Quoted single-line YAML scalars add one layer beyond shell quoting.
-	text, _, _ = strings.Cut(text, " #")
+	quote := byte(0)
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if quote != 0 {
+			if quote == '"' && c == '\\' && i+1 < len(text) {
+				i++
+			} else if c == quote {
+				if quote == '\'' && i+1 < len(text) && text[i+1] == '\'' {
+					i++
+				} else {
+					quote = 0
+				}
+			}
+		} else if c == '\'' || c == '"' {
+			quote = c
+		} else if c == '#' && (i == 0 || text[i-1] == ' ' || text[i-1] == '\t') {
+			text = text[:i]
+			break
+		}
+	}
 	text = strings.TrimSpace(text)
 	if len(text) >= 2 && (text[0] == '\'' || text[0] == '"') && text[len(text)-1] == text[0] {
 		return text[1 : len(text)-1]
@@ -116,12 +135,37 @@ func makeCommands(text string) []string {
 	if assignment == nil {
 		return nil
 	}
-	value, _, _ := strings.Cut(assignment[3], "#")
+	value := makeAssignmentValue(assignment[3])
 	var commands []string
 	if assignment[1] == "SHELL" || assignment[2] == "!=" {
 		commands = append(commands, value)
 	}
 	return append(commands, makeShellCommands(value)...)
+}
+
+func makeAssignmentValue(text string) string {
+	// Make ignores shell quotes when finding comments, but consumes escaping
+	// backslashes before # before it expands $(shell ...).
+	var value strings.Builder
+	for i := 0; i < len(text); {
+		start := i
+		for i < len(text) && text[i] == '\\' {
+			i++
+		}
+		if i < len(text) && text[i] == '#' {
+			value.WriteString(strings.Repeat("\\", (i-start)/2))
+			if (i-start)%2 == 0 {
+				break
+			}
+		} else {
+			value.WriteString(text[start:i])
+		}
+		if i < len(text) {
+			value.WriteByte(text[i])
+			i++
+		}
+	}
+	return value.String()
 }
 
 func makeShellCommands(text string) []string {
@@ -197,7 +241,7 @@ done:
 			command = false
 			continue
 		}
-		if word == "timeout" {
+		if path.Base(word) == "timeout" {
 			duration = true
 			continue
 		}
@@ -205,7 +249,11 @@ done:
 			continue
 		}
 		switch word {
-		case "if", "then", "else", "do", "!", "env", "exec", "command", "sudo", "time", "nohup", "xargs", "while", "until", "elif", "{":
+		case "if", "then", "else", "do", "!", "while", "until", "elif", "{":
+			continue
+		}
+		switch path.Base(word) {
+		case "env", "exec", "command", "sudo", "time", "nohup", "xargs":
 			continue
 		}
 		command = false

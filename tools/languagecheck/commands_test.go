@@ -35,6 +35,10 @@ func TestCommands(t *testing.T) {
 		{"container action input", ".github/workflows/ci.yml", "steps:\n  - uses: example/action@v1\n    with:\n      uses: docker://example/image:latest\n", 0},
 		{"container action argument", ".github/workflows/ci.yml", "steps:\n  - run: echo docker://example/image:latest\n", 0},
 		{"make shell chain", "Makefile", "VALUE = $(shell go version; uv run build.py)\n", 1},
+		{"make escaped hash", "Makefile", `X := $(shell echo "\#"; python x)` + "\n", 1},
+		{"make escaped hash comment", "Makefile", `X := $(shell \#; python x)` + "\n", 0},
+		{"make quoted hash comment", "Makefile", `X := " # $(shell python x)"` + "\n", 0},
+		{"make hash comment", "Makefile", `X := $(shell go version) # $(shell python x)` + "\n", 0},
 		{"make allowed shell", "Makefile", "TOOL_PATHS := $(shell go -C tools run ./download -paths)\n", 0},
 		{"make shell arguments", "Makefile", "VALUE := $(shell echo python)\n", 0},
 		{"make assignments", "Makefile", "TEXT := python\nSHELL_TOOL := bash\nSHELL := ./approved-shell\n", 0},
@@ -98,7 +102,7 @@ func TestCommandPrefixes(t *testing.T) {
 }
 
 func TestWorkflowBlockHeaders(t *testing.T) {
-	for _, header := range []string{"| # comment", "|+", ">+", "|2", ">-", "|2- # comment", ">+2", "|"} {
+	for _, header := range []string{"| # comment", "|+", ">+", "|2", ">-", "|2- # comment", ">+2", "|", ">", "|-"} {
 		t.Run(header, func(t *testing.T) {
 			for _, tt := range []struct {
 				command string
@@ -113,6 +117,96 @@ func TestWorkflowBlockHeaders(t *testing.T) {
 	}
 	if got := checkCommands(".github/workflows/ci.yml", strings.NewReader("run: echo '|+'\n  name: python\n")); len(got) != 0 {
 		t.Errorf("quoted block indicator: %v", got)
+	}
+}
+
+func TestWorkflowBlockLines(t *testing.T) {
+	for _, header := range []string{"|", ">", "|-"} {
+		t.Run(header, func(t *testing.T) {
+			source := "steps:\n  - run: " + header + "\n      python first.py\n        python nested.py\n      python last.py\n    name: python\n    env:\n      VALUE: python\n  - run: echo python\n"
+			got := checkCommands(".github/workflows/ci.yml", strings.NewReader(source))
+			if len(got) != 3 {
+				t.Fatalf("got %v; want three block commands", got)
+			}
+			for i, problem := range got {
+				if !strings.Contains(problem, []string{":3:", ":4:", ":5:"}[i]) || !strings.Contains(problem, `command "python"`) {
+					t.Errorf("unexpected block finding: %s", problem)
+				}
+			}
+		})
+	}
+}
+
+func TestYAMLScalarComments(t *testing.T) {
+	for _, tt := range []struct{ source, want string }{
+		{`echo " #"; python build.py`, `echo " #"; python build.py`},
+		{`'echo " #"; python build.py' # comment`, `echo " #"; python build.py`},
+		{`"echo \" # still quoted" # comment`, `echo \" # still quoted`},
+		{`'echo '' # still quoted' # comment`, `echo '' # still quoted`},
+		{`go version # python build.py`, `go version`},
+		{"go version\t# python build.py", `go version`},
+		{`echo value#suffix; python build.py`, `echo value#suffix; python build.py`},
+	} {
+		t.Run(tt.source, func(t *testing.T) {
+			if got := yamlScalar(tt.source); got != tt.want {
+				t.Errorf("got %q; want %q", got, tt.want)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		source string
+		count  int
+	}{
+		{`echo " #"; python build.py`, 1},
+		{`echo ' #'; python build.py`, 1},
+		{`'echo " #"; python build.py' # comment`, 1},
+		{`echo value#suffix; python build.py`, 1},
+		{`go version # python build.py`, 0},
+		{`echo " #; python build.py"`, 0},
+	} {
+		t.Run("run "+tt.source, func(t *testing.T) {
+			got := checkCommands(".github/workflows/ci.yml", strings.NewReader("steps:\n  - run: "+tt.source+"\n"))
+			if len(got) != tt.count {
+				t.Errorf("got %v; want %d", got, tt.count)
+			}
+		})
+	}
+}
+
+func TestMakeAssignmentComments(t *testing.T) {
+	for _, tt := range []struct{ source, want string }{
+		{`echo "#"; python x`, `echo "`},
+		{`echo "\#"; python x`, `echo "#"; python x`},
+		{`echo \\#; python x`, `echo \`},
+		{`echo \\\#; python x # comment`, `echo \#; python x `},
+		{`echo \\value`, `echo \\value`},
+	} {
+		if got := makeAssignmentValue(tt.source); got != tt.want {
+			t.Errorf("%q: got %q; want %q", tt.source, got, tt.want)
+		}
+	}
+}
+
+func TestPathQualifiedWrappers(t *testing.T) {
+	for _, prefix := range []string{"/usr/bin/env", "/bin/exec", "/usr/bin/command", "/usr/bin/sudo", "/usr/bin/time", "/usr/bin/nohup", "/usr/bin/xargs", "/usr/bin/timeout 30", "/usr/bin/timeout 0.5s"} {
+		t.Run(prefix, func(t *testing.T) {
+			if got := runtimeCommands(prefix + " python build.py"); len(got) != 1 || got[0] != "python" {
+				t.Errorf("got %v; want python", got)
+			}
+			for _, source := range []string{prefix, "echo " + prefix + " python", prefix + " go run ./python"} {
+				if got := runtimeCommands(source); len(got) != 0 {
+					t.Errorf("%q: unexpected %v", source, got)
+				}
+			}
+		})
+	}
+	for _, word := range []string{"if", "then", "else", "do", "while", "until", "elif", "!", "{"} {
+		if got := runtimeCommands("/usr/bin/" + word + " python"); len(got) != 0 {
+			t.Errorf("path-qualified control word %q: unexpected %v", word, got)
+		}
+	}
+	if got := runtimeCommands("/usr/bin/timeout python echo"); len(got) != 0 {
+		t.Errorf("invalid timeout duration: %v", got)
 	}
 }
 

@@ -247,6 +247,46 @@ func TestGitListing(t *testing.T) {
 	}
 }
 
+func TestExceptionsFileTracked(t *testing.T) {
+	for _, state := range []string{"tracked", "untracked", "ignored", "absent"} {
+		t.Run(state, func(t *testing.T) {
+			root := fixture(t, map[string]string{
+				"helper.py":    "",
+				exceptionsFile: "helper.py" + approval + "\n",
+				".gitignore":   exceptionsFile + "\n",
+			})
+			initRepo(t, root)
+			if state == "tracked" {
+				if _, err := git(root, "add", "-f", "--", exceptionsFile); err != nil {
+					t.Fatal(err)
+				}
+			} else if state == "untracked" {
+				if err := os.WriteFile(filepath.Join(root, ".gitignore"), nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if state == "absent" {
+				if err := os.Remove(filepath.Join(root, exceptionsFile)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			problems, err := check(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state == "tracked" {
+				if len(problems) != 0 {
+					t.Fatalf("tracked approval refused: %v", problems)
+				}
+				return
+			}
+			joined := strings.Join(problems, "\n")
+			if len(problems) != 2 || !strings.Contains(joined, exceptionsFile+": exceptions file is not tracked; an untracked file cannot approve anything") || !strings.Contains(joined, `"helper.py": path and kind are not in the language table`) {
+				t.Fatalf("want exceptions-file refusal and helper refusal; got %v", problems)
+			}
+		})
+	}
+}
+
 func TestGitEnvironment(t *testing.T) {
 	other := fixture(t, map[string]string{"other.go": ""})
 	initRepo(t, other)

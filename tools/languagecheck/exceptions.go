@@ -11,6 +11,9 @@ import (
 func readExceptions(repo *os.Root, tracked map[string]bool) (map[string]bool, []string) {
 	admitted := map[string]bool{}
 	var problems []string
+	if !tracked[exceptionsFile] {
+		return admitted, []string{exceptionsFile + ": exceptions file is not tracked; an untracked file cannot approve anything"}
+	}
 	f, err := openRegular(repo, exceptionsFile)
 	if err != nil {
 		return admitted, []string{fmt.Errorf("reading %s: %w", exceptionsFile, err).Error()}

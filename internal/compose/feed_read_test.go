@@ -1,4 +1,4 @@
-package main
+package compose_test
 
 import (
 	"context"
@@ -86,7 +86,7 @@ func TestFeedRead(t *testing.T) {
 			account := identitytest.Account(t, pool, "reader@example.org", "Reader")
 			scope.MemberID = orgtest.Member(t, pool, scope.OrganizationID, account, org.RoleMember, "reader", tc.joined)
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-				return checkedRead(t, tc.cursor > tc.joined)(newFeedWriter().Read(t.Context(), tx, scope, tc.joined, tc.cursor))
+				return checkedRead(t, tc.cursor > tc.joined)(compose.NewFeedWriter().Read(t.Context(), tx, scope, tc.joined, tc.cursor))
 			}))
 			feedRanges(t, pool, scope, []conversation.SequenceRange{{Lo: 0, Hi: tc.end}})
 		})
@@ -96,7 +96,7 @@ func TestFeedRead(t *testing.T) {
 func TestFeedReadReorderedAndRollback(t *testing.T) {
 	t.Parallel()
 	pool, scope := feedFixture(t)
-	feed := newFeedWriter()
+	feed := compose.NewFeedWriter()
 	for i, cursor := range []int64{5, 3, 1, 5} {
 		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 			return checkedRead(t, i == 0)(feed.Read(t.Context(), tx, scope, 1, cursor))
@@ -122,7 +122,7 @@ func TestFeedReadRefusesFutureCursor(t *testing.T) {
 	// A second organisation has a higher cursor; it must not authorize this one.
 	orgtest.Organization(t, pool, "other", "Other", 100)
 	err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		return checkedRead(t, false)(newFeedWriter().Read(t.Context(), tx, scope, 1, 7))
+		return checkedRead(t, false)(compose.NewFeedWriter().Read(t.Context(), tx, scope, 1, 7))
 	})
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
@@ -136,7 +136,7 @@ func TestFeedReadConcurrent(t *testing.T) {
 		for _, exists := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%d then %d existing=%t", cursors[0], cursors[1], exists), func(t *testing.T) {
 				pool, scope := feedFixture(t)
-				feed := newFeedWriter()
+				feed := compose.NewFeedWriter()
 				if exists {
 					feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 						return checkedRead(t, false)(feed.Read(t.Context(), tx, scope, 1, 1))
@@ -250,9 +250,9 @@ func TestEffectiveReadNoopsAndStatements(t *testing.T) {
 					feedRequire(t, platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
 						before := counter.Counts().Queries
 						if kind == "feed" {
-							err = checkedRead(t, want)(newFeedWriter().Read(t.Context(), tx, s, tc.joined, cursor))
+							err = checkedRead(t, want)(compose.NewFeedWriter().Read(t.Context(), tx, s, tc.joined, cursor))
 						} else {
-							err = checkedRead(t, want)(newTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: s, TopicID: f.Channel.DefaultTopicID}, tc.joined, cursor))
+							err = checkedRead(t, want)(compose.NewTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: s, TopicID: f.Channel.DefaultTopicID}, tc.joined, cursor))
 						}
 						if err != nil {
 							return err
@@ -330,7 +330,7 @@ func TestFeedReadFragmentedCost(t *testing.T) {
 			defer traced.Close()
 			feedRequire(t, platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
 				before := counter.Counts().Queries
-				if err := checkedRead(t, match)(newFeedWriter().Read(t.Context(), tx, s, 1, 20000)); err != nil {
+				if err := checkedRead(t, match)(compose.NewFeedWriter().Read(t.Context(), tx, s, 1, 20000)); err != nil {
 					return err
 				}
 				if got := counter.Counts().Queries - before; got != 10 {

@@ -19,7 +19,10 @@ A wiring package exports its use-case constructors, the `Tx`- and `Snapshot`-bou
 logic or new service layer (decision 26's 2026-10-18 amendment). Only `cmd/*`
 and `_test.go` files import it; it imports module roots, their wiring,
 `kernel` and `platform`. Its sub-packages follow these rules. It is outside
-the module graph.
+the module graph. `compose.PostReads` and `compose.PageCountsIn` bind unread
+writes and counts to conversation's transaction or snapshot; the feed/topic
+writer and count helpers live there too. Their database tests use
+`compose_test`; server and HTTP tests stay in `cmd/ribbitto`.
 
 The manifest allows unread's root, store and wiring to import conversation's
 root only, never its children, store, wiring, fixture package or org

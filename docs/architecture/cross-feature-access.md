@@ -40,7 +40,7 @@ across the channel and sidebar, the selected topic and the bounded topic list
 lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
-older pages connect with only the sidebar interest. Injected `PageCountsIn` binds `unread.PageCounts` to that snapshot, including older
+older pages connect with only the sidebar interest. Injected `compose.PageCountsIn` binds `unread.PageCounts` to that snapshot, including older
 history pages; their plain results carry both count maps and
 first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
@@ -75,7 +75,7 @@ scoped by organisation, member and channel. Go derives the prefix and up to
 100 gaps, retaining the supplied join prefix without rows; the 101st range
 bounds the final gap and never opens one. `unread.ChannelCounts` deduplicates
 sidebar IDs before loading and builds parallel gap IDs and bounds together.
-The composition root injects `conversationpg.ChannelUnreadIn`
+`compose.NewChannelCounts` injects `conversationpg.ChannelUnreadIn`
 through unread's `ChannelCounterIn` factory, sharing that snapshot. Conversation's
 `CountChannelUnread` probes ordered gaps, caps each channel at 100 messages
 before counting, and returns its first unread sequence in the same statement.
@@ -89,7 +89,7 @@ listed and selected IDs (at most 51), derives the prefix and supplies missing
 floors as `P − 1`. `unread.TopicCounts` builds ID/floor arrays together from
 that state and calls
 `conversationpg.TopicUnreadIn` through its `TopicCounterIn` factory, injected by
-the composition root. The snapshot-bound counter uses only message
+`compose.NewTopicCounts`. The snapshot-bound counter uses only message
 rows scoped by organisation, channel and topic and the supplied range values.
 Its two branches share a cap of 100; only the selected topic gets an uncapped
 first-unread lookup. The combined list takes two statements in the page snapshot, with no foreign-table seam.
@@ -101,13 +101,13 @@ savepoint around creation recovers a concurrent unique conflict; it never
 completes the caller's transaction. The caller supplies org's persisted join
 sequence; no message or foreign-table query runs in unread's store.
 `unread.FeedWriter` takes consumer-owned transaction factories, injected by
-the composition root: `conversationpg.MessageSequencesIn` supplies
+`compose.NewFeedWriter`: `conversationpg.MessageSequencesIn` supplies
 `FirstMessageAfter` through conversation's own `FirstChannelMessageAfter`
 sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 `orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
 a next message). The read POST owns that transaction (see [unread writes](unread-writes.md)).
-`unread.TopicWriter`, wired by the composition root, validates org's cursor, then
+`unread.TopicWriter`, wired by `compose.NewTopicWriter`, validates org's cursor, then
 prepares the locked prefix, ranges and floor before querying candidates and
 batch-adding their bounds and raising the floor, all in the caller's transaction.
 `conversationpg.TopicReadCandidatesIn` binds `TopicUnreadRangeBounds` to the
@@ -137,7 +137,7 @@ factories return concrete stores; unread owns `ChannelMessages`, `TopicMessages`
 without a range converter.
 
 Posting from a page uses conversation's `PostReadWriterIn`, injected by
-the composition root. After taking org's sequence, `Posting.Send` with a cursor
+`compose.PostReads`. After taking org's sequence, `Posting.Send` with a cursor
 validates the page cursor against the pre-post limit and inserts the message.
 Conversation supplies the channel predecessor and checks the topic for posts
 or moves strictly between the cursor and the new sequence. `unread.PostReads` chooses

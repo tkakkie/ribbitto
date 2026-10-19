@@ -232,7 +232,7 @@ func readCostStep(t *testing.T, n, tabs int, mode string) {
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SHOW server_version").Scan(&version))
 	t.Logf("%s %s/%s CPUs=%d PostgreSQL=%s pool=10 active-readers=%d", runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), version, active)
 	pub := &readCostPublisher{times: make(map[kernel.ID]time.Duration)}
-	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	hub := realtime.NewHub()
 	events := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, conversationpg.EventKinds()), hub, 1024, time.Minute)
 	auth := orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity)
@@ -272,7 +272,7 @@ func readCostStep(t *testing.T, n, tabs int, mode string) {
 	for i, c := range connections {
 		baseline[i] = c.counters()
 	}
-	reading := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), pub)
+	reading := unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), pub)
 	for phase := range 4 {
 		type result struct {
 			member   int

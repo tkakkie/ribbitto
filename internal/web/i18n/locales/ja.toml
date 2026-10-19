@@ -448,6 +448,9 @@ other = "引用するテキスト"
 ["message.error.quote"]
 other = "元のメッセージの一部を4000文字以内で入力してください。空欄にはできません。"
 
+["sidebar.draft"]
+other = "下書き"
+
 ["preference.send_with"]
 other = "送信キー"
 

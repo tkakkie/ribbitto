@@ -1,4 +1,4 @@
-package main
+package compose_test
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 					scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 					wantCount, wantFirst := int64(2), int64(2)
 					if n > 1 {
-						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, initial.EventSeq))
+						feedRequire(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, initial.EventSeq))
 						wantCount, wantFirst = 1, 3
 					}
 					trace := &pageTrace{QueryCounter: platform.NewQueryCounter(), names: map[string]int{}}
@@ -76,7 +76,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 						post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "concurrent")
 						feedRequire(t, err)
 						scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
-						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+						feedRequire(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 						_, err = conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(t.Context(), m, f.Channel.ID,
 							conversation.Branch{From: selected, Messages: []kernel.ID{initial.ID}, NewName: "moved"}, func(conversation.Topic) string { return "notice" })
 						feedRequire(t, err)
@@ -86,7 +86,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 					traced, err := pgxpool.NewWithConfig(t.Context(), config)
 					feedRequire(t, err)
 					defer traced.Close()
-					reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
+					reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 					wantTopics := min(n, 50)
 					var before *int64
 					if strings.Contains(kind, "older") {
@@ -131,7 +131,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 					if q := trace.Counts(); q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 || q.Queries != wantStatements {
 						t.Fatalf("page transactions: %+v", q)
 					}
-					fresh, err := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn).Page(t.Context(), m, f.Channel.ID, &selected, nil)
+					fresh, err := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn).Page(t.Context(), m, f.Channel.ID, &selected, nil)
 					feedRequire(t, err)
 					if fresh.ChannelCounts[f.Channel.ID] != 0 || *fresh.EventCursor != 6 {
 						t.Fatalf("concurrent changes did not commit: %+v", fresh)

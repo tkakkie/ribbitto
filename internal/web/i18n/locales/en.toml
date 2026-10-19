@@ -448,6 +448,9 @@ other = "Quoted text"
 ["message.error.quote"]
 other = "Enter a non-empty part of the original message (up to 4000 characters)."
 
+["sidebar.draft"]
+other = "Draft"
+
 ["preference.send_with"]
 other = "Send with"
 

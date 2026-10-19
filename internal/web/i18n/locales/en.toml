@@ -447,3 +447,18 @@ other = "Quoted text"
 
 ["message.error.quote"]
 other = "Enter a non-empty part of the original message (up to 4000 characters)."
+
+["preference.send_with"]
+other = "Send with"
+
+["preference.enter"]
+other = "Enter"
+
+["preference.modifier_enter"]
+other = "Ctrl+Enter (⌘+Enter on Mac)"
+
+["preference.save"]
+other = "Save"
+
+["message.help_modifier"]
+other = "Ctrl+Enter (⌘+Enter on Mac) sends; Enter adds a line break. **bold**, _italic_, `code`, > quote."

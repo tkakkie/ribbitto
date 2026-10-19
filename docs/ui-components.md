@@ -24,7 +24,7 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
 | `mentionPicker` | `internal/web/view/mention.templ` | the composer's @-picker listbox ([contract](architecture/web-composer.md#composer)) |
-| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty if no quote; `message-composer-v17.js` focuses textarea |
+| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty if no quote; `message-composer-v18.js` focuses textarea |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link, covering the conversation below `wide` ([side panels](#side-panels)); a header link, icon-only below `desk` with its accessible name kept, that opens one panel, `aria-current="true"` and a Filled icon while it is open |

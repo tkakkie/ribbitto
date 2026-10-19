@@ -142,7 +142,7 @@ before posting; non-members get 404.
 [Device drafts](../architecture/web-composer.md#drafts): session-scoped feed/topic
 restore; confirmation keeps newer text; Retry never snapshots.
 
-Enter sends (except during IME); Shift+Enter adds a newline. Help names formatting.
+Enter sends by default, or Ctrl/⌘+Enter by account choice; Shift+Enter adds a newline. IME never sends.
 Pages start at newest; live delivery follows only at the bottom. The sender's
 response ID scrolls once in either delivery order and after reconnect. Focus
 stays in the composer. Live appends announce; replay replaces IDs silently.

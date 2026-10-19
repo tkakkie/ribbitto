@@ -447,3 +447,18 @@ other = "引用するテキスト"
 
 ["message.error.quote"]
 other = "元のメッセージの一部を4000文字以内で入力してください。空欄にはできません。"
+
+["preference.send_with"]
+other = "送信キー"
+
+["preference.enter"]
+other = "Enter"
+
+["preference.modifier_enter"]
+other = "Ctrl+Enter（Macでは⌘+Enter）"
+
+["preference.save"]
+other = "保存"
+
+["message.help_modifier"]
+other = "Ctrl+Enter（Macでは⌘+Enter）で送信、Enterで改行。**太字**、_斜体_、`コード`、> 引用。"

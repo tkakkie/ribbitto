@@ -612,6 +612,9 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 			s.Reading = readCall(func(context.Context) error { return nil })
 			s.SignalLimits = s.ReadLimits
 		},
+		"preferences missing":               func(s *Services) { s.Preferences = nil },
+		"preferences without limiter":       func(s *Services) { s.SendKeyLimits = nil },
+		"preferences sharing post limiter":  func(s *Services) { s.SendKeyLimits = s.PostLimits },
 		"mentions without limiter":          func(s *Services) { s.MentionLimits = nil },
 		"mentions sharing typing limiter":   func(s *Services) { s.SignalLimits = s.MentionLimits },
 		"mentions sharing read limiter":     func(s *Services) { s.ReadLimits = s.MentionLimits },

@@ -286,6 +286,7 @@ func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.M
 func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapshot conversation.SidebarSnapshot) view.ChannelPage {
 	account, _ := middleware.Account(r.Context())
 	page = sidebarView(page, m, snapshot)
+	page.SendKey = string(account.SendKey)
 	page.ImageKeys = conversation.ChannelImageKeys()
 	page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 	session, _ := middleware.CurrentSession(r.Context())
@@ -522,6 +523,8 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 			page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
+		account, _ := middleware.Account(r.Context())
+		page.SendKey = string(account.SendKey)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}

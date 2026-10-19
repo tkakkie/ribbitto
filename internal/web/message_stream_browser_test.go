@@ -51,7 +51,7 @@ func TestBrowser(t *testing.T) {
 	for range browsers {
 		pool <- launchScenarioBrowser(t, ctx, bin)
 	}
-	run := func(name string, scenario func(*testing.T, *rod.Browser)) {
+	registerBrowserScenarios(func(name string, scenario func(*testing.T, *rod.Browser)) {
 		if !slices.Contains(selected, name) {
 			return
 		}
@@ -64,8 +64,7 @@ func TestBrowser(t *testing.T) {
 			t.Cleanup(func() { pool <- browser })
 			scenario(t, browser)
 		})
-	}
-	registerBrowserScenarios(run)
+	})
 	if selector == "" {
 		selector = "all"
 	}

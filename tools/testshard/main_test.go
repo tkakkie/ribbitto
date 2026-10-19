@@ -247,8 +247,14 @@ func TestRunPropagatesFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	for _, tc := range []struct{ status, report string }{{"0", "yes"}, {"7", "yes"}, {"7", ""}} {
-		t.Run(tc.status+tc.report, func(t *testing.T) {
+	for _, tc := range []struct{ shard, status, report, wantErr string }{
+		{"web-2/3", "0", "yes", ""},
+		{"web-2/3", "7", "yes", "running shard web-2/3: exit status 7"},
+		{"web-2/3", "7", "", "running shard web-2/3: exit status 7"},
+		{"web-2/3", "0", "", "shard web-2/3 succeeded without writing a browser scenario count"},
+		{"cmd", "0", "", ""},
+	} {
+		t.Run(tc.shard+"/"+tc.status+tc.report, func(t *testing.T) {
 			t.Setenv("MAKE_EXIT", tc.status)
 			t.Setenv("REPORT_COUNT", tc.report)
 			out, err := os.CreateTemp(t.TempDir(), "stdout")
@@ -258,10 +264,10 @@ func TestRunPropagatesFailure(t *testing.T) {
 			defer out.Close()
 			stdout := os.Stdout
 			os.Stdout = out
-			err = run("../..", "web-2/3", false, true)
+			err = run("../..", tc.shard, false, true)
 			os.Stdout = stdout
-			if tc.status == "0" && err != nil || tc.status == "7" && (err == nil || !strings.Contains(err.Error(), "running shard web-2/3: exit status 7")) {
-				t.Fatalf("run = %v", err)
+			if tc.wantErr == "" && err != nil || tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("run = %v, want %q", err, tc.wantErr)
 			}
 			line, err := os.ReadFile(out.Name())
 			want := ""

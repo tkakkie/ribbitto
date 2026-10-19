@@ -119,6 +119,8 @@ func run(root, name string, check, execute bool) error {
 			fmt.Print(string(line))
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("reading browser count: %w", err)
+		} else if s.browser != "" && runErr == nil {
+			return fmt.Errorf("shard %s succeeded without writing a browser scenario count", name)
 		}
 		if runErr != nil {
 			return fmt.Errorf("running shard %s: %w", name, runErr)

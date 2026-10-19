@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -97,7 +98,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				wantInterests = "sidebar"
 			}
 			m := org.Membership{Organization: org.Organization{ID: f.organization, Slug: "read", Name: "read"}, Member: org.Member{ID: f.member, JoinedEventSeq: 1}}
-			reader := conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn)
+			reader := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn)
 			snapshot, err := reader.Sidebar(ctx, m, f.channel, selected)
 			acceptanceOK(t, err)
 			u, err := url.Parse(f.reader.server.URL)

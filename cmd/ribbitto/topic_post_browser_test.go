@@ -14,6 +14,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -60,7 +61,7 @@ func TestTopicPostBrowser(t *testing.T) {
 	owner := sidebarBrowser(t, pool, server, f.AccountID)
 	// Enough history that the list scrolls, so "scrolled into view" means something.
 	// Seed through the use case to leave the HTTP post budget for browser sends.
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, nil)
 	membership := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
 	for i := range 30 {
 		_, err := posting.PostToTopic(ctx, membership, f.Channel.ID, &topic.ID, fmt.Sprintf("earlier %02d\nsecond line\nthird line", i))

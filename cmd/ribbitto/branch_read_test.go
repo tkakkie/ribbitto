@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -55,11 +56,11 @@ func TestBranchNoticeRead(t *testing.T) {
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT default_topic_id FROM channel WHERE id=$1", other.ChannelID).Scan(&source))
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT id FROM message WHERE organization_id=$1 AND event_seq=2", other.OrganizationID).Scan(&readMessage))
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT id FROM message WHERE organization_id=$1 AND event_seq=6", other.OrganizationID).Scan(&unreadMessage))
-				events := postingEvents
+				events := compose.PostingEvents
 				if rollback {
-					events = func(tx platform.Tx) conversation.EventAppender { return failingNoticeEvents{postingEvents(tx)} }
+					events = func(tx platform.Tx) conversation.EventAppender { return failingNoticeEvents{compose.PostingEvents(tx)} }
 				}
-				brancher := conversationpg.NewBrancher(pool, postingSequence, events, branchReads, nil)
+				brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, events, compose.BranchReads, nil)
 				destination, err := brancher.Branch(t.Context(), m, other.ChannelID, conversation.Branch{
 					Messages: []kernel.ID{readMessage, unreadMessage}, From: source, NewName: "design",
 				}, func(conversation.Topic) string { return "moved" })

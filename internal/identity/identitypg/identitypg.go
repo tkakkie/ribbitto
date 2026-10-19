@@ -10,7 +10,7 @@ import (
 )
 
 // AccountCreatorIn returns identity's account creator bound to the caller's
-// transaction. Composition roots adapt it to org.AccountCreatorIn with a
+// transaction. Compose adapts it to org.AccountCreatorIn with a
 // named function.
 func AccountCreatorIn(tx platform.Tx) *postgres.AccountCreator { return postgres.AccountCreatorIn(tx) }
 
@@ -30,4 +30,9 @@ func NewSignIn(pool *pgxpool.Pool, hasher *identity.Hasher, sessions *identity.S
 // caller that reads authors in the same snapshot as the rest of its page.
 func AccountsIn(snapshot platform.Snapshot) identity.Directory {
 	return postgres.NewDirectoryIn(snapshot)
+}
+
+// NewPreferences returns account preference updates on pool.
+func NewPreferences(pool *pgxpool.Pool) *identity.Preferences {
+	return identity.NewPreferences(postgres.NewAccountStore(pool))
 }

@@ -451,5 +451,20 @@ other = "元のメッセージの一部を4000文字以内で入力してくだ�
 ["sidebar.draft"]
 other = "下書き"
 
+["preference.send_with"]
+other = "送信キー"
+
+["preference.enter"]
+other = "Enter"
+
+["preference.modifier_enter"]
+other = "Ctrl+Enter（Macでは⌘+Enter）"
+
+["preference.save"]
+other = "保存"
+
+["message.help_modifier"]
+other = "Ctrl+Enter（Macでは⌘+Enter）で送信、Enterで改行。**太字**、_斜体_、`コード`、> 引用。"
+
 ["message.quote_selection"]
 other = "選択部分を引用"

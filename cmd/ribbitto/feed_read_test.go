@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -45,7 +46,7 @@ func feedFixture(t *testing.T) (*pgxpool.Pool, unread.Scope) {
 	t.Helper()
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "feed", "general")
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	member := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 	for range 5 {
 		_, err := posting.Post(t.Context(), member, f.Channel.ID, "message")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
@@ -158,7 +159,7 @@ func TestReadPostBrowser(t *testing.T) {
 				// The synthetic received-only cursor above was never an application.
 				page.MustEval(`() => document.querySelector('#organization-stream').dataset.eventCursor = '6'`)
 				posterID := orgtest.Member(t, pool, scope.OrganizationID, identitytest.Account(t, pool, "writer@example.org", "Writer"), org.RoleMember, "writer", 1)
-				poster := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+				poster := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 				membership := org.Membership{Organization: org.Organization{ID: scope.OrganizationID}, Member: org.Member{ID: posterID}}
 				other := conversationtest.Topic(t, pool, scope.OrganizationID, scope.ChannelID, "other")
 				post := func(topic kernel.ID, deliver bool) {

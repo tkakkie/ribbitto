@@ -35,6 +35,8 @@ type Topic struct {
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
+	// SendKey is the session account's composer preference.
+	SendKey string
 	// List marks the channel list page, whose content is the sidebar.
 	List                       bool
 	Reading                    bool // Whether read POSTs are wired.
@@ -307,7 +309,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v17.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v18.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/quote-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -568,6 +570,7 @@ templ messageComposer(page ChannelPage) {
 templ composerState(page ChannelPage) {
 	<div
 		id="message-composer-state"
+		data-send-key={ sendKeyValue(page) }
 		if page.PostedMessageID != nil {
 			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
 			data-posted-topic={ idValue(page.PostedTopicID) }
@@ -592,6 +595,8 @@ templ composerState(page ChannelPage) {
 		}
 		if fieldError(page) != "" {
 			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
+		} else if page.SendKey == "modifier_enter" {
+			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help_modifier") }</p>
 		} else {
 			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
@@ -818,4 +823,11 @@ templ unreadBadge(count int64) {
 
 templ draftMarker() {
 	<span data-draft-marker hidden class="shrink-0 text-caption font-normal text-muted">{ i18n.T(ctx, "sidebar.draft") }</span>
+}
+
+func sendKeyValue(page ChannelPage) string {
+	if page.SendKey == "modifier_enter" {
+		return page.SendKey
+	}
+	return "enter"
 }

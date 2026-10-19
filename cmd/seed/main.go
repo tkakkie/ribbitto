@@ -19,17 +19,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
-	"github.com/tkakkie/ribbitto/internal/unread"
-	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
 //go:embed conversations.json
@@ -150,9 +147,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	const slug = "paper-lantern"
 	installer := orgpg.NewSetup(pool, hasher, token,
-		accountCreator,
-		memberEvents,
-		defaultChannelCreator)
+		compose.AccountCreator,
+		compose.MemberEvents,
+		compose.DefaultChannelCreator)
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
 	if err != nil {
@@ -190,8 +187,8 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
 	signups := orgpg.NewSignUp(pool, hasher, true,
-		accountCreator,
-		memberEvents)
+		compose.AccountCreator,
+		compose.MemberEvents)
 	authorizer := orgpg.NewAuthorizer(pool)
 	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {
@@ -219,7 +216,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	channels := conversationpg.NewChannels(pool, conversation.DefaultMaxChannels)
-	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	posts := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	var general conversation.Channel
 	var generalMessages []scriptMessage
 	for _, scripted := range data.Channels {
@@ -250,7 +247,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
+		branches := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}
@@ -265,32 +262,4 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)
 	return err
-}
-
-// accountCreator binds identity's account creator to setup's and sign-up's transaction.
-func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
-
-// memberEvents binds realtime's appender to setup's and sign-up's transaction.
-func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
-func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
-	return conversationpg.DefaultChannelCreatorIn(tx)
-}
-
-// postingEvents binds realtime's appender to conversation's posting and branching transaction.
-func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// postingSequence binds org's sequence to conversation's posting and branching transaction.
-func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-// branchReads adapts unread's range writer to conversation's consumer interface.
-func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
-	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
-}
-
-type branchReadWriter struct{ ranges unread.RangeWriter }
-
-func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
 }

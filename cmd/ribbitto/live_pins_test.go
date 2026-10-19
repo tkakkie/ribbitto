@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -30,7 +31,7 @@ func TestLivePins(t *testing.T) {
 	owner, reader := sidebarBrowser(t, pool, api, f.AccountID), sidebarBrowser(t, pool, api, account)
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "pins")
 	acceptanceOK(t, err)
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, hub)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, hub)
 	message, err := posting.Post(t.Context(), m, f.Channel.ID, "pin across topics")
 	acceptanceOK(t, err)
 	path := view.ConversationURL("pins", f.Channel.ID, &selected.ID)
@@ -61,13 +62,13 @@ func TestLivePins(t *testing.T) {
 	for _, events := range tabs {
 		frame(events, "pin across topics")
 	}
-	_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, hub).Branch(t.Context(), m, f.Channel.ID, conversation.Branch{Messages: []kernel.ID{message.ID}, From: f.Channel.DefaultTopicID, NewName: "current label"}, func(conversation.Topic) string { return "branch notice" })
+	_, err = conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, hub).Branch(t.Context(), m, f.Channel.ID, conversation.Branch{Messages: []kernel.ID{message.ID}, From: f.Channel.DefaultTopicID, NewName: "current label"}, func(conversation.Topic) string { return "branch notice" })
 	acceptanceOK(t, err)
 	for _, events := range tabs {
 		frame(events, "current label")
 	}
 	// A commit without a raise is recovered by the existing watermark path.
-	pinning := conversationpg.NewPinning(pool, postingSequence, postingEvents, nil)
+	pinning := conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	acceptanceOK(t, pinning.Unpin(t.Context(), m, f.Channel.ID, message.ID))
 	hub.Raise(f.OrganizationID, 6)
 	for _, events := range tabs {

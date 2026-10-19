@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"log/slog"
 	"net/http/httptest"
@@ -176,15 +177,17 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 	acceptanceOK(t, err)
 	handler, err := web.NewHandler("", cat, web.Services{
-		PostLimits: middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
+		Preferences:   identitypg.NewPreferences(pool),
+		SendKeyLimits: middleware.NewMemberRateLimiter(time.Now),
+		PostLimits:    middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
 		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now), CreateLimits: middleware.NewChannelCreationRateLimiter(time.Now),
 		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
-		Messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
-		Posting:  conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, hub),
+		Messages: conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn),
+		Posting:  conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, hub),
 		Reading:  unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), p),
 		Stream: &web.Streaming{Lifetime: t.Context(), Hub: hub, Sessions: sessions, Authorizer: auth,
 			Events:  realtimepg.NewReader(pool, orgpg.BoundsIn, kinds),
-			Sidebar: sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), &p.changes)},
+			Sidebar: sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn), &p.changes)},
 	})
 	acceptanceOK(t, err)
 	server := httptest.NewTLSServer(handler)

@@ -130,3 +130,13 @@ transaction that decision 5 and branching rely on); per-module web packages
 `Membership` in the kernel (it has a natural owner, `org`).
 **Superseded in part by:** [decision 27](27-channels-topics-and-messages-are-one-conversation-module.md) (`channel`, `topic` and `message` become one `conversation` module; its graph and order).
 **Amended by:** [decision 29](29-test-fixtures-live-with-the-module-that-owns-their-tables.md) (a test-only fixture package).
+
+## Amendment: shared composition (2026-10-18)
+
+The maintainer approved #1304 on 2026-10-18: shared cross-module adapters
+and composition live in `internal/compose`, importable only by `cmd/*` and
+`_test.go` files. It may import module roots, their wiring, kernel and
+platform; modules and production web cannot import it. The manifest test
+and depguard enforce this boundary. It contains no business logic or new
+service layer, and does not introduce the orchestration module rejected
+above. Use cases retain transaction ownership and table access is unchanged.

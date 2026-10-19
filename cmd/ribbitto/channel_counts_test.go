@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -177,7 +178,7 @@ func TestChannelCountsMovedMessagesAndBranchNotice(t *testing.T) {
 	feedRequire(t, pool.QueryRow(t.Context(), "SELECT default_topic_id FROM channel WHERE id=$1", scope.ChannelID).Scan(&source))
 	feedRequire(t, pool.QueryRow(t.Context(), "SELECT member_id FROM message WHERE channel_id=$1 LIMIT 1", scope.ChannelID).Scan(&author))
 	feedRequire(t, pool.QueryRow(t.Context(), "SELECT array_agg(id ORDER BY event_seq) FROM message WHERE channel_id=$1 AND event_seq IN (2,6)", scope.ChannelID).Scan(&messages))
-	brancher := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
+	brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil)
 	_, err := brancher.Branch(t.Context(), org.Membership{Organization: org.Organization{ID: scope.OrganizationID}, Member: org.Member{ID: author, JoinedEventSeq: 1}}, scope.ChannelID,
 		conversation.Branch{Messages: messages, From: source, NewName: "moved"}, func(conversation.Topic) string { return "notice" })
 	feedRequire(t, err)

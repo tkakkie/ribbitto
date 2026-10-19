@@ -14,7 +14,8 @@ internal/lintfixture/sqlclosecheck.go:16:25: Rows/Stmt/NamedStmt was not closed 
 internal/lintfixture/bad.go:8:36: SA4017: TrimSpace doesn't have side effects and its return value is ignored (staticcheck)
 internal/lintfixture/bad_templ.go:36:3: SA4006: this value of ctx is never used (staticcheck)
 internal/lintfixture/bad_templ.go:37:3: SA4017: TrimSpace doesn't have side effects and its return value is ignored (staticcheck)
-7 issues:`
+internal/lintfixture/internal/compose/sub/bad.go:5:8: import 'github.com/tkakkie/ribbitto/internal/web' is not allowed from list 'composition': Respect the dependency direction in AGENTS.md. (depguard)
+8 issues:`
 
 func TestEvaluate(t *testing.T) {
 	if err := evaluate(recorded, true); err != nil {
@@ -37,6 +38,7 @@ func TestEvaluate(t *testing.T) {
 		{"lint passed", recorded, false, "depguard must reject pgxbridge in a module root"},
 		{"no depguard report", without("badroot/root.go"), true, "depguard must reject pgxbridge in a module root"},
 		{"depguard in a store", recorded + "\ninternal/lintfixture/internal/postgres/store.go:5:2: import 'x/pgxbridge' is not allowed (depguard)", true, "depguard must accept pgxbridge in a store"},
+		{"no compose sub-package report", without("compose/sub/bad.go:"), true, "depguard must reject web in a compose sub-package"},
 		{"no SA4017 in bad.go", without("lintfixture/bad.go:"), true, "staticcheck must reject an ignored result in bad.go"},
 		{"only SA4006 in bad_templ.go", without("bad_templ.go:37"), true, "staticcheck must reject an ignored result in bad_templ.go"},
 		{"no bodyclose", without("bodyclose.go"), true, "bodyclose must reject an unclosed HTTP response body"},

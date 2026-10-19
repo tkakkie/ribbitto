@@ -58,8 +58,9 @@ the process hasher. Through the injected `TxRunner`, the root owns one
 transaction: read the setup organisation, take its sequence first, create
 identity's account through `AccountCreatorIn`, insert org's member, then
 append `member.joined` through `EventAppenderIn`. Org declares both factories.
-The composition roots and web tests adapt the providers with named functions,
-all bound to the same transaction.
+The composition roots use `compose.AccountCreator` and `compose.MemberEvents`
+from `internal/compose`; web tests retain local named adapters. All bind the
+providers to the same transaction.
 The member gets the validated handle and sequence. Database email and handle
 rejections become typed conflicts or field errors without inspecting pgconn.
 Duplicate email or a handle already used in the organisation rolls back

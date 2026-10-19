@@ -1,9 +1,9 @@
 # Cross-feature access
 
-How features read and write each other's data today: which stores accept a
+How features access each other's data: which stores accept a
 pool, a transaction or a snapshot, and how posting, history and the page
 snapshot reach org's and identity's data. The [feature map](features.md)
-lists each feature's packages and tables and the known exceptions; the
+lists packages, tables and exceptions; the
 [architecture index](README.md) lists the other files. Exported module contracts
 are indexed in the generated APIs for [conversation](../api/conversation.txt),
 [unread](../api/unread.txt), [org](../api/org.txt) and [identity](../api/identity.txt).
@@ -14,7 +14,7 @@ Its `CreateChannel` creates a non-default channel; only setup's
 `conversation.Posting` owns the posting transaction (sequence first, topic
 reads, then the message and event) through its runner. It takes org's sequence
 through conversation's `EventSequenceIn` factory (`orgpg.SequenceIn`, adapted
-by a one-line closure) on that transaction; an unknown organisation is
+by `compose.PostingSequence`) on that transaction; an unknown organisation is
 `org.ErrNotFound`, which posting returns unchanged. Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
@@ -27,12 +27,12 @@ one message by organisation, channel and `event_seq`, returning `conversation.Er
 for a missing or out-of-scope message. `conversation.Reader` resolves authors through
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
 organisation, returning handles and account IDs), then `AccountDirectory.LookupDisplayNames`,
-served by identity (only those account IDs). Their adapters
-own the queries in `org/member.sql` and `identity/account.sql`; conversation never
-queries those tables. `conversation.Reader` receives both directories through
+served by identity (only those account IDs). Org and identity own the queries
+in `org/member.sql` and `identity/account.sql`; conversation never queries those tables. `conversation.Reader` receives both directories through
 conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
-from `orgpg.MembersIn` and `identitypg.AccountsIn` by one-line closures, and
-every history page's cursor through conversation's `EventCursorIn` (`orgpg.EventCursorIn`), all
+from `orgpg.MembersIn` and `identitypg.AccountsIn` by `compose.LookupMembers`
+and `compose.LookupAccounts`, and
+every history page's cursor through conversation's `EventCursorIn` (`orgpg.EventCursorIn`, adapted by `compose.EventCursor`), all
 bound to its snapshot through `SnapshotRunner`. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar, the selected topic and the bounded topic list
@@ -40,8 +40,7 @@ across the channel and sidebar, the selected topic and the bounded topic list
 lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
-older pages connect with only the sidebar interest. The injected `PageCountsIn`
-factory binds `unread.PageCounts` to that snapshot, including older
+older pages connect with only the sidebar interest. Injected `PageCountsIn` binds `unread.PageCounts` to that snapshot, including older
 history pages; their plain results carry both count maps and
 first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
@@ -118,7 +117,7 @@ neighbours, the prefix and topic floor, and one multirange built from supplied
 read-range values; it never reads unread's tables.
 
 Branching receives conversation's consumer-owned `ReadRangeWriterIn` factory,
-adapted from `unreadpg.WriterIn` in the composition roots. Its own previous-message
+adapted from `unreadpg.WriterIn` by `compose.BranchReads`. Its own previous-message
 query supplies the lower bound; the organisation lock keeps the notice newest,
 so the upper bound is its sequence plus one. Org's resolved membership carries
 the persisted join sequence. The adapter calls `Writer.Merge` after the notice
@@ -148,7 +147,7 @@ Org is locked before `channel_read`; all reads, writes and the event append
 share posting's transaction.
 
 Identity's store creates accounts in the caller's transaction through
-`identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to
+`identitypg.AccountCreatorIn`. `compose.AccountCreator` and remaining test adapters adapt it to
 org's factory and prove that the creator fits `org.AccountCreator`;
 identity owns `ErrEmailTaken` and `ErrInvalidEmail`, which org maps to its
 conflicts or field errors.

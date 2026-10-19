@@ -137,10 +137,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
+		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "send_key": {"enter"}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits, services.Preferences, services.SendKeyLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -184,6 +184,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Run(route.method+" "+path+" member", func(t *testing.T) {
 			w := get(route.method, path, aliceToken, now)
 			switch route.method + " " + route.path {
+			case "POST /send-key":
+				if w.Code != 303 || w.Header().Get("Location") != "/organizations/acme/channels" {
+					t.Fatalf("preference: %d %s", w.Code, w.Header().Get("Location"))
+				}
 			case "GET /mention-candidates":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `id="mention-listbox"`) {
 					t.Fatalf("candidates: %d %s", w.Code, w.Body.String())

@@ -18,6 +18,7 @@ and gets the route's answer for a malformed value below, never a redirect
 
 | Route | Result |
 |---|---|
+| `POST /organizations/{slug}/send-key` | Independent per-member limiter (429, `Retry-After: 1`); identity updates the signed-in account only. Invalid choice: 400; success: 303 to latest feed/topic from parsed return UUIDs, or channel list |
 | `GET /organizations/{slug}/mention-candidates?q=` | Search through `org.MemberSearch` with the resolved membership; no-store listbox fragment (at most 8 member options), including an empty list for no matches. Independent per-member admission answers empty 429 with `Retry-After: 1` |
 | `GET /organizations/{slug}/` | 303 to `conversation.Channels.Default`, found by `is_default`; a missing default is logged and answers 500 |
 | `GET /organizations/{slug}/channels` | The channel list page (#969): the sidebar as the page, nesting the topics of `?channel=<channel-id>` or else the default channel, with a sidebar-only stream; a malformed query or a malformed, unknown or other organisation's channel answers 404. The list is the page's `<main>`; below the `desk` breakpoint it fills the screen above the bottom navigation, and at desktop width a block beside it asks the member to open a channel |

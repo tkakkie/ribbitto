@@ -2,9 +2,10 @@
 // between CI's parallel jobs. It prints package patterns or runs make
 // check-test with a shard's packages, browser selector and flags; -check
 // fails unless every package is covered and the workflow runs each shard in
-// exactly one job. The named shards hold the slowest packages; "rest" is
-// everything else, so a package added later runs in CI without editing this
-// list or the workflow. make check runs -check.
+// exactly one job, with disjoint browser and non-browser execution ranges.
+// The named shards hold the slowest packages; "rest" is everything else, so
+// a package added later runs in CI without editing this list or the workflow.
+// make check runs -check.
 package main
 
 import (
@@ -32,13 +33,17 @@ type shard struct {
 	flags    string
 }
 
+const browserTestName = "TestBrowser"
+const browserTestPattern = "^" + browserTestName + "$"
+
 func shards() []shard {
 	return []shard{
 		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2"},
 		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2"},
-		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2"},
-		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run ^TestBrowser$"},
-		{"web-3/3", []string{"./internal/web"}, "3/3", "-p 2 -run ^TestBrowser$"},
+		{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern},
+		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2 -run " + browserTestPattern},
+		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run " + browserTestPattern},
+		{"web-3/3", []string{"./internal/web"}, "3/3", "-p 2 -run " + browserTestPattern},
 		{"realtime", []string{"./internal/realtime"}, "", "-p 2"},
 	}
 }
@@ -146,9 +151,17 @@ func testCommand(root string, s shard) *exec.Cmd {
 // Read source rather than running package code: a renamed test otherwise makes
 // browser-only slices pass with "no tests to run". The totals file also drives
 // the web coverage test, so a new workflow total cannot miss that proof.
+// Validation ties the non-browser exclusion to the same test name.
 func checkBrowserTests(root string, specs []shard) error {
+	if err := validateShards(specs); err != nil {
+		return err
+	}
 	for _, s := range specs {
-		if !strings.Contains(s.flags, "-run ^TestBrowser$") {
+		selection, err := parseFlags(s.flags)
+		if err != nil {
+			return fmt.Errorf("shard %s: %w", s.name, err)
+		}
+		if selection != "-run" {
 			continue
 		}
 		dir := filepath.Join(root, s.packages[0])
@@ -172,7 +185,7 @@ func checkBrowserTests(root string, specs []shard) error {
 			}
 			for _, decl := range file.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Recv != nil || fn.Name.Name != "TestBrowser" || fn.Type.TypeParams != nil || fn.Type.Results != nil || len(fn.Type.Params.List) != 1 {
+				if !ok || fn.Recv != nil || fn.Name.Name != browserTestName || fn.Type.TypeParams != nil || fn.Type.Results != nil || len(fn.Type.Params.List) != 1 {
 					continue
 				}
 				param := fn.Type.Params.List[0]
@@ -194,8 +207,27 @@ func checkBrowserTests(root string, specs []shard) error {
 	return nil
 }
 
-// Browser slices must form one complete set, with non-browser tests on the
-// first slice only. Names include the selector so workflow drift is visible.
+// Only these flag forms preserve the execution ranges checked below. Reject
+// extra or reordered tokens rather than interpreting arbitrary go test flags.
+func parseFlags(flags string) (string, error) {
+	args := strings.Fields(flags)
+	if len(args) < 2 || args[0] != "-p" || args[1] != "2" {
+		return "", fmt.Errorf("flags %q: must start with exactly -p 2", flags)
+	}
+	if len(args) == 2 {
+		return "", nil
+	}
+	if len(args) != 4 || (args[2] != "-run" && args[2] != "-skip") {
+		return "", fmt.Errorf("flags %q: selection must be exactly -run or -skip %s", flags, browserTestPattern)
+	}
+	if args[3] != browserTestPattern {
+		return "", fmt.Errorf("flags %q: %s pattern must be %s", flags, args[2], browserTestPattern)
+	}
+	return args[2], nil
+}
+
+// Each package runs either once in full, or in one non-browser slice plus a
+// complete set of browser selectors. Names expose selector drift in the matrix.
 func validateShards(specs []shard) error {
 	names := map[string]bool{}
 	groups := map[string][]shard{}
@@ -210,27 +242,51 @@ func validateShards(specs []shard) error {
 	}
 	for p, group := range groups {
 		seen := map[int]bool{}
+		nonBrowser, total := 0, 0
 		for _, s := range group {
-			if s.browser == "" && len(group) == 1 {
-				if s.flags != "-p 2" {
-					return fmt.Errorf("shard %s: unsharded packages must run all tests", s.name)
+			selection, err := parseFlags(s.flags)
+			if err != nil {
+				return fmt.Errorf("shard %s: %w", s.name, err)
+			}
+			switch selection {
+			case "":
+				if s.browser != "" {
+					return fmt.Errorf("shard %s: browser selector requires -run %s", s.name, browserTestPattern)
 				}
+				if len(group) != 1 {
+					return fmt.Errorf("%s: whole-package range overlaps other slices", p)
+				}
+				continue
+			case "-skip":
+				if s.browser != "" {
+					return fmt.Errorf("shard %s: non-browser slice must have an empty selector", s.name)
+				}
+				nonBrowser++
 				continue
 			}
 			k, n, ok := strings.Cut(s.browser, "/")
 			index, errK := strconv.Atoi(k)
-			total, errN := strconv.Atoi(n)
-			if !ok || errK != nil || errN != nil || total != len(group) || index < 1 || index > total || seen[index] || s.browser != fmt.Sprintf("%d/%d", index, total) || !strings.HasSuffix(s.name, "-"+s.browser) || len(s.packages) != 1 {
+			count, errN := strconv.Atoi(n)
+			if !ok || errK != nil || errN != nil || index < 1 || index > count || s.browser != fmt.Sprintf("%d/%d", index, count) || !strings.HasSuffix(s.name, "-"+s.browser) || len(s.packages) != 1 {
 				return fmt.Errorf("%s: invalid browser shard %q in %s", p, s.browser, s.name)
 			}
+			if total != 0 && total != count {
+				return fmt.Errorf("%s: browser total %d disagrees with %d", p, count, total)
+			}
+			if seen[index] {
+				return fmt.Errorf("%s: repeated browser selector %s", p, s.browser)
+			}
+			total = count
 			seen[index] = true
-			want := "-p 2 -run ^TestBrowser$"
-			if index == 1 {
-				want = "-p 2"
-			}
-			if s.flags != want {
-				return fmt.Errorf("shard %s: flags %q, want %q", s.name, s.flags, want)
-			}
+		}
+		if total == 0 && nonBrowser == 0 {
+			continue
+		}
+		if nonBrowser != 1 {
+			return fmt.Errorf("%s: want exactly one non-browser slice, got %d", p, nonBrowser)
+		}
+		if total == 0 || len(seen) != total {
+			return fmt.Errorf("%s: incomplete browser range: got %d slices, want %d (at least one)", p, len(seen), total)
 		}
 	}
 	return nil

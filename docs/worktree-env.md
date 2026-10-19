@@ -67,14 +67,15 @@ confirmed it (peak 38/100, no 53300). The shared server therefore keeps
 CI runs the rest shard in its own `test-rest` job beside `checks`.
 Each test job has its own PostgreSQL service. `tools/testshard` owns
 packages, browser selectors and Go test flags; `-run` passes these directly to
-`make check-test`. Browser slices must cover every selector of one total,
-with the first running all package tests and the others only `TestBrowser`.
+`make check-test`. Browser slices cover every selector of one total and run
+only `TestBrowser`; one non-browser slice runs `-skip ^TestBrowser$`.
 `-check` verifies the matrix and exact runner commands, rejecting independent
 package lists or flags. `-run` sets `GOFLAGS=-count=1` for every shard, whatever
 the workflow sets, because setup-go restores Go's test result cache; the
-workflow's `GOFLAGS` line is redundant. Web runs as `web-1/3`, `web-2/3` and
-`web-3/3`; cmd remains unsharded. Selectors use `RIBBITTO_BROWSER_SHARD=k/n`;
-empty or unset runs all scenarios, and malformed or empty shards fail.
+workflow's `GOFLAGS` line is redundant. Web runs as `web-nonbrowser`, `web-1/3`,
+`web-2/3` and `web-3/3`; cmd remains unsharded.
+Selectors use `RIBBITTO_BROWSER_SHARD=k/n`; empty or unset runs all scenarios,
+and malformed or empty shards fail.
 Registration filters full scenario names: the six slowest are pinned in
 serpentine order, and the rest use FNV-1a modulo n. The real-name coverage test
 and `-check` share `internal/web/testdata/browser-shard-totals.txt`.

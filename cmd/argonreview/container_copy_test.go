@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -131,6 +132,16 @@ func TestContainerCopyRefusesTypesAndRaces(t *testing.T) {
 		{"grows during read", "after-stat", func(t *testing.T, p string) { write(t, p, "longer changed content") }},
 		{"shrinks during read", "after-stat", func(t *testing.T, p string) { write(t, p, "") }},
 		{"same size rewrite", "after-read", func(t *testing.T, p string) { write(t, p, "NEW") }},
+		{"rewrite with restored mtime", "after-read", func(t *testing.T, p string) {
+			info, err := os.Stat(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(t, p, "NEW")
+			if err := os.Chtimes(p, info.ModTime(), info.ModTime()); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"replacement inode", "after-copy", func(t *testing.T, p string) {
 			info, err := os.Stat(p)
 			if err != nil {
@@ -312,33 +323,112 @@ func TestContainerCopyRefusesHiddenNames(t *testing.T) {
 }
 
 func TestContainerCopyRefusesRootSwap(t *testing.T) {
-	tree := containerFixture(t)
-	listed, err := listContainerFiles(context.Background(), tree)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The replacement has the same names and bytes. Only the root identity
-	// separates it from the held directory whose descriptors were copied.
-	hook := func(stage, _ string) {
-		if stage != "after-copy" {
-			return
-		}
-		if err := os.Rename(tree, tree+".old"); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.RemoveAll(tree + ".old") })
-		mkdir(t, tree)
-		for _, name := range listed {
-			data, err := os.ReadFile(filepath.Join(tree+".old", name))
+	for _, stage := range []string{"after-copy", "after-final-list"} {
+		t.Run(stage, func(t *testing.T) {
+			tree := containerFixture(t)
+			listed, err := listContainerFiles(context.Background(), tree)
 			if err != nil {
 				t.Fatal(err)
 			}
-			write(t, filepath.Join(tree, name), string(data))
+			// The replacement has the same names and bytes. Only the root identity
+			// separates it from the held directory whose descriptors were copied.
+			hook := func(now, _ string) {
+				if now != stage {
+					return
+				}
+				if err := os.Rename(tree, tree+".old"); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(tree + ".old") })
+				mkdir(t, tree)
+				for _, name := range listed {
+					data, err := os.ReadFile(filepath.Join(tree+".old", name))
+					if err != nil {
+						t.Fatal(err)
+					}
+					write(t, filepath.Join(tree, name), string(data))
+				}
+			}
+			// Freeze the listing so the test isolates root identity from Git metadata.
+			list := func(context.Context, string) ([]string, error) { return listed, nil }
+			if err := copyContainerSource(context.Background(), tree, filepath.Join(t.TempDir(), "tree"), list, hook); err == nil || !strings.Contains(err.Error(), "root changed") {
+				t.Fatalf("root replacement: %v", err)
+			}
+		})
+	}
+}
+
+func TestContainerCopyRefusesHiddenTypes(t *testing.T) {
+	for _, kind := range []string{"symlink", "FIFO", "socket", "device"} {
+		for _, name := range []string{".github/x", "AGENTS.md", "bin/x", ".git"} {
+			t.Run(kind+"/"+name, func(t *testing.T) {
+				// Short paths also fit Darwin's Unix socket pathname limit.
+				tree, err := os.MkdirTemp("/tmp", "argon-type-*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(tree) })
+				tree = resolved(t, tree)
+				gitT(t, tree, "init", "--quiet", "--template=")
+				write(t, filepath.Join(tree, ".gitignore"), "bin/\n")
+				p := filepath.Join(tree, name)
+				if name == ".git" {
+					if err := os.RemoveAll(p); err != nil {
+						t.Fatal(err)
+					}
+				}
+				mkdir(t, filepath.Dir(p))
+				switch kind {
+				case "symlink":
+					symlink(t, t.TempDir(), p)
+				case "FIFO":
+					if err := unix.Mkfifo(p, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				case "socket":
+					fd, err := unix.Socket(unix.AF_UNIX, unix.SOCK_STREAM, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer closeFD(fd)
+					if err := unix.Bind(fd, &unix.SockaddrUnix{Name: p}); err != nil {
+						t.Fatal(err)
+					}
+				case "device":
+					if err := unix.Mknod(p, unix.S_IFCHR|0o600, int(unix.Mkdev(1, 3))); err != nil {
+						if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) {
+							t.Skipf("device creation requires privileges unavailable to this test: %v", err)
+						}
+						t.Fatal(err)
+					}
+				}
+				if err := copyContainerSource(context.Background(), tree, filepath.Join(t.TempDir(), "tree"), listContainerFiles, nil); err == nil || !strings.Contains(err.Error(), "not a regular file or directory") {
+					t.Fatalf("special source entry accepted or wrong refusal: %v", err)
+				}
+			})
 		}
 	}
-	// Freeze the listing so the test isolates root identity from Git metadata.
-	list := func(context.Context, string) ([]string, error) { return listed, nil }
-	if err := copyContainerSource(context.Background(), tree, filepath.Join(t.TempDir(), "tree"), list, hook); err == nil || !strings.Contains(err.Error(), "root changed") {
-		t.Fatalf("root replacement: %v", err)
+}
+
+func TestContainerCopyRootGitTypes(t *testing.T) {
+	for _, kind := range []string{"file", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			tree := resolved(t, t.TempDir())
+			p := filepath.Join(tree, ".git")
+			if kind == "file" {
+				write(t, p, "gitdir: /unused\n")
+			} else {
+				// The metadata directory is exempt from recursive inspection.
+				symlink(t, "/unused", filepath.Join(p, "link"))
+			}
+			list := func(context.Context, string) ([]string, error) { return nil, nil }
+			dest := filepath.Join(t.TempDir(), "tree")
+			if err := copyContainerSource(context.Background(), tree, dest, list, nil); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
+				t.Fatalf("root .git copied: %v", err)
+			}
+		})
 	}
 }

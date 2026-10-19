@@ -79,7 +79,7 @@ func containerCopyPath(name string) (omit bool, err error) {
 
 type containerSourceStamp struct {
 	info  os.FileInfo
-	ctime unix.Timespec
+	ctime [2]int64
 }
 
 func stampContainerSource(f *os.File) (containerSourceStamp, error) {
@@ -94,7 +94,7 @@ func stampContainerSource(f *os.File) (containerSourceStamp, error) {
 	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
 		return containerSourceStamp{}, fmt.Errorf("examining source change time: %w", err)
 	}
-	return containerSourceStamp{info, st.Ctim}, nil
+	return containerSourceStamp{info, containerCTime(st)}, nil
 }
 
 func sameContainerSource(a, b containerSourceStamp) bool {
@@ -151,12 +151,15 @@ func checkContainerNames(ctx context.Context, root int) error {
 				if _, err := containerCopyPath(name); err != nil {
 					return err
 				}
-				if prefix == "" && strings.EqualFold(entry.Name(), ".git") {
-					continue
-				}
 				var st unix.Stat_t
 				if err := unix.Fstatat(fd, entry.Name(), &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 					return fmt.Errorf("inspecting source entry %q: %w", name, err)
+				}
+				if st.Mode&unix.S_IFMT != unix.S_IFDIR && st.Mode&unix.S_IFMT != unix.S_IFREG {
+					return fmt.Errorf("source entry %q is not a regular file or directory", name)
+				}
+				if prefix == "" && strings.EqualFold(entry.Name(), ".git") {
+					continue
 				}
 				if st.Mode&unix.S_IFMT == unix.S_IFDIR {
 					child, err := unix.Openat(fd, entry.Name(), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
@@ -256,23 +259,8 @@ func copyContainerSource(ctx context.Context, tree, dest string, list func(conte
 			return fmt.Errorf("source %q changed after copying", name)
 		}
 	}
-	// Check the root identity as well: re-listing a replaced path must not
-	// silently validate files copied through the old root descriptor.
-	again, err := walk(tree)
-	if err != nil {
-		return fmt.Errorf("reopening source root: %w", err)
-	}
-	defer closeFD(again)
-	before, err := identity(root)
-	if err != nil {
+	if err := checkContainerRoot(tree, root); err != nil {
 		return err
-	}
-	after, err := identity(again)
-	if err != nil {
-		return err
-	}
-	if before != after {
-		return errors.New("source root changed while copying")
 	}
 	if err := checkContainerNames(ctx, root); err != nil {
 		return err
@@ -281,8 +269,36 @@ func copyContainerSource(ctx context.Context, tree, dest string, list func(conte
 	if err != nil {
 		return err
 	}
+	if hook != nil {
+		hook("after-final-list", "")
+	}
+	if err := checkContainerRoot(tree, root); err != nil {
+		return err
+	}
 	if !slices.Equal(files, final) {
 		return errors.New("source file set changed while copying")
+	}
+	return nil
+}
+
+// Listing uses a pathname, so its root must still match the held descriptor
+// both before and after Git runs, even when a replacement has the same files.
+func checkContainerRoot(tree string, root int) error {
+	before, err := identity(root)
+	if err != nil {
+		return err
+	}
+	again, err := walk(tree)
+	if err != nil {
+		return fmt.Errorf("reopening source root: %w", err)
+	}
+	defer closeFD(again)
+	after, err := identity(again)
+	if err != nil {
+		return err
+	}
+	if before != after {
+		return errors.New("source root changed while copying")
 	}
 	return nil
 }

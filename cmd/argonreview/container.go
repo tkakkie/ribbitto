@@ -128,7 +128,7 @@ func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var report string
-		report, err = runContainerCheck(ctx, args[0], args[1], args[2], dockerRunner{})
+		report, err = runContainerCheck(ctx, args[0], args[1], args[2], dockerRunner{}, "/tmp")
 		// Cleanup has completed before writing to a potentially closed pipe.
 		if _, writeErr := io.WriteString(stdout, report); writeErr != nil {
 			err = errors.Join(err, fmt.Errorf("writing container report: %w", writeErr))
@@ -143,7 +143,7 @@ func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 	return code
 }
 
-func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner) (report string, err error) {
+func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (report string, err error) {
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
@@ -153,9 +153,10 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	if err != nil {
 		return "", fmt.Errorf("resolving worktree: %w", err)
 	}
-	// /tmp is fixed rather than caller-controlled TMPDIR. The private parent
-	// stays 0700; only its copied tree is made accessible to containerUser.
-	dir, err := os.MkdirTemp("/tmp", "argonreview-container-*")
+	// The command fixes copyParent to /tmp rather than caller-controlled
+	// TMPDIR; tests use private parents so concurrent runs cannot interfere.
+	// The private parent stays 0700; only its tree is accessible to containerUser.
+	dir, err := os.MkdirTemp(copyParent, "argonreview-container-*")
 	if err != nil {
 		return "", fmt.Errorf("creating source copy: %w", err)
 	}
@@ -211,7 +212,11 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 			if cleanupErr == nil {
 				cleanupErr = fmt.Errorf("docker rm exited with status %d", status)
 			}
-			err = errors.Join(err, fmt.Errorf("container cleanup unconfirmed: %w", cleanupErr))
+			if code != 0 || runErr != nil {
+				err = errors.Join(err, fmt.Errorf("container cleanup unconfirmed (docker run failed; container may never have existed): %w", cleanupErr))
+			} else {
+				err = errors.Join(err, fmt.Errorf("container removal failed: %w", cleanupErr))
+			}
 		}
 	}
 	err = errors.Join(err, ctx.Err())

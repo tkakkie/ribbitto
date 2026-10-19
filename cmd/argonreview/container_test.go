@@ -51,7 +51,7 @@ func TestContainerValidation(t *testing.T) {
 				t.Fatalf("validation %q: %v", tc.pattern, err)
 			}
 			if !tc.valid {
-				if _, err := runContainerCheck(context.Background(), "tree", "test", tc.pattern, runner); err == nil {
+				if _, err := runContainerCheck(context.Background(), "tree", "test", tc.pattern, runner, t.TempDir()); err == nil {
 					t.Fatal("invalid pattern accepted")
 				}
 			}
@@ -139,7 +139,7 @@ func TestContainerGoVersion(t *testing.T) {
 		t.Fatal("Docker ran for mismatched Go version")
 		return 0, nil
 	}}
-	if _, err := runContainerCheck(context.Background(), dir, "build", "./...", runner); err == nil || !strings.Contains(err.Error(), "go.mod") {
+	if _, err := runContainerCheck(context.Background(), dir, "build", "./...", runner, t.TempDir()); err == nil || !strings.Contains(err.Error(), "go.mod") {
 		t.Fatalf("version mismatch: %v", err)
 	}
 }
@@ -153,6 +153,7 @@ func TestContainerRunAndCleanup(t *testing.T) {
 		{name: "success"}, {name: "nonzero", status: 1}, {name: "OOM", status: 137}, {name: "abnormal", status: -1},
 		{name: "runner error", fail: true}, {name: "timeout", timeout: true}, {name: "interrupt", interrupt: true},
 		{name: "output limit", overflow: true}, {name: "cleanup fails", fail: true, cleanupFail: true},
+		{name: "run never created container", status: 125, cleanupFail: true},
 		{name: "cleanup fails after success", cleanupFail: true}, {name: "stop fails", stopFail: true}, {name: "late interrupt", lateInterrupt: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -192,6 +193,9 @@ func TestContainerRunAndCleanup(t *testing.T) {
 						return 1, errors.New("stop failed")
 					}
 					if tc.cleanupFail {
+						if tc.status == 125 {
+							return 1, errors.New("No such container")
+						}
 						return 1, errors.New("daemon unavailable")
 					}
 					return 0, nil
@@ -239,7 +243,7 @@ func TestContainerRunAndCleanup(t *testing.T) {
 				}
 				return tc.status, nil
 			}}
-			report, err := runContainerCheck(ctx, dir, "build", "./...", runner)
+			report, err := runContainerCheck(ctx, dir, "build", "./...", runner, t.TempDir())
 			success := tc.name == "success" || tc.name == "stop fails"
 			if strings.HasPrefix(report, "verified\n") != success {
 				t.Fatalf("report %q, err %v", report[:min(len(report), 300)], err)
@@ -257,8 +261,14 @@ func TestContainerRunAndCleanup(t *testing.T) {
 			if !strings.Contains(report, "Race detector was not run") || !strings.Contains(report, "database/browser tests are CI-only") {
 				t.Fatal("coverage limits absent")
 			}
-			if tc.cleanupFail && (err == nil || !strings.Contains(err.Error(), "cleanup unconfirmed")) {
-				t.Fatalf("cleanup failure hidden: %v", err)
+			if tc.cleanupFail {
+				want := "container removal failed"
+				if tc.fail || tc.status != 0 {
+					want = "docker run failed; container may never have existed"
+				}
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("cleanup failure: %v, want %q", err, want)
+				}
 			}
 		})
 	}
@@ -279,19 +289,13 @@ func TestContainerNamesAreUnique(t *testing.T) {
 		return 0, nil
 	}}
 	for range 2 {
-		if _, err := runContainerCheck(context.Background(), dir, "vet", ".", runner); err != nil {
+		if _, err := runContainerCheck(context.Background(), dir, "vet", ".", runner, t.TempDir()); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
 func TestContainerValidationCleanup(t *testing.T) {
-	// Observe only directories created by this invocation, without depending
-	// on Docker or the caller's TMPDIR. Existing /tmp entries stay untouched.
-	before, err := filepath.Glob("/tmp/argonreview-container-*")
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, tc := range []string{"missing go.mod", "wrong version", "refused name"} {
 		t.Run(tc, func(t *testing.T) {
 			tree := containerFixture(t)
@@ -309,12 +313,13 @@ func TestContainerValidationCleanup(t *testing.T) {
 				t.Fatal("Docker ran after refusal")
 				return 0, nil
 			}}
-			if _, err := runContainerCheck(context.Background(), tree, "test", "./...", runner); err == nil {
+			copyParent := t.TempDir()
+			if _, err := runContainerCheck(context.Background(), tree, "test", "./...", runner, copyParent); err == nil {
 				t.Fatal("validation passed")
 			}
-			after, err := filepath.Glob("/tmp/argonreview-container-*")
-			if err != nil || !reflect.DeepEqual(before, after) {
-				t.Fatalf("temporary copy left: %v, %v", after, err)
+			entries, err := os.ReadDir(copyParent)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("temporary copy left: %v, %v", entries, err)
 			}
 		})
 	}
@@ -339,7 +344,7 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 				}
 				return 0, nil
 			}}
-			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner)
+			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner, t.TempDir())
 			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
 				t.Fatalf("report %q, err %v", report, err)
 			}

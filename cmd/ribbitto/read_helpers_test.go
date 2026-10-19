@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/compose"
@@ -13,9 +17,6 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/unread"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 func feedRequire(t *testing.T, err error) {

@@ -67,7 +67,7 @@ func (p channelPages) readQuote(w http.ResponseWriter, r *http.Request, m org.Me
 	text := entry.Text(view.UnknownMember(r.Context()))
 	page.Quote = &view.Message{ID: entry.ID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		Body: conversation.PinExcerpt(entry, view.UnknownMember(r.Context()))}
-	if r.Method == http.MethodPost && values.Has("quote_text") {
+	if values.Has("quote_text") {
 		submitted := values.Get("quote_text")
 		page.QuoteText = &submitted
 		_, err := conversation.ValidateQuotePart(submitted, text)

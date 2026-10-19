@@ -83,6 +83,7 @@ func TestBrowser(t *testing.T) {
 		}
 	}
 	for _, width := range []int{1280, 390} {
+		run(fmt.Sprintf("quote-focus/width=%d", width), func(t *testing.T, browser *rod.Browser) { testQuoteFocusBrowser(t, browser, width) })
 		for _, scenario := range []string{"page", "live", "across", "quote", "nested-quote", "empty", "transfer", "lost", "menu", "part", "composer", "changed", "selection-menu", "backward", "triple-click"} {
 			run(fmt.Sprintf("quote-selection/%s/width=%d", scenario, width), func(t *testing.T, browser *rod.Browser) { testQuoteSelectionBrowser(t, browser, width, scenario, nil) })
 		}

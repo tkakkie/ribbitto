@@ -133,4 +133,23 @@ func assertFullConversationPage(t *testing.T, body string) {
 			t.Errorf("full conversation page missing %q", want)
 		}
 	}
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	composer := false
+	for n := range doc.Descendants() {
+		if n.DataAtom != atom.Script {
+			continue
+		}
+		src := attr(n, "src")
+		if src == "/static/message-composer-v19.js" {
+			composer = true
+		} else if strings.HasPrefix(src, "/static/message-composer-") {
+			t.Errorf("unexpected composer script %q", src)
+		}
+	}
+	if !composer {
+		t.Error("conversation page missing /static/message-composer-v19.js")
+	}
 }

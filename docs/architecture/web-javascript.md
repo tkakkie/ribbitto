@@ -2,12 +2,11 @@
 
 ## JavaScript
 
-JavaScript generates no HTML and owns no application state; it handles focus, scroll, keyboard,
+JavaScript: no HTML generation/application state; only focus, scroll, keyboard,
 local time, selection constraints, clipboard and htmx/SSE glue.
-Bounded composer state follows [composer](web-composer.md#composer) (decision 37).
-UI-library islands need scoped
-[decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
-exceptions; none exists today.
+Bounded state: [composer](web-composer.md#composer), decision 37.
+UI-library islands need scoped [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
+exceptions; none exist.
 
 **Exception (#1039):** [decision 34](../decisions/34-live-unread-counts.md) lets one script own
 sidebar badge numbers and bounded recovery state: the snapshot sequence,
@@ -49,10 +48,17 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 - `member-mentions-v1.js` marks resolved references matching `data-member-id` to `#organization-stream`'s `data-member` on scoped `htmx:load`, including the initial body event after deferred scripts. Live posts, duplicate replay and moves use `htmx.swap`; Load older selects/prepends server-rendered items. Both run inserted-node load tasks, including replacements/destination insertions; no DOM observer/polling. Token utilities add a 2 px dashed `brand` outline, no offset, versus the solid 2 px
   offset focus ring: a shape cue with ≥3:1 contrast against message background and `selected` chip in both themes ([contrast](../ui-colours.md#contrast-wcag-22-aa)). Shared server renders are identical for all readers; unresolved/other-organisation references have no ID. Quote snapshots stay plain text.
 - `mention-picker-v1.js` owns only the active token, dismissal and selection. It triggers server-rendered search, rejects stale results/picks and captures plain Enter/Tab before send/navigation. Token boundaries mirror posting; code checks are conservative. IME keys and the 100 ms commit Enter are suppressed; textarea focus/listbox ARIA stay ([composer](web-composer.md#composer)).
-- `message-composer-v18.js` preserves newest/visible-item position during [composer growth](../ui-composer.md), reveals the end caret after layout and prioritizes post-success scrolling. It closes Quote's popover and focuses the textarea after chip swaps. `htmx:configRequest` copies `#quote-form`'s native submitter name/value: popover focus restoration clears htmx's remembered button; unnamed Remove adds nothing. Composer submits pause during quote processing so neither path uses the old chip.
-  Quoted sends use the ordinary path after pending sends finish; chip markup/requests stay server/htmx-owned.
-- Part quotes share submitter glue (`name="part"`); editable text is server-rendered. `quote-selection-v1.js` accepts nonempty selections within one body, outside quotes. Plain text stays. Rich text follows `ExtractChatV1`: whole mentions use `data-quote-handle`, blocks join with one newline, `<br>` adds one; code, emphasis and links retain text. Cut/unresolved mentions or unknown markup hide the button; triple-click may leave an empty outside tail. Pointerdown/mousedown preserve selection.
-  Submit/`htmx:configRequest` recheck scope/text. Only selection supplies `quote_text` via parameter proxy/hidden input; other submits, before send and after request/swap clear/disable it. Swaps refresh button visibility.
+- `message-composer-v19.js` anchors [growth](../ui-composer.md) to newest/visible
+  item; shows end caret after layout; post-success scroll wins.
+  Quote closes popover; swaps focus Remove (Tab → Quote only part), part
+  `#quote-text`, body on removal; 422/409 keep focus/caret/selection.
+  [Autofocus](web-composer.md#composer): native on plain loads, script on swaps.
+  `htmx:configRequest` copies native `#quote-form` submitter name/value: popover
+  focus restore clears htmx's submitter; unnamed Remove adds nothing.
+  Submits await quotes (no old chip). Quoted sends go ordinary after pending
+  sends; server/htmx own chip markup/requests.
+- Parts share submitter glue (`name="part"`); server renders editable text. `quote-selection-v1.js` accepts nonempty selections in one body, outside quotes. Plain text stays; rich text follows `ExtractChatV1`: whole mentions use `data-quote-handle`, blocks join with one newline, `<br>` adds one; code, emphasis/links keep text. Cut/unresolved mentions or unknown markup hide the button; triple-click may leave an empty outside tail. Pointerdown/mousedown preserve selection.
+  Submit/`htmx:configRequest` recheck scope/text. Only selection supplies `quote_text` via parameter proxy/hidden input; other submits, before send and after request/swap clear/disable it. Swaps refresh visibility. Selection quotes focus `#quote-text`.
 - `message-drafts-v5.js` saves after 300 ms or lifecycle flush using monotonic input times. Blank/over-limit text writes tombstones; 4,000-code-point/50-entry limits apply from the first write. Equal/later stored edits win against the observed read; eviction is best effort. Sign-out/deadline stop writes and cancel saves. Sweep/restore share validity checks; restore seeds edit time without input/typing/focus, and server text wins. Bubbling `message-sending` (`{key, body, inPlace}`) snapshots
   immediately before emptying, cancelling debounce; Retry/busy drops emit none. `message-sent` (`{key, message}`) follows posted-message state and ordinary prefix removal (after IME). Pending success requires 200; in-place 409 requires prefix recovery. Pending events retain snapshot keys across 409 request-key rotation, including Edit/resend. Only this tab's unchanged last write becomes current text/tombstone for matching send snapshots or typing after in-place sends. Later sends, pending-path
   edits and other tabs' writes survive; failures/unknown keys do nothing. After prefix removal, dirty in-place text refreshes, retaining edit time/debounce even if storage differs; saves check edit times. Bubbling textarea `message-pending-action` (`{key, kind}`): `edit` saves now, cancelling stale debounce without input/typing; `remove` replaces that key's unchanged send snapshot. Markers toggle `hidden` for valid non-empty own member/session drafts. Hrefs map feed/topics to channels, topics to

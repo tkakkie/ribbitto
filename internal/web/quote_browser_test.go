@@ -158,7 +158,7 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 		page.MustElement(`#composer-quote input[name=quote]`)
 		page.MustWait(`id => document.querySelector('#composer-quote input').value === id`, realtime.FormatPayloadID(message.ID))
 		if scripts {
-			page.MustWait(`() => document.activeElement.id === 'message-body' && !document.querySelector(':popover-open')`)
+			page.MustWait(`() => document.activeElement.matches('#composer-quote button:first-of-type') && !document.querySelector(':popover-open')`)
 			if !page.MustEval(`() => window.quoteVisit && !location.search`).Bool() {
 				t.Fatal("Quote navigated")
 			}
@@ -219,14 +219,6 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 // Each invocation has its own server and limiter and makes only one post.
 func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original conversation.Message, scripts bool, width int) {
 	step := pageStep(page.GetContext(), page)
-	shiftTabToQuoteText := func(p *rod.Page) {
-		for presses := 0; !p.MustEval(`() => document.activeElement.id === 'quote-text'`).Bool(); presses++ {
-			if presses == 30 {
-				panic("Shift+Tab did not reach #quote-text from " + p.MustEval(`() => document.activeElement.tagName + '#' + document.activeElement.id`).Str())
-			}
-			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
-		}
-	}
 	tabTo := func(p *rod.Page, selector string) {
 		for range 100 {
 			if p.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
@@ -236,6 +228,12 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		}
 		panic("Tab did not reach " + selector)
 	}
+	step(t, "part storage setup: localStorage cleared before loading scripts", func(p *rod.Page) {
+		if err := navigateLoaded(p, url+"?before=1"); err != nil {
+			panic(err)
+		}
+		p.MustEval(`() => localStorage.clear()`)
+	})
 	step(t, "part setup: viewport, touch emulation and script policy installed", func(p *rod.Page) {
 		p.MustSetViewport(width, 844, 1, width < 768)
 		if err := (proto.EmulationSetTouchEmulationEnabled{Enabled: width < 768}).Call(p); err != nil {
@@ -264,11 +262,11 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
 	})
 	if scripts {
-		step(t, "whole chip focus: composer script focuses the message body", func(p *rod.Page) {
-			p.MustWait(`() => document.activeElement.id === 'message-body'`)
+		step(t, "whole chip focus: Remove quote takes focus", func(p *rod.Page) {
+			p.MustWait(`() => document.activeElement.matches('#composer-quote button:first-of-type')`)
 		})
-		step(t, "keyboard Shift-Tab: Quote only part takes focus before the body", func(p *rod.Page) {
-			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+		step(t, "keyboard Tab: Quote only part takes focus", func(p *rod.Page) {
+			p.Keyboard.MustType(input.Tab)
 			p.MustWait(`() => document.activeElement.matches('#composer-quote [name=part]')`)
 		})
 	}
@@ -282,21 +280,35 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 			panic("plain part GET must carry only the ID")
 		}
 	})
-	step(t, "keyboard Shift-Tab: editable part takes focus", func(p *rod.Page) {
-		shiftTabToQuoteText(p)
+	step(t, "part focus: editable part takes focus without another key", func(p *rod.Page) {
+		if !scripts {
+			// Without scripts the browser's own autofocus is not guaranteed in CI; reach it forward.
+			// The Go attribute assertion guards autofocus; this step proves keyboard reachability only.
+			tabTo(p, "#quote-text")
+		}
 		p.MustWait(`() => document.activeElement.id === 'quote-text'`)
 	})
 	step(t, "keyboard edit: quoted text is shortened to original", func(p *rod.Page) {
 		p.Keyboard.MustType(input.Home, input.Delete, input.Delete, input.Delete, input.Delete, input.Delete)
 		p.MustWait(`() => document.getElementById('quote-text').value === 'original'`)
 	})
+	step(t, "keyboard Tab: Remove follows the part editor in unchanged DOM order", func(p *rod.Page) {
+		p.Keyboard.MustType(input.Tab)
+		p.MustWait(`() => document.activeElement.matches('#composer-quote button:not([name])')`)
+	})
+	step(t, "keyboard Tab: body follows Remove", func(p *rod.Page) {
+		p.Keyboard.MustType(input.Tab)
+		p.MustWait(`() => document.activeElement.id === 'message-body'`)
+	})
 	step(t, "keyboard compose: unique answer entered", func(p *rod.Page) {
-		tabTo(p, "#message-body")
 		p.MustInsertText("partial keyboard answer")
 		p.MustWait(`() => document.getElementById('message-body').value === 'partial keyboard answer'`)
 	})
+	step(t, "keyboard Tab: send follows the body", func(p *rod.Page) {
+		p.Keyboard.MustType(input.Tab)
+		p.MustWait(`() => document.activeElement.matches('#message-composer button[type=submit]:not([form])')`)
+	})
 	step(t, "keyboard send: unique answer has exactly the part, author and original link", func(p *rod.Page) {
-		tabTo(p, `#message-composer button[type=submit]:not([form])`)
 		p.Keyboard.MustType(input.Enter)
 		p.MustWait(`href => [...document.querySelectorAll('#message-items > li')].some(item =>
  item.querySelector('[id^="body-message-"]')?.textContent === 'partial keyboard answer' &&

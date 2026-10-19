@@ -273,7 +273,7 @@ func accountMenu(page ChannelPage) templ.Component {
 			templ_7745c5c3_Var14 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div id=\"account-menu\" popover class=\"inset-auto top-3 bottom-3 left-24 m-0 h-auto max-h-fit w-64 overflow-y-auto rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4\"><p tabindex=\"-1\" autofocus class=\"break-words text-caption text-muted\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div id=\"account-menu\" popover class=\"inset-auto bottom-3 left-24 m-0 max-h-4/5 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4\"><p tabindex=\"-1\" autofocus class=\"break-words text-caption text-muted\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

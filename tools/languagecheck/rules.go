@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const fuzzKind = "fuzz"
+
 type rule struct {
 	pattern string
 	kind    string
@@ -26,7 +28,7 @@ func rules() []rule {
 		{"internal/lintfixture/*.templ", "templ lint fixture"},
 		{"web/styles/*.css", "CSS source"},
 		{"web/static/css/*.css", "CSS output"},
-		{"web/static/*.js", "browser JavaScript"},
+		{"web/static/*-v[0-9]*.js", "browser JavaScript"},
 		{"web/static/brand/*.svg", "brand SVG"},
 		{"web/static/channel-images-v1/*.svg", "channel SVG"},
 		{"docs/**/*.md", "documentation"},
@@ -63,8 +65,8 @@ func rules() []rule {
 func testdataRules() []rule {
 	return []rule{
 		{"internal/web/testdata/browser-shard-totals.txt", "browser test configuration"},
-		{"internal/conversation/testdata/fuzz/Fuzz*/*", "fuzz"},
-		{"internal/identity/testdata/fuzz/Fuzz*/*", "fuzz"},
+		{"internal/conversation/testdata/fuzz/Fuzz*/*", fuzzKind},
+		{"internal/identity/testdata/fuzz/Fuzz*/*", fuzzKind},
 	}
 }
 
@@ -102,7 +104,7 @@ func allowedKind(name string) string {
 	}
 	for _, r := range table {
 		if match(strings.Split(r.pattern, "/"), parts) {
-			if r.kind == "fuzz" && path.Ext(name) != "" {
+			if r.kind == fuzzKind && path.Ext(name) != "" {
 				continue
 			}
 			return r.kind

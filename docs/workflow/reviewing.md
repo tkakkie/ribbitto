@@ -63,6 +63,7 @@ issue revisions have no SHA.
   ([mutation evidence](argon-pull-requests.md#mutation-evidence)).
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
+- For each exception in `docs/language-exceptions.txt`, verify that its approving comment is the maintainer's and approves that exact path.
 
 ## Reporting
 

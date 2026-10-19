@@ -55,7 +55,8 @@ func TestRules(t *testing.T) {
 		{"internal/lintfixture/a.templ", "", true},
 		{"web/styles/a.css", "", true},
 		{"web/static/css/a.css", "", true},
-		{"web/static/a.js", "", true},
+		{"web/static/a-v1.js", "", true},
+		{"web/static/a-v23.js", "", true},
 		{"web/static/brand/a.svg", "", true},
 		{"web/static/channel-images-v1/a.svg", "", true},
 		{"docs/a.md", "", true},
@@ -93,6 +94,9 @@ func TestRules(t *testing.T) {
 		{"web/static/vendor/htmx.org-LICENSE", "", true},
 		{"web/static/vendor/idiomorph-LICENSE", "", true},
 		{"a.js", "", false}, {"web/static-evil/a.js", "", false},
+		{"web/static/eslint.config.js", "", false}, {"web/static/vite.config.js", "", false},
+		{"web/static/example.js", "", false}, {"web/static/app.js", "", false},
+		{"web/static/x/foo-v1.js", "", false},
 		{"foo/web/static/a.js", "", false}, {"web/static/nested/a.js", "", false},
 		{"a.sql", "", false}, {"db/a.sql", "", false}, {"db/queries/a.sql", "", false},
 		{"db/migrations/nested/a.sql", "", false}, {"A.SQL", "", false},
@@ -238,6 +242,25 @@ func TestGitListing(t *testing.T) {
 	}
 }
 
+func TestGitEnvironment(t *testing.T) {
+	other := fixture(t, map[string]string{"other.go": ""})
+	initRepo(t, other)
+	root := fixture(t, map[string]string{"target.go": ""})
+	initRepo(t, root)
+	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+	t.Setenv("GIT_INDEX_FILE", filepath.Join(other, ".git", "index"))
+	names, err := tracked(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(names, "\x00"); got != exceptionsFile+"\x00target.go" {
+		t.Fatalf("poisoned environment changed listing: %q", names)
+	}
+	if problems, err := check(root); err != nil || len(problems) != 0 {
+		t.Fatalf("check with poisoned environment: %v, %v", problems, err)
+	}
+}
+
 func TestUnsafeFiles(t *testing.T) {
 	for _, kind := range []string{"symlink", "FIFO", "missing", "parent symlink", "exception symlink", "exception FIFO"} {
 		t.Run(kind, func(t *testing.T) {
@@ -328,6 +351,25 @@ func TestBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := strings.TrimSuffix(string(out), "\n")
+	t.Run("working tree", func(t *testing.T) { assertBaseline(t, root) })
+	t.Run("approved exception", func(t *testing.T) {
+		root := fixture(t, map[string]string{"helper.py": ""})
+		// Amend a fixture copy; never add an exception to the live repository.
+		name := filepath.Join(root, exceptionsFile)
+		content, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name, append(content, []byte("helper.py"+approval+"\n")...), 0600); err != nil {
+			t.Fatal(err)
+		}
+		initRepo(t, root)
+		assertBaseline(t, root)
+	})
+}
+
+func assertBaseline(t *testing.T, root string) {
+	t.Helper()
 	problems, err := check(root)
 	if err != nil {
 		t.Fatal(err)
@@ -348,9 +390,11 @@ func TestBaseline(t *testing.T) {
 	for _, name := range names {
 		trackedNames[name] = true
 	}
-	exceptions, problems := readExceptions(repo, trackedNames)
-	if len(exceptions) != 0 || len(problems) != 0 {
-		t.Fatalf("baseline must have no exceptions: %v %v", exceptions, problems)
+	// Today's zero-exception baseline is evidence in the PR body and the empty
+	// exceptions file, not an assertion: approved entries must keep passing.
+	_, problems = readExceptions(repo, trackedNames)
+	if len(problems) != 0 {
+		t.Fatalf("baseline exceptions: %v", problems)
 	}
 }
 

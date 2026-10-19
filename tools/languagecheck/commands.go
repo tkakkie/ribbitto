@@ -5,25 +5,33 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"regexp"
 	"strings"
 	"unicode"
 )
 
-// This deliberately small scan checks command positions in Make recipes and
-// workflow run steps. Review still checks configurations, indirect execution
-// and dependency/runtime changes that a command-word scan cannot establish.
+// This deliberately small scan is not a Make, YAML or shell parser. Its
+// supported positions and remaining review obligations are in decision 42.
 func checkCommands(name string, source io.Reader) []string {
 	var problems []string
 	scanner := bufio.NewScanner(source)
 	runIndent := -1
+	type mapping struct {
+		indent int
+		key    string
+	}
+	var parents []mapping
+	blockHeader := regexp.MustCompile(`^[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$`)
 	for n := 1; scanner.Scan(); n++ {
 		line := scanner.Text()
 		text := strings.TrimSpace(line)
+		var commands []string
 		if name == "Makefile" {
-			if !strings.HasPrefix(line, "\t") {
-				continue
+			if strings.HasPrefix(line, "\t") {
+				commands = append(commands, strings.TrimLeft(text, "@-+"))
+			} else {
+				commands = makeCommands(text)
 			}
-			text = strings.TrimLeft(text, "@-+")
 		} else {
 			indent := len(line) - len(strings.TrimLeft(line, " "))
 			if text == "" || strings.HasPrefix(text, "#") {
@@ -33,29 +41,84 @@ func checkCommands(name string, source io.Reader) []string {
 				// This line is part of the preceding run block.
 			} else {
 				runIndent = -1
-				text = strings.TrimPrefix(text, "- ")
-				if !strings.HasPrefix(text, "run:") {
+				if strings.HasPrefix(text, "- ") {
+					text = strings.TrimPrefix(text, "- ")
+					indent += 2 // Sibling step keys align with the key after the dash.
+				}
+				for len(parents) > 0 && parents[len(parents)-1].indent >= indent {
+					parents = parents[:len(parents)-1]
+				}
+				key, value, ok := strings.Cut(text, ":")
+				if !ok {
 					continue
 				}
-				text = strings.TrimSpace(strings.TrimPrefix(text, "run:"))
-				if text == "|" || text == ">" || text == "|-" || text == ">-" {
+				text = strings.TrimSpace(value)
+				step := len(parents) > 0 && parents[len(parents)-1].key == "steps"
+				defaultRun := len(parents) >= 2 && parents[len(parents)-2].key == "defaults" && parents[len(parents)-1].key == "run"
+				if text == "" {
+					parents = append(parents, mapping{indent, key})
+				}
+				if key == "uses" && step {
+					action := yamlScalar(text)
+					base, ref, _ := strings.Cut(action, "@")
+					if ref != "" {
+						switch base {
+						case "actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "ruby/setup-ruby":
+							problems = append(problems, fmt.Sprintf("%q:%d: unapproved runtime setup %q", name, n, action))
+						}
+					}
+					continue
+				}
+				if key == "shell" && (step || defaultRun) {
+					text = yamlScalar(text)
+				} else if key != "run" {
+					continue
+				} else if blockHeader.MatchString(text) {
 					runIndent = indent
 					continue
-				}
-				// A quoted single-line YAML scalar has one layer of quoting beyond shell.
-				if len(text) >= 2 && (text[0] == '\'' || text[0] == '"') && text[len(text)-1] == text[0] {
-					text = text[1 : len(text)-1]
+				} else {
+					text = yamlScalar(text)
 				}
 			}
+			commands = append(commands, text)
 		}
-		for _, word := range runtimeCommands(text) {
-			problems = append(problems, fmt.Sprintf("%q:%d: unapproved runtime command %q", name, n, word))
+		for _, command := range commands {
+			for _, word := range runtimeCommands(command) {
+				problems = append(problems, fmt.Sprintf("%q:%d: unapproved runtime command %q", name, n, word))
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		problems = append(problems, fmt.Errorf("scanning commands in %q: %w", name, err).Error())
 	}
 	return problems
+}
+
+func yamlScalar(text string) string {
+	// Quoted single-line YAML scalars add one layer beyond shell quoting.
+	text, _, _ = strings.Cut(text, " #")
+	text = strings.TrimSpace(text)
+	if len(text) >= 2 && (text[0] == '\'' || text[0] == '"') && text[len(text)-1] == text[0] {
+		return text[1 : len(text)-1]
+	}
+	return text
+}
+
+func makeCommands(text string) []string {
+	// Restrict non-recipe scanning to simple assignments, excluding comments.
+	assignment := regexp.MustCompile(`^(?:(?:export|override)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*[:?+]?=[ \t]*(.*)$`).FindStringSubmatch(text)
+	if assignment == nil {
+		return nil
+	}
+	value, _, _ := strings.Cut(assignment[2], "#")
+	var commands []string
+	if assignment[1] == "SHELL" {
+		commands = append(commands, value)
+	}
+	for _, shell := range regexp.MustCompile(`\$\([ \t]*shell[ \t]+([^)]*)\)`).FindAllStringSubmatch(value, -1) {
+		commands = append(commands, shell[1])
+	}
+	return commands
 }
 
 func runtimeCommands(line string) []string {
@@ -105,21 +168,39 @@ done:
 	flush()
 	var refused []string
 	command := true
+	duration := false
 	for _, word := range words {
 		if word == ";" {
 			command = true
+			duration = false
 			continue
 		}
 		if !command {
 			continue
 		}
-		if strings.Contains(word, "=") || word == "if" || word == "then" || word == "else" || word == "do" || word == "!" || word == "env" || word == "exec" || word == "command" || word == "sudo" {
+		if duration {
+			duration = false
+			if regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?[smhd]?$`).MatchString(word) {
+				continue
+			}
+			command = false
+			continue
+		}
+		if word == "timeout" {
+			duration = true
+			continue
+		}
+		if strings.Contains(word, "=") {
+			continue
+		}
+		switch word {
+		case "if", "then", "else", "do", "!", "env", "exec", "command", "sudo", "time", "nohup", "xargs", "while", "until", "elif", "{":
 			continue
 		}
 		command = false
-		base := path.Base(word)
+		base := regexp.MustCompile(`[0-9]+(?:\.[0-9]+)*$`).ReplaceAllString(path.Base(word), "")
 		switch base {
-		case "node", "nodejs", "npm", "npx", "python", "python2", "python3", "pip", "pip2", "pip3", "cargo", "rustc", "deno", "bun", "ruby", "perl", "bash", "zsh", "sh":
+		case "node", "nodejs", "npm", "npx", "python", "pip", "cargo", "rustc", "deno", "bun", "ruby", "perl", "bash", "zsh", "sh", "yarn", "pnpm", "tsc", "tsx", "uv", "poetry", "php", "java", "dash", "ksh", "fish", "pwsh":
 			refused = append(refused, word)
 		}
 	}

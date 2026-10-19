@@ -41,7 +41,14 @@ func main() {
 func git(root string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.external="}, args...)...)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_PAGER=cat", "GIT_EXTERNAL_DIFF=")
+	// Hooks can export repository/index selectors; neither the gate nor its
+	// temporary-repository tests may inherit a different repository's state.
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GIT_") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_PAGER=cat", "GIT_EXTERNAL_DIFF=")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -126,7 +133,7 @@ func checkFiles(root string, names []string) ([]string, error) {
 		// Only the two-byte signature is needed for ordinary files. Fuzz data has
 		// a short, fixed first line; a bounded read cannot swallow arbitrary input.
 		size := 2
-		if kind == "fuzz" {
+		if kind == fuzzKind {
 			size = len("go test fuzz v1\n")
 		}
 		head, readErr := io.ReadAll(io.LimitReader(f, int64(size)))
@@ -150,7 +157,7 @@ func checkFiles(root string, names []string) ([]string, error) {
 			report("shebang is forbidden")
 			continue
 		}
-		if kind == "fuzz" && string(head) != "go test fuzz v1\n" && string(head) != "go test fuzz v1" {
+		if kind == fuzzKind && string(head) != "go test fuzz v1\n" && string(head) != "go test fuzz v1" {
 			report("fuzz corpus first line must be go test fuzz v1")
 		}
 		if kind == "" && !exceptions[name] {

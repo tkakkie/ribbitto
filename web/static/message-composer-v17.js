@@ -102,6 +102,8 @@
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;
     restoredKey = null;
+    // Correlate draft cleanup even after a 409 renews the request key.
+    sending.dataset.draftKey = sending.elements.idempotency_key.value;
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector("[data-pending-body]");
     shownBody.textContent = text;
@@ -177,7 +179,7 @@
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
     }
-    sendEvent("message-pending-action", { key: form.elements.idempotency_key.value, kind: edit ? "edit" : "remove" });
+    sendEvent("message-pending-action", { key: form.dataset.draftKey, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -390,7 +392,7 @@
         }
       }
       reconcile();
-      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
+      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.dataset.draftKey, message: state.dataset.postedMessage });
       return;
     }
     // The stream consumes this attribute at settle, possibly before IME ends.
@@ -409,7 +411,13 @@
     if (status === 409) {
       const sent = state.dataset.sentBody;
       say("");
-      afterComposition(body, () => { if (sent) say(removeSent(body, sent) ? "recovered" : "repeat"); sentEvent(); });
+      afterComposition(body, () => {
+        if (sent) {
+          const recovered = removeSent(body, sent);
+          say(recovered ? "recovered" : "repeat");
+          if (recovered) sentEvent();
+        }
+      });
     }
     // Focus on the send button returns to the textarea. htmx disables the
     // button in flight, and Chrome then moves its focus to the body at the

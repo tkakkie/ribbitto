@@ -72,15 +72,15 @@ errors. `TestBrowser/drafts-org`: both organisation pages (#1181), stale session
 keep newer/same-millisecond entries unread; later sessions/members remove earlier
 ones; malformed values/expired own sessions removed. `TestDraftComposerPlace`:
 latest/history attributes.
-`TestBrowser/drafts-save` gates debounce/cancellation, edit times, lifecycle/IME,
-tombstones, bounds, cap ties, trim/scope, overlap loss/recovery, expiry,
-errors/swaps. Markers order cross-tab reads.
-Restore: navigation, IME/pagehide, 422 precedence, ended sessions, no input/
-typing/focus, own-key guards, future-dated edits/deletions. Held sends: outcomes,
-edits, cross-tab writes, queues, busy dropped submits, pending 409, dirty in-place
-prefix removal after cross-tab write; Retry saved/unsaved/no newer text with both
-debounce/response orders on success/failure; Edit/Remove after queued success,
-backspacing and newer text.
+`TestBrowser/drafts-save`: debounce, edit times, lifecycle/IME, tombstones, bounds,
+cap ties, trim/scope, overlap recovery, expiry,
+errors/swaps. Markers order reads.
+Restore: navigation, IME/pagehide, 422, ended sessions, no input/typing/focus,
+own-key guards, future edits/deletions. Held sends: outcomes, edits, queues, busy drops,
+forced 409 swaps; rotated-key Retry/Remove after Edit/resend, success/failure;
+in-place 409 recovery; dirty cleanup keeps edit time/debounce against tab writes.
+Retry: saved/unsaved/no newer text, both save/response orders; Edit/Remove:
+queued success, tombstones, backspacing, newer text.
 
 ### Shared browser tests
 

@@ -128,9 +128,12 @@
       });
       const replaceSnapshot = (sendKey, inPlace = false) => {
         const eligible = source === sendKey || (inPlace && source === null);
-        // Prefix removal fires no input. Refresh an unsaved in-place edit
-        // even if another tab's write prevents immediate confirmation.
-        if (inPlace && source === null && dirty) edited();
+        // Prefix removal fires no input. Keep the edit time and debounce
+        // when another tab's write prevents immediate confirmation.
+        if (inPlace && source === null && dirty) {
+          text = body.value;
+          if (!text.trim() || [...text].length > 4000) text = "";
+        }
         try {
           if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
           edited();

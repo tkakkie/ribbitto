@@ -90,23 +90,24 @@ htmx sends resync requests. The markup contract is in
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
 - `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
-  input times. Blank/over-limit text writes tombstones; 4,000-code-point/50-entry
-  bounds start at first write. Equal/later stored edits win on read;
-  eviction: best effort. Sign-out/deadline stop writes and cancel saves.
-  Sweep/restore share owner/expiry/age/length checks. Restore before deadline
-  seeds the edit clock, without input/typing/focus; server text wins and saves.
-  Bubbling textarea `message-sending` carries `{key, body, inPlace}` before
-  emptying; snapshots at once, cancels debounce; Retry emits none,
-  nor does a busy dropped submit. `message-sent` carries `{key, message}` after
-  applying posted-message state and ordinary prefix removal (after IME ends).
-  Pending success requires 200; failed 409 emits none. Only this tab's unchanged
-  last write becomes current text/tombstone: the matching send's snapshot, or
-  typing after an in-place send. Later sends, pending-path edits and other tabs'
-  writes survive; failures/unknown keys do nothing. Dirty in-place text refreshes
-  after prefix removal even if storage differs; saving still checks edit times.
+  input times. Blank/over-limit text writes tombstones; limits: 4,000 code points,
+  50 entries. Equal/later stored edits win; eviction is best effort.
+  Sign-out/deadline stop writes. Sweep/restore share validity checks. Restore
+  seeds edit time without input/typing/focus; server text wins.
+  Bubbling `message-sending` carries `{key, body, inPlace}` before
+  emptying; snapshots at once, cancels debounce; Retry and busy drops emit none.
+  `message-sent`: `{key, message}` after posted-message state and ordinary
+  prefix removal (after IME). Pending success requires 200; in-place 409
+  requires prefix recovery. Pending events keep the snapshot key across 409
+  request-key rotation, including Edit/resend.
+  Only this tab's unchanged last write becomes current text/tombstone:
+  the matching send snapshot, or typing after an in-place send. Later sends,
+  pending-path edits and other tabs' writes survive; failures/unknown keys do
+  nothing. Dirty in-place text refreshes after prefix removal without advancing
+  edit time or restarting debounce, even if storage differs; saves check edit times.
   Bubbling textarea `message-pending-action`: `{key, kind}`:
-  `edit` saves current text immediately, cancelling stale debounce without
-  input/typing; `remove` replaces that key's unchanged send snapshot.
+  `edit` saves immediately, cancelling stale debounce without input/typing;
+  `remove` replaces that key's unchanged send snapshot.
   [Drafts](web-composer.md#drafts): races/cleanup.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the

@@ -2,11 +2,10 @@
 
 ## JavaScript
 
-JavaScript generates no HTML and owns no application state; it handles focus, scroll, keyboard,
+JavaScript: no HTML generation/application state; only focus, scroll, keyboard,
 local time, selection constraints, clipboard and htmx/SSE glue.
-Bounded composer state follows [composer](web-composer.md#composer) (decision 37).
-UI-library islands need scoped
-[decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
+Bounded composer state: [composer](web-composer.md#composer), decision 37.
+UI-library islands need scoped [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
 exceptions; none exist.
 
 **Exception (#1039):** [decision 34](../decisions/34-live-unread-counts.md) lets one script own
@@ -25,7 +24,7 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
   until success or hide/removal/navigation, with jittered exponential backoff
   capped initially at 8 s; `Retry-After` is a minimum, even above that cap.
   Success resets backoff and flushes newer shown work. Other failures flush only
-  strictly newer work; the same cursor waits for another trigger. Cleanup clears
+  strictly newer work; the same cursor waits for a trigger. Cleanup clears
   timers. Composer responses and unapplied events cannot advance it.
 - `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open events.
   It increments server-rendered badges only for newer, unseen `unread` frames
@@ -73,19 +72,20 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
   plain Enter/Tab before send/navigation. Token boundaries mirror posting; code
   checks are conservative. IME keys and the 100 ms commit Enter are suppressed;
   textarea focus/listbox ARIA stay ([composer](web-composer.md#composer)).
-- `message-composer-v18.js` preserves newest/visible-item position during
-  [composer growth](../ui-composer.md), reveals the end caret after layout and
-  prioritizes post-success scrolling. It closes Quote's popover and focuses
-  the textarea after chip swaps. `htmx:configRequest` copies `#quote-form`'s native
-  submitter name/value: popover focus restoration clears htmx's remembered button;
-  unnamed Remove adds nothing. Composer submits pause during quote processing
-  so neither path uses the old chip. Quoted sends use the ordinary path after
-  pending sends finish; chip markup/requests stay server/htmx-owned.
-- Part quotes share submitter glue (`name="part"`); editable text is server-rendered.
-  `quote-selection-v1.js` accepts nonempty selections within one body, outside quotes.
-  Plain text stays. Rich text follows `ExtractChatV1`: whole mentions use
+- `message-composer-v19.js` anchors [growth](../ui-composer.md) to the newest/visible
+  item; reveals end caret after layout; post-success scroll wins.
+  Quote closes popover. Swaps focus Remove (Tab → Quote only part), part
+  `#quote-text`, body on removal; 422/409 keep focus/caret/selection.
+  [Autofocus](web-composer.md#composer): browser on no-script loads, script on swaps.
+  `htmx:configRequest` copies native `#quote-form` submitter name/value: popover
+  focus restoration clears htmx's remembered button; unnamed Remove adds nothing.
+  Submits pause for quotes (no stale chip). Quoted sends await pending
+  sends, then use the ordinary path; server/htmx own markup/requests.
+- Parts share submitter glue (`name="part"`); server renders editable text.
+  `quote-selection-v1.js` accepts nonempty selections in one body, outside quotes.
+  Plain text stays; rich text follows `ExtractChatV1`: whole mentions use
   `data-quote-handle`, blocks join with one newline, `<br>` adds one; code,
-  emphasis and links retain text. Cut/unresolved mentions or unknown markup hide
+  emphasis/links keep text. Cut/unresolved mentions or unknown markup hide
   the button; triple-click may leave an empty outside tail. Pointerdown/mousedown
   preserve selection. Submit/`htmx:configRequest` recheck scope/text. Only selection
   supplies `quote_text` via parameter proxy/hidden input; other submits, before
@@ -144,10 +144,10 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 
 [Composer queue](web-composer.md#composer): ≤10 pending items,
 FIFO, paused on unknown outcomes. Not sent Retry goes last; unknown Retry stays.
-Edit restores failed text/key only into an empty composer outside IME, never
-overwriting drafts; removes the item, frees its slot and resumes the queue.
-Otherwise the visible disabled button explains why. Restored keys survive state
-swaps, transfer to pending forms on send, renew on emptying. Unused keys post;
+Outside IME, Edit restores failed text/key only to an empty composer (never
+overwrites drafts), removes the item, frees its slot and resumes the queue.
+Otherwise disabled Edit visibly explains why. Restored keys survive state
+swaps, transfer on pending send, renew on emptying. Unused keys post;
 [matching bodies](posting.md) return the stored ID; different bodies under used
 keys get 409/fresh Retry keys. Topic items settle by confirmed ID, response
 topic/applied sequence or later move from the shown topic; no move history

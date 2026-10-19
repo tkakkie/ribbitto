@@ -1,8 +1,8 @@
 # Markup and accessibility
 
-The target is WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`)
-renders every HTML route in each state and both languages and fails on the
-rules marked ✓; a new route fails the test until it has a rendered case.
+Target: WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`) renders
+every HTML route/state in both languages, enforcing ✓ rules; new routes
+fail until covered by a rendered case.
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` and a name (its text, or `aria-label` when it has none); a link is
@@ -117,12 +117,10 @@ the column instead, and the composer is hidden.
 
 The account menu or sheet (`#account-menu`) and the create popover
 (`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
-#1159) are non-modal native popovers. Tab or Shift-Tab leaving one closes it
+#1159) are non-modal native popovers. Tab/Shift-Tab leaving closes it
 and keeps focus on the reached control (#1092) (`popover-focus-v1.js`, on every page;
-it suits all three, which nest no popover). They close rather than keep Tab
-inside because an outside click already closes them. Escape closes one
-with focus back on its button; an outside click closes it and leaves focus
-where the click put it; a click inside leaves it open except for Quote. Without JavaScript, Tab can still move behind an open
+it suits all three, which nest no popover). They close on Tab exit because outside clicks already close them. Escape closes it and focuses its button; outside clicks close it, keeping
+clicked focus; inside clicks keep it open except Quote. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks each at desktop and
 phone width.
 
@@ -134,11 +132,13 @@ rather than sign-out, so a repeated Enter or Space acts on nothing and the
 menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
 
-Quoting has a keyboard and screen-reader path: menu → Quote → Quote only
-part → edit the labelled textarea → send. It works without JavaScript or page
-selection. Both chip actions have 44 px targets. "Quote selection" follows the
-body, hidden from focus and accessibility unless selected text stays in one
-body; its target is 44 × 44 px below `desk`. Pressing preserves selection.
+Keyboard/screen-reader quoting: menu → Quote → Quote only part → labelled editor
+→ send, without scripts/selection. Swaps focus Remove (Tab → Quote only part),
+part editor, or body on removal; 422/409 keep focus/caret.
+[Focus/autofocus rules](architecture/web-composer.md#composer).
+Chip actions have 44 px targets. "Quote selection" follows the body,
+hidden from focus/accessibility unless selection stays in one body; its target
+is 44 × 44 px below `desk`. Pressing preserves selection.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
 (`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.

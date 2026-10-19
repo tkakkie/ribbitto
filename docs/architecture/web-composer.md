@@ -2,19 +2,18 @@
 
 ## Composer
 
-Bounded state follows [decision 37][d37]: server-rendered keys,
-sending glue and feed/topic pending items; *planned* parts await issues.
+Bounded state ([decision 37][d37]): server-rendered keys, send glue, feed/topic pending
+items; *planned* parts await issues.
 
-Idle feed/topic sends use the ordinary path for blank/quoted text or over
-4,000 code points after line-ending normalisation and trimming, and without
-`crypto.randomUUID()`.
+Idle feed/topic sends use the ordinary path for blank/quoted text, >4,000
+code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 
 - **Ordinary sending** (input glue, #1173): textarea usable in flight:
-  answers replace only `#message-composer-state`. On 200 remove sent body
+  answers replace only `#message-composer-state`. 200 removes sent body
   (htmx request parameters) only if still a textarea prefix, via
   `setRangeText("", 0, length, "preserve")`: caret/selection stay on
-  remaining text; no `input` fires, hence no typing signal.
-  A `WeakMap` defers removal until `compositionend`, retaining the confirmation
+  remaining text; no `input`, hence no typing signal.
+  A `WeakMap` defers removal until `compositionend`, keeping the confirmation
   ID before stream settle consumes it. Answers copy `data-invalid` to textarea
   `aria-invalid`.
 - **Ordinary failures** (#1179) keep the text and the key; `#message-send-alert` says
@@ -29,14 +28,14 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
   verify that prefix of the retry text (without resolving handles): the
   script removes that prefix by the same rules (*the earlier message was
   sent*), or says the 409's error if the start changed. Otherwise
-  text stays with the error, including legacy rows without proof.
+  text/error stay, including legacy rows without proof.
 - **Pending own posts** (#1156, #1188, #1174, #1180):
   [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
   rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
   after `#message-items`. Each item's htmx form holds original text,
-  key, generation and shown cursor. The composer empties immediately, keeps
-  focus and takes `crypto.randomUUID()`. Fresh UUID per queued form unless
-  restored by Edit. At most 10 items per tab in all states, including failures
+  key, generation and shown cursor. Composer clears immediately, keeps
+  focus, takes `crypto.randomUUID()`. Each queued form gets a fresh UUID unless
+  Edit restored it. At most 10 items per tab in all states, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
   the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
   FIFO: one form at a time, predecessor classified first.
@@ -71,9 +70,9 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
   composition; otherwise visible but disabled with an associated
   localised explanation. It never overwrites a draft. It restores raw
   text, key and any unconfirmed mark, focuses the textarea with caret at
-  end, then removes the item. The key follows that text across state swaps
-  until sent or emptied; its unconfirmed mark stays in composer
-  `data-unconfirmed-key` for either sending path. A pending resend transfers
+  end, then removes the item. The key follows text across state swaps
+  until sent/emptied; its unconfirmed mark stays in composer
+  `data-unconfirmed-key` for either path. A pending resend transfers
   it to its form and clears the composer's mark; emptying restored
   text clears it and takes a fresh UUID.
   Editing a known refusal clears stale composer marks.
@@ -81,21 +80,21 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
   matching the [retry rule](posting.md), otherwise that pending 409.
   Pending sends bypass prefix removal, ordinary send alerts/failure
   classification and 409 cleanup.
-- **Idempotency key** (#1155): hidden `idempotency_key`, server-rendered fresh
-  initially, after success and with 409; kept on 422. Server-scoped to
-  authorised membership; never in stream payloads. Pending sends replace it with
+- **Idempotency key** (#1155): hidden `idempotency_key`, fresh on load, success/409; kept on 422. Scoped to authorised membership; never in streams. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
   `data-state`, the composer's request class and #1179's failure alert. Queued, sending
   and failed items hold reload; confirmed items do not. Retry success, Remove
   or Edit can release it: Edit's restored text is a draft. Dispatched
-  requests time out after 30 s; queues, retries and failed text can extend the hold.
-- **Quote chip:** `#composer-quote-description` holds author and excerpt
-  or labelled editable part; empty without a quote. Quote and Remove
-  quote focus the textarea after the chip swap; Quote closes its actions
-  popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
-  the resize observer preserves the reader on chip changes. Without
-  scripts both submit a GET with `#message-composer`; removal loses unsent text.
+  requests time out at 30 s; queues/retries/failed text can extend the hold.
+- **Quote chip:** `#composer-quote-description`: author/excerpt or labelled
+  editable part, empty without quote. Quote closes popover; whole swaps focus
+  Remove (Tab → Quote only part); parts `#quote-text` (Tab → Remove → body → send);
+  removal focuses body.
+  422/409 keep focus/caret/selection in server text, matching IDs/button purposes.
+  Script owns swaps, suppressing htmx autofocus replay; native autofocus serves
+  plain part loads. Chip/gap reduce [growth cap](../ui-composer.md); resize observer
+  keeps reader. Plain Quote/Remove GET `#message-composer`; Remove loses text.
 - **Mention picker:** `mention-picker-v1.js` enhances all composers.
   `#mention-search`: htmx 120 ms debounce,
   replace sync and `outerHTML` into `#mention-listbox`. Only matching `data-query`

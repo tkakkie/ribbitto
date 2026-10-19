@@ -367,13 +367,36 @@
       queueMicrotask(() => { rememberPost(); settling = false; });
     });
   }
+  const quoteFocus = new WeakMap();
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    if (![422, 409].includes(event.detail.xhr.status)) return;
+    const active = document.activeElement;
+    if (!active.closest("#composer-quote")) return;
+    const selector = active.id === "quote-text" ? "#quote-text" :
+      active.name === "part" ? 'button[name="part"]' : "button:not([name])";
+    quoteFocus.set(event.detail.xhr, { selector, start: active.selectionStart,
+      end: active.selectionEnd, direction: active.selectionDirection });
+  });
   // Responses replace only #message-composer-state (#1173): the textarea
   // stays enabled and in place while a post is in flight.
   document.addEventListener("htmx:afterSwap", (event) => {
     const state = event.target;
     if (state.id === "composer-quote") {
       updateQuoteHeight();
-      document.getElementById("message-body").focus({ preventScroll: true });
+      const text = state.querySelector("#quote-text");
+      // Keep server autofocus for native no-script navigation. htmx replays
+      // it at settle, so swapped chips leave focus entirely to this handler.
+      text?.removeAttribute("autofocus");
+      if ([422, 409].includes(event.detail.xhr.status)) {
+        const saved = quoteFocus.get(event.detail.xhr);
+        const replacement = saved && state.querySelector(saved.selector);
+        if (replacement) {
+          replacement.focus({ preventScroll: true });
+          if (replacement === text) text.setSelectionRange(saved.start, saved.end, saved.direction);
+        }
+      } else {
+        (text || state.querySelector("button") || document.getElementById("message-body")).focus({ preventScroll: true });
+      }
       return;
     }
     if (state.id !== "message-composer-state") return;

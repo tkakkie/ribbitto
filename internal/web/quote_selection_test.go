@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
 )
@@ -62,5 +64,52 @@ func TestQuoteSelectionMarkup(t *testing.T) {
 		if buttons != 1 || inputs != 1 || scripts != 1 {
 			t.Fatalf("selection buttons/inputs/scripts = %d/%d/%d, want 1/1/1", buttons, inputs, scripts)
 		}
+	}
+}
+
+type quoteSelectionFixture struct {
+	name            string
+	format          conversation.Format
+	body, quoteText string
+}
+
+// Shared with the browser scenarios: expected text is independent of both the
+// Go extractor and the selection serializer, so either changing breaks a test.
+var quoteSelectionFixtures = []quoteSelectionFixture{
+	{"plain", conversation.FormatPlainText, "**literal**\nline\n\nlast", "**literal**\nline\n\nlast"},
+	{"mention", conversation.FormatChatV1, "hello <@MEMBER> again", "hello @owner again"},
+	{"paragraphs", conversation.FormatChatV1, "first paragraph\n\nsecond paragraph", "first paragraph\n\nsecond paragraph"},
+	{"emphasis", conversation.FormatChatV1, "before **bold** and _italic_ after", "before bold and italic after"},
+	{"code", conversation.FormatChatV1, "before `x<y` after", "before x<y after"},
+	{"fenced-code", conversation.FormatChatV1, "before\n```go\nx<y\n  z\n```\nafter", "before\nx<y\n  z\nafter"},
+	{"link", conversation.FormatChatV1, "see https://example.com/path now", "see https://example.com/path now"},
+	{"line-break", conversation.FormatChatV1, "first line\nsecond line", "first line\nsecond line"},
+}
+
+func (f quoteSelectionFixture) entry(member kernel.ID) conversation.Entry {
+	entry := conversation.Entry{
+		Message: conversation.Message{ID: kernel.ID{2}, Format: f.format,
+			Body: strings.ReplaceAll(f.body, "MEMBER", realtime.FormatPayloadID(member))},
+		References: map[kernel.ID]conversation.Reference{member: {Handle: "owner", DisplayName: "acme"}},
+	}
+	if f.format == conversation.FormatChatV1 {
+		entry.Blocks = conversation.ParseChatV1(entry.Body)
+	}
+	return entry
+}
+
+func TestQuoteSelectionFixtures(t *testing.T) {
+	for _, fixture := range quoteSelectionFixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			entry := fixture.entry(kernel.ID{1})
+			text := entry.Text("@unknown")
+			if !strings.Contains(text, fixture.quoteText) || text != fixture.quoteText {
+				t.Fatalf("Entry.Text = %q, want quote_text %q", text, fixture.quoteText)
+			}
+			markup := streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", entry)))
+			if fixture.name == "mention" && !strings.Contains(string(markup), `data-quote-handle="owner"`) {
+				t.Fatal("resolved mention lacks its viewer-independent extraction handle")
+			}
+		})
 	}
 }

@@ -9,7 +9,15 @@
       ?.closest('[id^="body-message-"]');
   }
   function bothEnds(body, selection) {
-    return !!body && body.contains(selection.anchorNode) && body.contains(selection.focusNode);
+    if (!body) return false;
+    const range = selection.getRangeAt(0);
+    if (!body.contains(range.startContainer)) return false;
+    if (body.contains(range.endContainer)) return true;
+    // Triple-click may end at offset zero of the following element. Accept
+    // only an empty tail, never text from another message or quote snapshot.
+    const tail = range.cloneRange();
+    tail.setStart(body, body.childNodes.length);
+    return tail.cloneContents().textContent === "";
   }
   function nonempty(selection) {
     return !!selection && !selection.isCollapsed && selection.toString().trim() !== "";
@@ -22,8 +30,36 @@
   }
   function selected(selection) {
     if (!nonempty(selection) || selection.rangeCount !== 1) return null;
-    const body = bodyOf(selection.anchorNode);
+    const body = bodyOf(selection.getRangeAt(0).startContainer);
     return bothEnds(body, selection) && excludesQuotes(body, selection) ? body : null;
+  }
+  // Mirror ExtractChatV1, independently of browser paragraph separators and
+  // display names. Unknown markup or a cut/unresolved mention is not quotable.
+  function serializeSelection(body, selectedRange) {
+    const range = selectedRange.cloneRange();
+    if (!body.contains(range.endContainer)) range.setEnd(body, body.childNodes.length);
+    const mentionAt = node => (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)
+      ?.closest("[data-quote-handle]");
+    if (mentionAt(range.startContainer) || mentionAt(range.endContainer)) return null;
+    if (body.tagName === "P") return range.toString();
+    function inline(node) {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (node.nodeType !== Node.ELEMENT_NODE) return null;
+      if (node.hasAttribute("data-quote-handle")) {
+        const handle = node.getAttribute("data-quote-handle");
+        return handle ? "@" + handle : null;
+      }
+      if (node.tagName === "BR") return "\n";
+      if (!["P", "PRE", "STRONG", "EM", "CODE", "A"].includes(node.tagName)) return null;
+      return children(node, "");
+    }
+    function children(node, separator) {
+      const parts = [...node.childNodes].map(inline);
+      return parts.includes(null) ? null : parts.join(separator);
+    }
+    const fragment = range.cloneContents();
+    const blocks = [...fragment.children].some(node => ["P", "PRE"].includes(node.tagName));
+    return children(fragment, blocks ? "\n" : "");
   }
   function isSubmitter(button, body) {
     return !!body && button?.matches(buttons) && button.previousElementSibling === body;
@@ -31,7 +67,8 @@
   function update() {
     const selection = document.getSelection();
     current = selected(selection);
-    text = current ? selection.toString() : "";
+    text = current ? serializeSelection(current, selection.getRangeAt(0)) : null;
+    if (!text?.trim()) current = null;
     for (const button of document.querySelectorAll(buttons)) button.hidden = !isSubmitter(button, current);
   }
   function clear() {
@@ -42,6 +79,7 @@
     }
   }
   document.addEventListener("selectionchange", update);
+  document.addEventListener("htmx:afterSwap", update);
   function press(event) {
     if (!event.target.closest?.(buttons)) return;
     // Read before the default focus/selection action. Cancelling pointerdown

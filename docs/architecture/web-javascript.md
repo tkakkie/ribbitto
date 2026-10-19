@@ -1,6 +1,6 @@
 # Web JavaScript
 
-Responsibilities and constraints for browser enhancements.
+JavaScript responsibilities and constraints for browser enhancements.
 
 ## JavaScript
 
@@ -89,15 +89,16 @@ htmx sends resync requests. The markup contract is in
   Composer submits pause while the quote form is processing, before either
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
-- Partial quoting uses the same submitter glue for `name="part"`; the server
-  renders the editable text. `quote-selection-v1.js` listens on the document,
-  also for live items: both ends must be in one body, outside quote blocks,
-  with non-whitespace text. It keeps only that body and text; no storage,
-  HTML generation or requests. Pointerdown/mousedown cancellation preserves
-  selection. Submit and `htmx:configRequest` re-read it, cancelling lost or
-  out-of-scope selections. Only this submitter enables the input and supplies
-  raw `quote_text` through htmx's parameter proxy (controls already collected).
-  Before send, after request/swap and other submits clear/disable it.
+- Part quoting uses glue for `name="part"`.
+  `quote-selection-v1.js` accepts nonempty selections in one body, outside quotes.
+  Plain text stays unchanged; rich text follows `ExtractChatV1`: whole mentions
+  use `data-quote-handle`, blocks join with one newline, `<br>` adds a newline;
+  code, emphasis and links keep their text. Cut/unresolved mentions or unknown
+  markup hide the button. Triple-click may have an empty outside tail.
+  Pointerdown/mousedown preserve selection. Submit and `htmx:configRequest`
+  recheck scope/text; only selection supplies `quote_text` via the
+  parameter proxy and hidden input. Other submits, before send and after request/swap
+  clear/disable it; swaps refresh button visibility.
 - `message-drafts-v3.js` saves composer input after 300 ms or lifecycle flush,
   using the input's monotonic edit time. Blank/over-limit text writes tombstones;
   the 4,000-code-point/50-entry bounds apply from the first write. Equal/later

@@ -33,6 +33,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
+  | `data-quote-handle` | body member reference | always, empty if unresolved | viewer-independent handle for selection extraction |
   | `data-quote-selection` | submit button immediately after each body | always, initially `hidden` | selection-only submitter of `#quote-form`; shared across viewers |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
   | `data-snapshot-seq` | `#sidebar-channels` | always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |

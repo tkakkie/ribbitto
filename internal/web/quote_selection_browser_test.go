@@ -26,7 +26,7 @@ import (
 
 // Each predicate has its own scenario/server/limiter. No case makes more than
 // one deliberate composer POST; fixtures and stream delivery bypass HTTP limits.
-func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, scenario string) {
+func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, scenario string, fixture *quoteSelectionFixture) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	pool := pgtest.New(t)
@@ -47,6 +47,13 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		return sent.Message
 	}
 	first := post(conversation.Send{Body: "page original"})
+	if fixture != nil {
+		entry := fixture.entry(f.MemberID)
+		// Plain-text legacy bodies cannot be created through today's posting API.
+		if _, err := pool.Exec(ctx, "UPDATE message SET body = $2, format = $3 WHERE id = $1", first.ID, entry.Body, string(entry.Format)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	second := post(conversation.Send{Body: "another original"})
 	quoted := post(conversation.Send{Body: "before\n\n> nested quote\n\nafter", Quote: &first.ID})
 	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
@@ -173,7 +180,14 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
   }`, selector)
 	}
 	step(t, "selection body: only this item's button appears", func(p *rod.Page) {
-		selectText(p, body, body, 5, 13)
+		if fixture != nil {
+			p.MustEval(`s => {
+    const range = document.createRange(); range.selectNodeContents(document.querySelector(s));
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+   }`, body)
+		} else {
+			selectText(p, body, body, 5, 13)
+		}
 		show(p, button)
 		if width < 768 {
 			if !p.MustEval(`s => { const r = document.querySelector(s).getBoundingClientRect(); return r.width >= 44 && r.height >= 44; }`, button).Bool() {
@@ -185,6 +199,32 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		p.MustWait(`() => [...document.querySelectorAll('[data-quote-selection]')].every(b => b.hidden)`)
 	}
 	switch scenario {
+	case "partial-mention":
+		step(t, "selection starts inside display name: no button", func(p *rod.Page) {
+			p.MustEval(`s => {
+    const body = document.querySelector(s), mention = body.querySelector('[data-member-id]');
+    const range = document.createRange(); range.setStart(mention.querySelector('bdi').firstChild, 1);
+    range.setEnd(body.lastElementChild.lastChild, 3);
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+   }`, body)
+			hidden(p)
+		})
+		return
+	case "backward":
+		step(t, "backward selection: end anchor produces the same part", func(p *rod.Page) {
+			p.MustEval(`s => { const node = document.querySelector(s).firstElementChild.firstChild;
+    document.getSelection().setBaseAndExtent(node, 13, node, 5); }`, body)
+			show(p, button)
+		})
+	case "triple-click":
+		step(t, "triple-click selection: empty outside tail remains quotable", func(p *rod.Page) {
+			p.MustEval(`s => {
+    const body = document.querySelector(s), range = document.createRange();
+    range.setStart(body, 0); range.setEnd(body.nextElementSibling, 0);
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+   }`, body)
+			show(p, button)
+		})
 	case "across":
 		step(t, "selection across messages: neither endpoint's button is shown", func(p *rod.Page) {
 			selectText(p, body, "#body-"+view.MessageDOMID(second.ID), 5, 7)
@@ -290,6 +330,12 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		return
 	}
 	want := "original"
+	if fixture != nil {
+		want = fixture.quoteText
+	}
+	if scenario == "triple-click" {
+		want = "page original"
+	}
 	if scenario == "changed" {
 		want = "page"
 		step(t, "selection changed at submit: use live text before selectionchange delivery", func(p *rod.Page) {
@@ -320,6 +366,37 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("selection chip: request missing")
+	}
+	if scenario == "selection-menu" {
+		step(t, "menu Quote on another message after part chip: whole chip", func(p *rod.Page) {
+			// Exercise submit-time clearing before htmx collects controls, even if a
+			// previous selection has left its hidden input enabled.
+			p.MustEval(`() => {
+    const input = document.querySelector('#quote-form input[name=quote_text]');
+    input.disabled = false; input.value = 'original';
+    document.addEventListener('submit', event => {
+     event.target.dataset.selectionAtSubmit = new FormData(event.target).get('quote_text') ?? '';
+    }, {capture: true, once: true});
+   }`)
+			p.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, second.ID)).MustClick()
+			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustClick()
+			if p.MustEval(`() => document.getElementById('quote-form').dataset.selectionAtSubmit`).Str() != "" {
+				panic("menu Quote: selection input was enabled when submit reached htmx")
+			}
+			p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
+		})
+		select {
+		case form := <-requests:
+			if form.Has("quote_text") || form.Get("quote") != realtime.FormatPayloadID(second.ID) {
+				t.Fatalf("menu Quote after part chip: unexpected fields %v", form)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("menu Quote after part chip: second request missing")
+		}
+		if posts.Load() != 0 {
+			t.Fatal("menu Quote after part chip: unexpected composer post")
+		}
+		return
 	}
 	step(t, "selection compose: unique answer entered", func(p *rod.Page) {
 		p.MustElement("#message-body").MustInput("selection answer")

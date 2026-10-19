@@ -12,7 +12,7 @@ import (
 	"github.com/go-rod/rod"
 )
 
-// Other slices run -run ^TestBrowser$; a rename must break the build.
+// Every browser slice runs -run ^TestBrowser$; a rename must break the build.
 var _ = TestBrowser
 
 func browserPinnedNames() []string {

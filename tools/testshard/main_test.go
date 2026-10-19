@@ -16,13 +16,14 @@ func TestPartition(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, want := range map[string][]string{
-		"loadgen":  {"./cmd/loadgen", "./cmd/seed"},
-		"cmd":      {"./cmd/ribbitto"},
-		"web-1/3":  {"./internal/web"},
-		"web-2/3":  {"./internal/web"},
-		"web-3/3":  {"./internal/web"},
-		"realtime": {"./internal/realtime"},
-		rest:       {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
+		"loadgen":        {"./cmd/loadgen", "./cmd/seed"},
+		"cmd":            {"./cmd/ribbitto"},
+		"web-nonbrowser": {"./internal/web"},
+		"web-1/3":        {"./internal/web"},
+		"web-2/3":        {"./internal/web"},
+		"web-3/3":        {"./internal/web"},
+		"realtime":       {"./internal/realtime"},
+		rest:             {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
 	} {
 		if !slices.Equal(parts[name], want) {
 			t.Errorf("shard %s = %v, want %v", name, parts[name], want)
@@ -95,7 +96,7 @@ func TestPick(t *testing.T) {
 
 func TestScheduled(t *testing.T) {
 	const (
-		matrix    = "        shard: [loadgen, cmd, web-1/3, web-2/3, web-3/3, realtime]\n"
+		matrix    = "        shard: [loadgen, cmd, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
 		restStep  = "          go -C tools run ./testshard -run .. rest\n"
 		shardStep = "          go -C tools run ./testshard -run .. \"$SHARD\"\n"
 		valid     = matrix + restStep + shardStep
@@ -106,6 +107,8 @@ func TestScheduled(t *testing.T) {
 		{"every shard once", valid, ""},
 		{"named shard omitted", strings.Replace(valid, "web-2/3, ", "", 1), "shard web-2/3 0 times"},
 		{"named shard repeated", strings.Replace(valid, "web-2/3, ", "web-2/3, web-2/3, ", 1), "shard web-2/3 2 times"},
+		{"non-browser shard omitted", strings.Replace(valid, "web-nonbrowser, ", "", 1), "shard web-nonbrowser 0 times"},
+		{"non-browser shard repeated", strings.Replace(valid, "web-nonbrowser, ", "web-nonbrowser, web-nonbrowser, ", 1), "shard web-nonbrowser 2 times"},
 		{"cmd shard omitted", strings.Replace(valid, "cmd, ", "", 1), "shard cmd 0 times"},
 		{"cmd shard repeated", strings.Replace(valid, "cmd, ", "cmd, cmd, ", 1), "shard cmd 2 times"},
 		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
@@ -138,14 +141,11 @@ func TestScheduled(t *testing.T) {
 }
 
 func browserShards() []shard {
-	var specs []shard
-	for k := 1; k <= 3; k++ {
-		selector := fmt.Sprintf("%d/3", k)
-		flags := "-p 2 -run ^TestBrowser$"
-		if k == 1 {
-			flags = "-p 2"
-		}
-		specs = append(specs, shard{"web-" + selector, []string{"./internal/web"}, selector, flags})
+	const n = 3
+	specs := []shard{{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern}}
+	for k := 1; k <= n; k++ {
+		selector := fmt.Sprintf("%d/%d", k, n)
+		specs = append(specs, shard{"web-" + selector, []string{"./internal/web"}, selector, "-p 2 -run " + browserTestPattern})
 	}
 	return specs
 }
@@ -163,25 +163,60 @@ func TestBrowserShardCoverage(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		edit func([]shard) []shard
+		want string
 	}{
-		{"empty packages", func(s []shard) []shard { s[0].packages = nil; return s }},
-		{"unsharded flags", func(s []shard) []shard { s[0].browser = ""; s[0].flags = "-short"; return s[:1] }},
-		{"dropped", func(s []shard) []shard { return s[:2] }},
-		{"duplicated", func(s []shard) []shard { return append(s, s[0]) }},
-		{"mismatched total", func(s []shard) []shard { s[2].browser = "3/4"; return s }},
-		{"duplicate selector", func(s []shard) []shard { s[2].browser = "2/3"; return s }},
-		{"bad selector", func(s []shard) []shard { s[2].browser = "invalid"; return s }},
-		{"out of range", func(s []shard) []shard { s[2].browser = "4/3"; return s }},
-		{"unsharded overlap", func(s []shard) []shard { s[2].browser = ""; return s }},
-		{"repeated non-browser tests", func(s []shard) []shard { s[2].flags = "-p 2"; return s }},
-		{"missing non-browser tests", func(s []shard) []shard { s[0].flags = s[1].flags; return s }},
+		{"empty packages", func(s []shard) []shard { s[0].packages = nil; return s }, "invalid or repeated shard"},
+		{"unsharded flags", func(s []shard) []shard { s[0].flags = "-short"; return s[:1] }, "must start with exactly -p 2"},
+		{"dropped browser", func(s []shard) []shard { return s[:len(s)-1] }, "incomplete browser range"},
+		{"duplicated browser", func(s []shard) []shard { return append(s, s[1]) }, "invalid or repeated shard"},
+		{"dropped non-browser", func(s []shard) []shard { return s[1:] }, "one non-browser slice, got 0"},
+		{"duplicated non-browser", func(s []shard) []shard { return append(s, s[0]) }, "invalid or repeated shard"},
+		{"repeated non-browser range", func(s []shard) []shard { extra := s[0]; extra.name = "extra"; return append(s, extra) }, "one non-browser slice, got 2"},
+		{"missing browser range", func(s []shard) []shard { return s[:1] }, "incomplete browser range"},
+		{"mismatched total", func(s []shard) []shard { s[3].browser = "3/4"; s[3].name = "web-3/4"; return s }, "browser total 4 disagrees with 3"},
+		{"duplicate selector", func(s []shard) []shard { s[2].browser = "3/3"; s[2].name = "other-3/3"; return s }, "repeated browser selector"},
+		{"selector name mismatch", func(s []shard) []shard { s[2].browser = "3/3"; return s }, "invalid browser shard"},
+		{"bad selector", func(s []shard) []shard { s[3].browser = "invalid"; return s }, "invalid browser shard"},
+		{"out of range", func(s []shard) []shard { s[3].browser = "4/3"; return s }, "invalid browser shard"},
+		{"unsharded overlap", func(s []shard) []shard { s[3].browser = ""; return s }, "invalid browser shard"},
+		{"repeated non-browser tests", func(s []shard) []shard { s[3].flags = "-p 2"; return s }, "browser selector requires -run"},
+		{"whole-package overlap", func(s []shard) []shard { s[3].flags = "-p 2"; s[3].browser = ""; return s }, "whole-package range overlaps"},
+		{"missing non-browser tests", func(s []shard) []shard { s[0].flags = s[1].flags; return s }, "invalid browser shard"},
+		{"skip missing", func(s []shard) []shard { s[0].flags = "-p 2"; return s }, "whole-package range overlaps"},
+		{"skip pattern missing", func(s []shard) []shard { s[0].flags = "-p 2 -skip"; return s }, "selection must be exactly"},
+		{"skip pattern altered", func(s []shard) []shard { s[0].flags = "-p 2 -skip ^Other$"; return s }, "-skip pattern must be"},
+		{"non-browser selector", func(s []shard) []shard { s[0].browser = "1/3"; return s }, "non-browser slice must have an empty selector"},
+		{"run pattern missing", func(s []shard) []shard { s[1].flags = "-p 2 -run"; return s }, "selection must be exactly"},
+		{"run pattern altered", func(s []shard) []shard { s[1].flags = "-p 2 -run ^Other$"; return s }, "-run pattern must be"},
+		{"run duplicated", func(s []shard) []shard { s[1].flags += " -run ^TestBrowser$"; return s }, "selection must be exactly"},
+		{"skip duplicated", func(s []shard) []shard { s[0].flags += " -skip ^TestBrowser$"; return s }, "selection must be exactly"},
+		{"run and skip", func(s []shard) []shard { s[1].flags += " -skip ^TestBrowser$"; return s }, "selection must be exactly"},
+		{"p missing", func(s []shard) []shard { s[1].flags = "-run ^TestBrowser$"; return s }, "must start with exactly -p 2"},
+		{"p duplicated", func(s []shard) []shard { s[1].flags += " -p 2"; return s }, "selection must be exactly"},
+		{"p altered", func(s []shard) []shard { s[1].flags = "-p 4 -run ^TestBrowser$"; return s }, "must start with exactly -p 2"},
+		{"reordered flags", func(s []shard) []shard { s[1].flags = "-run ^TestBrowser$ -p 2"; return s }, "must start with exactly -p 2"},
+		{"unknown flag", func(s []shard) []shard { s[1].flags += " -short"; return s }, "selection must be exactly"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := partition(all, tc.edit(browserShards())); err == nil {
-				t.Fatal("accepted invalid shard list")
+			if _, err := partition(all, tc.edit(browserShards())); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("partition = %v, want %q", err, tc.want)
 			}
 		})
 	}
+	t.Run("four browser slices", func(t *testing.T) {
+		four := append(browserShards(), specs[len(specs)-1])
+		for k := 1; k < len(four); k++ {
+			four[k].browser = fmt.Sprintf("%d/%d", k, len(four)-1)
+			four[k].name = "web-" + four[k].browser
+		}
+		parts, err := partition(all, four)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := covers(parts, all, four); err != nil {
+			t.Fatal(err)
+		}
+	})
 	delete(parts, specs[1].name)
 	if err := covers(parts, all, specs); err == nil {
 		t.Fatal("accepted missing package slice")
@@ -189,7 +224,7 @@ func TestBrowserShardCoverage(t *testing.T) {
 }
 
 func TestScheduledBrowserShards(t *testing.T) {
-	valid := "shard: [web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n"
+	valid := "shard: [web-nonbrowser, web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n"
 	if err := scheduled(valid, browserShards()); err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +246,7 @@ func TestScheduledBrowserShards(t *testing.T) {
 func TestCommand(t *testing.T) {
 	root := t.TempDir()
 	// Exercise make's dollar expansion as well as the command arguments:
-	// browser-only flags contain an end-of-name regex anchor.
+	// both browser and non-browser flags contain an end-of-name regex anchor.
 	if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte("check-test:\n\t@printf '%s\\n' $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES) \"$$RIBBITTO_BROWSER_SHARD\" \"$$GOFLAGS\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -253,6 +288,8 @@ func TestRunPropagatesFailure(t *testing.T) {
 		{"web-2/3", "7", "", "running shard web-2/3: exit status 7"},
 		{"web-2/3", "0", "", "shard web-2/3 succeeded without writing a browser scenario count"},
 		{"cmd", "0", "", ""},
+		{"web-nonbrowser", "0", "", ""},
+		{"web-nonbrowser", "7", "", "running shard web-nonbrowser: exit status 7"},
 	} {
 		t.Run(tc.shard+"/"+tc.status+tc.report, func(t *testing.T) {
 			t.Setenv("MAKE_EXIT", tc.status)

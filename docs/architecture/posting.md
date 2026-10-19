@@ -18,11 +18,11 @@ sequenceDiagram
 ```
 
 `conversation.Posting.Send` validates and owns the transaction through
-its `TxRunner` (`PostToTopic`, `PostFromPage` and `Post` delegate to it): its transaction-bound `EventSequence` takes the sequence, then
+its `TxRunner` (`PostToTopic` and `Post` delegate to it): its transaction-bound `EventSequence` takes the sequence, then
 its `Writer` reads the default topic (and the selected topic, if supplied)
 and inserts the message; `Post` is its shorthand for the default topic. It
 encodes the post with `conversation.EncodePosted` and calls its
-transaction-bound `EventAppender.Append` before commit. `PostFromPage` also
+transaction-bound `EventAppender.Append` before commit. `Send` with a cursor also
 reads the composer's scope and own message through `PostReadWriterIn` in that
 transaction, under org-first locking ([unread writes](unread-writes.md)).
 Org's sequence (`orgpg.SequenceIn`) and realtime's appender
@@ -111,7 +111,7 @@ the sequence; so does an original deleted before the insert, through
 
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
-cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
+cursor and the composer's `IdempotencyKey`; `PostToTopic` and `Post`
 delegate to it. Only a keyed body with a valid handle candidate and an available
 member directory gets a scoped preflight key lookup using the same tokens
 in a separate read transaction, before conversion, expansion or reference checks.

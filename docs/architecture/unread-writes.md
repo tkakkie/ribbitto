@@ -94,7 +94,7 @@ A newly read message
   newest durable sequence the page has applied, never a sequence only
   received or the post's own response, so posting never reads past the
   page's cursor; like every topic read, it covers the whole topic up to `S`,
-  not only the loaded window. `conversation.Posting.PostFromPage` takes
+  not only the loaded window. `conversation.Posting.Send` with a cursor takes
   org's sequence first and refuses `S` above the pre-post committed limit.
   Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
   write and own-message union to that transaction. For a topic post with a

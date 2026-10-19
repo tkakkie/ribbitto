@@ -31,14 +31,9 @@ func NewTopicCounts(state TopicStateReaderIn, messages TopicCounterIn) *TopicCou
 	return &TopicCounts{state: state, messages: messages}
 }
 
-// Read returns capped counts and the selected topic's uncapped first unread
-// sequence (zero if none). Scope and joined come from resolved membership.
-func (c *TopicCounts) Read(ctx context.Context, s platform.Snapshot, scope Scope, joined int64, listed []kernel.ID, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
-	return c.ReadWithFirstUnread(ctx, s, scope, joined, listed, selected, true)
-}
-
-// ReadWithFirstUnread retains selection and state loading while explicitly choosing
-// whether the message counter also computes first unread.
+// ReadWithFirstUnread returns capped counts and, when requested, the selected
+// topic's uncapped first unread sequence (zero if none). Scope and joined come
+// from resolved membership.
 func (c *TopicCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snapshot, scope Scope, joined int64, listed []kernel.ID, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
 	state, err := c.state(s).Read(ctx, scope, joined, listed, selected)
 	if err != nil {

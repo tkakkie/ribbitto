@@ -1,14 +1,12 @@
 # Web JavaScript
 
-JavaScript responsibilities and constraints for browser enhancements.
-
 ## JavaScript
 
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
-keyboard, local time, selection constraints, copying to the clipboard, and
-htmx/SSE input glue. The bounded composer state of decision 37 is the
-[composer](web-composer.md#composer) exception. A UI-library island is only a scoped
-exception under
+keyboard, local time, selection constraints, clipboard copying and htmx/SSE glue.
+Bounded composer state is the
+[composer](web-composer.md#composer) exception (decision 37). UI-library islands require
+scoped exceptions under
 [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md);
 none exists today.
 
@@ -80,23 +78,37 @@ htmx sends resync requests. The markup contract is in
   and captures plain Enter/Tab before sending/navigation. Its token boundary mirrors posting;
   code checks are conservative. It suppresses IME keys and the 100 ms commit Enter,
   retaining textarea focus with listbox ARIA ([composer](web-composer.md#composer)).
-- `message-composer-v16.js` preserves the list's newest position or visible item
+- `message-composer-v17.js` preserves the list's newest position or visible item
   during [composer growth](../ui-composer.md), reveals the end caret after layout,
   and gives successful-post scrolling precedence. It closes Quote's popover and focuses the
   textarea after a chip swap. At `htmx:configRequest` it copies the native
   submitter's name/value for `#quote-form`, since popover focus restoration clears
   htmx's remembered button; the unnamed Remove button adds nothing.
-  Composer submits pause while the quote form is processing, before either
-  sending path can use the old chip. Quoted sends use the ordinary path, waiting for
+  Composer submits pause during quote-form processing, preventing either
+  send path using the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
-- Partial quoting uses the same submitter glue for `name="part"`; the server
-  renders the editable text. Page-selection enhancement remains planned (#1161).
-- `message-drafts-v3.js` saves composer input after 300 ms or lifecycle flush,
-  using the input's monotonic edit time. Blank/over-limit text writes tombstones;
-  the 4,000-code-point/50-entry bounds apply from the first write. Equal/later
-  stored edits win against the observed read; eviction is also best effort.
-  Sign-out notices and the session deadline stop writes and cancel pending saves.
-  [Drafts](web-composer.md#drafts) defines the races and cleanup rules.
+- Partial quotes share submitter glue (`name="part"`); editable text is server-rendered.
+  Page selection is planned (#1161).
+- `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
+  input times. Blank/over-limit text writes tombstones; limits: 4,000 code points,
+  50 entries. Equal/later stored edits win; eviction is best effort.
+  Sign-out/deadline cancel saves and stop writes. Sweep/restore share validity checks.
+  Restore seeds edit time without input/typing/focus; server text wins.
+  Bubbling `message-sending`: `{key, body, inPlace}` before emptying; snapshots
+  at once, cancels debounce; Retry/busy drops emit none.
+  `message-sent`: `{key, message}` after posted-message state and ordinary
+  prefix removal (after IME). Pending success requires 200; in-place 409
+  requires prefix recovery. Pending events keep the snapshot key across 409
+  request-key rotation, including Edit/resend.
+  Only this tab's unchanged last write becomes current text/tombstone:
+  matching send snapshots or typing after in-place sends. Later sends,
+  pending-path edits and other tabs' writes survive; failures/unknown keys do nothing.
+  Dirty in-place text refreshes after prefix removal, keeping
+  edit time/debounce even if storage differs; saves check edit times.
+  Bubbling textarea `message-pending-action` (`{key, kind}`):
+  `edit` saves now, cancels stale debounce without input/typing;
+  `remove` replaces that key's unchanged send snapshot.
+  [Drafts](web-composer.md#drafts): races/cleanup.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the
   Clipboard API, so shared live renders hold no origin; marks the link
@@ -138,18 +150,15 @@ htmx sends resync requests. The markup contract is in
 
 ## Composer
 
-The [composer queue](web-composer.md#composer) holds at most 10 pending items
-and dispatches in FIFO order, pausing while an outcome is unknown. Retry of
-a Not sent item goes to the end; an unknown outcome's Retry keeps its place.
-Edit restores a failed item's text and key only into an empty composer outside
-IME composition; it never overwrites a draft. It removes that item, frees its
-slot and resumes a paused queue. Otherwise the visible, disabled button
-describes why. The restored key survives other responses' state swaps;
-sending transfers it to the pending form, and emptying the textarea renews it.
-Unused keys post normally; bodies matching the [retry rule](posting.md) return the stored ID;
-a different body under a used key gets 409 and a fresh key for Retry.
-Topic pending items settle by confirmed ID, response topic/applied sequence, or a subsequent
-move from the shown topic; the script retains no move history
+[Composer queue](web-composer.md#composer): at most 10 pending items,
+FIFO, paused on unknown outcomes. Not sent Retry goes last; unknown Retry stays.
+Edit restores failed text/key only into an empty composer outside IME, never
+overwriting drafts; removes the item, frees its slot and resumes the queue.
+Otherwise the visible disabled button explains why. Restored keys survive state
+swaps, transfer to pending forms on send, renew on emptying. Unused keys post;
+[matching bodies](posting.md) return the stored ID; different bodies under used
+keys get 409/fresh Retry keys. Topic items settle by confirmed ID, response
+topic/applied sequence or later move from the shown topic; no move history
 ([decision 37][d37]).
 
 [a11y]: ../accessibility.md

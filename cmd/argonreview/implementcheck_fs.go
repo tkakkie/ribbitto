@@ -15,6 +15,7 @@ import (
 var (
 	errImplementRealPath  = errors.New("path is not a clean real path")
 	errImplementDirectory = errors.New("path is not a directory")
+	errImplementReadCap   = errors.New("file exceeds read cap")
 )
 
 // implementRealDirectory preserves the implementer guard's path contract.
@@ -69,7 +70,7 @@ func implementRead(path string, limit int64, shared bool) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("file exceeds %d bytes", limit)
+		return nil, fmt.Errorf("file exceeds %d bytes: %w", limit, errImplementReadCap)
 	}
 	return data, nil
 }

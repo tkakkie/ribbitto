@@ -270,19 +270,30 @@ func TestImplementCheckSafeRead(t *testing.T) {
 }
 
 func TestImplementCheckMCP(t *testing.T) {
-	for _, name := range []string{"missing", "directory", "symlink", "nonempty trusted", "empty"} {
+	for _, name := range []string{"missing", "directory", "symlink", "FIFO", "nonempty untrusted", "nonempty no trusted copy", "nonempty trusted", "empty"} {
 		t.Run(name, func(t *testing.T) {
 			f := implementCheckFixture(t)
 			path := filepath.Join(f.home, ".gemini/config/mcp_config.json")
+			trusted := filepath.Join(f.home, "implementer/mcp_config.json")
 			implementCheckRemove(t, path)
 			switch name {
 			case "directory":
 				implementCheckMkdir(t, path)
 			case "symlink":
 				implementCheckLink(t, f.saved, path)
+			case "FIFO":
+				if err := unix.Mkfifo(path, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "nonempty untrusted":
+				implementCheckWrite(t, path, "untrusted feature on")
+				implementCheckWrite(t, trusted, "trusted feature on")
+			case "nonempty no trusted copy":
+				implementCheckWrite(t, path, "feature on")
+				implementCheckRemove(t, trusted)
 			case "nonempty trusted":
 				implementCheckWrite(t, path, "feature on")
-				implementCheckWrite(t, filepath.Join(f.home, "implementer/mcp_config.json"), "feature on")
+				implementCheckWrite(t, trusted, "feature on")
 			case "empty":
 				implementCheckWrite(t, path, "")
 			}
@@ -293,6 +304,9 @@ func TestImplementCheckMCP(t *testing.T) {
 			}
 			if code != want || want == 1 && !strings.Contains(out, "mcp_config.json") {
 				t.Fatalf("exit %d: %s", code, out)
+			}
+			if strings.HasPrefix(name, "nonempty") && !strings.Contains(out, "feature-on state must be checked by #1432's contract, not here") {
+				t.Fatalf("missing feature-on contract explanation: %s", out)
 			}
 		})
 	}
@@ -510,7 +524,7 @@ func TestImplementCheckBuiltinListErrors(t *testing.T) {
 }
 
 func TestImplementCheckBuiltin(t *testing.T) {
-	for _, name := range []string{"no list", "no builtin", "builtin is file", "extra", "missing", "changed", "FIFO", "socket", "kind differs", "recorded link", "read error", "version failed", "version timeout", "version junk", "empty directory", "nested file", "valid"} {
+	for _, name := range []string{"no list", "no builtin", "builtin is file", "extra", "missing", "changed", "read cap", "FIFO", "socket", "kind differs", "recorded link", "read error", "version failed", "version timeout", "version junk", "empty directory", "nested file", "read cap boundary", "valid"} {
 		t.Run(name, func(t *testing.T) {
 			f := implementCheckFixture(t)
 			dir := filepath.Join(f.home, ".gemini/antigravity-cli/builtin")
@@ -530,6 +544,14 @@ func TestImplementCheckBuiltin(t *testing.T) {
 				implementCheckRemove(t, file)
 			case "changed":
 				implementCheckWrite(t, file, "changed")
+			case "read cap", "read cap boundary":
+				size := 1 << 20
+				if name == "read cap" {
+					size++
+				}
+				data := strings.Repeat("a", size)
+				implementCheckWrite(t, file, data)
+				implementCheckWrite(t, list, fmt.Sprintf("%x  ./tool.txt\n", sha256.Sum256([]byte(data))))
 			case "FIFO":
 				if err := unix.Mkfifo(filepath.Join(dir, "fifo"), 0600); err != nil {
 					t.Fatal(err)
@@ -570,11 +592,14 @@ func TestImplementCheckBuiltin(t *testing.T) {
 			}
 			code, out, _ := f.run()
 			want := 1
-			if name == "valid" || name == "empty directory" || name == "nested file" {
+			if name == "valid" || name == "empty directory" || name == "nested file" || name == "read cap boundary" {
 				want = 0
 			}
 			if code != want {
 				t.Fatalf("%d %s", code, out)
+			}
+			if name == "read cap" && !strings.Contains(out, fmt.Sprintf("builtin file %q is larger than the 1 MiB read cap; builtin files are hashed whole, so a larger file needs a code change", file)) {
+				t.Fatalf("missing builtin read-cap explanation: %s", out)
 			}
 			if (name == "FIFO" || name == "socket") && !strings.Contains(out, "unknown file type") {
 				t.Fatal(out)

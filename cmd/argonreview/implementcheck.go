@@ -41,6 +41,8 @@ import (
 // count are printed. Refused directories are pruned.
 // These checks observe a changing filesystem; they cannot make a later run
 // atomic with the inspection, just as the guard cannot.
+
+// implementCheckDeps supplies filesystem and process operations for tests.
 type implementCheckDeps struct {
 	trust       func() error
 	accountHome string
@@ -222,13 +224,15 @@ func (c *implementChecker) check(home, worktree, saved, expected, agy string) {
 	c.baseline(worktree)
 }
 
-// pending #1432: replace the body by the one definition of the feature on/off
-// contract (settings, hooks, guard mode, MCP file); until it merges only the
-// feature-off state is checked.
+// implementMCPContract currently requires feature off: an existing, empty regular
+// file. Every nonempty file is refused, including an exact implementer copy.
+// Pending #1432: replace this body with the one definition of the feature on/off
+// contract (settings, hooks, guard mode, MCP file). Feature-on consistency belongs
+// to that contract, not this interim check.
 func implementMCPContract(c *implementChecker, home string) {
 	path := filepath.Join(home, ".gemini/config/mcp_config.json")
 	if data, ok := c.read(path, 1<<20, false); ok && len(data) != 0 {
-		c.problem("mcp_config.json not empty: %q", path)
+		c.problem("mcp_config.json not empty: %q; feature-on state must be checked by #1432's contract, not here", path)
 	}
 }
 
@@ -360,7 +364,13 @@ func (c *implementChecker) builtin(home, agy string) {
 			case info.IsDir():
 				visit(path, rel+"/")
 			case info.Mode().IsRegular():
-				if data, ok := c.read(path, 1<<20, false); ok {
+				data, err := implementRead(path, 1<<20, false)
+				switch {
+				case errors.Is(err, errImplementReadCap):
+					c.problem("builtin file %q is larger than the 1 MiB read cap; builtin files are hashed whole, so a larger file needs a code change", path)
+				case err != nil:
+					c.problem("reading %q: %q", path, err)
+				default:
 					actual[rel] = fmt.Sprintf("%x", sha256.Sum256(data))
 				}
 			case info.Mode()&os.ModeSymlink != 0:

@@ -69,9 +69,14 @@ htmx does only requests and swaps; the server and templ own the HTML.
   fragment; htmx posts it to the channel's `/quote`, swapping `#composer-quote`.
   Each shared menu submits only `name="quote"` and the message UUID. The chip
   lives inside the composer, submits a hidden `quote`, and describes the textarea
-  through `#composer-quote-description` (author/excerpt only; empty without a quote).
+  through `#composer-quote-description` (author/excerpt or editable part; empty without a quote).
   Quoted post responses refresh it out of band: re-read on 422/409, empty on
   success. Unquoted pending responses leave it alone.
+  `part=<UUID>` starts an editable part with the original's extracted text.
+  A part chip submits `quote_text`, including empty text; whole chips omit it.
+  The chip and posting paths answer 422 for empty or absent-from-original parts.
+  A future selection input in `#quote-form` must be disabled by default so whole
+  Quote submits carry only the ID; no selection script is installed yet (#1161).
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).
 - Every channel/topic page (`?before=` and panel pages included) and the
   channel list page carry `data-event-cursor` on `#organization-stream`, the outer layout div outside

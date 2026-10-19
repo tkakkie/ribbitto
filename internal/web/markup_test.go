@@ -987,6 +987,8 @@ func TestComponentsMarkup(t *testing.T) {
 			Body:      "<script>bad()</script>\nمرحبا", Text: "<script>bad()</script>\nمرحبا",
 		})},
 		{"ComposerQuote", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "author", Body: "<script>bad()</script>"}}, false)},
+		{"ComposerQuote part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new("<script>part</script>")}, false)},
+		{"ComposerQuote invalid part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new(""), QuoteInvalid: true}, false)},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
 		{"Avatar", view.Avatar(kernel.ID{1}, "田中", "author")},

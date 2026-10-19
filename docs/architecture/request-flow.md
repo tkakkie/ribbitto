@@ -43,7 +43,17 @@ Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
 its channel, reads one ID through `conversation.Reader.Many`, and returns only
 `#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
 uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
-messages get the posting route's plain 404, without their text.
+messages get the posting route's plain 404, without their text, before comparing
+any submitted part. `part=<UUID>` (also a conversation GET) fills an editable
+chip with the original's extracted text; GET ignores `quote_text` entirely.
+Supplying both `quote` and `part` on GET or chip POST gets 400 before any
+message read. Posting POST ignores `part`, including on re-render, so it
+cannot override `quote`. Presence of body `quote_text` selects a part on chip
+POST and posting POST; absent means whole. Empty or not-found parts get 422,
+preserving submitted text and the idempotency key, with an error on the part
+rather than a valid body. Posting validates again inside its transaction
+after the scoped read and stores the normalised part. Both retry paths check
+scope, then part validity, then the stored snapshot: 404/422 precede 409.
 
 ## Server timeouts
 

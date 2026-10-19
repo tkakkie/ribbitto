@@ -438,3 +438,12 @@ other = "今すぐ再読み込み"
 
 ["mention.help"]
 other = "@ を入力してメンバーを検索します。矢印キーで選択し、Enter または Tab で挿入、Escape で閉じます。"
+
+["message.quote_part"]
+other = "一部だけ引用"
+
+["message.quote_text"]
+other = "引用するテキスト"
+
+["message.error.quote"]
+other = "元のメッセージの一部を4000文字以内で入力してください。空欄にはできません。"

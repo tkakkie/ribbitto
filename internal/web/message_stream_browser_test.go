@@ -83,6 +83,7 @@ func TestBrowser(t *testing.T) {
 		}
 	}
 	for _, width := range []int{1280, 390} {
+		run(fmt.Sprintf("quote-focus/width=%d", width), func(t *testing.T, browser *rod.Browser) { testQuoteFocusBrowser(t, browser, width) })
 		for _, scenario := range []string{"page", "live", "across", "quote", "nested-quote", "empty", "transfer", "lost", "menu", "part", "composer", "changed", "selection-menu", "backward", "triple-click"} {
 			run(fmt.Sprintf("quote-selection/%s/width=%d", scenario, width), func(t *testing.T, browser *rod.Browser) { testQuoteSelectionBrowser(t, browser, width, scenario, nil) })
 		}
@@ -115,6 +116,7 @@ func TestBrowser(t *testing.T) {
 	run("drafts", testDraftsBrowser)
 	run("drafts-org", testOrgDraftsBrowser)
 	run("drafts-save", testSaveDraftsBrowser)
+	run("drafts-markers", testDraftMarkersBrowser)
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

@@ -359,6 +359,11 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		p.MustWait(`want => document.getElementById('quote-text')?.value === want`, want)
 		p.MustWait(`() => { const i = document.querySelector('#quote-form input[name=quote_text]'); return i.disabled && i.value === ''; }`)
 	})
+	if scenario == "page" {
+		step(t, "selection focus: editable part takes focus", func(p *rod.Page) {
+			p.MustWait(`() => document.activeElement.id === 'quote-text'`)
+		})
+	}
 	select {
 	case form := <-requests:
 		if form.Get("quote") != realtime.FormatPayloadID(first.ID) || len(form["quote_text"]) != 1 || form.Get("quote_text") != want {

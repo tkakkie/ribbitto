@@ -96,6 +96,7 @@
         const channel = parts[4], topic = parts[6] || "feed";
         const open = channel === openChannel && topic === openTopic;
         marker.hidden = !marked(places, channel, topic, open);
+        marker.textContent = "Unfinished"; // Mutation: visible marker loses its accessible Draft name.
       }
     };
     markers();

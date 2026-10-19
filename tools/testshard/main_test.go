@@ -219,6 +219,9 @@ func TestCommand(t *testing.T) {
 			t.Fatalf("selector environment = %v", got)
 		}
 		cmd.Dir = root
+		// make check-tools runs this test under make, whose MAKELEVEL and
+		// MAKEFLAGS would make this make print "Entering directory" lines.
+		cmd.Env = append(cmd.Env, "MAKELEVEL=0", "MAKEFLAGS=")
 		out, err := cmd.Output()
 		wantOutput := strings.Join(append(append(strings.Fields(s.flags), s.packages...), s.browser), "\n") + "\n"
 		if err != nil || string(out) != wantOutput {

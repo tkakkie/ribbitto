@@ -456,6 +456,12 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 					reply = browserReply{status: status}
 					if status == 409 {
 						reply.body = pendingAnswer(t, place.Channel).body
+						if !strings.Contains(string(reply.body), `data-posted-message="`+view.MessageDOMID(place.Channel)+`"`) {
+							t.Fatal("409 fixture must name the stored message")
+						}
+						// Normally beforeSwap blocks pending failures. Exercise the
+						// afterSwap status guard independently of that first guard.
+						run(t, p, `window.failedSnapshot=localStorage.getItem(draftKey); document.addEventListener('htmx:beforeSwap', e => { if (e.detail.requestConfig?.elt.matches('[data-pending-form]') && e.detail.xhr.status===409) e.detail.shouldSwap=true; });`)
 					}
 					if status == 422 {
 						reply.body = []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{})))
@@ -470,6 +476,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 					// Settle clears response routing before this delayed IME confirmation.
 					step(t, p, "await send response settle during composition").MustWait(`() => swaps === 1`)
 					run(t, p, `check(sentEvents.length === 0 || sendEvents[0].inPlace === false, 'sent before composition removal'); document.querySelector('#message-body').dispatchEvent(new Event('compositionend',{bubbles:true})); releaseDrafts();`)
+				}
+				if status == 409 {
+					step(t, p, "await pending 409 failure with repeat").MustWait(`() => { const f=document.querySelector('[data-pending-form]'); return f?.dataset.state==='failed' && f.querySelector('[role=status]').textContent===document.querySelector('#message-send-alert').dataset.repeat; }`)
+					step(t, p, "pending 409 must preserve snapshot without success").MustWait(`() => sentEvents.length===0 && localStorage.getItem(draftKey)===failedSnapshot`)
 				}
 				if status == 200 {
 					waitState(t, p, "await confirmation event", `() => sentEvents.length === 1 && sentEvents[0].key === sendEvents[0].key && !!sentEvents[0].message`, `() => JSON.stringify({sendEvents, sentEvents, state:document.querySelector('#message-composer-state')?.dataset, compositionActive, pending:[...document.querySelectorAll('[data-pending-form]')].map(f => ({...f.dataset, key:f.elements.idempotency_key.value, item:f.closest('li').dataset}))})`)
@@ -542,7 +552,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		})
 	}
 
-	for _, mode := range []string{"edit", "edit-queued", "edit-backspace-pending", "edit-backspace-saved", "remove", "remove-newer"} {
+	for _, mode := range []string{"edit", "edit-queued", "edit-backspace-pending", "edit-backspace-saved", "remove", "remove-newer", "remove-newer-send", "remove-tab-write"} {
 		t.Run("pending-action/"+mode, func(t *testing.T) {
 			holdPosts.Store(true)
 			defer holdPosts.Store(false)
@@ -559,30 +569,55 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				releaseB(pendingAnswer(t, place.Channel))
 				step(t, p, "await queued B confirmation before Edit").MustWait(`() => sentEvents.length===1 && entry()?.text==='' && !document.querySelector('[data-pending-form].htmx-request')`)
 			}
-			if strings.HasPrefix(mode, "edit-backspace") {
+			if mode == "edit" || strings.HasPrefix(mode, "edit-backspace") {
 				run(t, p, `edit('x',++editNow); edit('',++editNow); check(pendingDrafts()===1,'backspace save not pending');`)
-				if mode == "edit-backspace-saved" {
+				if mode == "edit" || mode == "edit-backspace-saved" {
 					run(t, p, `releaseDrafts(); check(entry().text==='','missing backspace tombstone');`)
 				}
 			}
-			if mode == "remove-newer" {
+			if strings.HasPrefix(mode, "remove-newer") {
 				run(t, p, `edit('C',++editNow); releaseDrafts(); check(entry().text==='C','newer Remove text not saved');`)
+			}
+			if mode == "remove-newer-send" {
+				// Sending C empties the textarea without input: an incorrect
+				// replacement of A would now write a tombstone instead of C.
+				run(t, p, `document.querySelector('#message-composer').requestSubmit();`)
+				_, releaseC := nextPost(t)
+				releaseC(browserReply{status: 422})
+				step(t, p, "await newer C failure before Remove A").MustWait(`() => [...document.querySelectorAll('[data-pending-form]')].filter(f=>f.dataset.state==='failed').length===2 && !document.querySelector('[data-pending-form].htmx-request')`)
+			}
+			if mode == "remove-tab-write" {
+				other := open(t, false, "")
+				run(t, other, `edit('D',++editNow); releaseDrafts(); check(entry().text==='D','other tab did not save D');`)
+				syncStorage(t, other, p)
+				closePage(t, other)
+				// Let a bad replacement pass the edit-time check as well;
+				// only storage ownership should prevent overwriting D.
+				run(t, p, `editNow=entry().at+1; check(pendingDrafts()===0 && document.querySelector('#message-body').value==='','Remove tab-write state');`)
 			}
 			edit := strings.HasPrefix(mode, "edit")
 			want := ""
 			if edit {
 				want = "A"
-			} else if mode == "remove-newer" {
+			} else if strings.HasPrefix(mode, "remove-newer") {
 				want = "C"
+			} else if mode == "remove-tab-write" {
+				want = "D"
 			}
-			eval(t, p, "apply pending action without typing", `(edit,want) => {
-    let action; document.addEventListener('message-pending-action',e=>action=e.detail,{once:true});
+			bodyWant := want
+			if mode == "remove-newer-send" || mode == "remove-tab-write" {
+				bodyWant = ""
+			}
+			eval(t, p, "apply pending action without typing", `(edit,want,bodyWant) => {
+    let action; document.addEventListener('message-pending-action',e=>action=e.detail,{once:true}); typingRequests=0;
     const f=document.querySelector('[data-pending-form][data-state="failed"]'), key=f.elements.idempotency_key.value, inputs=restoreInputs, typing=typingRequests;
     const button=f.querySelector(edit?'[data-pending-edit]':'[data-pending-remove]'); check(!button.disabled,'pending action disabled'); button.click();
     check(action?.key===key && action.kind===(edit?'edit':'remove'),'pending action key or bubbling');
     check(restoreInputs===inputs && typingRequests===typing,'pending action emitted input or typing');
-    releaseDrafts(); check(entry().text===want && document.querySelector('#message-body').value===want,'pending action lost draft or stale timer won');
-   }`, edit, want)
+    if (edit) check(entry().text===want && pendingDrafts()===0 && typingRequests===0,'Edit did not save restored text immediately without typing');
+    else check(entry().text===want,'Remove replaced a newer stored draft');
+    releaseDrafts(); check(entry().text===want && document.querySelector('#message-body').value===bodyWant,'pending action lost draft or stale timer won');
+   }`, edit, want, bodyWant)
 			reload(t, p, want)
 		})
 	}

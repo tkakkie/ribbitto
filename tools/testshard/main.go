@@ -115,7 +115,8 @@ func testCommand(root string, s shard) *exec.Cmd {
 	flags := strings.ReplaceAll(s.flags, "$", "$$")
 	cmd := exec.Command("make", "check-test", "GO_TEST_PACKAGES="+strings.Join(s.packages, " "), "GO_TEST_FLAGS="+flags)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "RIBBITTO_BROWSER_SHARD="+s.browser)
+	// Workflow GOFLAGS must not narrow or cache a shard; -check does not read it.
+	cmd.Env = append(os.Environ(), "RIBBITTO_BROWSER_SHARD="+s.browser, "GOFLAGS=-count=1")
 	return cmd
 }
 

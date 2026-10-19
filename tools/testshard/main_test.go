@@ -205,25 +205,29 @@ func TestCommand(t *testing.T) {
 	root := t.TempDir()
 	// Exercise make's dollar expansion as well as the command arguments:
 	// browser-only flags contain an end-of-name regex anchor.
-	if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte("check-test:\n\t@printf '%s\\n' $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES) \"$$RIBBITTO_BROWSER_SHARD\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte("check-test:\n\t@printf '%s\\n' $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES) \"$$RIBBITTO_BROWSER_SHARD\" \"$$GOFLAGS\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("RIBBITTO_BROWSER_SHARD", "wrong")
+	t.Setenv("GOFLAGS", "-run=X")
 	for _, s := range append(shards(), browserShards()...) {
 		cmd := testCommand("/repository", s)
 		want := []string{"make", "check-test", "GO_TEST_PACKAGES=" + strings.Join(s.packages, " "), "GO_TEST_FLAGS=" + strings.ReplaceAll(s.flags, "$", "$$")}
 		if cmd.Dir != "/repository" || !slices.Equal(cmd.Args, want) {
 			t.Fatalf("command = %v in %s, want %v", cmd.Args, cmd.Dir, want)
 		}
-		if got := cmd.Environ(); got[len(got)-1] != "RIBBITTO_BROWSER_SHARD="+s.browser {
+		if got := cmd.Environ(); got[len(got)-2] != "RIBBITTO_BROWSER_SHARD="+s.browser {
 			t.Fatalf("selector environment = %v", got)
+		}
+		if got := cmd.Environ(); got[len(got)-1] != "GOFLAGS=-count=1" {
+			t.Fatalf("Go flags environment = %v", got)
 		}
 		cmd.Dir = root
 		// make check-tools runs this test under make, whose MAKELEVEL and
 		// MAKEFLAGS would make this make print "Entering directory" lines.
 		cmd.Env = append(cmd.Env, "MAKELEVEL=0", "MAKEFLAGS=")
 		out, err := cmd.Output()
-		wantOutput := strings.Join(append(append(strings.Fields(s.flags), s.packages...), s.browser), "\n") + "\n"
+		wantOutput := strings.Join(append(append(strings.Fields(s.flags), s.packages...), s.browser, "-count=1"), "\n") + "\n"
 		if err != nil || string(out) != wantOutput {
 			t.Fatalf("make output = %q, %v; want %q", out, err, wantOutput)
 		}

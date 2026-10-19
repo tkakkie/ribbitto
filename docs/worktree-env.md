@@ -64,12 +64,12 @@ confirmed it (peak 38/100, no 53300). The shared server therefore keeps
 - To raise `-p` to 4 or more, first re-measure at that setting, then change
   `max_connections` and the default together.
 
-
 CI gives each test job its own PostgreSQL service. `tools/testshard` owns
 packages, browser selectors and Go test flags; `-run` passes these directly to
 `make check-test`. Browser slices must cover every selector of one total,
 with the first running all package tests and the others only `TestBrowser`.
 `-check` verifies the matrix and exact runner commands, rejecting independent
-package lists or flags. CI test jobs use `GOFLAGS=-count=1` because setup-go
-restores Go's test result cache. The current web shard remains unsliced until
+package lists or flags. `-run` sets `GOFLAGS=-count=1` for every shard, whatever
+the workflow sets, because setup-go restores Go's test result cache; the
+workflow's `GOFLAGS` line is redundant. The current web shard remains unsliced until
 `TestBrowser` supports registration filtering.

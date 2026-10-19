@@ -250,7 +250,7 @@
     updateEdits();
   });
   const command = (event) => {
-    if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;
+    if (event.keyCode === 229 || event.key !== "Enter") return;
     const ended = compositionEnded.get(event.target);
     if (ended !== undefined && event.timeStamp - ended < 100) return;
     const mode = document.getElementById("message-composer-state").dataset.sendKey;

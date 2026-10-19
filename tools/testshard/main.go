@@ -20,12 +20,14 @@ import (
 
 // The named shards hold the packages that take longest on CI (#992), so
 // each job finishes at about the same time; "rest" runs in the checks job.
+// cmd and web run separately so their browser tests do not compete for CPUs.
 var shards = []struct {
 	name     string
 	packages []string
 }{
 	{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}},
-	{"web", []string{"./cmd/ribbitto", "./internal/web"}},
+	{"cmd", []string{"./cmd/ribbitto"}},
+	{"web", []string{"./internal/web"}},
 	{"realtime", []string{"./internal/realtime"}},
 }
 

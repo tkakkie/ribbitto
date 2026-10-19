@@ -14,7 +14,8 @@ func TestPartition(t *testing.T) {
 	}
 	for name, want := range map[string][]string{
 		"loadgen":  {"./cmd/loadgen", "./cmd/seed"},
-		"web":      {"./cmd/ribbitto", "./internal/web"},
+		"cmd":      {"./cmd/ribbitto"},
+		"web":      {"./internal/web"},
 		"realtime": {"./internal/realtime"},
 		rest:       {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
 	} {
@@ -32,6 +33,12 @@ func TestPartitionRefusesAMissingNamedPackage(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "./cmd/seed") {
 		t.Fatalf("partition without ./cmd/seed: err = %v", err)
 	}
+	t.Run("cmd package missing", func(t *testing.T) {
+		_, err := partition([]string{"./cmd/loadgen", "./cmd/seed", "./internal/realtime", "./internal/web"})
+		if err == nil || !strings.Contains(err.Error(), "shard cmd names ./cmd/ribbitto") {
+			t.Fatalf("partition without ./cmd/ribbitto: err = %v", err)
+		}
+	})
 }
 
 func TestCovers(t *testing.T) {
@@ -83,7 +90,7 @@ func TestPick(t *testing.T) {
 
 func TestScheduled(t *testing.T) {
 	const (
-		matrix    = "        shard: [loadgen, web, realtime]\n"
+		matrix    = "        shard: [loadgen, cmd, web, realtime]\n"
 		restStep  = "          packages=$(go -C tools run ./testshard .. rest)\n          test -n \"$packages\"\n          make check-test GO_TEST_PACKAGES=\"$packages\"\n"
 		shardStep = "          packages=$(go -C tools run ./testshard .. \"$SHARD\")\n          test -n \"$packages\"\n          make check-test GO_TEST_PACKAGES=\"$packages\"\n"
 		valid     = matrix + restStep + shardStep
@@ -94,6 +101,8 @@ func TestScheduled(t *testing.T) {
 		{"every shard once", valid, ""},
 		{"named shard omitted", strings.Replace(valid, "web, ", "", 1), "shard web 0 times"},
 		{"named shard repeated", strings.Replace(valid, "web, ", "web, web, ", 1), "shard web 2 times"},
+		{"cmd shard omitted", strings.Replace(valid, "cmd, ", "", 1), "shard cmd 0 times"},
+		{"cmd shard repeated", strings.Replace(valid, "cmd, ", "cmd, cmd, ", 1), "shard cmd 2 times"},
 		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
 		{"no matrix", restStep + shardStep, "found 0"},
 		{"two matrices", matrix + valid, "found 2"},

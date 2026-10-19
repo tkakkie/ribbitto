@@ -88,8 +88,8 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	root := strings.TrimFunc(string(data), func(r rune) bool {
 		return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
 	})
-	real, err := filepath.EvalSymlinks(root)
-	if !utf8.Valid(data) || !filepath.IsAbs(root) || err != nil || real != root || filepath.Clean(root) != root {
+	resolved, err := filepath.EvalSymlinks(root)
+	if !utf8.Valid(data) || !filepath.IsAbs(root) || err != nil || resolved != root || filepath.Clean(root) != root {
 		return "worktree path is not a clean real path"
 	}
 	info, err := lstat(root)

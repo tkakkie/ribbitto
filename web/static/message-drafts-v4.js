@@ -135,7 +135,7 @@
           if (!text.trim() || [...text].length > 4000) text = "";
         }
         try {
-          if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
+          if (!lastWrite || storage.getItem(key) !== lastWrite) return;
           edited();
           save();
         } catch { /* Storage errors leave sending usable. */ }

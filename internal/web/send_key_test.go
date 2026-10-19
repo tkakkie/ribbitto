@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
 )
 
 type preferenceMemory struct{}
@@ -40,10 +41,15 @@ func (s sendKeySession) Resolve(ctx context.Context, token string) (identity.Acc
 func TestSendKeyAuthorization(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "General")
-	_ = conversationtest.OrganizationWithOwner(t, pool, "other", "Other")
+	other := conversationtest.OrganizationWithOwner(t, pool, "other", "Other")
 	b := identitytest.Account(t, pool, "b@example.org", "B")
+	orgtest.Member(t, pool, other.OrganizationID, b, org.RoleMember, "bob-other", 1)
 	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	token, _, err := sessions.Create(t.Context(), f.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bToken, _, err := sessions.Create(t.Context(), b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +76,7 @@ func TestSendKeyAuthorization(t *testing.T) {
 			{"invalid value", token, "acme", "bogus", channel, topic, "", 400},
 			{"signed out", "", "acme", "modifier_enter", channel, topic, "", 404},
 			{"non-member", token, "other", "modifier_enter", channel, topic, "", 404},
+			{"other member", bToken, "other", "modifier_enter", "", "", "/organizations/other/channels", 303},
 		} {
 			t.Run(fmt.Sprintf("same-org=%t/%s", sameOrg, tc.name), func(t *testing.T) {
 				if _, err := pool.Exec(t.Context(), "UPDATE account SET send_key = 'enter'"); err != nil {
@@ -90,7 +97,7 @@ func TestSendKeyAuthorization(t *testing.T) {
 						t.Fatal(err)
 					}
 					want := "enter"
-					if id == f.AccountID && tc.status == 303 {
+					if tc.status == 303 && ((id == f.AccountID && tc.cookie == token) || (id == b && tc.cookie == bToken)) {
 						want = "modifier_enter"
 					}
 					if got != want {
@@ -155,11 +162,24 @@ func TestComposerSendKeyRendering(t *testing.T) {
 				if w.Code != wantStatus || !strings.Contains(body, `data-send-key="`+string(key)+`"`) || strings.Contains(body, "enterkeyhint") {
 					t.Fatalf("status/mode/key label: %d %s", w.Code, body)
 				}
+				doc, err := html.Parse(strings.NewReader(body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var helpMarkup strings.Builder
+				for n := range doc.Descendants() {
+					if attr(n, "id") == "message-help" {
+						if err := html.Render(&helpMarkup, n); err != nil {
+							t.Fatal(err)
+						}
+						break
+					}
+				}
 				if response == "422" {
-					if !strings.Contains(body, `id="message-help" role="alert"`) || strings.Contains(body, help) {
+					if !strings.Contains(helpMarkup.String(), `role="alert"`) || strings.Contains(helpMarkup.String(), help) {
 						t.Fatal("422 alert did not take precedence")
 					}
-				} else if !strings.Contains(body, help) {
+				} else if !strings.Contains(helpMarkup.String(), help) {
 					t.Fatal("missing shortcut help")
 				}
 				if response == "page" && !strings.Contains(body, `value="`+string(key)+`" checked`) {

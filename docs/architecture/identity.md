@@ -13,7 +13,10 @@ device. `GetSessionByTokenHash` selects it with the account, so
 middleware with no extra query. `identity.Preferences.SetSendKey` checks the
 value with `ParseSendKey` and updates only the account whose ID its caller
 passes, which must be the signed-in account's own; an unknown ID is
-`identity.ErrNoAccount`. Nothing in `web` uses it yet (#1158).
+`identity.ErrNoAccount`.
+In default `enter` mode, Enter, Ctrl/⌘+Enter and Alt+Enter send; Shift+Enter adds a newline.
+In `modifier_enter` mode, only Ctrl/⌘+Enter send; Enter, Shift+Enter and Alt+Enter add a newline.
+Composition never sends in either mode. Without scripts, Enter adds a newline.
 
 **Account creation in a caller's transaction.** `org.AccountCreator` and its
 `AccountCreatorIn` factory accept validated, normalised values and a password

@@ -210,7 +210,7 @@
   });
   // Some phone IMEs end composition before dispatching the confirming Enter,
   // with neither isComposing nor 229. Keep that short event sequence local to
-  // its textarea; a later deliberate Enter still sends normally.
+  // its textarea; a later deliberate key follows the selected send mode.
   const compositionEnded = new WeakMap();
   // A post's success may arrive mid-composition, when rewriting the value
   // would break the composition: the sent text then waits for its end.

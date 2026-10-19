@@ -82,6 +82,21 @@ func TestBrowser(t *testing.T) {
 			run(fmt.Sprintf("quote-part/scripts=%t/width=%d", scripts, width), func(t *testing.T, browser *rod.Browser) { testQuoteBrowser(t, browser, scripts, width, true) })
 		}
 	}
+	for _, width := range []int{1280, 390} {
+		for _, scenario := range []string{"page", "live", "across", "quote", "nested-quote", "empty", "transfer", "lost", "menu", "part", "composer", "changed", "selection-menu", "backward", "triple-click"} {
+			run(fmt.Sprintf("quote-selection/%s/width=%d", scenario, width), func(t *testing.T, browser *rod.Browser) { testQuoteSelectionBrowser(t, browser, width, scenario, nil) })
+		}
+		for _, fixture := range quoteSelectionFixtures {
+			run(fmt.Sprintf("quote-selection/%s/width=%d", fixture.name, width), func(t *testing.T, browser *rod.Browser) {
+				testQuoteSelectionBrowser(t, browser, width, "fixture", &fixture)
+			})
+			if fixture.name == "mention" {
+				run(fmt.Sprintf("quote-selection/partial-mention/width=%d", width), func(t *testing.T, browser *rod.Browser) {
+					testQuoteSelectionBrowser(t, browser, width, "partial-mention", &fixture)
+				})
+			}
+		}
+	}
 	run("message-actions", testMessageActionsBrowser)
 	run("message-link", testMessageLinkBrowser)
 	run("branch-form", testBranchFormBrowser)

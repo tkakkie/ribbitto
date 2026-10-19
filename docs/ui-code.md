@@ -111,8 +111,8 @@ included) and metadata use `wrap-anywhere` below `desk`, topic links at
 every width (#974).
 Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid
 iOS focus zoom (#973, #1120). The send button stays 44 × 44 px.
-Only latest feed and topic pages are enhanced;
-history uses plain forms. `message-composer-v18.js` handles quote focus and
+Latest feed/topic posts use htmx; history uses plain forms.
+`message-composer-v18.js` handles quote focus and
 [growth anchoring](ui-composer.md); both send modes guard IME and the
 100 ms after `compositionend`.
 

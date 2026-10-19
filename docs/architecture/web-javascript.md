@@ -2,23 +2,19 @@
 
 ## JavaScript
 
-JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
-keyboard, local time, selection constraints, clipboard copying and htmx/SSE glue.
-Bounded composer state is the
-[composer](web-composer.md#composer) exception (decision 37). UI-library islands require
-scoped exceptions under
-[decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md);
-none exists today.
+JavaScript generates no HTML and owns no application state; it handles focus, scroll, keyboard,
+local time, selection constraints, clipboard and htmx/SSE glue.
+Bounded composer state follows [composer](web-composer.md#composer) (decision 37).
+UI-library islands need scoped
+[decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
+exceptions; none exist.
 
-**Exception (#1039):**
-[decision 34](../decisions/34-live-unread-counts.md) lets one script own
+**Exception (#1039):** [decision 34](../decisions/34-live-unread-counts.md) lets one script own
 sidebar badge numbers and bounded recovery state: the snapshot sequence,
 at most 1,000 retained `unread` events with eligibility and application flags,
 a recovering flag, loss generations and the highest possibly lost sequence.
-It changes only the text and visibility of server-rendered badges, never
-creates elements or makes requests;
-htmx sends resync requests. The markup contract is in
-[web contracts](web-contracts.md).
+It changes only server-rendered badge text/visibility, never creates elements
+or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 
 - `message-stream-v13.js` observes `checkpoint` to update only `sse-connect`'s
   `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM
@@ -48,7 +44,7 @@ htmx sends resync requests. The markup contract is in
   request resync after uniform 0–2 s jitter. Recovery clearing is unchanged.
   A 429 counts as a request failure, keeps recovery open and retries
   through that backoff.
-  Cleanup clears the timer when its stream container is removed.
+  Removing its stream container clears its timer.
 
   | Attribute / target | Contract |
   |---|---|
@@ -60,97 +56,93 @@ htmx sends resync requests. The markup contract is in
 
 - `pins-sync-v1.js` compares server snapshot sequences before pins/response
   swaps and selects loaded controls' server-rendered actions from the section's
-  pin IDs. It restores button focus without touching history, draft or cursors.
-- `member-mentions-v1.js` marks resolved references whose `data-member-id`
-  matches `#organization-stream`'s existing `data-member`, on scoped
-  `htmx:load` (including htmx's initial body event after all deferred scripts).
-  Live posts, duplicate replay and moves use `htmx.swap`;
-  Load older selects and prepends server-rendered items. Both run htmx's
-  inserted-node load tasks, including for replacement and destination insertion.
-  No DOM observer or polling is needed. Token utilities add a 2 px dashed `brand`
-  outline with no offset, distinct from the solid, 2 px offset focus ring:
-  a shape cue with at least 3:1 contrast against the message background
-  and `selected` chip in both themes (see [colour contrast](../ui-colours.md#contrast-wcag-22-aa)).
-  The shared server render stays identical for every reader; unresolved and
-  other-organisation references carry no ID. Quote snapshots remain plain text.
+  pin IDs. It restores button focus, preserving history/draft/cursors.
+- `member-mentions-v1.js` marks resolved references matching `data-member-id`
+  to `#organization-stream`'s `data-member` on scoped `htmx:load`, including the
+  initial body event after deferred scripts. Live posts, duplicate replay and
+  moves use `htmx.swap`; Load older selects/prepends server-rendered items. Both
+  run inserted-node load tasks, including replacements/destination insertions;
+  no DOM observer/polling. Token utilities add a 2 px dashed `brand` outline,
+  no offset, versus the solid 2 px offset focus ring: a shape cue with ≥3:1
+  contrast against message background and `selected` chip in both themes
+  ([contrast](../ui-colours.md#contrast-wcag-22-aa)). Shared server renders are
+  identical for all readers; unresolved/other-organisation references have no ID.
+  Quote snapshots stay plain text.
 - `mention-picker-v1.js` owns only the active token, dismissal and selection.
-  It triggers the server-rendered search form, rejects stale results and picks,
-  and captures plain Enter/Tab before sending/navigation. Its token boundary mirrors posting;
-  code checks are conservative. It suppresses IME keys and the 100 ms commit Enter,
-  retaining textarea focus with listbox ARIA ([composer](web-composer.md#composer)).
-- `message-composer-v18.js` preserves the list's newest position or visible item
-  during [composer growth](../ui-composer.md), reveals the end caret after layout,
-  and gives successful-post scrolling precedence. It closes Quote's popover and focuses the
-  textarea after a chip swap. At `htmx:configRequest` it copies the native
-  submitter's name/value for `#quote-form`, since popover focus restoration clears
-  htmx's remembered button; the unnamed Remove button adds nothing.
-  Composer submits pause during quote-form processing, preventing either
-  send path using the old chip. Quoted sends use the ordinary path, waiting for
-  pending sends to finish; chip markup and requests remain server/htmx-owned.
-- Partial quotes share submitter glue (`name="part"`); editable text is server-rendered.
-  Page selection is planned (#1161).
-- `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
-  input times. Blank/over-limit text writes tombstones; limits: 4,000 code points,
-  50 entries. Equal/later stored edits win; eviction is best effort.
-  Sign-out/deadline cancel saves and stop writes. Sweep/restore share validity checks.
-  Restore seeds edit time without input/typing/focus; server text wins.
-  Bubbling `message-sending`: `{key, body, inPlace}` before emptying; snapshots
-  at once, cancels debounce; Retry/busy drops emit none.
-  `message-sent`: `{key, message}` after posted-message state and ordinary
-  prefix removal (after IME). Pending success requires 200; in-place 409
-  requires prefix recovery. Pending events keep the snapshot key across 409
-  request-key rotation, including Edit/resend.
-  Only this tab's unchanged last write becomes current text/tombstone:
-  matching send snapshots or typing after in-place sends. Later sends,
-  pending-path edits and other tabs' writes survive; failures/unknown keys do nothing.
-  Dirty in-place text refreshes after prefix removal, keeping
-  edit time/debounce even if storage differs; saves check edit times.
-  Bubbling textarea `message-pending-action` (`{key, kind}`):
-  `edit` saves now, cancels stale debounce without input/typing;
-  `remove` replaces that key's unchanged send snapshot.
-  [Drafts](web-composer.md#drafts): races/cleanup.
-- `message-link-v1.js` handles "Copy link" in a message's actions menu
-  (#1159): it copies the link's browser-resolved absolute `href` with the
-  Clipboard API, so shared live renders hold no origin; marks the link
-  `data-copied` (which shows "Link copied") until its menu closes; and
-  appends that label to the polite `#message-status`. With a modifier key,
-  without the API, or when copying fails, the link opens, as without
-  JavaScript.
+  It triggers server-rendered search, rejects stale results/picks and captures
+  plain Enter/Tab before send/navigation. Token boundaries mirror posting; code
+  checks are conservative. IME keys and the 100 ms commit Enter are suppressed;
+  textarea focus/listbox ARIA stay ([composer](web-composer.md#composer)).
+- `message-composer-v18.js` preserves newest/visible-item position during
+  [composer growth](../ui-composer.md), reveals the end caret after layout and
+  prioritizes post-success scrolling. It closes Quote's popover and focuses
+  the textarea after chip swaps. `htmx:configRequest` copies `#quote-form`'s native
+  submitter name/value: popover focus restoration clears htmx's remembered button;
+  unnamed Remove adds nothing. Composer submits pause during quote processing
+  so neither path uses the old chip. Quoted sends use the ordinary path after
+  pending sends finish; chip markup/requests stay server/htmx-owned.
+- Part quotes share submitter glue (`name="part"`); editable text is server-rendered.
+  `quote-selection-v1.js` accepts nonempty selections within one body, outside quotes.
+  Plain text stays. Rich text follows `ExtractChatV1`: whole mentions use
+  `data-quote-handle`, blocks join with one newline, `<br>` adds one; code,
+  emphasis and links retain text. Cut/unresolved mentions or unknown markup hide
+  the button; triple-click may leave an empty outside tail. Pointerdown/mousedown
+  preserve selection. Submit/`htmx:configRequest` recheck scope/text. Only selection
+  supplies `quote_text` via parameter proxy/hidden input; other submits, before
+  send and after request/swap clear/disable it. Swaps refresh button visibility.
+- `message-drafts-v4.js` saves after 300 ms or lifecycle flush using monotonic
+  input times. Blank/over-limit text writes tombstones; 4,000-code-point/50-entry
+  limits apply from the first write. Equal/later stored edits win against the
+  observed read; eviction is best effort. Sign-out/deadline stop writes and cancel
+  saves. Sweep/restore share validity checks; restore seeds edit time without
+  input/typing/focus, and server text wins.
+  Bubbling `message-sending` (`{key, body, inPlace}`) snapshots immediately before
+  emptying, cancelling debounce; Retry/busy drops emit none.
+  `message-sent` (`{key, message}`) follows posted-message state and ordinary
+  prefix removal (after IME). Pending success requires 200; in-place 409 requires
+  prefix recovery. Pending events retain snapshot keys across 409 request-key
+  rotation, including Edit/resend. Only this tab's unchanged last write becomes
+  current text/tombstone for matching send snapshots or typing after in-place
+  sends. Later sends, pending-path edits and other tabs' writes survive;
+  failures/unknown keys do nothing. After prefix removal, dirty in-place text
+  refreshes, retaining edit time/debounce even if storage differs; saves check
+  edit times. Bubbling textarea `message-pending-action` (`{key, kind}`): `edit`
+  saves now, cancelling stale debounce without input/typing; `remove` replaces
+  that key's unchanged send snapshot. [Drafts](web-composer.md#drafts): races/cleanup.
+- `message-link-v1.js` handles actions-menu "Copy link" (#1159) with the Clipboard
+  API and browser-resolved absolute `href`, keeping shared live renders origin-free.
+  `data-copied` shows "Link copied" until menu close; that label also goes to polite
+  `#message-status`. Modifiers, missing API or copy failures open the link, as
+  without JavaScript.
 - SSE `reset` closes htmx's event source. A DOM observer holds reload while
   the composer has `htmx-request` or #1179's failure alert, or a pending form
   is queued, sending or failed (including unconfirmed). A localised status
   offers a plain reload link. With nothing at stake, one uniform 0–5 s timer
   reloads for a fresh snapshot; new at-stake state cancels it, and firing
   rechecks. Confirmed items await reload delivery; drafts do not hold it.
-- **No requests of its own:** no `fetch`, `XMLHttpRequest`,
-  `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`.
-  Requests go through HTML forms, links and htmx. A script may set
-  form-control values and call `requestSubmit()`, `htmx.trigger` and
-  `htmx.process` on server-rendered or template-cloned elements; request
-  URLs come from server-rendered attributes, never built by a script. The
-  one kept rewrite is `message-stream-v13.js` updating only the `after`
-  parameter of the server-rendered `sse-connect` URL (above).
-- **Storage:** `sessionStorage` may hold only non-sensitive UX settings
-  whose loss affects no function and no server state, such as whether a
-  panel is open or a display preference; `localStorage` only the one
-  [drafts](web-composer.md#drafts) allowance, in the drafts script alone
-  ([decision 37][d37]). They never hold messages, credentials, session
-  tokens or other server-derived application data, except that allowance's
-  bounded draft text (which may quote messages), owner metadata and
-  sign-out notice. IndexedDB is allowed only by
-  [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
-  data classes.
-- **Files:** every script is external in `web/static` and loaded with the
-  response nonce. Application scripts also define no globals and are
-  versioned by file name (`-vN`), since static assets are immutable
-  ([`rendering.md`](rendering.md)). Vendored libraries (htmx, idiomorph)
-  keep their own globals and upstream file names ([a11y]).
+- **No requests of its own:** no `fetch`, `XMLHttpRequest`, `navigator.sendBeacon`,
+  `WebSocket`, new `EventSource` or `htmx.ajax`. HTML forms, links and htmx own
+  requests. Scripts may set controls/call `requestSubmit()`, `htmx.trigger`
+  and `htmx.process` on server-rendered/template-cloned elements. Request URLs
+  come from server attributes, never script-built. Only `message-stream-v13.js`
+  rewrites `sse-connect`'s `after` parameter (above).
+- **Storage:** `sessionStorage` holds only non-sensitive UX settings whose loss
+  affects no function/server state (e.g. panel open/display preference).
+  `localStorage` allows only [drafts](web-composer.md#drafts), in the drafts
+  script ([decision 37][d37]). Neither holds messages, credentials, session tokens
+  or other server-derived application data except bounded draft text (possibly
+  quoting messages), owner metadata and sign-out notice. IndexedDB requires
+  [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s data classes.
+- **Files:** scripts are external in `web/static`, loaded with the response nonce.
+  Application scripts define no globals; immutable assets require versioned
+  names (`-vN`, [rendering](rendering.md)). Vendored htmx/idiomorph retain their
+  globals and upstream names ([a11y]).
 - **htmx events:** an `htmx:load` handler works only on the inserted element
-  and descendants, never the whole document (#168).
+  and descendants, never the document (#168).
 
 ## Composer
 
-[Composer queue](web-composer.md#composer): at most 10 pending items,
+[Composer queue](web-composer.md#composer): ≤10 pending items,
 FIFO, paused on unknown outcomes. Not sent Retry goes last; unknown Retry stays.
 Edit restores failed text/key only into an empty composer outside IME, never
 overwriting drafts; removes the item, frees its slot and resumes the queue.

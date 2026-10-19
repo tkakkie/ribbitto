@@ -20,7 +20,7 @@ import (
 func testSendKeyBrowser(t *testing.T, browser *rod.Browser) {
 	for _, width := range []int{1280, 390} {
 		for _, mode := range []identity.SendKey{identity.SendKeyEnter, identity.SendKeyModifierEnter} {
-			cases := []string{"newline", "shift", "ctrl", "meta", "swap"}
+			cases := []string{"newline", "shift", "ctrl", "meta", "alt", "swap"}
 			for _, guard := range []string{"isComposing", "keyCode", "recentEnd"} {
 				for _, key := range []string{"enter", "ctrl", "meta"} {
 					cases = append(cases, guard+"/"+key)
@@ -83,6 +83,31 @@ func testSendKeyBrowser(t *testing.T, browser *rod.Browser) {
 						return
 					}
 					step(t, "input: prepare unique draft without a POST", func(p *rod.Page) { p.MustElement("#message-body").MustInput("draft " + name) })
+					if name == "alt" {
+						step(t, "Alt+Enter: selected mode sends or preserves the newline default", func(p *rod.Page) {
+							allowed := p.MustEval(`() => document.getElementById('message-body').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,altKey:true}))`).Bool()
+							if mode == identity.SendKeyModifierEnter {
+								if !allowed {
+									t.Fatal("Alt+Enter in modifier mode: newline default was prevented")
+								}
+								p.MustWait(`() => window.submits===0`)
+							} else {
+								p.MustWait(`() => window.submits===1 && window.swaps===1`)
+								if allowed {
+									t.Fatal("Alt+Enter in enter mode: send did not prevent the newline default")
+								}
+							}
+						})
+						want := int32(0)
+						if mode == identity.SendKeyEnter {
+							want = 1
+						}
+						if posts.Load() != want {
+							t.Fatalf("Alt+Enter in %s mode: got %d POSTs, want %d", mode, posts.Load(), want)
+						}
+						return
+					}
+					sendKey := name
 					if name == "newline" || name == "shift" {
 						step(t, "plain Enter: selected mode sends or inserts a newline", func(p *rod.Page) {
 							if name == "shift" {
@@ -104,6 +129,7 @@ func testSendKeyBrowser(t *testing.T, browser *rod.Browser) {
 						}
 					} else if strings.Contains(name, "/") {
 						parts := strings.Split(name, "/")
+						sendKey = parts[1]
 						step(t, "IME guard alone: key must cause zero submissions", func(p *rod.Page) {
 							p.MustEval(`(guard,key) => { const b=document.getElementById('message-body');
         if(guard==='recentEnd') b.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));
@@ -120,7 +146,7 @@ func testSendKeyBrowser(t *testing.T, browser *rod.Browser) {
 						t.Fatal("guard/newline: expected zero POSTs")
 					}
 					step(t, "deliberate send after IME window: exactly one submission and completed POST", func(p *rod.Page) {
-						p.MustEval(`(mode,key) => document.getElementById('message-body').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,ctrlKey:key==='ctrl'||(mode==='modifier_enter'&&key!=='meta'),metaKey:key==='meta'}))`, mode, name)
+						p.MustEval(`(mode,key) => document.getElementById('message-body').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,ctrlKey:key==='ctrl'||(mode==='modifier_enter'&&key!=='meta'),metaKey:key==='meta'}))`, mode, sendKey)
 						p.MustWait(`() => window.submits===1 && window.swaps===1`)
 					})
 					if posts.Load() != 1 {

@@ -462,3 +462,6 @@ other = "Save"
 
 ["message.help_modifier"]
 other = "Ctrl+Enter (⌘+Enter on Mac) sends; Enter adds a line break. **bold**, _italic_, `code`, > quote."
+
+["message.quote_selection"]
+other = "Quote selection"

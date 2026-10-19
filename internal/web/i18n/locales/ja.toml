@@ -462,3 +462,6 @@ other = "保存"
 
 ["message.help_modifier"]
 other = "Ctrl+Enter（Macでは⌘+Enter）で送信、Enterで改行。**太字**、_斜体_、`コード`、> 引用。"
+
+["message.quote_selection"]
+other = "選択部分を引用"

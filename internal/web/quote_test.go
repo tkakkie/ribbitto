@@ -132,7 +132,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;") || !strings.Contains(w.Body.String(), "Bob Example") || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
 			t.Fatalf("%s chip: %d %s", method, w.Code, w.Body.String())
 		}
-		if strings.Contains(w.Body.String(), `name="quote_text"`) {
+		if hasQuotePart(t, w.Body.String()) {
 			t.Fatal("whole chip contains a part control")
 		}
 		if method == http.MethodPost && strings.Contains(w.Body.String(), "message-composer-state") {
@@ -179,7 +179,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("missing part editor")
 	}
 	for _, hx := range []bool{false, true} {
-		if w := compose("", hx); w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) || strings.Contains(w.Body.String(), `name="quote_text"`) {
+		if w := compose("", hx); w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) || hasQuotePart(t, w.Body.String()) {
 			t.Fatalf("422 chip (htmx %t): %d %s", hx, w.Code, w.Body.String())
 		}
 		for _, part := range []string{"", "absent", "Deploy"} {
@@ -188,7 +188,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				body = ""
 			}
 			w := compose(body, hx, part)
-			if w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), part+"</textarea>") {
+			if w.Code != 422 || !hasQuotePart(t, w.Body.String()) || !strings.Contains(w.Body.String(), part+"</textarea>") {
 				t.Fatalf("422 part %q (htmx %t): %d %s", part, hx, w.Code, w.Body.String())
 			}
 			assertPartAutofocus(w, false)
@@ -234,7 +234,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 			}
 			w := serveForm(handler, method, path, cookie, tc.form)
 			if method == "GET" {
-				if w.Code != 200 || strings.Contains(w.Body.String(), `name="quote_text"`) != tc.form.Has("part") || tc.form.Has("part") && !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;</textarea>") {
+				if w.Code != 200 || hasQuotePart(t, w.Body.String()) != tc.form.Has("part") || tc.form.Has("part") && !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;</textarea>") {
 					t.Fatalf("GET must ignore URL quote_text: %d %s", w.Code, w.Body.String())
 				}
 				if tc.form.Has("part") {
@@ -243,7 +243,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				continue
 			}
 			assertPartAutofocus(w, tc.status == http.StatusOK)
-			if w.Code != tc.status || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), tc.form.Get("quote_text")) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
+			if w.Code != tc.status || !hasQuotePart(t, w.Body.String()) || !strings.Contains(w.Body.String(), tc.form.Get("quote_text")) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
 				t.Fatalf("%s %v: %d %s", method, tc.form, w.Code, w.Body.String())
 			}
 		}
@@ -273,7 +273,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 			}
 		}
 	}
-	if w := serveForm(handler, "GET", feed+"?quote="+id+"&quote_text=secret", cookie, nil); w.Code != 200 || strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
+	if w := serveForm(handler, "GET", feed+"?quote="+id+"&quote_text=secret", cookie, nil); w.Code != 200 || strings.Contains(w.Body.String(), "secret") || hasQuotePart(t, w.Body.String()) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
 		t.Fatalf("GET leaked URL quote_text: %d %s", w.Code, w.Body.String())
 	}
 	form := url.Values{"body": {""}, "quote": {realtime.FormatPayloadID(outside[2])}, "part": {id}}
@@ -476,4 +476,29 @@ func TestQuoteInvalidPreservesPostStatus(t *testing.T) {
 	if w.Code != 409 {
 		t.Fatalf("invalid part overwrote POST status: %d", w.Code)
 	}
+}
+
+// The selection input starts disabled in a separate form. Chip assertions
+// inspect successful controls, including on full-page validation responses.
+func hasQuotePart(t *testing.T, markup string) bool {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := range doc.Descendants() {
+		if attr(n, "name") == "quote_text" {
+			if _, disabled := attrOK(n, "disabled"); disabled {
+				if n.Data != "input" || attr(n, "type") != "hidden" {
+					t.Fatal("part control is disabled")
+				}
+				continue
+			}
+			if n.Data != "textarea" || attr(n, "id") != "quote-text" {
+				t.Fatal("part textarea lost its label target")
+			}
+			return true
+		}
+	}
+	return false
 }

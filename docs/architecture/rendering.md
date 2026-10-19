@@ -76,8 +76,7 @@ Application script URLs are versioned because static assets are immutable.
 `message-composer-v18.js` loads with the response nonce on channel pages.
 It anchors the list during [composer growth](../ui-composer.md) and handles
 [quote focus and locking](web-javascript.md#javascript).
-`requestSubmit` sends on Enter by default, or Ctrl/⌘+Enter. Shift+Enter
-and plain Enter in modifier mode add newlines. IME (`isComposing`, keyCode 229, or
+`requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or
 100 ms after composition ends) never sends. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). Latest feeds/topics instead
 show a pending own post immediately ([contract](web-composer.md#composer));

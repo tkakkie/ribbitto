@@ -80,8 +80,12 @@ htmx does only requests/swaps; the server and templ own HTML.
   `part=<UUID>` starts an editable part with the original's extracted text.
   A part chip submits `quote_text`, including empty text; whole chips omit it.
   The chip and posting paths answer 422 for empty or absent-from-original parts.
-  A future selection input in `#quote-form` must be disabled by default so whole
-  Quote submits carry only the ID; no selection script is installed yet (#1161).
+  `quote-selection-v1.js` reveals one shared selection button after the body.
+  Its `quote_text` hidden input is disabled by default in `#quote-form`, outside
+  the chip swap. The chip textarea belongs only to `#message-composer`: each
+  submitting form has at most one enabled `quote_text` control. Selection sends
+  text in the POST body; menu Quote, Quote only part and Remove leave the hidden
+  input empty/disabled. Composer sends use only the chip's editable part.
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).
 - Every channel/topic page (`?before=` and panel pages included) and the
   channel list page carry `data-event-cursor` on `#organization-stream`, the outer layout div outside

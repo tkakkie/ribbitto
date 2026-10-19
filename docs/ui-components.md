@@ -11,11 +11,11 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 
 | Component | File | Use |
 |---|---|---|
-| `submitButton`, `submitButtonFor` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child before the label); `submitButtonFor` submits a form named by its ID from outside it |
+| `submitButton`, `submitButtonFor` | `internal/web/view/controls.templ` | submit button labelled by message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child before the label); `submitButtonFor` submits a form named by its ID from outside it |
 | `textLink` | `internal/web/view/controls.templ` | underlined navigation links; callers supply a message ID and extra typography or spacing classes |
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
-| `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
+| `iconButton` | `internal/web/view/controls.templ` | icon-only button (its child) with an accessible name; can open a popover |
 | `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
 | `signOutButton` | `internal/web/view/hello.templ` | the shared POST sign-out form, taking a button kind; home uses `buttonWelcomeSecondary`, and `SignOutButton` keeps `buttonSecondary` for the account menu |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
@@ -24,7 +24,7 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
 | `mentionPicker` | `internal/web/view/mention.templ` | the composer's @-picker listbox ([contract](architecture/web-composer.md#composer)) |
-| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty if no quote; `message-composer-v18.js` focuses textarea |
+| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty without quote; Quote selection opens it; `message-composer-v18.js` focuses textarea |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link, covering the conversation below `wide` ([side panels](#side-panels)); a header link, icon-only below `desk` with its accessible name kept, that opens one panel, `aria-current="true"` and a Filled icon while it is open |

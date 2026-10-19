@@ -257,7 +257,7 @@ CREATE TRIGGER admission_audit AFTER INSERT OR UPDATE OR DELETE ON topic_read_fl
 			// every row and the multiset of actual INSERT/UPDATE/DELETE row effects.
 			_, err = pool.Exec(ctx, "DELETE FROM channel_read; DELETE FROM admission_write")
 			feedRequire(t, err)
-			reading := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil)
+			reading := unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil)
 			for _, p := range tabs {
 				if p.topic == (kernel.ID{}) {
 					err = reading.Feed(ctx, p.scope, 1, p.cursor)

@@ -61,7 +61,7 @@ func TestTopicPostBrowser(t *testing.T) {
 	owner := sidebarBrowser(t, pool, server, f.AccountID)
 	// Enough history that the list scrolls, so "scrolled into view" means something.
 	// Seed through the use case to leave the HTTP post budget for browser sends.
-	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, nil)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil)
 	membership := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
 	for i := range 30 {
 		_, err := posting.PostToTopic(ctx, membership, f.Channel.ID, &topic.ID, fmt.Sprintf("earlier %02d\nsecond line\nthird line", i))

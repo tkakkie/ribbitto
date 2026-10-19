@@ -48,7 +48,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				if selectedView {
 					topic = &selected
 				}
-				reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
+				reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 				page, err := reader.Page(t.Context(), m, f.Channel.ID, topic, nil)
 				feedRequire(t, err)
 				displaced := page.Topics[49].ID
@@ -64,7 +64,7 @@ func TestSidebarSnapshot(t *testing.T) {
 					post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "concurrent")
 					feedRequire(t, err)
 					scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
-					feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+					feedRequire(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 					branch, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(t.Context(), m, f.Channel.ID,
 						conversation.Branch{From: selected, Messages: []kernel.ID{initial.ID}, NewName: "aaa"}, func(conversation.Topic) string { return "notice" })
 					feedRequire(t, err)
@@ -77,7 +77,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				feedRequire(t, err)
 				defer traced.Close()
 				// Nil directory factories prove this read cannot load authors.
-				sidebar, err := conversationpg.NewReader(traced, nil, nil, compose.EventCursor, pageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
+				sidebar, err := conversationpg.NewReader(traced, nil, nil, compose.EventCursor, compose.PageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
 				feedRequire(t, err)
 				if !committed || sidebar.SnapshotSeq != *page.EventCursor || !reflect.DeepEqual(sidebar.Channels, page.Channels) || !reflect.DeepEqual(sidebar.Topics, page.Topics) ||
 					!reflect.DeepEqual(sidebar.ChannelCounts, page.ChannelCounts) || !reflect.DeepEqual(sidebar.TopicCounts, page.TopicCounts) ||
@@ -132,7 +132,7 @@ func TestSidebarScopes(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "sidebar", "general")
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "sidebar")
 	feedRequire(t, err)
-	reader := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn)
+	reader := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, compose.PageCountsIn)
 	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	otherTopic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "other")
 	post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, nil, "unread")
@@ -154,7 +154,7 @@ func TestSidebarScopes(t *testing.T) {
 		account := identitytest.Account(t, pool, "other@example.org", "other")
 		member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "other", m.Member.JoinedEventSeq)
 		scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: member}
-		feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+		feedRequire(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 		sidebar, err := reader.Sidebar(t.Context(), m, f.Channel.ID, nil)
 		feedRequire(t, err)
 		if sidebar.ChannelCounts[f.Channel.ID] != 1 || sidebar.TopicCounts[f.Channel.DefaultTopicID] != 1 {

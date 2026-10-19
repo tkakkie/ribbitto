@@ -330,14 +330,14 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
 			RecountLimit: config.recountLimit,
 			Pins:         web.NewPinsSource(ctx, conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)),
-			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn), changes),
+			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, compose.PageCountsIn), changes),
 			Presence:     state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }
 			},
 			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state), realtime.InterestTyping: web.NewTypingOwner(typingState)}}
 	}
-	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, postingNotifier)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Database: pool, ShuttingDown: config.shuttingDown,
@@ -350,10 +350,10 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        conversationpg.NewTopics(pool),
-		Messages:      conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn),
+		Messages:      conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn),
 		Posting:       posting,
 		SidebarResync: sidebarResync,
-		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
+		Reading:       unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), readPublisher),
 		Branching:     branching,
 		Pinning:       conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, postingNotifier),
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),

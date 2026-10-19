@@ -1,4 +1,4 @@
-package main
+package compose_test
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func TestTopicReadExamples(t *testing.T) {
 	read := func(t *testing.T, topic string, cursor int64, changed bool) {
 		s := unread.TopicScope{Scope: scope, TopicID: topics[topic]}
 		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-			return checkedRead(t, changed)(newTopicWriter().Read(t.Context(), tx, s, 5, cursor))
+			return checkedRead(t, changed)(compose.NewTopicWriter().Read(t.Context(), tx, s, 5, cursor))
 		}))
 		topicFloor(t, pool, s, cursor)
 	}
@@ -124,7 +124,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 	for _, cursor := range []int64{1, 2, 301} {
 		err = platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
 			before := counter.Counts().Queries
-			if err := checkedRead(t, cursor > 1)(newTopicWriter().Read(t.Context(), tx, s, 1, cursor)); err != nil {
+			if err := checkedRead(t, cursor > 1)(compose.NewTopicWriter().Read(t.Context(), tx, s, 1, cursor)); err != nil {
 				return err
 			}
 			got := counter.Counts().Queries - before
@@ -146,7 +146,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 	other := conversationtest.OrganizationWithOwner(t, pool, "other", "general")
 	s = unread.TopicScope{Scope: unread.Scope{OrganizationID: other.OrganizationID, ChannelID: other.Channel.ID, MemberID: other.MemberID}, TopicID: other.Channel.DefaultTopicID}
 	err = platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		return checkedRead(t, false)(newTopicWriter().Read(t.Context(), tx, s, 1, 2))
+		return checkedRead(t, false)(compose.NewTopicWriter().Read(t.Context(), tx, s, 1, 2))
 	})
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
@@ -174,9 +174,9 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 				}
 				write := func(ctx context.Context, tx platform.Tx, kind string, cursor int64, changed bool) error {
 					if kind == "feed" {
-						return checkedRead(t, changed)(newFeedWriter().Read(ctx, tx, scope, 1, cursor))
+						return checkedRead(t, changed)(compose.NewFeedWriter().Read(ctx, tx, scope, 1, cursor))
 					}
-					return checkedRead(t, changed)(newTopicWriter().Read(ctx, tx, s, 1, cursor))
+					return checkedRead(t, changed)(compose.NewTopicWriter().Read(ctx, tx, s, 1, cursor))
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()

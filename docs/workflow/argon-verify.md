@@ -7,20 +7,20 @@ Implementation is pending.
 
 ## Status
 
-`verify` is **NOT in force**. It requires
+The `verify` permission is **NOT in force**. It requires
 [#1429](https://github.com/tkakkie/ribbitto/issues/1429),
 [#1430](https://github.com/tkakkie/ribbitto/issues/1430),
 [#1431],
-[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and this PR to be
-merged; [#1436] Stage 1 complete (the real Argon run path, the hook that
-agy uses in normal operation, already runs the Go guard built from the trusted
-revision, after Stage 1's whole existing preflight passed through it and one
-real run completed with it); the extended real-path preflight in [#1433] to
-pass and be recorded; and the maintainer to explicitly approve enabling.
-#1436 Stage 2 is independent of enabling. After enabling
-and a passing smoke test, a later small documentation change records it as
-in force; this PR does not do so. The
-Start gate and review independence stay. Until then Argon runs keep today's
+[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and #1442
+to be merged; [#1436] Stage 1 to be complete before [#1433]'s extended
+real-path preflight (the real Argon run path, the hook that agy uses in normal
+operation, already runs the Go guard built from the trusted revision, after
+Stage 1's whole existing preflight passed through it and one real run
+completed with it); that preflight to pass and be recorded; and the
+maintainer to explicitly approve enabling.
+#1436 Stage 2 is independent of enabling. After enabling and a passing smoke
+test, a later small docs change records the permission as in force, not
+#1442. The Start gate and review independence stay. Until then Argon runs keep today's
 rules and settings unchanged: no MCP, no `verify`, the `mcp(*)` deny stays.
 
 ## Tool permissions
@@ -42,10 +42,10 @@ layers:
 
 With MCP configured, the custom agent's `tools` list is no barrier:
 `call_mcp_tool`, `list_resources`, `read_resource` and `manage_task` remain
-(spike part 2). The guard allows seven file tools plus the validated
-call; every other tool, including three resource/task tools, stays
+(spike part 2). The guard allows seven file tools plus the one validated
+call; every other tool, including the three resource/task tools, stays
 denied. Headless mode auto-denied the spike's guard-approved call;
-the settings allow is required too.
+settings must allow it.
 
 The feature switch, settings variant, guard mode and `mcp_config.json` must
 agree before and after each run; any mismatch fails closed. A changed
@@ -73,11 +73,11 @@ VERIFIED` results set `isError`.
 
 ## Verification container
 
-The runner uses no network: no outbound or loopback reach, including the
+The runner has no outbound or loopback network reach, including the
 host gateway and Docker Desktop VM. The spike's loopback probe logged no
 request under `--network none` ([part
 1](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
-It uses an isolated, throwaway source copy, never the original tree:
+It uses an isolated, throwaway source copy, never the original:
 
 - Copy tracked and untracked non-ignored files with the hardened git
   settings from the [boundary](argon-implementer.md#the-boundary).
@@ -102,7 +102,7 @@ It uses an isolated, throwaway source copy, never the original tree:
   output is never verified.
 
 Checks are exactly `go build <pkg>`, `go vet <pkg>` or `go test -count=1
--json <pkg>` for named packages admitted by the code's strict allowlist
+-json <pkg>` for named packages matching the code's strict allowlist
 pattern: no flags, spaces or `..` segment in the package argument, and no
 other flags. Output states no race detector or cgo runs there;
 cgo-dependent packages stay CI-only.
@@ -112,7 +112,7 @@ cgo-dependent packages stay CI-only.
 First line: `verified`, `FAILED` or `NOT VERIFIED`. Build/vet use zero
 exit status; tests use per-test JSON, never package `ok` alone:
 
-- A skipped test never succeeds. Count leaf tests only: a passing
+- Skips never succeed. Count leaf tests only: a passing
   parent whose subtests all skipped counts as skipped. Verification needs
   at least one passing leaf test, no failure or skip, and every targeted
   package's final result.

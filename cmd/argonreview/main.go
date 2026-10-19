@@ -17,7 +17,7 @@
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
-// implement-guard enforces the implementer trial's file boundary without a build check.
+// implement-guard enforces the implementer's file boundary without a build check.
 package main
 
 import (

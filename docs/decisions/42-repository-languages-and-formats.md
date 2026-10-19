@@ -72,6 +72,9 @@ A small command-word scan checks Makefile recipes, simple `SHELL` assignments
 simple assignments and tab-indented recipes, plus workflow `run` steps.
 Assignment comments follow Make's backslash escaping, independent of quotes;
 single-line YAML comments are stripped only outside single and double quotes.
+Workflow mapping headers may have trailing comments, sequence dashes may have
+multiple spaces, and mapping keys may have surrounding spaces; quoted scalars
+decode doubled single quotes and escaped double quotes/backslashes only.
 It refuses node/nodejs, npm/npx, python/pip, cargo/rustc, deno, bun, ruby,
 perl, bash/zsh/sh, yarn, pnpm, tsc/tsx, uv, poetry, php, java and
 dash/ksh/fish/pwsh, including optional digit-and-dot version suffixes.
@@ -93,8 +96,8 @@ scripts launched by name, runtime/dependency configuration, containers/images
 (including workflow `container:`/`image:`), backtick or quoted substitutions,
 wrapper options, nested Make expressions, `target: ; cmd` one-line recipes,
 runtime setup actions beyond the exact names scanned above, YAML flow mappings
-and computed keys or values. These can evade the scan; an allowed path is not
-runtime approval.
+and computed keys or values, and other YAML scalar escapes. These can evade
+the scan; an allowed path is not runtime approval.
 
 `make check` (through `check-tools`), `make prepush` and CI run the gate.
 CI's checkout includes `.git`, even with shallow history. This is different

@@ -43,8 +43,13 @@ func checkCommands(name string, source io.Reader) []string {
 			} else {
 				runIndent = -1
 				if strings.HasPrefix(text, "- ") {
-					text = strings.TrimPrefix(text, "- ")
-					indent += 2 // Sibling step keys align with the key after the dash.
+					trimmed := strings.TrimLeft(text[1:], " ")
+					if strings.HasPrefix(trimmed, "\t") {
+						continue // YAML sequence indentation cannot contain tabs.
+					}
+					// Sibling step keys align with the key after the dash.
+					indent += len(text) - len(trimmed)
+					text = trimmed
 				}
 				for len(parents) > 0 && parents[len(parents)-1].indent >= indent {
 					parents = parents[:len(parents)-1]
@@ -53,7 +58,8 @@ func checkCommands(name string, source io.Reader) []string {
 				if !ok {
 					continue
 				}
-				text = strings.TrimSpace(value)
+				key = strings.TrimSpace(key)
+				text = yamlWithoutComment(value)
 				step := len(parents) > 0 && parents[len(parents)-1].key == "steps"
 				defaultRun := len(parents) >= 2 && parents[len(parents)-2].key == "defaults" && parents[len(parents)-1].key == "run"
 				if text == "" {
@@ -102,6 +108,28 @@ func checkCommands(name string, source io.Reader) []string {
 
 func yamlScalar(text string) string {
 	// Quoted single-line YAML scalars add one layer beyond shell quoting.
+	text = yamlWithoutComment(text)
+	if len(text) < 2 || text[len(text)-1] != text[0] {
+		return text
+	}
+	switch text[0] {
+	case '\'':
+		return strings.ReplaceAll(text[1:len(text)-1], "''", "'")
+	case '"':
+		var value strings.Builder
+		for i := 1; i < len(text)-1; i++ {
+			if text[i] == '\\' && i+1 < len(text)-1 && (text[i+1] == '"' || text[i+1] == '\\') {
+				i++
+			}
+			value.WriteByte(text[i])
+		}
+		return value.String()
+	default:
+		return text
+	}
+}
+
+func yamlWithoutComment(text string) string {
 	quote := byte(0)
 	for i := 0; i < len(text); i++ {
 		c := text[i]
@@ -122,11 +150,7 @@ func yamlScalar(text string) string {
 			break
 		}
 	}
-	text = strings.TrimSpace(text)
-	if len(text) >= 2 && (text[0] == '\'' || text[0] == '"') && text[len(text)-1] == text[0] {
-		return text[1 : len(text)-1]
-	}
-	return text
+	return strings.TrimSpace(text)
 }
 
 func makeCommands(text string) []string {

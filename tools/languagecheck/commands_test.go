@@ -141,8 +141,11 @@ func TestYAMLScalarComments(t *testing.T) {
 	for _, tt := range []struct{ source, want string }{
 		{`echo " #"; python build.py`, `echo " #"; python build.py`},
 		{`'echo " #"; python build.py' # comment`, `echo " #"; python build.py`},
-		{`"echo \" # still quoted" # comment`, `echo \" # still quoted`},
-		{`'echo '' # still quoted' # comment`, `echo '' # still quoted`},
+		{`"echo \" # still quoted" # comment`, `echo " # still quoted`},
+		{`'echo '' # still quoted' # comment`, `echo ' # still quoted`},
+		{`"echo \\" # comment`, `echo \`},
+		{`"echo \\\" # still quoted" # comment`, `echo \" # still quoted`},
+		{`"echo \n\t\q"`, `echo \n\t\q`},
 		{`go version # python build.py`, `go version`},
 		{"go version\t# python build.py", `go version`},
 		{`echo value#suffix; python build.py`, `echo value#suffix; python build.py`},
@@ -157,6 +160,14 @@ func TestYAMLScalarComments(t *testing.T) {
 		source string
 		count  int
 	}{
+		{`"echo \" #\"; python build.py"`, 1},
+		{`'echo '' #''; python build.py'`, 1},
+		{`"\"python\" build.py"`, 1},
+		{`"echo '\\'; python build.py"`, 1},
+		{`echo " #"`, 0},
+		{`'echo ''it'''`, 0},
+		{`"echo \"hi\""`, 0},
+		{`"echo \\\" #; python build.py"`, 0},
 		{`echo " #"; python build.py`, 1},
 		{`echo ' #'; python build.py`, 1},
 		{`'echo " #"; python build.py' # comment`, 1},
@@ -243,6 +254,44 @@ func TestWorkflowRuntimeKeys(t *testing.T) {
 			source := "steps:\n  - name: " + shell + "\n    run: echo " + shell + "\n    with:\n      shell: " + shell + "\n"
 			if got := checkCommands(".github/workflows/ci.yml", strings.NewReader(source)); len(got) != 0 {
 				t.Errorf("%q: unexpected %v", source, got)
+			}
+		})
+	}
+}
+
+func TestWorkflowMappingSpacing(t *testing.T) {
+	for _, tt := range []struct {
+		name, source, finding string
+	}{
+		{"commented steps setup", "steps: # build steps\n  - uses: actions/setup-node@v4\n", `runtime setup "actions/setup-node@v4"`},
+		{"commented steps container", "steps: # build steps\n  - uses: docker://node:20\n", `container action "docker://node:20"`},
+		{"commented steps shell", "steps: # build steps\n  - run: go run ./tools\n    shell: bash\n", `runtime command "bash"`},
+		{"commented defaults", "defaults: # c\n  run:\n    shell: bash\n", `runtime command "bash"`},
+		{"commented default run", "defaults:\n  run: # c\n    shell: bash\n", `runtime command "bash"`},
+		{"commented default headers", "defaults: # c\n  run: # c\n    shell: bash\n", `runtime command "bash"`},
+		{"extra dash space run", "steps:\n  -  run: python build.py\n", `runtime command "python"`},
+		{"extra dash space block", "steps:\n  -  run: |\n       python build.py\n", `runtime command "python"`},
+		{"extra dash space setup", "steps:\n  -  uses: actions/setup-node@v4\n", `runtime setup "actions/setup-node@v4"`},
+		{"dash width and block sibling", "steps:\n  -   run: |\n        go run ./tools\n      with:\n        shell: bash\n      shell: bash\n", `runtime command "bash"`},
+		{"space before key colon", "steps : # build steps\n  - uses : actions/setup-node@v4\n", `runtime setup "actions/setup-node@v4"`},
+		{"commented steps run", "steps: # build steps\n  - run: python build.py\n", `runtime command "python"`},
+		{"commented steps go", "steps: # build steps\n  - run: go run ./tools\n", ""},
+		{"commented defaults allowed", "defaults: # c\n  run: # c\n    shell: ./approved-shell {0}\n", ""},
+		{"extra dash space go", "steps:\n  -  run: go run ./tools\n", ""},
+		{"extra dash space go block", "steps:\n  -  run: |\n       go run ./tools\n     name: python\n     with:\n       shell: bash\n", ""},
+		{"extra dash space allowed action", "steps:\n  -  uses: actions/setup-go@v4\n", ""},
+		{"space before colon go", "steps : # build steps\n  - run : go run ./tools\n", ""},
+		{"tab after dash", "steps:\n  -\trun: python build.py\n  -\tuses: actions/setup-node@v4\n  - run: go run ./tools\n", ""},
+		{"tab after dash spaces", "steps:\n  - \trun: python build.py\n  - \tuses: actions/setup-node@v4\n  - run: go run ./tools\n", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkCommands(".github/workflows/ci.yml", strings.NewReader(tt.source))
+			if tt.finding == "" {
+				if len(got) != 0 {
+					t.Fatalf("unexpected %v", got)
+				}
+			} else if len(got) != 1 || !strings.Contains(got[0], tt.finding) {
+				t.Fatalf("got %v; want one %s", got, tt.finding)
 			}
 		})
 	}

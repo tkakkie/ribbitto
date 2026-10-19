@@ -546,6 +546,16 @@ type markupCase struct {
 // every registered HTML route is either rendered here or listed as not
 // rendering a page.
 func TestPagesMarkup(t *testing.T) {
+	for _, lang := range []string{"en", "ja"} {
+		for _, member := range []kernel.ID{{8}, {9}} {
+			page := view.ChannelPage{MemberID: member, Current: view.Channel{ID: kernel.ID{1}}, Channels: []view.Channel{{ID: kernel.ID{1}}}, Topics: []view.Topic{{ID: kernel.ID{2}}}}
+			doc, err := html.Parse(strings.NewReader(renderIn(t, lang, view.ChannelList(page, false))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkDraftMarkers(t, doc, lang)
+		}
+	}
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -723,6 +733,7 @@ func TestPagesMarkup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				checkDraftMarkers(t, doc, lang)
 				fragment := c.route == "POST /organizations/{slug}/channels/{channelID}/quote" || c.route == "GET /organizations/{slug}/mention-candidates" || c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
 				for _, problem := range checkMarkup(doc, !fragment) {
 					t.Error(problem)
@@ -989,6 +1000,8 @@ func TestComponentsMarkup(t *testing.T) {
 		{"ComposerQuote", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "author", Body: "<script>bad()</script>"}}, false)},
 		{"ComposerQuote part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new("<script>part</script>")}, false)},
 		{"ComposerQuote invalid part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new(""), QuoteInvalid: true}, false)},
+		{"ChannelEntry", view.ChannelEntry("acme", view.Channel{ID: kernel.ID{1}, Name: "general"}, false, 0)},
+		{"TopicEntry", view.TopicEntry("acme", kernel.ID{1}, view.Topic{ID: kernel.ID{2}, Name: "topic"}, false, 0)},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
 		{"Avatar", view.Avatar(kernel.ID{1}, "田中", "author")},
@@ -1012,6 +1025,7 @@ func TestComponentsMarkup(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
+					checkDraftMarkers(t, doc, lang)
 					if component.name == "MessageItem" || component.name == "LiveMessageItem" {
 						item := find(doc, atom.Li)
 						if item == nil || attr(item, "id") != "message-abcd0000000000000000000000000000" {
@@ -1041,6 +1055,41 @@ func TestComponentsMarkup(t *testing.T) {
 					}
 				})).ServeHTTP(httptest.NewRecorder(), r)
 			})
+		}
+	}
+}
+
+// The complete static marker contract applies to page and shared SSE renders.
+func checkDraftMarkers(t *testing.T, doc *html.Node, lang string) {
+	t.Helper()
+	for row := range doc.Descendants() {
+		if row.DataAtom != atom.A || !strings.HasPrefix(attr(row, "id"), "link-channel-") && !strings.HasPrefix(attr(row, "id"), "link-topic-") {
+			continue
+		}
+		count := 0
+		for n := range row.Descendants() {
+			if _, ok := attrOK(n, "data-draft-marker"); !ok {
+				continue
+			}
+			count++
+			var b strings.Builder
+			if err := html.Render(&b, n); err != nil {
+				t.Fatal(err)
+			}
+			want := `<span data-draft-marker="" hidden="" class="shrink-0 text-caption font-normal text-muted">` + map[string]string{"en": "Draft", "ja": "下書き"}[lang] + `</span>`
+			previous := n.PrevSibling
+			for previous != nil && previous.Type == html.TextNode && strings.TrimSpace(previous.Data) == "" {
+				previous = previous.PrevSibling
+			}
+			if b.String() != want || n.Parent != row || previous == nil {
+				t.Fatalf("%s: non-static or misplaced marker: %s", attr(row, "id"), b.String())
+			}
+			if _, ok := attrOK(previous, "data-unread-count"); !ok {
+				t.Fatal("draft marker must follow unreadBadge")
+			}
+		}
+		if count != 1 {
+			t.Fatalf("%s: got %d draft markers, want one", attr(row, "id"), count)
 		}
 	}
 }

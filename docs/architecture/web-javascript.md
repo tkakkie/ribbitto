@@ -31,24 +31,21 @@ htmx sends resync requests. The markup contract is in
   Success resets backoff and flushes newer shown work. Other failures flush only
   strictly newer work; the same cursor waits for another trigger. Cleanup clears
   timers. Composer responses and unapplied events cannot advance it.
-- `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open events.
-  It increments server-rendered badges only for newer, unseen `unread` frames
-  from other members; `message` frames never increment. Snapshots apply in
-  stream order, dropping retained events at or below their sequence. Eligible
-  retained events above it reapply while not recovering, or when an answered
-  resync has no loss since dispatch and its sequence covers every possibly lost
-  event. Overflow records the highest dropped sequence; malformed or unapplied
-  frames record the highest sequence seen, including a parsable failed frame.
-  Retention itself is not loss. Overflow, malformed frames and DOM/request
-  failures stop increments; losses during a
-  request reserve another, including repeated losses during retries. One pending
-  htmx request and one timer merge duplicate triggers, with exponential backoff
-  starting at 250 ms and capped at 8 s; each retry chooses uniformly between
-  half and all of that backoff. Visibility return and persisted `pageshow`
-  request resync after uniform 0–2 s jitter. Recovery clearing is unchanged.
-  A 429 counts as a request failure, keeps recovery open and retries
-  through that backoff.
-  Cleanup clears the timer when its stream container is removed.
+- `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open.
+  Only newer, unseen, other-member `unread` frames increment badges.
+  Ordered snapshots drop retained events at
+  or below their sequence. Higher eligible events reapply outside recovery,
+  or after resync with no loss since dispatch and a sequence covering all loss.
+  Overflow records the highest
+  dropped sequence; malformed/unapplied frames the highest seen, including
+  parsable failed frames. Retention is not loss.
+  Overflow, malformed frames and DOM/request failures stop increments.
+  Loss during requests reserves another resync, including during retries.
+  One htmx request and timer coalesce triggers. Retry backoff doubles
+  from 250 ms to 8 s, uniformly jittered between half and full delay.
+  Visible return/persisted `pageshow`: resync after uniform 0–2 s jitter;
+  recovery clearing is unchanged. A 429 keeps recovery open and retries.
+  Removal clears its timer.
 
   | Attribute / target | Contract |
   |---|---|
@@ -89,7 +86,7 @@ htmx sends resync requests. The markup contract is in
   pending sends to finish; chip markup and requests remain server/htmx-owned.
 - Partial quotes share submitter glue (`name="part"`); editable text is server-rendered.
   Page selection is planned (#1161).
-- `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
+- `message-drafts-v5.js` saves after 300 ms or lifecycle flush with monotonic
   input times. Blank/over-limit text writes tombstones; limits: 4,000 code points,
   50 entries. Equal/later stored edits win; eviction is best effort.
   Sign-out/deadline cancel saves and stop writes. Sweep/restore share validity checks.
@@ -108,6 +105,11 @@ htmx sends resync requests. The markup contract is in
   Bubbling textarea `message-pending-action` (`{key, kind}`):
   `edit` saves now, cancels stale debounce without input/typing;
   `remove` replaces that key's unchanged send snapshot.
+  Markers toggle `hidden` for valid, non-empty own member/session drafts.
+  Hrefs map feed/topics to channels and topics to themselves; hide the open row.
+  Apply on `#sidebar-channels` scoped `htmx:load` (SSE/resync),
+  draft `storage`, `message-sent`, persisted `pageshow`, including list pages.
+  Sign-out notice/deadline hide markers.
   [Drafts](web-composer.md#drafts): races/cleanup.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the

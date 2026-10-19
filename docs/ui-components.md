@@ -18,7 +18,7 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
 | `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
 | `signOutButton` | `internal/web/view/hello.templ` | the shared POST sign-out form, taking a button kind; home uses `buttonWelcomeSecondary`, and `SignOutButton` keeps `buttonSecondary` for the account menu |
-| `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
+| `unreadBadge`, `draftMarker` | `internal/web/view/channel.templ` | unread counts; static draft text, accessible only when not `hidden` |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](ui-code.md#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
@@ -142,8 +142,8 @@ at rest first. Browsers without the Navigation API show no arrival motion.
 `testArrivalBrowser` (`internal/web/arrival_browser_test.go`) checks these
 cases.
 
-Below `desk` a conversation hides the sidebar, so its pill never moves; the
-list page's pill grows in when a conversation's back link leads there, and
+Below `desk` the hidden sidebar’s pill stays still; the list page’s grows
+after a conversation’s back link, and
 an opening panel rises as the sheet, because `rb-panel-in` is redefined
 under `max-desk:`. `testMotionTouchBrowser`
 (`internal/web/motion_touch_browser_test.go`) checks that nothing else moves.

@@ -314,7 +314,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-drafts-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-drafts-v5.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 
@@ -402,7 +402,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v13.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-drafts-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-drafts-v5.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 
@@ -770,6 +770,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			@channelImage(channel.ImageURL, false)
 			<span dir="auto" class="min-w-0 flex-1">{ channel.Name }</span>
 			@unreadBadge(count)
+			@draftMarker()
 		</a>
 		{ children... }
 	</li>
@@ -792,6 +793,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			@Icon("branch-regular", 16)
 			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
 			@unreadBadge(count)
+			@draftMarker()
 		</a>
 	</li>
 }
@@ -809,4 +811,8 @@ templ unreadBadge(count int64) {
 		<span aria-hidden="true">{ unreadText(count) }</span>
 		<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
 	</span>
+}
+
+templ draftMarker() {
+	<span data-draft-marker hidden class="shrink-0 text-caption font-normal text-muted">{ i18n.T(ctx, "sidebar.draft") }</span>
 }

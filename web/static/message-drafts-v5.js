@@ -11,7 +11,7 @@
   const v7 = "[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
   const prefix = "ribbitto.draft.v1:";
   // ribbitto.draft.v1:<member>:<session>:<channel>:<feed|topic>
-  const draft = new RegExp("^" + prefix.replaceAll(".", "\\.") + "(" + uuid + "):(" + v7 + "):" + uuid + ":(?:feed|" + uuid + ")$");
+  const draft = new RegExp("^" + prefix.replaceAll(".", "\\.") + "(" + uuid + "):(" + v7 + "):(" + uuid + "):(feed|" + uuid + ")$");
   const millisecond = (id) => id.slice(0, 8) + id.slice(9, 13);
   const day = 24 * 60 * 60 * 1000;
   // sweep decides every key under the prefix; the sign-out notice is outside
@@ -64,13 +64,44 @@
     const deadline = expires - rendered;
     let stopped = false, timer, dirty = false, composing = false, at = 0, text = "";
     let lastWrite, source, sending;
-    const stop = () => { stopped = true; dirty = false; clearTimeout(timer); };
+    const stop = () => { stopped = true; dirty = false; clearTimeout(timer); markers(); };
     const read = (key) => {
       try { return JSON.parse(storage.getItem(key)); } catch { return null; }
     };
     const form = document.getElementById("message-composer");
     const body = document.getElementById("message-body");
     const key = prefix + member + ":" + session + ":" + form?.dataset.draftChannel + ":" + (form?.dataset.draftTopic || "feed");
+    // Keep key scope separate from value validity: foreign values must
+    // never be read, even when they claim this page's owner and session.
+    const own = (match) => match?.[1] === member && match[2] === session;
+    const draftPlace = (match, entry) => valid(entry) && entry.text.trim() ? match.slice(3) : null;
+    const marked = (places, channel, topic, open) => !open && places.has(topic === "feed" ? channel : channel + ":" + topic);
+    const markers = (root = document.getElementById("sidebar-channels")) => {
+      const places = new Set();
+      if (!stopped && performance.now() < deadline) {
+        try {
+          for (const k of Object.keys(storage)) {
+            const match = draft.exec(k);
+            const place = own(match) ? draftPlace(match, read(k)) : null;
+            if (place) { places.add(place[0]); places.add(place.join(":")); }
+          }
+        } catch { places.clear(); }
+      }
+      for (const marker of root?.querySelectorAll("[data-draft-marker]") || []) {
+        const parts = new URL(marker.closest("a").href).pathname.split("/");
+        const channel = parts[4], topic = parts[6] || "feed";
+        const open = channel === form?.dataset.draftChannel && topic === (form.dataset.draftTopic || "feed");
+        marker.hidden = !marked(places, channel, topic, open);
+      }
+    };
+    markers();
+    document.addEventListener("htmx:load", (event) => {
+      const root = event.detail.elt;
+      if (root.id === "sidebar-channels") markers(root);
+      else { const sidebar = root.querySelector("#sidebar-channels"); if (sidebar) markers(sidebar); }
+    });
+    document.addEventListener("message-sent", () => markers());
+    window.addEventListener("pageshow", (event) => { if (event.persisted) markers(); });
     const trim = (limit, except) => {
       const entries = Object.keys(storage).filter((k) => {
         const match = draft.exec(k);
@@ -157,7 +188,10 @@
       window.addEventListener("pagehide", save);
       document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
     }
-    window.addEventListener("storage", (event) => { if (event.key === "ribbitto.signed-out.v1") stop(); });
+    window.addEventListener("storage", (event) => {
+      if (event.key === "ribbitto.signed-out.v1") stop();
+      else if (event.key === null || event.key.startsWith(prefix)) markers();
+    });
     const expire = () => {
       const left = deadline - performance.now();
       if (left > 0) {

@@ -524,9 +524,7 @@ templ messageComposer(page ChannelPage) {
 			dir="auto"
 			aria-autocomplete="list"
 			aria-controls="mention-listbox"
-			if page.BodyError != "" {
-				aria-invalid="true"
-			}
+			aria-invalid={ fmt.Sprint(page.BodyError != "") }
 			aria-describedby="message-help composer-quote-description"
 			aria-description={ i18n.T(ctx, "mention.help") }
 			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry"

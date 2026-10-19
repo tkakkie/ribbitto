@@ -181,7 +181,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				}
 				for n := range doc.Descendants() {
 					if attr(n, "id") == "message-body" {
-						if _, invalid := attrOK(n, "aria-invalid"); invalid {
+						if attr(n, "aria-invalid") != "false" {
 							t.Fatal("valid body marked invalid")
 						}
 					}

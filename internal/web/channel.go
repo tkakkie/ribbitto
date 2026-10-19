@@ -342,7 +342,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		}
 	}
 	page.Pins = viewPins(r.Context(), history.Pins)
-	if status < http.StatusBadRequest {
+	if page.BodyError == "" && !page.QuoteInvalid {
 		place := history.Current.DefaultTopicID
 		if history.Topic != nil {
 			place = history.Topic.ID
@@ -504,7 +504,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
 	_, page.QuoteUpdate = r.PostForm["quote"]
-	if status >= http.StatusBadRequest {
+	if page.BodyError != "" || (page.QuoteUpdate && status >= http.StatusBadRequest) {
 		// The part entry action belongs only to the chip route and GET.
 		values := url.Values{}
 		for _, name := range []string{"quote", "quote_text"} {
@@ -521,7 +521,7 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 		if topic != nil {
 			place, page.Topic = *topic, &view.Topic{ID: *topic}
 		}
-		if status < http.StatusBadRequest {
+		if page.BodyError == "" && !page.QuoteInvalid {
 			page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)

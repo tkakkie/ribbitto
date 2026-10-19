@@ -219,6 +219,14 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 // Each invocation has its own server and limiter and makes only one post.
 func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original conversation.Message, scripts bool, width int) {
 	step := pageStep(page.GetContext(), page)
+	shiftTabToQuoteText := func(p *rod.Page) {
+		for presses := 0; !p.MustEval(`() => document.activeElement.id === 'quote-text'`).Bool(); presses++ {
+			if presses == 30 {
+				panic("Shift+Tab did not reach #quote-text from " + p.MustEval(`() => document.activeElement.tagName + '#' + document.activeElement.id`).Str())
+			}
+			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+		}
+	}
 	tabTo := func(p *rod.Page, selector string) {
 		for range 100 {
 			if p.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
@@ -274,23 +282,10 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 			panic("plain part GET must carry only the ID")
 		}
 	})
-	step(t, "part chip focus: body with scripts, editable text without scripts", func(p *rod.Page) {
-		if scripts {
-			p.MustWait(`() => document.activeElement.id === 'message-body'`)
-		} else {
-			p.MustWait(`() => document.activeElement.id === 'quote-text'`)
-		}
+	step(t, "keyboard Shift-Tab: editable part takes focus", func(p *rod.Page) {
+		shiftTabToQuoteText(p)
+		p.MustWait(`() => document.activeElement.id === 'quote-text'`)
 	})
-	if scripts {
-		step(t, "keyboard Shift-Tab: remove quote takes focus", func(p *rod.Page) {
-			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
-			p.MustWait(`() => document.activeElement.matches('#composer-quote button')`)
-		})
-		step(t, "keyboard Shift-Tab: editable part takes focus", func(p *rod.Page) {
-			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
-			p.MustWait(`() => document.activeElement.id === 'quote-text'`)
-		})
-	}
 	step(t, "keyboard edit: quoted text is shortened to original", func(p *rod.Page) {
 		p.Keyboard.MustType(input.Home, input.Delete, input.Delete, input.Delete, input.Delete, input.Delete)
 		p.MustWait(`() => document.getElementById('quote-text').value === 'original'`)

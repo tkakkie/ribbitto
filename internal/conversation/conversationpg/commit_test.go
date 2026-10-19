@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -93,7 +94,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stall_commit();`, tc
 				}
 			})
 			notifier := &recordingNotifier{t: t, pool: pool}
-			posting := conversationpg.NewPosting(traced, eventSequence, appendEvents, notifier)
+			posting := conversationpg.NewPosting(traced, compose.PostingSequence, compose.PostingEvents, notifier)
 			posted, err := posting.Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "once")
 			if ctx.Err() == nil || commits != 1 {
 				t.Fatalf("request error=%v, COMMIT calls=%d; want cancellation at one COMMIT", ctx.Err(), commits)

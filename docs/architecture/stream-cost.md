@@ -86,8 +86,8 @@ Posts go through `conversation.Posting` with the hub as notifier.
 
 ## Sidebar mode (#812)
 
-Test adapters assemble `Reader.Sidebar` with the same exported channel and
-current-channel topic count factories as production; no production wiring moves.
+`Reader.Sidebar` uses `compose.PageCountsIn`, wrapped only to add a
+same-snapshot cursor witness to production counts.
 Each connection binds its own membership and read ranges. Before each step,
 prior posts are marked read; alternating members retain one unread seed.
 The initial snapshot must match that member's two count totals before counters

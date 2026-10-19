@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -20,8 +20,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
-// These adapters mirror cmd/ribbitto's public count composition without moving
-// production wiring. Only HTML rendering is replaced by a snapshot witness.
+// costPageCounter wraps production counts with a same-snapshot cursor witness.
+// Its extra statement is included in SQL and timing totals; rendering uses bytes.
 type costPageCounter struct{ snapshot platform.Snapshot }
 
 type costWitnessKey struct{}
@@ -37,17 +37,12 @@ func (c costPageCounter) ReadCounts(ctx context.Context, m org.Membership, chann
 }
 
 func (c costPageCounter) read(ctx context.Context, m org.Membership, channel kernel.ID, channels, topics []kernel.ID, selected *kernel.ID, firstUnread bool) (conversation.PageCounts, error) {
-	counts, err := unread.NewChannelCounts(unreadpg.ChannelRangesIn,
-		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) }).ReadWithFirstUnread(ctx, c.snapshot, m.Organization.ID, m.Member.ID, m.Member.JoinedEventSeq, channels, firstUnread)
-	if err != nil {
-		return conversation.PageCounts{}, err
+	counts := compose.PageCountsIn(c.snapshot)
+	read := counts.Read
+	if !firstUnread {
+		read = counts.(conversation.SidebarCounter).ReadCounts
 	}
-	result := conversation.PageCounts{ChannelCounts: make(map[kernel.ID]int64, len(counts)), FeedFirstUnread: counts[channel].FirstUnread}
-	for id, count := range counts {
-		result.ChannelCounts[id] = count.Count
-	}
-	result.TopicCounts, result.TopicFirstUnread, err = unread.NewTopicCounts(unreadpg.TopicStateIn,
-		func(s platform.Snapshot) unread.TopicCounter { return conversationpg.TopicUnreadIn(s) }).ReadWithFirstUnread(ctx, c.snapshot, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topics, selected, firstUnread)
+	result, err := read(ctx, m, channel, channels, topics, selected)
 	if witness, ok := ctx.Value(costWitnessKey{}).(*int64); ok && err == nil {
 		// Read in the counts' snapshot, never from the hub or a later transaction.
 		// This extra test-only statement is included in SQL and timing totals.

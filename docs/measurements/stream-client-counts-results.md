@@ -3,8 +3,8 @@
 The default sidebar mode of [TestStreamCost](../architecture/stream-cost.md) now follows
 [decision 34](../decisions/34-live-unread-counts.md). It uses author-only post
 triggers, current-channel move triggers, the production `RecountLimit` and
-`UnreadRenderer` selection in `Stream.Run`. Test adapters mirror only wiring
-that cannot be imported from cmd/web; snapshot bytes replace HTML.
+`UnreadRenderer` selection in `Stream.Run`. Counts now use shared compose wiring; test adapters mirror only cmd/web
+trigger and rendering behavior, with snapshot bytes replacing HTML.
 `RIBBITTO_STREAM_COST_RECOUNTS` overrides the shared computation capacity;
 unset, it is `max(1, pool size / 2)`, matching synchronous production.
 

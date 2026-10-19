@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,9 +15,13 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -36,6 +41,9 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	}
 	const setupToken = "m2-acceptance-setup-token-0123456789"
 	services := postgresServices(t, pool, sessions, setupToken, true)
+	// Preserve this history-only fixture's empty-count behavior: unread dividers
+	// add list items and change older links. Production counts run in other suites.
+	services.Messages = conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, emptyPageCountsIn)
 	// This multi-route fixture intentionally posts more than the production burst.
 	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
 	// The real limits, as in production: the flow stays within them.
@@ -251,4 +259,13 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	if logs.Len() != 0 {
 		t.Errorf("unexpected message fallback: %s", logs.String())
 	}
+}
+
+// emptyPageCountsIn preserves TestM2AcceptanceAgainstPostgreSQL's history-only
+// list assertions. Unlike production counts it supplies no unread dividers.
+type emptyPageCounter struct{}
+
+func emptyPageCountsIn(platform.Snapshot) conversation.PageCounter { return emptyPageCounter{} }
+func (emptyPageCounter) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
+	return conversation.PageCounts{}, nil
 }

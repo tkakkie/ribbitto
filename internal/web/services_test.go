@@ -1,22 +1,18 @@
 package web
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
-	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/unread"
-	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -59,11 +55,15 @@ func asAlice(s *Services) {
 	s.Sessions, s.Authz = oneSession{}, oneOrganisation{}
 }
 
-// postgresServices wires the PostgreSQL-backed services the way
-// cmd/ribbitto's buildHandler does, around the caller's sessions so a suite
-// can control their clock. A non-empty setupToken enables setup; signUp adds
-// sign-up with the operator's switch on. Authentication rate limits stay
-// off: a suite that tests them sets Limits.
+// postgresServices uses production database adapters, including post reads,
+// page counts, Preferences and SendKeyLimits. Caller-supplied sessions allow
+// clock control; uncached Authz makes fixture writes visible immediately.
+// Setup, SignUp and SetupSessions are opt-in. Limits stays nil so suites choose
+// authentication throttling; other limiters and Channels use production defaults.
+// Database, ShuttingDown, Stream, Typing, SignalLimits, SidebarResync, Reading
+// and write notifications stay nil: suites opt into readiness, shutdown, live
+// sources and read routes separately. RequestLogger uses the process default.
+// No database service is faked.
 func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessions, setupToken string, signUp bool) Services {
 	t.Helper()
 	hasher, err := identity.NewHasher()
@@ -76,10 +76,10 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Authz:     orgpg.NewAuthorizer(pool),
 		Channels:  conversationpg.NewChannels(pool, conversation.DefaultMaxChannels),
 		Topics:    conversationpg.NewTopics(pool),
-		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn),
-		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, lookupMembers, nil),
-		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil),
-		Pinning:   conversationpg.NewPinning(pool, postingSequence, postingEvents, nil),
+		Messages:  conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn),
+		Posting:   conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil),
+		Branching: conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil),
+		Pinning:   conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil),
 	}
 	s.Preferences = identitypg.NewPreferences(pool)
 	s.SendKeyLimits = middleware.NewMemberRateLimiter(time.Now)
@@ -93,46 +93,17 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	s.MemberSearch = orgpg.NewMemberSearch(pool, identitypg.AccountsIn)
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
-			accountCreator,
-			memberEvents,
-			defaultChannelCreator), sessions
+			compose.AccountCreator,
+			compose.MemberEvents,
+			compose.DefaultChannelCreator), sessions
 	}
 	if signUp {
 		s.SignUp, s.SetupSessions = orgpg.NewSignUp(pool, hasher, true,
-			accountCreator,
-			memberEvents), sessions
+			compose.AccountCreator,
+			compose.MemberEvents), sessions
 	}
 	return s
 }
-
-// accountCreator binds identity's account creator to setup's and sign-up's transaction.
-func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
-
-// memberEvents binds realtime's appender to setup's and sign-up's transaction.
-func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
-func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
-	return conversationpg.DefaultChannelCreatorIn(tx)
-}
-
-// postingEvents binds realtime's appender to conversation's posting and branching transaction.
-func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// postingSequence binds org's sequence to conversation's posting and branching transaction.
-func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
 
 // recordingNotifier captures the notice sequence that Branch publishes after
 // commit, keeping replay's stopping point out of the production return value.
@@ -149,23 +120,4 @@ func (n *recordingNotifier) raised(t *testing.T) int64 {
 		t.Fatal("branch raised no notice sequence")
 	}
 	return n.seq
-}
-
-// branchReads adapts unread's range writer to conversation's consumer interface.
-func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
-	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
-}
-
-type branchReadWriter struct{ ranges unread.RangeWriter }
-
-func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
-}
-
-// These fixtures exercise the reader's existing history and directory behavior.
-type emptyPageCounter struct{}
-
-func emptyPageCountsIn(platform.Snapshot) conversation.PageCounter { return emptyPageCounter{} }
-func (emptyPageCounter) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
-	return conversation.PageCounts{}, nil
 }

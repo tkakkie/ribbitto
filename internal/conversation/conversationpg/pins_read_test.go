@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -28,9 +29,9 @@ func TestReaderOverview(t *testing.T) {
 	requireNoError(t, err)
 	second, err := newPosting(pool).Post(ctx, m, f.Channel.ID, "stays")
 	requireNoError(t, err)
-	_, err = conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil).Branch(ctx, m, f.Channel.ID, conversation.Branch{Messages: []kernel.ID{first.ID}, From: first.TopicID, NewName: "design"}, func(conversation.Topic) string { return "moved" })
+	_, err = conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(ctx, m, f.Channel.ID, conversation.Branch{Messages: []kernel.ID{first.ID}, From: first.TopicID, NewName: "design"}, func(conversation.Topic) string { return "moved" })
 	requireNoError(t, err)
-	pinning := conversationpg.NewPinning(pool, eventSequence, appendEvents, nil)
+	pinning := conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	requireNoError(t, pinning.Pin(ctx, m, f.Channel.ID, first.ID))
 	requireNoError(t, pinning.Pin(ctx, curator, f.Channel.ID, second.ID))
 	readState := func() (n int) {
@@ -38,7 +39,7 @@ func TestReaderOverview(t *testing.T) {
 		return n
 	}
 	before := readState()
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	page, err := reader.Overview(ctx, m, f.Channel.ID, nil, nil, 0)
 	requireNoError(t, err)
 	// Every topic, newest pin first, with current topics and names; the
@@ -104,8 +105,8 @@ func TestPinExcerptChatV1(t *testing.T) {
 	posted.Body = "**Deploy** " + ref(curator) + "\n> _by_ " + ref(other.MemberID)
 	_, err = pool.Exec(ctx, "UPDATE message SET body = $2 WHERE id = $1", posted.ID, posted.Body)
 	requireNoError(t, err)
-	requireNoError(t, conversationpg.NewPinning(pool, eventSequence, appendEvents, nil).Pin(ctx, m, f.Channel.ID, posted.ID))
-	pins, err := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn).Pins(ctx, m, f.Channel.ID)
+	requireNoError(t, conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil).Pin(ctx, m, f.Channel.ID, posted.ID))
+	pins, err := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn).Pins(ctx, m, f.Channel.ID)
 	requireNoError(t, err)
 	if len(pins) != 1 {
 		t.Fatalf("pins = %+v", pins)

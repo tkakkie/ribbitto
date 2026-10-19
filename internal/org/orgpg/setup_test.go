@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -40,11 +40,7 @@ func (s setupBarrier) Open(ctx context.Context) (bool, error) {
 }
 
 func newSetup(pool *pgxpool.Pool, hasher *identity.Hasher, state org.SetupState, writes org.RegistrationWriterIn, accounts org.AccountCreatorIn) *org.Setup {
-	return org.NewSetup(state, orgpg.NewTxRunnerForTest(pool), writes, accounts, signupEvents, defaultChannel, hasher, "secret")
-}
-
-func defaultChannel(tx platform.Tx) org.DefaultChannelCreator {
-	return conversationpg.DefaultChannelCreatorIn(tx)
+	return org.NewSetup(state, orgpg.NewTxRunnerForTest(pool), writes, accounts, compose.MemberEvents, compose.DefaultChannelCreator, hasher, "secret")
 }
 
 type rawSetupOrganization struct {
@@ -64,7 +60,7 @@ func TestSetup(t *testing.T) {
 		t.Run(fmt.Sprint(attempts), func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel)
+			s := orgpg.NewSetup(pool, hasher, "secret", compose.AccountCreator, compose.MemberEvents, compose.DefaultChannelCreator)
 			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
 			counts := func(want int) {
 				t.Helper()
@@ -85,7 +81,7 @@ func TestSetup(t *testing.T) {
 				writes := func(tx platform.Tx) org.RegistrationWriter {
 					return rawSetupOrganization{rawSignupMember{postgres.RegistrationWriterIn(tx), tc.handle}, tc.slug}
 				}
-				accounts := func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{signupAccount(tx), tc.email} }
+				accounts := func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{compose.AccountCreator(tx), tc.email} }
 				_, err := newSetup(pool, hasher, postgres.NewSetupState(pool), writes, accounts).Complete(ctx, "secret", input)
 				var fields org.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {
@@ -94,7 +90,7 @@ func TestSetup(t *testing.T) {
 				counts(0)
 			}
 			barrier := setupBarrier{SetupState: postgres.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			contender := newSetup(pool, hasher, barrier, registrationIn, signupAccount)
+			contender := newSetup(pool, hasher, barrier, registrationIn, compose.AccountCreator)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -154,7 +150,7 @@ func TestSetupConflictRace(t *testing.T) {
 			ctx := t.Context()
 			const attempts = 10
 			barrier := setupBarrier{SetupState: postgres.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			s := newSetup(pool, hasher, barrier, registrationIn, signupAccount)
+			s := newSetup(pool, hasher, barrier, registrationIn, compose.AccountCreator)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -206,7 +202,7 @@ func TestSetupOpenConflict(t *testing.T) {
 			} else {
 				identitytest.Account(t, pool, input.Email, "Existing")
 			}
-			s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel)
+			s := orgpg.NewSetup(pool, hasher, "secret", compose.AccountCreator, compose.MemberEvents, compose.DefaultChannelCreator)
 			open, err := s.Open(ctx)
 			if err != nil || !open {
 				t.Fatalf("before conflict: setup open = %t: %v", open, err)
@@ -240,7 +236,7 @@ func TestSetupDefaultChannelRollback(t *testing.T) {
 	channels := func(platform.Tx) org.DefaultChannelCreator {
 		return failingDefaultChannel{err: failure}
 	}
-	s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, channels)
+	s := orgpg.NewSetup(pool, hasher, "secret", compose.AccountCreator, compose.MemberEvents, channels)
 	_, err = s.Complete(ctx, "secret", org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	if !errors.Is(err, failure) {
 		t.Fatalf("Complete = %v, want injected default-channel error", err)

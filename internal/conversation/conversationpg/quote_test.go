@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -44,7 +45,7 @@ func TestPostingQuoteAgainstPostgreSQL(t *testing.T) {
 	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	bob := orgtest.Member(t, pool, acme.OrganizationID, identitytest.Account(t, pool, "bob@example.org", "Bob"), org.RoleMember, "bob", 1)
 	owner, bobM := membership(acme.OrganizationID, acme.MemberID), membership(acme.OrganizationID, bob)
-	posting := conversationpg.NewPagePosting(pool, eventSequence, appendEvents, nil, lookupMembers, nil)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, nil, compose.LookupMembers, nil)
 	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
 	post := func(m org.Membership, channel kernel.ID, body string) conversation.Message {
 		t.Helper()
@@ -112,8 +113,8 @@ func TestPostingQuoteAgainstPostgreSQL(t *testing.T) {
 	far := post(membership(globex.OrganizationID, globex.MemberID), globex.Channel.ID, "secret")
 	// The scoped read in the transaction decides, not the snapshot before it.
 	moved := conversation.NewPagePosting(conversationpg.NewTxRunnerForTest(pool),
-		func(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }, eventSequence, appendEvents, nil,
-		conversationpg.NewSnapshotRunnerForTest(pool), lookupMembers,
+		func(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }, compose.PostingSequence, compose.PostingEvents, nil,
+		conversationpg.NewSnapshotRunnerForTest(pool), compose.LookupMembers,
 		func(s platform.Snapshot) conversation.ReadStore {
 			return staleReads{ReadStore: postgres.ReadStoreIn(s), channel: random.ID}
 		}, nil)

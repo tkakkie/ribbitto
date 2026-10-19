@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -22,7 +22,7 @@ func TestDefaultChannelCreatorIn(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
-	var createDefault org.DefaultChannelCreatorIn = func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) }
+	var createDefault org.DefaultChannelCreatorIn = compose.DefaultChannelCreator
 	rollback := errors.New("caller rolls back")
 	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		requireNoError(t, createDefault(tx).CreateDefaultChannel(ctx, acme))

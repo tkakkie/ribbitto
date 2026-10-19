@@ -763,6 +763,8 @@ func (w *fakePostingWriter) TopicChangedBetween(context.Context, kernel.ID, kern
 	return false, nil
 }
 
+// fakePostReads keeps testPoster database-free for handler unit tests. Unlike
+// compose.PostReads, it succeeds without advancing persisted read state.
 type fakePostReads struct{}
 
 func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error {

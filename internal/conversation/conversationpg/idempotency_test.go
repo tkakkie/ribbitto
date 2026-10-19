@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -61,7 +62,7 @@ func TestSendIdempotencyKey(t *testing.T) {
 	if len(proof) != 36 || binary.BigEndian.Uint32(proof[:4]) != 5 || !bytes.Equal(proof[4:], digest[:]) || !bytes.Equal(first.Message.TypedBodyProof[:], proof) {
 		t.Fatalf("proof not persisted and read back: %x, %x", proof, first.Message.TypedBodyProof)
 	}
-	read, err := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn).One(ctx, alice, acme.Channel.ID, first.Message.EventSeq)
+	read, err := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn).One(ctx, alice, acme.Channel.ID, first.Message.EventSeq)
 	requireNoError(t, err)
 	if read.TypedBodyProof != first.Message.TypedBodyProof {
 		t.Fatal("history read lost proof")
@@ -106,7 +107,7 @@ func TestSendIdempotencyKey(t *testing.T) {
 	// Branching moves the stored message from A to B. A repeat on A returns
 	// the moved message with the requested topic A, and the next post, with
 	// a fresh key, lands in A.
-	moved, err := conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil).Branch(ctx, alice, acme.Channel.ID,
+	moved, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(ctx, alice, acme.Channel.ID,
 		conversation.Branch{Messages: []kernel.ID{first.Message.ID}, From: topicA.ID, NewName: "b"}, func(conversation.Topic) string { return "moved" })
 	requireNoError(t, err)
 	repeat, err := send(alice, acme.Channel.ID, &topicA.ID, "hello")
@@ -148,9 +149,9 @@ func TestSendIdempotencyKeyConcurrent(t *testing.T) {
 			var preflights sync.WaitGroup
 			preflights.Add(sends)
 			members := func(snapshot platform.Snapshot) conversation.MemberDirectory {
-				return collisionDirectory{MemberDirectory: lookupMembers(snapshot), preflights: &preflights}
+				return collisionDirectory{MemberDirectory: compose.LookupMembers(snapshot), preflights: &preflights}
 			}
-			service := conversationpg.NewPagePosting(pool, eventSequence, appendEvents, nil, members, nil)
+			service := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, nil, members, nil)
 			key := conversation.NewIdempotencyKey()
 			results := make(chan conversation.Sent, sends)
 			errs := make(chan error, sends)

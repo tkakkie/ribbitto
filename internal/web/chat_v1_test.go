@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -47,7 +48,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
 
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID, OrganizationID: f.OrganizationID}}
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	// Posting refuses references outside the organisation and stores chat_v1,
 	// so the fixture writes these rows itself, as a bad row could hold them:
 	// the first plain_text like a row from before chat_v1.
@@ -105,7 +106,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		}
 		return serveForm(handler, http.MethodGet, view.ChannelURL("acme", f.Channel.ID), cookie, nil).Body.Bytes()
 	}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	inLanguage := func(lang string) (langCtx context.Context) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Accept-Language", lang)
@@ -198,7 +199,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	}
 	// Pins and branching carry the format: the pin reads the chat_v1 row as
 	// stored, the move renders parsed markup, and the notice is escaped chat_v1.
-	if err := conversationpg.NewPinning(pool, postingSequence, postingEvents, nil).Pin(ctx, m, f.Channel.ID, rich.ID); err != nil {
+	if err := conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil).Pin(ctx, m, f.Channel.ID, rich.ID); err != nil {
 		t.Fatal(err)
 	}
 	pins, err := reader.Pins(ctx, m, f.Channel.ID)
@@ -209,7 +210,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		t.Errorf("pin excerpt %q", excerpt)
 	}
 	notifier := &recordingNotifier{}
-	topic, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
+	topic, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, notifier).Branch(ctx, m, f.Channel.ID,
 		conversation.Branch{From: rich.TopicID, Messages: []kernel.ID{rich.ID}, NewName: "moved"}, func(conversation.Topic) string { return "**notice**" })
 	if err != nil {
 		t.Fatal(err)

@@ -63,7 +63,7 @@ func TestChannelCountsFirstGapBeforeCap(t *testing.T) {
  SELECT $1,$2,$3,$4,'unread',s FROM generate_series(2,301) s`, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID)
 	feedRequire(t, err)
 	feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}, 1, unread.Range{Lo: 5, Hi: 41})
+		return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}, 1, conversation.SequenceRange{Lo: 5, Hi: 41})
 	}))
 	// The three unread messages in the first gap must survive the cap even
 	// though the later gap alone contains more than 100 unread messages.
@@ -88,7 +88,7 @@ func TestChannelCountsStatementsAndDuplicate(t *testing.T) {
  SELECT $1,$2,$3,$4,'unread',s+$6 FROM generate_series(2,$5::bigint) s`, f.OrganizationID, channel.ID, channel.DefaultTopicID, f.MemberID, i+3, i*20)
 		feedRequire(t, err)
 		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-			return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: f.OrganizationID, ChannelID: channel.ID, MemberID: f.MemberID}, 1, unread.Range{Lo: int64(i*20 + 3), Hi: int64(i*20 + 4)})
+			return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: f.OrganizationID, ChannelID: channel.ID, MemberID: f.MemberID}, 1, conversation.SequenceRange{Lo: int64(i*20 + 3), Hi: int64(i*20 + 4)})
 		}))
 	}
 	counter := platform.NewQueryCounter()
@@ -159,7 +159,7 @@ func TestChannelCountsMovedMessagesAndBranchNotice(t *testing.T) {
 	account := identitytest.Account(t, pool, "counter@example.org", "Counter")
 	scope.MemberID = orgtest.Member(t, pool, scope.OrganizationID, account, org.RoleMember, "counter", 1)
 	feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		return unreadpg.WriterIn(tx).Merge(t.Context(), scope, 1, unread.Range{Lo: 0, Hi: 3})
+		return unreadpg.WriterIn(tx).Merge(t.Context(), scope, 1, conversation.SequenceRange{Lo: 0, Hi: 3})
 	}))
 	check := func(want int64) {
 		feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {

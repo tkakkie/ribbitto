@@ -251,7 +251,7 @@ func costConnections(t *testing.T, pool *pgxpool.Pool, posting *conversation.Pos
 		// This makes shared member output observable even before the count cap.
 		initial := int64(i % 2)
 		err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-			return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, unread.Range{Lo: 0, Hi: seed.EventSeq + 1 - initial})
+			return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, conversation.SequenceRange{Lo: 0, Hi: seed.EventSeq + 1 - initial})
 		})
 		if err != nil {
 			t.Fatal(err)

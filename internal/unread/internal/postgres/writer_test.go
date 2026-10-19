@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -30,20 +31,20 @@ func require(t *testing.T, err error) {
 func scopeOf(f conversationtest.OrganizationFixture) unread.Scope {
 	return unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 }
-func ranges(t *testing.T, pool *pgxpool.Pool, s unread.Scope) []unread.Range {
+func ranges(t *testing.T, pool *pgxpool.Pool, s unread.Scope) []conversation.SequenceRange {
 	t.Helper()
 	rows, err := pool.Query(t.Context(), "SELECT lo,hi FROM read_range WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 ORDER BY lo", s.OrganizationID, s.ChannelID, s.MemberID)
 	require(t, err)
 	defer rows.Close()
-	result, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (unread.Range, error) {
-		var r unread.Range
+	result, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (conversation.SequenceRange, error) {
+		var r conversation.SequenceRange
 		err := row.Scan(&r.Lo, &r.Hi)
 		return r, err
 	})
 	require(t, err)
 	return result
 }
-func merge(t *testing.T, pool *pgxpool.Pool, s unread.Scope, r unread.Range) {
+func merge(t *testing.T, pool *pgxpool.Pool, s unread.Scope, r conversation.SequenceRange) {
 	t.Helper()
 	require(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error { return WriterIn(tx).Merge(t.Context(), s, 1, r) }))
 }
@@ -54,20 +55,20 @@ func TestMergeRanges(t *testing.T) {
 	s := scopeOf(conversationtest.OrganizationWithOwner(t, pool, "ranges", "general"))
 	tests := []struct {
 		name  string
-		added unread.Range
-		want  []unread.Range
+		added conversation.SequenceRange
+		want  []conversation.SequenceRange
 	}{
-		{"first write inserts prefix", unread.Range{Lo: 10, Hi: 12}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}}},
-		{"disjoint", unread.Range{Lo: 20, Hi: 22}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}, {Lo: 20, Hi: 22}}},
-		{"touch left", unread.Range{Lo: 12, Hi: 14}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 20, Hi: 22}}},
-		{"touch right", unread.Range{Lo: 18, Hi: 20}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 22}}},
-		{"overlap", unread.Range{Lo: 19, Hi: 24}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 24}}},
-		{"contained", unread.Range{Lo: 11, Hi: 13}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 24}}},
-		{"bridge neighbours", unread.Range{Lo: 14, Hi: 18}, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 24}}},
-		{"merge prefix", unread.Range{Lo: 2, Hi: 10}, []unread.Range{{Lo: 0, Hi: 24}}},
-		{"reordered old range", unread.Range{Lo: 3, Hi: 4}, []unread.Range{{Lo: 0, Hi: 24}}},
+		{"first write inserts prefix", conversation.SequenceRange{Lo: 10, Hi: 12}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}}},
+		{"disjoint", conversation.SequenceRange{Lo: 20, Hi: 22}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}, {Lo: 20, Hi: 22}}},
+		{"touch left", conversation.SequenceRange{Lo: 12, Hi: 14}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 20, Hi: 22}}},
+		{"touch right", conversation.SequenceRange{Lo: 18, Hi: 20}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 22}}},
+		{"overlap", conversation.SequenceRange{Lo: 19, Hi: 24}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 24}}},
+		{"contained", conversation.SequenceRange{Lo: 11, Hi: 13}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 14}, {Lo: 18, Hi: 24}}},
+		{"bridge neighbours", conversation.SequenceRange{Lo: 14, Hi: 18}, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 24}}},
+		{"merge prefix", conversation.SequenceRange{Lo: 2, Hi: 10}, []conversation.SequenceRange{{Lo: 0, Hi: 24}}},
+		{"reordered old range", conversation.SequenceRange{Lo: 3, Hi: 4}, []conversation.SequenceRange{{Lo: 0, Hi: 24}}},
 	}
-	before := []unread.Range{{Lo: 0, Hi: 2}}
+	before := []conversation.SequenceRange{{Lo: 0, Hi: 2}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			merge(t, pool, s, tt.added)
@@ -99,7 +100,7 @@ func TestMergeRanges(t *testing.T) {
 	}
 	rollback := errors.New("rollback")
 	err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		if err := WriterIn(tx).Merge(t.Context(), s, 1, unread.Range{Lo: 30, Hi: 31}); err != nil {
+		if err := WriterIn(tx).Merge(t.Context(), s, 1, conversation.SequenceRange{Lo: 30, Hi: 31}); err != nil {
 			return err
 		}
 		return rollback
@@ -125,11 +126,11 @@ func TestMergeScope(t *testing.T) {
 	account := identitytest.Account(t, pool, "other@example.org", "Other")
 	others[2].MemberID = orgtest.Member(t, pool, s.OrganizationID, account, org.RoleMember, "other", 1)
 	for _, other := range others {
-		seedRanges(t, pool, other, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 99}})
+		seedRanges(t, pool, other, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 99}})
 	}
-	seedRanges(t, pool, s, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}})
+	seedRanges(t, pool, s, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}})
 	require(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		require(t, WriterIn(tx).Merge(t.Context(), s, 1, unread.Range{Lo: 10, Hi: 11}))
+		require(t, WriterIn(tx).Merge(t.Context(), s, 1, conversation.SequenceRange{Lo: 10, Hi: 11}))
 		// Range writes also lock rows; probe channel_read itself so those writes
 		// cannot conceal a missing or incorrectly scoped channel lock.
 		err := pgx.BeginFunc(t.Context(), pool, func(probe pgx.Tx) error {
@@ -151,17 +152,17 @@ func TestMergeScope(t *testing.T) {
 		}
 		return nil
 	}))
-	if got := ranges(t, pool, s); !reflect.DeepEqual(got, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}}) {
+	if got := ranges(t, pool, s); !reflect.DeepEqual(got, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}}) {
 		t.Fatalf("scoped ranges=%v", got)
 	}
 	for i, other := range others {
-		if got := ranges(t, pool, other); !reflect.DeepEqual(got, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 99}}) {
+		if got := ranges(t, pool, other); !reflect.DeepEqual(got, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 99}}) {
 			t.Fatalf("scope %d changed: %v", i, got)
 		}
 	}
 }
 
-func seedRanges(t *testing.T, pool *pgxpool.Pool, s unread.Scope, rs []unread.Range) {
+func seedRanges(t *testing.T, pool *pgxpool.Pool, s unread.Scope, rs []conversation.SequenceRange) {
 	t.Helper()
 	_, err := pool.Exec(t.Context(), "INSERT INTO channel_read VALUES ($1,$2,$3)", s.OrganizationID, s.ChannelID, s.MemberID)
 	require(t, err)
@@ -178,7 +179,7 @@ func TestConcurrentMerges(t *testing.T) {
 			pool := pgtest.New(t)
 			s := scopeOf(conversationtest.OrganizationWithOwner(t, pool, "concurrent", "general"))
 			if exists {
-				seedRanges(t, pool, s, []unread.Range{{Lo: 0, Hi: 2}})
+				seedRanges(t, pool, s, []conversation.SequenceRange{{Lo: 0, Hi: 2}})
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -195,7 +196,7 @@ func TestConcurrentMerges(t *testing.T) {
 			}()
 			go func() {
 				first <- platform.InTx(ctx, pool, func(tx platform.Tx) error {
-					if err := WriterIn(tx).Merge(ctx, s, 1, unread.Range{Lo: 10, Hi: 11}); err != nil {
+					if err := WriterIn(tx).Merge(ctx, s, 1, conversation.SequenceRange{Lo: 10, Hi: 11}); err != nil {
 						return err
 					}
 					locked <- pgxbridge.Tx(tx).Conn().PgConn().PID()
@@ -218,7 +219,7 @@ func TestConcurrentMerges(t *testing.T) {
 			go func() {
 				second <- platform.InTx(ctx, pool, func(tx platform.Tx) error {
 					pid <- pgxbridge.Tx(tx).Conn().PgConn().PID()
-					return WriterIn(tx).Merge(ctx, s, 1, unread.Range{Lo: 11, Hi: 12})
+					return WriterIn(tx).Merge(ctx, s, 1, conversation.SequenceRange{Lo: 11, Hi: 12})
 				})
 			}()
 			waiter := <-pid
@@ -238,7 +239,7 @@ func TestConcurrentMerges(t *testing.T) {
 			}
 			close(release)
 			require(t, <-second)
-			if got := ranges(t, pool, s); !reflect.DeepEqual(got, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}}) {
+			if got := ranges(t, pool, s); !reflect.DeepEqual(got, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 10, Hi: 12}}) {
 				t.Fatalf("concurrent union=%v", got)
 			}
 		})
@@ -251,7 +252,7 @@ func TestReadStateForeignKeys(t *testing.T) {
 	a := conversationtest.OrganizationWithOwner(t, pool, "a", "general")
 	b := conversationtest.OrganizationWithOwner(t, pool, "b", "general")
 	s := scopeOf(a)
-	merge(t, pool, s, unread.Range{Lo: 10, Hi: 11})
+	merge(t, pool, s, conversation.SequenceRange{Lo: 10, Hi: 11})
 	other := conversationtest.Channel(t, pool, a.OrganizationID, "other", false)
 	tests := []struct {
 		name, sql string

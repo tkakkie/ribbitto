@@ -18,14 +18,14 @@ type ChannelCounts struct // ChannelCounts combines range loading and counting i
   func (*ChannelCounts).Read(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, joined int64, channels []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]ChannelCount, error) // Read counts the sidebar's channels across all topics.
   func (*ChannelCounts).ReadWithFirstUnread(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, joined int64, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]ChannelCount, error) // ReadWithFirstUnread retains selection and state loading while explicitly choosing whether the message counter also computes first unread.
 type ChannelMessages interface // ChannelMessages supplies conversation's next message sequence; zero means none.
-  func (ChannelMessages).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error)
+  func (ChannelMessages).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the first sequence strictly above cursor, or zero.
   func (ChannelMessages).HasMessages(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, []int64) (bool, error) // HasMessages probes parallel half-open bounds in one scoped statement.
 type ChannelMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ChannelMessages // ChannelMessagesIn binds conversation's query to the caller's transaction.
 type ChannelRanges interface // ChannelRanges reads the first ranges of the sidebar's channels in one statement.
   func (ChannelRanges).Read(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]ChannelReadState, error)
 type ChannelRangesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ChannelRanges // ChannelRangesIn binds range reads to the caller's snapshot.
 type ChannelReadState struct // ChannelReadState contains the prefix end and up to 100 unread gaps.
-  field Gaps []Range
+  field Gaps []github.com/tkakkie/ribbitto/internal/conversation.SequenceRange
   field Prefix int64
 var ErrInvalidCursor error // ErrInvalidCursor means the cursor is negative, unrepresentable or ahead of committed events.
 type EventCursor interface // EventCursor reads org's committed event sequence.
@@ -53,16 +53,13 @@ type PageCounts struct // PageCounts combines channel and topic counts in the ca
 type PageTopicCounts interface // PageTopicCounts supplies topic counts in a shared snapshot.
   func (PageTopicCounts).ReadWithFirstUnread(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, Scope, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error)
 type PostReads struct // PostReads combines page reads and the author's own-message read.
-  func (*PostReads).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joined int64, topic *github.com/tkakkie/ribbitto/internal/kernel.ID, cursor *int64, own Range, floor int64) error // Read retains posting's organisation-first lock order and never completes tx.
+  func (*PostReads).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joined int64, topic *github.com/tkakkie/ribbitto/internal/kernel.ID, cursor *int64, own github.com/tkakkie/ribbitto/internal/conversation.SequenceRange, floor int64) error // Read retains posting's organisation-first lock order and never completes tx.
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
   func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
-  func (PreparedTopic).ReadState() (prefix int64, floor int64, ranges []Range) // ReadState returns the prefix, floor and read ranges above the prefix.
-type Range struct // Range contains read sequences from Lo inclusive to Hi exclusive.
-  field Hi int64
-  field Lo int64
+  func (PreparedTopic).ReadState() (prefix int64, floor int64, ranges []github.com/tkakkie/ribbitto/internal/conversation.SequenceRange) // ReadState returns the prefix, floor and read ranges above the prefix.
 type RangeWriter interface // RangeWriter unions read ranges with the member's persisted join prefix.
-  func (RangeWriter).Merge(context.Context, Scope, int64, Range) error
-  func (RangeWriter).MergeCovered(context.Context, Scope, int64, Range) ([]Range, error) // MergeCovered returns only newly covered intervals, excluding the join prefix.
+  func (RangeWriter).Merge(context.Context, Scope, int64, github.com/tkakkie/ribbitto/internal/conversation.SequenceRange) error
+  func (RangeWriter).MergeCovered(context.Context, Scope, int64, github.com/tkakkie/ribbitto/internal/conversation.SequenceRange) ([]github.com/tkakkie/ribbitto/internal/conversation.SequenceRange, error) // MergeCovered returns only newly covered intervals, excluding the join prefix.
 type RangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) RangeWriter // RangeWriterIn binds range writes to the caller's transaction.
 type ReadPublisher interface // ReadPublisher receives count invalidations, independently of request cancellation.
   func (ReadPublisher).ReadChanged(organization github.com/tkakkie/ribbitto/internal/kernel.ID, member github.com/tkakkie/ribbitto/internal/kernel.ID) // ReadChanged asks the member's sidebars to recount persisted state.
@@ -80,7 +77,7 @@ type TopicCounts struct // TopicCounts combines topic state and message counts i
   func (*TopicCounts).Read(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, scope Scope, joined int64, listed []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // Read returns capped counts and the selected topic's uncapped first unread sequence (zero if none).
   func (*TopicCounts).ReadWithFirstUnread(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, scope Scope, joined int64, listed []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // ReadWithFirstUnread retains selection and state loading while explicitly choosing whether the message counter also computes first unread.
 type TopicMessages interface // TopicMessages supplies unread message bounds through a validated cursor.
-  func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []Range) ([]Range, error) // Ranges returns whole-channel neighbour bounds for this topic's unread messages.
+  func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []github.com/tkakkie/ribbitto/internal/conversation.SequenceRange) ([]github.com/tkakkie/ribbitto/internal/conversation.SequenceRange, error) // Ranges returns [previous + 1, next) for this topic's unread messages through cursor, using whole-channel neighbours (0 or message + 1 if absent).
 type TopicMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) TopicMessages // TopicMessagesIn binds conversation's candidate query to the caller's transaction.
 type TopicPrepareIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) func(context.Context, TopicScope, int64) (PreparedTopic, error) // TopicPrepareIn binds locked preparation to the caller's transaction.
 type TopicRead func(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, TopicScope, int64, int64) (bool, error) // TopicRead writes a topic page in the caller's transaction.

@@ -6,17 +6,20 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 type postState struct {
 	readingState
-	merge func(Scope, int64, Range) error
+	merge func(Scope, int64, conversation.SequenceRange) error
 	add   func([]int64, []int64, int64) error
 }
 
-func (p postState) Merge(_ context.Context, s Scope, j int64, r Range) error { return p.merge(s, j, r) }
+func (p postState) Merge(_ context.Context, s Scope, j int64, r conversation.SequenceRange) error {
+	return p.merge(s, j, r)
+}
 func (p postState) Add(_ context.Context, lo, hi []int64, floor int64) error {
 	return p.add(lo, hi, floor)
 }
@@ -53,8 +56,8 @@ func TestPostReads(t *testing.T) {
 				}
 				return nil
 			}
-			state := postState{merge: func(s Scope, j int64, r Range) error {
-				if s != scope || j != 5 || r != (Range{Lo: 11, Hi: 12}) {
+			state := postState{merge: func(s Scope, j int64, r conversation.SequenceRange) error {
+				if s != scope || j != 5 || r != (conversation.SequenceRange{Lo: 11, Hi: 12}) {
 					t.Fatal("incorrect merge arguments")
 				}
 				return step("merge")
@@ -95,7 +98,7 @@ func TestPostReads(t *testing.T) {
 						return false, err
 					})
 				})
-			err := reads.Read(t.Context(), platform.Tx{}, scope, 5, tc.topic, tc.cursor, Range{Lo: 11, Hi: 12}, 9)
+			err := reads.Read(t.Context(), platform.Tx{}, scope, 5, tc.topic, tc.cursor, conversation.SequenceRange{Lo: 11, Hi: 12}, 9)
 			if tc.fail == "unprepared" {
 				if err == nil || err.Error() != "posting topic read: page write returned without preparing" {
 					t.Fatalf("guard error = %v", err)

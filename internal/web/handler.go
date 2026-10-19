@@ -24,21 +24,13 @@ import (
 
 // Services are the use cases the handlers call.
 type Services struct {
+	MemberLimits  MemberLimits
 	Preferences   *identity.Preferences
-	SendKeyLimits *middleware.MemberRateLimiter
 	RequestLogger *slog.Logger // nil: use the process logger
 	Database      Pinger       // nil: readiness answers 503
 	ShuttingDown  func() bool  // nil: no shutdown signal (tests)
 	MemberSearch  MemberSearch // nil: mention candidates answer 404
-	MentionLimits *middleware.MemberRateLimiter
 	Typing        *typing.State
-	SignalLimits  *middleware.MemberRateLimiter
-	ReadLimits    *middleware.MemberRateLimiter
-	CreateLimits  *middleware.MemberRateLimiter
-	ResyncLimits  *middleware.MemberRateLimiter
-	BranchLimits  *middleware.MemberRateLimiter
-	PostLimits    *middleware.MemberRateLimiter
-	PinLimits     *middleware.MemberRateLimiter
 	Sessions      middleware.SessionResolver
 	SignIn        SignInService
 	SignUp        SignUpService
@@ -80,37 +72,11 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if services.Stream != nil && services.Stream.Lifetime == nil {
 		return nil, nil, errors.New("web: Streaming.Lifetime is required")
 	}
-	if services.Typing != nil && services.SignalLimits == nil {
-		return nil, nil, errors.New("web: Services.SignalLimits is required with Typing")
+	if services.MemberLimits == (MemberLimits{}) {
+		return nil, nil, errors.New("web: Services.MemberLimits must be built by NewMemberLimits")
 	}
-	if services.Reading != nil && (services.ReadLimits == nil || services.ReadLimits == services.SignalLimits) {
-		return nil, nil, errors.New("web: independent Services.ReadLimits is required with Reading")
-	}
-	if services.Channels != nil && (services.CreateLimits == nil || services.CreateLimits == services.ReadLimits || services.CreateLimits == services.SignalLimits) {
-		return nil, nil, errors.New("web: independent Services.CreateLimits is required with Channels")
-	}
-	if services.SidebarResync != nil && (services.ResyncLimits == nil || services.ResyncLimits == services.SignalLimits || services.ResyncLimits == services.ReadLimits || services.ResyncLimits == services.CreateLimits) {
-		return nil, nil, errors.New("web: independent Services.ResyncLimits is required with SidebarResync")
-	}
-	if services.Branching != nil && (services.BranchLimits == nil || services.BranchLimits == services.SignalLimits || services.BranchLimits == services.ReadLimits || services.BranchLimits == services.CreateLimits || services.BranchLimits == services.ResyncLimits) {
-		return nil, nil, errors.New("web: independent Services.BranchLimits is required with Branching")
-	}
-	if services.PostLimits == nil || services.PostLimits == services.SignalLimits || services.PostLimits == services.ReadLimits || services.PostLimits == services.CreateLimits || services.PostLimits == services.ResyncLimits || services.PostLimits == services.BranchLimits {
-		return nil, nil, errors.New("web: independent Services.PostLimits is required")
-	}
-	if services.PinLimits == nil || services.PinLimits == services.SignalLimits || services.PinLimits == services.ReadLimits || services.PinLimits == services.CreateLimits || services.PinLimits == services.ResyncLimits || services.PinLimits == services.BranchLimits || services.PinLimits == services.PostLimits {
-		return nil, nil, errors.New("web: independent Services.PinLimits is required")
-	}
-	if services.MemberSearch != nil && (services.MentionLimits == nil || services.MentionLimits == services.SignalLimits || services.MentionLimits == services.ReadLimits || services.MentionLimits == services.CreateLimits || services.MentionLimits == services.ResyncLimits || services.MentionLimits == services.BranchLimits) {
-		return nil, nil, errors.New("web: independent Services.MentionLimits is required with MemberSearch")
-	}
-	if services.Preferences == nil || services.SendKeyLimits == nil {
-		return nil, nil, errors.New("web: Services.Preferences and SendKeyLimits are required")
-	}
-	for _, limit := range []*middleware.MemberRateLimiter{services.SignalLimits, services.ReadLimits, services.CreateLimits, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MentionLimits} {
-		if services.SendKeyLimits == limit {
-			return nil, nil, errors.New("web: independent Services.SendKeyLimits is required")
-		}
+	if services.Preferences == nil {
+		return nil, nil, errors.New("web: Services.Preferences is required")
 	}
 
 	assets := static.FS()
@@ -166,7 +132,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
 	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
-	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits, services.Preferences, services.SendKeyLimits))
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.Handle("GET /healthz", middleware.LogRoute("GET /healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

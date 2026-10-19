@@ -57,7 +57,7 @@ func composerHandler(t *testing.T, topic bool, overrides ...func(*Services)) (ht
 		s.Posting = poster
 		s.Messages = sidebarReader{page: snapshot}
 		s.Channels = &fakeChannels{channels: []conversation.Channel{c}}
-		s.Typing, s.SignalLimits = state, middleware.NewMemberRateLimiter(time.Now)
+		s.Typing = state
 	}}
 	setup = append(setup, overrides...)
 	h, err := NewHandler("", catalogues, testServices(setup...))

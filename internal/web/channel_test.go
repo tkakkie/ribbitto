@@ -266,7 +266,10 @@ func TestChannelCreationLimit(t *testing.T) {
 func TestChannelCreationAdmission(t *testing.T) {
 	fake := &fakeChannels{}
 	limits := middleware.NewChannelCreationRateLimiter(time.Now)
-	handler, _ := newLimitedHandler(t, asAlice, func(s *Services) { s.Channels = fake; s.CreateLimits = limits })
+	handler, _ := newLimitedHandler(t, asAlice, func(s *Services) {
+		s.Channels = fake
+		s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) { l.create = limits })
+	})
 	// Session and membership resolution precede admission; denied callers cannot
 	// consume the member's budget. The org route suite also proves their 404s.
 	r := httptest.NewRequest("POST", "/organizations/unknown/channels", strings.NewReader("name=%zz"))

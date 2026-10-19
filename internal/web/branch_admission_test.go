@@ -33,7 +33,9 @@ func TestBranchAdmissionPostgreSQL(t *testing.T) {
 				t.Fatal(err)
 			}
 			services := postgresServices(t, pool, sessions, "", false)
-			services.BranchLimits = middleware.NewBranchRateLimiter(func() time.Time { return time.Unix(1, 0) })
+			services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) {
+				l.branch = middleware.NewBranchRateLimiter(func() time.Time { return time.Unix(1, 0) })
+			})
 			m, err := services.Authz.Member(t.Context(), &identity.Account{ID: f.AccountID}, "acme")
 			if err != nil {
 				t.Fatal(err)

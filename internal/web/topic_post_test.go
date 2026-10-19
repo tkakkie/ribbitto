@@ -47,7 +47,7 @@ func TestTopicPostScopeAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	services := postgresServices(t, pool, sessions, "", false)
-	services.Typing, services.SignalLimits = typing.New(realtime.NewHub()), middleware.NewMemberRateLimiter(time.Now)
+	services.Typing = typing.New(realtime.NewHub())
 	h, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

@@ -1,9 +1,8 @@
 # Posting and pin-change admission
 
-`Services.PostLimits` and `Services.PinLimits` each require their own
-`middleware.MemberRateLimiter`, distinct from every other member limiter;
-missing or shared wiring fails startup. These are **unmeasured, provisional**
-per-process budgets:
+Posting and pin-change budgets are independent within `Services.MemberLimits`
+([wiring](rate-limits.md#member-admission-for-typing)). These are
+**unmeasured, provisional** per-process budgets:
 
 | Requests | Burst | Refill | Concurrent | Retry-After |
 |---|---|---|---|---|

@@ -42,7 +42,12 @@ func NewMemberRateLimiter(now func() time.Time) *MemberRateLimiter {
 // NewReadRateLimiter returns initial, unmeasured read limits: 4/s, burst 16,
 // and four concurrent requests per member. State is in memory per process.
 func NewReadRateLimiter(now func() time.Time) *MemberRateLimiter {
-	return NewMemberRateLimiterWithBudget(now, 4, 16, 4)
+	return NewReadRateLimiterWithConcurrency(now, 4)
+}
+
+// NewReadRateLimiterWithConcurrency keeps the read budget with a custom slot ceiling.
+func NewReadRateLimiterWithConcurrency(now func() time.Time, concurrent int) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 4, 16, concurrent)
 }
 
 // NewChannelCreationRateLimiter returns an independent burst of 10, then one

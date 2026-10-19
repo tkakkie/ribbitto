@@ -295,7 +295,10 @@ func TestMessagePostHandler(t *testing.T) {
 					reader := populatedMessages()
 					reader.before = &reads
 					s.Messages, s.Posting = reader, poster
-					s.Typing, s.SignalLimits = state, middleware.NewMemberRateLimiter(time.Now)
+					s.Typing = state
+					s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+						l.signal = middleware.NewMemberRateLimiter(time.Now)
+					})
 				}))
 				if err != nil {
 					t.Fatal(err)

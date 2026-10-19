@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -45,14 +46,14 @@ func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Ser
 
 // streamServersWithHub also exposes the hub so tests can wait for catch-up.
 // No watermark worker runs: only the wired use cases can wake these streams.
-func streamServersWithHub(t *testing.T, pool *pgxpool.Pool, limits ...*middleware.MemberRateLimiter) (api, streams *httptest.Server, hub *realtime.Hub) {
+func streamServersWithHub(t *testing.T, pool *pgxpool.Pool, limits ...web.MemberLimits) (api, streams *httptest.Server, hub *realtime.Hub) {
 	t.Helper()
 	hub = realtime.NewHub()
 	config := handlerConfig{maxChannels: conversation.DefaultMaxChannels, setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
 		hub:            hub, streamWriteTimeout: testStreamWrite}
 	if len(limits) != 0 {
-		config.readLimits = limits[0]
+		config.memberLimits = limits[0]
 	}
 	handler, _, err := buildHandler(t.Context(), pool, config)
 	acceptanceOK(t, err)

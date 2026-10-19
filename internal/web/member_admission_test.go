@@ -39,8 +39,8 @@ func TestPostPinAdmissionPostgreSQL(t *testing.T) {
 			}
 			now := time.Unix(1, 0)
 			s := postgresServices(t, pool, sessions, "", false)
-			s.PostLimits = middleware.NewPostRateLimiter(func() time.Time { return now })
-			s.PinLimits = middleware.NewPinRateLimiter(func() time.Time { return now })
+			s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) { l.post = middleware.NewPostRateLimiter(func() time.Time { return now }) })
+			s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) { l.pin = middleware.NewPinRateLimiter(func() time.Time { return now }) })
 			cat, err := i18n.New(slog.Default())
 			if err != nil {
 				t.Fatal(err)

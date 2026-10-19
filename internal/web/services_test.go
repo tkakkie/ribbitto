@@ -13,7 +13,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/unread"
-	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
 // testServices returns the services NewHandler requires, as DB-free fakes:
@@ -34,14 +33,7 @@ func testServices(overrides ...func(*Services)) Services {
 	s.Preferences = identity.NewPreferences(&preferenceMemory{})
 	s.MemberSearch = &fakeMemberSearch{}
 	s.SidebarResync = &unread.Changes{}
-	s.SendKeyLimits = middleware.NewMemberRateLimiter(time.Now)
-	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
-	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
-	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
-	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
-	s.PostLimits = middleware.NewPostRateLimiter(time.Now)
-	s.PinLimits = middleware.NewPinRateLimiter(time.Now)
-	s.MentionLimits = middleware.NewMentionRateLimiter(time.Now)
+	s.MemberLimits = NewMemberLimits(time.Now)
 	s.Branching = &fakeBrancher{}
 	for _, override := range overrides {
 		override(&s)
@@ -56,11 +48,11 @@ func asAlice(s *Services) {
 }
 
 // postgresServices uses production database adapters, including post reads,
-// page counts, Preferences and SendKeyLimits. Caller-supplied sessions allow
+// page counts, Preferences and MemberLimits. Caller-supplied sessions allow
 // clock control; uncached Authz makes fixture writes visible immediately.
 // Setup, SignUp and SetupSessions are opt-in. Limits stays nil so suites choose
 // authentication throttling; other limiters and Channels use production defaults.
-// Database, ShuttingDown, Stream, Typing, SignalLimits, SidebarResync, Reading
+// Database, ShuttingDown, Stream, Typing, SidebarResync, Reading
 // and write notifications stay nil: suites opt into readiness, shutdown, live
 // sources and read routes separately. RequestLogger uses the process default.
 // No database service is faked.
@@ -82,14 +74,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Pinning:   conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil),
 	}
 	s.Preferences = identitypg.NewPreferences(pool)
-	s.SendKeyLimits = middleware.NewMemberRateLimiter(time.Now)
-	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
-	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
-	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
-	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
-	s.PostLimits = middleware.NewPostRateLimiter(time.Now)
-	s.PinLimits = middleware.NewPinRateLimiter(time.Now)
-	s.MentionLimits = middleware.NewMentionRateLimiter(time.Now)
+	s.MemberLimits = NewMemberLimits(time.Now)
 	s.MemberSearch = orgpg.NewMemberSearch(pool, identitypg.AccountsIn)
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
@@ -127,3 +112,11 @@ func fixturePoster(pool *pgxpool.Pool) *conversation.Posting {
 }
 
 var _ Poster = (*conversation.Posting)(nil)
+
+// memberLimitOverride confines pointer injection to same-package tests.
+func memberLimitOverride(limits MemberLimits, set func(*MemberLimits)) MemberLimits {
+	return NewMemberLimits(time.Now, MemberLimitsOption{func(l *MemberLimits) {
+		*l = limits
+		set(l)
+	}})
+}

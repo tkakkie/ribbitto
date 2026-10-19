@@ -100,11 +100,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	services := postgresServices(t, pool, sessions, "", false)
 	// This multi-route fixture intentionally posts more than the production burst.
-	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) { l.post = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4) })
 	state := typing.New(realtime.NewHub())
 	services.Typing = state
 	budgetTime := now
-	services.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time { budgetTime = budgetTime.Add(time.Second); return budgetTime })
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) {
+		l.signal = middleware.NewMemberRateLimiter(func() time.Time { budgetTime = budgetTime.Add(time.Second); return budgetTime })
+	})
 	membership, err := services.Authz.Member(ctx, &identity.Account{ID: alice}, "acme")
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +143,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "send_key": {"enter"}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}, "quote": {realtime.FormatPayloadID(linked.ID)}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits, services.Preferences, services.SendKeyLimits)
+	routes := orgRoutes(&pageRenderer{}, services)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -27,17 +26,17 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting Poster, branching Branching, pinning Pinning, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter, resync SidebarResync, resyncLimit, branchLimit, postLimit, pinLimit *middleware.MemberRateLimiter, search MemberSearch, mentionLimit *middleware.MemberRateLimiter, preferences *identity.Preferences, preferenceLimit *middleware.MemberRateLimiter) []orgRoute {
-	handlers := channelPages{typing: typingState, limiter: limiter, readLimit: readLimit, createLimit: createLimit, branchLimit: branchLimit, postLimit: postLimit, pinLimit: pinLimit, reading: reading, pages: pages, channels: channels, topics: topics, messages: messages, posting: posting, branching: branching, pinning: pinning, stream: stream}
-	if stream != nil {
-		handlers.renders = newRenderCache(stream.Lifetime)
+func orgRoutes(pages *pageRenderer, services Services) []orgRoute {
+	handlers := channelPages{typing: services.Typing, limiter: services.MemberLimits.Signal(), readLimit: services.MemberLimits.Read(), createLimit: services.MemberLimits.Create(), branchLimit: services.MemberLimits.Branch(), postLimit: services.MemberLimits.Post(), pinLimit: services.MemberLimits.Pin(), reading: services.Reading, pages: pages, channels: services.Channels, topics: services.Topics, messages: services.Messages, posting: services.Posting, branching: services.Branching, pinning: services.Pinning, stream: services.Stream}
+	if services.Stream != nil {
+		handlers.renders = newRenderCache(services.Stream.Lifetime)
 	}
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
-		{http.MethodPost, "/send-key", sendKey(preferences, preferenceLimit)},
+		{http.MethodPost, "/send-key", sendKey(services.Preferences, services.MemberLimits.SendKey())},
 		{http.MethodGet, "/events", handlers.events},
-		{http.MethodGet, "/mention-candidates", mentionCandidates(search, mentionLimit)},
-		{http.MethodPost, "/sidebar/resync", resyncSidebar(resync, resyncLimit)},
+		{http.MethodGet, "/mention-candidates", mentionCandidates(services.MemberSearch, services.MemberLimits.Mention())},
+		{http.MethodPost, "/sidebar/resync", resyncSidebar(services.SidebarResync, services.MemberLimits.Resync())},
 		{http.MethodPost, "/channels/{channelID}/topics/{topicID}/typing", handlers.signal},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},
 		{http.MethodGet, "/channels/{channelID}/members", handlers.members},

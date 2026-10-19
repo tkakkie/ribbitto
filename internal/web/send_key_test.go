@@ -111,7 +111,9 @@ func TestSendKeyAuthorization(t *testing.T) {
 	t.Run("rate limit writes nothing", func(t *testing.T) {
 		services := postgresServices(t, pool, sessions, "", false)
 		now := time.Now()
-		services.SendKeyLimits = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 1, 1, 0)
+		services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) {
+			l.sendKey = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 1, 1, 0)
+		})
 		h, err := NewHandler("", cat, services)
 		if err != nil {
 			t.Fatal(err)

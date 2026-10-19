@@ -48,17 +48,14 @@
     if (!new RegExp("^" + v7 + "$").test(page?.session) || !Number.isSafeInteger(expires) || !Number.isSafeInteger(rendered)) return;
     const { member, session } = page;
     const storage = window.localStorage;
-    sweep(storage, session, member, (value) => {
-      let entry;
-      try {
-        entry = JSON.parse(value);
-      } catch {
-        return false;
-      }
+    const valid = (entry) => {
       const now = Date.now();
       return entry?.member === member && entry.session === session && entry.expires === expires &&
         typeof entry.text === "string" && [...entry.text].length <= 4000 &&
         typeof entry.at === "number" && now - entry.at < 7 * day && entry.at - now <= day;
+    };
+    sweep(storage, session, member, (value) => {
+      try { return valid(JSON.parse(value)); } catch { return false; }
     });
     // The deadline counts from this document's time origin, which precedes
     // the render, so it never comes after the session's expiry; the device
@@ -117,9 +114,7 @@
       const entry = read(key);
       if (performance.now() < deadline) {
         if (body.value) { at = typeof entry?.at === "number" ? entry.at : 0; edited(); save(); }
-        else if (entry?.member === member && entry.session === session && entry.expires === expires &&
-            typeof entry.text === "string" && [...entry.text].length <= 4000 &&
-            typeof entry.at === "number" && Date.now() - entry.at < 7 * day && entry.at - Date.now() <= day) body.value = entry.text;
+        else if (valid(entry)) { at = entry.at; body.value = entry.text; }
       }
       body.addEventListener("message-sending", (event) => {
         const { key: sendKey, body: raw, inPlace } = event.detail;
@@ -131,17 +126,27 @@
         at = Math.max(at, (read(key)?.at || 0) + 1);
         save(true);
       });
-      body.addEventListener("message-sent", (event) => {
-        const sendKey = event.detail.key;
-        if (sending?.key !== sendKey) return;
-        const eligible = source === sendKey || (sending.inPlace && source === null);
-        sending = null;
-        // Unsaved edits count too: pending success must keep their timer.
+      const replaceSnapshot = (sendKey, inPlace = false) => {
+        const eligible = source === sendKey || (inPlace && source === null);
+        // Prefix removal fires no input. Refresh an unsaved in-place edit
+        // even if another tab's write prevents immediate confirmation.
+        if (inPlace && source === null && dirty) edited();
         try {
           if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
           edited();
           save();
         } catch { /* Storage errors leave sending usable. */ }
+      };
+      body.addEventListener("message-sent", (event) => {
+        if (sending?.key !== event.detail.key) return;
+        const { key: sendKey, inPlace } = sending;
+        sending = null;
+        // Unsaved pending-path edits keep their timer and cannot be cleared.
+        replaceSnapshot(sendKey, inPlace);
+      });
+      body.addEventListener("message-pending-action", (event) => {
+        if (event.detail.kind === "edit") { edited(); save(); }
+        else if (event.detail.kind === "remove") replaceSnapshot(event.detail.key);
       });
       body.addEventListener("input", edited);
       body.addEventListener("compositionstart", () => { composing = true; clearTimeout(timer); });

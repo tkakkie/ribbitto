@@ -1,9 +1,7 @@
 # Messages
 
-Message identity, accepted bodies and rendering. Read before changing them.
-
-**Keep it current:** update this file in the same pull request whenever
-these rules change.
+Message identity, accepted bodies and rendering. Read before changes;
+update in the same pull request when rules change.
 
 ## Identity and format
 
@@ -20,9 +18,8 @@ and lives with its message. Keyed posts store `typed_body_proof`: the
 normalized typed body's 4-byte big-endian byte length and SHA-256 (36 bytes).
 No backfill: legacy proofs stay NULL; unkeyed posts and notices have neither.
 
-Bodies are stored with a `format`, and the stored body is the source of truth.
-A stored message is never reinterpreted, and rendered HTML is at most a
-disposable cache
+Bodies store a `format`; the stored body is the source of truth.
+Stored messages are never reinterpreted; rendered HTML is only a disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 Messages stored before `chat_v1` remain `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
@@ -42,7 +39,7 @@ A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
-A message may quote one earlier message of the same channel
+A message may quote one earlier message in its channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, action and chip since #1160, selection planned: #1161). The quote stores the
 quoted message's ID, its author's member ID and a text snapshot that the
 server copies or, for a selection, checks against the original's extracted
@@ -50,8 +47,8 @@ text, in the posting transaction. The snapshot belongs to the quoting
 message and stays as posted when the original is edited, moved or deleted;
 deletion sets only the quoted message ID to null. A quote is not a reply.
 
-Channel pins reference the current message; their permissions, limits
-and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890 and #1205).
+Channel pins reference the current message; permissions, limits and lifecycle:
+[`pins.md`](pins.md) (implemented in #887–#890 and #1205).
 
 ## Accepted bodies
 
@@ -77,10 +74,9 @@ RLI, FSI and PDI (U+2066–U+2069) and the marks LRM, RLM and ALM (U+200E,
 U+200F, U+061C) are **allowed on purpose**: they are the recommended way to
 mix directions in plain text with Arabic or Hebrew.
 
-The database checks the length, the absence of CR, the rejected controls,
-separators and bidi characters (listed one by one, not as a range), and
-that the body does not start or end with ASCII white space; PostgreSQL
-`text` rejects NUL. The Unicode-aware trim stays in conversation.
+The database checks length, no CR, rejected controls/separators/bidi characters
+(listed individually, not as a range), and no leading/trailing ASCII white space.
+PostgreSQL `text` rejects NUL; Unicode-aware trim stays in conversation.
 
 ## Showing bodies
 
@@ -102,8 +98,7 @@ resolved extraction (below). Its users are the pins excerpt
 (`conversation.PinExcerpt`, 200 code points counted after resolution) and
 the live item's `data-announcement`, the quote snapshot (trimmed at both
 ends, an empty one rejected); *planned*: the selection check (#1161),
-and later notifications and search. A quote's snapshot is left out of the
-quoting message's extraction.
+and later notifications and search. Extraction excludes the quoting message's quote snapshot.
 
 A `chat_v1` body ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
 `conversation` into plain structs and rendered node by node with templ,
@@ -125,22 +120,26 @@ language too.
 
 ## Posting from the channel page
 
-Latest feeds/topics empty the composer into pending items. All states count
-toward 10 slots per tab; overflow keeps text with a notice. Delivery, move-out,
-Remove/Edit free slots; Retry reuses its slot. FIFO requests never overlap
-ordinary sends. Not sent retries go last; unknown outcomes pause until same-key
-Retry succeeds, Remove or Edit. Remove/Edit allow late commits out of order;
-uninterrupted success and same-key Retry preserve storage order.
+Latest feeds/topics empty the composer into pending items (#1156, #1188, #1174,
+#1180). All states count toward 10 slots per tab; overflow keeps text with a notice.
+Delivery, move-out, Remove/Edit free slots; Retry reuses its slot.
+FIFO requests run one at a time and never overlap ordinary sends.
+Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
+Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
+success and same-key Retry preserve storage order.
 Edit restores text/key and uncertainty to an empty composer outside IME, focuses
 its end and removes the item; otherwise it is disabled with a description.
-Identity/uncertainty survive swaps and refusals until emptying renews the key.
-Pending responses and failures keep text.
-Idle blank/over-limit sends, or without `crypto.randomUUID()`, use the ordinary
-path: success removes the sent prefix; 422 keeps text and a field error. Older/scriptless posts use 303 on success and full-page 422 errors. Organisation and channel
-resolve before posting; non-members get 404.
+State swaps and refusals retain the key and uncertainty; emptying renews the
+key and clears uncertainty. Pending responses keep text; failures never swap it.
+Idle blank/over-limit sends, or without
+`crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
+(#1173); 422 keeps text and a field error. The textarea stays usable.
+The stream delivers real items and replay. Older/scriptless posts
+use 303 on success and full-page 422 errors. Organisation and channel resolve
+before posting; non-members get 404.
 
-[Device drafts](../architecture/web-composer.md#drafts) restore per feed/topic
-within the session. Send confirmation preserves newer text; Retry never snapshots.
+[Device drafts](../architecture/web-composer.md#drafts): session-scoped feed/topic
+restore; confirmation keeps newer text; Retry never snapshots.
 
 Enter sends (except during IME); Shift+Enter adds a newline. Help names formatting.
 Pages start at newest; live delivery follows only at the bottom. The sender's

@@ -1,15 +1,13 @@
 # Web composer
 
-Composer JavaScript and device drafts.
-
 ## Composer
 
-Bounded composer state follows [decision 37][d37]. Server-rendered keys,
-sending glue and feed/topic pending items exist; *planned* parts await their issues.
+Bounded state follows [decision 37][d37]: server-rendered keys,
+sending glue and feed/topic pending items; *planned* parts await issues.
 
-Idle feed/topic sends use the ordinary path for blank text, a selected quote,
-or over 4,000 code points after line-ending normalisation and trimming;
-so do contexts without `crypto.randomUUID()`.
+Idle feed/topic sends use the ordinary path for blank/quoted text or over
+4,000 code points after line-ending normalisation and trimming, and without
+`crypto.randomUUID()`.
 
 - **Ordinary sending** (input glue, #1173): textarea usable in flight:
   answers replace only `#message-composer-state`. On 200 remove sent body
@@ -51,7 +49,7 @@ so do contexts without `crypto.randomUUID()`.
   without resolving that request: it may commit later; real delivery stays
   visible. Storage follows send order on uninterrupted success or
   successful same-key Retry; Remove or Edit may reorder it.
-  A 200 swaps the composer state and out-of-band typing form, sets
+  200 swaps composer state and out-of-band typing form, sets
   `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
   `data-posted-message` links the item to delivery. A `MutationObserver` removes
@@ -78,9 +76,9 @@ so do contexts without `crypto.randomUUID()`.
   `data-unconfirmed-key` for either sending path. A pending resend transfers
   it to its form and clears the composer's mark; emptying restored
   text clears it and takes a fresh UUID.
-  Editing a known refusal clears any stale composer mark.
-  An unused key posts normally; a body matching the [retry rule](posting.md)
-  under a used key returns the stored message; a different body gets that pending 409.
+  Editing a known refusal clears stale composer marks.
+  Unused keys post normally; used keys return the stored message for a body
+  matching the [retry rule](posting.md), otherwise that pending 409.
   Pending sends bypass prefix removal, ordinary send alerts/failure
   classification and 409 cleanup.
 - **Idempotency key** (#1155): hidden `idempotency_key`, server-rendered fresh
@@ -116,23 +114,24 @@ so do contexts without `crypto.randomUUID()`.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v4.js` cleans up (#1178, #1181), saves (#1186) and restores
-feed/topic text (#1162), never history. Restore keeps focus and emits no
-input/typing; server-rendered text wins. See [send events](web-javascript.md#javascript).
-Sidebar markers (#1177) are planned; lost responses can leave posted drafts.
+`message-drafts-v4.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+restore (#1162), never history. Restore seeds the edit clock from `at`, keeps focus,
+emits no input/typing; server text wins. [Events](web-javascript.md#javascript):
+Edit saves without input; Remove clears its unchanged send snapshot;
+pending 409 fails; Retry keeps newer text, even unsaved across its response.
+Markers (#1177) planned; lost responses can leave posted drafts.
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
 - **Value:** JSON `{member, session, expires, text, at}`; `expires` and `at`
   are Unix milliseconds. Limit: 4,000 code points, 50 entries per member
   and session. Retention: last edit (`at`), checked only at load.
-- **Saving:** latest htmx forms carry `data-draft-channel` and optional
-  `data-draft-topic`, outside state swaps. Snapshots use tab-monotonic edit
-  times, never save times; 300 ms debounce, `pagehide`/hidden flush;
-  wait for `compositionend`. Clean tabs never flush. Blank/over-limit input
-  and confirmed blank text write empty-text tombstones at edit time,
-  never delete keys. Tombstones restore nothing, count toward 50,
-  leave only by eviction, session end or retention.
+- **Saving:** latest htmx forms carry `data-draft-channel`/optional
+  `data-draft-topic` outside state swaps. Tab-monotonic edit times, never save
+  times; 300 ms debounce, `pagehide`/hidden flush, wait for `compositionend`.
+  Clean tabs never flush. Blank/over-limit input and confirmed blank text write
+  empty tombstones at edit time, never delete keys. Tombstones restore nothing,
+  count toward 50; only eviction, session end or retention removes them.
 - **Races and cap:** pre-write reads skip equal/later stored edits, leaving
   the tab clean. Sort own entries by edit time (oldest first), then key;
   trim other entries to 49 before insertion, all to 50 after every write.

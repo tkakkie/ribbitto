@@ -89,22 +89,25 @@ htmx sends resync requests. The markup contract is in
   Composer submits pause while the quote form is processing, before either
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
-- `message-drafts-v4.js` saves composer input after 300 ms or lifecycle flush,
-  using the input's monotonic edit time. Blank/over-limit text writes tombstones;
-  the 4,000-code-point/50-entry bounds apply from the first write. Equal/later
-  stored edits win against the observed read; eviction is also best effort.
-  Sign-out notices and the session deadline stop writes and cancel pending saves.
-  Restore reads only this member/session/place before the deadline, without
-  input, typing or focus events; a server-rendered body wins and is saved.
-  Bubbling `message-sending` on the textarea carries `{key, body, inPlace}`
-  before emptying; Retry emits none. It snapshots immediately and cancels debounce.
-  `message-sent` carries `{key, message}` after applying a posted-message state
-  and removing the ordinary sent prefix (after composition ends if needed).
-  This tab's unchanged last write can become current text or a tombstone:
-  the matching send's snapshot, or typing after that send when in place.
-  Later sends, pending-path edits and other tabs' writes survive; failures and
-  unknown keys do nothing.
-  [Drafts](web-composer.md#drafts) defines the races and cleanup rules.
+- `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
+  input times. Blank/over-limit text writes tombstones; 4,000-code-point/50-entry
+  bounds start at first write. Equal/later stored edits win on read;
+  eviction: best effort. Sign-out/deadline stop writes and cancel saves.
+  Sweep/restore share owner/expiry/age/length checks. Restore before deadline
+  seeds the edit clock, without input/typing/focus; server text wins and saves.
+  Bubbling textarea `message-sending` carries `{key, body, inPlace}` before
+  emptying; snapshots at once, cancels debounce; Retry emits none,
+  nor does a busy dropped submit. `message-sent` carries `{key, message}` after
+  applying posted-message state and ordinary prefix removal (after IME ends).
+  Pending success requires 200; failed 409 emits none. Only this tab's unchanged
+  last write becomes current text/tombstone: the matching send's snapshot, or
+  typing after an in-place send. Later sends, pending-path edits and other tabs'
+  writes survive; failures/unknown keys do nothing. Dirty in-place text refreshes
+  after prefix removal even if storage differs; saving still checks edit times.
+  Bubbling textarea `message-pending-action`: `{key, kind}`:
+  `edit` saves current text immediately, cancelling stale debounce without
+  input/typing; `remove` replaces that key's unchanged send snapshot.
+  [Drafts](web-composer.md#drafts): races/cleanup.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the
   Clipboard API, so shared live renders hold no origin; marks the link
@@ -146,18 +149,15 @@ htmx sends resync requests. The markup contract is in
 
 ## Composer
 
-The [composer queue](web-composer.md#composer) holds at most 10 pending items
-and dispatches in FIFO order, pausing while an outcome is unknown. Retry of
-a Not sent item goes to the end; an unknown outcome's Retry keeps its place.
-Edit restores a failed item's text and key only into an empty composer outside
-IME composition; it never overwrites a draft. It removes that item, frees its
-slot and resumes a paused queue. Otherwise the visible, disabled button
-describes why. The restored key survives other responses' state swaps;
-sending transfers it to the pending form, and emptying the textarea renews it.
-Unused keys post normally; bodies matching the [retry rule](posting.md) return the stored ID;
-a different body under a used key gets 409 and a fresh key for Retry.
-Topic pending items settle by confirmed ID, response topic/applied sequence, or a subsequent
-move from the shown topic; the script retains no move history
+[Composer queue](web-composer.md#composer): at most 10 pending items,
+FIFO, paused on unknown outcomes. Not sent Retry goes last; unknown Retry stays.
+Edit restores failed text/key only into an empty composer outside IME, never
+overwriting drafts; removes the item, frees its slot and resumes the queue.
+Otherwise the visible disabled button explains why. Restored keys survive state
+swaps, transfer to pending forms on send, renew on emptying. Unused keys post;
+[matching bodies](posting.md) return the stored ID; different bodies under used
+keys get 409/fresh Retry keys. Topic items settle by confirmed ID, response
+topic/applied sequence or later move from the shown topic; no move history
 ([decision 37][d37]).
 
 [a11y]: ../accessibility.md

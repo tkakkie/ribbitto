@@ -132,7 +132,7 @@
         // even if another tab's write prevents immediate confirmation.
         if (inPlace && source === null && dirty) edited();
         try {
-          if (!eligible || !lastWrite || storage.getItem(key) !== lastWrite) return;
+          if (!lastWrite || storage.getItem(key) !== lastWrite) return;
           edited();
           save();
         } catch { /* Storage errors leave sending usable. */ }

@@ -20,8 +20,8 @@ completed with it); that preflight to pass and be recorded; and the
 maintainer to explicitly approve enabling.
 #1436 Stage 2 is independent of enabling. After enabling and a passing smoke
 test, a later small docs change records the permission as in force, not
-#1442. The Start gate and review independence stay. Until then Argon runs keep today's
-rules and settings unchanged: no MCP, no `verify`, the `mcp(*)` deny stays.
+#1442. The Start gate and review independence stay. Until then Argon runs
+keep today's rules and settings unchanged: no MCP, no `verify`, the `mcp(*)` deny stays.
 
 ## Tool permissions
 

@@ -512,7 +512,7 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 				values[name] = value
 			}
 		}
-		if !p.readQuote(w, r, m, c.ID, values, &page) {
+		if !p.readQuote(w, r, m, c.ID, r.PostForm, &page) {
 			return
 		}
 	}

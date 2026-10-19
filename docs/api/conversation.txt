@@ -89,6 +89,7 @@ var ErrInvalidBranch error // ErrInvalidBranch means the request itself is unusa
 var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outside the bundled set.
 var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that breaks ValidateChannelName.
 var ErrInvalidPostCursor error // ErrInvalidPostCursor means the page cursor is invalid or ahead of committed events.
+var ErrInvalidQuotePart error // ErrInvalidQuotePart wraps ErrInvalidBody for an invalid quoted part.
 var ErrInvalidTopicName error // ErrInvalidTopicName wraps a name that breaks ValidateTopicName.
 var ErrMessageNotFound error // ErrMessageNotFound means no message has the requested key in the caller's organisation and channel, including when the message exists in another scope.
 var ErrPinLimit error // ErrPinLimit means a new pin would exceed MaxChannelPins.

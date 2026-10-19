@@ -109,7 +109,9 @@ channel's originals are one `ErrQuoteNotFound` (web: 404), which rolls back
 the sequence; so does an original deleted before the insert, through
 `message_quoted_message_fkey`. `ValidateQuotePart` checks a supplied part
 against `Entry.Text` after that scoped read and stores its normalised text.
-A repeat compares the quote too, including a submitted part's text.
+A repeat validates scope and any part before comparing the stored snapshot
+with the requested whole or part. A part equal to the whole extracted text
+is the same snapshot; switching either way to different text returns 409.
 
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
@@ -117,7 +119,10 @@ cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
 delegate to it. Only a keyed body with a valid handle candidate and an available
 member directory gets a scoped preflight key lookup using the same tokens
 in a separate read transaction, before conversion, expansion or reference checks.
-A found message resolves the requested composer topic without taking a sequence.
+Before comparing, the repeat reads `Writer.QuotedMessage` in scope and
+validates the requested snapshot with the preloaded references. Scope errors
+answer 404 and invalid parts answer 422, keeping the submitted key; neither
+becomes a 409. A found message resolves the requested composer topic without taking a sequence.
 Ordinary keyed posts retain the insert-first path. The insert stores the key
 and `typed_body_proof` of the normalized typed input atomically with the converted
 body, and the partial unique index `message_idempotency_key_idx` on

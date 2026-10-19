@@ -174,6 +174,25 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 			if w.Code != 422 || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), part+"</textarea>") {
 				t.Fatalf("422 part %q (htmx %t): %d %s", part, hx, w.Code, w.Body.String())
 			}
+			if body != "" {
+				doc, err := html.Parse(strings.NewReader(w.Body.String()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for n := range doc.Descendants() {
+					if attr(n, "id") == "message-body" {
+						if _, invalid := attrOK(n, "aria-invalid"); invalid {
+							t.Fatal("valid body marked invalid")
+						}
+					}
+					if attr(n, "id") == "quote-text" && attr(n, "aria-invalid") != "true" {
+						t.Fatal("invalid part not marked invalid")
+					}
+				}
+				if strings.Contains(w.Body.String(), "Enter 1–4000 characters without control characters or directional embeddings and overrides.") || strings.Contains(w.Body.String(), `data-invalid`) {
+					t.Fatal("quote-only error marked the body invalid")
+				}
+			}
 		}
 	}
 	if w := serveForm(handler, "POST", feed+"/quote", cookie, nil); w.Code != 200 || strings.Contains(w.Body.String(), `name="quote"`) {
@@ -196,6 +215,12 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				path = feed + "?" + tc.form.Encode()
 			}
 			w := serveForm(handler, method, path, cookie, tc.form)
+			if method == "GET" {
+				if w.Code != 200 || strings.Contains(w.Body.String(), `name="quote_text"`) != tc.form.Has("part") || tc.form.Has("part") && !strings.Contains(w.Body.String(), "Deploy &lt;b&gt;today&lt;/b&gt;</textarea>") {
+					t.Fatalf("GET must ignore URL quote_text: %d %s", w.Code, w.Body.String())
+				}
+				continue
+			}
 			if w.Code != tc.status || !strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), tc.form.Get("quote_text")) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
 				t.Fatalf("%s %v: %d %s", method, tc.form, w.Code, w.Body.String())
 			}
@@ -208,6 +233,30 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 				t.Fatalf("part %q scope %x: %d %s", part, quoted, w.Code, w.Body.String())
 			}
 		}
+	}
+	for _, method := range []string{"GET", "POST"} {
+		for _, tc := range []struct {
+			form   url.Values
+			status int
+		}{
+			{url.Values{"part": {realtime.FormatPayloadID(outside[2])}, "quote_text": {"absent"}}, 404},
+			{url.Values{"quote": {realtime.FormatPayloadID(outside[2])}, "part": {id}}, 400},
+		} {
+			path := feed + "/quote"
+			if method == "GET" {
+				path = feed + "?" + tc.form.Encode()
+			}
+			if w := serveForm(handler, method, path, cookie, tc.form); w.Code != tc.status {
+				t.Fatalf("%s part scope: %d %s", method, w.Code, w.Body.String())
+			}
+		}
+	}
+	if w := serveForm(handler, "GET", feed+"?quote="+id+"&quote_text=secret", cookie, nil); w.Code != 200 || strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), `name="quote_text"`) || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) {
+		t.Fatalf("GET leaked URL quote_text: %d %s", w.Code, w.Body.String())
+	}
+	form := url.Values{"body": {""}, "quote": {realtime.FormatPayloadID(outside[2])}, "part": {id}}
+	if w := serveForm(handler, "POST", feed, cookie, form); w.Code != 404 {
+		t.Fatalf("POST part overrode quote: %d %s", w.Code, w.Body.String())
 	}
 	var answers []string
 	for _, quoted := range outside {
@@ -319,6 +368,63 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 
+	for _, body := range []string{"retry answer", "retry answer @owner"} {
+		for _, tc := range []struct {
+			name        string
+			first, next *string
+			foreign     bool
+			status      int
+		}{
+			{"whole to part", nil, new("Deploy"), false, 409},
+			{"part to whole", new("Deploy"), nil, false, 409},
+			{"whole to equal part", nil, new("Deploy <b>today</b>"), false, 303},
+			{"equal part to whole", new("Deploy <b>today</b>"), nil, false, 303},
+			{"scope before comparison", nil, new("absent"), true, 404},
+			{"substring before comparison", nil, new("absent"), false, 422},
+		} {
+			t.Run(body+"/"+tc.name, func(t *testing.T) {
+				key := *freshKey()
+				form := url.Values{"body": {body}, "quote": {id}, "idempotency_key": {key}}
+				if tc.first != nil {
+					form.Set("quote_text", *tc.first)
+				}
+				if w := serveForm(handler, "POST", feed, cookie, form); w.Code != 303 {
+					t.Fatalf("first send: %d %s", w.Code, w.Body.String())
+				}
+				form.Del("quote_text")
+				if tc.next != nil {
+					form.Set("quote_text", *tc.next)
+				}
+				if tc.foreign {
+					form.Set("quote", realtime.FormatPayloadID(outside[2]))
+				}
+				for _, hx := range []bool{false, true} {
+					r := httptest.NewRequest("POST", feed, strings.NewReader(form.Encode()))
+					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
+					if hx {
+						r.Header.Set("HX-Request", "true")
+					}
+					w := httptest.NewRecorder()
+					handler.ServeHTTP(w, r)
+					status := tc.status
+					if hx && status == 303 {
+						status = 200
+					}
+					if w.Code != status {
+						t.Fatalf("retry (htmx %t): %d, want %d: %s", hx, w.Code, status, w.Body.String())
+					}
+					if tc.status == 422 && !strings.Contains(w.Body.String(), `name="idempotency_key" value="`+key+`"`) {
+						t.Fatal("422 replaced the submitted key")
+					}
+					if tc.status == 404 && w.Body.String() != "404 page not found\n" {
+						t.Fatal("404 returned composer state or foreign text")
+					}
+				}
+			})
+		}
+	}
+
 	// Deleting the original keeps the author and the text, without a link.
 	if _, err := pool.Exec(ctx, "DELETE FROM message WHERE id = $1", original.ID); err != nil {
 		t.Fatal(err)
@@ -326,5 +432,26 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 	_, pageQuote = find(pageOf(), itemID)
 	if quote := rendered(pageQuote); strings.Contains(quote, "<a ") || !strings.Contains(quote, "Bob Example") || !strings.Contains(quote, "Deploy &lt;b&gt;today") {
 		t.Errorf("quote of a deleted original:\n%s", quote)
+	}
+}
+
+// An ambiguous chip selection is rejected before any message read.
+func TestReadQuoteAmbiguousInput(t *testing.T) {
+	for _, method := range []string{"GET", "POST"} {
+		w := httptest.NewRecorder()
+		values := url.Values{"quote": {realtime.FormatPayloadID(kernel.ID{9})}, "part": {realtime.FormatPayloadID(kernel.ID{1})}}
+		if (channelPages{}).readQuote(w, httptest.NewRequest(method, "/", nil), org.Membership{}, kernel.ID{2}, values, &view.ChannelPage{}) || w.Code != 400 {
+			t.Fatalf("%s: %d", method, w.Code)
+		}
+	}
+}
+
+func TestQuoteInvalidPreservesPostStatus(t *testing.T) {
+	p := channelPages{messages: fakeMessages{}, pages: &pageRenderer{stylesheetURL: func() (string, error) { return "", nil }}}
+	r := httptest.NewRequest("POST", "/", nil)
+	w := httptest.NewRecorder()
+	p.render(w, r, org.Membership{}, kernel.ID{1}, 409, view.ChannelPage{QuoteInvalid: true, BodyError: "message.error.repeat"}, nil)
+	if w.Code != 409 {
+		t.Fatalf("invalid part overwrote POST status: %d", w.Code)
 	}
 }

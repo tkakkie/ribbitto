@@ -517,7 +517,20 @@ templ messageComposer(page ChannelPage) {
 		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-autocomplete="list" aria-controls="mention-listbox" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" aria-description={ i18n.T(ctx, "mention.help") } class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea
+			id="message-body"
+			name="body"
+			rows="3"
+			dir="auto"
+			aria-autocomplete="list"
+			aria-controls="mention-listbox"
+			if page.BodyError != "" {
+				aria-invalid="true"
+			}
+			aria-describedby="message-help composer-quote-description"
+			aria-description={ i18n.T(ctx, "mention.help") }
+			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry"
+		>{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

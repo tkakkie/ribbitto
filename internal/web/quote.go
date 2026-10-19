@@ -36,13 +36,20 @@ func (p channelPages) quote(w http.ResponseWriter, r *http.Request, m org.Member
 func (p channelPages) readQuote(w http.ResponseWriter, r *http.Request, m org.Membership, channel kernel.ID, values url.Values, page *view.ChannelPage) bool {
 	raw, present := values["quote"]
 	part, editing := values["part"]
+	if present && editing {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return false
+	}
 	if editing {
 		raw, present = part, true
 	}
 	if !present {
 		return true
 	}
-	id, ok := pathID(raw[0])
+	id, ok := pathID(values.Get("quote"))
+	if editing {
+		id, ok = pathID(values.Get("part"))
+	}
 	if !ok || len(raw) != 1 {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return false
@@ -60,7 +67,7 @@ func (p channelPages) readQuote(w http.ResponseWriter, r *http.Request, m org.Me
 	text := entry.Text(view.UnknownMember(r.Context()))
 	page.Quote = &view.Message{ID: entry.ID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		Body: conversation.PinExcerpt(entry, view.UnknownMember(r.Context()))}
-	if values.Has("quote_text") {
+	if r.Method == http.MethodPost && values.Has("quote_text") {
 		submitted := values.Get("quote_text")
 		page.QuoteText = &submitted
 		_, err := conversation.ValidateQuotePart(submitted, text)

@@ -255,16 +255,43 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		p.Keyboard.MustType(input.Enter)
 		p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
 	})
+	if scripts {
+		step(t, "whole chip focus: composer script focuses the message body", func(p *rod.Page) {
+			p.MustWait(`() => document.activeElement.id === 'message-body'`)
+		})
+		step(t, "keyboard Shift-Tab: Quote only part takes focus before the body", func(p *rod.Page) {
+			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+			p.MustWait(`() => document.activeElement.matches('#composer-quote [name=part]')`)
+		})
+	}
 	step(t, "keyboard Quote only part: textarea contains the full original", func(p *rod.Page) {
-		tabTo(p, `#composer-quote [name=part]`)
+		if !scripts {
+			tabTo(p, `#composer-quote [name=part]`)
+		}
 		p.Keyboard.MustType(input.Enter)
 		p.MustWait(`() => document.getElementById('quote-text')?.value === 'page original'`)
 		if !scripts && p.MustEval(`() => location.search.includes('quote_text') || !location.search.includes('part=')`).Bool() {
 			panic("plain part GET must carry only the ID")
 		}
 	})
+	step(t, "part chip focus: body with scripts, editable text without scripts", func(p *rod.Page) {
+		if scripts {
+			p.MustWait(`() => document.activeElement.id === 'message-body'`)
+		} else {
+			p.MustWait(`() => document.activeElement.id === 'quote-text'`)
+		}
+	})
+	if scripts {
+		step(t, "keyboard Shift-Tab: remove quote takes focus", func(p *rod.Page) {
+			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+			p.MustWait(`() => document.activeElement.matches('#composer-quote button')`)
+		})
+		step(t, "keyboard Shift-Tab: editable part takes focus", func(p *rod.Page) {
+			p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+			p.MustWait(`() => document.activeElement.id === 'quote-text'`)
+		})
+	}
 	step(t, "keyboard edit: quoted text is shortened to original", func(p *rod.Page) {
-		tabTo(p, "#quote-text")
 		p.Keyboard.MustType(input.Home, input.Delete, input.Delete, input.Delete, input.Delete, input.Delete)
 		p.MustWait(`() => document.getElementById('quote-text').value === 'original'`)
 	})

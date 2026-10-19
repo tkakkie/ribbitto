@@ -1,8 +1,8 @@
 # 38. A quote is a snapshot owned by the quoting message; text extraction is per format
 
 **Decided** (#1153, approved by the maintainer). Text extraction and two of
-its users (the pins excerpt and the live announcement) exist (#1204), and so
-stores, posts and shows whole quotes (#1176), with the Quote action and
+its users (the pins excerpt and the live announcement) exist (#1204), as do
+storage, posting and display of whole quotes (#1176), with the Quote action and
 composer chip (#1160), and editable parts (#1161). Page text selection
 remains planned (#1161).
 The body format, its rendering and how a pasted message URL renders belong to

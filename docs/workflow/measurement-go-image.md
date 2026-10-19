@@ -12,11 +12,12 @@ digest, never by tag.
 
 The maintainer approved the digest that the official `golang:1.27.2` tag
 resolved to when it was pulled on 2026-10-19, as trusted for the #1162 and
-#1177 measurements. The result is in the
-[measurement comment](https://github.com/tkakkie/ribbitto/pull/1352#issuecomment-6263271044).
+#1177 measurements. The results are in the comments on
+[#1162](https://github.com/tkakkie/ribbitto/pull/1352#issuecomment-6263271044) and
+[#1177](https://github.com/tkakkie/ribbitto/pull/1376#issuecomment-6263271467).
 
 ## Replacing it
 
 Replace the digest, with the maintainer's approval, when go.mod's `go`
-version outgrows it. The previous local image (Go 1.27.1) could not build
-SHAs whose go.mod says 1.27.2 with `GOTOOLCHAIN=local`.
+version outgrows it: the image's Go version must be at least the `go` line of
+the commit under test, because `GOTOOLCHAIN=local` refuses to build otherwise.

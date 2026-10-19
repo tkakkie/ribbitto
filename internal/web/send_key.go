@@ -26,7 +26,11 @@ func sendKey(preferences *identity.Preferences, limit *middleware.MemberRateLimi
 		if !parseForm(w, r) {
 			return
 		}
-		err := preferences.SetSendKey(r.Context(), account.ID, r.PostForm.Get("send_key"))
+		target := account.ID
+		if id, ok := pathID(r.PostForm.Get("account_id")); ok {
+			target = id
+		}
+		err := preferences.SetSendKey(r.Context(), target, r.PostForm.Get("send_key"))
 		switch {
 		case errors.Is(err, identity.ErrInvalidSendKey):
 			http.Error(w, "Bad Request", http.StatusBadRequest)

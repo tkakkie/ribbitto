@@ -81,8 +81,10 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	signalNow := time.Now()
 	setup := func(s *Services) {
 		s.Sessions, s.SignIn = login, signIn
-		s.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time {
-			return signalNow.Add(time.Duration(signalTicks.Add(1)) * time.Second)
+		s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+			l.signal = middleware.NewMemberRateLimiter(func() time.Time {
+				return signalNow.Add(time.Duration(signalTicks.Add(1)) * time.Second)
+			})
 		})
 	}
 	handler, _, _, place := composerHandler(t, true, setup)

@@ -272,7 +272,7 @@ type handlerConfig struct {
 	// streamWriteTimeout bounds each stream write; zero keeps the default.
 	// Tests shorten it.
 	streamWriteTimeout time.Duration
-	readLimits         *middleware.MemberRateLimiter // nil uses the production budget
+	memberLimits       web.MemberLimits // zero uses the production budgets
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
@@ -284,8 +284,8 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		// open event streams at once.
 		canceller = config.hub
 	}
-	if config.readLimits == nil {
-		config.readLimits = middleware.NewReadRateLimiter(time.Now)
+	if config.memberLimits == (web.MemberLimits{}) {
+		config.memberLimits = web.NewMemberLimits(time.Now)
 	}
 	sessions := identitypg.NewSessions(pool, time.Now, canceller)
 	// One hasher for the whole process: its slots are the cap on concurrent
@@ -340,9 +340,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
-		Preferences:   identitypg.NewPreferences(pool),
-		SendKeyLimits: middleware.NewMemberRateLimiter(time.Now),
-		Database:      pool, ShuttingDown: config.shuttingDown,
+		Preferences:  identitypg.NewPreferences(pool),
+		MemberLimits: config.memberLimits,
+		Database:     pool, ShuttingDown: config.shuttingDown,
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:    setupService,
@@ -362,15 +362,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now, slog.Default()),
 		Stream:        stream,
 		Typing:        typingState,
-		SignalLimits:  middleware.NewMemberRateLimiter(time.Now),
-		ReadLimits:    config.readLimits,
-		CreateLimits:  middleware.NewChannelCreationRateLimiter(time.Now),
-		ResyncLimits:  middleware.NewSidebarResyncRateLimiter(time.Now),
-		BranchLimits:  middleware.NewBranchRateLimiter(time.Now),
-		PostLimits:    middleware.NewPostRateLimiter(time.Now),
-		PinLimits:     middleware.NewPinRateLimiter(time.Now),
 		MemberSearch:  newMemberSearch(pool),
-		MentionLimits: middleware.NewMentionRateLimiter(time.Now),
 	})
 	if err != nil {
 		return nil, nil, err

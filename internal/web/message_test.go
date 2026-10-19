@@ -360,7 +360,7 @@ func TestMessagePostHandler(t *testing.T) {
 					reader := populatedMessages()
 					reader.before = &reads
 					s.Messages, s.Posting = reader, testPosting(writer)
-					s.Typing, s.SignalLimits = state, middleware.NewMemberRateLimiter(time.Now)
+					s.Typing = state
 				}))
 				if err != nil {
 					t.Fatal(err)

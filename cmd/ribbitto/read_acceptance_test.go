@@ -26,7 +26,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
-	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -80,7 +79,7 @@ func TestReadSidebarConcurrentHTTP(t *testing.T) {
 	unblock := sync.OnceFunc(func() { close(g.release) })
 	defer unblock()
 	// This persistence test deliberately holds five reads at the database lock.
-	f := newReadSidebarFixture(t, readTracedPool(t, pool, g), middleware.NewMemberRateLimiterWithBudget(time.Now, 4, 16, 5))
+	f := newReadSidebarFixture(t, readTracedPool(t, pool, g), web.NewMemberLimits(time.Now, web.WithReadAdmission(time.Now, 5)))
 	// Establish the lock row without reading any message.
 	request := f.reader.request(t, "POST", f.feed+"/read", url.Values{"cursor": {"1"}})
 	request.Header.Set("HX-Request", "true")
@@ -177,10 +176,9 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 	acceptanceOK(t, err)
 	handler, err := web.NewHandler("", cat, web.Services{
-		Preferences:   identitypg.NewPreferences(pool),
-		SendKeyLimits: middleware.NewMemberRateLimiter(time.Now),
-		PostLimits:    middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
-		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now), CreateLimits: middleware.NewChannelCreationRateLimiter(time.Now),
+		Preferences:  identitypg.NewPreferences(pool),
+		MemberLimits: web.NewMemberLimits(time.Now),
+		Sessions:     sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth,
 		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
 		Messages: conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn),
 		Posting:  conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, hub),

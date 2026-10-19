@@ -6,4 +6,5 @@
 // Production delivers whole sections and synchronizes loaded explicit controls.
 // Typing signals and posts share composer generations; the organisation stream
 // replaces localized, viewer-filtered status content on latest feeds/topics.
+// MemberLimits constructs independent request budgets; orgRoutes consumes Services.
 package web

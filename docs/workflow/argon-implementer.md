@@ -172,9 +172,9 @@ home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any of this
 cannot be verified, Argon does not run and the maintainer gets the reason.
 
-When in force, add [extended preflight](argon-verify.md#extended-preflight):
-keep current items; replace only the MCP refusal with "MCP other than the
-exact `verify` call".
+For #1433's preflight and once in force, [extend preflight](argon-verify.md#extended-preflight):
+keep items; replace only the MCP refusal with "MCP other than the exact
+`verify` call".
 
 ## Records
 

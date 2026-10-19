@@ -127,9 +127,9 @@ moving it into the container.
 
 ## Extended preflight
 
-[#1433](https://github.com/tkakkie/ribbitto/issues/1433) adds these checks
-to the [existing preflight](argon-implementer.md#preflight). Keep current
-items; only when in force, replace the MCP refusal with "MCP other than the
+For [#1433](https://github.com/tkakkie/ribbitto/issues/1433)'s preflight and once in force,
+extend the [existing preflight](argon-implementer.md#preflight): keep current
+items; replace only the MCP refusal with "MCP other than the
 exact `verify` call". Claude runs the real Argon → MCP → Docker → test-result
 path on the host in a throwaway repository with the dedicated worker home:
 

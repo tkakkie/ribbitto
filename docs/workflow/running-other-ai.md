@@ -77,9 +77,8 @@ For code Codex or Argon wrote (maintainer, 2026-10-16,
 [#1220](https://github.com/tkakkie/ribbitto/issues/1220)): no unreasoned
 difference between the AIs, enough safety for practice, little to operate.
 
-- **In its own sandbox,** the implementing AI may build and test as before:
-  Codex in its profile ([below](#running-codex)), Argon only as its
-  [boundary](argon-implementer.md#the-boundary) allows.
+- **In its sandbox,** an AI may build and test: Codex in its
+  [profile](#running-codex), Argon only within its [boundary](argon-implementer.md#the-boundary).
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
   `go test`, a build, `make dev` or any tool from that tree.
@@ -91,10 +90,11 @@ difference between the AIs, enough safety for practice, little to operate.
 - **Still done on the host:** code and diff review, the credential grep on
   `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
   workspace checks ([boundary](argon-implementer.md#the-boundary)).
-- **UI changes:** CI's browser tests by default. Where a manual check is
-  essential, the maintainer decides case by case whether and how it runs.
-- **No Docker verification environment** for now; reconsider when one is
-  actually needed.
+- **UI changes:** CI browser tests by default; the maintainer decides
+  whether/how essential manual checks run.
+- Argon's one [container path](argon-verify.md#status) awaits the rule
+  taking force; Codex has no Docker. Host rules stay; `verify` is Argon's
+  own check; green CI is required.
 
 A branch with only Claude's own code on top of `main` is not a handoff:
 Claude follows the [local checks](../../AGENTS.md#commands) and

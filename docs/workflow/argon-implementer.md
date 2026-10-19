@@ -10,6 +10,8 @@ stops at once and the maintainer decides.
 
 **Start gate.** No Argon run starts until an issue records a preflight
 (below) that passed in full for the `agy` version and custom agent in use.
+The [verify rule](argon-verify.md#status) is not in force; this boundary
+and preflight stay unchanged until then.
 
 ## Which issues
 
@@ -70,10 +72,10 @@ but enforced by configuration, not by the prompt.
   `HOME` and a fresh `TMPDIR` beside the worktree, removed after the run:
   no `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK` or credential helper.
 - **No commands** (maintainer, 2026-10-16). `run_command` and every other
-  command tool are refused, by the deny rule `command(*)` and by the guard.
-  The #1206 preflight showed that a command under `agy --sandbox` reaches
-  loopback services outside it. Allowing commands again needs its own
-  `process` issue.
+  command tool stay refused by `command(*)` and the guard. #1206 found
+  outside loopback reach under `agy --sandbox`; allowing commands needs a
+  `process` issue. The pending rule excepts only the fixed
+  [verify][v] MCP tool, never a command Argon chooses.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
@@ -95,27 +97,27 @@ but enforced by configuration, not by the prompt.
   `log/cli-<timestamp>.log` in the home) are exempt. The home's
   conversation store (`brain/`) is emptied before and after every run,
   Argon's or #1207's.
-- **A custom agent.** agy offers `grep_search`, `find_by_name` and
-  `list_dir` only to custom agents that list them, so `agy` runs with
-  `--agent argon-implementer`: a Markdown agent whose `tools` are exactly
-  the seven file tools the guard allows. Its definition stays in the
-  trusted part of the home; Claude copies it into `.gemini/config/agents/`
-  for each run, the checks accept it only as a byte-identical copy, and it
-  is removed afterwards.
-- **A fail-closed tool allowlist.** Deny rules cannot name `search_web`,
-  subagents, `generate_image` or `schedule`, so a trusted guard, apart from
-  the review guard (`cmd/argonreview/guard.go`), allows only file reads,
-  listing and search inside the worktree, and file creates and edits
-  inside it. It refuses, case-insensitively and at any depth, `.github` and
-  any `.git`, `.gitattributes`, `.gitmodules`, `.agents`, `.agent`,
+- **A custom agent.** `--agent argon-implementer` lists seven file tools in
+  `tools` (`grep_search`, `find_by_name`, `list_dir` need a custom agent).
+  With MCP, `tools` cannot restrict `call_mcp_tool`, `list_resources`,
+  `read_resource` or `manage_task` (#1427 spike part 2); the guard does.
+  Today MCP is unconfigured. Claude copies the trusted home definition to
+  `.gemini/config/agents/` per run, checked byte-for-byte and removed.
+- **A fail-closed tool allowlist.** Denies cannot name `search_web`,
+  subagents, `generate_image` or `schedule`; its own guard allows the
+  seven file tools only inside the worktree. It refuses at any depth,
+  case-insensitively, `.github`, `.git`, `.gitattributes`, `.gitmodules`, `.agents`, `.agent`,
   `_agents`, `_agent`, `.gemini`, `.claude`, `.codex`, `.mcp.json`,
   `hooks.json`, `plugin.json`, `skills.json`, `plugins.json`, `GEMINI.md`,
   `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md`. It
-  denies every other tool. A guard that fails or prints nothing is a
-  denial. It checks each path component without following symlinks,
-  refuses a symlink or a path that leaves the worktree, and refuses every
-  file tool call while the worktree holds a symlink. The guard and its
-  configuration live outside the worktree, where Argon cannot write.
+  denies every other tool. The pending [allow][v]
+  adds one `call_mcp_tool`: exact server, `verify` and arguments;
+  `manage_task`, `list_resources`, `read_resource` and all other tools stay
+  denied. Failure or silence denies. Each path component is checked without
+  following symlinks; symlinks, outside paths and all file calls while the
+  tree holds a symlink are refused. Guard/configuration stay outside Argon's
+  reach. [Go](argon-verify.md#control-code-in-go) awaits staged checks; scripts
+  stay in use.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
@@ -128,7 +130,7 @@ but enforced by configuration, not by the prompt.
   loaded as instructions, as in reviews, and the guard keeps Argon from
   editing them.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
-  and URL reads. Argon never holds GitHub credentials, never pushes, and
+  (except the pending [verify](argon-verify.md#status)) and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
 - **Handoff: the [shared rule](running-other-ai.md#handoff-of-another-ais-code)
   for Codex and Argon.** Argon leaves
@@ -171,13 +173,19 @@ home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any of this
 cannot be verified, Argon does not run and the maintainer gets the reason.
 
+When in force, add the [extended preflight](argon-verify.md#extended-preflight);
+keep every current item.
+
 ## Records
 
-Per Argon pull request, one comment on #2: the issue, the final tier,
-review rounds and blocking findings, Argon's runs (count, time, failures),
-rework (fixes by Argon, changes Claude or Codex had to make), CI failures,
-the CI round trips and fix effort caused by Argon running no commands, and
-the mutation runs.
+Per PR, one #2 comment: issue, final tier, review rounds/blockers, Argon
+runs (count, time, failures), rework (Argon fixes, Claude/Codex changes), CI
+failures, CI round trips and fix effort due to no commands, mutation runs.
+Once in force, add `verify` calls/verdicts; keep CI round-trip and mutation
+CI-run counting unchanged from #1233, #1235, #1256, #1260
+([#1427](https://github.com/tkakkie/ribbitto/issues/1427)).
 
 Changing the eligibility, the boundary or the reviewers is a new `process`
 issue.
+
+[v]: argon-verify.md#tool-permissions

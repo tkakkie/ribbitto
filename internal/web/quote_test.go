@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -41,7 +42,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 	foreign := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	acme := org.Organization{ID: f.OrganizationID, Slug: "acme"}
 	m := org.Membership{Organization: acme, Member: org.Member{ID: f.MemberID, OrganizationID: f.OrganizationID}}
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	post := func(m org.Membership, channel kernel.ID, body string) conversation.Message {
 		t.Helper()
 		posted, err := posting.Post(ctx, m, channel, body)
@@ -141,7 +142,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 	}
 	// Isolate organisation scope from channel scope: the foreign message and
 	// channel match, but the membership still belongs to acme.
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	w := httptest.NewRecorder()
 	if ok := (channelPages{messages: reader}).readQuote(w, httptest.NewRequest("GET", "/", nil), m, foreign.Channel.ID, url.Values{"quote": {realtime.FormatPayloadID(outside[2])}, "quote_text": {"absent"}}, &view.ChannelPage{}); ok || w.Code != 404 || w.Body.String() != "404 page not found\n" {
 		t.Fatalf("organisation-only scope: %d %s", w.Code, w.Body.String())

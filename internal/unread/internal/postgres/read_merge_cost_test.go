@@ -1,10 +1,8 @@
-package postgres
+package postgres_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"os"
 	"runtime"
 	"slices"
@@ -12,53 +10,23 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/unread"
-	"github.com/tkakkie/ribbitto/internal/unread/internal/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/unread/internal/postgres"
 )
 
-// mergeBeforeCoverage is the union from c283544^, with identical SQL and locks,
-// but without #834's sorting/subtraction. Only valid fixture inputs reach it.
-func mergeBeforeCoverage(ctx context.Context, w *Writer, s unread.Scope, joined int64, r conversation.SequenceRange) error {
-	p := scopeParams(s)
-	if err := w.lock(ctx, p); err != nil {
-		return err
-	}
-	for _, added := range []conversation.SequenceRange{{Lo: 0, Hi: joined + 1}, r} {
-		lower := added.Lo
-		previous, err := w.queries.RangePredecessor(ctx, sqlcgen.RangePredecessorParams{OrganizationID: p.OrganizationID, ChannelID: p.ChannelID, MemberID: p.MemberID, Lo: added.Lo})
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		// No predecessor means the same lower bound as the production implementation.
-		if err == nil {
-			lower = previous.Lo
-		}
-		removed, err := w.queries.DeleteRangeNeighbours(ctx, sqlcgen.DeleteRangeNeighboursParams{OrganizationID: p.OrganizationID, ChannelID: p.ChannelID, MemberID: p.MemberID, LowerLo: lower, Lo: added.Lo, Hi: added.Hi})
-		if err != nil {
-			return err
-		}
-		for _, r := range removed {
-			added.Lo = min(added.Lo, r.Lo)
-			added.Hi = max(added.Hi, r.Hi)
-		}
-		if err := w.queries.InsertReadRange(ctx, sqlcgen.InsertReadRangeParams{OrganizationID: p.OrganizationID, ChannelID: p.ChannelID, MemberID: p.MemberID, Lo: added.Lo, Hi: added.Hi}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
+// mergeCostAdapter compares the historical union with the current store on the
+// same inputs; unlike compose.PostReads it accepts only history posts so page
+// read advancement cannot distort the merge measurement.
 type mergeCostAdapter struct {
-	writer   *Writer
+	writer   *postgres.Writer
 	baseline bool
 }
 
@@ -66,7 +34,7 @@ func (a mergeCostAdapter) Merge(ctx context.Context, o, c, m kernel.ID, joined, 
 	s := unread.Scope{OrganizationID: o, ChannelID: c, MemberID: m}
 	r := conversation.SequenceRange{Lo: lo, Hi: hi}
 	if a.baseline {
-		return mergeBeforeCoverage(ctx, a.writer, s, joined, r)
+		return postgres.MergeBeforeCoverageForTest(ctx, a.writer, s, joined, r)
 	}
 	return a.writer.Merge(ctx, s, joined, r)
 }
@@ -78,8 +46,6 @@ func (a mergeCostAdapter) Read(ctx context.Context, m org.Membership, c kernel.I
 	}
 	return a.Merge(ctx, m.Organization.ID, c, m.Member.ID, m.Member.JoinedEventSeq, lo, hi)
 }
-func mergeCostSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-func mergeCostEvents(tx platform.Tx) conversation.EventAppender   { return realtimepg.AppenderIn(tx) }
 
 // TestReadMergeCost alternates real committed posting/branching transactions
 // against the pre-coverage union on restored, identical fragmented data.
@@ -92,7 +58,7 @@ func TestReadMergeCost(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, fixture, "merge-cost", "general")
 	dest := conversationtest.Topic(t, fixture, f.OrganizationID, f.Channel.ID, "Destination")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
-	seed, err := conversationpg.NewPosting(fixture, mergeCostSequence, mergeCostEvents, nil).Post(t.Context(), m, f.Channel.ID, "seed")
+	seed, err := conversationpg.NewPosting(fixture, compose.PostingSequence, compose.PostingEvents, nil).Post(t.Context(), m, f.Channel.ID, "seed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,9 +95,9 @@ func TestReadMergeCost(t *testing.T) {
 						exec(t, "DELETE FROM read_range WHERE organization_id=$1", f.OrganizationID)
 						exec(t, "INSERT INTO channel_read (organization_id,channel_id,member_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", f.OrganizationID, f.Channel.ID, f.MemberID)
 						exec(t, "INSERT INTO read_range (organization_id,channel_id,member_id,lo,hi) SELECT $1::uuid,$2::uuid,$3::uuid,s,s+1 FROM generate_series(3,$4::bigint,2) s UNION ALL SELECT $1::uuid,$2::uuid,$3::uuid,0,2", f.OrganizationID, f.Channel.ID, f.MemberID, int64(fragments*2+1))
-						adapter := func(tx platform.Tx) mergeCostAdapter { return mergeCostAdapter{WriterIn(tx), arm == 0} }
-						posting := conversationpg.NewPagePosting(pool, mergeCostSequence, mergeCostEvents, func(tx platform.Tx) conversation.PostReadWriter { return adapter(tx) }, nil, nil)
-						branching := conversationpg.NewBrancher(pool, mergeCostSequence, mergeCostEvents, func(tx platform.Tx) conversation.ReadRangeWriter { return adapter(tx) }, nil)
+						adapter := func(tx platform.Tx) mergeCostAdapter { return mergeCostAdapter{postgres.WriterIn(tx), arm == 0} }
+						posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, func(tx platform.Tx) conversation.PostReadWriter { return adapter(tx) }, nil, nil)
+						branching := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, func(tx platform.Tx) conversation.ReadRangeWriter { return adapter(tx) }, nil)
 						before := q.Counts()
 						var mem0, mem1 runtime.MemStats
 						runtime.ReadMemStats(&mem0)

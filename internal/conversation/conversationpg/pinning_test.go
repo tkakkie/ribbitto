@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -29,7 +30,7 @@ func TestPinningFlow(t *testing.T) {
 	other := m
 	other.Member.ID = orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "pinner@example.org", "Curator"), org.RoleMember, "curator", 1)
 	n := &recordingNotifier{t: t, pool: pool}
-	p := conversationpg.NewPinning(pool, eventSequence, appendEvents, n)
+	p := conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, n)
 	var messages []conversation.Message
 	for range conversation.MaxChannelPins + 1 {
 		msg, err := newPosting(pool).Post(ctx, m, f.Channel.ID, "message")
@@ -45,7 +46,7 @@ func TestPinningFlow(t *testing.T) {
 	for i, member := range []org.Membership{m, other} {
 		go func() {
 			<-start
-			result <- conversationpg.NewPinning(pool, eventSequence, appendEvents, nil).Pin(ctx, member, f.Channel.ID, messages[conversation.MaxChannelPins-1+i].ID)
+			result <- conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil).Pin(ctx, member, f.Channel.ID, messages[conversation.MaxChannelPins-1+i].ID)
 		}()
 	}
 	close(start)
@@ -69,7 +70,7 @@ func TestPinningFlow(t *testing.T) {
 		t.Fatal("race/repeat pin changed state or consumed extra sequence")
 	}
 	// Appending no event fails the deferred commit guard after the metadata write.
-	broken := conversationpg.NewPinning(pool, eventSequence, func(platform.Tx) conversation.EventAppender { return missingPinEvent{} }, n)
+	broken := conversationpg.NewPinning(pool, compose.PostingSequence, func(platform.Tx) conversation.EventAppender { return missingPinEvent{} }, n)
 	if broken.Unpin(ctx, other, f.Channel.ID, messages[0].ID) == nil {
 		t.Fatal("missing event committed")
 	}

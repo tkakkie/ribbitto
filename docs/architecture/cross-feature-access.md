@@ -147,7 +147,7 @@ Org is locked before `channel_read`; all reads, writes and the event append
 share posting's transaction.
 
 Identity's store creates accounts in the caller's transaction through
-`identitypg.AccountCreatorIn`. `compose.AccountCreator` and remaining test adapters adapt it to
-org's factory and prove that the creator fits `org.AccountCreator`;
+`identitypg.AccountCreatorIn`. `compose.AccountCreator` adapts it to
+org's factory (`org.AccountCreator`) in commands and database tests;
 identity owns `ErrEmailTaken` and `ErrInvalidEmail`, which org maps to its
 conflicts or field errors.

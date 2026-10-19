@@ -4,19 +4,17 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func TestPosting(t *testing.T) {
@@ -32,7 +30,7 @@ func TestPosting(t *testing.T) {
 	channelID := conversationtest.Channel(t, pool, organizationID, conversation.DefaultChannelName, true).ID
 	alice := identitytest.Account(t, pool, "alice@example.org", "Alice")
 	memberID := orgtest.Member(t, pool, organizationID, alice, org.RoleMember, "alice", 1)
-	posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 	m := org.Membership{Organization: org.Organization{ID: organizationID}, Member: org.Member{ID: memberID}}
 	for next := int64(1); next <= 2; next++ {
 		posted, err := posting.Post(t.Context(), m, channelID, "  hello\r\nworld  ")
@@ -59,9 +57,9 @@ func completeSetup(t *testing.T, pool *pgxpool.Pool) (org.SetupResult, error) {
 	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
 	return orgpg.NewSetup(pool, hasher, "secret",
-		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-		func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) },
+		compose.AccountCreator,
+		compose.MemberEvents,
+		compose.DefaultChannelCreator,
 	).Complete(t.Context(), "secret", org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 }
 

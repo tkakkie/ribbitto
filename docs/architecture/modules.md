@@ -21,8 +21,9 @@ and `_test.go` files import it; it imports module roots, their wiring,
 `kernel` and `platform`. Its sub-packages follow these rules. It is outside
 the module graph. `compose.PostReads` and `compose.PageCountsIn` bind unread
 writes and counts to conversation's transaction or snapshot; the feed/topic
-writer and count helpers live there too. Their database tests use
-`compose_test`; server and HTTP tests stay in `cmd/ribbitto`.
+writer and count helpers live there too. Database tests reuse these adapters,
+using external `_test` packages to avoid cycles; unread's external cost test
+reaches its private historical merge helper through `export_test.go`.
 
 The manifest allows unread's root, store and wiring to import conversation's
 root only, never its children, store, wiring, fixture package or org

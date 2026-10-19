@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -55,7 +56,7 @@ func TestPostMessage(t *testing.T) {
 	writer := func(tx platform.Tx) conversation.Writer {
 		return rawBodyWriter{Writer: postgres.WriterIn(tx), body: " untrimmed"}
 	}
-	refused := conversation.NewPosting(conversationpg.NewTxRunnerForTest(pool), writer, eventSequence, appendEvents, nil)
+	refused := conversation.NewPosting(conversationpg.NewTxRunnerForTest(pool), writer, compose.PostingSequence, compose.PostingEvents, nil)
 	if _, err := refused.Post(ctx, memberships["acme"], channels["acme"], " untrimmed"); err == nil {
 		t.Fatal("the database accepted an untrimmed body")
 	}
@@ -106,7 +107,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
-	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil)
+	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil)
 	posted, err := posting.Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "kept")
 	requireNoError(t, err)
 	written := func() (counts [4]int64) {

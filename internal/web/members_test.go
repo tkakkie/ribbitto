@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -136,7 +137,7 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("around page with members panel: %s", around)
 	}
 	// Each negative case changes one scope while keeping the other fixed.
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	for _, tt := range []struct {
 		name                  string
 		organization, channel kernel.ID

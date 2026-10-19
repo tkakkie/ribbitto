@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -32,7 +33,7 @@ func TestBranching(t *testing.T) {
 	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	notifier := &recordingNotifier{t: t, pool: pool}
-	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, notifier), membership(acme.OrganizationID, acme.MemberID)
+	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, notifier), membership(acme.OrganizationID, acme.MemberID)
 	var posted []conversation.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, member, acme.Channel.ID, body)
@@ -210,10 +211,10 @@ func TestBranchingFailingNoticeAppend(t *testing.T) {
 	requireNoError(t, err)
 	moved := false
 	events := func(tx platform.Tx) conversation.EventAppender {
-		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
+		return failingNotice{EventAppender: compose.PostingEvents(tx), moved: &moved}
 	}
 	notifier := &recordingNotifier{t: t, pool: pool}
-	brancher := conversationpg.NewBrancher(pool, eventSequence, events, branchReads, notifier)
+	brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, events, compose.BranchReads, notifier)
 	member := membership(acme.OrganizationID, acme.MemberID)
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := conversation.Branch{Messages: []kernel.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
@@ -244,10 +245,10 @@ func TestBranchNoticeInsertFailure(t *testing.T) {
 	// failingNotice records the move; the notice's append is never reached.
 	moved := false
 	events := func(tx platform.Tx) conversation.EventAppender {
-		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
+		return failingNotice{EventAppender: compose.PostingEvents(tx), moved: &moved}
 	}
 	notifier := &recordingNotifier{t: t, pool: pool}
-	brancher := conversationpg.NewBrancher(pool, eventSequence, events, branchReads, notifier)
+	brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, events, compose.BranchReads, notifier)
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := conversation.Branch{Messages: []kernel.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
 	_, err = brancher.Branch(ctx, membership(acme.OrganizationID, globex.MemberID), acme.Channel.ID, b, func(d conversation.Topic) string { return "moved to " + d.Name })
@@ -280,7 +281,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
-			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil), membership(acme.OrganizationID, acme.MemberID)
+			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil), membership(acme.OrganizationID, acme.MemberID)
 			valid, err := posting.Post(ctx, member, acme.Channel.ID, "still in source")
 			requireNoError(t, err)
 			stale, err := posting.Post(ctx, member, acme.Channel.ID, "already moved")

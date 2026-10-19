@@ -5,18 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"io"
 	"reflect"
 	"slices"
 	"strconv"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -190,13 +191,13 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	var ids []kernel.ID
 	var source kernel.ID
 	for range 2 {
-		posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "selected body")
+		posted, err := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil).Post(ctx, m, f.Channel.ID, "selected body")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +217,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		warm = append(warm, out)
 	}
 	notifier := &recordingNotifier{}
-	destination, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
+	destination, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, notifier).Branch(ctx, m, f.Channel.ID,
 		conversation.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +368,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
 				Name: topic.Name, CreatedAt: topic.CreatedAt,
 			}
-			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+			reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 			var moved []kernel.ID
 			var source kernel.ID
 			for i := range tt.count {
@@ -375,7 +376,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				if i == 0 || i == tt.count/2 || i == tt.count-1 {
 					selected = nil // Before, within and after the destination's messages.
 				}
-				posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
+				posted, err := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -391,7 +392,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
 			notifier := &recordingNotifier{}
-			_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
+			_, err = conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, notifier).Branch(ctx, m, f.Channel.ID,
 				conversation.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
@@ -453,12 +454,12 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
 					Name: topic.Name, CreatedAt: topic.CreatedAt,
 				}
-				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
+				reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 				var source conversation.Topic
 				var moved []kernel.ID
 				for i := range count {
 					for _, selected := range []*kernel.ID{nil, &destination.ID} {
-						posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
+						posted, err := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -490,7 +491,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					}
 				}
 				notifier := &recordingNotifier{}
-				_, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
+				_, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, notifier).Branch(ctx, m, f.Channel.ID,
 					conversation.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)

@@ -1,21 +1,16 @@
 package conversationpg_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
-	"github.com/tkakkie/ribbitto/internal/unread"
-	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
 func requireNoError(t *testing.T, err error) {
@@ -40,16 +35,10 @@ func membership(organizationID, memberID kernel.ID) org.Membership {
 	return org.Membership{Organization: org.Organization{ID: organizationID}, Member: org.Member{ID: memberID}}
 }
 
-// eventSequence and appendEvents bind org's sequence and realtime's appender
-// to posting's and branching's transaction, as cmd/ribbitto does.
-func eventSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-func appendEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
 // newPosting builds posting on org's sequence and realtime's appender, as
 // cmd/ribbitto does, without notifications.
 func newPosting(pool *pgxpool.Pool) *conversation.Posting {
-	return conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
+	return conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 }
 
 // assertEventLog takes the scenario's boundary: compared with the boundary it
@@ -73,35 +62,4 @@ func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantBoundar
 	if seq != wantSeq || boundary != wantBoundary || count != seq-boundary || valid != count {
 		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d boundary=%d", seq, boundary, count, valid, wantSeq, wantBoundary)
 	}
-}
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
-
-// branchReads adapts unread's range writer to conversation's consumer interface.
-func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
-	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
-}
-
-type branchReadWriter struct{ ranges unread.RangeWriter }
-
-func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
-}
-
-// These fixtures exercise the reader's existing history and directory behavior.
-type emptyPageCounter struct{}
-
-func emptyPageCountsIn(platform.Snapshot) conversation.PageCounter { return emptyPageCounter{} }
-func (emptyPageCounter) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
-	return conversation.PageCounts{}, nil
 }

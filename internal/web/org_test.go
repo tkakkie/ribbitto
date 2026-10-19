@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -506,7 +507,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				t.Fatalf("foreign post: %d %s", w.Code, w.Body.String())
 			}
 		}
-		poster := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+		poster := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, nil)
 		for range 51 {
 			if _, err := poster.Post(ctx, a, acmeChannel, "hello after reload"); err != nil {
 				t.Fatal(err)

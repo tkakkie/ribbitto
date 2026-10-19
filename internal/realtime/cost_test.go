@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -158,16 +159,16 @@ func TestStreamCost(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	sidebarReader := conversationpg.NewReader(pool, nil, nil, eventCursor, costPageCountsIn)
+	sidebarReader := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, costPageCountsIn)
 
 	m := members[0]
 	hub := realtime.NewHub()
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, hub)
+	posting := conversationpg.NewPosting(pool, compose.PostingSequence, compose.PostingEvents, hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))}
 	var inner realtime.EventReader = dbReads
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, costPageCountsIn)
+	reader := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, costPageCountsIn)
 	renderer := readingRenderer{messages: reader, membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)

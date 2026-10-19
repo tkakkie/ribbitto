@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -18,7 +18,6 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func TestSignUp(t *testing.T) {
@@ -27,7 +26,7 @@ func TestSignUp(t *testing.T) {
 	ctx := t.Context()
 	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
-	service := orgpg.NewSignUp(pool, hasher, true, signupAccount, signupEvents)
+	service := orgpg.NewSignUp(pool, hasher, true, compose.AccountCreator, compose.MemberEvents)
 	_, err = service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
 	if !errors.Is(err, org.ErrSignUpClosed) {
 		t.Fatalf("before setup: %v", err)
@@ -37,7 +36,7 @@ func TestSignUp(t *testing.T) {
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
 	otherAccount := identitytest.Account(t, pool, "other@example.org", "Other")
 	orgtest.Member(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
-	result, err := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
+	result, err := orgpg.NewSetup(pool, hasher, "secret", compose.AccountCreator, compose.MemberEvents, compose.DefaultChannelCreator).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
 	var initialEpoch, joinedEpoch int64
 	requireNoError(t, pool.QueryRow(ctx, "SELECT access_epoch FROM organization WHERE id=$1", result.OrganizationID).Scan(&initialEpoch))
@@ -80,12 +79,12 @@ func TestSignUp(t *testing.T) {
 		{"here", "alice2@example.org", nil, "handle", false},
 		{"alice2", "alice2@example.org", appendFailure, "", true},
 	} {
-		createAccounts, writes, events := org.AccountCreatorIn(signupAccount), org.RegistrationWriterIn(registrationIn), org.EventAppenderIn(signupEvents)
+		createAccounts, writes, events := org.AccountCreatorIn(compose.AccountCreator), org.RegistrationWriterIn(registrationIn), org.EventAppenderIn(compose.MemberEvents)
 		handle, email := tc.handle, tc.email
 		// Substitute after validation so the real CHECKs reject the raw values.
 		if tc.field == "email" {
 			email = "alice2@example.org"
-			createAccounts = func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{signupAccount(tx), tc.email} }
+			createAccounts = func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{compose.AccountCreator(tx), tc.email} }
 		}
 		if tc.field == "handle" {
 			handle = "alice2"
@@ -120,9 +119,9 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	ctx := t.Context()
 	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
-	_, err = orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
+	_, err = orgpg.NewSetup(pool, hasher, "secret", compose.AccountCreator, compose.MemberEvents, compose.DefaultChannelCreator).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
-	service := orgpg.NewSignUp(pool, hasher, true, signupAccount, signupEvents)
+	service := orgpg.NewSignUp(pool, hasher, true, compose.AccountCreator, compose.MemberEvents)
 	if _, err := service.SignUp(ctx, "Owner Two", " OWNER ", "owner2@example.org", "long enough password"); !errors.Is(err, org.ErrHandleTaken) {
 		t.Fatalf("case variant: %v", err)
 	}
@@ -152,9 +151,6 @@ func TestSignUpHandleConflicts(t *testing.T) {
 }
 
 func registrationIn(tx platform.Tx) org.RegistrationWriter { return postgres.RegistrationWriterIn(tx) }
-
-func signupAccount(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
-func signupEvents(tx platform.Tx) org.EventAppender   { return realtimepg.AppenderIn(tx) }
 
 type rawSignupAccount struct {
 	org.AccountCreator

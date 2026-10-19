@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/compose"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -37,8 +38,8 @@ func requireNoError(t *testing.T, err error) {
 // org's sequence and this store's appender.
 func newPosting(pool *pgxpool.Pool) *conversation.Posting {
 	return conversationpg.NewPosting(pool,
-		func(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) },
-		func(tx platform.Tx) conversation.EventAppender { return postgres.AppenderIn(tx) }, nil)
+		compose.PostingSequence,
+		compose.PostingEvents, nil)
 }
 
 // membership is the fixture owner's membership, which posting takes.

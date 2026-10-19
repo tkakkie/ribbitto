@@ -1,7 +1,7 @@
 // Command testshard splits the application module's Go test packages
-// between CI's parallel jobs. It prints one shard's package patterns for
-// make check-test; -check fails unless the shards together list every
-// package of go list ./... exactly once and the workflow runs each shard in
+// between CI's parallel jobs. It prints package patterns or runs make
+// check-test with a shard's packages, browser selector and flags; -check
+// fails unless every package is covered and the workflow runs each shard in
 // exactly one job. The named shards hold the slowest packages; "rest" is
 // everything else, so a package added later runs in CI without editing this
 // list or the workflow. make check runs -check.
@@ -15,79 +15,149 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 // The named shards hold the packages that take longest on CI (#992), so
 // each job finishes at about the same time; "rest" runs in the checks job.
 // cmd and web run separately so their browser tests do not compete for CPUs.
-var shards = []struct {
+type shard struct {
 	name     string
 	packages []string
-}{
-	{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}},
-	{"cmd", []string{"./cmd/ribbitto"}},
-	{"web", []string{"./internal/web"}},
-	{"realtime", []string{"./internal/realtime"}},
+	browser  string
+	flags    string
+}
+
+func shards() []shard {
+	return []shard{
+		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2"},
+		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2"},
+		{"web", []string{"./internal/web"}, "", "-p 2"},
+		{"realtime", []string{"./internal/realtime"}, "", "-p 2"},
+	}
 }
 
 const rest = "rest"
 
 const workflow = ".github/workflows/ci.yml"
 
-// The workflow names the shards it runs in a test matrix line, and runs each
-// shard with one of the two steps below. -check reads the workflow without
-// its comment lines and requires each step's lines exactly once, so a shard
-// dropped, repeated, replaced by another package list or made unable to fail
-// (Muse Code on #1007) fails make check.
+// Exact commands keep package lists and flags under testshard's control.
 var (
 	matrixLine = regexp.MustCompile(`(?m)^\s*shard: \[(.*)\]\s*$`)
 	steps      = map[string][]string{
-		rest:     {`packages=$(go -C tools run ./testshard .. rest)`, `test -n "$packages"`, `make check-test GO_TEST_PACKAGES="$packages"`},
-		"matrix": {`packages=$(go -C tools run ./testshard .. "$SHARD")`, `test -n "$packages"`, `make check-test GO_TEST_PACKAGES="$packages"`},
+		rest:     {`go -C tools run ./testshard -run .. rest`},
+		"matrix": {`go -C tools run ./testshard -run .. "$SHARD"`},
 	}
 )
 
 func main() {
-	check := flag.Bool("check", false, "fail unless the shards list every package exactly once")
+	execute := flag.Bool("run", false, "run make check-test with the shard configuration")
+	check := flag.Bool("check", false, "fail unless every package slice is scheduled exactly once")
 	flag.Parse()
-	if *check && flag.NArg() == 1 || !*check && flag.NArg() == 2 {
-		if err := run(flag.Arg(0), flag.Arg(1), *check); err != nil {
+	if *check && !*execute && flag.NArg() == 1 || !*check && flag.NArg() == 2 {
+		if err := run(flag.Arg(0), flag.Arg(1), *check, *execute); err != nil {
 			fmt.Fprintln(os.Stderr, "testshard:", err)
 			os.Exit(1)
 		}
 		return
 	}
-	fmt.Fprintln(os.Stderr, "usage: testshard <repository root> <shard> | testshard -check <repository root>")
+	fmt.Fprintln(os.Stderr, "usage: testshard [-run] <repository root> <shard> | testshard -check <repository root>")
 	os.Exit(2)
 }
 
-func run(root, shard string, check bool) error {
+func run(root, name string, check, execute bool) error {
 	all, err := list(root)
 	if err != nil {
 		return err
 	}
-	parts, err := partition(all)
+	specs := shards()
+	parts, err := partition(all, specs)
 	if err != nil {
 		return err
 	}
 	if check {
-		if err := covers(parts, all); err != nil {
+		if err := covers(parts, all, specs); err != nil {
 			return err
 		}
 		source, err := os.ReadFile(filepath.Join(root, workflow))
 		if err != nil {
 			return fmt.Errorf("reading the workflow: %w", err)
 		}
-		return scheduled(string(source))
+		return scheduled(string(source), specs)
 	}
-	packages, err := pick(parts, shard)
+	packages, err := pick(parts, name)
 	if err != nil {
 		return err
+	}
+	if execute {
+		s := shard{name: name, packages: packages, flags: "-p 2"}
+		for _, candidate := range specs {
+			if candidate.name == name {
+				s = candidate
+			}
+		}
+		cmd := testCommand(root, s)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("running shard %s: %w", name, err)
+		}
+		return nil
 	}
 	// One line: make check-test passes the list in a variable, and a newline
 	// there would end the recipe line.
 	fmt.Println(strings.Join(packages, " "))
+	return nil
+}
+
+func testCommand(root string, s shard) *exec.Cmd {
+	// Make expands command-line variables before the shell sees regex anchors.
+	flags := strings.ReplaceAll(s.flags, "$", "$$")
+	cmd := exec.Command("make", "check-test", "GO_TEST_PACKAGES="+strings.Join(s.packages, " "), "GO_TEST_FLAGS="+flags)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "RIBBITTO_BROWSER_SHARD="+s.browser)
+	return cmd
+}
+
+// Browser slices must form one complete set, with non-browser tests on the
+// first slice only. Names include the selector so workflow drift is visible.
+func validateShards(specs []shard) error {
+	names := map[string]bool{}
+	groups := map[string][]shard{}
+	for _, s := range specs {
+		if s.name == rest || names[s.name] || len(s.packages) == 0 {
+			return fmt.Errorf("invalid or repeated shard %q", s.name)
+		}
+		names[s.name] = true
+		for _, p := range s.packages {
+			groups[p] = append(groups[p], s)
+		}
+	}
+	for p, group := range groups {
+		seen := map[int]bool{}
+		for _, s := range group {
+			if s.browser == "" && len(group) == 1 {
+				if s.flags != "-p 2" {
+					return fmt.Errorf("shard %s: unsharded packages must run all tests", s.name)
+				}
+				continue
+			}
+			k, n, ok := strings.Cut(s.browser, "/")
+			index, errK := strconv.Atoi(k)
+			total, errN := strconv.Atoi(n)
+			if !ok || errK != nil || errN != nil || total != len(group) || index < 1 || index > total || seen[index] || s.browser != fmt.Sprintf("%d/%d", index, total) || !strings.HasSuffix(s.name, "-"+s.browser) || len(s.packages) != 1 {
+				return fmt.Errorf("%s: invalid browser shard %q in %s", p, s.browser, s.name)
+			}
+			seen[index] = true
+			want := "-p 2 -run ^TestBrowser$"
+			if index == 1 {
+				want = "-p 2"
+			}
+			if s.flags != want {
+				return fmt.Errorf("shard %s: flags %q, want %q", s.name, s.flags, want)
+			}
+		}
+	}
 	return nil
 }
 
@@ -140,16 +210,16 @@ func goList(root string, args ...string) (string, error) {
 	return string(out), nil
 }
 
-// partition assigns every package to one shard. A named package that no
+// partition assigns every package to its declared shards. A named package that no
 // longer exists is an error, so a rename cannot leave a shard quietly empty.
-func partition(all []string) (map[string][]string, error) {
+func partition(all []string, specs []shard) (map[string][]string, error) {
+	if err := validateShards(specs); err != nil {
+		return nil, err
+	}
 	parts := map[string][]string{}
 	named := map[string]string{}
-	for _, s := range shards {
+	for _, s := range specs {
 		for _, p := range s.packages {
-			if other, ok := named[p]; ok {
-				return nil, fmt.Errorf("%s is in shards %s and %s", p, other, s.name)
-			}
 			if !slices.Contains(all, p) {
 				return nil, fmt.Errorf("shard %s names %s, which go list ./... does not list", s.name, p)
 			}
@@ -168,9 +238,27 @@ func partition(all []string) (map[string][]string, error) {
 
 // covers checks the partition itself, so a later change to partition cannot
 // drop or repeat a package unnoticed.
-func covers(parts map[string][]string, all []string) error {
-	seen := map[string]string{}
+func covers(parts map[string][]string, all []string, specs []shard) error {
+	if err := validateShards(specs); err != nil {
+		return err
+	}
+	remaining := map[string][]string{}
 	for name, packages := range parts {
+		remaining[name] = slices.Clone(packages)
+	}
+	for _, s := range specs {
+		if !slices.Equal(remaining[s.name], s.packages) {
+			return fmt.Errorf("shard %s: packages %v, want %v", s.name, remaining[s.name], s.packages)
+		}
+		delete(remaining, s.name)
+	}
+	seen := map[string]string{}
+	for _, s := range specs {
+		for _, p := range s.packages {
+			seen[p] = s.name
+		}
+	}
+	for name, packages := range remaining {
 		for _, p := range packages {
 			if other, ok := seen[p]; ok {
 				return fmt.Errorf("%s is in shards %s and %s", p, other, name)
@@ -191,7 +279,10 @@ func covers(parts map[string][]string, all []string) error {
 
 // scheduled checks that the workflow runs every shard exactly once: each
 // named shard once in the test matrix and rest once in its own step.
-func scheduled(source string) error {
+func scheduled(source string, specs []shard) error {
+	if err := validateShards(specs); err != nil {
+		return err
+	}
 	var kept, trimmed []string
 	for _, line := range strings.Split(source, "\n") {
 		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
@@ -205,7 +296,7 @@ func scheduled(source string) error {
 		return fmt.Errorf("%s: want one test matrix line \"shard: [...]\", found %d", workflow, len(lines))
 	}
 	var want, got []string
-	for _, s := range shards {
+	for _, s := range specs {
 		want = append(want, s.name)
 	}
 	for _, name := range strings.Split(lines[0][1], ",") {
@@ -226,9 +317,12 @@ func scheduled(source string) error {
 			return fmt.Errorf("%s: the %s step's lines appear %d times, want once: %q", workflow, name, n, steps[name])
 		}
 	}
-	// No other step may pick its own package list.
-	if n := strings.Count(source, "make check-test"); n != len(steps) {
-		return fmt.Errorf("%s: make check-test runs in %d places, want %d", workflow, n, len(steps))
+	// Only the runner may invoke make check-test or choose its flags.
+	if n := strings.Count(source, "make check-test"); n != 0 {
+		return fmt.Errorf("%s: make check-test runs in %d places, want 0", workflow, n)
+	}
+	if strings.Contains(source, "GO_TEST_FLAGS") || strings.Count(source, "go -C tools run ./testshard") != len(steps) {
+		return fmt.Errorf("%s: extra shard command or test flags", workflow)
 	}
 	return nil
 }

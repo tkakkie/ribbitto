@@ -111,9 +111,9 @@ so local notes and tools do not change the output.
 `make check` must pass before a pull request; for code another AI wrote,
 green CI on the draft replaces it and must pass before review
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test` and `check-tools` in order. CI runs them in
-parallel, with `check-test` once per [`tools/testshard`](tools/testshard/main.go)
-shard (`.github/workflows/ci.yml`). It
+It runs `check-static`, `check-test`, then `check-tools`. CI runs them in parallel;
+[`testshard -run`](tools/testshard/main.go) owns each shard's packages, selector
+and flags (`.github/workflows/ci.yml`). It
 checks formatting and internal packages' `doc.go` files through
 [`tools/formatcheck`](tools/formatcheck/main.go), then vets, lints,
 builds, runs the Go tests with the race detector (at `-p 2` by default; see

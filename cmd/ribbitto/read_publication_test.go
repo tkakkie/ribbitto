@@ -123,24 +123,80 @@ func TestReadPublicationConcurrent(t *testing.T) {
 // Guard the composition boundary too: a private publication in either adapter
 // bypasses Reading's commit contract and duplicates the durable notification.
 func TestReadAdaptersDoNotPublish(t *testing.T) {
-	for _, path := range []string{"read_adapters.go", "../../internal/compose/branch_reads.go"} {
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	for _, file := range []struct {
+		name     string
+		expected []string
+	}{
+		{"read_adapters.go", []string{"postReads", "Read", "newFeedWriter", "newTopicWriter"}},
+		{"../../internal/compose/branch_reads.go", []string{"BranchReads", "Merge"}},
+	} {
+		missing, violations, err := checkReadAdapterPublication(file.name, nil, file.expected)
 		feedRequire(t, err)
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok {
-				continue
-			}
-			switch fn.Name.Name {
-			case "postReads", "BranchReads", "Read", "Merge", "newFeedWriter", "newTopicWriter":
-				ast.Inspect(fn.Body, func(n ast.Node) bool {
-					if selector, ok := n.(*ast.SelectorExpr); ok && (selector.Sel.Name == "ReadChanged" || selector.Sel.Name == "NewReading") {
-						t.Errorf("%s calls reading publication via %s", fn.Name.Name, selector.Sel.Name)
-					}
-					return true
-				})
-			}
+		for _, name := range missing {
+			t.Errorf("%s: missing expected function %s", file.name, name)
 		}
+		for _, violation := range violations {
+			t.Errorf("%s: %s", file.name, violation)
+		}
+	}
+}
+
+func checkReadAdapterPublication(name string, src any, expected []string) (missing, violations []string, err error) {
+	file, err := parser.ParseFile(token.NewFileSet(), name, src, 0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing read adapter %s: %w", name, err)
+	}
+	found := make(map[string]bool, len(expected))
+	for _, want := range expected {
+		found[want] = false
+	}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if _, ok := found[fn.Name.Name]; !ok {
+			continue
+		}
+		found[fn.Name.Name] = true
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			if selector, ok := n.(*ast.SelectorExpr); ok && (selector.Sel.Name == "ReadChanged" || selector.Sel.Name == "NewReading") {
+				violations = append(violations, fmt.Sprintf("%s calls reading publication via %s", fn.Name.Name, selector.Sel.Name))
+			}
+			return true
+		})
+	}
+	// A renamed or moved adapter must not silently remove guard coverage.
+	for _, want := range expected {
+		if !found[want] {
+			missing = append(missing, want)
+		}
+	}
+	return missing, violations, nil
+}
+
+func TestReadAdapterPublicationGuard(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		source     string
+		missing    []string
+		violations []string
+	}{
+		{name: "all present", source: "func Read() {}; func (adapter) Merge() {}"},
+		{name: "renamed", source: "func ReadX() {}; func (adapter) Merge() {}", missing: []string{"Read"}},
+		{name: "no matches", source: "func Other() {}", missing: []string{"Read", "Merge"}},
+		{
+			name: "publication", source: "func Read() { x.ReadChanged(); x.NewReading() }; func (adapter) Merge() {}",
+			violations: []string{"Read calls reading publication via ReadChanged", "Read calls reading publication via NewReading"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			missing, violations, err := checkReadAdapterPublication("adapter.go", "package adapter; type adapter struct{}; "+tt.source, []string{"Read", "Merge"})
+			feedRequire(t, err)
+			if !reflect.DeepEqual(missing, tt.missing) || !reflect.DeepEqual(violations, tt.violations) {
+				t.Errorf("missing=%v, violations=%v; want missing=%v, violations=%v", missing, violations, tt.missing, tt.violations)
+			}
+		})
 	}
 }
 

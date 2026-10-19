@@ -20,9 +20,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// fakeBrancher keeps Brancher's input validation because browser fixtures
-// submit invalid names and wait for its 422 feedback before retrying.
-// Conflicts depend on stored messages, so tests supply those through err.
+// fakeBrancher keeps the message-count bounds and ValidateTopicName call from
+// validateAndNormalizeBranch for 422 feedback, including browser name retries.
+// Tests supply other validation errors and stored-message conflicts through err.
 type fakeBrancher struct {
 	membership org.Membership
 	channel    kernel.ID
@@ -36,16 +36,6 @@ func (f *fakeBrancher) Branch(_ context.Context, m org.Membership, channel kerne
 		return conversation.Topic{ID: kernel.ID{0x32}}, f.err
 	}
 	if len(b.Messages) == 0 || len(b.Messages) > conversation.MaxBranchMessages {
-		return conversation.Topic{}, conversation.ErrInvalidBranch
-	}
-	seen := make(map[kernel.ID]bool, len(b.Messages))
-	for _, id := range b.Messages {
-		if seen[id] {
-			return conversation.Topic{}, conversation.ErrInvalidBranch
-		}
-		seen[id] = true
-	}
-	if b.To != nil && (b.NewName != "" || *b.To == b.From) {
 		return conversation.Topic{}, conversation.ErrInvalidBranch
 	}
 	if b.To == nil {

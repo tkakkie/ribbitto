@@ -117,9 +117,11 @@ is the same snapshot; switching either way to different text returns 409.
 Web calls `Poster.Send` through `Services.Posting`; `*conversation.Posting`
 implements that seam. `Send` takes the optional cursor and composer's
 `IdempotencyKey`; `PostToTopic` and `Post` delegate to it. Web unit tests
-return canned `Sent` results/errors; conversation tests own transaction,
-sequence, event and deduplication assertions. Database fixtures keep a
-concrete poster for `PostToTopic` and `Post`. Only a keyed body with a valid handle candidate and an available
+return canned `Sent` results/errors, with the real body validation
+(`conversation.ValidateMessageBody`); conversation tests own transaction,
+sequence, event and deduplication assertions. Database fixtures keep a concrete
+poster for `PostToTopic` and `Post`.
+Only a keyed body with a valid handle candidate and an available
 member directory gets a scoped preflight key lookup using the same tokens
 in a separate read transaction, before conversion, expansion or reference checks.
 Before comparing, the repeat reads `Writer.QuotedMessage` in scope and

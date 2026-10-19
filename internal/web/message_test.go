@@ -229,11 +229,15 @@ type fakePoster struct {
 
 func (p *fakePoster) Send(_ context.Context, m org.Membership, channel kernel.ID, send conversation.Send) (conversation.Sent, error) {
 	p.calls = append(p.calls, postCall{m, channel, send})
-	if err, ok := p.bodyErrors[send.Body]; ok {
-		return p.result, err
+	err := p.err
+	if bodyErr, ok := p.bodyErrors[send.Body]; ok {
+		err = bodyErr
 	}
-	if p.err != nil {
-		return p.result, p.err
+	if err != nil {
+		if errors.Is(err, conversation.ErrPostKeyReused) {
+			return p.result, err
+		}
+		return conversation.Sent{}, err
 	}
 	if _, err := conversation.ValidateMessageBody(send.Body); err != nil {
 		return conversation.Sent{}, fmt.Errorf("%w: %w", conversation.ErrInvalidBody, err)

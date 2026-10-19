@@ -3,7 +3,7 @@
 Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
 Writing rules: [`ui-code.md`](ui-code.md).
 
-**Keep it current:** update this file with shared component changes.
+**Keep current:** update this file with shared component changes.
 
 ## Shared components
 
@@ -13,12 +13,12 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 |---|---|---|
 | `submitButton`, `submitButtonFor` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child before the label); `submitButtonFor` submits a form named by its ID from outside it |
 | `textLink` | `internal/web/view/controls.templ` | underlined navigation links; callers supply a message ID and extra typography or spacing classes |
-| `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
+| `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border, brand underline on focus and focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
-| `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
-| `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
+| `iconButton` | `internal/web/view/controls.templ` | an icon-only button (icon child) with an accessible name; can open a popover |
+| `welcomeLayout` | `internal/web/view/welcome.templ` | shared brand/content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
 | `signOutButton` | `internal/web/view/hello.templ` | the shared POST sign-out form, taking a button kind; home uses `buttonWelcomeSecondary`, and `SignOutButton` keeps `buttonSecondary` for the account menu |
-| `unreadBadge`, `draftMarker` | `internal/web/view/channel.templ` | unread counts; static draft text, accessible only when not `hidden` |
+| `unreadBadge`, `draftMarker` | `internal/web/view/channel.templ` | an unread count with its screen-reader text; `draftMarker` is static draft text, accessible only while not `hidden` |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](ui-code.md#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
@@ -32,11 +32,9 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `channelImage` | `internal/web/view/channel_image.templ` | a decorative channel illustration from a handler-resolved URL; 24 px and lazy in the sidebar, 32 px in the header, with fixed dimensions and asynchronous decoding |
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
-  anything that changes state is a submit button in a form, even when it
-  should look like a link.
+  state changes use a form submit button, even when styled as a link.
 - **Components take small inputs** — a label, a kind, a props struct —
-  and decide nothing about permissions or data; handlers prepare view
-  models (`docs/architecture/web-layers.md`).
+  and decide no permissions or data; handlers prepare view models (`docs/architecture/web-layers.md`).
 - **A new component arrives with its first user.** Restyling a page also
   extracts its repeated looks.
 
@@ -142,8 +140,8 @@ at rest first. Browsers without the Navigation API show no arrival motion.
 `testArrivalBrowser` (`internal/web/arrival_browser_test.go`) checks these
 cases.
 
-Below `desk` the hidden sidebar’s pill stays still; the list page’s grows
-after a conversation’s back link, and
+Below `desk` a conversation hides the sidebar, so its pill never moves; the
+list page's pill grows in when a conversation's back link leads there, and
 an opening panel rises as the sheet, because `rb-panel-in` is redefined
 under `max-desk:`. `testMotionTouchBrowser`
 (`internal/web/motion_touch_browser_test.go`) checks that nothing else moves.

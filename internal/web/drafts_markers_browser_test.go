@@ -96,6 +96,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		p = p.Context(ctx)
 		t.Cleanup(func() { step(t, p.Context(context.Background()), "close marker page").MustClose() })
 		step(t, p, "install marker controls").MustEvalOnNewDocument(`(() => {
+   window.pageErrors=0; window.addEventListener('error',()=>pageErrors++);
    window.opens=0; document.addEventListener('htmx:sseOpen',()=>opens++);
    const now=performance.now.bind(performance), set=window.setTimeout; window.elapsed=0;
    performance.now=()=>now()+elapsed;
@@ -188,6 +189,12 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 				step(t, p, "open channel list").MustNavigate(server.URL + "/organizations/acme/channels")
 				step(t, p, "load channel list").MustWaitLoad()
 				wait(t, p, "list has no composer", `() => !document.querySelector('#message-composer') && marked('`+topic+`') === true`)
+				wait(t, p, "second list marker starts hidden", `() => marked('channel-04000000000000000000000000000000') === false`)
+				step(t, p, "write second list draft and refresh").MustEval(`() => { put('feed',{},null,null,'04000000-0000-0000-0000-000000000000'); refresh(); }`)
+				wait(t, p, "show second list draft marker", `() => marked('channel-04000000000000000000000000000000') === true`)
+				if got := step(t, p, "read channel list page errors").MustEval(`() => pageErrors`).Int(); got != 0 {
+					t.Fatalf("channel list page errors: %d", got)
+				}
 			case "persisted-pageshow", "message-sent":
 				step(t, p, "clear draft and refresh event").MustEval(`name => { localStorage.removeItem(written); if(name==='message-sent') document.querySelector('#message-body').dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:'unknown'}})); else refresh(); }`, name)
 			case "notice-storage", "draft-storage", "send-another-tab":

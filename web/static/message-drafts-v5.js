@@ -70,13 +70,15 @@
     };
     const form = document.getElementById("message-composer");
     const body = document.getElementById("message-body");
-    const key = prefix + member + ":" + session + ":" + form?.dataset.draftChannel + ":" + (form?.dataset.draftTopic || "feed");
+    const openChannel = form?.dataset?.draftChannel, openTopic = form?.dataset?.draftTopic || "feed";
+    const key = prefix + member + ":" + session + ":" + openChannel + ":" + openTopic;
     // Keep key scope separate from value validity: foreign values must
     // never be read, even when they claim this page's owner and session.
     const own = (match) => match?.[1] === member && match[2] === session;
     const draftPlace = (match, entry) => valid(entry) && entry.text.trim() ? match.slice(3) : null;
     const marked = (places, channel, topic, open) => !open && places.has(topic === "feed" ? channel : channel + ":" + topic);
     const markers = (root = document.getElementById("sidebar-channels")) => {
+      if (!root) return;
       const places = new Set();
       if (!stopped && performance.now() < deadline) {
         try {
@@ -87,18 +89,20 @@
           }
         } catch { places.clear(); }
       }
-      for (const marker of root?.querySelectorAll("[data-draft-marker]") || []) {
-        const parts = new URL(marker.closest("a").href).pathname.split("/");
+      for (const marker of root.querySelectorAll("[data-draft-marker]")) {
+        const anchor = marker.closest("a");
+        if (!anchor) continue;
+        const parts = new URL(anchor.href).pathname.split("/");
         const channel = parts[4], topic = parts[6] || "feed";
-        const open = channel === form?.dataset.draftChannel && topic === (form.dataset.draftTopic || "feed");
+        const open = channel === openChannel && topic === openTopic;
         marker.hidden = !marked(places, channel, topic, open);
       }
     };
     markers();
     document.addEventListener("htmx:load", (event) => {
-      const root = event.detail.elt;
-      if (root.id === "sidebar-channels") markers(root);
-      else { const sidebar = root.querySelector("#sidebar-channels"); if (sidebar) markers(sidebar); }
+      const root = event.detail?.elt;
+      if (root?.id === "sidebar-channels") markers(root);
+      else { const sidebar = root?.querySelector("#sidebar-channels"); if (sidebar) markers(sidebar); }
     });
     document.addEventListener("message-sent", () => markers());
     window.addEventListener("pageshow", (event) => { if (event.persisted) markers(); });

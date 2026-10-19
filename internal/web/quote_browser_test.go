@@ -38,7 +38,7 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 	}
 	post := func(body string) conversation.Message {
 		t.Helper()
-		sent, err := services.Posting.Post(ctx, m, f.Channel.ID, body)
+		sent, err := fixturePoster(pool).Post(ctx, m, f.Channel.ID, body)
 		if err != nil {
 			t.Fatal(err)
 		}

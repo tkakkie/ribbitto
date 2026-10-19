@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -57,7 +58,7 @@ func TestPanelLinksFollowPageState(t *testing.T) {
 			messages := olderMessages()
 			messages.firstUnread = tc.snapshot
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Messages, s.Branching = messages, testBrancher(&fakeBranchWriter{})
+				s.Messages, s.Branching = messages, &fakeBrancher{err: conversation.ErrInvalidBranch}
 			}))
 			if err != nil {
 				t.Fatal(err)

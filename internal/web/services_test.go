@@ -34,7 +34,7 @@ func testServices(overrides ...func(*Services)) Services {
 	s.MemberSearch = &fakeMemberSearch{}
 	s.SidebarResync = &unread.Changes{}
 	s.MemberLimits = NewMemberLimits(time.Now)
-	s.Branching = testBrancher(&fakeBranchWriter{})
+	s.Branching = &fakeBrancher{}
 	for _, override := range overrides {
 		override(&s)
 	}
@@ -69,7 +69,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Channels:  conversationpg.NewChannels(pool, conversation.DefaultMaxChannels),
 		Topics:    conversationpg.NewTopics(pool),
 		Messages:  conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn),
-		Posting:   conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil),
+		Posting:   fixturePoster(pool),
 		Branching: conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil),
 		Pinning:   conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, nil),
 	}
@@ -106,6 +106,12 @@ func (n *recordingNotifier) raised(t *testing.T) int64 {
 	}
 	return n.seq
 }
+
+func fixturePoster(pool *pgxpool.Pool) *conversation.Posting {
+	return conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil)
+}
+
+var _ Poster = (*conversation.Posting)(nil)
 
 // memberLimitOverride confines pointer injection to same-package tests.
 func memberLimitOverride(limits MemberLimits, set func(*MemberLimits)) MemberLimits {

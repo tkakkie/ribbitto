@@ -246,7 +246,7 @@ func TestMentionRenameAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := "hello <@" + realtime.FormatPayloadID(bob) + ">"
-	posted, err := s.Posting.PostToTopic(ctx, m, f.Channel.ID, nil, "hello @bob")
+	posted, err := fixturePoster(pool).PostToTopic(ctx, m, f.Channel.ID, nil, "hello @bob")
 	if err != nil {
 		t.Fatal(err)
 	}

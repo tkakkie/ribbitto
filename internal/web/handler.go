@@ -40,7 +40,7 @@ type Services struct {
 	Authz         Authorizer
 	Topics        TopicLookup
 	Messages      MessageReader
-	Posting       *conversation.Posting
+	Posting       Poster
 	Branching     Branching // nil: branching answers 404
 	Pinning       Pinning   // nil: pin and unpin answer 404
 	Channels      Channels
@@ -66,6 +66,9 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	// Fail at start-up rather than panic on the first request.
 	if services.Sessions == nil || services.SignIn == nil || services.Authz == nil || services.Channels == nil || services.Topics == nil || services.Messages == nil || services.Posting == nil {
 		return nil, nil, errors.New("web: Services.Sessions, Services.SignIn, Services.Authz, Services.Channels, Services.Topics, Services.Messages and Services.Posting are required")
+	}
+	if posting, ok := services.Posting.(*conversation.Posting); ok && posting == nil {
+		return nil, nil, errors.New("web: Services.Posting is required")
 	}
 	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
 		return nil, nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")

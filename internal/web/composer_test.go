@@ -52,6 +52,9 @@ func composerHandler(t *testing.T, topic bool, overrides ...func(*Services)) (ht
 	}
 	setup := []func(*Services){asAlice, func(s *Services) {
 		s.Authz = composerMember{membership: m}
+		poster := testPoster()
+		poster.result.Topic = place.Topic
+		s.Posting = poster
 		s.Messages = sidebarReader{page: snapshot}
 		s.Channels = &fakeChannels{channels: []conversation.Channel{c}}
 		s.Typing = state
@@ -157,7 +160,7 @@ func TestComposerValidationPreservation(t *testing.T) {
 					}
 					return *submitted
 				}()), func(t *testing.T) {
-					h, _, _, place := composerHandler(t, topic)
+					h, _, _, place := composerHandler(t, topic, func(s *Services) { s.Posting = &fakePoster{err: conversation.ErrInvalidBody} })
 					path := view.ConversationURL("acme", place.Channel, nil)
 					if topic {
 						path = view.ConversationURL("acme", place.Channel, &place.Topic)
@@ -207,7 +210,8 @@ func TestComposerPostLifecycle(t *testing.T) {
 			for _, retry := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/retry=%t", check, mode, retry), func(t *testing.T) {
 					topic, hx := strings.Contains(mode, "topic"), strings.HasPrefix(mode, "enhanced")
-					h, state, m, place := composerHandler(t, topic)
+					var poster *fakePoster
+					h, state, m, place := composerHandler(t, topic, func(s *Services) { poster = s.Posting.(*fakePoster) })
 					path := view.ConversationURL("acme", place.Channel, nil)
 					if topic {
 						path = view.ConversationURL("acme", place.Channel, &place.Topic)
@@ -230,6 +234,7 @@ func TestComposerPostLifecycle(t *testing.T) {
 						t.Fatal("real form generation refused before post")
 					}
 					if retry {
+						poster.err = conversation.ErrInvalidBody
 						values.Set("body", "\n\n")
 						w = composerRequest(h, action, values, hx)
 						if w.Code != 422 {
@@ -240,6 +245,7 @@ func TestComposerPostLifecycle(t *testing.T) {
 							t.Fatal("422 changed or closed generation")
 						}
 					}
+					poster.err = nil
 					values.Set("body", "posted")
 					w = composerRequest(h, action, values, hx)
 					if hx {

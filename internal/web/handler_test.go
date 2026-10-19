@@ -22,6 +22,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -596,6 +597,7 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 		"no topics":                         func(s *Services) { s.Topics = nil },
 		"no messages":                       func(s *Services) { s.Messages = nil },
 		"no posting":                        func(s *Services) { s.Posting = nil },
+		"typed-nil posting":                 func(s *Services) { s.Posting = (*conversation.Posting)(nil) },
 		"no sessions":                       func(s *Services) { s.Sessions = nil },
 		"no sign-in":                        func(s *Services) { s.SignIn = nil },
 		"setup without a session creator":   func(s *Services) { s.Setup = &fakeSetup{} },

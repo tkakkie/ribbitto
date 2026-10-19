@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -25,12 +26,15 @@ import (
 
 var canonicalKey = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
-// keyedComposer serves the composer handler over a posting fake with the
-// key index, on the feed or a topic.
-func keyedComposer(t *testing.T, topic bool) (http.Handler, *fakePostingWriter, *typing.State, org.Membership, typing.Place, string) {
+// keyedComposer serves the composer handler over a Poster fake with canned results, on the feed or a topic.
+func keyedComposer(t *testing.T, topic bool) (http.Handler, *fakePoster, *typing.State, org.Membership, typing.Place, string) {
 	t.Helper()
-	writer := &fakePostingWriter{id: kernel.ID{0x42}}
-	h, state, m, place := composerHandler(t, topic, func(s *Services) { s.Posting = testPosting(writer) })
+	writer := testPoster()
+	// Canned proof of "hello", returned independently of the submitted body.
+	proof, _ := hex.DecodeString("000000052cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+	copy(writer.result.Message.TypedBodyProof[:], proof)
+	h, state, m, place := composerHandler(t, topic, func(s *Services) { s.Posting = writer })
+	writer.result.Topic, writer.result.Message.TopicID = place.Topic, place.Topic
 	path := view.ConversationURL("acme", place.Channel, nil)
 	if topic {
 		path = view.ConversationURL("acme", place.Channel, &place.Topic)
@@ -73,29 +77,37 @@ func TestComposerIdempotencyKey(t *testing.T) {
 					t.Fatalf("rendered keys %q and %q", first, older.Get("idempotency_key"))
 				}
 				// A 422 keeps the submitted key exactly.
+				writer.err = conversation.ErrInvalidBody
 				values.Set("body", "\n\n")
 				if _, kept := composerForm(t, keyedSend(t, h, path, values, hx, http.StatusUnprocessableEntity)); kept.Get("idempotency_key") != first {
 					t.Fatal("422 replaced the submitted key")
 				}
 				// A success renders a fresh key.
+				writer.err = nil
 				values.Set("body", "hello")
 				_, next := composerForm(t, keyedSend(t, h, path, values, hx, success))
-				if fresh := next.Get("idempotency_key"); !canonicalKey.MatchString(fresh) || fresh == first || writer.inserts != 1 {
-					t.Fatalf("success rendered key %q after %q, inserts %d", fresh, first, writer.inserts)
+				if fresh := next.Get("idempotency_key"); !canonicalKey.MatchString(fresh) || fresh == first || len(writer.calls) != 2 {
+					t.Fatalf("success rendered key %q after %q, calls %d", fresh, first, len(writer.calls))
+				}
+				call := writer.calls[1]
+				if call.membership != m || call.channel != place.Channel || call.send.Body != "hello" || call.send.Key == nil || call.send.Key.String() != first || call.send.Cursor == nil || *call.send.Cursor != 42 || (call.send.Topic != nil) != topic || topic && *call.send.Topic != place.Topic {
+					t.Fatalf("poster call: %+v", call)
 				}
 				// A repeat of the first send is answered as a success naming
-				// the stored message, and writes nothing.
+				// the stored message returned by Poster.
+				writer.result.Repeat = true
 				next.Set("idempotency_key", first)
 				next.Set("body", "hello")
 				w := keyedSend(t, h, path, next, hx, success)
-				if hx && !strings.Contains(w.Body.String(), `data-posted-message="`+view.MessageDOMID(kernel.ID{0x42})+`"`) || writer.inserts != 1 {
-					t.Fatalf("repeat: inserts %d, %s", writer.inserts, w.Body.String())
+				if hx && !strings.Contains(w.Body.String(), `data-posted-message="`+view.MessageDOMID(kernel.ID{0x42})+`"`) || len(writer.calls) != 3 {
+					t.Fatalf("repeat: calls %d, %s", len(writer.calls), w.Body.String())
 				}
 				// Another body under the used key: 409 with the draft kept, the
 				// stored message named, a fresh key and the generation still open.
 				_, reused := composerForm(t, w)
 				generation := reused.Get("composer")
 				reused.Set("idempotency_key", first)
+				writer.err = conversation.ErrPostKeyReused
 				reused.Set("body", "changed")
 				w = keyedSend(t, h, path, reused, hx, http.StatusConflict)
 				_, conflict := composerForm(t, w)
@@ -104,8 +116,8 @@ func TestComposerIdempotencyKey(t *testing.T) {
 				if hx {
 					draft = ""
 				}
-				if conflict.Get("body") != draft || conflict.Get("composer") != generation || conflict.Get("idempotency_key") == first || !canonicalKey.MatchString(conflict.Get("idempotency_key")) || writer.inserts != 1 {
-					t.Fatalf("409 controls %v, inserts %d", conflict, writer.inserts)
+				if conflict.Get("body") != draft || conflict.Get("composer") != generation || conflict.Get("idempotency_key") == first || !canonicalKey.MatchString(conflict.Get("idempotency_key")) || len(writer.calls) != 4 {
+					t.Fatalf("409 controls %v, calls %d", conflict, len(writer.calls))
 				}
 				if !strings.Contains(w.Body.String(), `data-posted-message="`+view.MessageDOMID(kernel.ID{0x42})+`"`) || !strings.Contains(w.Body.String(), "A different message was already sent from this composer.") {
 					t.Fatalf("409 does not name the stored message or explain: %s", w.Body.String())
@@ -124,10 +136,7 @@ func TestComposerIdempotencyKey(t *testing.T) {
 					channel kernel.ID
 					quote   *conversation.Quote
 				}{{place.Channel, nil}, {kernel.ID{9}, nil}, {place.Channel, &conversation.Quote{}}} {
-					for k, stored := range writer.keyed {
-						stored.ChannelID, stored.Quote = c.channel, c.quote
-						writer.keyed[k] = stored
-					}
+					writer.result.Message.ChannelID, writer.result.Message.Quote = c.channel, c.quote
 					reused.Set("body", "hello again")
 					body := keyedSend(t, h, path, reused, hx, http.StatusConflict).Body.String()
 					recovered := hx && c.channel == place.Channel && c.quote == nil
@@ -144,10 +153,10 @@ func TestComposerKeyField(t *testing.T) {
 	for _, topic := range []bool{false, true} {
 		for _, hx := range []bool{false, true} {
 			for _, tt := range []struct {
-				name    string
-				keys    []string
-				status  int
-				inserts int
+				name   string
+				keys   []string
+				status int
+				calls  int
 			}{
 				{"malformed", []string{"not-a-key"}, http.StatusBadRequest, 0},
 				{"not canonical", []string{"0123456789abcdef0123456789abcdef"}, http.StatusBadRequest, 0},
@@ -168,8 +177,8 @@ func TestComposerKeyField(t *testing.T) {
 							t.Fatalf("status %d, want %d", w.Code, status)
 						}
 					}
-					if writer.inserts != tt.inserts {
-						t.Fatalf("inserts %d, want %d", writer.inserts, tt.inserts)
+					if len(writer.calls) != tt.calls || tt.calls > 0 && writer.calls[0].send.Key != nil {
+						t.Fatalf("calls %d, want %d", len(writer.calls), tt.calls)
 					}
 				})
 			}
@@ -194,10 +203,7 @@ func TestComposerRepeatAfterMove(t *testing.T) {
 				values.Set("body", "hello")
 				_, values = composerForm(t, keyedSend(t, h, path, values, hx, success))
 				moved := typing.Place{Channel: place.Channel, Topic: kernel.ID{9}}
-				for scope, stored := range writer.keyed {
-					stored.TopicID = moved.Topic
-					writer.keyed[scope] = stored
-				}
+				writer.result.Message.TopicID, writer.result.Repeat = moved.Topic, true
 				submitted := values.Get("composer")
 				values.Set("idempotency_key", key)
 				values.Set("body", "hello")
@@ -215,8 +221,8 @@ func TestComposerRepeatAfterMove(t *testing.T) {
 				if hx {
 					wantAction = ""
 				}
-				if action != wantAction || attr(signal, "hx-post") != typingURL || writer.inserts != 1 {
-					t.Fatalf("repeat composer posts to %q, typing %q, inserts %d", action, attr(signal, "hx-post"), writer.inserts)
+				if action != wantAction || attr(signal, "hx-post") != typingURL || len(writer.calls) != 2 {
+					t.Fatalf("repeat composer posts to %q, typing %q, calls %d", action, attr(signal, "hx-post"), len(writer.calls))
 				}
 				typist := typing.Typist{Member: m.Member.ID}
 				if state.Signal(m.Organization.ID, place, typist, submitted, time.Now()) {
@@ -280,10 +286,10 @@ func TestIdempotencyKeyStaysOutOfStreams(t *testing.T) {
 // A retry that adds a quote is not the stored send: its 409 keeps the error
 // instead of removing the text and dropping the quote (#1179).
 func TestRecoveredNeedsAnUnquotedRetry(t *testing.T) {
-	h, writer, _, m, _, path := keyedComposer(t, false)
+	h, writer, _, _, _, path := keyedComposer(t, false)
 	key := conversation.NewIdempotencyKey()
 	keyedSend(t, h, path, url.Values{"body": {"hello"}, "idempotency_key": {key.String()}}, true, http.StatusOK)
-	stored := writer.keyed[[3][16]byte{m.Organization.ID, m.Member.ID, key}]
+	stored := writer.result.Message
 	stored.ChannelID = kernel.ID{1}
 
 	for _, tc := range []struct {

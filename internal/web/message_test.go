@@ -19,7 +19,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -212,112 +211,43 @@ func TestMessageTimestampView(t *testing.T) {
 	}
 }
 
-type fakeTxRunner struct{}
-
-func (fakeTxRunner) InTx(_ context.Context, fn func(platform.Tx) error) error {
-	return fn(platform.Tx{})
+type postCall struct {
+	membership org.Membership
+	channel    kernel.ID
+	send       conversation.Send
 }
 
-type fakePostingWriter struct {
-	returned             *conversation.Message
-	id                   kernel.ID
-	err                  error
-	body                 string
-	org, channel, member kernel.ID
-	// keyed holds the author's messages by key, as the unique index does;
-	// fakeTxRunner has no rollback, so a taken key writes no field above.
-	keyed   map[[3][16]byte]conversation.Message
-	inserts int
+// fakePoster keeps Posting's body validation because browser fixtures rely on
+// its 422 responses to preserve drafts and composer generations. Explicit
+// outcomes still take precedence, and calls retain the un-normalised body.
+type fakePoster struct {
+	calls      []postCall
+	result     conversation.Sent
+	err        error
+	bodyErrors map[string]error
 }
 
-func (*fakePostingWriter) GetDefaultTopic(_ context.Context, org, channel kernel.ID) (conversation.Topic, error) {
-	return conversation.Topic{ID: kernel.ID{2}, OrganizationID: org, ChannelID: channel, IsDefault: true}, nil
-}
-
-func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID) (conversation.Topic, error) {
-	return conversation.Topic{ID: id, OrganizationID: org, ChannelID: channel}, nil
-}
-
-func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, _ *conversation.Quote) (conversation.Message, error) {
-	if _, taken := w.keyed[[3][16]byte{org, member, keyBytes(key)}]; key != nil && taken {
-		return conversation.Message{}, conversation.ErrPostKeyTaken
+func (p *fakePoster) Send(_ context.Context, m org.Membership, channel kernel.ID, send conversation.Send) (conversation.Sent, error) {
+	p.calls = append(p.calls, postCall{m, channel, send})
+	err := p.err
+	if bodyErr, ok := p.bodyErrors[send.Body]; ok {
+		err = bodyErr
 	}
-	w.org, w.channel, w.member, w.body = org, channel, member, body
-	if w.err != nil {
-		return conversation.Message{}, w.err
-	}
-	w.inserts++
-	posted := conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, TypedBodyProof: proof, EventSeq: seq}
-	if w.returned != nil {
-		posted = *w.returned
-	}
-	if key != nil {
-		if w.keyed == nil {
-			w.keyed = map[[3][16]byte]conversation.Message{}
+	if err != nil {
+		if errors.Is(err, conversation.ErrPostKeyReused) {
+			return p.result, err
 		}
-		w.keyed[[3][16]byte{org, member, *key}] = posted
+		return conversation.Sent{}, err
 	}
-	return posted, nil
-}
-
-func (w *fakePostingWriter) KeyedMessage(_ context.Context, org, member kernel.ID, key conversation.IdempotencyKey) (conversation.Message, error) {
-	if m, ok := w.keyed[[3][16]byte{org, member, key}]; ok {
-		return m, nil
+	if _, err := conversation.ValidateMessageBody(send.Body); err != nil {
+		return conversation.Sent{}, fmt.Errorf("%w: %w", conversation.ErrInvalidBody, err)
 	}
-	return conversation.Message{}, conversation.ErrMessageNotFound
+	return p.result, nil
 }
 
-func keyBytes(key *conversation.IdempotencyKey) [16]byte {
-	if key == nil {
-		return [16]byte{}
-	}
-	return *key
+func testPoster() *fakePoster {
+	return &fakePoster{result: conversation.Sent{Message: conversation.Message{ID: kernel.ID{0x42}, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{1}, MemberID: kernel.ID{8}, TopicID: kernel.ID{2}, EventSeq: 43}, Topic: kernel.ID{2}}}
 }
-
-// Branching's methods must fail if a posting test calls them.
-func (*fakePostingWriter) CreateTopic(context.Context, kernel.ID, kernel.ID, string) (conversation.Topic, error) {
-	panic("posting fake: unexpected CreateTopic")
-}
-
-func (*fakePostingWriter) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel.ID) (conversation.Message, error) {
-	panic("posting fake: unexpected QuotedMessage")
-}
-
-func (*fakePostingWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
-	panic("posting fake: unexpected InsertNotice")
-}
-
-func (*fakePostingWriter) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID, int64) (int64, error) {
-	panic("posting fake: unexpected MoveMessages")
-}
-
-type fakeEventSequence struct{}
-
-func (fakeEventSequence) NextEventSeq(context.Context, kernel.ID) (int64, error) {
-	return 43, nil
-}
-
-type fakeEventAppender struct{}
-
-func (fakeEventAppender) Append(context.Context, kernel.ID, int64, realtime.EventKind, *kernel.ID, []byte) error {
-	return nil
-}
-
-var (
-	_ conversation.TxRunner      = fakeTxRunner{}
-	_ conversation.Writer        = (*fakePostingWriter)(nil)
-	_ conversation.EventSequence = fakeEventSequence{}
-	_ conversation.EventAppender = fakeEventAppender{}
-)
-
-func testPosting(writer conversation.Writer) *conversation.Posting {
-	return conversation.NewPagePosting(fakeTxRunner{},
-		func(platform.Tx) conversation.Writer { return writer },
-		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil, nil, nil, nil)
-}
-
-func testPoster() *conversation.Posting { return testPosting(&fakePostingWriter{}) }
 
 func TestMessagePostHandler(t *testing.T) {
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
@@ -326,14 +256,19 @@ func TestMessagePostHandler(t *testing.T) {
 	}
 	for _, tt := range []struct {
 		name, body string
-		storeErr   error
+		postErr    error
 		status     int
 	}{
 		{"success", "  hello\r\nworld  ", nil, 303},
-		{"empty", " \n ", nil, 422},
-		{"leading newline", "\n\n", nil, 422},
-		{"long", strings.Repeat("界", 4001), nil, 422},
-		{"forbidden", "<script>\u202ebad</script>", nil, 422},
+		{"empty", " \n ", conversation.ErrInvalidBody, 422},
+		{"leading newline", "\n\n", conversation.ErrInvalidBody, 422},
+		{"long", strings.Repeat("界", 4001), conversation.ErrInvalidBody, 422},
+		{"forbidden", "<script>\u202ebad</script>", conversation.ErrInvalidBody, 422},
+		{"default empty", "  ", nil, 422},
+		{"default absent body", "", nil, 422},
+		{"default newline", "\n", nil, 422},
+		{"default leading newline", "\n\n", nil, 422},
+		{"default control", "invalid\u0001body", nil, 422},
 		{"missing", "hello", conversation.ErrChannelNotFound, 404},
 		{"membership gone", "hello", org.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},
@@ -341,10 +276,10 @@ func TestMessagePostHandler(t *testing.T) {
 		for _, mode := range []struct{ hx, topic bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
 			hx := mode.hx
 			t.Run(fmt.Sprintf("%s/htmx=%t/topic=%t", tt.name, hx, mode.topic), func(t *testing.T) {
-				writer := &fakePostingWriter{id: kernel.ID{37}, err: tt.storeErr}
+				poster := &fakePoster{err: tt.postErr}
 				state := typing.New(realtime.NewHub())
-				actual := conversation.Message{ID: writer.id, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}, EventSeq: 71}
-				writer.returned = &actual
+				actual := conversation.Message{ID: kernel.ID{37}, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}, EventSeq: 71}
+				poster.result = conversation.Sent{Message: actual, Topic: kernel.ID{2}}
 				// Posting closes the generation in the requested place: the
 				// fake's default topic and the topic URL's are both {2}, and
 				// typing never uses the returned message's topic {6} (#1155).
@@ -359,8 +294,11 @@ func TestMessagePostHandler(t *testing.T) {
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
 					reader.before = &reads
-					s.Messages, s.Posting = reader, testPosting(writer)
+					s.Messages, s.Posting = reader, poster
 					s.Typing = state
+					s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+						l.signal = middleware.NewMemberRateLimiter(time.Now)
+					})
 				}))
 				if err != nil {
 					t.Fatal(err)
@@ -377,6 +315,14 @@ func TestMessagePostHandler(t *testing.T) {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, r)
+				var requested *kernel.ID
+				if mode.topic {
+					requested = &kernel.ID{2}
+				}
+				wantSend := conversation.Send{Topic: requested, Body: tt.body, Cursor: new(int64), UnknownMember: "@unknown member"}
+				if len(poster.calls) != 1 || poster.calls[0].channel != (kernel.ID{1}) || poster.calls[0].membership != (org.Membership{Organization: org.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: org.Member{Role: org.RoleOwner, Handle: "alice"}}) || !reflect.DeepEqual(poster.calls[0].send, wantSend) {
+					t.Fatalf("poster call: %+v, want send %+v", poster.calls, wantSend)
+				}
 				want := tt.status
 				if hx && want == 303 {
 					want = 200
@@ -399,14 +345,11 @@ func TestMessagePostHandler(t *testing.T) {
 					t.Fatal("new composer cannot start typing")
 				}
 				if tt.status == 303 {
-					if writer.body != "hello\nworld" || writer.org != (kernel.ID{}) || writer.member != (kernel.ID{}) || writer.channel != (kernel.ID{1}) {
-						t.Fatalf("posting scope/body: %+v", writer)
-					}
 					if !hx && w.Header().Get("Location") != path {
 						t.Fatal("wrong redirect")
 					}
 				}
-				marker := `data-posted-message="` + view.MessageDOMID(writer.id) + `"`
+				marker := `data-posted-message="` + view.MessageDOMID(actual.ID) + `"`
 				if hx && (want == 200 || want == 422) && !strings.Contains(w.Body.String(), `name="cursor" value="0"`) {
 					t.Fatal("composer must echo submitted cursor, not post sequence")
 				}
@@ -442,8 +385,8 @@ func TestMessagePostHandler(t *testing.T) {
 					if _, invalid := attrOK(state, "data-invalid"); invalid != (want == 422) || find(state, atom.Textarea) != nil {
 						t.Fatal("enhanced answer flags the field wrongly or replaces the textarea")
 					}
-					if want == 422 && (attr(find(state, atom.P), "role") != "alert" || writer.body != "") {
-						t.Fatal("enhanced 422 lacks its alert or posted")
+					if want == 422 && attr(find(state, atom.P), "role") != "alert" {
+						t.Fatal("enhanced 422 lacks its alert")
 					}
 					return
 				} else {
@@ -455,8 +398,8 @@ func TestMessagePostHandler(t *testing.T) {
 				}
 				field := find(doc, atom.Textarea)
 				if want == 422 {
-					if text(field) != tt.body || attr(field, "aria-invalid") != "true" || writer.body != "" {
-						t.Fatal("invalid input lost or posted")
+					if text(field) != tt.body || attr(field, "aria-invalid") != "true" {
+						t.Fatal("invalid input lost its value or error state")
 					}
 					checkFieldError(t, doc, field)
 				} else if text(field) != "" {
@@ -536,7 +479,9 @@ func TestMessagePagingHandler(t *testing.T) {
 			var seen []*int64
 			var arounds []int64
 			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: kernel.ID{8}, TopicID: kernel.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen, around: &arounds}
+			poster := testPoster()
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Posting = poster
 				s.Messages, s.Reading = reader, readCall(func(context.Context) error { return nil })
 			}))
 			if err != nil {
@@ -655,6 +600,7 @@ func TestMessagePagingHandler(t *testing.T) {
 					if posted.Code != 303 || posted.Header().Get("Location") != tt.path {
 						t.Fatal("older-page form must redirect to the latest page")
 					}
+					poster.err = conversation.ErrInvalidBody
 					invalid := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"\n\n"}})
 					if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), "\n\n\n</textarea>") {
 						t.Fatal("older-page form must retain an invalid draft")
@@ -753,22 +699,6 @@ func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.I
 	// Like Reader.Members, a channel the page cannot find is an error.
 	_, err := f.Page(ctx, m, id, nil, nil)
 	return conversation.MembersPage{Members: []conversation.ChannelMember{{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "alice"}, {ID: kernel.ID{2}, DisplayName: "\u3164", Handle: "legacy"}}, Next: &kernel.ID{7}}, err
-}
-
-func (*fakePostingWriter) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
-	return 0, nil
-}
-
-func (w *fakePostingWriter) TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error) {
-	return false, nil
-}
-
-// fakePostReads keeps testPoster database-free for handler unit tests. Unlike
-// compose.PostReads, it succeeds without advancing persisted read state.
-type fakePostReads struct{}
-
-func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error {
-	return nil
 }
 
 func (f fakeMessages) Sidebar(ctx context.Context, m org.Membership, id kernel.ID, topic *kernel.ID) (conversation.SidebarSnapshot, error) {

@@ -24,7 +24,7 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 	handler, writer, _, _, _, path := keyedComposer(t, true)
-	// The fake writer is not safe for concurrent use; the test reads it too.
+	// The Poster fake is not safe for concurrent use; the test reads it too.
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
@@ -158,13 +158,21 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	// "third" is stored and its answer lost; the retry's 409 arrives during
 	// an IME composition, and the stored text leaves only when it ends, with
 	// the caret kept on the remaining text (#1173's rules).
+	mu.Lock()
+	writer.result.Message.TypedBodyProof = conversation.TypedBodyProof{0x0, 0x0, 0x0, 0x5, 0xb1, 0xe9, 0x93, 0x24, 0x50, 0x5b, 0xd3, 0x2d, 0xa0, 0xe1, 0xf8, 0x5d, 0xcf, 0x5e, 0x19, 0xa0, 0x9d, 0xb0, 0x48, 0x1e, 0x8a, 0x15, 0xf6, 0x2c, 0x41, 0xeb, 0x32, 0x3, 0x4, 0xa8, 0xe9, 0x27}
+	mu.Unlock()
 	page.MustEval(`() => { document.getElementById('message-body').value = 'third'; }`)
-	send("lost")
+	key = send("lost").Get("idempotency_key")
 	page.MustEval(`() => { const body = document.getElementById('message-body'); body.value = 'third world'; body.setSelectionRange(7, 7); body.focus(); }`)
+	mu.Lock()
+	writer.err = conversation.ErrPostKeyReused
+	mu.Unlock()
 	answers <- "held"
 	n := page.MustEval(`() => window.composerAnswers`).Int()
 	page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
-	<-sent
+	if form := <-sent; form.Get("idempotency_key") != key {
+		t.Fatalf("held retry: sent %v, want the lost send's key %q", form, key)
+	}
 	if err := (proto.InputImeSetComposition{Text: "に", SelectionStart: 1, SelectionEnd: 1}).Call(page); err != nil {
 		t.Fatal(err)
 	}
@@ -182,18 +190,19 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	// A legacy row cannot prove the original typed input. Even a body that
 	// starts with the stored text must keep the draft and show the 409 error.
-	page.MustEval(`() => { document.getElementById('message-body').value = 'legacy'; }`)
-	send("lost")
 	mu.Lock()
-	for scope, stored := range writer.keyed {
-		if stored.Body == "legacy" {
-			stored.TypedBodyProof = conversation.TypedBodyProof{}
-			writer.keyed[scope] = stored
-		}
-	}
+	writer.err = nil
+	mu.Unlock()
+	page.MustEval(`() => { document.getElementById('message-body').value = 'legacy'; }`)
+	key = send("lost").Get("idempotency_key")
+	mu.Lock()
+	writer.result.Message.TypedBodyProof = conversation.TypedBodyProof{}
+	writer.err = conversation.ErrPostKeyReused
 	mu.Unlock()
 	page.MustEval(`() => { const body = document.getElementById('message-body'); body.value = 'legacy extra'; body.setSelectionRange(8, 8); }`)
-	send("pass")
+	if form := send("pass"); form.Get("idempotency_key") != key {
+		t.Fatalf("legacy retry: sent %v, want the lost send's key %q", form, key)
+	}
 	if got := state()[0]; got != "legacy extra" || page.MustEval(`() => document.getElementById('message-body').selectionStart`).Int() != 8 {
 		t.Fatalf("unverified 409 removed draft: %q", got)
 	}
@@ -203,7 +212,7 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	// The verified-prefix case above also asserts the caret after removal.
 	mu.Lock()
 	defer mu.Unlock()
-	if writer.inserts != 4 {
-		t.Fatalf("%d messages stored, want 4", writer.inserts)
+	if len(writer.calls) != 7 {
+		t.Fatalf("%d Poster calls, want 7", len(writer.calls))
 	}
 }

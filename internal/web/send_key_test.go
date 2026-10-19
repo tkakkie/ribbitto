@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -141,7 +142,12 @@ func TestComposerSendKeyRendering(t *testing.T) {
 	for _, key := range []identity.SendKey{identity.SendKeyEnter, identity.SendKeyModifierEnter} {
 		for _, response := range []string{"page", "200", "422"} {
 			t.Run(string(key)+"/"+response, func(t *testing.T) {
-				h, _, _, place := composerHandler(t, false, func(s *Services) { s.Sessions = sendKeySession{key: key} })
+				h, _, _, place := composerHandler(t, false, func(s *Services) {
+					s.Sessions = sendKeySession{key: key}
+					if response == "422" {
+						s.Posting = &fakePoster{err: conversation.ErrInvalidBody}
+					}
+				})
 				path := view.ChannelURL("acme", place.Channel)
 				w := serveForm(h, "GET", path, "live", nil)
 				if response != "page" {

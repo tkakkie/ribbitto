@@ -91,12 +91,19 @@ type containerRunner interface {
 	run(context.Context, []string, []string, io.Writer, io.Writer) (int, error)
 }
 
-type dockerRunner struct{}
+type dockerRunner struct {
+	ownGroup bool
+	path     string
+}
 
-func (dockerRunner) run(ctx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
+func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
 	// Look up only in trusted directories, never the caller's PATH or cwd.
 	var binary string
-	for _, dir := range filepath.SplitList(containerPath) {
+	searchPath := r.path
+	if searchPath == "" {
+		searchPath = containerPath
+	}
+	for _, dir := range filepath.SplitList(searchPath) {
 		if path, err := exec.LookPath(filepath.Join(dir, "docker")); err == nil {
 			binary = path
 			break
@@ -107,6 +114,12 @@ func (dockerRunner) run(ctx context.Context, args, env []string, stdout, stderr 
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = "/", env, stdout, stderr
+	// The MCP server must kill descendants too when its context ends; a
+	// surviving docker child must not keep a killed server's call alive.
+	if r.ownGroup {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	}
 	cmd.WaitDelay = time.Second
 	err := cmd.Run()
 	var exit *exec.ExitError

@@ -12,7 +12,7 @@ provide full parity.
   branching, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
-  keyboard shortcuts (Enter to send), local-time display, own-mention outlines,
+  keyboard shortcuts (chosen send key), local-time display, own-mention outlines,
   pending own posts on feeds/topics and drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
 
@@ -39,7 +39,7 @@ htmx does only requests/swaps; the server and templ own HTML.
 
 - A normal request gets a full page. `hx-select` can select part of it (Load older).
   Enhanced posts return `MessageComposer`: `#message-composer-state` (hidden
-  controls and `#message-help`; never the textarea, #1173) plus a hidden
+  controls, `data-send-key` and `#message-help`; never the textarea, #1173) plus a hidden
   `typing-form`, refreshed out of band with the same generation (only there: Load
   older would install an unclosed one). Signals use the
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
@@ -52,13 +52,15 @@ htmx does only requests/swaps; the server and templ own HTML.
   proof (`data-sent-body`) instead of the error; legacy rows without proof keep the error and draft. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid` on every swap; pending
   success sets it to `"false"` and keeps `aria-describedby="message-help composer-quote-description"`.
+  The state's `data-send-key` (`enter`/`modifier_enter`) is read on every keydown;
+  load/state swaps set `enterkeyhint`. `#message-help` shows a body alert before shortcut help.
   Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v17.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v18.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one. Events on `#message-body`:
   `message-sending` and `message-sent` bind draft snapshots/confirmation to each

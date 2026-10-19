@@ -108,7 +108,7 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
   Composition hides it; Enter has a 100 ms guard after commit.
   Picks use `setRangeText` and dispatch `input` for drafts and typing.
 - **Drafts:** [below](#drafts).
-- **Send key** (planned, #1158): server-stored preference (`account.send_key`, #1175) read
+- **Send key** (#1158): server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.
 
 ### Drafts

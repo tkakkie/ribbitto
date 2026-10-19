@@ -177,7 +177,9 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 	acceptanceOK(t, err)
 	handler, err := web.NewHandler("", cat, web.Services{
-		PostLimits: middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
+		Preferences:   identitypg.NewPreferences(pool),
+		SendKeyLimits: middleware.NewMemberRateLimiter(time.Now),
+		PostLimits:    middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
 		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now), CreateLimits: middleware.NewChannelCreationRateLimiter(time.Now),
 		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
 		Messages: conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn),

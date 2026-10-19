@@ -73,7 +73,7 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
   plain Enter/Tab before send/navigation. Token boundaries mirror posting; code
   checks are conservative. IME keys and the 100 ms commit Enter are suppressed;
   textarea focus/listbox ARIA stay ([composer](web-composer.md#composer)).
-- `message-composer-v17.js` preserves newest/visible-item position during
+- `message-composer-v18.js` preserves newest/visible-item position during
   [composer growth](../ui-composer.md), reveals the end caret after layout and
   prioritizes post-success scrolling. It closes Quote's popover and focuses
   the textarea after chip swaps. `htmx:configRequest` copies `#quote-form`'s native

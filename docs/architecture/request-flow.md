@@ -39,6 +39,11 @@ the home page.
 Every route under `/organizations/{slug}/` and its result is listed in
 [`routes.md`](routes.md).
 
+`POST …/send-key` uses independent per-member admission, then identity preferences
+to update only `middleware.Account` (invalid value: 400). Its 303 uses parsed
+`return_channel`/`return_topic` UUIDs and `view.ConversationURL`, or the channel
+list, dropping history, panels and scroll position. The choice follows the account.
+
 Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
 its channel, reads one ID through `conversation.Reader.Many`, and returns only
 `#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`

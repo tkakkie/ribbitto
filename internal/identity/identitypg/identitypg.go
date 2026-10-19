@@ -31,3 +31,8 @@ func NewSignIn(pool *pgxpool.Pool, hasher *identity.Hasher, sessions *identity.S
 func AccountsIn(snapshot platform.Snapshot) identity.Directory {
 	return postgres.NewDirectoryIn(snapshot)
 }
+
+// NewPreferences returns account preference updates on pool.
+func NewPreferences(pool *pgxpool.Pool) *identity.Preferences {
+	return identity.NewPreferences(postgres.NewAccountStore(pool))
+}

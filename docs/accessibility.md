@@ -136,30 +136,28 @@ Enter and with Space at desktop and phone width.
 
 Quoting has a keyboard and screen-reader path: menu → Quote → Quote only
 part → edit the labelled textarea → send. It works without JavaScript or page
-selection. Both chip actions have 44 px targets.
+selection. Both chip actions have 44 px targets. The optional "Quote selection"
+button follows the body, hidden (no tab stop or accessibility node) unless the
+whole selection is inside one body; below `desk` its target is 44 × 44 px.
+The selection survives the press.
 
-A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
-when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
-header control has `aria-current="true"`. Its close link, and Escape through
-`side-panel-v3.js`, return to the conversation; Escape acts only with focus
-in the panel or on nothing and no popover open, so Escape in the composer
-never closes the panel. After that close, focus returns to the control that opened the panel:
-its id crosses the page load in `sessionStorage`.
+A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
+(`autofocus` with `tabindex="-1"`). Its open header control has
+`aria-current="true"`. The close link and `side-panel-v3.js`'s Escape return
+to the conversation and focus the opener, whose id crosses the page load in
+`sessionStorage`. Escape acts only with focus in the panel or on nothing
+and no popover open, so it never closes the panel from the composer.
 
-Below 1200 px the panel covers the conversation and is a modal dialog,
-one model for the overlay and the phone's sheet (#972,
-[side panels](ui-components.md#side-panels)). The script gives it
-`role="dialog"` and `aria-modal="true"` and makes everything else on the
-page inert (the app bar, the sidebar or list, and the conversation), so
-neither focus nor a pointer reaches them; focus left behind moves to the
-heading. Tab from the last stop, and Shift-Tab from the first stop or the
-heading, wrap inside the dialog. Widening the window to 1200 px removes the
-role, `aria-modal` and `inert`, leaving the complementary `<aside>`;
-crossing 852 px either way keeps the modal. The dimmed `#panel-backdrop`,
-over the whole page, is a close link for a pointer only (`tabindex="-1"`,
-`aria-hidden="true"`); the close link and Escape serve the keyboard and
-assistive technology, and focus returns to the opener after any of the
-three. The modal semantics come with the script: without JavaScript the
-panel is a page whose close link and member paging work.
-`testPanelSheetBrowser` checks this through the accessibility tree at both
-widths, with the sheet's height, scrolling and the reading pause.
+Below 1200 px the panel covers the conversation as a modal dialog, sharing
+the overlay/phone sheet model (#972, [side panels](ui-components.md#side-panels)).
+The script sets `role="dialog"`, `aria-modal="true"` and makes the rest of the
+page inert (app bar, sidebar or list, conversation), blocking focus and pointers;
+focus left behind moves to the heading. Tab from the last stop, and Shift-Tab
+from the first stop or heading, wrap inside. Widening to 1200 px removes
+`role`, `aria-modal` and `inert`, restoring the complementary `<aside>`;
+crossing 852 px either way keeps the modal. The dimmed `#panel-backdrop` covers the page
+as a pointer-only close link (`tabindex="-1"`, `aria-hidden="true"`); the close
+link and Escape serve keyboard and assistive technology. All three return
+focus to the opener. Without JavaScript the panel is a page with working
+close link and member paging. `testPanelSheetBrowser` checks the accessibility
+tree at both widths, sheet height, scrolling and reading pause.

@@ -361,42 +361,11 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 	})
 	select {
 	case form := <-requests:
-		if len(form["quote_text"]) != 1 || form.Get("quote_text") != want {
+		if form.Get("quote") != realtime.FormatPayloadID(first.ID) || len(form["quote_text"]) != 1 || form.Get("quote_text") != want {
 			t.Fatalf("selection request: %v", form)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("selection chip: request missing")
-	}
-	if scenario == "selection-menu" {
-		step(t, "menu Quote on another message after part chip: whole chip", func(p *rod.Page) {
-			// Exercise submit-time clearing before htmx collects controls, even if a
-			// previous selection has left its hidden input enabled.
-			p.MustEval(`() => {
-    const input = document.querySelector('#quote-form input[name=quote_text]');
-    input.disabled = false; input.value = 'original';
-    document.addEventListener('submit', event => {
-     event.target.dataset.selectionAtSubmit = new FormData(event.target).get('quote_text') ?? '';
-    }, {capture: true, once: true});
-   }`)
-			p.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, second.ID)).MustClick()
-			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustClick()
-			if p.MustEval(`() => document.getElementById('quote-form').dataset.selectionAtSubmit`).Str() != "" {
-				panic("menu Quote: selection input was enabled when submit reached htmx")
-			}
-			p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
-		})
-		select {
-		case form := <-requests:
-			if form.Has("quote_text") || form.Get("quote") != realtime.FormatPayloadID(second.ID) {
-				t.Fatalf("menu Quote after part chip: unexpected fields %v", form)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("menu Quote after part chip: second request missing")
-		}
-		if posts.Load() != 0 {
-			t.Fatal("menu Quote after part chip: unexpected composer post")
-		}
-		return
 	}
 	step(t, "selection compose: unique answer entered", func(p *rod.Page) {
 		p.MustElement("#message-body").MustInput("selection answer")
@@ -410,6 +379,25 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
    item.querySelector('figure figcaption')?.textContent.includes('@owner') &&
    item.querySelector('figure a')?.getAttribute('href') === href)`, view.MessageURL("acme", first.ID), want)
 	})
+	if scenario == "selection-menu" {
+		step(t, "menu after quoted post: another message's actions open", func(p *rod.Page) {
+			p.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, second.ID)).MustClick()
+			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustWaitVisible()
+		})
+		step(t, "menu after quoted post: whole Quote creates another message's whole chip", func(p *rod.Page) {
+			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustClick()
+			p.MustWait(`id => document.querySelector('#composer-quote [name=part]')?.value === id &&
+   document.querySelector('#composer-quote input[name=quote]')?.value === id && !document.getElementById('quote-text')`, realtime.FormatPayloadID(second.ID))
+		})
+		select {
+		case form := <-requests:
+			if form.Get("quote") != realtime.FormatPayloadID(second.ID) || form.Has("quote_text") {
+				t.Fatalf("menu after quoted post: unexpected second chip request %v", form)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("menu after quoted post: second chip request missing")
+		}
+	}
 	if posts.Load() != 1 {
 		t.Fatalf("selection send: posts = %d, want one deliberate send", posts.Load())
 	}

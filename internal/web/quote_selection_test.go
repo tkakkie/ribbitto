@@ -78,7 +78,7 @@ type quoteSelectionFixture struct {
 var quoteSelectionFixtures = []quoteSelectionFixture{
 	{"plain", conversation.FormatPlainText, "**literal**\nline\n\nlast", "**literal**\nline\n\nlast"},
 	{"mention", conversation.FormatChatV1, "hello <@MEMBER> again", "hello @owner again"},
-	{"paragraphs", conversation.FormatChatV1, "first paragraph\n\nsecond paragraph", "first paragraph\n\nsecond paragraph"},
+	{"one-block-blank-lines", conversation.FormatChatV1, "first paragraph\n\nsecond paragraph", "first paragraph\n\nsecond paragraph"},
 	{"emphasis", conversation.FormatChatV1, "before **bold** and _italic_ after", "before bold and italic after"},
 	{"code", conversation.FormatChatV1, "before `x<y` after", "before x<y after"},
 	{"fenced-code", conversation.FormatChatV1, "before\n```go\nx<y\n  z\n```\nafter", "before\nx<y\n  z\nafter"},

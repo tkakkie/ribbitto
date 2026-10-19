@@ -108,16 +108,15 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` must pass before a pull request; for code another AI wrote,
-green CI on the draft replaces it and must pass before review
+`make check` must pass before a pull request; for another AI's code,
+green draft CI replaces it before review
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test`, then `check-tools`. CI runs them in parallel;
-the `rest` shard runs in its own `test-rest` job beside `checks`, and
-[`testshard -run`](tools/testshard/main.go) owns each shard's packages, selector
-and flags (`.github/workflows/ci.yml`). It
-checks formatting and internal packages' `doc.go` files through
+It runs `check-static`, `check-test`, then `check-tools`. CI's `checks` job runs
+the first and last; the rest shard runs in its own `test-rest` job beside `checks`.
+[`testshard -run`](tools/testshard/main.go) owns test packages, selectors and flags.
+`make check` checks formatting and internal `doc.go` files through
 [`tools/formatcheck`](tools/formatcheck/main.go), then vets, lints,
-builds, runs the Go tests with the race detector (at `-p 2` by default; see
+builds, runs Go tests with `-race` (`-p 2` by default; see
 [worktree-env.md](docs/worktree-env.md)), and checks the import
 graph, module API summaries and the documents. `tools/sourcecheck` enforces the
 [product vocabulary](docs/domain/vocabulary.md) and

@@ -99,7 +99,7 @@
       }
     };
     markers();
-    document.addEventListener("htmx:load", (event) => {
+    document.addEventListener("mutation-disabled-load", (event) => {
       const root = event.detail?.elt;
       if (root?.id === "sidebar-channels") markers(root);
       else { const sidebar = root?.querySelector("#sidebar-channels"); if (sidebar) markers(sidebar); }

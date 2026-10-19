@@ -217,6 +217,9 @@ type postCall struct {
 	send       conversation.Send
 }
 
+// fakePoster keeps Posting's body validation because browser fixtures rely on
+// its 422 responses to preserve drafts and composer generations. Explicit
+// outcomes still take precedence, and calls retain the un-normalised body.
 type fakePoster struct {
 	calls      []postCall
 	result     conversation.Sent
@@ -229,7 +232,13 @@ func (p *fakePoster) Send(_ context.Context, m org.Membership, channel kernel.ID
 	if err, ok := p.bodyErrors[send.Body]; ok {
 		return p.result, err
 	}
-	return p.result, p.err
+	if p.err != nil {
+		return p.result, p.err
+	}
+	if _, err := conversation.ValidateMessageBody(send.Body); err != nil {
+		return conversation.Sent{}, fmt.Errorf("%w: %w", conversation.ErrInvalidBody, err)
+	}
+	return p.result, nil
 }
 
 func testPoster() *fakePoster {
@@ -251,6 +260,11 @@ func TestMessagePostHandler(t *testing.T) {
 		{"leading newline", "\n\n", conversation.ErrInvalidBody, 422},
 		{"long", strings.Repeat("界", 4001), conversation.ErrInvalidBody, 422},
 		{"forbidden", "<script>\u202ebad</script>", conversation.ErrInvalidBody, 422},
+		{"default empty", "  ", nil, 422},
+		{"default absent body", "", nil, 422},
+		{"default newline", "\n", nil, 422},
+		{"default leading newline", "\n\n", nil, 422},
+		{"default control", "invalid\u0001body", nil, 422},
 		{"missing", "hello", conversation.ErrChannelNotFound, 404},
 		{"membership gone", "hello", org.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},

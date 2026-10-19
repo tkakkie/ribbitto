@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,9 @@ import (
 	"golang.org/x/net/html"
 )
 
+// fakeBrancher keeps Brancher's input validation because browser fixtures
+// submit invalid names and wait for its 422 feedback before retrying.
+// Conflicts depend on stored messages, so tests supply those through err.
 type fakeBrancher struct {
 	membership org.Membership
 	channel    kernel.ID
@@ -28,7 +32,30 @@ type fakeBrancher struct {
 
 func (f *fakeBrancher) Branch(_ context.Context, m org.Membership, channel kernel.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error) {
 	f.membership, f.channel, f.got = m, channel, b
-	return conversation.Topic{ID: kernel.ID{0x32}}, f.err
+	if f.err != nil {
+		return conversation.Topic{ID: kernel.ID{0x32}}, f.err
+	}
+	if len(b.Messages) == 0 || len(b.Messages) > conversation.MaxBranchMessages {
+		return conversation.Topic{}, conversation.ErrInvalidBranch
+	}
+	seen := make(map[kernel.ID]bool, len(b.Messages))
+	for _, id := range b.Messages {
+		if seen[id] {
+			return conversation.Topic{}, conversation.ErrInvalidBranch
+		}
+		seen[id] = true
+	}
+	if b.To != nil && (b.NewName != "" || *b.To == b.From) {
+		return conversation.Topic{}, conversation.ErrInvalidBranch
+	}
+	if b.To == nil {
+		name, err := conversation.ValidateTopicName(b.NewName)
+		if err != nil {
+			return conversation.Topic{}, fmt.Errorf("%w: %w", conversation.ErrInvalidTopicName, err)
+		}
+		return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, nil
+	}
+	return conversation.Topic{ID: *b.To}, nil
 }
 
 func TestBranchSelection(t *testing.T) {
@@ -51,8 +78,10 @@ func TestBranchSelection(t *testing.T) {
 		{"mixed", []string{selection, strings.Replace(selection, source, "32000000-0000-0000-0000-000000000000", 1)}, nil, 422, "topic.branch_mixed"},
 		{"stale", []string{selection}, conversation.ErrBranchConflict, 409, "topic.branch_conflict"},
 		{"name", []string{selection}, conversation.ErrInvalidTopicName, 422, "topic.branch_name_invalid"},
+		{"name default", []string{selection}, nil, 422, "topic.branch_name_invalid"},
 		{"duplicate", []string{selection}, conversation.ErrTopicNameTaken, 422, "topic.branch_name_taken"},
 		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), conversation.ErrInvalidBranch, 422, "topic.branch_invalid"},
+		{"too many default", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), nil, 422, "topic.branch_invalid"},
 		{"out of scope", []string{selection}, conversation.ErrTopicNotFound, 404, ""},
 	} {
 		for _, hx := range []bool{false, true} {
@@ -64,7 +93,7 @@ func TestBranchSelection(t *testing.T) {
 						t.Fatal(err)
 					}
 					form := url.Values{"message": tt.selected, "name": {"design"}, "return_topic": {source}, "before": {"9"}}
-					if tt.name == "name" {
+					if strings.HasPrefix(tt.name, "name") {
 						form.Set("name", strings.Repeat("x", 81))
 					}
 					if tt.name == "existing" {
@@ -92,7 +121,7 @@ func TestBranchSelection(t *testing.T) {
 						if tt.name == "existing" {
 							wantBranch.To = &kernel.ID{0x32}
 						}
-						if tt.name == "too many" {
+						if strings.HasPrefix(tt.name, "too many") {
 							wantBranch.Messages = make([]kernel.ID, len(tt.selected))
 							for i := range wantBranch.Messages {
 								wantBranch.Messages[i] = kernel.ID{8}

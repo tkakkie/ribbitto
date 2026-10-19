@@ -3,7 +3,7 @@
 The maintainer chose option B on 2026-10-19
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-This rule awaits implementation.
+Implementation is pending.
 
 ## Status
 
@@ -11,20 +11,19 @@ The `verify` permission is **NOT in force**. It requires
 [#1429](https://github.com/tkakkie/ribbitto/issues/1429),
 [#1430](https://github.com/tkakkie/ribbitto/issues/1430),
 [#1431](https://github.com/tkakkie/ribbitto/issues/1431),
-[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and this
-documentation pull request to be merged, the extended real-path preflight in
+[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and this PR to be merged,
+the extended real-path preflight in
 [#1433](https://github.com/tkakkie/ribbitto/issues/1433) to pass and be
 recorded, and the maintainer to explicitly approve enabling. After enabling
 and a passing smoke test, a later small documentation change records the
-permission as in force; this pull request does not make that change. The
+permission as in force; this PR does not do so. The
 Start gate and review independence stay. Until then Argon runs keep today's
-rules byte for byte: no MCP, no `verify`, and settings retain the `mcp(*)`
-deny.
+rules and settings unchanged: no MCP, no `verify`, the `mcp(*)` deny stays.
 
 ## Tool permissions
 
-Argon keeps no arbitrary shell, `run_command` or other command tool. MCP
-admits only one fixed `verify` tool, through two agreeing layers:
+(When in force) Argon keeps no arbitrary shell, `run_command` or other
+command tool. MCP admits only one fixed `verify` tool through two agreeing layers:
 
 - The guard allows `call_mcp_tool` only for the exact configured server,
   tool `verify` and strictly validated `Arguments`, sharing one Go schema
@@ -32,9 +31,9 @@ admits only one fixed `verify` tool, through two agreeing layers:
   wrong types, over-long values, flags, absolute paths, `..` and disallowed
   path-like values. Check names and package patterns are fixed in code;
   no caller selects a command, worktree or image.
-- Settings replace only the blanket `mcp(*)` deny with the narrow
-  `mcp(<server>/verify)` allow when the feature is on. With it off, settings
-  are byte-identical to today's, including all command and URL denies.
+- Feature-on settings replace only the blanket `mcp(*)` deny with the narrow
+  `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
+  today's, including all command and URL denies.
   The review launcher's settings and guard stay unchanged.
 
 With MCP configured, the custom agent's `tools` list is no barrier:
@@ -60,11 +59,11 @@ calls `argonreview container-check`.
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
 variables, a trusted binary path and fixed start-up arguments for the
 trusted source path and worktree. Neither agy's environment nor a tool
-argument supplies these. The server refuses to serve unless its build is
-from the trusted revision, checked against that source. The MCP file and
+argument supplies these. The server serves only if its build matches
+the trusted revision, checked against that source. The MCP file and
 server are included in pre- and post-run checks.
 
-The server checks a fixed environment allowlist, settled by preflight. The
+The server checks a fixed environment allowlist settled by preflight. The
 runner uses only constants and fixed Docker variables. `FAILED` and `NOT
 VERIFIED` results set `isError`.
 
@@ -74,7 +73,7 @@ The runner uses no network: no outbound or loopback reach, including the
 host gateway and Docker Desktop VM. The spike's loopback probe logged no
 request under `--network none` ([part
 1](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
-It runs on an isolated, throwaway source copy, never the original tree:
+It uses an isolated, throwaway source copy, never the original tree:
 
 - Copy tracked and untracked non-ignored files with the hardened git
   settings from the [boundary](argon-implementer.md#the-boundary). Ignored
@@ -129,9 +128,10 @@ moving it into the container.
 ## Extended preflight
 
 [#1433](https://github.com/tkakkie/ribbitto/issues/1433) adds these checks
-to the [existing preflight](argon-implementer.md#preflight), retained in
-full. Claude runs the real Argon → MCP → Docker → test-result path on the
-host, in a throwaway repository with the dedicated worker home:
+to the [existing preflight](argon-implementer.md#preflight). Keep current
+items; only when in force, replace the MCP refusal with "MCP other than the
+exact `verify` call". Claude runs the real Argon → MCP → Docker → test-result
+path on the host in a throwaway repository with the dedicated worker home:
 
 - **Allow:** `verify` passes on a real package; a deliberately broken
   change makes the targeted test fail by name.
@@ -167,8 +167,8 @@ or Docker start; each probe's pass/fail and whether its run counts. Record
 no secret or home content; grep the record for the home path, sign-in file
 names and credential variable names and require no matches.
 
-Only after every preflight item passes and the maintainer explicitly
-approves, switch normal operation on and record a minimal smoke test:
+Only after all preflight items pass and explicit maintainer approval,
+switch normal operation on and record a minimal smoke test:
 `verify` succeeds on a correct package; `run_command` and shell execution,
 an unlisted MCP tool and an extra argument are refused; settings, hooks and
 MCP file match the expected files; the account's shared settings hash is

@@ -7,23 +7,27 @@ Implementation is pending.
 
 ## Status
 
-The `verify` permission is **NOT in force**. It requires
+`verify` is **NOT in force**. It requires
 [#1429](https://github.com/tkakkie/ribbitto/issues/1429),
 [#1430](https://github.com/tkakkie/ribbitto/issues/1430),
-[#1431](https://github.com/tkakkie/ribbitto/issues/1431),
-[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and this PR to be merged,
-the extended real-path preflight in
-[#1433](https://github.com/tkakkie/ribbitto/issues/1433) to pass and be
-recorded, and the maintainer to explicitly approve enabling. After enabling
-and a passing smoke test, a later small documentation change records the
-permission as in force; this PR does not do so. The
+[#1431],
+[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and this PR to be
+merged; [#1436] Stage 1 complete (the real Argon run path, the hook that
+agy uses in normal operation, already runs the Go guard built from the trusted
+revision, after Stage 1's whole existing preflight passed through it and one
+real run completed with it); the extended real-path preflight in [#1433] to
+pass and be recorded; and the maintainer to explicitly approve enabling.
+#1436 Stage 2 is independent of enabling. After enabling
+and a passing smoke test, a later small documentation change records it as
+in force; this PR does not do so. The
 Start gate and review independence stay. Until then Argon runs keep today's
 rules and settings unchanged: no MCP, no `verify`, the `mcp(*)` deny stays.
 
 ## Tool permissions
 
 (When in force) Argon keeps no arbitrary shell, `run_command` or other
-command tool. MCP admits only one fixed `verify` tool through two agreeing layers:
+command tool. MCP admits only one fixed `verify` tool through two agreeing
+layers:
 
 - The guard allows `call_mcp_tool` only for the exact configured server,
   tool `verify` and strictly validated `Arguments`, sharing one Go schema
@@ -31,28 +35,28 @@ command tool. MCP admits only one fixed `verify` tool through two agreeing layer
   wrong types, over-long values, flags, absolute paths, `..` and disallowed
   path-like values. Check names and package patterns are fixed in code;
   no caller selects a command, worktree or image.
-- Feature-on settings replace only the blanket `mcp(*)` deny with the narrow
+- Feature-on settings replace only blanket `mcp(*)` deny with narrow
   `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
   today's, including all command and URL denies.
   The review launcher's settings and guard stay unchanged.
 
 With MCP configured, the custom agent's `tools` list is no barrier:
 `call_mcp_tool`, `list_resources`, `read_resource` and `manage_task` remain
-(spike part 2). The guard allows seven file tools plus the one validated
-call; every other tool, including the three resource/task tools, stays
-denied. Headless mode auto-denied the spike's call with guard approval
-alone; the settings allow is required too.
+(spike part 2). The guard allows seven file tools plus the validated
+call; every other tool, including three resource/task tools, stays
+denied. Headless mode auto-denied the spike's guard-approved call;
+the settings allow is required too.
 
 The feature switch, settings variant, guard mode and `mcp_config.json` must
 agree before and after each run; any mismatch fails closed. A changed
 settings, hooks or MCP file makes the run not count, as `denied_actions`
-already does. Server identity, arguments and configuration bytes are fixed
+does. Server identity, arguments and configuration bytes are fixed
 in #1430/#1432 code.
 
 ## Trusted server
 
 Outside `agy`'s sandbox, the MCP server is trusted computing base code. It
-gets minimal credentials, Docker rights and host rights, with no interface
+gets minimal credentials, Docker and host rights, with no interface
 for arbitrary commands. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
@@ -60,10 +64,10 @@ A fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
 variables, a trusted binary path and fixed start-up arguments for the
 trusted source path and worktree. Neither agy's environment nor a tool
 argument supplies these. The server serves only if its build matches
-the trusted revision, checked against that source. The MCP file and
-server are included in pre- and post-run checks.
+the trusted revision, checked against that source. Pre- and post-run checks
+include the MCP file and server.
 
-The server checks a fixed environment allowlist settled by preflight. The
+The server checks preflight's fixed environment allowlist. The
 runner uses only constants and fixed Docker variables. `FAILED` and `NOT
 VERIFIED` results set `isError`.
 
@@ -76,8 +80,8 @@ request under `--network none` ([part
 It uses an isolated, throwaway source copy, never the original tree:
 
 - Copy tracked and untracked non-ignored files with the hardened git
-  settings from the [boundary](argon-implementer.md#the-boundary). Ignored
-  files are excluded; copy caps are trusted constants.
+  settings from the [boundary](argon-implementer.md#the-boundary).
+  Copy caps are trusted constants.
   Omit root `.git`, `.github`, `AGENTS.md`, `CLAUDE.md`, `.gitattributes`
   and `.gitmodules`. Refuse nested `.git`, those baseline names outside
   the root and the guard's other refused names at any depth,
@@ -88,8 +92,8 @@ It uses an isolated, throwaway source copy, never the original tree:
   failure. Never copy or mount the dedicated `HOME`, sign-in token or
   parent `.git`.
 - Use a read-only container root, dropped capabilities, no new privileges,
-  an unprivileged user, and tmpfs for `/tmp` and container `HOME`. Pin the
-  image by digest with exactly the Go toolchain the copy's `go.mod` names;
+  an unprivileged user, tmpfs for `/tmp` and container `HOME`. Pin the
+  image by digest with the exact Go toolchain in the copy's `go.mod`;
   refuse a mismatch. Modules are offline with a read-only module cache:
   `GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly CGO_ENABLED=0`.
 - Time, memory (with equal swap limit), processes, CPU and output limits
@@ -100,34 +104,34 @@ It uses an isolated, throwaway source copy, never the original tree:
 Checks are exactly `go build <pkg>`, `go vet <pkg>` or `go test -count=1
 -json <pkg>` for named packages admitted by the code's strict allowlist
 pattern: no flags, spaces or `..` segment in the package argument, and no
-other flags. The race detector and cgo are not run there; output says so,
-and cgo-dependent packages stay CI-only.
+other flags. Output states no race detector or cgo runs there;
+cgo-dependent packages stay CI-only.
 
 ## Results
 
-The first line is `verified`, `FAILED` or `NOT VERIFIED`. Build/vet use zero
+First line: `verified`, `FAILED` or `NOT VERIFIED`. Build/vet use zero
 exit status; tests use per-test JSON, never package `ok` alone:
 
-- A skipped test is never a success. Count leaf tests only: a passing
+- A skipped test never succeeds. Count leaf tests only: a passing
   parent whose subtests all skipped counts as skipped. Verification needs
-  at least one passing leaf test, no failure or skip, and a final result
-  for every targeted package.
+  at least one passing leaf test, no failure or skip, and every targeted
+  package's final result.
 - Zero passing tests, no test files, missing results, malformed or truncated
-  output, a non-zero exit, an out-of-memory kill or abnormal exit are never
+  output, non-zero exit, out-of-memory kill or abnormal exit are never
   `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
   with the skipped count and names.
-- Database and browser tests are CI-only for now and appear as
+- Database and browser tests are CI-only for now, shown as
   `NOT VERIFIED` with skipped test names. A test needing an omitted file
-  fails or skips and is not verified in the container.
+  fails or skips, never verified in the container.
 
 `verified` is Argon's own check; it never replaces green CI, review or
 [handoff checks](running-other-ai.md#handoff-of-another-ais-code). CI stays
-the check. Mutation evidence stays on scratch pull requests: #1429 excludes
-moving it into the container.
+the check. Mutation evidence stays on scratch pull requests, excluded from
+the container by #1429.
 
 ## Extended preflight
 
-For [#1433](https://github.com/tkakkie/ribbitto/issues/1433)'s preflight and once in force,
+For [#1433]'s preflight and once in force,
 extend the [existing preflight](argon-implementer.md#preflight): keep current
 items; replace only the MCP refusal with "MCP other than the
 exact `verify` call". Claude runs the real Argon → MCP → Docker → test-result
@@ -154,15 +158,15 @@ path on the host in a throwaway repository with the dedicated worker home:
 
 Preflight's temporary permission is not the normal-operation permission.
 Only during preflight, the managed temporary configuration uses #1432's
-feature-on settings, guard mode and MCP file. At the end, success or
-failure, restore and check the feature-off settings, hooks and MCP file byte
-for byte, the agent directory and `brain/` as before, no remaining session
-state or session process. Record restoration too.
+feature-on settings, guard mode and MCP file. After success or failure,
+restore and check feature-off settings, hooks and MCP file byte for byte,
+the agent directory and `brain/` as before, no remaining session state or
+session process. Record restoration.
 
 The evidence comment records every command and log, agy version, trusted
-commit SHA, binary hash, image digest and identifiers (hashes) of guard,
-settings and MCP configuration. List tools run and refused; for each
-refusal, its layer (guard, settings, server or container), any side effect
+commit SHA, binary hash, image digest and guard,
+settings and MCP configuration hashes. List tools run and refused; for each
+refusal, layer (guard, settings, server or container), any side effect
 or Docker start; each probe's pass/fail and whether its run counts. Record
 no secret or home content; grep the record for the home path, sign-in file
 names and credential variable names and require no matches.
@@ -175,13 +179,13 @@ MCP file match the expected files; the account's shared settings hash is
 unchanged; nothing unexpected changed. If any smoke check fails, switch off
 immediately, restore and check the old configuration, and investigate before
 another attempt. After a passing smoke test, make the later Status change
-described above; the Start gate then points to #1433's record.
+above; the Start gate then points to #1433's record.
 
 ## Control code in Go
 
 The direction is Go in `cmd/argonreview`, built from the trusted revision:
 the implementer guard (`argonreview implement-guard`,
-[#1431](https://github.com/tkakkie/ribbitto/issues/1431)), pre- and post-run
+[#1431]), pre- and post-run
 checks (`argonreview implement-check`,
 [#1434](https://github.com/tkakkie/ribbitto/issues/1434)), run command
 (`argonreview implement-run`,
@@ -189,7 +193,7 @@ checks (`argonreview implement-check`,
 and verify server. These implementations are pending.
 
 The Python guard and zsh scripts remain in use until each stage of
-[#1436](https://github.com/tkakkie/ribbitto/issues/1436) is compared and
+[#1436] is compared and
 verified before use, with rollback: first the guard, then checks and run
 command. Each stage keeps the full preflight and no weaker boundary; a
 failed comparison, preflight or restoration stops the next real run.
@@ -199,3 +203,7 @@ off and its file empty.
 
 If option B cannot be built, the maintainer's fallback is option C: the
 launcher runs the checks between runs.
+
+[#1431]: https://github.com/tkakkie/ribbitto/issues/1431
+[#1433]: https://github.com/tkakkie/ribbitto/issues/1433
+[#1436]: https://github.com/tkakkie/ribbitto/issues/1436

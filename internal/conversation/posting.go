@@ -266,7 +266,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 			if err != nil && !errors.Is(err, ErrQuoteNotFound) {
 				return err
 			}
-			quote, err = quoteOf(original, references, s.UnknownMember, s.QuoteText)
+			quote, _ = quoteOf(original, references, s.UnknownMember, s.QuoteText)
 		}
 		stored, err = p.writer(tx).KeyedMessage(ctx, m.Organization.ID, m.Member.ID, key)
 		if err == nil && requested == (kernel.ID{}) {

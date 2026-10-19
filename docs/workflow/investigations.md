@@ -1,12 +1,12 @@
 # Investigations and the performance target
 
 - New measurement or verification stages, prototypes and measurement
-  infrastructure need explicit maintainer approval before work starts.
+infrastructure need explicit maintainer approval before work starts.
 - Investigation and optimisation issues state a pull-request or time cap
-  before work starts. Stop and report at the cap, even without a conclusion.
+before work starts. Stop and report at the cap, even without a conclusion.
 - The target is 5,000 concurrent connections per process, with message arrival
-  not much worse than without unread counts. Check 2 vCPU / 4 GB in a separate
-  issue once available; development-machine runs decide until then.
+not much worse than without unread counts. Check 2 vCPU / 4 GB in a separate
+issue once available; development-machine runs decide until then.
 
 ## Host measurements
 
@@ -16,40 +16,40 @@ After handoff, builds, tests and `make dev` stay in CI or sandboxes.
 All conditions apply:
 
 1. Cross-review (Claude or Codex), Copilot and adversarial review approve
-   with measurement pending; CI passes at that head before `ai-reviewed`.
-   Measure after that label. Before asking for merge, the orchestrator
-   checks results against the issue's *Done when*.
+with measurement pending; CI passes at that head before `ai-reviewed`.
+Measure after that label. Before asking for merge, the orchestrator
+checks results against the issue's *Done when*.
 2. Match the full build/run SHA to reviews and CI; a label is not enough.
-   Each push needs reviews and CI at its SHA before another run. Until setup
-   is validated, each run also needs case-by-case maintainer approval for
-   that SHA (#1273, #1276).
+Each push needs reviews and CI at its SHA before another run. Until setup
+is validated, each run also needs case-by-case maintainer approval for
+that SHA (#1273, #1276).
 3. The measurement is required by the issue's *Done when*, approved by
-   `ready`, and within the issue's cap.
+`ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
-   other tools use the trusted, fixed base SHA or a source approved in
-   advance (e.g. an external harness). A head adding a migration is a stop
-   for the maintainer.
+other tools use the trusted, fixed base SHA or a source approved in
+advance (e.g. an external harness). A head adding a migration is a stop
+for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
-   Both routes build both approved full SHAs from fresh, verified clean
-   checkouts with the [trusted git settings and `GOENV=off`](running-argon.md#the-trusted-invocation).
-   Never build from the implementer's worktree or sandbox: ignored/untracked
-   files and local git config can alter builds at the same `HEAD`. Embed
-   assets; no head tree is needed at run time.
-6. If an isolated build is impossible, build as the dedicated low-privilege
-   user with the minimal environment below. Use the same route for base.
+Both routes build both approved full SHAs from fresh, verified clean
+checkouts with the [trusted git settings and `GOENV=off`](running-argon.md#the-trusted-invocation).
+Never build from the implementer's worktree or sandbox: ignored/untracked
+files and local git config can alter builds at the same `HEAD`. Embed
+assets; run time needs no head tree.
+6. If isolation is impossible, build as the dedicated low-privilege
+user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
-   neither. Use only its binary/data/runtime paths and server/database
-   loopback ports; shared databases and Chrome's DevTools stay denied. The
-   maintainer creates the user (a system change) and installs/validates the
-   profile once. If restrictions fail, keep them; stop for a case-by-case
-   maintainer decision.
+neither. Use only its binary/data/runtime paths and server/database
+loopback ports; shared databases and Chrome's DevTools stay denied. The
+maintainer creates the user (a system change) and installs/validates the
+profile once. If restrictions fail, keep them; stop for a case-by-case
+maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
-   on its chosen `127.0.0.1` port, with disposable data and credentials.
+on its chosen `127.0.0.1` port, with disposable data and credentials.
 9. Afterwards, even on failure, stop all servers; remove database/container,
-   volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
+volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. Record SHAs, conditions (toolchain, image digest, restrictions), exact
-    commands, results and that this was a host measurement in the PR.
-    Redact credentials.
+commands, results and that this was a host measurement in the PR.
+Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session with the
 same host, Chrome, profile, dataset, build/run route, toolchain, flags, user
@@ -58,7 +58,8 @@ warm-up posts. Another session's absolute values never decide results alone.
 
 ### Build routes
 
-Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference.
+Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference
+([current value](measurement-go-image.md#measurement-go-image)).
 Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
 head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
@@ -119,30 +120,30 @@ cd /private/var/ribbitto-measure/build/src &&
 Setup is maintainer-only:
 
 - Create `_ribbitto_measure`, a non-admin user with no login, credentials,
-  privileged groups or access to Docker, developer homes or shared data.
+privileged groups or access to Docker, developer homes or shared data.
 - Create administrator-owned `/private/var/ribbitto-measure`: read-only
-  `server` binary slot, user-writable `data`, separate fallback `build`
-  unreadable by the server profile. Use real paths, no symlinks.
+`server` binary slot, user-writable `data`, separate fallback `build`
+unreadable by the server profile. Use real paths, no symlinks.
 - Install the profile below, administrator-owned and not writable by the
-  measurement user, at `/private/var/ribbitto-measure/server.sb`. Reserve
-  server port 18080 and database port 55434 for these alone.
-  Change ports in profile and commands together; never allow all loopback.
+measurement user, at `/private/var/ribbitto-measure/server.sb`. Reserve
+server port 18080 and database port 55434 for these alone.
+Change ports in profile and commands together; never allow all loopback.
 - Validate this macOS version as the dedicated user with the trusted base,
-  in order. Watch denials with
-  `log stream --style compact --predicate 'sender == "Sandbox"'`:
+in order. Watch denials with
+`log stream --style compact --predicate 'sender == "Sandbox"'`:
   1. No database; use run user/environment:
-     `sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
-     Expect logged usage error, exit 1: profile, dyld and Go start.
+`sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
+Expect logged usage error, exit 1: profile, dyld and Go start.
   2. With throwaway DB, make a database-backed request to `127.0.0.1:18080`.
-     Possible gaps: self-signals (`(allow signal (target self))`),
-     parent-directory metadata reads, pgx current-user lookup. Prefer explicit
-     `user=` and `sslmode=disable` in `db_url` over allowing `mach-lookup`.
+Possible gaps: self-signals (`(allow signal (target self))`),
+parent-directory metadata reads, pgx current-user lookup. Prefer explicit
+`user=` and `sslmode=disable` in `db_url` over allowing `mach-lookup`.
   3. Test copy: add only execution/runtime reads for `/bin/cat` and
-     `/usr/bin/nc`; same user/environment and other file/network rules.
-     Confirm denial: outside reads (including operator's `~`), connections to
-     5432/55433/Chrome's DevTools port, other execution and address/port binds.
-  Record results/profiles in PR. A denial stops; widening needs review and
-  maintainer approval.
+`/usr/bin/nc`; same user/environment and other file/network rules.
+Confirm denial: outside reads (including operator's `~`), connections to
+5432/55433/Chrome's DevTools port, other execution and address/port binds.
+Record results/profiles in PR. A denial stops; widening needs review and
+maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
 imports. SBPL requires `localhost`, not numeric hosts; it matches only

@@ -23,7 +23,7 @@ import (
 )
 
 // The named shards hold the packages that take longest on CI (#992), so
-// each job finishes at about the same time; "rest" runs in the checks job.
+// each job finishes at about the same time; "rest" runs in its own test-rest job.
 // cmd and web run separately so their browser tests do not compete for CPUs.
 type shard struct {
 	name     string
@@ -353,7 +353,7 @@ func covers(parts map[string][]string, all []string, specs []shard) error {
 }
 
 // scheduled checks that the workflow runs every shard exactly once: each
-// named shard once in the test matrix and rest once in its own step.
+// named shard once in the test matrix and rest once in its own job.
 func scheduled(source string, specs []shard) error {
 	if err := validateShards(specs); err != nil {
 		return err

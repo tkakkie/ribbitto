@@ -112,6 +112,7 @@ so local notes and tools do not change the output.
 green CI on the draft replaces it and must pass before review
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
 It runs `check-static`, `check-test`, then `check-tools`. CI runs them in parallel;
+the `rest` shard runs in its own `test-rest` job beside `checks`, and
 [`testshard -run`](tools/testshard/main.go) owns each shard's packages, selector
 and flags (`.github/workflows/ci.yml`). It
 checks formatting and internal packages' `doc.go` files through

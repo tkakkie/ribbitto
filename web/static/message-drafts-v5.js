@@ -80,7 +80,7 @@
     const markers = (root = document.getElementById("sidebar-channels")) => {
       if (!root) return;
       const places = new Set();
-      if (!stopped && performance.now() < deadline) {
+      if (!stopped) {
         try {
           for (const k of Object.keys(storage)) {
             const match = draft.exec(k);

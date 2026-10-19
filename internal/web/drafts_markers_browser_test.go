@@ -46,7 +46,13 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 				}
 			}
 		case strings.HasSuffix(r.URL.Path, "/resync"):
-			templ.Handler(view.SidebarLists(page)).ServeHTTP(w, r)
+			// Match resyncSidebar: the POST acknowledges the request; the
+			// replacement arrives on the stream, with its synchronous settle.
+			select {
+			case frames <- realtime.Outgoing{Ephemeral: true, Name: "sidebar", Data: []byte(renderIn(t, "en", view.SidebarLists(page)))}:
+				w.WriteHeader(http.StatusNoContent)
+			case <-r.Context().Done():
+			}
 		case r.Method == "POST":
 			page.PostedMessageID = new(kernel.ID{9})
 			page.IdempotencyKey = new("00000000-0000-4000-8000-000000000002")
@@ -95,6 +101,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		p = p.Context(ctx)
 		t.Cleanup(func() { step(t, p.Context(context.Background()), "close marker page").MustClose() })
+		diagMarkerPage(t, p, browser) // DIAG(#1444): remove with diag_*_test.go.
 		step(t, p, "install marker controls").MustEvalOnNewDocument(`(() => {
    window.pageErrors=0; window.addEventListener('error',()=>pageErrors++);
    window.opens=0; document.addEventListener('htmx:sseOpen',()=>opens++);

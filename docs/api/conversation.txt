@@ -56,9 +56,6 @@ type ChannelStore interface // ChannelStore reads and writes channels, always wi
   func (ChannelStore).GetChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).GetDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).SetChannelImage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID, image string) error
-type ChannelUnread interface // ChannelUnread counts messages in supplied, ordered, disjoint channel gaps.
-  func (ChannelUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // Count returns counts capped at 100 and first unread sequences (zero if none).
-  func (ChannelUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64, firstUnread bool) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Channels struct // Channels runs the channel use cases for a member resolved by org.
   func (*Channels).Create(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string) (Channel, error) // Create adds a channel.
   func (*Channels).CreateWithImage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string, image string) (Channel, error) // CreateWithImage adds a channel with a bundled image, or its ID-based default.
@@ -158,9 +155,6 @@ type Message struct // Message is a post identified by ID, its body read under F
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
   func (Message).TypedBodyPrefix(typed string) string // TypedBodyPrefix returns only a prefix verified against the original typed input.
   field TypedBodyProof TypedBodyProof // TypedBodyProof verifies the whole normalized typed body on keyed retries.
-type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
-  func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.
-  func (MessageSequences).HasMessages(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, []int64) (bool, error) // HasMessages probes parallel half-open bounds in one transaction-bound statement.
 type Moved struct // Moved is the payload of KindMessagesMoved.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field FromTopicID github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -304,13 +298,8 @@ type Topic struct // Topic is a named conversation inside a channel, identified 
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
-type TopicReadCandidates interface // TopicReadCandidates supplies unread message bounds without exposing storage.
-  func (TopicReadCandidates).Ranges(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, cursor int64, prefix int64, floor int64, readSet []SequenceRange) ([]SequenceRange, error) // Ranges returns [previous + 1, next) for the topic's unread messages shown through cursor, using whole-channel neighbours (0 or message + 1 if absent).
 type TopicReader interface // TopicReader looks topics up within one organisation and channel.
   func (TopicReader).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error)
-type TopicUnread interface // TopicUnread counts messages using supplied read state, never foreign tables.
-  func (TopicUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet []SequenceRange, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // Count returns per-topic counts capped at 100 and the selected topic's uncapped first unread sequence (zero if none).
-  func (TopicUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet []SequenceRange, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Topics struct // Topics runs the topic lookups for a member resolved by org.
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
 type TxRunner interface // TxRunner runs channel creation, posting, branching and pinning (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.

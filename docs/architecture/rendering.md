@@ -1,16 +1,13 @@
 # Rendering and assets
 
-templ components live in `internal/web/view`. Static assets are embedded
-from `web/static` into the binary; the stylesheet URL carries the SHA-256
-of the embedded CSS, so assets can be cached as immutable. In development
-(`make dev`, `RIBBITTO_DEV_ASSETS=web/static`) assets are read from disk and
-the hash is recomputed per request, so rebuilt CSS appears without a
-restart.
+templ components live in `internal/web/view`. Assets embedded from
+`web/static` are cached as immutable; the stylesheet URL carries the CSS's SHA-256.
+In development (`make dev`, `RIBBITTO_DEV_ASSETS=web/static`), disk assets
+and a per-request hash make rebuilt CSS appear without restarting.
 
-Fluent icons use a versioned, same-origin SVG sprite in `web/static/vendor`
-through the shared `Icon` templ component ([UI convention](../ui-code.md#icons)).
-The sprite is embedded and served like the other assets; its external `<use>`
-references require no change to the Content Security Policy below.
+Fluent icons use an embedded, versioned SVG sprite in `web/static/vendor`
+through `Icon` ([UI convention](../ui-code.md#icons)). Its same-origin `<use>`
+references need no Content Security Policy change.
 
 Channel illustrations ship from the embedded `channel-images-v1` directory
 with versioned URLs. Handlers resolve stored keys or choose a stable
@@ -31,10 +28,16 @@ to templ through `templ.WithNonce`; every script in the shared layout uses
 default-src 'self'; script-src 'nonce-<nonce>'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 ```
 
-There is no `'self'` in `script-src`: even same-origin external scripts
-require the response's nonce. This is defence in depth against HTML
-injection. HTML responses also send `X-Content-Type-Options: nosniff` and
-`Referrer-Policy: same-origin`; `/static/`, `/healthz` and `/readyz` bypass it.
+Even same-origin scripts require the nonce: `script-src` has no `'self'`.
+This is defence in depth against HTML injection. The middleware also sends:
+
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: same-origin`
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()`
+
+These apply to SSE too; no separate JSON routes exist. `/static/`,
+`/healthz` and `/readyz` bypass the middleware.
 The static handler sends `X-Content-Type-Options: nosniff`
 and `Content-Security-Policy: default-src 'none'; sandbox` on every response,
 found or not, including the explicit 405 (`Allow: GET, HEAD`) for any other
@@ -44,12 +47,10 @@ as `<img>`, `<use>`, a script or a stylesheet does not apply its own policy;
 `TestBrowser/static-headers` checks that icons and illustrations
 still paint. Caddy owns `Strict-Transport-Security` in deployment.
 
-The layout's `htmx-config` meta tag sets `allowEval: false`,
-`allowScriptTags: false` and `includeIndicatorStyles: false`. htmx cannot
-evaluate attribute scripts, execute scripts from swapped fragments, or
-inject its default inline indicator stylesheet. Do not use inline scripts,
-`hx-on`, or other attribute scripts; keep JavaScript and styles in external
-assets.
+The layout's `htmx-config` meta tag sets `allowEval: false`, `allowScriptTags: false`
+and `includeIndicatorStyles: false`, disabling attribute evaluation, swapped
+scripts and inline indicator styles. Keep scripts and styles external;
+never use inline scripts, `hx-on` or other attribute scripts.
 
 The same meta tag sets `responseHandling` to htmx's defaults (`204`: no
 swap; `[23]..`: swap; `[45]..`: no swap, error), with

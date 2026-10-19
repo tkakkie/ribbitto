@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -12,7 +13,7 @@ import (
 // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
 type PreparedTopic interface {
 	// ReadState returns the prefix, floor and read ranges above the prefix.
-	ReadState() (prefix, floor int64, ranges []Range)
+	ReadState() (prefix, floor int64, ranges []conversation.SequenceRange)
 	// Add unions candidate bounds and raises the floor, including an empty batch.
 	Add(context.Context, []int64, []int64, int64) error
 }
@@ -22,8 +23,12 @@ type TopicPrepareIn func(platform.Tx) func(context.Context, TopicScope, int64) (
 
 // TopicMessages supplies unread message bounds through a validated cursor.
 type TopicMessages interface {
-	// Ranges returns whole-channel neighbour bounds for this topic's unread messages.
-	Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, []Range) ([]Range, error)
+	// Ranges returns [previous + 1, next) for this topic's unread messages
+	// through cursor, using whole-channel neighbours (0 or message + 1 if absent).
+	// Prefix is exclusive; readSet contains ranges above it. Floor skips older
+	// messages unless moved in after it. Validate cursor against committed events
+	// in the same transaction before calling.
+	Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, []conversation.SequenceRange) ([]conversation.SequenceRange, error)
 }
 
 // TopicMessagesIn binds conversation's candidate query to the caller's transaction.

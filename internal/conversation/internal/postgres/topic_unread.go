@@ -13,17 +13,20 @@ import (
 )
 
 // TopicUnreadIn binds topic counts to the caller's snapshot.
-func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
-	return topicUnread{sqlcgen.New(pgxbridge.Snapshot(s))}
+func TopicUnreadIn(s platform.Snapshot) *TopicUnread {
+	return &TopicUnread{sqlcgen.New(pgxbridge.Snapshot(s))}
 }
 
-type topicUnread struct{ queries *sqlcgen.Queries }
+// TopicUnread counts messages using supplied read state in a caller-owned snapshot.
+type TopicUnread struct{ queries *sqlcgen.Queries }
 
-func (r topicUnread) Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
+// Count returns capped topic counts and the selected first unread sequence.
+func (r TopicUnread) Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
 	return r.CountWithFirstUnread(ctx, organizationID, channelID, prefix, topics, floors, readSet, selected, true)
 }
 
-func (r topicUnread) CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
+// CountWithFirstUnread explicitly chooses whether to compute first unread.
+func (r TopicUnread) CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet []conversation.SequenceRange, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
 	if len(topics) != len(floors) {
 		return nil, 0, fmt.Errorf("counting topic unread: unequal topic arrays")
 	}

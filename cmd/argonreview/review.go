@@ -211,12 +211,7 @@ func (r review) launch(w *workspace) (int, []byte, []byte, error) {
 	if err := os.Mkdir(tmp, 0o700); err != nil {
 		return 1, nil, nil, fmt.Errorf("creating agy's temporary directory: %w", err)
 	}
-	env := []string{"TMPDIR=" + tmp}
-	for _, value := range withHome(r.home) {
-		if !strings.HasPrefix(value, "TMPDIR=") {
-			env = append(env, value)
-		}
-	}
+	env := agyEnvironment(os.Environ(), r.home, tmp)
 	code, err := r.sup.run(r.agy, args, env, w.tree, stdout, stderr)
 	if err != nil {
 		return max(code, 1), nil, nil, err

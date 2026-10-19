@@ -61,7 +61,7 @@ func TestTopicReadExamples(t *testing.T) {
 		_, err := brancher.Branch(t.Context(), org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}, f.Channel.ID, conversation.Branch{From: topics[from], To: &target, Messages: ids}, func(conversation.Topic) string { return "moved" })
 		feedRequire(t, err)
 	}
-	check := func(t *testing.T, want ...unread.Range) {
+	check := func(t *testing.T, want ...conversation.SequenceRange) {
 		feedRanges(t, pool, scope, want)
 		for i := 1; i < len(want); i++ {
 			var exists bool
@@ -77,30 +77,30 @@ func TestTopicReadExamples(t *testing.T) {
 	advance(t, 18)
 	t.Run("Reading one topic (topic test 2)", func(t *testing.T) {
 		read(t, "a", 18, true)
-		check(t, unread.Range{Lo: 0, Hi: 11}, unread.Range{Lo: 12, Hi: 13}, unread.Range{Lo: 14, Hi: 16})
+		check(t, conversation.SequenceRange{Lo: 0, Hi: 11}, conversation.SequenceRange{Lo: 12, Hi: 13}, conversation.SequenceRange{Lo: 14, Hi: 16})
 	})
 	t.Run("Branching (topic test 1)", func(t *testing.T) {
 		advance(t, 19)
 		move(t, "a", "d", 12, 14)
-		check(t, unread.Range{Lo: 0, Hi: 11}, unread.Range{Lo: 12, Hi: 13}, unread.Range{Lo: 14, Hi: 16})
+		check(t, conversation.SequenceRange{Lo: 0, Hi: 11}, conversation.SequenceRange{Lo: 12, Hi: 13}, conversation.SequenceRange{Lo: 14, Hi: 16})
 	})
 	t.Run("Moving an unread message into a topic read further; A message that arrives after the snapshot", func(t *testing.T) {
 		advance(t, 24)
 		read(t, "b", 24, true)
 		move(t, "c", "b", 16)
 		read(t, "b", 24, false)
-		check(t, unread.Range{Lo: 0, Hi: 16})
+		check(t, conversation.SequenceRange{Lo: 0, Hi: 16})
 	})
 	t.Run("Moving a message more than once", func(t *testing.T) {
 		move(t, "b", "d", 16)
 		move(t, "d", "b", 12)
-		check(t, unread.Range{Lo: 0, Hi: 16})
+		check(t, conversation.SequenceRange{Lo: 0, Hi: 16})
 	})
 	t.Run("Moving read and unread messages together", func(t *testing.T) {
 		insert(t, "a", 31, 32)
 		advance(t, 32)
 		move(t, "a", "e", 10, 31)
-		check(t, unread.Range{Lo: 0, Hi: 16})
+		check(t, conversation.SequenceRange{Lo: 0, Hi: 16})
 	})
 }
 
@@ -135,7 +135,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 		if !errors.Is(err, rollback) {
 			t.Fatal(err)
 		}
-		feedRanges(t, pool, scope, []unread.Range{})
+		feedRanges(t, pool, scope, []conversation.SequenceRange{})
 		var rows int
 		feedRequire(t, pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM channel_read)+(SELECT count(*) FROM topic_read_floor)").Scan(&rows))
 		if rows != 0 {
@@ -150,7 +150,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
 	}
-	feedRanges(t, pool, scope, []unread.Range{})
+	feedRanges(t, pool, scope, []conversation.SequenceRange{})
 }
 
 func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
@@ -164,12 +164,12 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 				other := conversationtest.Topic(t, pool, scope.OrganizationID, scope.ChannelID, "other")
 				_, err := pool.Exec(t.Context(), "UPDATE message SET topic_id=$2 WHERE organization_id=$1 AND event_seq=4", scope.OrganizationID, other.ID)
 				feedRequire(t, err)
-				want := []unread.Range{{Lo: 0, Hi: 4}, {Lo: 5, Hi: 6}}
+				want := []conversation.SequenceRange{{Lo: 0, Hi: 4}, {Lo: 5, Hi: 6}}
 				if cursors == [2]int64{3, 3} {
-					want = []unread.Range{{Lo: 0, Hi: 4}}
+					want = []conversation.SequenceRange{{Lo: 0, Hi: 4}}
 				}
 				if (kinds[0] == "feed" && cursors[0] == 5) || (kinds[1] == "feed" && cursors[1] == 5) {
-					want = []unread.Range{{Lo: 0, Hi: 6}}
+					want = []conversation.SequenceRange{{Lo: 0, Hi: 6}}
 				}
 				write := func(ctx context.Context, tx platform.Tx, kind string, cursor int64, changed bool) error {
 					if kind == "feed" {

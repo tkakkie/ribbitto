@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -26,21 +27,21 @@ func seedFloor(t *testing.T, pool *pgxpool.Pool, s unread.Scope, topic kernel.ID
 }
 
 func TestTopicBatch(t *testing.T) {
-	many := []unread.Range{{Lo: 0, Hi: 2}}
+	many := []conversation.SequenceRange{{Lo: 0, Hi: 2}}
 	for i := int64(10); i < 310; i += 3 {
-		many = append(many, unread.Range{Lo: i, Hi: i + 1})
+		many = append(many, conversation.SequenceRange{Lo: i, Hi: i + 1})
 	}
 	tests := []struct {
 		name                string
-		stored, added, want []unread.Range
+		stored, added, want []conversation.SequenceRange
 	}{
-		{"first use", nil, nil, []unread.Range{{Lo: 0, Hi: 6}}},
-		{"both neighbours", []unread.Range{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 22}}, []unread.Range{{Lo: 12, Hi: 20}}, []unread.Range{{Lo: 0, Hi: 6}, {Lo: 8, Hi: 22}}},
-		{"touching additions", nil, []unread.Range{{Lo: 12, Hi: 15}, {Lo: 10, Hi: 12}}, []unread.Range{{Lo: 0, Hi: 6}, {Lo: 10, Hi: 15}}},
-		{"stored connector", []unread.Range{{Lo: 0, Hi: 2}, {Lo: 12, Hi: 20}}, []unread.Range{{Lo: 10, Hi: 13}, {Lo: 19, Hi: 22}}, []unread.Range{{Lo: 0, Hi: 6}, {Lo: 10, Hi: 22}}},
-		{"join prefix", []unread.Range{{Lo: 0, Hi: 2}, {Lo: 5, Hi: 9}}, []unread.Range{{Lo: 9, Hi: 12}}, []unread.Range{{Lo: 0, Hi: 12}}},
-		{"many stored", many, []unread.Range{{Lo: 6, Hi: 310}}, []unread.Range{{Lo: 0, Hi: 310}}},
-		{"many additions", nil, many[1:], append([]unread.Range{{Lo: 0, Hi: 6}}, many[1:]...)},
+		{"first use", nil, nil, []conversation.SequenceRange{{Lo: 0, Hi: 6}}},
+		{"both neighbours", []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 22}}, []conversation.SequenceRange{{Lo: 12, Hi: 20}}, []conversation.SequenceRange{{Lo: 0, Hi: 6}, {Lo: 8, Hi: 22}}},
+		{"touching additions", nil, []conversation.SequenceRange{{Lo: 12, Hi: 15}, {Lo: 10, Hi: 12}}, []conversation.SequenceRange{{Lo: 0, Hi: 6}, {Lo: 10, Hi: 15}}},
+		{"stored connector", []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 12, Hi: 20}}, []conversation.SequenceRange{{Lo: 10, Hi: 13}, {Lo: 19, Hi: 22}}, []conversation.SequenceRange{{Lo: 0, Hi: 6}, {Lo: 10, Hi: 22}}},
+		{"join prefix", []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 5, Hi: 9}}, []conversation.SequenceRange{{Lo: 9, Hi: 12}}, []conversation.SequenceRange{{Lo: 0, Hi: 12}}},
+		{"many stored", many, []conversation.SequenceRange{{Lo: 6, Hi: 310}}, []conversation.SequenceRange{{Lo: 0, Hi: 310}}},
+		{"many additions", nil, many[1:], append([]conversation.SequenceRange{{Lo: 0, Hi: 6}}, many[1:]...)},
 	}
 	for _, tt := range tests {
 		for _, floor := range []int64{-1, 5, 10, 20} {
@@ -147,11 +148,11 @@ func TestTopicBatchScope(t *testing.T) {
 				case "topic":
 					otherTopic = kernel.ID{}
 				}
-				old := []unread.Range{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 10}, {Lo: 20, Hi: 99}}
+				old := []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 9, Hi: 10}, {Lo: 20, Hi: 99}}
 				if dimension != "topic" {
 					seedRanges(t, pool, other, old)
 				}
-				seedRanges(t, pool, s, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}})
+				seedRanges(t, pool, s, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}})
 				seedFloor(t, pool, other, otherTopic, 4)
 				if existing {
 					seedFloor(t, pool, s, topic, 5)
@@ -163,12 +164,12 @@ func TestTopicBatchScope(t *testing.T) {
 					if existing {
 						wantFloor = 5
 					}
-					if p.Prefix != 2 || p.Floor != wantFloor || !reflect.DeepEqual(p.Ranges, []unread.Range{{Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}}) {
+					if p.Prefix != 2 || p.Floor != wantFloor || !reflect.DeepEqual(p.Ranges, []conversation.SequenceRange{{Lo: 8, Hi: 12}, {Lo: 20, Hi: 21}}) {
 						t.Fatalf("unscoped preparation: %+v", p)
 					}
 					return p.Add(t.Context(), []int64{10}, []int64{20}, 10)
 				}))
-				if got := ranges(t, pool, s); !reflect.DeepEqual(got, []unread.Range{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 21}}) {
+				if got := ranges(t, pool, s); !reflect.DeepEqual(got, []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 8, Hi: 21}}) {
 					t.Fatalf("scoped union=%v", got)
 				}
 				if dimension != "topic" && !reflect.DeepEqual(ranges(t, pool, other), old) {

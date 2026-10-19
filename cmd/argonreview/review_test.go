@@ -27,6 +27,7 @@ func fakeAgy(t *testing.T, dir string) string {
 	t.Helper()
 	script := `#!/bin/sh
 { echo "HOME=$HOME"; echo "TMPDIR=$TMPDIR"; echo "PWD=$(pwd -P)"; for a in "$@"; do echo "ARG=$a"; done; } > '` + dir + `/seen'
+/usr/bin/env > '` + dir + `/seen-env'
 [ -f "$HOME/prepared" ] || exit 9
 [ "$(cat README)" = two ] && [ -z "$(find . -iname .agents)" ] || exit 8
 [ -n "$TMPDIR" ] && echo '{}' > "$TMPDIR/agy-cache.json"
@@ -86,8 +87,20 @@ func (b *afterCleanup) Write(p []byte) (int, error) {
 
 func TestReview(t *testing.T) {
 	r, fake := newReview(t)
+	wantEnv := testAgyParentEnvironment(t)
+	build := r.build
+	r.build = func() (*workspace, error) {
+		w, err := build()
+		if err == nil {
+			wantEnv["TMPDIR"] = filepath.Join(w.dir, "tmp")
+		}
+		return w, err
+	}
 	out := afterCleanup{t: t, source: r.source}
-	if code, err := r.run(&out); code != 0 || err != nil {
+	code, err := r.run(&out)
+	wantEnv["HOME"] = r.home
+	assertFakeAgyEnvironment(t, filepath.Join(fake, "seen-env"), wantEnv)
+	if code != 0 || err != nil {
 		t.Fatalf("code = %d, err = %v", code, err)
 	}
 	pr := r.pr

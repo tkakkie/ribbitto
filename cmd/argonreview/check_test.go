@@ -25,11 +25,13 @@ func TestCheck(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home, bin := t.TempDir(), t.TempDir()
+			t.Setenv("TMPDIR", t.TempDir())
+			wantEnv := testAgyParentEnvironment(t)
 			agy := filepath.Join(bin, "agy")
 			write(t, filepath.Join(bin, "listing"), tc.output)
 			// The fake runs only after prepare, and records where it ran and
-			// with which HOME.
-			script := "#!/bin/sh\n[ -f \"$HOME/prepared\" ] || exit 9\necho \"$HOME $(pwd -P) $*\" > \"$HOME/seen\"\ncat '" + filepath.Join(bin, "listing") + "'\nexit " + strconv.Itoa(tc.status) + "\n"
+			// with which HOME and environment.
+			script := "#!/bin/sh\n[ -f \"$HOME/prepared\" ] || exit 9\necho \"$HOME $(pwd -P) $*\" > \"$HOME/seen\"\n/usr/bin/env > \"$HOME/seen-env\"\ncat '" + filepath.Join(bin, "listing") + "'\nexit " + strconv.Itoa(tc.status) + "\n"
 			write(t, agy, script)
 			if err := os.Chmod(agy, 0o755); err != nil {
 				t.Fatal(err)
@@ -43,6 +45,10 @@ func TestCheck(t *testing.T) {
 				return nil
 			}
 			code, err := check(home, agy, prepare, supervisor{10 * time.Second, time.Second, nil, systemCleanup()})
+			if tc.name != "prepare refused" {
+				wantEnv["HOME"] = home
+				assertFakeAgyEnvironment(t, filepath.Join(home, "seen-env"), wantEnv)
+			}
 			if code != tc.code || (err == nil) != (tc.code == 0) {
 				t.Fatalf("code = %d, err = %v; want %d", code, err, tc.code)
 			}

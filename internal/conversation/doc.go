@@ -35,5 +35,6 @@
 // default-channel write and transaction-bound channel message and topic unread
 // range bounds and batched message existence for unread, plus snapshot-bound
 // capped channel and topic counts. Read sets
-// cross as values, never foreign-table reads.
+// cross as SequenceRange values, never foreign-table reads; unread owns the
+// interfaces and wiring exposes the concrete query stores.
 package conversation

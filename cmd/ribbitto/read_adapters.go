@@ -25,37 +25,20 @@ func newFeedWriter() *unread.FeedWriter {
 func newTopicWriter() *unread.TopicWriter {
 	return unread.NewTopicWriter(
 		topicPrepare,
-		func(tx platform.Tx) unread.TopicMessages {
-			return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
-		},
+		topicReadCandidates,
 		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
 	)
+}
+
+// topicReadCandidates binds conversation's store directly to unread's consumer.
+func topicReadCandidates(tx platform.Tx) unread.TopicMessages {
+	return conversationpg.TopicReadCandidatesIn(tx)
 }
 
 func topicPrepare(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
 	return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
 		return unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
 	}
-}
-
-type topicMessages struct {
-	candidates conversation.TopicReadCandidates
-}
-
-func (m topicMessages) Ranges(ctx context.Context, organizationID, channelID, topicID kernel.ID, cursor, prefix, floor int64, read []unread.Range) ([]unread.Range, error) {
-	set := make([]conversation.SequenceRange, len(read))
-	for i, r := range read {
-		set[i] = conversation.SequenceRange{Lo: r.Lo, Hi: r.Hi}
-	}
-	bounds, err := m.candidates.Ranges(ctx, organizationID, channelID, topicID, cursor, prefix, floor, set)
-	if err != nil {
-		return nil, err
-	}
-	ranges := make([]unread.Range, len(bounds))
-	for i, r := range bounds {
-		ranges[i] = unread.Range{Lo: r.Lo, Hi: r.Hi}
-	}
-	return ranges, nil
 }
 
 // branchReads adapts unread's range writer to conversation's consumer interface.
@@ -66,7 +49,7 @@ func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
 type branchReadWriter struct{ ranges unread.RangeWriter }
 
 func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
-	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
+	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, conversation.SequenceRange{Lo: lo, Hi: hi})
 }
 
 // postReads binds the page and own-message writes to posting's transaction.
@@ -79,10 +62,8 @@ func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kern
 		func() unread.FeedRead { return newFeedWriter().Read },
 		func(prepare unread.TopicPrepareIn) unread.TopicRead {
 			return unread.NewTopicWriter(prepare,
-				func(tx platform.Tx) unread.TopicMessages {
-					return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
-				},
+				topicReadCandidates,
 				func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) }).Read
 		})
-	return reads.Read(ctx, w.tx, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topic, cursor, unread.Range{Lo: lo, Hi: hi}, floor)
+	return reads.Read(ctx, w.tx, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topic, cursor, conversation.SequenceRange{Lo: lo, Hi: hi}, floor)
 }

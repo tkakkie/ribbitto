@@ -141,7 +141,14 @@ adversarial follow-up checks and closure verification keep their reviewers.
 
 ## The boundary
 
-Deny rules refuse file writes, commands, URL reads and MCP. The guard, the
+`agy` receives only the dedicated `HOME`, workspace `TMPDIR` (none for
+`check`, which writes nothing, uses shared `/tmp`), `PATH`,
+`LANG`, the POSIX `LC_` names, `USER` and `LOGNAME`. Proxy and certificate
+variables are not passed: behind a proxy, `agy` may not connect until a pull
+request adds them to the list. Record a live `check` and
+`issue`/`review` run from the trusted build.
+
+Deny rules refuse writes, commands, URL reads and MCP. The guard, the
 only hook, allows `view_file`, `list_dir`, `grep_search` and `find_by_name`
 and denies everything else, including `search_web`, subagents,
 `generate_image` and `schedule`, which no deny rule can name. Reads outside
@@ -154,17 +161,17 @@ Remaining limits:
 - Antigravity treats a hook that prints nothing and exits 0 as an allow.
   The guard exits 0 only after writing an allow, so a lost answer is a
   refusal (#1130).
-- A guard refusal ends the tool call, not the run; such a run can still
-  count. The refusal stays in the transcript.
+- A guard refusal ends the tool call, not the run, which can still count;
+  the refusal stays in the transcript.
 - A process running as you can change the dedicated `HOME` between
-  `prepare` and the launch; it could change your own configuration anyway.
+  `prepare` and launch; it could change your configuration anyway.
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 
-A review report is emitted only after successful workspace removal. The
-dedicated `HOME` keeps the sign-in, the launcher's three files and
-Antigravity's own state (logs, conversation store, caches); `prepare`
-refuses customisation there but does not police the rest.
+Reports appear only after workspace removal. The dedicated `HOME` keeps
+the sign-in, the launcher's three files and Antigravity's state (logs,
+conversation store, caches); `prepare` refuses customisation there but
+does not police the rest.
 
 ## Evidence
 

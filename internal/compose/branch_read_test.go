@@ -1,4 +1,4 @@
-package main
+package compose_test
 
 import (
 	"context"

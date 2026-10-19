@@ -182,12 +182,12 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 		PostLimits:    middleware.NewPostRateLimiter(time.Now), PinLimits: middleware.NewPinRateLimiter(time.Now),
 		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now), CreateLimits: middleware.NewChannelCreationRateLimiter(time.Now),
 		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
-		Messages: conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn),
-		Posting:  conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, hub),
-		Reading:  unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), p),
+		Messages: conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn),
+		Posting:  conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, hub),
+		Reading:  unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), p),
 		Stream: &web.Streaming{Lifetime: t.Context(), Hub: hub, Sessions: sessions, Authorizer: auth,
 			Events:  realtimepg.NewReader(pool, orgpg.BoundsIn, kinds),
-			Sidebar: sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, pageCountsIn), &p.changes)},
+			Sidebar: sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, compose.PageCountsIn), &p.changes)},
 	})
 	acceptanceOK(t, err)
 	server := httptest.NewTLSServer(handler)

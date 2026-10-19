@@ -31,7 +31,7 @@ func TestLivePins(t *testing.T) {
 	owner, reader := sidebarBrowser(t, pool, api, f.AccountID), sidebarBrowser(t, pool, api, account)
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "pins")
 	acceptanceOK(t, err)
-	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, hub)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, hub)
 	message, err := posting.Post(t.Context(), m, f.Channel.ID, "pin across topics")
 	acceptanceOK(t, err)
 	path := view.ConversationURL("pins", f.Channel.ID, &selected.ID)

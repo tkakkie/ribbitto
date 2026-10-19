@@ -53,7 +53,7 @@ func TestReadPublicationConcurrent(t *testing.T) {
 				var topic kernel.ID
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT default_topic_id FROM channel WHERE id=$1", scope.ChannelID).Scan(&topic))
 				if exists {
-					feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, 1, 1))
+					feedRequire(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Feed(t.Context(), scope, 1, 1))
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
@@ -78,8 +78,8 @@ func TestReadPublicationConcurrent(t *testing.T) {
 					case <-release:
 					case <-ctx.Done():
 					}
-				}}, newFeedWriter(), newTopicWriter(), publisher)
-				second := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), publisher)
+				}}, compose.NewFeedWriter(), compose.NewTopicWriter(), publisher)
+				second := unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), publisher)
 				read := func(r *unread.Reading, kind string) error {
 					if kind == "feed" {
 						return r.Feed(ctx, scope, 1, 2)
@@ -127,7 +127,7 @@ func TestReadAdaptersDoNotPublish(t *testing.T) {
 		name     string
 		expected []string
 	}{
-		{"read_adapters.go", []string{"postReads", "Read", "newFeedWriter", "newTopicWriter"}},
+		{"../../internal/compose/read_adapters.go", []string{"PostReads", "Read", "NewFeedWriter", "NewTopicWriter"}},
 		{"../../internal/compose/branch_reads.go", []string{"BranchReads", "Merge"}},
 	} {
 		missing, violations, err := checkReadAdapterPublication(file.name, nil, file.expected)
@@ -247,7 +247,10 @@ func TestReadAdaptersCommitAndNotify(t *testing.T) {
 				feedRequire(t, err)
 				want = []string{"sequence", "messages.moved", "read", "message.posted", "notify"}
 			} else {
-				reads := func(tx platform.Tx) conversation.PostReadWriter { steps = append(steps, "read"); return postReads(tx) }
+				reads := func(tx platform.Tx) conversation.PostReadWriter {
+					steps = append(steps, "read")
+					return compose.PostReads(tx)
+				}
 				var target *kernel.ID
 				if kind == "topic" {
 					target = &topic

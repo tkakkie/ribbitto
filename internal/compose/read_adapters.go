@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"context"
@@ -13,16 +13,16 @@ import (
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
-// newFeedWriter binds the feed write to reading's transaction.
-func newFeedWriter() *unread.FeedWriter {
+// NewFeedWriter binds the feed write to reading's transaction.
+func NewFeedWriter() *unread.FeedWriter {
 	return unreadpg.NewFeedWriter(
 		func(tx platform.Tx) unread.ChannelMessages { return conversationpg.MessageSequencesIn(tx) },
 		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
 	)
 }
 
-// newTopicWriter binds the topic write to reading's transaction.
-func newTopicWriter() *unread.TopicWriter {
+// NewTopicWriter binds the topic write to reading's transaction.
+func NewTopicWriter() *unread.TopicWriter {
 	return unread.NewTopicWriter(
 		topicPrepare,
 		topicReadCandidates,
@@ -41,14 +41,14 @@ func topicPrepare(tx platform.Tx) func(context.Context, unread.TopicScope, int64
 	}
 }
 
-// postReads binds the page and own-message writes to posting's transaction.
-func postReads(tx platform.Tx) conversation.PostReadWriter { return postReadWriter{tx: tx} }
+// PostReads binds the page and own-message writes to posting's transaction.
+func PostReads(tx platform.Tx) conversation.PostReadWriter { return postReadWriter{tx: tx} }
 
 type postReadWriter struct{ tx platform.Tx }
 
 func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor *int64, lo, hi, floor int64) error {
 	reads := unread.NewPostReads(func(tx platform.Tx) unread.RangeWriter { return unreadpg.WriterIn(tx) }, topicPrepare,
-		func() unread.FeedRead { return newFeedWriter().Read },
+		func() unread.FeedRead { return NewFeedWriter().Read },
 		func(prepare unread.TopicPrepareIn) unread.TopicRead {
 			return unread.NewTopicWriter(prepare,
 				topicReadCandidates,

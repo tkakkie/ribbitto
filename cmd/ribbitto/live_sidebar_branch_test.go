@@ -46,13 +46,13 @@ func newSidebarBranchFixture(t *testing.T) sidebarBranchFixture {
 	member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "branch")
 	acceptanceOK(t, err)
-	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, postReads, compose.LookupMembers, nil)
+	posting := conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil)
 	read, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "read moves")
 	acceptanceOK(t, err)
 	unreadPost, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "unread moves")
 	acceptanceOK(t, err)
 	scope := unread.TopicScope{Scope: unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: member}, TopicID: source}
-	acceptanceOK(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Topic(t.Context(), scope, 1, read.EventSeq))
+	acceptanceOK(t, unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil).Topic(t.Context(), scope, 1, read.EventSeq))
 	var messages []string
 	for _, id := range []kernel.ID{read.ID, unreadPost.ID} {
 		messages = append(messages, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))

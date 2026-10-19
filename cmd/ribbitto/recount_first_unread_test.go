@@ -79,7 +79,7 @@ func TestSidebarSkipsFirstUnread(t *testing.T) {
 			traced, err := pgxpool.NewWithConfig(t.Context(), config)
 			feedRequire(t, err)
 			defer traced.Close()
-			reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, pageCountsIn)
+			reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn)
 			sidebar, err := reader.Sidebar(t.Context(), m, f.Channel.ID, &selected)
 			feedRequire(t, err)
 			// Raw pgtest pools skip the application's local timeout setting.

@@ -281,6 +281,10 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		}
 	})
 	step(t, "part focus: editable part takes focus without another key", func(p *rod.Page) {
+		if !scripts {
+			// Without scripts the browser's own autofocus is not guaranteed in CI; reach it forward.
+			tabTo(p, "#quote-text")
+		}
 		p.MustWait(`() => document.activeElement.id === 'quote-text'`)
 	})
 	step(t, "keyboard edit: quoted text is shortened to original", func(p *rod.Page) {

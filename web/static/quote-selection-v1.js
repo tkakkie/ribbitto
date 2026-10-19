@@ -46,8 +46,7 @@
       if (node.nodeType === Node.TEXT_NODE) return node.textContent;
       if (node.nodeType !== Node.ELEMENT_NODE) return null;
       if (node.hasAttribute("data-quote-handle")) {
-        const handle = node.getAttribute("data-quote-handle");
-        return handle ? "@" + handle : null;
+        return node.textContent;
       }
       if (node.tagName === "BR") return "\n";
       if (!["P", "PRE", "STRONG", "EM", "CODE", "A"].includes(node.tagName)) return null;

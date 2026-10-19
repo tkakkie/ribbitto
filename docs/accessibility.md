@@ -1,8 +1,8 @@
 # Markup and accessibility
 
 The target is WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`)
-renders every HTML route in each state and both languages and fails on the
-rules marked ✓; a new route fails the test until it has a rendered case.
+checks rules marked ✓ on every HTML route/state in both languages. New routes
+require a rendered case.
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` and a name (its text, or `aria-label` when it has none); a link is
@@ -57,20 +57,18 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   textarea and select has at least 16 px text there (#973, #1120). `TestBrowser/width-audit`
   (`internal/web/width_audit_browser_test.go`) checks these targets, control
   reachability, and document and scroll-container horizontal overflow on
-  every page at phone, landscape and breakpoint widths (#974). A target
-  label is a checkbox's or radio's label, which stands in for the small
-  native widget; another control's caption is exempt only while that
-  control is itself a 44 × 44 px target.
+  every page at phone, landscape and breakpoint widths (#974). Checkbox/radio
+  labels stand in for their widgets; other captions need a 44 × 44 px control.
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and
   no global CSS beyond `web/styles/app.css`.
 - **Scripts.** ✓ No inline handlers (`on*` attributes); application-written
   JavaScript is external, in `web/static`, and defines no globals. Vendored
-  libraries (htmx, idiomorph) keep theirs. The nonce and external-script
-  rules are in [`architecture/rendering.md`](architecture/rendering.md).
-- **Icons are decorative.** The shared `Icon` component hides its SVG from
-  assistive technology and keyboard focus; icon-only buttons need `aria-label`.
+  libraries (htmx, idiomorph) keep theirs. Nonce and external-script rules:
+  [`architecture/rendering.md`](architecture/rendering.md).
+- **Icons are decorative.** `Icon` hides its SVG from assistive technology and focus;
+  icon-only buttons need `aria-label`.
 - **Assets exist.** ✓ Every `/static/` script, stylesheet, icon link, image
   and SVG `<use>` URL resolves to an embedded file, ignoring queries and
   fragments. SVG fragments
@@ -136,7 +134,9 @@ Enter and with Space at desktop and phone width.
 
 Quoting has a keyboard and screen-reader path: menu → Quote → Quote only
 part → edit the labelled textarea → send. It works without JavaScript or page
-selection. Both chip actions have 44 px targets.
+selection. Both chip actions have 44 px targets. The optional Quote selection
+button follows the body, starts `hidden` (no tab stop or accessibility node),
+and has a 44 × 44 px phone target. Pointer presses preserve selected text.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's

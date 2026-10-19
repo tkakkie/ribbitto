@@ -1,13 +1,13 @@
 # UI components
 
 Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
-Writing rules: [`ui-code.md`](ui-code.md).
+Rules: [`ui-code.md`](ui-code.md).
 
-**Keep it current:** update this file with shared component changes.
+**Keep current:** update with shared component changes.
 
 ## Shared components
 
-A look used in two places becomes an `internal/web/view` component; pages reuse it.
+Repeated looks become `internal/web/view` components.
 
 | Component | File | Use |
 |---|---|---|
@@ -24,21 +24,19 @@ A look used in two places becomes an `internal/web/view` component; pages reuse 
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
 | `mentionPicker` | `internal/web/view/mention.templ` | the composer's @-picker listbox ([contract](architecture/web-composer.md#composer)) |
-| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, whole excerpt/Quote only part or labelled `quote_text`; ID, Remove quote; 422 keeps text/alert; empty without quote; composer script restores focus |
+| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, whole excerpt/Quote only part or labelled `quote_text`; ID, Remove quote; 422 keeps text/alert; empty without quote; composer restores focus |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link, covering the conversation below `wide` ([side panels](#side-panels)); a header link, icon-only below `desk` with its accessible name kept, that opens one panel, `aria-current="true"` and a Filled icon while it is open |
 | `imagePicker` | `internal/web/view/channel_image.templ` | a labelled fieldset of native radios with the `brand` accent and focus outline, decorative illustrations and named choices, including the ID-based default; shared by creation and overview |
 | `channelImage` | `internal/web/view/channel_image.templ` | a decorative channel illustration from a handler-resolved URL; 24 px and lazy in the sidebar, 32 px in the header, with fixed dimensions and asynchronous decoding |
 
-- **Links navigate, buttons act.** Going somewhere is an `<a href>`;
-  anything that changes state is a submit button in a form, even when it
-  should look like a link.
+- **Links navigate, buttons act.** Use `<a href>` for navigation and form
+  submit buttons for state changes, even when styled as links.
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
-- **A new component arrives with its first user.** Restyling a page also
-  extracts its repeated looks.
+- **New components need a caller; restyling extracts repeated looks.**
 
 Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
 for 48 px phone targets; `textField` sets `inputProps.Tall` for the same
@@ -62,12 +60,15 @@ it changes how the header wraps; reserving it there would wrap seed rows at 390 
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.
 
-Exception (#1156): `pendingMessage` mirrors `messageItem`'s layout to keep
+`pendingMessage` mirrors `messageItem`'s layout (#1156) to keep
 the shared stream render unchanged; their different headers and bodies
 would complicate a wrapper. `testPendingComposerBrowser` guards geometry
 within 1 px. Pending items reserve the 44 px phone header, at full opacity
 without motion; Retry, Edit and Remove describe their body. No topic label,
 selection or actions menu.
+
+Quote selection follows each body, hidden until selected (44 × 44 px on phones).
+It opens the part chip; its input and the chip textarea have separate forms.
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer

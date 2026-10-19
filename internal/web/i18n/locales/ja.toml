@@ -447,3 +447,6 @@ other = "引用するテキスト"
 
 ["message.error.quote"]
 other = "元のメッセージの一部を4000文字以内で入力してください。空欄にはできません。"
+
+["message.quote_selection"]
+other = "選択部分を引用"

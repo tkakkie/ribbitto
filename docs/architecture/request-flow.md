@@ -49,7 +49,10 @@ chip with the original's extracted text; GET ignores `quote_text` entirely.
 Supplying both `quote` and `part` on GET or chip POST gets 400 before any
 message read. Posting POST ignores `part`, including on re-render, so it
 cannot override `quote`. Presence of body `quote_text` selects a part on chip
-POST and posting POST; absent means whole. Empty or not-found parts get 422,
+POST and posting POST; absent means whole. The selection button supplies raw
+`quote_text` only in the chip POST body; its disabled-by-default hidden input
+is cleared after capture. Menu Quote omits it. The returned editable chip
+then supplies the part in the composer's posting POST. Empty or not-found parts get 422,
 preserving submitted text and the idempotency key, with an error on the part
 rather than a valid body. Posting validates again inside its transaction
 after the scoped read and stores the normalised part. Both retry paths check

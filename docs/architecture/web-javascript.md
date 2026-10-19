@@ -1,6 +1,6 @@
 # Web JavaScript
 
-JavaScript responsibilities and constraints for browser enhancements.
+Responsibilities and constraints for browser enhancements.
 
 ## JavaScript
 
@@ -90,7 +90,14 @@ htmx sends resync requests. The markup contract is in
   sending path can use the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
 - Partial quoting uses the same submitter glue for `name="part"`; the server
-  renders the editable text. Page-selection enhancement remains planned (#1161).
+  renders the editable text. `quote-selection-v1.js` listens on the document,
+  also for live items: both ends must be in one body, outside quote blocks,
+  with non-whitespace text. It keeps only that body and text; no storage,
+  HTML generation or requests. Pointerdown/mousedown cancellation preserves
+  selection. Submit and `htmx:configRequest` re-read it, cancelling lost or
+  out-of-scope selections. Only this submitter enables the input and supplies
+  raw `quote_text` through htmx's parameter proxy (controls already collected).
+  Before send, after request/swap and other submits clear/disable it.
 - `message-drafts-v3.js` saves composer input after 300 ms or lifecycle flush,
   using the input's monotonic edit time. Blank/over-limit text writes tombstones;
   the 4,000-code-point/50-entry bounds apply from the first write. Equal/later

@@ -7,11 +7,10 @@ these rules change.
 
 ## Identity and format
 
-A message is identified by its `id` (UUIDv7) — in the DOM, pin metadata and
-its URL, and later in reactions, editing and deleting. `event_seq` orders messages
-and drives paging and unread counts (unique per organisation). An event
-reads its message by organisation, channel and `event_seq`; the message's
-stable identifier for the DOM and links remains `id`.
+A message's `id` (UUIDv7) identifies it in the DOM, pins and URLs, and later
+in reactions, editing and deleting. `event_seq`, unique per organisation,
+orders messages and drives paging and unread counts. Events read by
+organisation, channel and `event_seq`; DOM ids and links retain `id`.
 
 A composer send may store a random UUID **idempotency key**
 ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
@@ -44,7 +43,9 @@ message it answers; the link opens a paged reply-chain view
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
-Whole and editable part quotes are implemented; page selection is planned (#1161).
+Quote selection (JavaScript) opens an editable part for non-empty text wholly
+inside one body, excluding quote blocks. Menu → Quote → Quote only part also
+works without JavaScript. Parts show no flag.
 The quote stores the original's ID, author member ID and text snapshot.
 In the posting transaction, absent `quote_text` copies the whole extraction;
 a present field, even empty, means part. `ValidateQuotePart` normalises with

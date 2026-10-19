@@ -70,10 +70,7 @@
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
     const template = document.getElementById("message-pending-template");
     const inPlace = () => sendEvent("message-sending", { key: event.target.elements.idempotency_key?.value, body: event.target.elements.body.value, inPlace: true });
-    if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) {
-      if (!event.target.classList.contains("htmx-request")) inPlace();
-      return;
-    }
+    if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) { inPlace(); return; }
     const form = event.target, body = form.elements.body;
     const list = document.getElementById("message-pending");
     // Both forms replace the same state; a stale ordinary answer must not
@@ -167,8 +164,8 @@
     const edit = event.target.closest("[data-pending-edit]");
     if (!edit && !event.target.closest("[data-pending-remove]")) return;
     const body = document.getElementById("message-body");
-    const form = event.target.closest("form");
     if (edit) {
+      const form = edit.closest("form");
       if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
@@ -177,7 +174,6 @@
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
     }
-    sendEvent("message-pending-action", { key: form.elements.idempotency_key.value, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -390,7 +386,7 @@
         }
       }
       reconcile();
-      if (event.detail.xhr.status === 200 && state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
+      if (state.dataset.postedMessage) sendEvent("message-sent", { key: pending.elements.idempotency_key.value, message: state.dataset.postedMessage });
       return;
     }
     // The stream consumes this attribute at settle, possibly before IME ends.

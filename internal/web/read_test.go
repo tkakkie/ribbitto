@@ -45,9 +45,11 @@ func TestReadAdmissionOrder(t *testing.T) {
 			limits := middleware.NewReadRateLimiter(func() time.Time { return time.Unix(1, 0) })
 			h, _ := newLimitedHandler(t, asAlice, func(s *Services) {
 				s.Channels, s.Topics = channels, fakeTopics{lookups: &lookups}
-				s.ReadLimits = limits
+				s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) { l.read = limits })
 				s.Typing = typing.New(realtime.NewHub())
-				s.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+				s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+					l.signal = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+				})
 				s.Reading = readCall(func(context.Context) error { reads++; return nil })
 			})
 			for i := range 5 {

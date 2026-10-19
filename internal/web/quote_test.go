@@ -61,7 +61,7 @@ func TestQuoteAgainstPostgreSQL(t *testing.T) {
 	}
 	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	services := postgresServices(t, pool, sessions, "", false)
-	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) { l.post = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4) })
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

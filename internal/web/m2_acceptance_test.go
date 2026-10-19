@@ -45,7 +45,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	// add list items and change older links. Production counts run in other suites.
 	services.Messages = conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, emptyPageCountsIn)
 	// This multi-route fixture intentionally posts more than the production burst.
-	services.PostLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) { l.post = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4) })
 	// The real limits, as in production: the flow stays within them.
 	services.Limits = middleware.NewAuthLimits(nil, time.Now, slog.New(slog.NewTextHandler(&logs, nil)))
 	handler, err := NewHandler("", catalogues, services)
@@ -209,7 +209,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		}
 		outsiders = append(outsiders, struct{ name, cookie string }{name, token})
 	}
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Pinning, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits, services.BranchLimits, services.PostLimits, services.PinLimits, services.MemberSearch, services.MentionLimits, services.Preferences, services.SendKeyLimits)
+	routes := orgRoutes(&pageRenderer{}, services)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}

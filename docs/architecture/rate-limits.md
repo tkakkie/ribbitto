@@ -69,9 +69,12 @@ keys. Refused requests create no buckets, take no tokens and do not extend
 retention. Admission and eviction are serialized, including concurrent
 requests for the same member.
 
-All member limiters live in memory per process: share one instance per
-request type. Restart resets budgets; server processes have independent
-budgets. There are no configuration settings or distributed limits.
+`Services.MemberLimits` groups all nine in-memory member budgets, including
+send-key preferences. `web.NewMemberLimits` constructs distinct limiters behind
+private fields and accessors; the zero group fails startup. `orgRoutes` takes `Services`
+and wires these budgets to their handlers. Share one group per process. Restart
+resets budgets; server processes have independent budgets. There are no
+configuration settings or distributed limits.
 
 ## Member admission for reads
 
@@ -91,9 +94,7 @@ there is no success guarantee under sustained overload.
 
 ## Member admission for channel creation
 
-Channel creation requires independent `Services.CreateLimits`; missing or
-shared wiring fails startup.
-Its `MemberRateLimiter` allows burst 10, then
+Channel creation allows burst 10, then
 one token per minute per trusted organisation/member pair. Session and
 membership resolution precede admission, which precedes form parsing and
 all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
@@ -103,8 +104,7 @@ bound and eviction rules apply. The persistent count cap is described in
 
 ## Member admission for sidebar resyncs
 
-The sidebar resync POST requires independent `Services.ResyncLimits`;
-missing or shared wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
+The sidebar resync POST allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
 all tabs, sessions and addresses. The script's exponential backoff starts
 at 250 ms and is capped at 8 s, each wait between half and all of it: at the
@@ -124,8 +124,7 @@ convergence guarantee.
 
 ## Member admission for branching
 
-Branch POSTs require independent `Services.BranchLimits`; missing or shared
-wiring fails startup. Burst 20, then one token every 6 s per trusted
+Branch POSTs allow burst 20, then one token every 6 s per trusted
 organisation/member: enough to tidy a channel, while moves recount each
 viewer's sidebar at most ~10 times/min. CSRF, session and
 membership precede admission; parsing and branch work follow it. Failed
@@ -137,8 +136,7 @@ and per-process reset rules apply.
 
 ## Member admission for mention candidates
 
-Candidate GETs require independent `Services.MentionLimits`; missing or
-shared wiring fails startup. Initial, unmeasured budget: 4/s, burst 8,
+Candidate GETs have an initial, unmeasured budget: 4/s, burst 8,
 two concurrent requests per trusted organisation/member, across sessions
 and addresses. Session and membership precede admission; search follows.
 Refusal is empty 429 with `Retry-After: 1`; the picker ignores it. Admitted

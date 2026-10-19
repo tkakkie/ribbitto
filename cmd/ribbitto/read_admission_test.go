@@ -23,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
+	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -136,7 +137,7 @@ CREATE TRIGGER admission_audit AFTER INSERT OR UPDATE OR DELETE ON topic_read_fl
 			feedRequire(t, err)
 			traced := readTracedPool(t, pool, readAdmissionTrace{})
 			clock := time.Unix(1, 0)
-			handler, sessions, err := buildHandler(ctx, traced, handlerConfig{maxChannels: conversation.DefaultMaxChannels, readLimits: middleware.NewReadRateLimiter(func() time.Time { return clock })})
+			handler, sessions, err := buildHandler(ctx, traced, handlerConfig{maxChannels: conversation.DefaultMaxChannels, memberLimits: web.NewMemberLimits(time.Now, web.WithReadAdmission(func() time.Time { return clock }, 4))})
 			feedRequire(t, err)
 			token, _, err := sessions.Create(ctx, f.AccountID)
 			feedRequire(t, err)

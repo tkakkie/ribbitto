@@ -33,7 +33,7 @@ func TestTypingRefusals(t *testing.T) {
 				state.Signal(kernel.ID{}, place, typing.Typist{Handle: "alice"}, token, time.Now())
 				before := state.Read(kernel.ID{}, place, kernel.ID{9})
 				h, _ := newLimitedHandler(t, asAlice, func(s *Services) {
-					s.Typing, s.SignalLimits = state, middleware.NewMemberRateLimiter(time.Now)
+					s.Typing = state
 					if mode == "non-member" {
 						s.Authz = noOrganisations{}
 					}
@@ -58,9 +58,11 @@ func TestTypingRefusals(t *testing.T) {
 						})
 					}
 					if mode == "limited" {
-						s.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+						s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+							l.signal = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+						})
 						for range 4 {
-							s.SignalLimits.Allow(kernel.ID{}, kernel.ID{})
+							s.MemberLimits.Signal().Allow(kernel.ID{}, kernel.ID{})
 						}
 						s.Channels = &fakeChannels{getErr: errors.New("must not look up")}
 					}
@@ -116,7 +118,9 @@ func TestTypingRouteSharedLimiter(t *testing.T) {
 	state := typing.New(realtime.NewHub())
 	h, _ := newLimitedHandler(t, asAlice, func(s *Services) {
 		s.Typing = state
-		s.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+		s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+			l.signal = middleware.NewMemberRateLimiter(func() time.Time { return time.Unix(1, 0) })
+		})
 	})
 	for i := range 5 {
 		channel, topic := kernel.ID{byte(1 + i%2)}, kernel.ID{byte(10 + i)}

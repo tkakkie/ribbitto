@@ -53,7 +53,7 @@ func testMentionPickerBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	services := postgresServices(t, pool, sessions, "", false)
 	// This scenario makes many deliberate searches without exercising throttling.
-	services.MentionLimits = middleware.NewMemberRateLimiterWithBudget(time.Now, 100, 100, 2)
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) { l.mention = middleware.NewMemberRateLimiterWithBudget(time.Now, 100, 100, 2) })
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
 		t.Fatal(err)

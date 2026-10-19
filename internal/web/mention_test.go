@@ -52,7 +52,9 @@ func TestMentionCandidates(t *testing.T) {
 	s := testServices(asAlice)
 	s.MemberSearch = search
 	now := time.Unix(1, 0)
-	s.MentionLimits = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 4, 8, 2)
+	s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) {
+		l.mention = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 4, 8, 2)
+	})
 	h, err := NewHandler("", catalogues, s)
 	if err != nil {
 		t.Fatal(err)

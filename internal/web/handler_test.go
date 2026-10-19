@@ -587,53 +587,10 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	if _, err := NewHandler("", catalogues, testServices()); err != nil {
 		t.Fatalf("NewHandler rejected the default services: %v", err)
 	}
-	for _, pin := range []bool{false, true} {
-		for i := range 7 {
-			s := testServices()
-			others := []*middleware.MemberRateLimiter{nil, s.SignalLimits, s.ReadLimits, s.CreateLimits, s.ResyncLimits, s.BranchLimits, s.PostLimits}
-			// Supply a real typing limiter so every alias case differs from nil.
-			others[1] = middleware.NewMemberRateLimiter(time.Now)
-			s.SignalLimits = others[1]
-			if pin {
-				s.PinLimits = others[i]
-			} else if i < 6 {
-				s.PostLimits = others[i]
-			} else {
-				continue // Post/pin sharing is checked by the pin case.
-			}
-			if _, err := NewHandler("", catalogues, s); err == nil {
-				t.Errorf("accepted missing/shared limiter: pin=%t other=%d", pin, i)
-			}
-		}
-	}
 	for name, missing := range map[string]func(*Services){
-		"stream without lifetime": func(s *Services) { s.Stream = &Streaming{} },
-		"read without limiter":    func(s *Services) { s.Reading, s.ReadLimits = readCall(func(context.Context) error { return nil }), nil },
-		"read sharing typing limiter": func(s *Services) {
-			s.Reading = readCall(func(context.Context) error { return nil })
-			s.SignalLimits = s.ReadLimits
-		},
+		"stream without lifetime":           func(s *Services) { s.Stream = &Streaming{} },
+		"missing member limits":             func(s *Services) { s.MemberLimits = MemberLimits{} },
 		"preferences missing":               func(s *Services) { s.Preferences = nil },
-		"preferences without limiter":       func(s *Services) { s.SendKeyLimits = nil },
-		"preferences sharing post limiter":  func(s *Services) { s.SendKeyLimits = s.PostLimits },
-		"mentions without limiter":          func(s *Services) { s.MentionLimits = nil },
-		"mentions sharing typing limiter":   func(s *Services) { s.SignalLimits = s.MentionLimits },
-		"mentions sharing read limiter":     func(s *Services) { s.ReadLimits = s.MentionLimits },
-		"mentions sharing create limiter":   func(s *Services) { s.CreateLimits = s.MentionLimits },
-		"mentions sharing resync limiter":   func(s *Services) { s.ResyncLimits = s.MentionLimits },
-		"mentions sharing branch limiter":   func(s *Services) { s.BranchLimits = s.MentionLimits },
-		"branch without limiter":            func(s *Services) { s.BranchLimits = nil },
-		"branch sharing typing limiter":     func(s *Services) { s.SignalLimits = s.BranchLimits },
-		"branch sharing read limiter":       func(s *Services) { s.BranchLimits = s.ReadLimits },
-		"branch sharing create limiter":     func(s *Services) { s.BranchLimits = s.CreateLimits },
-		"branch sharing resync limiter":     func(s *Services) { s.BranchLimits = s.ResyncLimits },
-		"resync without limiter":            func(s *Services) { s.ResyncLimits = nil },
-		"resync sharing typing limiter":     func(s *Services) { s.SignalLimits = s.ResyncLimits },
-		"resync sharing read limiter":       func(s *Services) { s.ResyncLimits = s.ReadLimits },
-		"resync sharing create limiter":     func(s *Services) { s.ResyncLimits = s.CreateLimits },
-		"create without limiter":            func(s *Services) { s.CreateLimits = nil },
-		"create sharing read limiter":       func(s *Services) { s.CreateLimits = s.ReadLimits },
-		"create sharing typing limiter":     func(s *Services) { s.SignalLimits = s.CreateLimits },
 		"no authorizer":                     func(s *Services) { s.Authz = nil },
 		"no channels":                       func(s *Services) { s.Channels = nil },
 		"no topics":                         func(s *Services) { s.Topics = nil },

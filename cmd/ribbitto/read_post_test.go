@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
+	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -63,7 +64,7 @@ func TestReadPost(t *testing.T) {
 	hub := realtime.NewHub()
 	// Validation sequences intentionally exceed the production read burst.
 	clock := time.Unix(1, 0)
-	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: hub, readLimits: middleware.NewReadRateLimiter(func() time.Time { clock = clock.Add(time.Second); return clock })})
+	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: hub, memberLimits: web.NewMemberLimits(time.Now, web.WithReadAdmission(func() time.Time { clock = clock.Add(time.Second); return clock }, 4))})
 	feedRequire(t, err)
 	token, _, err := sessions.Create(ctx, f.AccountID)
 	feedRequire(t, err)

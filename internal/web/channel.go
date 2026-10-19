@@ -330,18 +330,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
-	if _, present := r.URL.Query()["quote"]; present && r.Method == http.MethodGet {
+	if (r.URL.Query().Has("quote") || r.URL.Query().Has("part")) && r.Method == http.MethodGet {
 		if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
 			return
 		}
-		var ok bool
-		page.Quote, ok = p.readQuote(w, r, m, id, r.URL.Query())
-		if !ok {
+		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) {
 			return
 		}
 	}
 	page.Pins = viewPins(r.Context(), history.Pins)
-	if page.BodyError == "" {
+	if page.BodyError == "" && !page.QuoteInvalid {
 		place := history.Current.DefaultTopicID
 		if history.Topic != nil {
 			place = history.Topic.ID
@@ -418,7 +416,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		key = new(conversation.IdempotencyKey(parsed))
 	}
-	// A message of this channel to quote whole (decision 38); posting checks
+	// A message of this channel to quote (decision 38); posting checks
 	// its organisation and channel.
 	var quote *kernel.ID
 	if submitted, present := r.PostForm["quote"]; present {
@@ -429,12 +427,16 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		quote = &parsed
 	}
+	var quoteText *string
+	if r.PostForm.Has("quote_text") {
+		quoteText = new(r.PostForm.Get("quote_text"))
+	}
 	body := r.PostForm.Get("body")
 	var composer *string
 	if _, present := r.PostForm["composer"]; present {
 		composer = new(r.PostForm.Get("composer"))
 	}
-	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, UnknownMember: view.UnknownMember(r.Context())})
+	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, QuoteText: quoteText, UnknownMember: view.UnknownMember(r.Context())})
 	posted := sent.Message
 	// A repeat closes the generation in the requested place it was issued
 	// for, not in the topic branching may have moved the message into.
@@ -470,6 +472,8 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		bodyError := "message.error.body"
 		if errors.Is(err, conversation.ErrUnknownReference) {
 			bodyError = "message.error.reference"
+		} else if errors.Is(err, conversation.ErrInvalidQuotePart) {
+			bodyError = ""
 		}
 		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: bodyError, IdempotencyKey: kept})
 	case errors.Is(err, conversation.ErrPostKeyReused):
@@ -497,10 +501,15 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
 	_, page.QuoteUpdate = r.PostForm["quote"]
-	if page.BodyError != "" {
-		var ok bool
-		page.Quote, ok = p.readQuote(w, r, m, c.ID, r.PostForm)
-		if !ok {
+	if page.BodyError != "" || (page.QuoteUpdate && status >= http.StatusBadRequest) {
+		// The part entry action belongs only to the chip route and GET.
+		values := url.Values{}
+		for _, name := range []string{"quote", "quote_text"} {
+			if value, present := r.PostForm[name]; present {
+				values[name] = value
+			}
+		}
+		if !p.readQuote(w, r, m, c.ID, values, &page) {
 			return
 		}
 	}
@@ -509,7 +518,7 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 		if topic != nil {
 			place, page.Topic = *topic, &view.Topic{ID: *topic}
 		}
-		if page.BodyError == "" {
+		if page.BodyError == "" && !page.QuoteInvalid {
 			page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)

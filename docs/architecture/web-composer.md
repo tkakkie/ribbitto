@@ -90,8 +90,8 @@ Idle feed/topic sends use the ordinary path for blank/quoted text or over
   and failed items hold reload; confirmed items do not. Retry success, Remove
   or Edit can release it: Edit's restored text is a draft. Dispatched
   requests time out after 30 s; queues, retries and failed text can extend the hold.
-- **Quote chip:** `#composer-quote-description` holds only quoted author
-  and excerpt; present but empty without a quote. Quote and Remove
+- **Quote chip:** `#composer-quote-description` holds author and excerpt
+  or labelled editable part; empty without a quote. Quote and Remove
   quote focus the textarea after the chip swap; Quote closes its actions
   popover. Chip height and its gap reduce the [growth cap](../ui-composer.md);
   the resize observer preserves the reader on chip changes. Without

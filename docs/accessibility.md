@@ -117,11 +117,8 @@ the column instead, and the composer is hidden.
 
 The account menu or sheet (`#account-menu`) and the create popover
 (`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
-#1159) are native popovers, which are not modal, so Tab can
-leave them while they stay open. Once a Tab or Shift-Tab settles, focus
-does not rest outside an open popover, where the popover could cover it
-(#1092): a Tab or Shift-Tab that moves focus out of it closes it, and focus
-stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
+#1159) are non-modal native popovers. Tab or Shift-Tab leaving one closes it
+and keeps focus on the reached control (#1092) (`popover-focus-v1.js`, on every page;
 it suits all three, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
@@ -136,6 +133,10 @@ sheet covers the bottom navigation's button that opened it (#1102). Text
 rather than sign-out, so a repeated Enter or Space acts on nothing and the
 menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
+
+Quoting has a keyboard and screen-reader path: menu → Quote → Quote only
+part → edit the labelled textarea → send. It works without JavaScript or page
+selection. Both chip actions have 44 px targets.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
 (`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.

@@ -1,14 +1,12 @@
 # Web JavaScript
 
-JavaScript responsibilities and constraints for browser enhancements.
-
 ## JavaScript
 
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
-keyboard, local time, selection constraints, copying to the clipboard, and
-htmx/SSE input glue. The bounded composer state of decision 37 is the
-[composer](web-composer.md#composer) exception. A UI-library island is only a scoped
-exception under
+keyboard, local time, selection constraints, clipboard copying and htmx/SSE glue.
+Bounded composer state is the
+[composer](web-composer.md#composer) exception (decision 37). UI-library islands require
+scoped exceptions under
 [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md);
 none exists today.
 
@@ -86,27 +84,29 @@ htmx sends resync requests. The markup contract is in
   textarea after a chip swap. At `htmx:configRequest` it copies the native
   submitter's name/value for `#quote-form`, since popover focus restoration clears
   htmx's remembered button; the unnamed Remove button adds nothing.
-  Composer submits pause while the quote form is processing, before either
-  sending path can use the old chip. Quoted sends use the ordinary path, waiting for
+  Composer submits pause during quote-form processing, preventing either
+  send path using the old chip. Quoted sends use the ordinary path, waiting for
   pending sends to finish; chip markup and requests remain server/htmx-owned.
+- Partial quotes share submitter glue (`name="part"`); editable text is server-rendered.
+  Page selection is planned (#1161).
 - `message-drafts-v4.js` saves after 300 ms or lifecycle flush with monotonic
   input times. Blank/over-limit text writes tombstones; limits: 4,000 code points,
   50 entries. Equal/later stored edits win; eviction is best effort.
-  Sign-out/deadline stop writes. Sweep/restore share validity checks. Restore
-  seeds edit time without input/typing/focus; server text wins.
-  Bubbling `message-sending` carries `{key, body, inPlace}` before
-  emptying; snapshots at once, cancels debounce; Retry and busy drops emit none.
+  Sign-out/deadline cancel saves and stop writes. Sweep/restore share validity checks.
+  Restore seeds edit time without input/typing/focus; server text wins.
+  Bubbling `message-sending`: `{key, body, inPlace}` before emptying; snapshots
+  at once, cancels debounce; Retry/busy drops emit none.
   `message-sent`: `{key, message}` after posted-message state and ordinary
   prefix removal (after IME). Pending success requires 200; in-place 409
   requires prefix recovery. Pending events keep the snapshot key across 409
   request-key rotation, including Edit/resend.
   Only this tab's unchanged last write becomes current text/tombstone:
-  the matching send snapshot, or typing after an in-place send. Later sends,
-  pending-path edits and other tabs' writes survive; failures/unknown keys do
-  nothing. Dirty in-place text refreshes after prefix removal without advancing
-  edit time or restarting debounce, even if storage differs; saves check edit times.
-  Bubbling textarea `message-pending-action`: `{key, kind}`:
-  `edit` saves immediately, cancelling stale debounce without input/typing;
+  matching send snapshots or typing after in-place sends. Later sends,
+  pending-path edits and other tabs' writes survive; failures/unknown keys do nothing.
+  Dirty in-place text refreshes after prefix removal, keeping
+  edit time/debounce even if storage differs; saves check edit times.
+  Bubbling textarea `message-pending-action` (`{key, kind}`):
+  `edit` saves now, cancels stale debounce without input/typing;
   `remove` replaces that key's unchanged send snapshot.
   [Drafts](web-composer.md#drafts): races/cleanup.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu

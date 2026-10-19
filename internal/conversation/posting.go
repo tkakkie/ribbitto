@@ -69,8 +69,10 @@ type Send struct {
 	Cursor *int64
 	// Key makes a repeated send return the first message; nil posts without it.
 	Key *IdempotencyKey
-	// Quote is a message of the channel to quote whole (decision 38), or nil.
+	// Quote is a message of the channel to quote (decision 38), or nil.
 	Quote *kernel.ID
+	// QuoteText selects a part; nil copies the whole extracted body.
+	QuoteText *string
 	// UnknownMember stands in the quote's text for a member the quoted
 	// chat_v1 message references and the directory did not return.
 	UnknownMember string
@@ -103,7 +105,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	// or checking expansion. The unique index still decides concurrent sends.
 	tokens := handleTokens(body)
 	if s.Key != nil && p.members != nil && len(tokens) > 0 {
-		sent, err := p.repeat(ctx, m, channelID, body, s.Quote, s.Topic, kernel.ID{}, *s.Key)
+		sent, err := p.repeat(ctx, m, channelID, body, s, kernel.ID{}, *s.Key)
 		if !errors.Is(err, ErrMessageNotFound) {
 			return sent, err
 		}
@@ -167,7 +169,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			if err != nil {
 				return err
 			}
-			if quote, err = quoteOf(original, quoted, s.UnknownMember); err != nil {
+			if quote, err = quoteOf(original, quoted, s.UnknownMember, s.QuoteText); err != nil {
 				return err
 			}
 		}
@@ -202,7 +204,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if errors.Is(err, ErrPostKeyTaken) && s.Key != nil {
 		// The rollback returned the sequence (no holes); read the stored
 		// message in a transaction of its own.
-		return p.repeat(ctx, m, channelID, typed, s.Quote, s.Topic, requested, *s.Key)
+		return p.repeat(ctx, m, channelID, typed, s, requested, *s.Key)
 	}
 	if err != nil {
 		return Sent{}, fmt.Errorf("posting message: %w", err)
@@ -245,12 +247,16 @@ func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID,
 
 // repeat answers a send whose key the author already stored. The topic is
 // not compared: branching may have moved the message since.
-func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, topicID *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
+func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, s Send, requested kernel.ID, key IdempotencyKey) (Sent, error) {
 	var stored Message
+	var original Message
 	err := p.runner.InTx(ctx, func(tx platform.Tx) error {
 		var err error
 		stored, err = p.writer(tx).KeyedMessage(ctx, m.Organization.ID, m.Member.ID, key)
-		if err == nil && requested == (kernel.ID{}) {
+		if err != nil {
+			return err
+		}
+		if requested == (kernel.ID{}) {
 			// This is a replay-only read transaction, with no sequence or writes.
 			// Keep the requested composer scope even if the message moved.
 			topic, lookupErr := p.writer(tx).GetDefaultTopic(ctx, m.Organization.ID, channelID)
@@ -260,21 +266,40 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 			if lookupErr != nil {
 				return lookupErr
 			}
-			if topicID != nil {
-				topic, lookupErr = p.writer(tx).GetTopic(ctx, m.Organization.ID, channelID, *topicID)
+			if s.Topic != nil {
+				topic, lookupErr = p.writer(tx).GetTopic(ctx, m.Organization.ID, channelID, *s.Topic)
 				if lookupErr != nil {
 					return lookupErr
 				}
 			}
 			requested = topic.ID
 		}
+		// A missing key must not change fresh-send validation precedence.
+		// Found keys resolve scope before part validity and key comparison.
+		if s.Quote != nil {
+			original, err = p.writer(tx).QuotedMessage(ctx, m.Organization.ID, channelID, *s.Quote)
+		}
 		return err
 	})
 	if err != nil {
 		return Sent{}, fmt.Errorf("finding repeated message: %w", err)
 	}
+	var quote *Quote
+	if s.Quote != nil {
+		references, err := p.quoteReferences(ctx, m.Organization.ID, channelID, *s.Quote)
+		if err != nil {
+			return Sent{}, err
+		}
+		if quote, err = quoteOf(original, references, s.UnknownMember, s.QuoteText); err != nil {
+			return Sent{}, err
+		}
+	}
 	sent := Sent{Message: stored, Topic: requested, Repeat: true}
-	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, quote) {
+	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, s.Quote) {
+		return sent, ErrPostKeyReused
+	}
+	// A whole and a part equal to the whole are the same snapshot.
+	if quote != nil && stored.Quote.Text != quote.Text {
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil
@@ -328,8 +353,12 @@ func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID
 // plain_text body as stored, a chat_v1 body's extraction with references
 // resolved at quote time. The text must pass a body's checks after trimming,
 // so an extraction with nothing left is refused like an invalid body.
-func quoteOf(original Message, references map[kernel.ID]Reference, unknown string) (*Quote, error) {
-	text, err := ValidateMessageBody(Entry{Message: original, References: references}.Text(unknown))
+func quoteOf(original Message, references map[kernel.ID]Reference, unknown string, part *string) (*Quote, error) {
+	extracted := Entry{Message: original, References: references}.Text(unknown)
+	text, err := ValidateMessageBody(extracted)
+	if part != nil {
+		text, err = ValidateQuotePart(*part, extracted)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: quoted text: %w", ErrInvalidBody, err)
 	}

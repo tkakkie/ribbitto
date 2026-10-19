@@ -43,7 +43,17 @@ Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
 its channel, reads one ID through `conversation.Reader.Many`, and returns only
 `#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
 uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
-messages get the posting route's plain 404, without their text.
+messages get the posting route's plain 404, without their text, before comparing
+any submitted part. `part=<UUID>` (also a conversation GET) fills an editable
+chip with the original's extracted text; GET ignores `quote_text` entirely.
+Supplying both `quote` and `part` on GET or chip POST gets 400 before any
+message read. Posting POST ignores `part`, including on re-render, so it
+cannot override `quote`. Presence of body `quote_text` selects a part on chip
+POST and posting POST; absent means whole. Empty or not-found parts get 422,
+preserving submitted text and the idempotency key, with an error on the part
+rather than a valid body. Posting validates again inside its transaction
+after the scoped read and stores the normalised part. Both retry paths check
+scope, then part validity, then the stored snapshot: 404/422 precede 409.
 
 ## Server timeouts
 
@@ -66,18 +76,27 @@ The write deadline does not cancel the handler's context. Independent
 
 Outermost first:
 
-1. `http.CrossOriginProtection` on every route. It rejects cross-origin
+1. `middleware.LimitBody`: every request body is capped at 64 KiB. It must see
+   the server's real writer so an oversized body closes the connection. Reading
+   past the cap fails with `*http.MaxBytesError`, which handlers answer with 413;
+   a route that answers without reading the body (a closed route's 404) is
+   unaffected. It never answers itself, so every request is still logged.
+2. `middleware.RequestLog`: assigns a server-generated ID in context and logs
+   once when the handler returns (streams log when they end). The only request
+   fields are `request_id`, method, registered route pattern, status and duration.
+   `middleware.LogRoute` captures patterns at inner registration, including
+   routes without sessions; the outer `/` catch-all is never used as a label.
+   Unknown paths/methods, mux redirects and pre-routing rejections use
+   `unmatched`, never a raw path. Bodies, headers, queries and client addresses
+   are excluded. `Unwrap` preserves ResponseController stream operations.
+3. `http.CrossOriginProtection` on every route. It rejects cross-origin
    requests using `Sec-Fetch-Site`, or `Origin` against `Host`, but lets GET,
    HEAD and OPTIONS through — so **every route that changes state is a
    POST**, and GET handlers never change state.
-2. `middleware.LimitBody`: every request body is capped at 64 KiB. Reading
-   past it fails with `*http.MaxBytesError`, which handlers answer with 413;
-   a route that answers without reading the body (a closed route's 404) is
-   unaffected.
-3. On everything except `/static/`, `/healthz` and `/readyz`: security headers
+4. On everything except `/static/`, `/healthz` and `/readyz`: security headers
    ([`rendering.md`](rendering.md#content-security-policy)), then i18n.
    `/static/` sets its own `nosniff` and restrictive CSP.
-4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
+5. On each **registered** HTML route (the `sessionMux` in `NewHandler`
    wraps routes one by one; `/setup` and `/signup` are registered without
    it, so their availability is decided first): `middleware.Session`. An unknown path or
    method gets its plain 404 or 405 without a session lookup, so it costs

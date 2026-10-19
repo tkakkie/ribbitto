@@ -64,8 +64,11 @@ type ChannelPage struct {
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
 	// Quote is the selected original; QuoteUpdate limits swaps to quoted sends.
-	Quote       *Message
-	QuoteUpdate bool
+	Quote *Message
+	// QuoteText is present even for an empty submitted part; nil means whole.
+	QuoteText    *string
+	QuoteInvalid bool
+	QuoteUpdate  bool
 	// IdempotencyKey is the composer's key for one send (decision 37 (b));
 	// like Composer, a 422 keeps the submitted value or its absence.
 	IdempotencyKey *string
@@ -514,7 +517,18 @@ templ messageComposer(page ChannelPage) {
 		@ComposerQuote(page, false)
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-autocomplete="list" aria-controls="mention-listbox" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help composer-quote-description" aria-description={ i18n.T(ctx, "mention.help") } class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<textarea
+			id="message-body"
+			name="body"
+			rows="3"
+			dir="auto"
+			aria-autocomplete="list"
+			aria-controls="mention-listbox"
+			aria-invalid={ fmt.Sprint(page.BodyError != "") }
+			aria-describedby="message-help composer-quote-description"
+			aria-description={ i18n.T(ctx, "mention.help") }
+			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry"
+		>{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.

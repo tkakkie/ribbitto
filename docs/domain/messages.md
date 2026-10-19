@@ -39,13 +39,15 @@ A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
-A message may quote one earlier message in its channel
-([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md); a whole message since #1176, action and chip since #1160, selection planned: #1161). The quote stores the
-quoted message's ID, its author's member ID and a text snapshot that the
-server copies or, for a selection, checks against the original's extracted
-text, in the posting transaction. The snapshot belongs to the quoting
-message and stays as posted when the original is edited, moved or deleted;
-deletion sets only the quoted message ID to null. A quote is not a reply.
+A message may quote one earlier message of the same channel
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
+Whole and editable part quotes are implemented; page selection is planned (#1161).
+The quote stores the original's ID, author member ID and text snapshot.
+In the posting transaction, absent `quote_text` copies the whole extraction;
+a present field, even empty, means part. `ValidateQuotePart` normalises with
+the body rules and requires a substring of `Entry.Text`; invalid parts get 422.
+The snapshot belongs to the quoting message and survives edits, moves and
+deletion of the original; deletion nulls only its ID. A quote is not a reply.
 
 Channel pins reference the current message; permissions, limits and lifecycle:
 [`pins.md`](pins.md) (implemented in #887–#890 and #1205).
@@ -94,11 +96,10 @@ renders the same for every reader.
 **Plain text from a message** comes from one extraction function per format,
 owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)):
 `Entry.Text` returns a `plain_text` body unchanged and a `chat_v1` body's
-resolved extraction (below). Its users are the pins excerpt
-(`conversation.PinExcerpt`, 200 code points counted after resolution) and
-the live item's `data-announcement`, the quote snapshot (trimmed at both
-ends, an empty one rejected); *planned*: the selection check (#1161),
-and later notifications and search. Extraction excludes the quoting message's quote snapshot.
+resolved extraction (below). Its users are pins excerpts
+(200 code points after resolution), live announcements, quote snapshots
+(trimmed; empty rejected) and part checks; later, notifications and search.
+A quote's snapshot is left out of the quoting message's extraction.
 
 A `chat_v1` body ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
 `conversation` into plain structs and rendered node by node with templ,

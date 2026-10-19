@@ -31,7 +31,8 @@ exceptions. Directory entries below are direct-only unless stated otherwise:
   plain text API summaries directly in `docs/api/`, the two document exception
   files and the scope check's named allowlist.
 - Vendor files only by their existing exact names: browser scripts, icon SVG,
-  licences and README in `web/static/vendor/`. Testdata only the named browser
+  licences and README in `web/static/vendor/`. Testdata only the JSON Go test
+  fixture `cmd/argonreview/testdata/implement-guard/cases.json`, the named browser
   shard totals and extension-less fuzz corpora below the conversation and
   identity modules, at `testdata/fuzz/Fuzz*/<file>`, with first line
   `go test fuzz v1`. Neither directory is excluded from checking.

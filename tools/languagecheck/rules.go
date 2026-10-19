@@ -67,6 +67,7 @@ func rules() []rule {
 
 func testdataRules() []rule {
 	return []rule{
+		{"cmd/argonreview/testdata/implement-guard/cases.json", "test data (JSON)"},
 		{"internal/web/testdata/browser-shard-totals.txt", "browser test configuration"},
 		{"internal/conversation/testdata/fuzz/Fuzz*/*", fuzzKind},
 		{"internal/identity/testdata/fuzz/Fuzz*/*", fuzzKind},

@@ -1,9 +1,7 @@
 # Messages
 
-Message identity, accepted bodies and rendering. Read before changing them.
-
-**Keep it current:** update this file in the same pull request whenever
-these rules change.
+Message identity, accepted bodies and rendering. Read before changes;
+update in the same pull request when rules change.
 
 ## Identity and format
 
@@ -20,9 +18,8 @@ and lives with its message. Keyed posts store `typed_body_proof`: the
 normalized typed body's 4-byte big-endian byte length and SHA-256 (36 bytes).
 No backfill: legacy proofs stay NULL; unkeyed posts and notices have neither.
 
-Bodies are stored with a `format`, and the stored body is the source of truth.
-A stored message is never reinterpreted, and rendered HTML is at most a
-disposable cache
+Bodies store a `format`; the stored body is the source of truth.
+Stored messages are never reinterpreted; rendered HTML is only a disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 Messages stored before `chat_v1` remain `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
@@ -52,8 +49,8 @@ the body rules and requires a substring of `Entry.Text`; invalid parts get 422.
 The snapshot belongs to the quoting message and survives edits, moves and
 deletion of the original; deletion nulls only its ID. A quote is not a reply.
 
-Channel pins reference the current message; their permissions, limits
-and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890 and #1205).
+Channel pins reference the current message; permissions, limits and lifecycle:
+[`pins.md`](pins.md) (implemented in #887–#890 and #1205).
 
 ## Accepted bodies
 
@@ -79,10 +76,9 @@ RLI, FSI and PDI (U+2066–U+2069) and the marks LRM, RLM and ALM (U+200E,
 U+200F, U+061C) are **allowed on purpose**: they are the recommended way to
 mix directions in plain text with Arabic or Hebrew.
 
-The database checks the length, the absence of CR, the rejected controls,
-separators and bidi characters (listed one by one, not as a range), and
-that the body does not start or end with ASCII white space; PostgreSQL
-`text` rejects NUL. The Unicode-aware trim stays in conversation.
+The database checks length, no CR, rejected controls/separators/bidi characters
+(listed individually, not as a range), and no leading/trailing ASCII white space.
+PostgreSQL `text` rejects NUL; Unicode-aware trim stays in conversation.
 
 ## Showing bodies
 
@@ -132,7 +128,7 @@ FIFO requests run one at a time and never overlap ordinary sends.
 Not sent retries go last; unknown outcomes pause until same-key Retry succeeds,
 Remove or Edit. Remove/Edit allow late commits out of order; uninterrupted
 success and same-key Retry preserve storage order.
-Edit restores text/key and uncertainty to an empty composer, focuses
+Edit restores text/key and uncertainty to an empty composer outside IME, focuses
 its end and removes the item; otherwise it is disabled with a description.
 State swaps and refusals retain the key and uncertainty; emptying renews the
 key and clears uncertainty. Pending responses keep text; failures never swap it.
@@ -142,6 +138,9 @@ Idle blank/over-limit sends, or without
 The stream delivers real items and replay. Older/scriptless posts
 use 303 on success and full-page 422 errors. Organisation and channel resolve
 before posting; non-members get 404.
+
+[Device drafts](../architecture/web-composer.md#drafts): session-scoped feed/topic
+restore; confirmation keeps newer text; Retry never snapshots.
 
 Enter sends (except during IME); Shift+Enter adds a newline. Help names formatting.
 Pages start at newest; live delivery follows only at the bottom. The sender's

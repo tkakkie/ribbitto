@@ -4,8 +4,8 @@ Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisio
 
 ## Progressive enhancement
 
-Core functionality works without JavaScript. JavaScript is progressive
-enhancement, not full parity.
+Core functionality works without JavaScript; progressive enhancement need not
+provide full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
@@ -13,14 +13,14 @@ enhancement, not full parity.
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), local-time display, own-mention outlines,
-  pending own posts on feeds/topics and planned drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
+  pending own posts on feeds/topics and drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
 
 ## Go handlers
 
 Handlers in `internal/web` validate requests, call use cases, convert results
-to view models, and choose the status, component and full page or fragment. They never build HTML strings
-(`AGENTS.md`); plain-text responses such as `/healthz` and `/readyz` are not HTML.
+to view models, and choose status, component and full page or fragment. They never
+build HTML strings (`AGENTS.md`); `/healthz` and `/readyz` return plain text.
 
 ## templ
 
@@ -35,7 +35,7 @@ formatting, choosing an i18n message ID) belongs in them.
 
 ## htmx
 
-htmx does only requests and swaps; the server and templ own the HTML.
+htmx does only requests/swaps; the server and templ own HTML.
 
 - A normal request gets a full page. `hx-select` can select part of it (Load older).
   Enhanced posts return `MessageComposer`: `#message-composer-state` (hidden
@@ -58,9 +58,12 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v16.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v17.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
-  including after composer replacement; it never adds one.
+  including after composer replacement; it never adds one. Events on `#message-body`:
+  `message-sending` and `message-sent` bind draft snapshots/confirmation to each
+  send's idempotency identity; `message-pending-action` carries `{key, kind}`
+  (`edit|remove`), handled by the drafts script ([contract](web-javascript.md#javascript)).
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
 - SSE uses explicit fragments shared with full-page rendering. `MessageItem`

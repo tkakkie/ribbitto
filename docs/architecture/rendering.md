@@ -73,7 +73,7 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v16.js` loads with the response nonce on channel pages.
+`message-composer-v17.js` loads with the response nonce on channel pages.
 It anchors the list during [composer growth](../ui-composer.md) and handles
 [quote focus and locking](web-javascript.md#javascript).
 Enter sends via `requestSubmit`; Shift+Enter inserts a newline.
@@ -104,8 +104,8 @@ generation to the resolved posting topic's `/typing` route, with matching plain/
 state, keeping their generations equal. Each form coordinates its own requests;
 signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
-composing input. They survive replacement without storing drafts or sending
-requests themselves. Without scripts, this hidden form sends nothing.
+composing input. Draft restore emits neither event; send events confirm local
+snapshots ([drafts](web-composer.md#drafts)). Without scripts the form is inert.
 The script scrolls to the newest entry on load, except when the URL's
 fragment names a message on the page: a page opened from a message's URL
 ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)

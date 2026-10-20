@@ -414,6 +414,9 @@ func TestVerifyMCPEnvironmentNoLeak(t *testing.T) {
 		{"malformed arbitrary", []string{"arbitrary-" + secret}, "environment entry without an equals sign"},
 		{"duplicate", []string{"PATH=" + secret + "=first", "PATH=" + secret + "=second"}, `environment variable "PATH" repeats`},
 		{"forbidden", []string{"UNKNOWN=" + secret + "=value"}, `environment variable "UNKNOWN" is forbidden`},
+		{"DOCKER_HOST", []string{"DOCKER_HOST=" + secret + "=value"}, `environment variable "DOCKER_HOST" is forbidden`},
+		{"DOCKER_CONFIG", []string{"DOCKER_CONFIG=" + secret + "=value"}, `environment variable "DOCKER_CONFIG" is forbidden`},
+		{"TMPDIR", []string{"TMPDIR=" + secret + "=value"}, `environment variable "TMPDIR" is forbidden`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := verifyEnvironment(tc.env)
@@ -428,7 +431,7 @@ func TestVerifyMCPEnvironmentNoLeak(t *testing.T) {
 				t.Error("trust check ran after environment refusal")
 				return nil
 			}, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
-			if code != 1 || out.Len() != 0 || !strings.Contains(log.String(), tc.want) || strings.Contains(out.String()+log.String(), secret) {
+			if code != 1 || out.Len() != 0 || log.String() != "argonreview verify-mcp: "+tc.want+"\n" || strings.Contains(out.String()+log.String(), secret) {
 				t.Fatalf("exit %d stdout %q stderr %q", code, &out, &log)
 			}
 		})
@@ -480,7 +483,7 @@ func TestVerifyMCPStartup(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{"HOME", "GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "GIT_ASKPASS", "GEMINI_API_KEY", "GEMINI_OTHER", "RIBBITTO_ARGON_SOURCE", "UNKNOWN"} {
+	for _, name := range []string{"HOME", "GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "GIT_ASKPASS", "GEMINI_API_KEY", "GEMINI_OTHER", "RIBBITTO_ARGON_SOURCE", "DOCKER_HOST", "DOCKER_CONFIG", "TMPDIR", "UNKNOWN"} {
 		t.Run(name, func(t *testing.T) {
 			var out, log bytes.Buffer
 			value := "/dedicated-home/private-sentinel"
@@ -497,7 +500,7 @@ func TestVerifyMCPStartup(t *testing.T) {
 		}
 	}
 	var out, log bytes.Buffer
-	if code := startVerifyMCP(context.Background(), good, []string{"PATH=/usr/bin:/bin", "TMPDIR=/tmp", "DOCKER_HOST=local", "DOCKER_CONFIG=/nonexistent"}, func(s string) error {
+	if code := startVerifyMCP(context.Background(), good, []string{"PATH=/usr/bin:/bin"}, func(s string) error {
 		if s != source {
 			t.Error("source changed")
 		}

@@ -139,10 +139,10 @@ func verifyEnvironment(environ []string) error {
 		}
 		seen[name] = true
 		switch name {
-		// The issue's contract allows the fixed Docker variables. The runner
-		// ignores them and hard-codes its own Docker environment; dropping
-		// them is a preflight #1433 decision.
-		case "PATH", "TMPDIR", "DOCKER_HOST", "DOCKER_CONFIG":
+		// Accept only inputs this path uses: the runner supplies its own
+		// Docker settings and copies under /tmp, so allowing caller Docker
+		// variables or TMPDIR would promise controls that have no effect.
+		case "PATH":
 		default:
 			return fmt.Errorf("environment variable %q is forbidden", name)
 		}

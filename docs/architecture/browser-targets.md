@@ -35,12 +35,13 @@ maintainer on 2026-10-20 (#1406).
 
 ## Verification status
 
-Only what the repository's checks run is recorded as verified; everything
+Only what the repository's checks run is recorded as verified; a check counts
+for a target release only when it records the browser version, and everything
 else is recorded as unverified until a check exists.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) on the installed Chrome in CI (`RIBBITTO_REQUIRE_BROWSER=1`, [`web-layers-checks.md`](web-layers-checks.md#shared-browser-tests)); older major version not verified | installed CI release verified; older major version unverified |
+| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1` ([`web-layers-checks.md`](web-layers-checks.md#shared-browser-tests)), running on the Chrome installed on the CI runner image, whose version CI neither pins nor records; older major version not verified | unverified (target versions are unverified for now: the tests run on some Chrome release, but which major and patch version, and whether it is the latest stable release, is not recorded; becomes verified only once a check records the concrete version, planned in #1426) |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |

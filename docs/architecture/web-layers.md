@@ -1,6 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
 Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
+Target browsers, compatibility rules and verification status: [`browser-targets.md`](browser-targets.md).
 
 ## Progressive enhancement
 
@@ -62,7 +63,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v19.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v20.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one. Events on `#message-body`:
   `message-sending` and `message-sent` bind draft snapshots/confirmation to each

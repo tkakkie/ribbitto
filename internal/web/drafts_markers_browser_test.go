@@ -28,25 +28,30 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		Topic:    &view.Topic{ID: kernel.ID{3}}, MemberID: kernel.ID{8}, Session: session,
 		SessionExpires: time.Now().Add(24 * time.Hour), Rendered: time.Now(), EventCursor: new(int64(42)),
 		Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001")}
-	frames := make(chan realtime.Outgoing, 1)
+	var streams draftMarkerStreams
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		page := snapshot
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/events"):
+			stream, release := streams.subscribe(r.Context())
+			defer release()
 			w.Header().Set("Content-Type", "text/event-stream")
 			sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
 			for err := sender.Heartbeat(r.Context()); err == nil; {
 				select {
-				case out := <-frames:
+				case out := <-stream.frames:
 					err = sender.Send(r.Context(), out)
 				case <-r.Context().Done():
 					return
 				}
 			}
 		case strings.HasSuffix(r.URL.Path, "/resync"):
-			templ.Handler(view.SidebarLists(page)).ServeHTTP(w, r)
+			// Match resyncSidebar: the POST acknowledges the request; the
+			// replacement arrives on the stream, with its synchronous settle.
+			streams.publish(realtime.Outgoing{Ephemeral: true, Name: "sidebar", Data: []byte(renderIn(t, "en", view.SidebarLists(page)))})
+			w.WriteHeader(http.StatusNoContent)
 		case r.Method == "POST":
 			page.PostedMessageID = new(kernel.ID{9})
 			page.IdempotencyKey = new("00000000-0000-4000-8000-000000000002")
@@ -77,7 +82,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 	wait := func(t *testing.T, p *rod.Page, name, condition string) {
 		t.Helper()
 		if err := step(t, p, name).Wait(rod.Eval(condition)); err != nil {
-			diagnostic := step(t, p.Context(context.Background()), "read marker failure state").MustEval(`() => JSON.stringify({url:location.href, storage:Object.entries(localStorage), markers:[...document.querySelectorAll('[data-draft-marker]')].map(m=>[m.closest('a').href,m.hidden])})`).Str()
+			diagnostic := step(t, p.Context(context.Background()), "read marker failure state").MustEval(`() => JSON.stringify({url:location.href, opens, storage:Object.entries(localStorage), markers:[...document.querySelectorAll('[data-draft-marker]')].map(m=>[m.closest('a').href,m.hidden])})`).Str()
 			t.Fatalf("%s: %v; observed %s", name, err, diagnostic)
 		}
 	}
@@ -162,14 +167,33 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 			p := open(t, path, true)
 			step(t, p, "seed isolated marker predicate").MustEval(`() => { ` + tc.seed + `; refresh(); }`)
 			wait(t, p, tc.name, `() => `+tc.want)
-			link := step(t, p, "find accessible channel row").MustElement("#link-" + channel)
-			tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: link.Object.ObjectID}).Call(step(t, p, "read accessible channel name"))
-			if err != nil || len(tree.Nodes) == 0 || tree.Nodes[0].Name == nil {
-				t.Fatalf("channel accessible name: tree=%+v, error=%v", tree, err)
-			}
-			shown := step(t, p, "read marker visibility for accessible name").MustEval(`() => marked('` + channel + `')`).Bool()
-			if got := tree.Nodes[0].Name.Value.Str(); strings.Contains(got, "Draft") != shown {
-				t.Fatalf("accessible name %q, marker shown=%t", got, shown)
+			reading := step(t, p, "read consistent accessible channel name")
+			for {
+				link := reading.MustElement("#link-" + channel)
+				state := `function () { return {connected:this.isConnected, shown:!this.querySelector('[data-draft-marker]').hidden}; }`
+				before := link.MustEval(state)
+				if !before.Get("connected").Bool() {
+					continue
+				}
+				tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: link.Object.ObjectID}).Call(reading)
+				if err != nil {
+					t.Fatalf("channel accessible name: %v", err)
+				}
+				after := link.MustEval(state)
+				// A resync can replace the row between protocols. Re-read only
+				// when this very row detached or its visibility changed; a stable
+				// AX/DOM disagreement must fail, never wait for agreement.
+				if !after.Get("connected").Bool() || before.Get("shown").Bool() != after.Get("shown").Bool() {
+					continue
+				}
+				if len(tree.Nodes) == 0 || tree.Nodes[0].Name == nil {
+					t.Fatalf("channel accessible name: tree=%+v", tree)
+				}
+				shown := after.Get("shown").Bool()
+				if got := tree.Nodes[0].Name.Value.Str(); strings.Contains(got, "Draft") != shown {
+					t.Fatalf("accessible name %q, marker shown=%t", got, shown)
+				}
+				break
 			}
 		})
 	}
@@ -211,9 +235,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 			case "sidebar-sse", "sidebar-resync":
 				step(t, p, "remember old sidebar").MustEval(`() => window.previousSidebar=document.querySelector('#sidebar-channels')`)
 				if name == "sidebar-sse" {
-					select {
-					case frames <- realtime.Outgoing{Ephemeral: true, Name: "sidebar", Data: []byte(renderIn(t, "en", view.SidebarLists(snapshot)))}:
-					case <-time.After(3 * time.Second):
+					if streams.publish(realtime.Outgoing{Ephemeral: true, Name: "sidebar", Data: []byte(renderIn(t, "en", view.SidebarLists(snapshot)))}) == 0 {
 						t.Fatal("deliver sidebar frame: stream unavailable")
 					}
 				} else {

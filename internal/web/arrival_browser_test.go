@@ -78,7 +78,7 @@ func testArrivalBrowser(t *testing.T, browser *rod.Browser) {
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
 	defer page.MustClose()
 	// Animations run, and their events fire, only in a tab that repaints.
 	page.MustActivate()

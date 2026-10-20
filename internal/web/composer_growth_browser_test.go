@@ -261,11 +261,11 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 				// Safari's keyboard. It does not emulate native keyboard panning.
 				page.MustEvalOnNewDocument(`(() => {
 					const viewport = location.search.includes('noViewport') ? undefined :
-						Object.assign(new EventTarget(), {height: 540, offsetTop: 0});
+						Object.assign(new EventTarget(), {height: location.search.includes('equalViewport') ? innerHeight : 540, offsetTop: 0});
 					Object.defineProperty(window, 'visualViewport', {value: viewport});
 				})()`)
 				page.MustNavigate(server.URL).MustWaitLoad()
-				check("visual viewport on load", `() => document.documentElement.style.getPropertyValue('--composer-viewport-h') === '540px' ? '' : 'height missing'`)
+				check("visual viewport on load", `() => document.getElementById('organization-stream').style.getPropertyValue('--composer-viewport-h') === '540px' ? '' : 'height missing'`)
 				page.MustElement("#message-body").MustInput(strings.Repeat("paste\n", 20) + "last line")
 				const visible = `() => {
 					const v = visualViewport, b = document.getElementById('message-body'), r = b.getBoundingClientRect();
@@ -286,11 +286,36 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 				page.MustEval(`() => { visualViewport.height = 540; visualViewport.dispatchEvent(new Event('resize')); }`)
 				check("keyboard expands", visible)
 				check("newest after keyboard expansion", newest)
+				viewportStep := pageStep(ctx, page)
+				fallback := func(what string, action func(*rod.Page)) {
+					t.Helper()
+					viewportStep(t, what, func(p *rod.Page) {
+						action(p)
+						p.MustEval(`() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
+						if problem := p.MustEval(`() => {
+							const s = document.getElementById('organization-stream').style, b = document.getElementById('message-body');
+							if (document.documentElement.style.length || s.getPropertyValue('--composer-viewport-h') || s.getPropertyValue('--composer-viewport-top')) return 'viewport override remains';
+							const cap = Math.max(82, Math.min(innerHeight / 2, innerHeight - 337 - 34));
+							return Math.abs(parseFloat(getComputedStyle(b).maxHeight) - cap) <= 0.01 ? '' : 'fallback cap incorrect';
+						}`).Str(); problem != "" {
+							panic(problem)
+						}
+					})
+				}
+				fallback("keyboard close removes viewport overrides", func(p *rod.Page) {
+					p.MustEval(`() => { visualViewport.height = innerHeight; visualViewport.offsetTop = 0; window.dispatchEvent(new Event('orientationchange')); }`)
+				})
+				fallback("equal visual viewport on load uses dvh", func(p *rod.Page) {
+					p.MustNavigate(server.URL + "?equalViewport").MustWaitLoad()
+				})
+				fallback("subpixel visual viewport uses dvh", func(p *rod.Page) {
+					p.MustEval(`() => { visualViewport.height = innerHeight - 0.5; visualViewport.offsetTop = 0.5; visualViewport.dispatchEvent(new Event('resize')); }`)
+				})
 				page.MustNavigate(server.URL + "?noViewport").MustWaitLoad()
 				set(strings.Repeat("fallback\n", 100))
 				check("no visual viewport uses dvh", `() => {
 					const b = document.getElementById('message-body');
-					return !document.documentElement.style.getPropertyValue('--composer-viewport-h') &&
+					return !document.getElementById('organization-stream').style.getPropertyValue('--composer-viewport-h') &&
 						b.clientHeight === Math.floor(Math.max(82, Math.min(innerHeight / 2, innerHeight - 337 - 34))) &&
 						b.scrollHeight > b.clientHeight ? '' : 'dvh fallback failed';
 				}`)

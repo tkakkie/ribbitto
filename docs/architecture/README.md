@@ -49,6 +49,7 @@ Read the file for the area you change:
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, pending own posts, the idempotency key, drafts and the send key |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
+| [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
 [org](../api/org.txt), [conversation](../api/conversation.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).

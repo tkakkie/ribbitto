@@ -23,6 +23,9 @@
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
+// verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
+// MCP tool, verify, over stdio; it runs the container check on the fixed
+// worktree (#1430).
 // implement-guard enforces the implementer's file boundary without a build check.
 package main
 
@@ -47,6 +50,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "verify-mcp" {
+		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
 	}
@@ -125,7 +131,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir>")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> | verify-mcp --trusted-source <abs path> --worktree <abs path>")
 	return 2
 }
 

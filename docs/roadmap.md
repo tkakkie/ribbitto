@@ -59,13 +59,13 @@ me" view (#433); presence across several server processes (#236).
 
 ## M5
 
-M5 is done (#870–#879; review #881). It gave existing pages one desktop
+M5 is done (#870–#879; whole-milestone review #881). It gave existing pages one desktop
 design: white rounded blocks on a lightly tinted base — an app bar, the
 conversation and side panels — with the sidebar of icon-and-label rows on
 the base, a wide reading column and a rounded composer, and on desktop the
 feel of Microsoft's Fluent 2. It replaced the "Clear water" direction and
 its colours from #9. M5 shipped light pages and removed the old dark theme;
-M6 added dark colours (#967). Outcomes:
+M6 added dark colours for the new direction (#967). Outcomes:
 
 1. **The direction is written down.** [`ui.md`](ui.md) records the new
    direction, its tokens with colours chosen anew, and the contrast table,
@@ -121,12 +121,12 @@ Left for later: a manual light/dark switch.
 The repository is public, but a release — a
 container image and a Compose file with PostgreSQL and Caddy
 ([decision 7](decisions/07-rental-vps-and-containers.md)) — comes later,
-when the maintainer chooses. Until then code, security and docs stay
+when the maintainer chooses, once more is built. Until then code, security and docs stay
 release-ready.
 
-The [vision](vision.md)'s principles stay. Constraints set for the MVP may
+The [vision](vision.md)'s principles stay. Technical constraints set for the MVP may
 change after M6 where a need is shown, each through a new decision recording
-why and what changes, never silently. Roughly in this order:
+why and what changes, never by quietly breaking an old one. Roughly in this order:
 
 1. **Revisit the constraints (short).** Measure in the browser: input
    latency, INP, switching, initial JavaScript, memory. Then

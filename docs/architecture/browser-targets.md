@@ -35,15 +35,34 @@ maintainer on 2026-10-20 (#1406).
 
 ## Verification status
 
-Only what the repository's checks run is recorded as verified; a check counts
-for a target release only when it records the browser version, and everything
-else is recorded as unverified until a check exists.
+Both automated tests and manual checks count as verification evidence;
+anything without evidence is recorded as unverified.
+
+A record counts as verified only when it records all of the following (a
+record missing any of them is not a verification):
+
+- **Browser name.**
+- **Concrete version:** major and patch, and the OS or device version where
+  relevant (for example iOS / iPadOS and Safari).
+- **Date.**
+- **Environment:** real device, emulator or simulator, automated test, and
+  so on.
+- **Scope of the check:** what was exercised.
+- **Result.**
+- **Evidence:** a link or a pointer to where the run is recorded (for
+  example a CI job, a test name, or the review or issue comment).
+
+A result for one version counts for that version only, never for the whole
+browser family and never for "the latest two versions"; each target version
+is verified, or recorded unverified, on its own. A different environment
+(for example Playwright's WebKit versus real iOS Safari, or an emulator
+versus a device) is a different record: WebKit is not iOS Safari.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1` ([`web-layers-checks.md`](web-layers-checks.md#shared-browser-tests)), running on the Chrome installed on the CI runner image, whose version CI neither pins nor records; older major version not verified | unverified (target versions are unverified for now: the tests run on some Chrome release, but which major and patch version, and whether it is the latest stable release, is not recorded; becomes verified only once a check records the concrete version, planned in #1426) |
+| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1` ([`web-layers-checks.md`](web-layers-checks.md#shared-browser-tests)), running on the Chrome installed on the CI runner image, whose version CI neither pins nor records; older major version not verified | unverified (target versions are unverified for now: the tests run on some Chrome release, but which major and patch version, and whether it is the latest stable release, is not recorded; a target version becomes verified only when a check records all required fields, including the concrete version, planned in #1426) |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |
-| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified | unverified |
-| Android Chrome | latest two major versions | not verified (smoke test planned in #1426) | unverified |
+| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified (manual check on a real iOS device planned in #1426; #1426 plans four separately recorded levels — the existing Chrome go-rod tests, a WebKit run recorded as WebKit and never as iOS Safari, a real iOS device run, and an Android Chrome run) | unverified |
+| Android Chrome | latest two major versions | not verified (manual check on Android Chrome planned in #1426) | unverified |

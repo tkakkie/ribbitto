@@ -490,7 +490,8 @@ func implementGitEnv() []string {
 	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
 }
 
-// Known limit: filter.<driver>.clean in .git/config plus .git/info/attributes still runs during git diff.
+// Known limit: filter.<driver>.clean in .git/config plus .git/info/attributes
+// still runs during git diff; that is a program run on the host.
 func (c *implementChecker) baseline(worktree string) {
 	out, status, err := c.deps.git("merge-base", "HEAD", "origin/main")
 	if err != nil || status != 0 || !implementMatch(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})\n$`, string(out)) {
@@ -509,6 +510,13 @@ func (c *implementChecker) baseline(worktree string) {
 			c.problem("comparing baseline HEAD %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
 		case status == 1:
 			c.problem("%q differs from origin/main in HEAD", base)
+		}
+		out, status, err = c.deps.git("diff", "--quiet", "--no-ext-diff", "--no-textconv", "--cached", mb, "--", base)
+		switch {
+		case err != nil || status != 0 && status != 1 || len(out) != 0:
+			c.problem("comparing baseline index %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
+		case status == 1:
+			c.problem("%q index differs from the merge base", base)
 		}
 		out, status, err = c.deps.git("ls-files", "-v", "-z", "--", base)
 		indexed := len(out) != 0

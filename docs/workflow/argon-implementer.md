@@ -117,13 +117,14 @@ but enforced by configuration, not by the prompt.
   worktree, where Argon cannot write. [Go](argon-verify.md#control-code-in-go)
   awaits staged checks; scripts stay.
 - **No workspace hooks or customisation.** Hooks run commands outside the
-  sandbox ([running Argon](running-argon.md#the-boundary)). Before each run,
-  fixes included, Claude refuses symlinks, nested `.git` (even in `.github`),
-  guard-refused names and other workspace configuration at any depth except
-  the trusted baseline: `.github` and root `AGENTS.md`, `CLAUDE.md`,
-  `.gitattributes`, `.gitmodules`. HEAD and worktree must match the merge base
-  with `origin/main`; index entries absent there and flags hiding edits fail.
-  The root `.git` file must be unchanged. Otherwise stop. Baseline instructions
+  sandbox ([running Argon](running-argon.md#the-boundary)). Before each run, fixes
+  included, Claude refuses symlinks, nested `.git` (even in `.github`),
+  guard-refused names and workspace configuration at any depth except the
+  trusted baseline: for each baseline path (`.github` and the root `AGENTS.md`,
+  `CLAUDE.md`, `.gitattributes` and `.gitmodules`), the path is present only if
+  `origin/main` tracks it, and HEAD, the index and the worktree all match the
+  merge base; index flags hiding edits fail. The root `.git` file must be
+  unchanged. Otherwise stop. Baseline instructions
   load as in reviews; the guard denies edits.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   (the [verify][v] exception is pending, not in force) and URL reads.

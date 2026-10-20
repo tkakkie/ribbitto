@@ -136,7 +136,11 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 						return []byte("100644 blob " + strings.Repeat("b", 64) + "\t" + base + "\x00"), 0, nil
 					}
 				case "diff":
-					if strings.Join(args, " ") != "diff --quiet --no-ext-diff --no-textconv "+mb+" -- "+args[len(args)-1] {
+					cached := ""
+					if args[4] == "--cached" {
+						cached = "--cached "
+					}
+					if strings.Join(args, " ") != "diff --quiet --no-ext-diff --no-textconv "+cached+mb+" -- "+args[len(args)-1] {
 						t.Errorf("args %v", args)
 					}
 					if mode == "tracked changed" {
@@ -176,9 +180,9 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 			if (c.problems == 0) != good {
 				t.Fatalf("%s", &out)
 			}
-			want := 16
+			want := 21
 			if strings.HasPrefix(mode, "tracked") {
-				want = 31
+				want = 36
 			}
 			if len(calls) != want {
 				t.Fatalf("calls %v", calls)
@@ -200,6 +204,12 @@ func TestImplementCheckBaselineGitOutput(t *testing.T) {
 			{name: "HEAD status 2", command: "diff-tree", status: 2, want: "comparing baseline HEAD"},
 			{name: "HEAD error", command: "diff-tree", err: fs.ErrNotExist, want: "comparing baseline HEAD"},
 			{name: "HEAD signal", command: "diff-tree", status: -1, err: errors.New("signal: killed"), want: "comparing baseline HEAD"},
+			{name: "cached changed", command: "diff", status: 1, want: "index differs from the merge base"},
+			{name: "cached output", command: "diff", output: "garbage", want: "comparing baseline index"},
+			{name: "cached NUL output", command: "diff", output: "\x00", want: "comparing baseline index"},
+			{name: "cached status 2", command: "diff", status: 2, want: "comparing baseline index"},
+			{name: "cached error", command: "diff", err: fs.ErrNotExist, want: "comparing baseline index"},
+			{name: "cached signal", command: "diff", status: -1, err: errors.New("signal: killed"), want: "comparing baseline index"},
 			{name: "index status 2", command: "ls-files", status: 2, want: "listing baseline index"},
 			{name: "index error", command: "ls-files", err: fs.ErrNotExist, want: "listing baseline index"},
 			{name: "index signal", command: "ls-files", status: -1, err: errors.New("signal: killed"), want: "listing baseline index"},
@@ -224,7 +234,8 @@ func TestImplementCheckBaselineGitOutput(t *testing.T) {
 					case "cat-file":
 						return []byte("blob\n"), 0, nil
 					}
-					if args[0] == tc.command && args[len(args)-1] == "AGENTS.md" && (tc.command != "ls-files" || args[1] == "-v") {
+					if args[0] == tc.command && args[len(args)-1] == "AGENTS.md" &&
+						(tc.command != "ls-files" || args[1] == "-v") && (tc.command != "diff" || args[4] == "--cached") {
 						return []byte(tc.output), tc.status, tc.err
 					}
 					return nil, 0, nil
@@ -492,6 +503,38 @@ func TestImplementCheckRealGitHiddenBaseline(t *testing.T) {
 			}
 			code, out, stderr := f.run()
 			if code != 1 || !strings.Contains(out, want) {
+				t.Fatalf("want %q, exit %d: %s %s", want, code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestImplementCheckRealGitIndexBaseline(t *testing.T) {
+	for _, mode := range []string{"staged addition deleted", "staged modification restored", "staged deletion restored", "clean", "clean absent AGENTS"} {
+		t.Run(mode, func(t *testing.T) {
+			f, _ := implementCheckGitFixture(t, mode != "clean absent AGENTS")
+			base := "AGENTS.md"
+			switch mode {
+			case "staged addition deleted":
+				base = ".github"
+				path := filepath.Join(f.tree, base, "workflows/evil.yml")
+				implementCheckWrite(t, path, "changed")
+				implementCheckGitOK(t, f.tree, "add", "--", base)
+				implementCheckRemove(t, path)
+			case "staged modification restored":
+				implementCheckWrite(t, filepath.Join(f.tree, base), "changed")
+				implementCheckGitOK(t, f.tree, "add", "--", base)
+				implementCheckWrite(t, filepath.Join(f.tree, base), "baseline")
+			case "staged deletion restored":
+				implementCheckGitOK(t, f.tree, "rm", "--", base)
+				implementCheckWrite(t, filepath.Join(f.tree, base), "baseline")
+			}
+			code, out, stderr := f.run()
+			if strings.HasPrefix(mode, "clean") {
+				if code != 0 || out != "implement-check: ok\n" || stderr != "" {
+					t.Fatalf("exit %d: %s %s", code, out, stderr)
+				}
+			} else if want := fmt.Sprintf("%q index differs from the merge base", base); code != 1 || !strings.Contains(out, want) {
 				t.Fatalf("want %q, exit %d: %s %s", want, code, out, stderr)
 			}
 		})

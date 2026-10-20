@@ -853,7 +853,7 @@ func implementCheckFixture(t *testing.T) *implementCheckTestFixture {
 		if args[0] == "merge-base" {
 			return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
 		}
-		if args[0] != "ls-tree" && args[0] != "diff-tree" && args[0] != "ls-files" {
+		if args[0] != "ls-tree" && args[0] != "diff-tree" && args[0] != "ls-files" && args[0] != "diff" {
 			t.Errorf("unexpected git %v", args)
 		}
 		return nil, 0, nil

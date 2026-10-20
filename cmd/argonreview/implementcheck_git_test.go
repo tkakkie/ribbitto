@@ -55,11 +55,17 @@ func implementCheckBaselineRun(f *implementCheckTestFixture) (int, string) {
 func implementCheckGitStage(args []string) string {
 	switch args[0] {
 	case "ls-tree":
+		if len(args) == 3 {
+			return "HEAD root"
+		}
 		if args[3] == "HEAD" {
 			return "HEAD"
 		}
 		return "reference"
 	case "ls-files":
+		if args[1] == "-z" {
+			return "index spelling"
+		}
 		return args[1]
 	default:
 		return args[0]
@@ -67,7 +73,7 @@ func implementCheckGitStage(args []string) string {
 }
 
 func TestImplementCheckGitFailures(t *testing.T) {
-	for _, stage := range []string{"rev-parse", "merge-base", "reference", "HEAD", "cat-file", "-s", "-v"} {
+	for _, stage := range []string{"rev-parse", "merge-base", "reference", "HEAD", "cat-file", "-s", "-v", "HEAD root", "index spelling"} {
 		for _, outcome := range []struct {
 			name   string
 			out    []byte
@@ -96,7 +102,7 @@ func TestImplementCheckGitFailures(t *testing.T) {
 				hit, calls := false, 0
 				f.deps.git = func(args ...string) ([]byte, int, error) {
 					calls++
-					if implementCheckGitStage(args) == stage && (stage == "rev-parse" || stage == "merge-base" || stage == "cat-file" || args[len(args)-1] == "AGENTS.md") {
+					if implementCheckGitStage(args) == stage && (stage == "rev-parse" || stage == "merge-base" || stage == "cat-file" || stage == "HEAD root" || strings.TrimPrefix(args[len(args)-1], ":(icase,literal)") == "AGENTS.md") {
 						hit = true
 						data := outcome.out
 						if outcome.err != nil || outcome.status != 0 {
@@ -129,6 +135,10 @@ func TestImplementCheckGitFailures(t *testing.T) {
 					want = "checking baseline object"
 				case "-v":
 					want = "baseline index"
+				case "HEAD root":
+					want = "baseline HEAD root"
+				case "index spelling":
+					want = "baseline index spelling"
 				}
 				if !strings.Contains(out, want) {
 					t.Fatalf("missing %q: %s", want, out)
@@ -172,6 +182,10 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 					want = []string{"ls-tree", "-r", "-z", strings.Repeat("a", 40), "--", base}
 				case "HEAD":
 					want = []string{"ls-tree", "-r", "-z", "HEAD", "--", base}
+				case "HEAD root":
+					want = []string{"ls-tree", "-z", "HEAD"}
+				case "index spelling":
+					want = []string{"ls-files", "-z", "--", ":(icase,literal)" + strings.TrimPrefix(base, ":(icase,literal)")}
 				case "-s", "-v":
 					want = []string{"ls-files", args[1], "-z", "--", base}
 				case "cat-file":
@@ -189,7 +203,7 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 			if (problems == 0) != good {
 				t.Fatal(out)
 			}
-			want := 22
+			want := 28
 			if tracked {
 				want++
 			}
@@ -267,9 +281,9 @@ func TestImplementCheckBaselineGitOutput(t *testing.T) {
 			})
 		}
 	}
-	// NUL framing must preserve spaces and newlines in actual baseline paths.
+	// NUL framing must preserve printable spaces in actual baseline paths.
 	f := implementCheckFixture(t)
-	rel := ".github/path with\nspace"
+	rel := ".github/path with space"
 	implementCheckWrite(t, filepath.Join(f.tree, rel), "baseline")
 	oid := implementBlobOID([]byte("baseline"), "sha1")
 	original := f.deps.git
@@ -319,6 +333,12 @@ func TestImplementCheckTreeEntry(t *testing.T) {
 			{"duplicate", valid + valid},
 			{"dotdot", strings.ReplaceAll(valid, ".github/file", ".github/../file")},
 			{"nested git", strings.ReplaceAll(valid, ".github/file", ".github/.GIT/file")},
+			{"backslash", strings.ReplaceAll(valid, ".github/file", `.github/work\flow.yml`)},
+			{"control", strings.ReplaceAll(valid, ".github/file", ".github/work\x01flow.yml")},
+			{"newline", strings.ReplaceAll(valid, ".github/file", ".github/work\nflow.yml")},
+			{"DEL", strings.ReplaceAll(valid, ".github/file", ".github/work\x7fflow.yml")},
+			{"invalid UTF-8", strings.ReplaceAll(valid, ".github/file", ".github/work\xffflow.yml")},
+			{"nonprintable Unicode", strings.ReplaceAll(valid, ".github/file", ".github/work\u200bflow.yml")},
 			{"file parent", valid + strings.ReplaceAll(valid, ".github/file", ".github/file/child")},
 		}
 		if index {
@@ -339,7 +359,7 @@ func TestImplementCheckTreeEntry(t *testing.T) {
 				original := f.deps.git
 				f.deps.git = func(args ...string) ([]byte, int, error) {
 					target := args[len(args)-1] == ".github"
-					if target && (index && args[0] == "ls-files" && args[1] == "-s" || !index && args[0] == "ls-tree" && args[3] != "HEAD") {
+					if target && (index && args[0] == "ls-files" && args[1] == "-s" || !index && implementCheckGitStage(args) == "reference") {
 						return []byte(tc.data), 0, nil
 					}
 					return original(args...)

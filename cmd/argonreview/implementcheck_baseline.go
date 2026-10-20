@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 type implementBaselineEntry struct{ mode, oid string }
@@ -23,7 +25,19 @@ func implementBlobOID(data []byte, format string) string {
 	return fmt.Sprintf("%x", sha1.Sum(blob))
 }
 
+// Baseline names are a trusted, controlled set: plain printable UTF-8, with
+// no backslash, control character or .git component (in any case). A legitimate
+// baseline outside this contract fails closed; change the contract deliberately
+// before admitting it. This applies to the root files and the entire .github tree.
 func implementBaselinePath(rel, base string) bool {
+	if !utf8.ValidString(rel) {
+		return false
+	}
+	for _, r := range rel {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
 	if rel != base && !strings.HasPrefix(rel, base+"/") {
 		return false
 	}
@@ -94,6 +108,75 @@ func implementBaselineEqual(a, b map[string]implementBaselineEntry) bool {
 	return true
 }
 
+// Exact ls-tree pathspecs miss case variants even with core.ignorecase=true.
+// Read HEAD's root once, allowing unrelated names but validating every record.
+func (c *implementChecker) baselineHeadSpelling(bases []string, hexLen int) {
+	out, status, err := c.deps.git("ls-tree", "-z", "HEAD")
+	if err != nil || status != 0 {
+		c.problem("cannot list baseline HEAD root: status %d, error %q", status, fmt.Sprint(err))
+		return
+	}
+	seen := make(map[string]bool)
+	for len(out) != 0 {
+		record, rest, terminated := bytes.Cut(out, []byte{0})
+		fields, name, tab := strings.Cut(string(record), "\t")
+		parts := strings.Split(fields, " ")
+		if !terminated || !tab || len(parts) != 3 || name == "" || name == "." || name == ".." || strings.Contains(name, "/") || seen[name] {
+			c.problem("malformed baseline HEAD root record: %q", record)
+			return
+		}
+		kind := ""
+		switch parts[0] {
+		case "100644", "100755", "120000":
+			kind = "blob"
+		case "040000":
+			kind = "tree"
+		case "160000":
+			kind = "commit"
+		}
+		if kind == "" || parts[1] != kind || !implementMatch(fmt.Sprintf(`^[0-9a-f]{%d}$`, hexLen), parts[2]) {
+			c.problem("malformed baseline HEAD root record: %q", record)
+			return
+		}
+		seen[name] = true
+		for _, base := range bases {
+			if strings.EqualFold(name, base) && name != base {
+				c.problem("baseline HEAD spelling differs: %q, expected %q", name, base)
+			}
+		}
+		out = rest
+	}
+}
+
+func (c *implementChecker) baselineIndexSpelling(base string) {
+	// Both icase and literal are supported by Git 2.34+ (including Apple Git).
+	// Together they match the whole directory and ignore case without treating
+	// a baseline name as a glob. Real-Git tests pin both icase forms' behaviour.
+	out, status, err := c.deps.git("ls-files", "-z", "--", ":(icase,literal)"+base)
+	if err != nil || status != 0 {
+		c.problem("cannot list baseline index spelling %q: status %d, error %q", base, status, fmt.Sprint(err))
+		return
+	}
+	for len(out) != 0 {
+		record, rest, terminated := bytes.Cut(out, []byte{0})
+		rel := string(record)
+		first, _, _ := strings.Cut(rel, "/")
+		if !terminated || !strings.EqualFold(first, base) || !implementBaselinePath(rel, first) {
+			c.problem("malformed baseline index spelling record for %q: %q", base, record)
+			return
+		}
+		if first != base {
+			c.problem("baseline index spelling differs: %q, expected %q", rel, base)
+		}
+		out = rest
+	}
+}
+
+// A gitdir writer can forge refs/remotes/origin/main, the object store and
+// info/grafts that determine the reference. These checks remove program
+// execution and filter/attribute/index-cache influence, not that trust limit.
+// The saved .git file gate keeps the gitdir trusted; pinning the expected
+// origin/main object ID outside the gitdir would be a follow-up.
 func (c *implementChecker) baseline(worktree string) {
 	out, status, err := c.deps.git("rev-parse", "--show-object-format")
 	format, hexLen := strings.TrimSuffix(string(out), "\n"), 40
@@ -114,7 +197,10 @@ func (c *implementChecker) baseline(worktree string) {
 		return
 	}
 	mb := strings.TrimSuffix(string(out), "\n")
-	for _, base := range []string{".github", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules"} {
+	bases := []string{".github", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules"}
+	c.baselineHeadSpelling(bases, hexLen)
+	for _, base := range bases {
+		c.baselineIndexSpelling(base)
 		reference, ok := c.baselineListing(base, hexLen, false, "ls-tree", "-r", "-z", mb, "--", base)
 		if !ok {
 			continue

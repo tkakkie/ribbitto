@@ -465,3 +465,134 @@ func TestImplementCheckBaselineSets(t *testing.T) {
 		}
 	}
 }
+
+func TestImplementCheckCaseVariants(t *testing.T) {
+	for _, layer := range []string{"HEAD", "index"} {
+		for _, rel := range []string{"claude.md", "Agents.md", ".GITHUB/workflows/e.yml", ".GitAttributes", ".GitModules", ".github/Workflows/x.yml"} {
+			t.Run(layer+"/"+rel, func(t *testing.T) {
+				f, repo := implementCheckGitFixture(t, true)
+				// Config is shared by the repository and its linked worktrees.
+				implementCheckGitOK(t, repo, "config", "core.ignorecase", "true")
+				oid := strings.TrimSpace(implementCheckGitOK(t, f.tree, "rev-parse", "HEAD:.github/trusted"))
+				// Insert without touching disk, so case-insensitive hosts can keep
+				// Agents.md beside the existing, unchanged AGENTS.md baseline.
+				implementCheckGitOK(t, f.tree, "update-index", "--add", "--cacheinfo", "100644,"+oid+","+rel)
+				base, _, _ := strings.Cut(rel, "/")
+				switch strings.ToLower(base) {
+				case ".github":
+					base = ".github"
+				case "agents.md":
+					base = "AGENTS.md"
+				case "claude.md":
+					base = "CLAUDE.md"
+				default:
+					base = strings.ToLower(base)
+				}
+				// Pin both supported magic forms against real Git, including a
+				// directory's descendants. Exact pathspecs miss root variants.
+				literal := implementCheckGitOK(t, f.tree, "ls-files", "-z", "--", ":(icase,literal)"+base)
+				icase := implementCheckGitOK(t, f.tree, "ls-files", "-z", "--", ":(icase)"+base)
+				if literal != icase || !strings.Contains(literal, rel+"\x00") {
+					t.Fatalf("icase pathspecs missed %q: literal %q, icase %q", rel, literal, icase)
+				}
+				want := "baseline index spelling differs"
+				if rel == ".github/Workflows/x.yml" {
+					want = `".github" index differs from the merge base`
+				}
+				if layer == "HEAD" {
+					implementCheckGitOK(t, f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "case variant")
+					want = "baseline HEAD spelling differs"
+					if rel == ".github/Workflows/x.yml" {
+						want = `".github" differs from origin/main in HEAD`
+					}
+				}
+				problems, out := implementCheckBaselineRun(f)
+				if problems == 0 || !strings.Contains(out, want) {
+					t.Fatalf("want %q: %s", want, out)
+				}
+				if layer == "HEAD" {
+					// Also isolate HEAD from the index: restore the reference index
+					// while leaving the committed variant absent from disk.
+					implementCheckGitOK(t, f.tree, "update-index", "--force-remove", "--", rel)
+					problems, out = implementCheckBaselineRun(f)
+					if problems == 0 || !strings.Contains(out, want) {
+						t.Fatalf("HEAD alone, want %q: %s", want, out)
+					}
+				}
+			})
+		}
+	}
+	t.Run("exact baseline", func(t *testing.T) {
+		f, repo := implementCheckGitFixture(t, true)
+		implementCheckGitOK(t, repo, "config", "core.ignorecase", "true")
+		if problems, out := implementCheckBaselineRun(f); problems != 0 {
+			t.Fatal(out)
+		}
+	})
+}
+
+func TestImplementCheckSpellingOutput(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	root := "100644 blob " + oid + "\tAGENTS.md\x00"
+	for _, tc := range []struct{ name, stage, data string }{
+		{"root truncated", "HEAD root", strings.TrimSuffix(root, "\x00")},
+		{"root missing tab", "HEAD root", strings.ReplaceAll(root, "\t", " ")},
+		{"root double space", "HEAD root", strings.Replace(root, " ", "  ", 1)},
+		{"root empty name", "HEAD root", strings.ReplaceAll(root, "AGENTS.md", "")},
+		{"root dot", "HEAD root", strings.ReplaceAll(root, "AGENTS.md", ".")},
+		{"root dotdot", "HEAD root", strings.ReplaceAll(root, "AGENTS.md", "..")},
+		{"root slash", "HEAD root", strings.ReplaceAll(root, "AGENTS.md", "dir/file")},
+		{"root duplicate", "HEAD root", root + root},
+		{"root mode", "HEAD root", strings.ReplaceAll(root, "100644", "100600")},
+		{"root type", "HEAD root", strings.ReplaceAll(root, "blob", "tree")},
+		{"root oid", "HEAD root", strings.ReplaceAll(root, oid, "short")},
+		{"index truncated", "index spelling", "AGENTS.md"},
+		{"index empty", "index spelling", "\x00"},
+		{"index wrong root", "index spelling", "other\x00"},
+		{"index traversal", "index spelling", "AGENTS.md/../other\x00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := implementCheckBaselineFake(t, true)
+			original := f.deps.git
+			f.deps.git = func(args ...string) ([]byte, int, error) {
+				if implementCheckGitStage(args) == tc.stage && (tc.stage == "HEAD root" || args[len(args)-1] == ":(icase,literal)AGENTS.md") {
+					return []byte(tc.data), 0, nil
+				}
+				return original(args...)
+			}
+			problems, out := implementCheckBaselineRun(f)
+			want := "malformed baseline " + tc.stage + " record"
+			if problems == 0 || !strings.Contains(out, want) {
+				t.Fatalf("want %q: %s", want, out)
+			}
+		})
+	}
+}
+
+func TestImplementCheckBaselineFilenameContract(t *testing.T) {
+	for _, tc := range []struct{ name, rel string }{
+		{"backslash", `.github/work\flow.yml`},
+		{"control", ".github/work\x01flow.yml"},
+		{"newline", ".github/work\nflow.yml"},
+		{"DEL", ".github/work\x7fflow.yml"},
+		{"invalid UTF-8", ".github/work\xffflow.yml"},
+		{"nonprintable Unicode", ".github/work\u200bflow.yml"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := implementCheckBaselineFake(t, false)
+			original := f.deps.git
+			f.deps.git = func(args ...string) ([]byte, int, error) {
+				if implementCheckGitStage(args) == "reference" && args[len(args)-1] == ".github" {
+					return []byte("100644 blob " + strings.Repeat("a", 40) + "\t" + tc.rel + "\x00"), 0, nil
+				}
+				return original(args...)
+			}
+			problems, out := implementCheckBaselineRun(f)
+			// Require the parsing diagnostic: a later filesystem mismatch must
+			// not stand in for the filename contract's refusal.
+			if problems == 0 || !strings.Contains(out, `cannot list baseline ".github" (ls-tree -r)`) {
+				t.Fatal(out)
+			}
+		})
+	}
+}

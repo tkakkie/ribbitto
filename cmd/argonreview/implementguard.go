@@ -94,16 +94,18 @@ func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(st
 	root := strings.TrimFunc(string(data), func(r rune) bool {
 		return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
 	})
-	resolved, err := filepath.EvalSymlinks(root)
-	if !utf8.Valid(data) || !filepath.IsAbs(root) || err != nil || resolved != root || filepath.Clean(root) != root {
+	if !utf8.Valid(data) {
 		return "worktree path is not a clean real path"
 	}
-	info, err := lstat(root)
-	if err != nil {
-		return fmt.Errorf("guard error: checking worktree: %w", err).Error()
-	}
-	if !info.IsDir() {
-		return "guard error: worktree is not a directory"
+	if err := implementRealDirectory(root, lstat); err != nil {
+		switch {
+		case errors.Is(err, errImplementRealPath):
+			return "worktree path is not a clean real path"
+		case errors.Is(err, errImplementDirectory):
+			return "guard error: worktree is not a directory"
+		default:
+			return fmt.Errorf("guard error: checking worktree: %w", err).Error()
+		}
 	}
 	input, err := io.ReadAll(io.LimitReader(stdin, maxGuardInput+1))
 	if err != nil {

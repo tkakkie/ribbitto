@@ -83,6 +83,9 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
 
 ## Writing code
 
+- Use only the languages and formats in the
+  [language list](docs/decisions/42-repository-languages-and-formats.md#language-list);
+  if a task seems to need another, stop and ask the maintainer in the issue.
 - Write boring Go: no generics or reflection unless they remove real
   duplication, no global state, pass `context.Context`, wrap errors with
   `fmt.Errorf("doing x: %w", err)`.

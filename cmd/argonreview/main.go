@@ -23,7 +23,9 @@
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
-// verify-mcp --trusted-source <abs path> --worktree <abs path> serves one MCP tool, verify, over stdio; it runs the container check on the fixed worktree (#1430).
+// verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
+// MCP tool, verify, over stdio; it runs the container check on the fixed
+// worktree (#1430).
 // implement-guard enforces the implementer's file boundary without a build check.
 package main
 

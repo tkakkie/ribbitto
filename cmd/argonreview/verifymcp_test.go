@@ -357,29 +357,36 @@ func TestVerifyMCPCallRefusals(t *testing.T) {
 }
 func TestVerifyResult(t *testing.T) {
 	for _, tc := range []struct {
-		name, report string
-		err          error
-		limited      bool
-		first        string
-		bad          bool
+		name, report        string
+		err                 error
+		timedOut, cancelled bool
+		first               string
+		bad                 bool
 	}{
-		{"verified", "verified\ndetails", nil, false, "verified", false}, {"failed", "FAILED\ndetails", nil, false, "FAILED", true}, {"failure reason", "FAILED: tests\ndetails", nil, false, "FAILED: tests", true},
-		{"bare not verified", "NOT VERIFIED\ndetails", nil, false, "NOT VERIFIED", true},
-		{"not verified", "NOT VERIFIED: skipped\ndetails", nil, false, "NOT VERIFIED: skipped", true},
-		{"verified plus error", "verified\ndetails", errors.New("removal failed"), false, "FAILED:", true},
-		{"error only", "", errors.New("run failed"), false, "NOT VERIFIED: the check could not run", true},
-		{"empty", "", nil, false, "NOT VERIFIED: the check could not run", true},
-		{"garbage", "garbage\ndetails", nil, false, "NOT VERIFIED: the check could not run", true},
-		{"lookalike", "verified-ish", nil, false, "NOT VERIFIED: the check could not run", true}, {"leading space", " verified", nil, false, "NOT VERIFIED: the check could not run", true},
-		{"expired", "verified\ndetails", nil, true, "NOT VERIFIED: time limit exceeded", true},
-		{"deadline failed", "FAILED: timeout\ndetails", context.DeadlineExceeded, true, "FAILED: timeout", true},
-		{"deadline unknown", "garbage", context.DeadlineExceeded, true, "NOT VERIFIED: time limit exceeded", true},
-		{"runner deadline", "", fmt.Errorf("runner: %w", context.DeadlineExceeded), false, "NOT VERIFIED: time limit exceeded", true},
+		{"verified", "verified\ndetails", nil, false, false, "verified", false}, {"failed", "FAILED\ndetails", nil, false, false, "FAILED", true}, {"failure reason", "FAILED: tests\ndetails", nil, false, false, "FAILED: tests", true},
+		{"bare not verified", "NOT VERIFIED\ndetails", nil, false, false, "NOT VERIFIED", true},
+		{"not verified", "NOT VERIFIED: skipped\ndetails", nil, false, false, "NOT VERIFIED: skipped", true},
+		{"verified plus error", "verified\ndetails", errors.New("removal failed"), false, false, "FAILED: the check returned an error", true},
+		{"error only", "", errors.New("run failed"), false, false, "NOT VERIFIED: the check could not run", true},
+		{"empty", "", nil, false, false, "NOT VERIFIED: the check could not run", true},
+		{"garbage", "garbage\ndetails", nil, false, false, "NOT VERIFIED: the check could not run", true},
+		{"lookalike", "verified-ish", nil, false, false, "NOT VERIFIED: the check could not run", true}, {"leading space", " verified", nil, false, false, "NOT VERIFIED: the check could not run", true},
+		{"expired", "verified\ndetails", nil, true, false, "NOT VERIFIED: time limit exceeded", true},
+		{"deadline failed", "FAILED: timeout\ndetails", context.DeadlineExceeded, true, false, "FAILED: timeout", true},
+		{"deadline unknown", "garbage", context.DeadlineExceeded, true, false, "NOT VERIFIED: time limit exceeded", true},
+		{"runner deadline", "", fmt.Errorf("runner: %w", context.DeadlineExceeded), false, false, "NOT VERIFIED: time limit exceeded", true},
+		{"cancelled verified", "verified\ndetails", nil, false, true, "NOT VERIFIED: cancelled", true},
+		{"cancelled garbage", "garbage\ndetails", nil, false, true, "NOT VERIFIED: cancelled", true},
+		{"cancelled error", "verified\ndetails", fmt.Errorf("runner: %w", context.Canceled), false, false, "NOT VERIFIED: cancelled", true},
+		{"timeout wins over cancelled", "verified\ndetails", context.Canceled, true, true, "NOT VERIFIED: time limit exceeded", true},
+		{"runner deadline while cancelled", "verified\ndetails", context.DeadlineExceeded, false, true, "NOT VERIFIED: time limit exceeded", true},
+		{"cancelled failed", "FAILED: tests\ndetails", context.Canceled, false, true, "FAILED: tests", true},
+		{"cancelled not verified", "NOT VERIFIED: skipped\ndetails", context.Canceled, false, true, "NOT VERIFIED: skipped", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			text, bad := verifyResult(tc.report, tc.err, tc.limited)
+			text, bad := verifyResult(tc.report, tc.err, tc.timedOut, tc.cancelled)
 			first, _, _ := strings.Cut(text, "\n")
-			if !strings.HasPrefix(first, tc.first) || bad != tc.bad {
+			if first != tc.first || bad != tc.bad {
 				t.Fatalf("%q, %v", text, bad)
 			}
 			if strings.Contains(tc.report, "details") && !strings.Contains(text, "details") {
@@ -390,9 +397,41 @@ func TestVerifyResult(t *testing.T) {
 			}
 		})
 	}
-	text, bad := verifyResult("verified\n"+strings.Repeat("日", verifyResultLimit), nil, false)
+	text, bad := verifyResult("verified\n"+strings.Repeat("日", verifyResultLimit), nil, false, false)
 	if bad || len(text) > verifyResultLimit || !utf8.ValidString(text) || !strings.HasPrefix(text, "verified\n") || !strings.Contains(text, "truncated") {
 		t.Fatalf("cap: %d %v", len(text), bad)
+	}
+}
+
+func TestVerifyMCPEnvironmentNoLeak(t *testing.T) {
+	const secret = "environment-secret-sentinel"
+	for _, tc := range []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"malformed PATH", []string{"PATH:/private/" + secret}, "environment entry without an equals sign"},
+		{"malformed arbitrary", []string{"arbitrary-" + secret}, "environment entry without an equals sign"},
+		{"duplicate", []string{"PATH=" + secret + "=first", "PATH=" + secret + "=second"}, `environment variable "PATH" repeats`},
+		{"forbidden", []string{"UNKNOWN=" + secret + "=value"}, `environment variable "UNKNOWN" is forbidden`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifyEnvironment(tc.env)
+			if err == nil {
+				t.Fatal("environment accepted")
+			}
+			if strings.Contains(err.Error(), secret) || err.Error() != tc.want {
+				t.Errorf("unsafe environment error: %q", err)
+			}
+			var out, log bytes.Buffer
+			code := startVerifyMCP(context.Background(), []string{"--trusted-source", "/source", "--worktree", "/tree"}, tc.env, func(string) error {
+				t.Error("trust check ran after environment refusal")
+				return nil
+			}, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+			if code != 1 || out.Len() != 0 || !strings.Contains(log.String(), tc.want) || strings.Contains(out.String()+log.String(), secret) {
+				t.Fatalf("exit %d stdout %q stderr %q", code, &out, &log)
+			}
+		})
 	}
 }
 
@@ -780,14 +819,102 @@ func TestVerifyMCPShutdown(t *testing.T) {
 			if !finished.Load() {
 				t.Fatal("server returned before verifier")
 			}
+			assertVerifyShutdownResult(t, out.String(), reason)
 			deadDockerChild(t, dir)
-			rs := readMCPResponses(t, out.String())
-			if len(rs) != 2 || !strings.Contains(string(rs[1].Result), `"isError":true`) {
-				t.Fatalf("responses %s", &out)
-			}
 		})
 	}
 }
+
+// Check the wire result without depending on host process inspection.
+func assertVerifyShutdownResult(t *testing.T, out, reason string) {
+	t.Helper()
+	rs := readMCPResponses(t, out)
+	if len(rs) != 2 || rs[1].Error != nil {
+		t.Fatalf("responses %s", out)
+	}
+	var result struct {
+		IsError bool
+		Content []struct{ Type, Text string }
+	}
+	if err := json.Unmarshal(rs[1].Result, &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError || len(result.Content) != 1 || result.Content[0].Type != "text" {
+		t.Fatalf("result %s", rs[1].Result)
+	}
+	text := result.Content[0].Text
+	first, _, _ := strings.Cut(text, "\n")
+	want := "NOT VERIFIED: cancelled"
+	if reason == "deadline" || strings.HasPrefix(reason, "call limit") {
+		want = "NOT VERIFIED: time limit exceeded"
+	} else if strings.Contains(text, "time limit") {
+		t.Errorf("cancellation reported a time limit: %q", text)
+	}
+	if first != want || strings.HasPrefix(first, "verified") {
+		t.Fatalf("first line %q, want %q", first, want)
+	}
+}
+
+func TestVerifyMCPShutdownFakeVerifier(t *testing.T) {
+	for _, reason := range []string{"EOF", "signal", "deadline", "call limit", "call limit before deadline branch"} {
+		t.Run(reason, func(t *testing.T) {
+			in, send := io.Pipe()
+			defer func() { _ = send.Close() }()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			started, verifierDone := make(chan struct{}), make(chan struct{})
+			v := fakeVerifier(func(ctx context.Context, _, _ string) (string, error) {
+				close(started)
+				<-ctx.Done()
+				close(verifierDone)
+				return "verified\ndetails", nil
+			})
+			s := verifyMCPServer{verifier: v, callLimit: time.Minute}
+			deadline := make(chan struct{})
+			if reason == "deadline" || reason == "call limit before deadline branch" {
+				s.callDeadline = deadline
+			}
+			if strings.HasPrefix(reason, "call limit") {
+				s.callLimit = 100 * time.Millisecond
+			}
+			var out, log bytes.Buffer
+			done := make(chan int, 1)
+			go func() { done <- s.serve(ctx, in, &out, &log) }()
+			_, _ = io.WriteString(send, mcpInit+"\n"+mcpCall+"\n")
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("verifier did not start")
+			}
+			switch reason {
+			case "EOF":
+				_ = send.Close()
+			case "signal":
+				cancel()
+			case "deadline":
+				close(deadline)
+			}
+			select {
+			case <-verifierDone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("verifier did not stop")
+			}
+			if reason != "signal" {
+				_ = send.Close()
+			}
+			select {
+			case code := <-done:
+				if reason == "signal" && code != 1 || reason != "signal" && code != 0 {
+					t.Fatalf("exit %d: %s", code, &log)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("server did not finish")
+			}
+			assertVerifyShutdownResult(t, out.String(), reason)
+		})
+	}
+}
+
 func TestVerifyMCPShutdownGrace(t *testing.T) {
 	in, send := io.Pipe()
 	ctx, cancel := context.WithCancel(context.Background())

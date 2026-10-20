@@ -132,7 +132,7 @@ func verifyEnvironment(environ []string) error {
 	for _, entry := range environ {
 		name, _, ok := strings.Cut(entry, "=")
 		if !ok {
-			return fmt.Errorf("environment variable %q has no equals sign", name)
+			return errors.New("environment entry without an equals sign")
 		}
 		if seen[name] {
 			return fmt.Errorf("environment variable %q repeats", name)
@@ -186,16 +186,19 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 	}}).serve(ctx, stdin, stdout, stderr)
 }
 
-func verifyResult(report string, runErr error, limited bool) (string, bool) {
+func verifyResult(report string, runErr error, timedOut, cancelled bool) (string, bool) {
 	// The runner has an earlier deadline of its own, including source copying.
-	limited = limited || errors.Is(runErr, context.DeadlineExceeded)
+	timedOut = timedOut || errors.Is(runErr, context.DeadlineExceeded)
+	cancelled = !timedOut && (cancelled || errors.Is(runErr, context.Canceled))
 	first, _, _ := strings.Cut(report, "\n")
 	recognized := first == "FAILED" || strings.HasPrefix(first, "FAILED:") || first == "NOT VERIFIED" || strings.HasPrefix(first, "NOT VERIFIED:")
 	bad := true
 	switch {
 	case recognized:
-	case limited:
+	case timedOut:
 		report = "NOT VERIFIED: time limit exceeded\n" + report
+	case cancelled:
+		report = "NOT VERIFIED: cancelled\n" + report
 	case first == "verified" && runErr != nil:
 		report = "FAILED: the check returned an error\n" + report
 	case first == "verified":
@@ -378,10 +381,11 @@ type verifyCompletion struct {
 	err    error
 }
 type verifyFlight struct {
-	id     json.RawMessage
-	args   verifyArguments
-	ctx    context.Context
-	cancel context.CancelFunc
+	id       json.RawMessage
+	args     verifyArguments
+	ctx      context.Context
+	cancel   context.CancelFunc
+	timedOut bool
 }
 
 func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -457,6 +461,8 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 		case <-contextDone:
 			shutdown(1)
 		case <-deadline:
+			// Parent cancellation can make both select cases ready.
+			flight.timedOut = ctx.Err() == nil
 			deadline = nil
 			flight.cancel()
 			beginGrace()
@@ -464,7 +470,9 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 			_, _ = fmt.Fprintln(stderr, "verify-mcp: verifier did not stop within shutdown grace")
 			return 1
 		case result := <-done:
-			text, bad := verifyResult(result.report, result.err, flight.ctx.Err() != nil)
+			timedOut := flight.timedOut || errors.Is(flight.ctx.Err(), context.DeadlineExceeded)
+			cancelled := !timedOut && (flight.ctx.Err() != nil || errors.Is(result.err, context.Canceled))
+			text, bad := verifyResult(result.report, result.err, timedOut, cancelled)
 			first, _, _ := strings.Cut(text, "\n")
 			_, _ = fmt.Fprintf(stderr, "verify %s %s: %s\n", flight.args.check, flight.args.pattern, first)
 			id := flight.id
@@ -567,7 +575,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 				}
 				callCtx, cancel := context.WithTimeout(ctx, limit)
 				completed := make(chan verifyCompletion, 1)
-				flight = &verifyFlight{req.id, args, callCtx, cancel}
+				flight = &verifyFlight{id: req.id, args: args, ctx: callCtx, cancel: cancel}
 				done = completed
 				deadline = callCtx.Done()
 				if s.callDeadline != nil {

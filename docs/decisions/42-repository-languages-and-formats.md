@@ -13,7 +13,8 @@ The table itself changes only through an issue approved by the maintainer.
 ## Language list
 
 Derived from all 976 tracked files of the 2026-10-19 baseline, without
-exceptions. Directory entries below are direct-only unless stated otherwise:
+exceptions, with later exact-path additions approved through #1437.
+Directory entries below are direct-only unless stated otherwise:
 
 - Go throughout the repository, except fenced vendor and testdata directories.
 - SQL migrations directly in `db/migrations/`, queries one module directory
@@ -32,11 +33,21 @@ exceptions. Directory entries below are direct-only unless stated otherwise:
   plain text API summaries directly in `docs/api/`, the two document exception
   files and the scope check's named allowlist.
 - Vendor files only by their existing exact names: browser scripts, icon SVG,
-  licences and README in `web/static/vendor/`. Testdata only the JSON Go test
-  fixture `cmd/argonreview/testdata/implement-guard/cases.json`, the named browser
-  shard totals and extension-less fuzz corpora below the conversation and
-  identity modules, at `testdata/fuzz/Fuzz*/<file>`, with first line
-  `go test fuzz v1`. Neither directory is excluded from checking.
+  licences and README in `web/static/vendor/`. Guard Go test data only by these
+  exact paths under the maintainer's decision recorded on #1437:
+  `cmd/argonreview/testdata/implement-guard/cases.json`,
+  `cmd/argonreview/testdata/implement-guard/hooks-off.json`,
+  `cmd/argonreview/testdata/implement-guard/hooks-on.json`,
+  `cmd/argonreview/testdata/implement-guard/settings-off.json`,
+  `cmd/argonreview/testdata/implement-guard/settings-on.json`,
+  `cmd/argonreview/testdata/implement-guard/mcp-config-on.json` (JSON), and
+  `cmd/argonreview/testdata/implement-guard/real-agy-calls.jsonl` (JSONL).
+  The six additions after `cases.json` were approved on 2026-10-20 in chat;
+  the orchestrator records that approval on #1437. Other testdata is limited
+  to the named browser shard totals and extension-less fuzz corpora below
+  the conversation and identity modules, at `testdata/fuzz/Fuzz*/<file>`,
+  with first line `go test fuzz v1`. Neither directory is excluded from checking;
+  there is no general testdata, JSON or JSONL allowance.
 
 TypeScript, Node, Rust/WASM and any other language or runtime are **not
 approved by this rule**; each becomes allowed only when its own accepted

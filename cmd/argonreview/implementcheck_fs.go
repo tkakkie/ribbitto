@@ -35,9 +35,15 @@ func implementRealDirectory(path string, lstat func(string) (fs.FileInfo, error)
 	return nil
 }
 
-// implementRead is the only reader for compared and hashed files. Opening the
+// All compared and hashed files use this descriptor reader. Opening the
 // parent component by component also refuses symlinks above the leaf.
 func implementRead(path string, limit int64, shared bool) ([]byte, error) {
+	data, _, err := implementReadMode(path, limit, shared)
+	return data, err
+}
+
+// The mode and bytes must come from the same descriptor, even after replacement.
+func implementReadMode(path string, limit int64, shared bool) ([]byte, fs.FileMode, error) {
 	flags := unix.O_RDONLY | unix.O_NONBLOCK | unix.O_CLOEXEC
 	var fd int
 	var err error
@@ -49,31 +55,31 @@ func implementRead(path string, limit int64, shared bool) ([]byte, error) {
 		var parent int
 		parent, err = walk(filepath.Dir(path))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		defer closeFD(parent)
 		fd, err = unix.Openat(parent, filepath.Base(path), flags|unix.O_NOFOLLOW, 0)
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	f := os.NewFile(uintptr(fd), path)
 	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("not a regular file (type %s)", info.Mode().Type())
+		return nil, 0, fmt.Errorf("not a regular file (type %s)", info.Mode().Type())
 	}
 	data, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("file exceeds %d bytes: %w", limit, errImplementReadCap)
+		return nil, 0, fmt.Errorf("file exceeds %d bytes: %w", limit, errImplementReadCap)
 	}
-	return data, nil
+	return data, info.Mode(), nil
 }
 
 // Compare identities while walking up, rather than trusting string prefixes on
@@ -123,7 +129,7 @@ func implementBaselineExempt(rel string) bool {
 	case ".git", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules", ".github":
 		return true
 	}
-	// git ls-files --others cannot see entries named .git; scan must refuse them.
+	// Keep scan's nested-.git refusal even outside the baseline walk.
 	return strings.HasPrefix(rel, ".github/") && !strings.EqualFold(path.Base(rel), ".git")
 }
 

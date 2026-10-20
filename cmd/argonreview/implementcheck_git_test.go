@@ -15,8 +15,65 @@ import (
 	"time"
 )
 
+// A complete fake plumbing fixture keeps error tests independent of filesystem
+// mismatches: removing an error check must make its test fail.
+func implementCheckBaselineFake(t *testing.T, tracked bool) *implementCheckTestFixture {
+	t.Helper()
+	f := implementCheckFixture(t)
+	if tracked {
+		implementCheckWrite(t, filepath.Join(f.tree, "AGENTS.md"), "baseline")
+	}
+	fallback := f.deps.git
+	f.deps.git = func(args ...string) ([]byte, int, error) {
+		if args[0] == "cat-file" {
+			return []byte("blob\n"), 0, nil
+		}
+		if tracked && args[len(args)-1] == "AGENTS.md" {
+			oid := implementBlobOID([]byte("baseline"), "sha1")
+			if args[0] == "ls-tree" {
+				return []byte("100644 blob " + oid + "\tAGENTS.md\x00"), 0, nil
+			}
+			if args[0] == "ls-files" && args[1] == "-s" {
+				return []byte("100644 " + oid + " 0\tAGENTS.md\x00"), 0, nil
+			}
+			if args[0] == "ls-files" && args[1] == "-v" {
+				return []byte("H AGENTS.md\x00"), 0, nil
+			}
+		}
+		return fallback(args...)
+	}
+	return f
+}
+
+func implementCheckBaselineRun(f *implementCheckTestFixture) (int, string) {
+	var out bytes.Buffer
+	c := implementChecker{deps: f.deps, out: &out}
+	c.baseline(f.tree)
+	return c.problems, out.String()
+}
+
+func implementCheckGitStage(args []string) string {
+	switch args[0] {
+	case "ls-tree":
+		if len(args) == 3 {
+			return "HEAD root"
+		}
+		if args[3] == "HEAD" {
+			return "HEAD"
+		}
+		return "reference"
+	case "ls-files":
+		if args[1] == "-z" {
+			return "index spelling"
+		}
+		return args[1]
+	default:
+		return args[0]
+	}
+}
+
 func TestImplementCheckGitFailures(t *testing.T) {
-	for _, stage := range []string{"merge-base", "ls-tree", "cat-file", "diff", "ls-files"} {
+	for _, stage := range []string{"rev-parse", "merge-base", "reference", "HEAD", "cat-file", "-s", "-v", "HEAD root", "index spelling"} {
 		for _, outcome := range []struct {
 			name   string
 			out    []byte
@@ -30,162 +87,128 @@ func TestImplementCheckGitFailures(t *testing.T) {
 			{name: "oversized output", out: bytes.Repeat([]byte("a"), (1<<20)+1)},
 			{name: "output copy failure", status: -1, err: io.ErrClosedPipe},
 			{name: "malformed output", out: []byte("garbage")},
-			{name: "status 2", status: 2}, {name: "status 128", status: 128},
+			{name: "status 1", status: 1}, {name: "status 2", status: 2}, {name: "status 128", status: 128},
 		} {
 			t.Run(stage+"/"+outcome.name, func(t *testing.T) {
-				f := implementCheckFixture(t)
-				hit, probedAbsent := false, false
-				f.deps.lstat = func(path string) (fs.FileInfo, error) {
-					if path == filepath.Join(f.tree, ".github") {
+				f := implementCheckBaselineFake(t, true)
+				original := f.deps.git
+				probedAbsent := false
+				f.deps.lstat = func(p string) (fs.FileInfo, error) {
+					if p == filepath.Join(f.tree, "AGENTS.md") && stage == "reference" {
 						probedAbsent = true
 					}
-					return os.Lstat(path)
+					return os.Lstat(p)
 				}
+				hit, calls := false, 0
 				f.deps.git = func(args ...string) ([]byte, int, error) {
-					if args[0] == stage && (stage == "merge-base" || stage == "cat-file" || args[len(args)-1] == ".github") {
+					calls++
+					if implementCheckGitStage(args) == stage && (stage == "rev-parse" || stage == "merge-base" || stage == "cat-file" || stage == "HEAD root" || strings.TrimPrefix(args[len(args)-1], ":(icase,literal)") == "AGENTS.md") {
 						hit = true
-						return outcome.out, outcome.status, outcome.err
+						data := outcome.out
+						if outcome.err != nil || outcome.status != 0 {
+							data, _, _ = original(args...)
+						}
+						return data, outcome.status, outcome.err
 					}
-					if args[0] == "merge-base" {
-						return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
-					}
-					if args[0] == "ls-tree" && args[len(args)-1] == ".github" {
-						return []byte("040000 tree " + strings.Repeat("b", 40) + "\t.github\x00"), 0, nil
-					}
-					if args[0] == "cat-file" {
-						return []byte("tree\n"), 0, nil
-					}
-					if stage == "merge-base" {
-						t.Errorf("git called after failed merge-base: %v", args)
-					}
-					return nil, 0, nil
+					return original(args...)
 				}
-				var out bytes.Buffer
-				c := implementChecker{deps: f.deps, out: &out}
-				c.baseline(f.tree)
-				if !hit || c.problems == 0 || probedAbsent {
-					t.Fatalf("hit %t, absent probe %t, problems %d: %s", hit, probedAbsent, c.problems, &out)
+				problems, out := implementCheckBaselineRun(f)
+				if !hit || problems == 0 || probedAbsent {
+					t.Fatalf("hit %t, problems %d: %s", hit, problems, out)
 				}
-				if stage == "ls-tree" && !strings.Contains(out.String(), `cannot tell whether ".github" is tracked`) {
-					t.Fatal(out.String())
+				if stage == "rev-parse" && calls != 1 || stage == "merge-base" && calls != 2 {
+					t.Fatalf("continued after failed prerequisite: %d", calls)
+				}
+				if stage == "merge-base" && outcome.name == "status 1" && out != "CHECK: no merge base with origin/main\n" {
+					t.Fatal(out)
+				}
+				want := "cannot list baseline"
+				switch stage {
+				case "rev-parse":
+					want = "object format failed"
+				case "merge-base":
+					want = "merge base"
+					if outcome.name != "status 1" {
+						want = "merge-base"
+					}
+				case "cat-file":
+					want = "checking baseline object"
+				case "-v":
+					want = "baseline index"
+				case "HEAD root":
+					want = "baseline HEAD root"
+				case "index spelling":
+					want = "baseline index spelling"
+				}
+				if !strings.Contains(out, want) {
+					t.Fatalf("missing %q: %s", want, out)
 				}
 			})
 		}
-	}
-	for _, stage := range []string{"merge-base", "ls-tree", "cat-file", "diff", "ls-files"} {
-		t.Run(stage+"/status 1", func(t *testing.T) {
-			f := implementCheckFixture(t)
-			calls := 0
-			f.deps.git = func(args ...string) ([]byte, int, error) {
-				calls++
-				if args[0] == stage {
-					return nil, 1, nil
-				}
-				if args[0] == "merge-base" {
-					return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
-				}
-				if args[0] == "ls-tree" {
-					return []byte("100644 blob " + strings.Repeat("b", 40) + "\t" + args[len(args)-1] + "\x00"), 0, nil
-				}
-				if args[0] == "cat-file" {
-					return []byte("blob\n"), 0, nil
-				}
-				return nil, 0, nil
-			}
-			var out bytes.Buffer
-			c := implementChecker{deps: f.deps, out: &out}
-			c.baseline(f.tree)
-			if c.problems == 0 || stage == "merge-base" && (calls != 1 || out.String() != "CHECK: no merge base with origin/main\n") {
-				t.Fatalf("calls %d: %s", calls, &out)
-			}
-		})
 	}
 }
 
 func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 	for _, mode := range []string{"absent exists", "absent stat error", "tracked changed", "tracked untracked", "absent", "tracked"} {
 		t.Run(mode, func(t *testing.T) {
-			f := implementCheckFixture(t)
-			if mode == "absent exists" {
-				implementCheckWrite(t, filepath.Join(f.tree, "AGENTS.md"), "new")
+			tracked := strings.HasPrefix(mode, "tracked")
+			f := implementCheckBaselineFake(t, tracked)
+			if mode == "absent exists" || mode == "tracked changed" {
+				implementCheckWrite(t, filepath.Join(f.tree, "AGENTS.md"), "changed")
+			}
+			if mode == "tracked untracked" {
+				implementCheckWrite(t, filepath.Join(f.tree, ".github/extra"), "extra")
 			}
 			if mode == "absent stat error" {
-				f.deps.lstat = func(path string) (fs.FileInfo, error) {
-					if filepath.Base(path) == "AGENTS.md" {
+				f.deps.lstat = func(p string) (fs.FileInfo, error) {
+					if filepath.Base(p) == "AGENTS.md" {
 						return nil, fs.ErrPermission
 					}
-					return os.Lstat(path)
+					return os.Lstat(p)
 				}
 			}
-			calls := []string{}
-			mb := strings.Repeat("a", 64)
+			original := f.deps.git
+			calls := 0
 			f.deps.git = func(args ...string) ([]byte, int, error) {
-				calls = append(calls, strings.Join(args, " "))
-				switch args[0] {
+				calls++
+				base := args[len(args)-1]
+				var want []string
+				switch implementCheckGitStage(args) {
+				case "rev-parse":
+					want = []string{"rev-parse", "--show-object-format"}
 				case "merge-base":
-					if strings.Join(args, " ") != "merge-base HEAD refs/remotes/origin/main" {
-						t.Errorf("args %v", args)
-					}
-					return []byte(mb + "\n"), 0, nil
-				case "ls-tree":
-					base := args[len(args)-1]
-					if strings.Join(args, " ") != "ls-tree -z "+mb+" -- "+base {
-						t.Errorf("args %v", args)
-					}
-					if strings.HasPrefix(mode, "tracked") {
-						return []byte("100644 blob " + strings.Repeat("b", 64) + "\t" + base + "\x00"), 0, nil
-					}
-				case "diff":
-					cached := ""
-					if args[4] == "--cached" {
-						cached = "--cached "
-					}
-					if strings.Join(args, " ") != "diff --quiet --no-ext-diff --no-textconv "+cached+mb+" -- "+args[len(args)-1] {
-						t.Errorf("args %v", args)
-					}
-					if mode == "tracked changed" {
-						return nil, 1, nil
-					}
-				case "diff-tree":
-					if strings.Join(args, " ") != "diff-tree --quiet -r "+mb+" HEAD -- "+args[len(args)-1] {
-						t.Errorf("args %v", args)
-					}
+					want = []string{"merge-base", "HEAD", "refs/remotes/origin/main"}
+				case "reference":
+					want = []string{"ls-tree", "-r", "-z", strings.Repeat("a", 40), "--", base}
+				case "HEAD":
+					want = []string{"ls-tree", "-r", "-z", "HEAD", "--", base}
+				case "HEAD root":
+					want = []string{"ls-tree", "-z", "HEAD"}
+				case "index spelling":
+					want = []string{"ls-files", "-z", "--", ":(icase,literal)" + strings.TrimPrefix(base, ":(icase,literal)")}
+				case "-s", "-v":
+					want = []string{"ls-files", args[1], "-z", "--", base}
 				case "cat-file":
-					if strings.Join(args, " ") != "cat-file -t "+strings.Repeat("b", 64) {
-						t.Errorf("args %v", args)
-					}
-					return []byte("blob\n"), 0, nil
-				case "ls-files":
-					if args[1] == "-v" {
-						if strings.Join(args, " ") != "ls-files -v -z -- "+args[len(args)-1] {
-							t.Errorf("args %v", args)
-						}
-						return nil, 0, nil
-					}
-					if strings.Join(args, " ") != "ls-files --others -z -- "+args[len(args)-1] {
-						t.Errorf("args %v", args)
-					}
-					if mode == "tracked untracked" {
-						return []byte("extra\x00"), 0, nil
-					}
+					want = []string{"cat-file", "-t", implementBlobOID([]byte("baseline"), "sha1")}
 				default:
-					t.Errorf("unexpected args %v", args)
+					t.Fatalf("unexpected git %v", args)
 				}
-				return nil, 0, nil
+				if !reflect.DeepEqual(args, want) {
+					t.Errorf("args %v, want %v", args, want)
+				}
+				return original(args...)
 			}
-			var out bytes.Buffer
-			c := implementChecker{deps: f.deps, out: &out}
-			c.baseline(f.tree)
+			problems, out := implementCheckBaselineRun(f)
 			good := mode == "absent" || mode == "tracked"
-			if (c.problems == 0) != good {
-				t.Fatalf("%s", &out)
+			if (problems == 0) != good {
+				t.Fatal(out)
 			}
-			want := 21
-			if strings.HasPrefix(mode, "tracked") {
-				want = 36
+			want := 28
+			if tracked {
+				want++
 			}
-			if len(calls) != want {
-				t.Fatalf("calls %v", calls)
+			if calls != want {
+				t.Fatalf("calls %d want %d", calls, want)
 			}
 		})
 	}
@@ -198,89 +221,159 @@ func TestImplementCheckBaselineGitOutput(t *testing.T) {
 			status                      int
 			err                         error
 		}{
-			{name: "HEAD changed", command: "diff-tree", status: 1, want: "differs from origin/main in HEAD"},
-			{name: "HEAD output", command: "diff-tree", output: "garbage", want: "comparing baseline HEAD"},
-			{name: "HEAD NUL output", command: "diff-tree", output: "\x00", want: "comparing baseline HEAD"},
-			{name: "HEAD status 2", command: "diff-tree", status: 2, want: "comparing baseline HEAD"},
-			{name: "HEAD error", command: "diff-tree", err: fs.ErrNotExist, want: "comparing baseline HEAD"},
-			{name: "HEAD signal", command: "diff-tree", status: -1, err: errors.New("signal: killed"), want: "comparing baseline HEAD"},
-			{name: "cached changed", command: "diff", status: 1, want: "index differs from the merge base"},
-			{name: "cached output", command: "diff", output: "garbage", want: "comparing baseline index"},
-			{name: "cached NUL output", command: "diff", output: "\x00", want: "comparing baseline index"},
-			{name: "cached status 2", command: "diff", status: 2, want: "comparing baseline index"},
-			{name: "cached error", command: "diff", err: fs.ErrNotExist, want: "comparing baseline index"},
-			{name: "cached signal", command: "diff", status: -1, err: errors.New("signal: killed"), want: "comparing baseline index"},
-			{name: "index status 2", command: "ls-files", status: 2, want: "listing baseline index"},
-			{name: "index error", command: "ls-files", err: fs.ErrNotExist, want: "listing baseline index"},
-			{name: "index signal", command: "ls-files", status: -1, err: errors.New("signal: killed"), want: "listing baseline index"},
-			{name: "index short", command: "ls-files", output: "H\x00", want: "malformed baseline index record"},
-			{name: "index empty", command: "ls-files", output: "\x00", want: "malformed baseline index record"},
-			{name: "index no space", command: "ls-files", output: "HxAGENTS.md\x00", want: "malformed baseline index record"},
-			{name: "index no path", command: "ls-files", output: "H \x00", want: "malformed baseline index record"},
-			{name: "index unterminated", command: "ls-files", output: "H AGENTS.md", want: "malformed baseline index record"},
-			{name: "index flags", command: "ls-files", output: "H AGENTS.md\x00h AGENTS.md\x00S AGENTS.md\x00s AGENTS.md\x00M AGENTS.md\x00R AGENTS.md\x00C AGENTS.md\x00K AGENTS.md\x00", want: "has tag"},
-			{name: "index normal", command: "ls-files", output: "H AGENTS.md\x00H path with\nspace\x00"},
+			{name: "HEAD changed", command: "HEAD", status: 1, want: "cannot list baseline"},
+			{name: "HEAD output", command: "HEAD", output: "garbage", want: "cannot list baseline"},
+			{name: "HEAD NUL output", command: "HEAD", output: "\x00", want: "cannot list baseline"},
+			{name: "HEAD status 2", command: "HEAD", status: 2, want: "cannot list baseline"},
+			{name: "HEAD error", command: "HEAD", err: fs.ErrNotExist, want: "cannot list baseline"},
+			{name: "HEAD signal", command: "HEAD", status: -1, err: errors.New("signal: killed"), want: "cannot list baseline"},
+			{name: "cached changed", command: "-s", status: 1, want: "cannot list baseline"},
+			{name: "cached output", command: "-s", output: "garbage", want: "cannot list baseline"},
+			{name: "cached NUL output", command: "-s", output: "\x00", want: "cannot list baseline"},
+			{name: "cached status 2", command: "-s", status: 2, want: "cannot list baseline"},
+			{name: "cached error", command: "-s", err: fs.ErrNotExist, want: "cannot list baseline"},
+			{name: "cached signal", command: "-s", status: -1, err: errors.New("signal: killed"), want: "cannot list baseline"},
+			{name: "index status 2", command: "-v", status: 2, want: "listing baseline index"},
+			{name: "index error", command: "-v", err: fs.ErrNotExist, want: "listing baseline index"},
+			{name: "index signal", command: "-v", status: -1, err: errors.New("signal: killed"), want: "listing baseline index"},
+			{name: "index short", command: "-v", output: "H\x00", want: "malformed baseline index record"},
+			{name: "index empty", command: "-v", output: "\x00", want: "malformed baseline index record"},
+			{name: "index no space", command: "-v", output: "HxAGENTS.md\x00", want: "malformed baseline index record"},
+			{name: "index no path", command: "-v", output: "H \x00", want: "malformed baseline index record"},
+			{name: "index unterminated", command: "-v", output: "H AGENTS.md", want: "malformed baseline index record"},
+			{name: "index flags", command: "-v", output: "H AGENTS.md\x00h AGENTS.md\x00S AGENTS.md\x00s AGENTS.md\x00M AGENTS.md\x00R AGENTS.md\x00C AGENTS.md\x00K AGENTS.md\x00", want: "has tag"},
+			{name: "index normal", command: "-v", output: "H AGENTS.md\x00"},
 		} {
 			t.Run(fmt.Sprintf("tracked=%t/%s", tracked, tc.name), func(t *testing.T) {
-				f := implementCheckFixture(t)
+				f := implementCheckBaselineFake(t, tracked)
+				original := f.deps.git
 				f.deps.git = func(args ...string) ([]byte, int, error) {
-					switch args[0] {
-					case "merge-base":
-						return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
-					case "ls-tree":
-						if tracked && args[len(args)-1] == "AGENTS.md" {
-							return []byte("100644 blob " + strings.Repeat("b", 40) + "\tAGENTS.md\x00"), 0, nil
-						}
-					case "cat-file":
-						return []byte("blob\n"), 0, nil
-					}
-					if args[0] == tc.command && args[len(args)-1] == "AGENTS.md" &&
-						(tc.command != "ls-files" || args[1] == "-v") && (tc.command != "diff" || args[4] == "--cached") {
+					if implementCheckGitStage(args) == tc.command && args[len(args)-1] == "AGENTS.md" {
 						return []byte(tc.output), tc.status, tc.err
 					}
-					return nil, 0, nil
+					return original(args...)
 				}
-				var out bytes.Buffer
-				c := implementChecker{deps: f.deps, out: &out}
-				c.baseline(f.tree)
-				want := tc.want
 				if tc.name == "index normal" && !tracked {
-					want = "in the index but origin/main does not track it"
-				}
-				if want == "" {
-					if c.problems != 0 {
-						t.Fatal(out.String())
+					wrapped := f.deps.git
+					f.deps.git = func(args ...string) ([]byte, int, error) {
+						if args[0] == "ls-files" && args[1] == "-s" && args[len(args)-1] == "AGENTS.md" {
+							return []byte("100644 " + implementBlobOID([]byte("baseline"), "sha1") + " 0\tAGENTS.md\x00"), 0, nil
+						}
+						return wrapped(args...)
 					}
-				} else if c.problems == 0 || !strings.Contains(out.String(), want) {
-					t.Fatalf("want %q: %s", want, &out)
+					tc.want = "in the index but origin/main does not track it"
+				}
+				problems, out := implementCheckBaselineRun(f)
+				if tc.want == "" {
+					if problems != 0 {
+						t.Fatal(out)
+					}
+				} else if problems == 0 || !strings.Contains(out, tc.want) {
+					t.Fatalf("want %q: %s", tc.want, out)
 				}
 				if tc.name == "index flags" {
 					for _, tag := range []string{"h", "S", "s", "M", "R", "C", "K"} {
-						if !strings.Contains(out.String(), `has tag "`+tag+`"`) {
-							t.Fatalf("missing tag %q: %s", tag, &out)
+						if !strings.Contains(out, `has tag "`+tag+`"`) {
+							t.Fatal(out)
 						}
 					}
 				}
 			})
 		}
 	}
+	// NUL framing must preserve printable spaces in actual baseline paths.
+	f := implementCheckFixture(t)
+	rel := ".github/path with space"
+	implementCheckWrite(t, filepath.Join(f.tree, rel), "baseline")
+	oid := implementBlobOID([]byte("baseline"), "sha1")
+	original := f.deps.git
+	f.deps.git = func(args ...string) ([]byte, int, error) {
+		if args[0] == "cat-file" {
+			return []byte("blob\n"), 0, nil
+		}
+		if args[len(args)-1] == ".github" {
+			if args[0] == "ls-tree" {
+				return []byte("100644 blob " + oid + "\t" + rel + "\x00"), 0, nil
+			}
+			if args[1] == "-s" {
+				return []byte("100644 " + oid + " 0\t" + rel + "\x00"), 0, nil
+			}
+			return []byte("H " + rel + "\x00"), 0, nil
+		}
+		return original(args...)
+	}
+	if problems, out := implementCheckBaselineRun(f); problems != 0 {
+		t.Fatal(out)
+	}
 }
 
 func TestImplementCheckTreeEntry(t *testing.T) {
 	oid := strings.Repeat("a", 40)
-	for _, data := range []string{
-		"100644 blob " + oid + "\twrong\x00", "100644 blob short\t.github\x00",
-		"100644 blob " + oid + "\t.github", "100644  blob " + oid + "\t.github\x00",
-		"garbage", "100644 tree " + oid + "\t.github\x00", "040000 blob " + oid + "\t.github\x00",
-		"040000 tree " + oid + "\t.github\x00extra\x00",
-	} {
-		if implementTreeEntry([]byte(data), ".github") {
-			t.Errorf("accepted %q", data)
+	for _, index := range []bool{false, true} {
+		kind := "blob "
+		if index {
+			kind = ""
 		}
-	}
-	for _, mode := range []string{"040000 tree", "100644 blob", "100755 blob", "120000 blob", "160000 commit"} {
-		if !implementTreeEntry([]byte(mode+" "+oid+"\t.github\x00"), ".github") {
-			t.Errorf("refused %s", mode)
+		valid := "100644 " + kind + oid
+		if index {
+			valid += " 0"
+		}
+		valid += "\t.github/file\x00"
+		cases := []struct{ name, data string }{
+			{"wrong path", strings.ReplaceAll(valid, ".github/file", "wrong")},
+			{"short oid", strings.ReplaceAll(valid, oid, "short")},
+			{"long oid", strings.ReplaceAll(valid, oid, strings.Repeat("a", 64))},
+			{"nonhex oid", strings.ReplaceAll(valid, oid, strings.Repeat("z", 40))},
+			{"truncated", strings.TrimSuffix(valid, "\x00")},
+			{"double space", strings.Replace(valid, " ", "  ", 1)},
+			{"garbage", "garbage"}, {"extra NUL", valid + "\x00"},
+			{"symlink", strings.Replace(valid, "100644", "120000", 1)},
+			{"gitlink", strings.Replace(valid, "100644", "160000", 1)},
+			{"tree mode", strings.Replace(valid, "100644", "040000", 1)},
+			{"duplicate", valid + valid},
+			{"dotdot", strings.ReplaceAll(valid, ".github/file", ".github/../file")},
+			{"nested git", strings.ReplaceAll(valid, ".github/file", ".github/.GIT/file")},
+			{"backslash", strings.ReplaceAll(valid, ".github/file", `.github/work\flow.yml`)},
+			{"control", strings.ReplaceAll(valid, ".github/file", ".github/work\x01flow.yml")},
+			{"newline", strings.ReplaceAll(valid, ".github/file", ".github/work\nflow.yml")},
+			{"DEL", strings.ReplaceAll(valid, ".github/file", ".github/work\x7fflow.yml")},
+			{"invalid UTF-8", strings.ReplaceAll(valid, ".github/file", ".github/work\xffflow.yml")},
+			{"nonprintable Unicode", strings.ReplaceAll(valid, ".github/file", ".github/work\u200bflow.yml")},
+			{"file parent", valid + strings.ReplaceAll(valid, ".github/file", ".github/file/child")},
+		}
+		if index {
+			for _, stage := range []string{"1", "2", "3", "x"} {
+				cases = append(cases, struct{ name, data string }{"stage " + stage, strings.Replace(valid, " 0\t", " "+stage+"\t", 1)})
+			}
+		} else {
+			for _, kind := range []string{"tree", "commit", "unknown"} {
+				cases = append(cases, struct{ name, data string }{"type " + kind, strings.Replace(valid, "blob", kind, 1)})
+			}
+		}
+		for _, tc := range cases {
+			t.Run(fmt.Sprintf("index=%t/%s", index, tc.name), func(t *testing.T) {
+				if _, ok := implementTreeEntry([]byte(tc.data), ".github", 40, index); ok {
+					t.Fatalf("accepted %q", tc.data)
+				}
+				f := implementCheckFixture(t)
+				original := f.deps.git
+				f.deps.git = func(args ...string) ([]byte, int, error) {
+					target := args[len(args)-1] == ".github"
+					if target && (index && args[0] == "ls-files" && args[1] == "-s" || !index && implementCheckGitStage(args) == "reference") {
+						return []byte(tc.data), 0, nil
+					}
+					return original(args...)
+				}
+				problems, out := implementCheckBaselineRun(f)
+				if problems == 0 || !strings.Contains(out, "cannot list baseline") {
+					t.Fatal(out)
+				}
+			})
+		}
+		for _, mode := range []string{"100644", "100755"} {
+			if _, ok := implementTreeEntry([]byte(strings.Replace(valid, "100644", mode, 1)), ".github", 40, index); !ok {
+				t.Fatalf("refused %s", mode)
+			}
 		}
 	}
 }
@@ -381,10 +474,10 @@ func TestImplementCheckBuiltinVersionRunner(t *testing.T) {
 }
 
 func TestImplementCheckGitEnv(t *testing.T) {
-	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_NO_LAZY_FETCH", "GIT_NO_REPLACE_OBJECTS", "GIT_OPTIONAL_LOCKS", "PATH", "HOME"} {
+	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_NO_LAZY_FETCH", "GIT_NO_REPLACE_OBJECTS", "GIT_OPTIONAL_LOCKS", "GIT_ASKPASS", "GIT_TERMINAL_PROMPT", "GIT_PROTOCOL_FROM_USER", "GIT_ALLOW_PROTOCOL", "PATH", "HOME"} {
 		t.Setenv(name, "hostile")
 	}
-	want := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
+	want := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=/usr/bin/false", "GIT_PROTOCOL_FROM_USER=0", "GIT_ALLOW_PROTOCOL="}
 	if got := implementGitEnv(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("git environment %q; want %q", got, want)
 	}
@@ -417,7 +510,7 @@ func TestImplementCheckGitNoLazyFetch(t *testing.T) {
 	// guard; the helper exits before any network connection can be made.
 	var env []string
 	for _, entry := range implementGitEnv() {
-		if entry != "GIT_NO_LAZY_FETCH=1" {
+		if entry != "GIT_NO_LAZY_FETCH=1" && entry != "GIT_PROTOCOL_FROM_USER=0" && entry != "GIT_ALLOW_PROTOCOL=" {
 			env = append(env, entry)
 		}
 	}

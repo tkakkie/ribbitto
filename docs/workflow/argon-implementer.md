@@ -1,43 +1,40 @@
 # Argon as implementer
 
 Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements eligible issues
-(below) under the boundary, preflight and records in this file, which
-grew out of [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
-became a standing rule with
-[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Start at the [Argon
-entry point](README.md#implementer-argon). If a boundary below fails, Argon
-stops at once and the maintainer decides.
+under [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
+[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Start at the
+[Argon entry](README.md#implementer-argon). If a boundary fails,
+Argon stops at once; the maintainer decides.
 
-**Start gate.** No Argon run starts until an issue records a preflight
-(below) that passed in full for the `agy` version and custom agent in use.
+**Start gate.** Each run requires an issue recording a full passing preflight
+for its `agy` version and custom agent.
 [Verify](argon-verify.md#status) is not in force; this boundary stands.
 
 ## Which issues
 
-Argon implements eligible normal-risk tier B and C issues under the rules
-below; Codex implements everything else, except an issue for which the
-maintainer names Claude.
+Argon implements eligible normal-risk tier B/C issues under these rules;
+Codex implements the rest unless the maintainer names Claude.
 
-An issue is eligible only if its *Risk* is `normal`
-([risk](reviewing.md#risk)) **and** its *Implementer* field states an expected
-adversarial tier C or B and the case it matches
+An issue is eligible only with *Risk* `normal`
+([risk](reviewing.md#risk)) **and** an *Implementer* field stating expected
+adversarial tier C or B and its case
 ([tiers](adversarial-review.md#which-review-runs)), for example
-`Argon (normal risk; expected tier B: tests in A's areas)`, and only if it
-can be verified without running its code locally: no `make dev` or browser
-check unless the maintainer runs it. Go code and tests are eligible;
+`Argon (normal risk; expected tier B: tests in A's areas)`,
+and only if it can be verified without running its code locally: no `make dev`
+or browser check unless the maintainer runs it. Go code and tests are eligible;
 verification follows the [boundary](#the-boundary) and
 [handoff](running-other-ai.md#handoff-of-another-ais-code).
-The [issue review](reviewing.md#issue-review) checks the expected tier.
+[Issue review](reviewing.md#issue-review) checks the tier.
 No M7 issue is picked unless the maintainer names it.
 
-**The tier follows the diff, not the expectation.** If an Argon change
+**The diff determines the tier.** If an Argon change
 matches tier A or touches a `high` risk path, it leaves Argon and the
 maintainer decides; Claude checks this against `origin/main` before every
 push and does not push such a change. See [Argon's review
 assignments](argon-pull-requests.md#who-reviews).
 
-Claude implements only when the maintainer names Claude for a specific
-issue (maintainer, 2026-10-17,
+Claude implements only when named by the maintainer for a specific issue
+(maintainer, 2026-10-17,
 [#1252](https://github.com/tkakkie/ribbitto/issues/1252)). Existing `ready`
 issues naming Claude are reassigned when started, without a bulk edit.
 
@@ -57,8 +54,8 @@ issues naming Claude are reassigned when started, without a bulk edit.
 
 ## The boundary
 
-Like Codex's handoff ([running Codex](running-other-ai.md#running-codex)),
-but enforced by configuration, not by the prompt.
+Like [Codex's handoff](running-other-ai.md#running-codex), but enforced by
+configuration rather than the prompt.
 
 - **Invocation.** Claude creates the worktree (`../wt/<name>`, branch
   `argon/<topic>` from `origin/main`) and runs `agy -p` there with stdin
@@ -66,8 +63,8 @@ but enforced by configuration, not by the prompt.
   maintainer picks (`gemini-4-argon-high` unless he says otherwise). Never
   `--dangerously-skip-permissions`. `agy` runs in its own session under a
   supervisor like the review launcher's (`cmd/argonreview/supervise.go`),
-  which stops every process in that session after the run and confirms
-  none is left. `agy` starts from an empty environment except `PATH`,
+  which stops every session process after the run and confirms none remains.
+  `agy` starts from an empty environment except `PATH`,
   `HOME` and a fresh `TMPDIR` beside the worktree, removed after the run:
   no `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK` or credential helper.
 - **No commands** (maintainer, 2026-10-16). `run_command` and every other
@@ -77,20 +74,20 @@ but enforced by configuration, not by the prompt.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
-  never run at the same time, and each writes its own settings and guard
-  before every run. It is never the account's home and never the review
+  never run concurrently; each writes its settings and guard before every run.
+  It is never the account's home or the review
   home (`RIBBITTO_ARGON_HOME`), whose files `prepare` rewrites for reviews.
   The account's `~/.gemini/antigravity-cli/settings.json` is never edited,
   not even temporarily with a restore; its hash is checked before and after
-  every run, as the review launcher does. Before and after every run,
-  Claude checks that the home's own settings, hooks and MCP files are the
-  ones written and that it holds no symlink and, at any depth outside those
+  every run, as in reviews. Before and after every run, Claude checks the home's
+  settings, hooks and MCP files equal those written, and the home has no symlink
+  and, at any depth outside those
   files, none of: the customisation `prepare` refuses
   (`cmd/argonreview/prepare.go`); `AGENTS.md`, `AGENTS.override.md`,
   `GEMINI.md`, `CLAUDE.md`, `CLAUDE.local.md`; `.claude`, `.codex`,
   `.mcp.json`; `.agents`, `.agent`, `_agents`, `_agent`; `hooks.json`,
   `plugin.json`, `skills.json`, `plugins.json`. It stops otherwise. Only
-  agy's own `builtin/` (while it matches the trusted hash list for the
+  agy's `builtin/` (while it matches the trusted hash list for the
   running agy version) and `cli.log` (while it links to a regular
   `log/cli-<timestamp>.log` in the home) are exempt. The home's
   conversation store (`brain/`) is emptied before and after every run,
@@ -120,16 +117,21 @@ but enforced by configuration, not by the prompt.
   sandbox ([running Argon](running-argon.md#the-boundary)). Before each run, fixes
   included, Claude refuses symlinks, nested `.git` (even in `.github`),
   guard-refused names and workspace configuration at any depth except the
-  trusted baseline: for each baseline path (`.github` and the root `AGENTS.md`,
-  `CLAUDE.md`, `.gitattributes` and `.gitmodules`), the path is present only if
-  `origin/main` tracks it, and HEAD, the index and the worktree all match the
-  merge base; index flags hiding edits fail. The root `.git` file must be
-  unchanged. Otherwise stop. Baseline instructions
-  load as in reviews; the guard denies edits.
+  trusted baseline: each baseline path (`.github` and root `AGENTS.md`,
+  `CLAUDE.md`, `.gitattributes` and `.gitmodules`) independently matches the
+  merge base in HEAD, index and worktree, in both directions. Index mode,
+  object ID and stage must match; tags hiding edits fail. Case variants of
+  baseline names fail in HEAD and index too. Direct worktree reads refuse
+  symlinks, compare executable bits and hash bytes. Walking `.github`
+  files and directories refuses untracked or ignored files and extra
+  directories, even empty ones.
+  Git filters, attributes and the index cache have no effect. A path absent
+  at the merge base must be absent everywhere. The root `.git` file must be
+  unchanged; otherwise stop. Baseline instructions load as in reviews;
+  the guard denies edits.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   (the [verify][v] exception is pending, not in force) and URL reads.
-  Argon never holds GitHub credentials, never pushes, and
-  never opens or merges a pull request.
+  Argon holds no GitHub credentials, pushes nothing, neither opens nor merges a PR.
 - **Handoff: the [shared rule](running-other-ai.md#handoff-of-another-ais-code)
   for Codex and Argon.** Argon leaves
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
@@ -145,10 +147,9 @@ but enforced by configuration, not by the prompt.
 
 ## Preflight
 
-Before Argon's first issue, and again when the `agy` version or the custom
-agent changes, a minimal preflight tested on effects as in #1041
-and #1071, in a throwaway repository, through Argon's own tools. Each of
-these is refused or has no effect:
+Before Argon's first issue and after any `agy` version or custom agent change,
+test preflight effects as in #1041/#1071 in a throwaway repository through Argon's
+tools. Each is refused or has no effect:
 
 - **commands:** `run_command`, plainly, through a shell and in the
   background; and a loopback listener started outside, as in the
@@ -168,8 +169,8 @@ these is refused or has no effect:
 The account's shared settings stay unchanged. Telemetry and AI credits are
 confirmed off in the home used, as running-argon.md records for the review
 home. #1041's accepted data and cost terms (the flat fee only; no API key and
-no pay-as-you-go) are confirmed to cover write-mode use. If any of this
-cannot be verified, Argon does not run and the maintainer gets the reason.
+no pay-as-you-go) are confirmed to cover write-mode use. If any is unverified,
+Argon does not run; tell the maintainer why.
 
 For #1433's preflight and once in force, [extend preflight](argon-verify.md#extended-preflight):
 keep items; replace only the MCP refusal with "MCP other than the exact

@@ -22,13 +22,12 @@ import (
 
 // Safer-side differences from checks.zsh (#1434): trusted-build check first;
 // GIT_NO_LAZY_FETCH=1, GIT_NO_REPLACE_OBJECTS=1 and GIT_OPTIONAL_LOCKS=0;
-// ls-tree distinguishes absence from failure (cat-file -e returns 128 for both
-// missing paths and missing tree objects); a failed merge-base stops baseline
-// checks. A tracked
-// object's type is checked too: quiet diff can succeed without opening a
-// missing blob when the index/worktree are unchanged. Object-check failures
-// never mean absence. Component-wise O_NOFOLLOW|O_NONBLOCK, regular-only reads
-// cannot follow links or block on FIFOs. Every walk/read/hash error is a problem;
+// Recursive ls-tree distinguishes absence from failure; each reference blob
+// must exist. HEAD, index and raw worktree bytes/modes independently match
+// the reference. Git never compares worktree content or runs clean filters.
+// Failed object-format or merge-base queries stop baseline checks.
+// Component-wise O_NOFOLLOW|O_NONBLOCK, regular-only reads cannot follow links
+// or block on FIFOs. Every walk/read/hash error is a problem;
 // names survive spaces/newlines and all paths, targets and errors are quoted.
 // Home names are the union of the two existing sets plus mcp_config.json outside
 // its owned location; nested .gemini is refused. MCP must exist and be regular.
@@ -488,117 +487,16 @@ func implementGit(worktree string) func(...string) ([]byte, int, error) {
 		if binary == "" {
 			return nil, -1, errors.New("no git in /usr/bin or /bin")
 		}
-		command := append([]string{"-C", worktree, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)
+		command := append([]string{"--no-pager", "-C", worktree, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.askPass=/usr/bin/false", "-c", "credential.helper=", "-c", "core.sshCommand=/usr/bin/false", "-c", "protocol.allow=never"}, args...)
 		return implementProcess(binary, command, implementGitEnv(), 60*time.Second)
 	}
 }
 
 func implementGitEnv() []string {
 	// Missing objects in an untrusted partial clone must not trigger a fetch
-	// that executes a program selected by repository configuration.
-	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
-}
-
-// Known limit: filter.<driver>.clean in .git/config plus .git/info/attributes
-// still runs during git diff; that is a program run on the host.
-// Empty untracked directories under .github are not detected (#1463).
-func (c *implementChecker) baseline(worktree string) {
-	out, status, err := c.deps.git("merge-base", "HEAD", "refs/remotes/origin/main")
-	if err != nil || status != 0 || !implementMatch(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})\n$`, string(out)) {
-		if err == nil && status == 1 {
-			c.problem("no merge base with origin/main")
-		} else {
-			c.problem("merge-base with origin/main failed: status %d, error %q, output %q", status, fmt.Sprint(err), out)
-		}
-		return
-	}
-	mb := strings.TrimSuffix(string(out), "\n")
-	for _, base := range []string{".github", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules"} {
-		out, status, err := c.deps.git("diff-tree", "--quiet", "-r", mb, "HEAD", "--", base)
-		switch {
-		case err != nil || status != 0 && status != 1 || len(out) != 0:
-			c.problem("comparing baseline HEAD %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
-		case status == 1:
-			c.problem("%q differs from origin/main in HEAD", base)
-		}
-		out, status, err = c.deps.git("diff", "--quiet", "--no-ext-diff", "--no-textconv", "--cached", mb, "--", base)
-		switch {
-		case err != nil || status != 0 && status != 1 || len(out) != 0:
-			c.problem("comparing baseline index %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
-		case status == 1:
-			c.problem("%q index differs from the merge base", base)
-		}
-		out, status, err = c.deps.git("ls-files", "-v", "-z", "--", base)
-		indexed := len(out) != 0
-		if err != nil || status != 0 {
-			c.problem("listing baseline index %q: status %d, error %q", base, status, fmt.Sprint(err))
-		} else {
-			for len(out) != 0 {
-				record, rest, ok := bytes.Cut(out, []byte{0})
-				if !ok || len(record) < 3 || record[1] != ' ' {
-					c.problem("malformed baseline index record for %q: %q", base, record)
-					break
-				}
-				if record[0] != 'H' {
-					c.problem("baseline index %q has tag %q", base, record[:1])
-				}
-				out = rest
-			}
-		}
-		out, status, err = c.deps.git("ls-tree", "-z", mb, "--", base)
-		if err != nil || status != 0 || len(out) != 0 && !implementTreeEntry(out, base) {
-			c.problem("cannot tell whether %q is tracked at the branch point: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
-			continue
-		}
-		if len(out) == 0 {
-			if indexed {
-				c.problem("%q is in the index but origin/main does not track it", base)
-			}
-			_, err := c.deps.lstat(filepath.Join(worktree, base))
-			if err == nil {
-				c.problem("%q exists but origin/main does not track it", base)
-			} else if !errors.Is(err, fs.ErrNotExist) {
-				c.problem("checking absent baseline %q: %q", base, err)
-			}
-			continue
-		}
-		// Presence was established by ls-tree, never by cat-file's status.
-		// Quiet diff can trust the index and avoid reading a missing object.
-		fields := strings.Fields(strings.SplitN(string(out), "\t", 2)[0])
-		out, status, err = c.deps.git("cat-file", "-t", fields[2])
-		if err != nil || status != 0 || string(out) != fields[1]+"\n" {
-			c.problem("checking baseline object for %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
-		}
-		out, status, err = c.deps.git("diff", "--quiet", "--no-ext-diff", "--no-textconv", mb, "--", base)
-		switch {
-		case err != nil || status != 0 && status != 1 || len(out) != 0:
-			c.problem("comparing baseline %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
-		case status == 1:
-			c.problem("%q differs from origin/main at the branch point", base)
-		}
-		out, status, err = c.deps.git("ls-files", "--others", "-z", "--", base)
-		if err != nil || status != 0 {
-			c.problem("listing untracked files under %q: status %d, error %q", base, status, fmt.Sprint(err))
-		} else if len(out) != 0 {
-			c.problem("untracked files under %q", base)
-		}
-	}
-}
-
-func implementTreeEntry(out []byte, base string) bool {
-	// cat-file -e cannot distinguish a missing path from repository corruption:
-	// both exit 128. ls-tree's successful empty output is the only absence here.
-	fields, path, ok := strings.Cut(string(out), "\t")
-	if !ok || path != base+"\x00" {
-		return false
-	}
-	parts := strings.Split(fields, " ")
-	if len(parts) != 3 || !implementMatch(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`, parts[2]) {
-		return false
-	}
-	switch parts[0] + " " + parts[1] {
-	case "040000 tree", "100644 blob", "100755 blob", "120000 blob", "160000 commit":
-		return true
-	}
-	return false
+	// that executes a program selected by repository configuration. Git 2.x
+	// honours GIT_ASKPASS before core.askPass; override both, and reset the
+	// credential.helper list. The empty GIT_ALLOW_PROTOCOL allowlist overrides
+	// even per-protocol repository config; SSH refusal also fences lazy fetch.
+	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=/usr/bin/false", "GIT_PROTOCOL_FROM_USER=0", "GIT_ALLOW_PROTOCOL="}
 }

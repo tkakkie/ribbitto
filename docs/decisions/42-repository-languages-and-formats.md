@@ -39,7 +39,11 @@ exceptions. Directory entries below are direct-only unless stated otherwise:
   `go test fuzz v1`. Neither directory is excluded from checking.
 
 TypeScript, Node, Rust/WASM and any other language or runtime are **not
-approved**. Nothing is allowed ahead of #1356. UI-library islands still need
+approved by this rule**; each becomes allowed only when its own accepted
+decision adds it to the language list and path-and-kind table. TypeScript,
+Node and the Go-driven esbuild build are the subject of #1356 and a separate
+decision pull request still in review; a decision accepted through #1356
+would add them. UI-library islands still need
 [decision 40](40-plain-javascript-by-default-library-islands-by-measured-exception.md)'s
 individual approval and measurement conditions; this gate grants no such
 approval.
@@ -70,7 +74,10 @@ case-sensitive and component-based. Symlinks and special files are refused;
 a shebang at the first two bytes is forbidden everywhere without exception.
 
 The check does not judge commands, Makefile/CI/configuration contents or
-dependencies. Those stay issue and pull request review items. A new language,
+dependencies; issue and pull request review remains the control for those.
+The mechanical check catches accidental drift in file kinds, places and
+shebangs, not deliberate evasion (such as a script under an allowed name or
+kind), and is not a security boundary. A new language,
 runtime or dependency needs the maintainer's explicit approval; an allowed
 file path grants no such approval.
 

@@ -2,9 +2,11 @@
   // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
   const viewport = window.visualViewport;
   const updateViewport = () => {
-    const style = document.documentElement.style;
+    const style = document.getElementById("organization-stream")?.style;
+    if (!style) return;
+    const differs = viewport && (Math.abs(viewport.height - window.innerHeight) > 1 || Math.abs(viewport.offsetTop) > 1);
     for (const [name, value] of [["--composer-viewport-h", viewport?.height], ["--composer-viewport-top", viewport?.offsetTop]]) {
-      const next = value === undefined ? "" : value + "px";
+      const next = differs ? value + "px" : "";
       if (style.getPropertyValue(name) === next) continue;
       if (next) style.setProperty(name, next);
       else style.removeProperty(name);
@@ -288,15 +290,13 @@
     const height = quote?.getBoundingClientRect().height || 0;
     // A visible chip adds one flex gap as well as its own height.
     const next = (height ? height + parseFloat(getComputedStyle(body.form).rowGap) : 0) + "px";
-    if (body.form.style.getPropertyValue("--composer-quote-h") === next) return;
+    // The CSS fallback already covers an absent chip, without invalidation.
+    if ((body.form.style.getPropertyValue("--composer-quote-h") || "0px") === next) return;
     body.form.style.setProperty("--composer-quote-h", next);
     // Measuring a removed chip can briefly grow the list and clamp its scroll,
     // even when the updated cap brings the list back to the same height.
     quoteResized = true;
   };
-  updateQuoteHeight();
-  // The first measurement is the initial layout, not a change to restore from.
-  quoteResized = false;
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));
@@ -318,10 +318,9 @@
     if (target && target.parentElement?.id === "message-items") return;
     if (list) list.scrollTop = list.scrollHeight;
   };
-  newest();
   const pane = document.getElementById("message-list");
   if (pane) {
-    let height = pane.clientHeight, position, settling = false;
+    let height, position, measured = false, settling = false;
     const remember = () => {
       const top = pane.getBoundingClientRect().top;
       let item;
@@ -331,12 +330,29 @@
       position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
         item, offset: item ? item.getBoundingClientRect().top - top : 0 };
     };
-    remember();
-    rememberPost = () => { height = pane.clientHeight; remember(); };
+    rememberPost = () => {
+      // A background-tab settle can precede the initial observer delivery.
+      if (!measured) return;
+      height = pane.clientHeight;
+      remember();
+    };
     // A resize can clamp scrollTop before its scroll event. Keep the state
     // from the old height until the observer has restored the reader.
-    pane.addEventListener("scroll", () => { if (!quoteResized && pane.clientHeight === height) remember(); });
+    pane.addEventListener("scroll", () => { if (measured && !quoteResized && pane.clientHeight === height) remember(); });
     const resize = new ResizeObserver(() => {
+      if (!measured) {
+        measured = true;
+        // The observer supplies initial layout before paint. Save newest (or
+        // the native fragment position) before writing the quote cap, so no
+        // read forces its layout. The deeper textarea/form observations let
+        // a cap resize deliver again and restore that intent before paint.
+        newest();
+        rememberPost();
+        if (body) revealEnd(body);
+        updateQuoteHeight();
+        quoteResized = false;
+        return;
+      }
       updateQuoteHeight();
       if (pane.clientHeight !== height || quoteResized) {
         quoteResized = false;

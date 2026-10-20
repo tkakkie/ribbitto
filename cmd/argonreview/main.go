@@ -23,7 +23,12 @@
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
-// implement-guard enforces the implementer's file boundary without a build check.
+// verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
+// MCP tool, verify, over stdio; it runs the container check on the fixed
+// worktree (#1430).
+// implement-guard <dir> enforces the implementer's file boundary without a build
+// check. Optional --allow-verify admits only the fixed, strictly validated verify
+// MCP call; it is off by default and also requires matching settings and config.
 package main
 
 import (
@@ -47,11 +52,17 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "verify-mcp" {
+		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
 	}
-	if len(args) == 2 && args[0] == "implement-guard" {
+	if len(args) == 2 && args[0] == "implement-guard" && !strings.HasPrefix(args[1], "-") {
 		return implementGuard(args[1], stdin, stdout, stderr)
+	}
+	if len(args) == 3 && args[0] == "implement-guard" && !strings.HasPrefix(args[1], "-") && args[2] == "--allow-verify" {
+		return implementGuardMode(args[1], true, stdin, stdout, stderr, filepath.WalkDir, os.Lstat)
 	}
 	round := 1
 	approved := ""
@@ -125,7 +136,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir>")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | verify-mcp --trusted-source <abs path> --worktree <abs path>")
 	return 2
 }
 

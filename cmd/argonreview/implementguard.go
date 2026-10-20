@@ -46,7 +46,13 @@ func implementGuard(dir string, stdin io.Reader, stdout, stderr io.Writer) int {
 func implementGuardWithFS(dir string, stdin io.Reader, stdout, stderr io.Writer,
 	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
 ) int {
-	reason := implementGuardReason(dir, stdin, walk, lstat)
+	return implementGuardMode(dir, false, stdin, stdout, stderr, walk, lstat)
+}
+
+func implementGuardMode(dir string, verify bool, stdin io.Reader, stdout, stderr io.Writer,
+	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
+) int {
+	reason := implementGuardReason(dir, verify, stdin, walk, lstat)
 	decision := struct {
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
@@ -77,7 +83,7 @@ func implementGuardWithFS(dir string, stdin io.Reader, stdout, stderr io.Writer,
 	return 0
 }
 
-func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
+func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
 	lstat func(string) (fs.FileInfo, error),
 ) string {
 	data, err := os.ReadFile(filepath.Join(dir, "implementer-worktree"))
@@ -112,7 +118,7 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	if !implementGuardJSONLimits(input) {
 		return "guard error: JSON exceeds safe parsing limits"
 	}
-	paths, reason := implementGuardPaths(input)
+	paths, reason := implementGuardPaths(input, verify)
 	if reason != "" {
 		return reason
 	}
@@ -144,7 +150,7 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	return ""
 }
 
-func implementGuardPaths(input []byte) ([]string, string) {
+func implementGuardPaths(input []byte, verify bool) ([]string, string) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(input, &envelope); err != nil {
 		return nil, "guard error: unreadable hook input"
@@ -156,6 +162,9 @@ func implementGuardPaths(input []byte) ([]string, string) {
 	var name string
 	if err := json.Unmarshal(call["name"], &name); err != nil || bytes.Equal(call["name"], []byte("null")) {
 		return nil, "tool name is not a string"
+	}
+	if verify && name == "call_mcp_tool" && implementVerifyCall(input, call["args"]) == nil {
+		return nil, ""
 	}
 	switch name {
 	case "view_file", "list_dir", "grep_search", "find_by_name", "write_to_file", "replace_file_content", "multi_replace_file_content":

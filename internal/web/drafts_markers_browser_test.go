@@ -28,7 +28,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		Topic:    &view.Topic{ID: kernel.ID{3}}, MemberID: kernel.ID{8}, Session: session,
 		SessionExpires: time.Now().Add(24 * time.Hour), Rendered: time.Now(), EventCursor: new(int64(42)),
 		Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001")}
-	streams := draftMarkerStreams{trace: diagMarkerDelivery(t)} // DIAG(#1444): remove trace hook.
+	var streams draftMarkerStreams
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -41,10 +41,8 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 			sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
 			for err := sender.Heartbeat(r.Context()); err == nil; {
 				select {
-				case frame := <-stream.frames:
-					streams.record(stream, frame, "received", nil)
-					err = sender.Send(r.Context(), frame.out)
-					streams.record(stream, frame, "sent", err)
+				case out := <-stream.frames:
+					err = sender.Send(r.Context(), out)
 				case <-r.Context().Done():
 					return
 				}
@@ -102,7 +100,6 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		p = p.Context(ctx)
 		t.Cleanup(func() { step(t, p.Context(context.Background()), "close marker page").MustClose() })
-		diagMarkerPage(t, p, browser) // DIAG(#1444): remove with diag_*_test.go.
 		step(t, p, "install marker controls").MustEvalOnNewDocument(`(() => {
    window.pageErrors=0; window.addEventListener('error',()=>pageErrors++);
    window.opens=0; document.addEventListener('htmx:sseOpen',()=>opens++);

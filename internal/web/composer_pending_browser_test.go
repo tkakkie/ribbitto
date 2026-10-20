@@ -82,7 +82,7 @@ func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool) (*rod.Page, 
 	}
 	server := httptest.NewServer(catalogues.Middleware(mux))
 	t.Cleanup(server.Close)
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
 	t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
 	page.MustEvalOnNewDocument(`(() => {
  window.answers=0; window.opens=0; window.requests=0; window.ordinaryRequests=0; window.failures=[];

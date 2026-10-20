@@ -94,12 +94,13 @@ func TestImplementCheckIndexEntries(t *testing.T) {
 		t.Run(state, func(t *testing.T) {
 			f, _ := implementCheckGitFixture(t, true)
 			oid := strings.TrimSpace(implementCheckGitOK(t, f.tree, "rev-parse", "HEAD:AGENTS.md"))
-			if state == "mode" {
+			switch state {
+			case "mode":
 				implementCheckGitOK(t, f.tree, "update-index", "--cacheinfo", "100755,"+oid+",AGENTS.md")
-			} else if state == "oid" {
+			case "oid":
 				other := strings.TrimSpace(implementCheckGitOK(t, f.tree, "rev-parse", "HEAD:.github/trusted"))
 				implementCheckGitOK(t, f.tree, "update-index", "--cacheinfo", "100644,"+other+",AGENTS.md")
-			} else {
+			default:
 				// Fixed stdin creates conflict stages without shell interpolation.
 				implementCheckIndexStage(t, f, oid, strings.TrimPrefix(state, "stage "))
 			}

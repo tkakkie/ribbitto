@@ -29,6 +29,7 @@
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
+// implement-check checks the implementer's home and worktree from a trusted build.
 package main
 
 import (
@@ -57,6 +58,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "implement-check" {
+		return implementCheckCommand(args[1:], stdout, stderr, implementCheckDefaults())
 	}
 	if len(args) == 2 && args[0] == "implement-guard" && !strings.HasPrefix(args[1], "-") {
 		return implementGuard(args[1], stdin, stdout, stderr)
@@ -136,7 +140,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | verify-mcp --trusted-source <abs path> --worktree <abs path>")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>]")
 	return 2
 }
 

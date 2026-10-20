@@ -55,9 +55,9 @@ func implementVerifyCall(input, args []byte) error {
 	return nil
 }
 
-// implementerHooks generates the Go command form used by #1436 Stage 1.
-// Like the settings goldens, its goldens use placeholder paths and the same
-// template; they cannot match today's production hooks, which use Python.
+// implementerHooks generates the Go command form of the implementer's hooks.json.
+// The goldens use placeholder paths and the same template; with the production
+// paths the off golden is byte-identical to the production file.
 func implementerHooks(verify bool, binary, dir string) ([]byte, error) {
 	// sh -c interprets this command, so quote both paths and refuse text that
 	// could break out of the quotes or produce a different command line.

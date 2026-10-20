@@ -1,12 +1,11 @@
 # Argon as implementer
 
 Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements eligible issues
-(below) under the boundary, preflight and records in this file, which
-grew out of [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
-became a standing rule with
-[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Start at the [Argon
-entry point](README.md#implementer-argon). If a boundary below fails, Argon
-stops at once and the maintainer decides.
+under this boundary, preflight and records. The boundary grew from
+[#1206](https://github.com/tkakkie/ribbitto/issues/1206), and became standing with
+[#1247](https://github.com/tkakkie/ribbitto/issues/1247).
+Start at the [Argon entry](README.md#implementer-argon).
+Boundary failure stops Argon; the maintainer decides.
 
 **Start gate.** No Argon run starts until an issue records a preflight
 (below) that passed in full for the `agy` version and custom agent in use.
@@ -18,16 +17,15 @@ Argon implements eligible normal-risk tier B and C issues under the rules
 below; Codex implements everything else, except an issue for which the
 maintainer names Claude.
 
-An issue is eligible only if its *Risk* is `normal`
-([risk](reviewing.md#risk)) **and** its *Implementer* field states an expected
-adversarial tier C or B and the case it matches
-([tiers](adversarial-review.md#which-review-runs)), for example
-`Argon (normal risk; expected tier B: tests in A's areas)`, and only if it
-can be verified without running its code locally: no `make dev` or browser
-check unless the maintainer runs it. Go code and tests are eligible;
+An eligible issue has *Risk* `normal` ([risk](reviewing.md#risk)) and an
+*Implementer* field stating an expected adversarial tier C or B and its
+matching case ([tiers](adversarial-review.md#which-review-runs)), for example
+`Argon (normal risk; expected tier B: tests in A's areas)`.
+It must be verifiable without running its code locally: no `make dev` or
+browser check unless the maintainer runs it. Go code and tests are eligible;
 verification follows the [boundary](#the-boundary) and
 [handoff](running-other-ai.md#handoff-of-another-ais-code).
-The [issue review](reviewing.md#issue-review) checks the expected tier.
+[Issue review](reviewing.md#issue-review) checks the expected tier.
 No M7 issue is picked unless the maintainer names it.
 
 **The tier follows the diff, not the expectation.** If an Argon change
@@ -48,7 +46,7 @@ issues naming Claude are reassigned when started, without a bulk edit.
   Claude prepares [mutation evidence](argon-pull-requests.md#mutation-evidence).
 - **Argon** applies the review, Copilot and adversarial fixes, in further
   runs in the same worktree. If it cannot finish a fix in one more run, the
-  maintainer decides: reassign or stop. A reassigned issue restarts from a clean `origin/main`.
+  maintainer decides: reassign or stop. Reassignment restarts from clean `origin/main`.
 - For a fix Claude writes itself, [review independence](reviewing.md#review-independence-and-rounds)
   applies. Codex reads CI and a diff Claude makes with
   the hardened git settings below and passes on stdin, and it runs in a clean
@@ -58,7 +56,7 @@ issues naming Claude are reassigned when started, without a bulk edit.
 ## The boundary
 
 Like Codex's handoff ([running Codex](running-other-ai.md#running-codex)),
-but enforced by configuration, not by the prompt.
+enforced by configuration.
 
 - **Invocation.** Claude creates the worktree (`../wt/<name>`, branch
   `argon/<topic>` from `origin/main`) and runs `agy -p` there with stdin
@@ -74,6 +72,8 @@ but enforced by configuration, not by the prompt.
   command tool are refused by `command(*)` and the guard. #1206 found
   loopback reach outside `agy --sandbox`; allowing commands needs its own
   `process` issue. Pending: only the fixed [verify][v] MCP tool.
+  [Decision 43](../architecture/web-toolchain.md) grants no Node/npm
+  commands; setup is implemented later by #1415. CI checks code.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
@@ -111,7 +111,7 @@ but enforced by configuration, not by the prompt.
   `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md`. It
   denies every other tool. Pending [verify][v] adds one `call_mcp_tool`: exact server, `verify`,
   arguments; resource/task tools stay denied.
-  Failure or silence denies. Check path components without following
+  Silence/failure denies. Check path components without following
   symlinks; refuse symlinks, outside paths and all file calls if the tree
   holds a symlink. Guard/configuration stay outside the
   worktree, where Argon cannot write. [Go](argon-verify.md#control-code-in-go)
@@ -135,7 +135,7 @@ but enforced by configuration, not by the prompt.
   for Codex and Argon.** Argon leaves
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
   supervisor has confirmed that no process from the run is left, Claude
-  repeats the pre-run checks, reads the diff and runs the credential grep
+  repeats pre-run checks, reads the diff and runs the credential grep
   from [running Codex](running-other-ai.md#running-codex). Before every
   commit and push, Claude repeats the pre-run checks. Every git command Claude runs in the worktree has
   `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`,
@@ -146,10 +146,9 @@ but enforced by configuration, not by the prompt.
 
 ## Preflight
 
-Before Argon's first issue, and again when the `agy` version or the custom
-agent changes, a minimal preflight tested on effects as in #1041
-and #1071, in a throwaway repository, through Argon's own tools. Each of
-these is refused or has no effect:
+Before Argon's first issue, and again after an `agy` version/custom-agent
+change, test a minimal preflight on effects (#1041, #1071), in a throwaway
+repository through Argon's own tools. Each is refused or has no effect:
 
 - **commands:** `run_command`, plainly, through a shell and in the
   background; and a loopback listener started outside, as in the

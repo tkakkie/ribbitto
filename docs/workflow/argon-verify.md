@@ -1,9 +1,12 @@
 # Argon verification
 
-The maintainer chose option B on 2026-10-19
+Maintainer chose option B on 2026-10-19
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Implementation is pending.
+Implementation pending.
+[Decision 43](../architecture/web-toolchain.md) adds no Node/npm commands.
+#1415 documents #1411's planned generation for asset-dependent Go checks;
+it cannot enable verify or widen permissions.
 
 ## Status
 
@@ -48,8 +51,8 @@ call; every other tool, including the three resource/task tools, stays
 denied. Headless mode auto-denied the spike's guard-approved call;
 settings must allow it.
 
-The feature switch, settings variant, guard mode and `mcp_config.json` must
-agree before and after each run; any mismatch fails closed. A changed
+The feature switch, settings, guard mode and `mcp_config.json` must
+agree before/after each run; mismatches fail closed. A changed
 settings, hooks or MCP file makes the run not count, as `denied_actions`
 does. Server identity, arguments and configuration bytes are fixed
 in #1430/#1432 code.
@@ -61,11 +64,10 @@ gets minimal credentials, Docker and host rights, with no interface
 for arbitrary commands. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
-A fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
-variables, a trusted binary path and fixed start-up arguments for the
-trusted source path and worktree. Neither agy's environment nor a tool
-argument supplies these. The server serves only if its build matches
-the trusted revision, checked against that source. Pre- and post-run checks
+Fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
+variables, trusted binary path and fixed trusted-source/worktree arguments.
+Neither agy's environment nor tool arguments supply these. The server requires its build to match the trusted revision, checked
+against that source. Pre- and post-run checks
 include the MCP file and server.
 
 The server checks preflight's fixed environment allowlist. The
@@ -74,11 +76,11 @@ VERIFIED` results set `isError`.
 
 ## Verification container
 
-The runner has no outbound or loopback network reach, including the
-host gateway and Docker Desktop VM. The spike's loopback probe logged no
+The runner has no outbound/loopback reach, including host gateway and
+Docker Desktop VM. The spike's loopback probe logged no
 request under `--network none` ([part
 1](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
-It uses an isolated, throwaway source copy, never the original:
+It uses an isolated throwaway source copy:
 
 - Copy tracked and untracked non-ignored files with the hardened git
   settings from the [boundary](argon-implementer.md#the-boundary).
@@ -105,7 +107,7 @@ It uses an isolated, throwaway source copy, never the original:
 Checks are exactly `go build <pkg>`, `go vet <pkg>` or `go test -count=1
 -json <pkg>` for named packages matching the code's strict allowlist
 pattern: no flags, spaces or `..` segment in the package argument, and no
-other flags. Output states no race detector or cgo runs there;
+other flags. Output states neither race detector nor cgo runs there;
 cgo-dependent packages stay CI-only.
 
 ## Results
@@ -113,17 +115,15 @@ cgo-dependent packages stay CI-only.
 First line: `verified`, `FAILED` or `NOT VERIFIED`. Build/vet use zero
 exit status; tests use per-test JSON, never package `ok` alone:
 
-- Skips never succeed. Count leaf tests only: a passing
-  parent whose subtests all skipped counts as skipped. Verification needs
+- Skips never succeed. Count leaf tests only: a passing parent with all subtests skipped counts as skipped. Verification needs
   at least one passing leaf test, no failure or skip, and every targeted
   package's final result.
 - Zero passing tests, no test files, missing results, malformed or truncated
   output, non-zero exit, out-of-memory kill or abnormal exit are never
   `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
   with the skipped count and names.
-- Database and browser tests are CI-only for now, shown as
-  `NOT VERIFIED` with skipped test names. A test needing an omitted file
-  fails or skips, never verified in the container.
+- Database/browser tests stay CI-only, shown as
+  `NOT VERIFIED` with skipped test names. An omitted-file test fails or skips, never verified.
 
 `verified` is Argon's own check; it never replaces green CI, review or
 [handoff checks](running-other-ai.md#handoff-of-another-ais-code). CI stays
@@ -161,19 +161,17 @@ Preflight's temporary permission is not the normal-operation permission.
 Only during preflight, the managed temporary configuration uses #1432's
 feature-on settings, guard mode and MCP file. After success or failure,
 restore and check feature-off settings, hooks and MCP file byte for byte,
-the agent directory and `brain/` as before, no remaining session state or
-session process. Record restoration.
+the agent directory and `brain/` as before, no remaining session state/process. Record restoration.
 
-The evidence comment records every command and log, agy version, trusted
-commit SHA, binary hash, image digest and guard,
-settings and MCP configuration hashes. List tools run and refused; for each
+Evidence records every command/log, agy version, trusted commit SHA,
+binary hash, image digest and guard/settings/MCP hashes. List tools run and refused; for each
 refusal, layer (guard, settings, server or container), any side effect
 or Docker start; each probe's pass/fail and whether its run counts. Record
 no secret or home content; grep the record for the home path, sign-in file
 names and credential variable names and require no matches.
 
-Only after all preflight items pass and explicit maintainer approval,
-switch normal operation on and record a minimal smoke test:
+Only after full preflight and explicit maintainer approval, enable normal
+operation and record a minimal smoke test:
 `verify` succeeds on a correct package; `run_command` and shell execution,
 an unlisted MCP tool and an extra argument are refused; settings, hooks and
 MCP file match the expected files; the account's shared settings hash is

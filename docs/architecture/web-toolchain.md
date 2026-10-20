@@ -1,0 +1,131 @@
+# Web toolchain (planned)
+
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) approves
+these mechanics. None is installed by the decision pull request. #1410–#1415
+build the foundation; #1416–#1421 convert scripts. Current versioned
+JavaScript delivery and source checks apply until their replacements land.
+#1409 writes module conventions; this page covers toolchain mechanics only.
+
+## Build, manifest and embedding — #1411
+
+#1411 will use esbuild's per-bundle `[name]-[hash].js` names and minification.
+A Go registry declares page entries; templ looks up logical names rather
+than spelling output filenames.
+During conversion, bundle migrated sources without loading their old script
+a second time; unchanged scripts keep their current tags and `-vN` names.
+
+The generated manifest records each logical entry, its bundle filename,
+matching external-map filename and the commit SHA. Embed generated bundles
+and the runtime manifest, never maps. Build checks must reject missing/unknown registry
+entries, missing bundles, unexpected output and manifest paths outside the
+output tree; verify every referenced bundle is embedded and its name agrees
+with the pinned builder's output. An explicit dist embed requirement or
+required generated manifest must fail compilation when generation is missing,
+even if other static files exist. CI generates in a clean output directory
+and packages that exact result: there is no committed dist to diff for freshness.
+
+Make, CI, Docker and release entry points must state and run Go generation
+before Go compilation. Prove generation and embedding work with Node absent
+from PATH. Update build instructions with those changes; fresh-clone bare
+Go builds lose their current convenience. Development must rebuild edited
+sources and serve matching disk bundles/manifest with `no-store`, rather
+than requiring a binary rebuild on each edit. The initial manifest uses
+per-bundle hashes, without a whole-graph prefix.
+
+## Versions and installation — #1410, #1415
+
+#1410 will introduce one root `.node-version` containing `26.8.1`. CI setup,
+local development and sandbox setup read this same pin; Go wrappers used by
+one-line Make recipes reject a different runtime version. Use that Node
+release's bundled npm, not a separately upgraded global npm. CI provisions
+the release from the pin. For local development and Codex, the maintainer's
+trusted setup supplies that exact release before the run; Codex does not
+download Node or expand its network profile. A missing/mismatched runtime
+is reported, not silently replaced. #1415 documents and verifies this setup.
+Argon's command prohibition and pending verify boundary remain unchanged.
+
+The root `package.json` will pin `typescript` exactly to `7.0.2`, with a
+committed `package-lock.json` including optional platform dependencies. Install only
+with `npm ci --ignore-scripts` from the reviewed lockfile using pinned Node;
+keep install/cache writes inside the implementer's sandbox. No npm scripts
+are needed. The Go wrapper must keep inherited npm configuration from omitting
+the checker or its platform package or enabling lifecycle scripts. The
+portable package selects the platform executable; no manual platform pins.
+Classic `6.0.3` replaces the pin only for a demonstrated migration checker
+or editor compatibility failure, with the case and fallback recorded in its PR.
+#1410 checks diagnostics and editor/language-service use on supported development
+platforms; the spike did not test editors.
+
+Updates are ordinary dependency PRs: change the exact checker pin and lockfile
+together; for a Node update also change `.node-version` and regenerate the
+lockfile with that release's bundled npm. CI must prove installation, type
+checking and, once #1412 lands, unit tests with the changed pins. #1410 must
+add an npm ecosystem to `.github/dependabot.yml` with Go's current seven-day
+cooldown; it proposes updates, never bypasses review or the exact-pin rule.
+
+Relative imports name `.ts` with `allowImportingTsExtensions`. Do not rely on tsconfig path aliases for
+Node resolution: Node ignores tsconfig. #1412 starts `.mjs` harnesses importing
+DOM-free `.ts` logic and runs `node --test` separately from the type check.
+
+## Generated contract and state — #1413, #1416, #1417
+
+#1413 will commit the generated client file as web/src/contracts.gen.ts.
+Go definitions used by templ own ids, attribute names, custom event names
+and payload fields/types. A Go generator under `tools/`, reached by
+`go generate`, produces constants/types and typed accessors; a Go freshness
+check fails on drift. Generated selectors/id helpers also cover dynamic id
+suffixes. Type narrowing and runtime validation at the DOM/event boundary
+remain necessary: types cannot validate server attributes or third-party
+htmx event detail by themselves.
+
+Migrated modules use those accessors for contract hooks and events. No raw
+contract selectors, `dataset` keys, attribute names or custom event strings
+outside the adapter. A Go check with negative fixtures rejects those literal
+bypasses in authored sources; exporting constants alone would let stale
+literals type-check. Review covers indirect/computed bypasses the check
+cannot prove. Unconverted scripts retain their current contract until their
+conversion; the coverage ratchet expands with them (#1414).
+
+Keep server controls/attributes as the boundary and any necessary derived
+CSS/test projection. Typed in-memory state is authoritative for client-only
+values. #1416/#1417 must coordinate composer and stream reset guards: changing
+queue state must notify/reset the guard even without DOM mutations. Keep
+immutable `draftKey` tied to the original draft snapshot, separate from a
+409-rotated retry request key; preserve stream-first/response-first settlement.
+Browser tests retain these guarantees, with contract-specific fixture updates
+where needed, never weakened assertions.
+
+## Source maps — #1411
+
+Development maps may be served locally. Production external maps include
+`sourcesContent` and are kept as the CI/release artifact of the originating
+build run in a maintainer-owned private artifact repository, for 30 days.
+Only the maintainer and the CI job may access them; the public repository's
+ordinary Actions artifacts are not the destination. The implementation must
+establish that access and expiry before using the store. Keep maps out of
+the image, embedded files and public static routes; no inline maps or public
+`sourceMappingURL` link. Record the originating commit SHA and build-run id
+with the manifest; each map uses the same bundle hash in its filename
+(`[name]-[hash].js.map`) so a stack can be matched to the exact output.
+
+## Checks and measurement — #1412, #1414, #1426
+
+Adapt `web/static/javascript_test.go` to inspect authored TypeScript and
+remaining JavaScript, allow module-scoped declarations without global writes,
+and recognize the converted drafts module's storage ownership. Add TypeScript
+syntax fixtures and hashed-manifest checks while preserving forbidden APIs,
+requests, storage and HTML-manipulation intent. Regex is a bounded source
+check, not parsing or a security boundary; strict types do not cure alias,
+computed-property or multiline blind spots. Keep the browser tests.
+
+Each issue's pre-`ready` measurement record contains, for all five metrics
+in decision 43: baseline SHA,
+page/path and scenario, device/browser and profile, method, sample count and
+aggregation, and numeric allowed head-minus-base tolerance with units. Include
+vendor and synchronous scripts in whole-page totals; report raw bytes too.
+Use separate response gzip streams (`gzip -9` on stdin) and state whether
+request counts are graph counts or browser observations. Measurement approval,
+cap, alternating base/head and quiet-machine rules still follow
+[investigations](../workflow/investigations.md) and decision 40 §5.
+A claimed unaffected metric needs an explicit method and numeric tolerance,
+not an unstated exemption. #1426 sets milestone limits before `ready` too.

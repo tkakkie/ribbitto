@@ -30,3 +30,5 @@ boundaries; without written rules each change would pick its own (#193).
 real-time updates); a headless-browser test dependency such as go-rod
 (deferred until after M3, if needed); a client-side framework (`DECISIONS.md`
 2).
+
+**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) (typed client state; message list, sidebar and counts remain server-owned subject to decision 34; requests and decisions 34/37 unchanged).

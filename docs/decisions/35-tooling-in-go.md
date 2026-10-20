@@ -31,3 +31,5 @@ symlinks in the fingerprint, an unreadable token dropping a live database.
 **Considered:** keeping Python for the worktree tooling (a second runtime
 for contributors and CI, with its own unlinted tests); keeping logic in the
 `Makefile` (untested shell, failures hidden by pipelines).
+
+**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) (one exception for pinned Node type checking, unit tests and their dependency management; build and check orchestration stay Go).

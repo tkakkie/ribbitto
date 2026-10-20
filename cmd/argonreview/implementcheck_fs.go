@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -122,7 +123,8 @@ func implementBaselineExempt(rel string) bool {
 	case ".git", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules", ".github":
 		return true
 	}
-	return strings.HasPrefix(rel, ".github/")
+	// git ls-files --others cannot see entries named .git; scan must refuse them.
+	return strings.HasPrefix(rel, ".github/") && !strings.EqualFold(path.Base(rel), ".git")
 }
 
 func (c *implementChecker) scan(root string, home bool) {

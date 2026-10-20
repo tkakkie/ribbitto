@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -141,12 +142,22 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 					if mode == "tracked changed" {
 						return nil, 1, nil
 					}
+				case "diff-tree":
+					if strings.Join(args, " ") != "diff-tree --quiet -r "+mb+" HEAD -- "+args[len(args)-1] {
+						t.Errorf("args %v", args)
+					}
 				case "cat-file":
 					if strings.Join(args, " ") != "cat-file -t "+strings.Repeat("b", 64) {
 						t.Errorf("args %v", args)
 					}
 					return []byte("blob\n"), 0, nil
 				case "ls-files":
+					if args[1] == "-v" {
+						if strings.Join(args, " ") != "ls-files -v -z -- "+args[len(args)-1] {
+							t.Errorf("args %v", args)
+						}
+						return nil, 0, nil
+					}
 					if strings.Join(args, " ") != "ls-files --others -z -- "+args[len(args)-1] {
 						t.Errorf("args %v", args)
 					}
@@ -165,14 +176,82 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 			if (c.problems == 0) != good {
 				t.Fatalf("%s", &out)
 			}
-			want := 6
+			want := 16
 			if strings.HasPrefix(mode, "tracked") {
-				want = 21
+				want = 31
 			}
 			if len(calls) != want {
 				t.Fatalf("calls %v", calls)
 			}
 		})
+	}
+}
+
+func TestImplementCheckBaselineGitOutput(t *testing.T) {
+	for _, tracked := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, command, output, want string
+			status                      int
+			err                         error
+		}{
+			{name: "HEAD changed", command: "diff-tree", status: 1, want: "differs from origin/main in HEAD"},
+			{name: "HEAD output", command: "diff-tree", output: "garbage", want: "comparing baseline HEAD"},
+			{name: "HEAD NUL output", command: "diff-tree", output: "\x00", want: "comparing baseline HEAD"},
+			{name: "HEAD status 2", command: "diff-tree", status: 2, want: "comparing baseline HEAD"},
+			{name: "HEAD error", command: "diff-tree", err: fs.ErrNotExist, want: "comparing baseline HEAD"},
+			{name: "HEAD signal", command: "diff-tree", status: -1, err: errors.New("signal: killed"), want: "comparing baseline HEAD"},
+			{name: "index status 2", command: "ls-files", status: 2, want: "listing baseline index"},
+			{name: "index error", command: "ls-files", err: fs.ErrNotExist, want: "listing baseline index"},
+			{name: "index signal", command: "ls-files", status: -1, err: errors.New("signal: killed"), want: "listing baseline index"},
+			{name: "index short", command: "ls-files", output: "H\x00", want: "malformed baseline index record"},
+			{name: "index empty", command: "ls-files", output: "\x00", want: "malformed baseline index record"},
+			{name: "index no space", command: "ls-files", output: "HxAGENTS.md\x00", want: "malformed baseline index record"},
+			{name: "index no path", command: "ls-files", output: "H \x00", want: "malformed baseline index record"},
+			{name: "index unterminated", command: "ls-files", output: "H AGENTS.md", want: "malformed baseline index record"},
+			{name: "index flags", command: "ls-files", output: "H AGENTS.md\x00h AGENTS.md\x00S AGENTS.md\x00s AGENTS.md\x00M AGENTS.md\x00R AGENTS.md\x00C AGENTS.md\x00K AGENTS.md\x00", want: "has tag"},
+			{name: "index normal", command: "ls-files", output: "H AGENTS.md\x00H path with\nspace\x00"},
+		} {
+			t.Run(fmt.Sprintf("tracked=%t/%s", tracked, tc.name), func(t *testing.T) {
+				f := implementCheckFixture(t)
+				f.deps.git = func(args ...string) ([]byte, int, error) {
+					switch args[0] {
+					case "merge-base":
+						return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
+					case "ls-tree":
+						if tracked && args[len(args)-1] == "AGENTS.md" {
+							return []byte("100644 blob " + strings.Repeat("b", 40) + "\tAGENTS.md\x00"), 0, nil
+						}
+					case "cat-file":
+						return []byte("blob\n"), 0, nil
+					}
+					if args[0] == tc.command && args[len(args)-1] == "AGENTS.md" && (tc.command != "ls-files" || args[1] == "-v") {
+						return []byte(tc.output), tc.status, tc.err
+					}
+					return nil, 0, nil
+				}
+				var out bytes.Buffer
+				c := implementChecker{deps: f.deps, out: &out}
+				c.baseline(f.tree)
+				want := tc.want
+				if tc.name == "index normal" && !tracked {
+					want = "in the index but origin/main does not track it"
+				}
+				if want == "" {
+					if c.problems != 0 {
+						t.Fatal(out.String())
+					}
+				} else if c.problems == 0 || !strings.Contains(out.String(), want) {
+					t.Fatalf("want %q: %s", want, &out)
+				}
+				if tc.name == "index flags" {
+					for _, tag := range []string{"h", "S", "s", "M", "R", "C", "K"} {
+						if !strings.Contains(out.String(), `has tag "`+tag+`"`) {
+							t.Fatalf("missing tag %q: %s", tag, &out)
+						}
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -369,6 +448,76 @@ func TestImplementCheckRealGitBaseline(t *testing.T) {
 			}
 			if mode == "corrupt object" && strings.Contains(out, "does not track") {
 				t.Fatal(out)
+			}
+		})
+	}
+}
+
+func TestImplementCheckRealGitHiddenBaseline(t *testing.T) {
+	for _, mode := range []string{"committed restored", "committed removed", "staged deleted", "assume unchanged", "skip worktree"} {
+		t.Run(mode, func(t *testing.T) {
+			f, _ := implementCheckGitFixture(t, true)
+			base, want := "AGENTS.md", `"AGENTS.md" differs from origin/main in HEAD`
+			if mode == "committed removed" || mode == "staged deleted" {
+				base = "CLAUDE.md"
+				want = `"CLAUDE.md" differs from origin/main in HEAD`
+			}
+			switch mode {
+			case "committed restored", "committed removed", "staged deleted":
+				implementCheckWrite(t, filepath.Join(f.tree, base), "changed")
+				implementCheckGitOK(t, f.tree, "add", "--", base)
+				if mode == "staged deleted" {
+					implementCheckRemove(t, filepath.Join(f.tree, base))
+					want = `"CLAUDE.md" is in the index but origin/main does not track it`
+				} else {
+					implementCheckGitOK(t, f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "changed baseline")
+					if mode == "committed restored" {
+						implementCheckGitOK(t, f.tree, "restore", "--source=origin/main", "--staged", "--worktree", "--", base)
+					} else {
+						implementCheckGitOK(t, f.tree, "rm", "--", base)
+					}
+				}
+			case "assume unchanged", "skip worktree":
+				flag, tag := "--assume-unchanged", "h"
+				if mode == "skip worktree" {
+					flag, tag = "--skip-worktree", "S"
+				}
+				implementCheckGitOK(t, f.tree, "update-index", flag, "--", base)
+				implementCheckWrite(t, filepath.Join(f.tree, base), "changed")
+				want = `baseline index "AGENTS.md" has tag "` + tag + `"`
+			}
+			// These attacks all pass the original worktree-only comparison.
+			if mode != "staged deleted" {
+				implementCheckGitOK(t, f.tree, "diff", "--quiet", "--no-ext-diff", "--no-textconv", "origin/main", "--", base)
+			}
+			code, out, stderr := f.run()
+			if code != 1 || !strings.Contains(out, want) {
+				t.Fatalf("want %q, exit %d: %s %s", want, code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestImplementCheckGithubGitNames(t *testing.T) {
+	for _, rel := range []string{".github/.git/inside", ".github/sub/.git", ".github/.GIT", ".github/workflows/x.yml"} {
+		t.Run(rel, func(t *testing.T) {
+			f, _ := implementCheckGitFixture(t, true)
+			implementCheckWrite(t, filepath.Join(f.tree, rel), "file")
+			if rel == ".github/workflows/x.yml" {
+				implementCheckGitOK(t, f.tree, "add", "--", rel)
+				implementCheckGitOK(t, f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "trusted workflow")
+				implementCheckGitOK(t, f.tree, "update-ref", "refs/remotes/origin/main", "HEAD")
+			}
+			code, out, stderr := f.run()
+			if rel == ".github/workflows/x.yml" {
+				if code != 0 || out != "implement-check: ok\n" {
+					t.Fatalf("exit %d: %s %s", code, out, stderr)
+				}
+				return
+			}
+			name := strings.TrimSuffix(rel, "/inside")
+			if code != 1 || !strings.Contains(out, "refused name in worktree: "+fmt.Sprintf("%q", filepath.Join(f.tree, name))) {
+				t.Fatalf("exit %d: %s %s", code, out, stderr)
 			}
 		})
 	}

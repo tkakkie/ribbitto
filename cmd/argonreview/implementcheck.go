@@ -490,6 +490,7 @@ func implementGitEnv() []string {
 	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
 }
 
+// Known limit: filter.<driver>.clean in .git/config plus .git/info/attributes still runs during git diff.
 func (c *implementChecker) baseline(worktree string) {
 	out, status, err := c.deps.git("merge-base", "HEAD", "origin/main")
 	if err != nil || status != 0 || !implementMatch(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})\n$`, string(out)) {
@@ -502,12 +503,39 @@ func (c *implementChecker) baseline(worktree string) {
 	}
 	mb := strings.TrimSuffix(string(out), "\n")
 	for _, base := range []string{".github", "AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules"} {
-		out, status, err := c.deps.git("ls-tree", "-z", mb, "--", base)
+		out, status, err := c.deps.git("diff-tree", "--quiet", "-r", mb, "HEAD", "--", base)
+		switch {
+		case err != nil || status != 0 && status != 1 || len(out) != 0:
+			c.problem("comparing baseline HEAD %q: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
+		case status == 1:
+			c.problem("%q differs from origin/main in HEAD", base)
+		}
+		out, status, err = c.deps.git("ls-files", "-v", "-z", "--", base)
+		indexed := len(out) != 0
+		if err != nil || status != 0 {
+			c.problem("listing baseline index %q: status %d, error %q", base, status, fmt.Sprint(err))
+		} else {
+			for len(out) != 0 {
+				record, rest, ok := bytes.Cut(out, []byte{0})
+				if !ok || len(record) < 3 || record[1] != ' ' {
+					c.problem("malformed baseline index record for %q: %q", base, record)
+					break
+				}
+				if record[0] != 'H' {
+					c.problem("baseline index %q has tag %q", base, record[:1])
+				}
+				out = rest
+			}
+		}
+		out, status, err = c.deps.git("ls-tree", "-z", mb, "--", base)
 		if err != nil || status != 0 || len(out) != 0 && !implementTreeEntry(out, base) {
 			c.problem("cannot tell whether %q is tracked at the branch point: status %d, error %q, output %q", base, status, fmt.Sprint(err), out)
 			continue
 		}
 		if len(out) == 0 {
+			if indexed {
+				c.problem("%q is in the index but origin/main does not track it", base)
+			}
 			_, err := c.deps.lstat(filepath.Join(worktree, base))
 			if err == nil {
 				c.problem("%q exists but origin/main does not track it", base)

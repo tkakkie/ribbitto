@@ -470,13 +470,18 @@ func TestImplementCheckRefusedNames(t *testing.T) {
 	})
 	t.Run("worktree baseline names", func(t *testing.T) {
 		f := implementCheckFixture(t)
-		for _, rel := range []string{"AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules", ".github/deep/.git/hooks.json"} {
+		for _, rel := range []string{"AGENTS.md", "CLAUDE.md", ".gitattributes", ".gitmodules", ".github/deep/hooks.json"} {
 			implementCheckWrite(t, filepath.Join(f.tree, rel), "baseline")
 		}
 		var out bytes.Buffer
 		c := implementChecker{deps: f.deps, out: &out}
 		c.scan(f.tree, false)
 		if c.problems != 0 {
+			t.Fatal(out.String())
+		}
+		implementCheckWrite(t, filepath.Join(f.tree, ".github/deep/.git/hooks.json"), "refused")
+		c.scan(f.tree, false)
+		if c.problems != 1 || !strings.Contains(out.String(), "refused name in worktree") {
 			t.Fatal(out.String())
 		}
 	})
@@ -848,7 +853,7 @@ func implementCheckFixture(t *testing.T) *implementCheckTestFixture {
 		if args[0] == "merge-base" {
 			return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
 		}
-		if args[0] != "ls-tree" {
+		if args[0] != "ls-tree" && args[0] != "diff-tree" && args[0] != "ls-files" {
 			t.Errorf("unexpected git %v", args)
 		}
 		return nil, 0, nil

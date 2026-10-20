@@ -26,8 +26,12 @@ func feedBudgetReferences(name string, source []byte) ([]string, error) {
 		}
 		for _, spec := range decl.Specs {
 			value := spec.(*ast.ValueSpec)
+			comment := value.Doc.Text() + value.Comment.Text()
+			if len(decl.Specs) == 1 {
+				comment += decl.Doc.Text()
+			}
 			for _, ident := range value.Names {
-				if strings.HasPrefix(ident.Name, "feedBudget") && !issue.MatchString(decl.Doc.Text()+value.Doc.Text()+value.Comment.Text()) {
+				if strings.HasPrefix(ident.Name, "feedBudget") && !issue.MatchString(comment) {
 					violations = append(violations, ident.Name+": budget comment needs an issue reference (#<digits>)")
 				}
 			}
@@ -67,6 +71,8 @@ func TestFeedGuardBudgetReferenceChecker(t *testing.T) {
 		{"package web\nvar feedBudgetMissing = 1", 1},
 		{"package web\n// #1478: justified\nconst feedBudgetGood = 1", 0},
 		{"package web\nconst (\n// #1478: justified\nfeedBudgetGood = 1\nfeedBudgetMissing = 2\n)", 1},
+		{"package web\n// #1478: justified\nconst (\nfeedBudgetMissing = 1\nfeedBudgetAlsoMissing = 2\n)", 2},
+		{"package web\nconst (\n// #1478: justified\nfeedBudgetGood = 1\nfeedBudgetAlsoGood = 2 // #1478: justified\n)", 0},
 		{"package web\nvar feedBudgetGood = 1 // #1478: justified", 0},
 	} {
 		violations, err := feedBudgetReferences("memory.go", []byte(tt.source))

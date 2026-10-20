@@ -32,6 +32,7 @@
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
 // implement-check checks the implementer's home and worktree from a trusted build.
+// implement-run supervises one feature-off implementer run and its checks (#1435).
 // implement-config generates and checks the trusted implementer configuration
 // in a separate output directory without running the binary (#1433).
 package main
@@ -57,6 +58,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "implement-run" {
+		return implementRunCommand(args[1:], stdout, stderr, implementRunDefaults())
+	}
 	if len(args) > 0 && args[0] == "implement-config" {
 		return implementConfigCommand(args[1:], stdout, stderr)
 	}
@@ -150,7 +154,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test> <package-pattern> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test> <package-pattern> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] | "+implementRunUsage+" | "+implementConfigUsage)
 	return 2
 }
 

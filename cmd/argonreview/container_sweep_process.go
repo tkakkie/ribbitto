@@ -22,7 +22,7 @@ type processTable interface {
 	signal(int, syscall.Signal) error
 }
 type psTable struct {
-	run func(...string) ([]procInfo, error)
+	run func(...string) (string, error)
 }
 
 func parseSweepProcesses(data string) ([]procInfo, error) {
@@ -43,6 +43,26 @@ func parseSweepProcesses(data string) ([]procInfo, error) {
 		result[len(result)-1].command += "\n" + line
 	}
 	return result, nil
+}
+
+func parseSweepSingleProcess(data string, pid int) (procInfo, bool, error) {
+	lines := strings.Split(strings.TrimSuffix(data, "\n"), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		p, ok := parseSweepProcessHeader(line)
+		if !ok || p.pid != pid {
+			return procInfo{}, false, errors.New("invalid process identity")
+		}
+		// A single-PID query has one header; even row-looking argv lines
+		// belong to its command and must participate in identity checks.
+		if i+1 < len(lines) {
+			p.command += "\n" + strings.Join(lines[i+1:], "\n")
+		}
+		return p, true, nil
+	}
+	return procInfo{}, false, nil
 }
 
 func parseSweepProcessHeader(line string) (procInfo, bool) {
@@ -67,7 +87,7 @@ func parseSweepProcessHeader(line string) (procInfo, bool) {
 	}
 	return procInfo{pid, ppid, uid, start, strings.TrimLeft(rest, " \t")}, true
 }
-func sweepPS(args ...string) ([]procInfo, error) {
+func sweepPS(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/ps", args...)
@@ -80,34 +100,32 @@ func sweepPS(args ...string) ([]procInfo, error) {
 	// ps -p returns 1 with empty output when the process has gone away.
 	var exit *exec.ExitError
 	if errors.As(err, &exit) && exit.ExitCode() == 1 && out.stdout.Len() == 0 && len(args) > 0 && args[0] == "-p" {
-		return nil, nil
+		return "", nil
 	}
 	if err != nil || out.over || ctx.Err() != nil {
-		return nil, errors.New("process listing failed")
+		return "", errors.New("process listing failed")
 	}
-	return parseSweepProcesses(out.stdout.String())
+	return out.stdout.String(), nil
 }
-func (p psTable) query(args ...string) ([]procInfo, error) {
+func (p psTable) query(args ...string) (string, error) {
 	if p.run != nil {
 		return p.run(args...)
 	}
 	return sweepPS(args...)
 }
 func (p psTable) list() ([]procInfo, error) {
-	return p.query("-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+	data, err := p.query("-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+	if err != nil {
+		return nil, err
+	}
+	return parseSweepProcesses(data)
 }
 func (p psTable) read(pid int) (procInfo, bool, error) {
-	procs, err := p.query("-p", strconv.Itoa(pid), "-ww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+	data, err := p.query("-p", strconv.Itoa(pid), "-ww", "-o", "pid=,ppid=,uid=,lstart=,command=")
 	if err != nil {
 		return procInfo{}, false, err
 	}
-	if len(procs) == 0 {
-		return procInfo{}, false, nil
-	}
-	if len(procs) != 1 || procs[0].pid != pid {
-		return procInfo{}, false, errors.New("invalid process identity")
-	}
-	return procs[0], true, nil
+	return parseSweepSingleProcess(data, pid)
 }
 func (psTable) signal(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) }
 

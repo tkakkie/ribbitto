@@ -143,22 +143,25 @@ func TestSweepOrphanClientReporting(t *testing.T) {
 				}
 				reads := 0
 				table := &fakeProcessTable{procs: procs}
-				single := psTable{run: func(args ...string) ([]procInfo, error) {
+				single := psTable{run: func(args ...string) (string, error) {
 					reads++
 					if !reflect.DeepEqual(args, []string{"-p", "41", "-ww", "-o", "pid=,ppid=,uid=,lstart=,command="}) {
 						t.Fatalf("ps args=%q", args)
 					}
 					switch kind {
 					case "error":
-						return nil, errors.New("single-pid read failed")
+						return "", errors.New("single-pid read failed")
 					case "forged-zero", "gone":
-						return nil, nil
+						return "", nil
 					case "forged-changed":
 						real := p
 						real.command = "/bin/unrelated"
-						return parseSweepProcesses(sweepProcessRow(real))
+						return sweepProcessRow(real), nil
 					default:
-						return table.procs, nil
+						if len(table.procs) == 0 {
+							return "", nil
+						}
+						return sweepProcessRow(table.procs[0]), nil
 					}
 				}}
 				table.readFn = single.read
@@ -216,16 +219,144 @@ func TestSweepClientExitedAtRead(t *testing.T) {
 			p := sweepProc()
 			p.ppid = 200
 			reads := 0
-			s.processes = psTable{run: func(args ...string) ([]procInfo, error) {
+			s.processes = psTable{run: func(args ...string) (string, error) {
 				if args[0] == "-axww" {
-					return []procInfo{p}, nil
+					return sweepProcessRow(p), nil
 				}
 				reads++
-				return nil, nil
+				return "", nil
 			}}
 			live, err := s.live(c)
 			if err != nil || live != locked || reads != 1 {
 				t.Fatalf("live=%v err=%v reads=%d, want live=%v", live, err, reads, locked)
+			}
+		})
+	}
+}
+
+func TestSweepSelfPIDClientRow(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		for _, actualKind := range []string{"non-orphan", "unrelated"} {
+			t.Run(fmt.Sprint(dry)+"/"+actualKind, func(t *testing.T) {
+				s, out, _ := sweepFixture(t)
+				s.dry = dry
+				forged := sweepProc()
+				actual := forged
+				if actualKind == "non-orphan" {
+					actual.ppid = 200
+				} else {
+					actual.command = "/bin/other argument"
+				}
+				actual.command += "\n" + strings.TrimSuffix(sweepProcessRow(forged), "\n")
+				reads := 0
+				single := psTable{run: func(args ...string) (string, error) {
+					if !reflect.DeepEqual(args, []string{"-p", "41", "-ww", "-o", "pid=,ppid=,uid=,lstart=,command="}) {
+						t.Fatalf("ps args=%q", args)
+					}
+					reads++
+					return sweepProcessRow(actual), nil
+				}}
+				listed := psTable{run: func(...string) (string, error) { return sweepProcessRow(actual), nil }}
+				procs, err := listed.list()
+				if err != nil || len(procs) != 2 || procs[1] != forged {
+					t.Fatalf("parse=%+v err=%v", procs, err)
+				}
+				table := &fakeProcessTable{procs: procs, readFn: single.read}
+				s.processes = table
+				if err := s.run(); err != nil || out.Len() != 0 || reads != 1 || len(table.signalled) != 0 || len(table.signals) != 0 {
+					t.Fatalf("sweep=%v report=%q reads=%d pids=%v signals=%v", err, out, reads, table.signalled, table.signals)
+				}
+			})
+		}
+	}
+}
+
+func TestSweepSelfPIDLiveRow(t *testing.T) {
+	for _, locked := range []bool{false, true} {
+		t.Run(fmt.Sprint(locked), func(t *testing.T) {
+			s, out, fixture := sweepFixture(t)
+			c := sweepContainerFixture(t, s, fixture)
+			dir := sweepCopyFixture(t, s)
+			c.Mounts = []sweepMount{{"bind", filepath.Join(dir, "tree"), "/work"}}
+			saveSweepContainer(t, fixture, c, ".json")
+			root, err := os.Open(s.parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = root.Close() }()
+			s.copyRoot, s.resolvedParent = root, s.parent
+			if locked {
+				lock, err := lockContainerCopy(dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = lock.Close() }()
+			}
+			forged := sweepProc()
+			forged.ppid = 200
+			actual := forged
+			actual.command = "/bin/other argument\n" + strings.TrimSuffix(sweepProcessRow(forged), "\n")
+			reads := 0
+			s.processes = psTable{run: func(args ...string) (string, error) {
+				if args[0] == "-p" {
+					reads++
+				}
+				return sweepProcessRow(actual), nil
+			}}
+			live, err := s.live(c)
+			if err != nil || live != locked || reads != 1 {
+				t.Fatalf("live=%v err=%v reads=%d, want live=%v", live, err, reads, locked)
+			}
+			if err := s.run(); err != nil {
+				t.Fatalf("sweep=%v report=%q", err, out)
+			}
+			if locked {
+				assertNoSweepRM(t, fixture)
+			} else if !strings.Contains(out.String(), "reclaimed container "+c.ID) {
+				t.Fatalf("report=%q", out)
+			}
+		})
+	}
+}
+
+func TestSweepSinglePIDOutput(t *testing.T) {
+	for _, kind := range []string{"one", "empty", "whitespace", "leading-blank", "wrong-pid", "unparsable", "invalid-before-header", "header-continuations"} {
+		t.Run(kind, func(t *testing.T) {
+			p := sweepProc()
+			data := sweepProcessRow(p)
+			wantExists, wantErr := true, false
+			switch kind {
+			case "empty":
+				data, wantExists = "", false
+			case "whitespace":
+				data, wantExists = " \t\n\n \t\n", false
+			case "leading-blank":
+				data = " \t\n\n" + data
+			case "wrong-pid":
+				other := p
+				other.pid++
+				data = sweepProcessRow(other)
+				wantExists, wantErr = false, true
+			case "unparsable", "invalid-before-header":
+				data = "not a process header\n"
+				if kind == "invalid-before-header" {
+					data += sweepProcessRow(p)
+				}
+				wantExists, wantErr = false, true
+			case "header-continuations":
+				other := p
+				other.pid++
+				p.command += "\n" + strings.TrimSuffix(sweepProcessRow(p), "\n") + "\n\n" + strings.TrimSuffix(sweepProcessRow(other), "\n") + "\n last \t\n"
+				data = sweepProcessRow(p)
+			}
+			table := psTable{run: func(...string) (string, error) { return data, nil }}
+			got, exists, err := table.read(p.pid)
+			want := procInfo{}
+			if wantExists {
+				want = p
+			}
+			if got != want || exists != wantExists || (err != nil) != wantErr {
+				t.Fatalf("read=%+v exists=%v err=%v; want=%+v exists=%v error=%v", got, exists, err, want, wantExists, wantErr)
 			}
 		})
 	}
@@ -240,7 +371,9 @@ func TestSweepSinglePIDRead(t *testing.T) {
 			case "zero":
 				data = ""
 			case "two":
-				data += sweepProcessRow(p)
+				other := p
+				other.pid++
+				data = sweepProcessRow(other) + data
 			case "forged-row":
 				other := p
 				other.pid++
@@ -255,15 +388,15 @@ func TestSweepSinglePIDRead(t *testing.T) {
 				data = sweepProcessRow(p)
 			}
 			calls := 0
-			table := psTable{run: func(args ...string) ([]procInfo, error) {
+			table := psTable{run: func(args ...string) (string, error) {
 				calls++
 				if !reflect.DeepEqual(args, []string{"-p", "41", "-ww", "-o", "pid=,ppid=,uid=,lstart=,command="}) {
 					t.Fatalf("ps args=%q", args)
 				}
 				if kind == "error" {
-					return nil, errors.New("ps failed")
+					return "", errors.New("ps failed")
 				}
-				return parseSweepProcesses(data)
+				return data, nil
 			}}
 			got, exists, err := table.read(p.pid)
 			want := kind == "one" || kind == "multiline"

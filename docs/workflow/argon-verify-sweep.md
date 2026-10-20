@@ -76,11 +76,14 @@ The bind source loses any known host-mount prefix before symlink resolution.
 Orphaned clients (parent PID 1) never prove liveness. Each matching client is
 re-read with single-PID `ps`; PID, uid, parent, start time and exact command
 must still match. A changed or absent entry is not liveness evidence; a read
-error prevents reclamation. Zero rows in single-PID output mean the process
-is gone; multiple rows or a row with another PID fail the sweep.
+error prevents reclamation. Single-PID output is one row: the first nonempty
+line must be a valid header for the requested PID, and all later lines are
+command text, even if they look like headers. Empty or whitespace-only output
+means the process is gone; a different PID or an unparsable first header fails
+the sweep.
 
-Process rows require PID, parent, uid and a valid five-field start time before
-the command. Other lines continue the preceding command, preserving embedded
+Full-list process rows require PID, parent, uid and a valid five-field start
+time before the command. Other lines continue the preceding command, preserving embedded
 newlines; a nonempty continuation before any row fails parsing. A row-looking
 line inside argv can appear as a table entry, so liveness always requires the
 independent single-PID check.

@@ -2,11 +2,12 @@
 
 **Decided** (#1437, at the maintainer's request on 2026-10-19;
 [workflow log](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6267383947)).
-Use the language list below. A task needing another language, runtime or
-format stops for the maintainer's explicit approval in its issue. The
+Amended by the maintainer on 2026-10-20 in #1437.
+Use the language list below. A task needing another language, runtime,
+dependency or format stops for the maintainer's explicit approval in its issue. The
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)
-is the enforcement; this list is its human-readable description. The table
-itself changes only through an issue approved by the maintainer.
+checks file kinds by location; this list is its human-readable description.
+The table itself changes only through an issue approved by the maintainer.
 [Decision 35](35-tooling-in-go.md) stays unchanged.
 
 ## Language list
@@ -67,57 +68,21 @@ The check reads NUL-separated tracked paths from git and the corresponding
 working-tree files; missing files and read/list errors fail. Matching is
 case-sensitive and component-based. Symlinks and special files are refused;
 a shebang at the first two bytes is forbidden everywhere without exception.
-A small command-word scan checks Makefile recipes, simple `SHELL` assignments
-(including `::=`), `!=` command assignments and literal `$(shell ...)` in
-simple assignments and tab-indented recipes, plus workflow `run` steps.
-Recipe prefixes consume leading `@`, `-`, `+`, spaces and tabs together.
-Assignment comments follow Make's backslash escaping, independent of quotes;
-single-line YAML comments are stripped only outside single and double quotes.
-Empty shell quotes start a token, so an adjacent `#` is not a comment.
-Workflow mapping headers may have trailing comments, sequence dashes may have
-multiple spaces, bare dashes and dash comments preserve the enclosing mapping,
-and mapping keys may have surrounding spaces; quoted scalars decode doubled
-single quotes and escaped double quotes/backslashes only.
-It refuses node/nodejs, npm/npx, python/pip, cargo/rustc, deno, bun, ruby,
-perl, bash/zsh/sh, yarn, pnpm, tsc/tsx, uv, poetry, php, java and
-dash/ksh/fish/pwsh, including optional digit-and-dot version suffixes.
-It recognises simple command positions after control words (`if`, `then`,
-`else`, `do`, `while`, `until`, `elif`, `!`, `{`), wrappers (`env`, `exec`,
-`command`, `sudo`, `time`, `nohup`, `xargs`) and `timeout <duration>`.
-Wrapper names also match by path basename; control words match only literally.
-Workflow block scalars accept indentation/chomping indicators and comments.
-In ordinary block mappings, the scan checks direct step `uses` values for
-`actions/setup-node`, `actions/setup-python`, `actions/setup-java`,
-`actions/setup-ruby`, `ruby/setup-ruby`, `oven-sh/setup-bun`,
-`denoland/setup-deno`, `dtolnay/rust-toolchain`,
-`astral-sh/setup-uv` and `pnpm/action-setup` with an `@` reference. It also
-refuses direct step `uses: docker://` actions and checks direct step or
-`defaults.run` `shell` values for those runtime commands.
 
-The command-word scan is a best-effort tripwire against accidental introduction
-of another runtime in the Makefile and workflow files, not a security boundary.
-A line scanner cannot prevent deliberate evasion through indirection, aliases,
-command substitution, scripts launched by name or shell tricks. The control for
-those is issue and pull request review, the file-kind table and the shebang ban.
-
-This is not a Make, YAML or shell parser. Review must also cover
-runtime/dependency configuration, containers/images
-(including workflow `container:`/`image:`), backtick or quoted substitutions,
-wrapper options, nested Make expressions, `target: ; cmd` one-line recipes,
-runtime setup actions beyond the exact names scanned above, YAML flow mappings
-and computed keys or values, and other YAML scalar escapes. These can evade
-the scan; an allowed path is not runtime approval.
+The check does not judge commands, Makefile/CI/configuration contents or
+dependencies. Those stay issue and pull request review items. A new language,
+runtime or dependency needs the maintainer's explicit approval; an allowed
+file path grants no such approval.
 
 `make check` (through `check-tools`), `make prepush` and CI run the gate.
 CI's checkout includes `.git`, even with shallow history. This is different
 from Argon's isolated verification copy (#1429), which has no `.git` by
 design and is not asked to run this check.
 
-**Why:** a path-aware mechanical gate catches an accidental second runtime
-before review, including scripts hidden in fixtures or vendor directories.
+**Why:** a path-aware mechanical gate catches unapproved file kinds and
+locations, including scripts hidden in fixtures or vendor directories.
 The approval link leaves the human decision reviewable without networking
 from a repository check.
 
 **Considered:** extensions alone (admit SQL or JavaScript in the wrong place);
-excluding vendor or testdata (hide scripts); scanning every text occurrence of
-a runtime name (confuse prose and arguments with commands).
+excluding vendor or testdata (hide scripts).

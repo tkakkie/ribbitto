@@ -1,6 +1,7 @@
-// Command languagecheck enforces the path-and-kind table described by
-// docs/decisions/42-repository-languages-and-formats.md. Changing the table
-// requires an issue approved by the maintainer; it is not a task-local escape.
+// Command languagecheck checks tracked file kinds by location, bans shebangs
+// and validates exact-path approval records as described by decision 42.
+// Commands, configuration contents and dependencies remain review items.
+// Changing the table requires an issue approved by the maintainer.
 package main
 
 import (
@@ -137,13 +138,6 @@ func checkFiles(root string, names []string) ([]string, error) {
 			size = len("go test fuzz v1\n")
 		}
 		head, readErr := io.ReadAll(io.LimitReader(f, int64(size)))
-		if name == "Makefile" || strings.HasPrefix(name, ".github/workflows/") {
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				report(fmt.Errorf("seeking commands: %w", err).Error())
-			} else {
-				problems = append(problems, checkCommands(name, f)...)
-			}
-		}
 		closeErr := f.Close()
 		if readErr != nil {
 			report(fmt.Errorf("reading head: %w", readErr).Error())

@@ -3,24 +3,25 @@
   const inFlight = new WeakSet();
   document.addEventListener("submit", (event) => {
     const form = event.target;
-    const button = event.submitter;
+    const button = event.submitter ?? form.querySelector("[data-pin-action]:not([hidden])");
     if (!form.matches("[data-pin-control]") || !window.htmx || !button?.matches("[data-pin-action]")) return;
     event.preventDefault();
     if (inFlight.has(form)) return;
     inFlight.add(form);
     const clear = () => inFlight.delete(form);
     try {
-      window.htmx.ajax("POST", button.getAttribute("formaction"), { source: button, target: form, swap: "outerHTML" }).then(clear, clear);
+      window.htmx.ajax("POST", button.getAttribute("formaction"), { source: button, target: form, swap: "outerHTML", event }).then(clear, clear);
     } catch (error) {
       clear();
       throw error;
     }
   });
-  // 2.0.7 sends afterRequest on the source (or its surviving ancestor after
-  // a swap). Do not rely on its promise: an onload exception can leave it pending.
-  const answered = (event) => inFlight.delete(event.detail.requestConfig?.elt.closest("[data-pin-control]"));
-  document.addEventListener("htmx:afterRequest", answered);
-  document.addEventListener("htmx:sendError", answered);
+  // After a swap, detail.elt can be a surviving ancestor: requestConfig.elt
+  // still finds the detached source's form. onLoadError can leave promises pending.
+  const answered = (event) => inFlight.delete((event.detail.requestConfig?.elt ?? event.detail.elt)?.closest("[data-pin-control]"));
+  for (const name of ["afterRequest", "sendError", "timeout", "sendAbort", "responseError", "onLoadError"]) {
+    document.addEventListener("htmx:" + name, answered);
+  }
   const section = () => document.getElementById("pins-section");
   const stale = (incoming) => section() && BigInt(incoming.dataset.pinsSeq) < BigInt(section().dataset.pinsSeq);
   const sync = (control) => {

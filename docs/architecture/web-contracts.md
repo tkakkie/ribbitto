@@ -29,7 +29,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-pinned` | pin form | always | pin state |
   | `data-pin-action` | pin button | always | `true`: Unpin; `false`: Pin |
   | `method`, `action` | pin form | always | normal POST fallback; no `hx-*` on this form or its buttons |
-  | `type`, `formaction`, `hidden` | pin button | first two always; hidden on inactive action | explicit submit action and server-rendered visibility; delegated submit uses `event.submitter` |
+  | `type`, `formaction`, `hidden` | pin button | first two always; hidden on inactive action | explicit submit action and server-rendered visibility; delegated submit uses `event.submitter`, or the non-hidden pin button when absent |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |

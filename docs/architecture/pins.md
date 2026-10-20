@@ -102,7 +102,8 @@ controls render both explicit actions; the script only selects visibility and
 restores focus. Closing the overview unsubscribes; its controls recover on reload.
 Forms and both buttons retain their DOM contract and native POST/303 fallback.
 One delegated submit handler uses the submitter's server-rendered `formaction`
-with htmx (button source, form target, `outerHTML`); per-form in-flight drops
+(the non-hidden button if no submitter) with htmx (button source, form target,
+`outerHTML`); per-form in-flight drops
 replace `hx-sync`, so different messages remain independent. No per-message
 pin element carries `hx-*`. ConfigRequest on the source adds `X-Pins-Section`
 when the overview is present. A 409 swaps the server's unchanged control and

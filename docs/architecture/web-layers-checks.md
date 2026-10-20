@@ -1,6 +1,6 @@
 # Web layers: how the rules are checked
 
-Rules: [`web-layers.md`](web-layers.md),
+The rules are in [`web-layers.md`](web-layers.md),
 [`web-contracts.md`](web-contracts.md) and
 [`web-javascript.md`](web-javascript.md).
 
@@ -53,7 +53,8 @@ decision); a script owns no application state beyond decisions 34 and 37;
 composer request URLs come from server-rendered attributes; components make
 no authorisation decisions.
 
-**Current exceptions:** check application state against [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
+**Current exceptions:** review the no-application-state
+rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
 for one script's sidebar badge numbers and bounded recovery state. It never
 creates elements or makes requests. Review composer code with
 [decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)'s allowances: pending own posts, the idempotency key and
@@ -128,7 +129,7 @@ replacement and bounded insertion without sorting.
 
 `TestApplicationJavaScript` in `web/static/javascript_test.go` checks every
 direct `web/static/*.js` file, regardless of its name or version; it does
-not descend into subdirectories such as `vendor/`. Names end in
+not descend into subdirectories such as `vendor/`. Names must end in
 `-vN.js`, where N is one or more decimal digits.
 
 The check matches source patterns on each line after masking `//` and
@@ -140,10 +141,7 @@ It rejects:
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
   `document.writeln` and `createContextualFragment`. Reads and comparisons
   of HTML properties pass.
-- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource` and
-  `indexedDB`, and `htmx.ajax` except in `pins-sync-v2.js` (delegated pins);
-  `localStorage` outside
-  `message-drafts-vN.js`.
+- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `pins-sync-v2.js`; `localStorage` outside `message-drafts-vN.js`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. These evaluation restrictions restate
   the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).

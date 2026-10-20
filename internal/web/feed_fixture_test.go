@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/binary"
 	"strings"
 	"testing"
 
@@ -18,7 +19,8 @@ func feedFixture(t *testing.T, n int) view.ChannelPage {
 	page.Messages = make([]view.Message, n)
 	for i := range n {
 		entry := seed[i%len(seed)]
-		entry.ID, entry.EventSeq = kernel.ID{byte(i + 1)}, int64(i+1)
+		entry.ID, entry.EventSeq = kernel.ID{}, int64(i+1)
+		binary.LittleEndian.PutUint64(entry.ID[:8], uint64(i+1))
 		entry.URL = view.MessageURL(page.Organization.Slug, entry.ID)
 		entry.PinURL = view.PinURL(page.Organization.Slug, page.Current.ID, entry.ID)
 		page.Messages[i] = entry
@@ -43,4 +45,14 @@ func hasHTMXAttribute(n *html.Node) bool {
 		}
 	}
 	return false
+}
+
+func TestFeedFixtureUniqueIDs(t *testing.T) {
+	seen := make(map[kernel.ID]bool)
+	for _, entry := range feedFixture(t, 512).Messages {
+		if entry.ID == (kernel.ID{}) || seen[entry.ID] {
+			t.Fatalf("zero or duplicate fixture ID: %x", entry.ID)
+		}
+		seen[entry.ID] = true
+	}
 }

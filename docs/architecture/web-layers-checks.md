@@ -143,7 +143,7 @@ It rejects:
   of HTML properties pass.
 - `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `pins-sync-v2.js`; `localStorage` outside `message-drafts-vN.js`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
-  directly quoted first argument. These evaluation restrictions restate
+  directly quoted first argument. They restate
   the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).
 - `var`/`let`/`const` and named `function` declarations at zero brace and
   parenthesis depth (a keyword after `.`, such as `options.var`, is a

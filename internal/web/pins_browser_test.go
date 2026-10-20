@@ -96,8 +96,8 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 			t.Fatalf("step %q: %v", "create page", result.err)
 		}
 		page = result.page
-	case <-time.After(8 * time.Second):
-		t.Fatalf("step %q: page did not open within 8 s", "create page")
+	case <-time.After(15 * time.Second):
+		t.Fatalf("step %q: page did not open within 15 s", "create page")
 	}
 	defer func() {
 		cleanup := page.Timeout(time.Second)

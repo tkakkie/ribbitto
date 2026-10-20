@@ -21,9 +21,10 @@ import (
 )
 
 // Safer-side differences from checks.zsh (#1434): trusted-build check first;
-// GIT_NO_REPLACE_OBJECTS=1 and GIT_OPTIONAL_LOCKS=0; ls-tree distinguishes
-// absence from failure (cat-file -e returns 128 for both missing paths and
-// missing tree objects); a failed merge-base stops baseline checks. A tracked
+// GIT_NO_LAZY_FETCH=1, GIT_NO_REPLACE_OBJECTS=1 and GIT_OPTIONAL_LOCKS=0;
+// ls-tree distinguishes absence from failure (cat-file -e returns 128 for both
+// missing paths and missing tree objects); a failed merge-base stops baseline
+// checks. A tracked
 // object's type is checked too: quiet diff can succeed without opening a
 // missing blob when the index/worktree are unchanged. Object-check failures
 // never mean absence. Component-wise O_NOFOLLOW|O_NONBLOCK, regular-only reads
@@ -268,18 +269,17 @@ func (c *implementChecker) agent(home string) {
 }
 
 func implementVersion(out []byte) (string, error) {
-	line, _, _ := strings.Cut(string(out), "\n")
-	var b strings.Builder
-	for _, ch := range line {
-		if ch >= '0' && ch <= '9' || ch == '.' {
-			b.WriteRune(ch)
+	line, rest, _ := strings.Cut(string(out), "\n")
+	// Unlike checks.zsh's character filter, fail closed so malformed output
+	// cannot select a trusted builtin hash list for a different version.
+	if rest != "" || !implementMatch(`^[0-9]+(\.[0-9]+)+$`, line) {
+		preview, suffix := string(out), ""
+		if len(preview) > 64 {
+			preview, suffix = preview[:64], " (truncated)"
 		}
+		return "", fmt.Errorf("invalid agy version %q%s", preview, suffix)
 	}
-	version := b.String()
-	if !implementMatch(`^[0-9]+(\.[0-9]+)*$`, version) {
-		return "", fmt.Errorf("invalid agy version %q", version)
-	}
-	return version, nil
+	return line, nil
 }
 
 func implementBuiltinList(data []byte) (map[string]string, error) {
@@ -479,10 +479,15 @@ func implementGit(worktree string) func(...string) ([]byte, int, error) {
 		if binary == "" {
 			return nil, -1, errors.New("no git in /usr/bin or /bin")
 		}
-		env := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
 		command := append([]string{"-C", worktree, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"}, args...)
-		return implementProcess(binary, command, env, 60*time.Second)
+		return implementProcess(binary, command, implementGitEnv(), 60*time.Second)
 	}
+}
+
+func implementGitEnv() []string {
+	// Missing objects in an untrusted partial clone must not trigger a fetch
+	// that executes a program selected by repository configuration.
+	return []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
 }
 
 func (c *implementChecker) baseline(worktree string) {

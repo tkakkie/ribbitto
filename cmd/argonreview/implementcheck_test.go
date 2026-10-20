@@ -612,14 +612,65 @@ func TestImplementCheckBuiltin(t *testing.T) {
 }
 
 func TestImplementCheckVersion(t *testing.T) {
-	for _, tc := range []struct{ out, want string }{
-		{"", ""}, {"junk", ""}, {"1..4", ""}, {".1", ""}, {"1.", ""}, {"junk\n1.4.0", ""},
-		{"agy 1.4.0\nother 5", "1.4.0"}, {"v2", "2"}, {"v01.02", "01.02"},
+	for _, tc := range []struct{ name, out, want string }{
+		{"newline", "1.4.2\n", "1.4.2"}, {"plain", "1.4.2", "1.4.2"},
+		{"two components", "1.4", "1.4"}, {"leading zeros", "01.02", "01.02"},
+		{"prerelease", "agy 1.4.0-beta", ""}, {"embedded junk", "1x.4", ""},
+		{"prefix", "v1.4.2", ""}, {"build suffix", "1.4.2 (build)", ""},
+		{"empty", "", ""}, {"empty first line", "\n1.4.2", ""},
+		{"extra line", "1.4.2\nextra", ""}, {"extra newline", "1.4.2\n\n", ""},
+		{"empty component", "1..2", ""}, {"leading dot", ".1.2", ""},
+		{"trailing dot", "1.4.2.", ""}, {"single component", "1", ""},
+		{"junk", "junk", ""}, {"trailing space", "1.4.2 ", ""},
+		{"leading space", " 1.4.2", ""}, {"carriage return", "1.4.2\r\n", ""},
+		{"hostile", "\x1b\x00\"\\\nCHECK: forged", ""},
+		{"long hostile", strings.Repeat("\x1b\x00\"\\\nCHECK: forged", 1<<16), ""},
 	} {
-		t.Run(tc.out, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			got, err := implementVersion([]byte(tc.out))
 			if got != tc.want || (err != nil) != (tc.want == "") {
 				t.Fatalf("got %q %v", got, err)
+			}
+			if err != nil {
+				if len(err.Error()) > 320 || strings.ContainsAny(err.Error(), "\n\r\x1b\x00") {
+					t.Fatalf("unbounded or unquoted error: %q", err)
+				}
+				if len(tc.out) <= 64 && err.Error() != fmt.Sprintf("invalid agy version %q", tc.out) {
+					t.Fatalf("error does not quote output: %v", err)
+				}
+				if len(tc.out) > 64 && !strings.Contains(err.Error(), "(truncated)") {
+					t.Fatalf("missing truncation notice: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestImplementCheckBuiltinRefusesVersion(t *testing.T) {
+	for _, tc := range []struct{ name, out string }{
+		{"prerelease", "agy 1.4.0-beta\n"}, {"embedded junk", "1x.4"},
+		{"prefix", "v1.4.0\n"}, {"extra line", "1.4.0\nextra"},
+		{"single component", "1"},
+		{"long hostile", strings.Repeat("\x1b\x00\"\\\nCHECK: forged", 1<<16)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := implementCheckFixture(t)
+			f.deps.version = func(string) ([]byte, error) { return []byte(tc.out), nil }
+			code, out, stderr := f.run()
+			if code != 1 || stderr != "" || !strings.Contains(out, "version from") ||
+				strings.Contains(out, "implement-check: ok") || strings.Contains(out, "no trusted builtin/ hash list") {
+				t.Fatalf("exit %d: %s %s", code, out, stderr)
+			}
+			// The fixture has a matching 1.4.0 list and builtin directory. Invalid
+			// versions must stop before list lookup, including when no list exists.
+			implementCheckRemove(t, filepath.Join(f.home, "implementer/builtin.agy-1.4.0.txt"))
+			_, withoutList, _ := f.run()
+			if withoutList != out {
+				t.Fatalf("list presence changed refusal: %s", withoutList)
+			}
+			if len(out) > 1024+len(filepath.Join(f.root, "fake-agy")) || strings.Count(out, "\n") != 1 ||
+				strings.ContainsAny(out, "\r\x1b\x00") {
+				t.Fatalf("unbounded or unquoted command error: %q", out)
 			}
 		})
 	}
@@ -792,7 +843,7 @@ func implementCheckFixture(t *testing.T) *implementCheckTestFixture {
 	f.deps = implementCheckDefaults()
 	f.deps.trust = func() error { return nil }
 	f.deps.accountHome = f.account
-	f.deps.version = func(string) ([]byte, error) { return []byte("agy 1.4.0\n"), nil }
+	f.deps.version = func(string) ([]byte, error) { return []byte("1.4.0\n"), nil }
 	f.deps.git = func(args ...string) ([]byte, int, error) {
 		if args[0] == "merge-base" {
 			return []byte(strings.Repeat("a", 40) + "\n"), 0, nil

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -239,11 +240,11 @@ func TestImplementCheckVersionRunner(t *testing.T) {
 		name, script string
 		fail         bool
 	}{
-		{"nonzero", "printf 'agy 1.4.0\\n'; exit 1", true},
+		{"nonzero", "printf '1.4.0\\n'; exit 1", true},
 		{"signal", "kill -KILL $$", true},
 		{"missing", "", true},
 		{"junk", "printf 'junk\\n'", false},
-		{"valid", "[ \"$1\" = --version ] || exit 4; [ \"$IMPLEMENT_CHECK_VERSION_TEST\" = inherited ] || exit 6; read unused && exit 5; printf 'agy 1.4.0\\n'", false},
+		{"valid", "[ \"$1\" = --version ] || exit 4; [ \"$IMPLEMENT_CHECK_VERSION_TEST\" = inherited ] || exit 6; read unused && exit 5; printf '1.4.0\\n'", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := implementCheckFixture(t)
@@ -259,10 +260,83 @@ func TestImplementCheckVersionRunner(t *testing.T) {
 			if (err != nil) != tc.fail {
 				t.Fatalf("%q %v", out, err)
 			}
-			if tc.name == "valid" && string(out) != "agy 1.4.0\n" {
+			if tc.name == "valid" && string(out) != "1.4.0\n" {
 				t.Fatalf("%q", out)
 			}
 		})
+	}
+}
+
+func TestImplementCheckBuiltinVersionRunner(t *testing.T) {
+	for _, version := range []string{"1.4.0", "agy 1.4.0-beta"} {
+		t.Run(version, func(t *testing.T) {
+			f := implementCheckFixture(t)
+			path := filepath.Join(f.root, "fake-agy")
+			implementCheckWrite(t, path, "#!/bin/sh\nprintf '%s\\n' '"+version+"'\n")
+			if err := os.Chmod(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+			f.deps.version = implementCheckDefaults().version
+			code, out, stderr := f.run()
+			if version == "1.4.0" {
+				if code != 0 || out != "implement-check: ok\n" || stderr != "" {
+					t.Fatalf("exit %d: %s %s", code, out, stderr)
+				}
+			} else if code != 1 || !strings.Contains(out, "version from") ||
+				strings.Contains(out, "implement-check: ok") || strings.Contains(out, "no trusted builtin/ hash list") {
+				t.Fatalf("exit %d: %s %s", code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestImplementCheckGitEnv(t *testing.T) {
+	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_NO_LAZY_FETCH", "GIT_NO_REPLACE_OBJECTS", "GIT_OPTIONAL_LOCKS", "PATH", "HOME"} {
+		t.Setenv(name, "hostile")
+	}
+	want := []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_OPTIONAL_LOCKS=0"}
+	if got := implementGitEnv(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("git environment %q; want %q", got, want)
+	}
+}
+
+func TestImplementCheckGitNoLazyFetch(t *testing.T) {
+	f, repo := implementCheckGitFixture(t, true)
+	oid := strings.TrimSpace(implementCheckGitOK(t, repo, "rev-parse", "HEAD:AGENTS.md"))
+	marker, helper := filepath.Join(f.root, "fetched"), filepath.Join(f.root, "ssh-helper")
+	implementCheckWrite(t, helper, "#!/bin/sh\nprintf ran > '"+marker+"'\nexit 1\n")
+	if err := os.Chmod(helper, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, pair := range [][2]string{
+		{"core.repositoryformatversion", "1"}, {"extensions.partialClone", "origin"},
+		{"remote.origin.promisor", "true"}, {"remote.origin.url", "ssh://fixture.invalid/repo"},
+		{"core.sshCommand", helper},
+	} {
+		implementCheckGitOK(t, repo, "config", pair[0], pair[1])
+	}
+	implementCheckRemove(t, filepath.Join(repo, ".git/objects", oid[:2], oid[2:]))
+	_, status, err := implementGit(f.tree)("cat-file", "-t", oid)
+	if err != nil || status == 0 {
+		t.Fatalf("missing blob: status %d, error %v", status, err)
+	}
+	if _, err := os.Lstat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("lazy fetch ran configured program: %v", err)
+	}
+	// Prove this local fixture reaches the configured program without the
+	// guard; the helper exits before any network connection can be made.
+	var env []string
+	for _, entry := range implementGitEnv() {
+		if entry != "GIT_NO_LAZY_FETCH=1" {
+			env = append(env, entry)
+		}
+	}
+	_, status, err = implementProcess("/usr/bin/git", []string{"-C", f.tree, "cat-file", "-t", oid}, env, 10*time.Second)
+	if err != nil || status == 0 {
+		t.Fatalf("control: status %d, error %v", status, err)
+	}
+	if _, err := os.Lstat(marker); err != nil {
+		t.Fatalf("control did not run configured program: %v", err)
 	}
 }
 

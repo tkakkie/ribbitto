@@ -53,6 +53,7 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 		width       int
 	}{
 		{"desktop", "", 1280},
+		{"narrow", "", 390},
 		{"quote", "?quote", 390},
 		{"quote-capped", "?quote&capped", 390},
 	} {
@@ -76,21 +77,27 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatalf("%s: %s", what, problem)
 				}
 			}
-			step("install first-paint recorder")
+			step("install early settle and first-paint recorder")
 			page.MustEvalOnNewDocument(`(() => {
 				window.composerFrames = [];
 				document.addEventListener('DOMContentLoaded', () => {
-					// A task after each rendering opportunity samples after the
-					// observer deliveries, including the very first paint's layout.
-					const record = () => requestAnimationFrame(() => setTimeout(() => {
-						const l = document.getElementById('message-list'), items = document.getElementById('message-items');
+					// A stream settle in a background tab can precede measurement.
+					const item = document.getElementById('message-items').lastElementChild;
+					item.dispatchEvent(new CustomEvent('htmx:afterSettle', {bubbles: true, detail: {target: item}}));
+				}, {once: true});
+				const deadline = performance.now() + 5000;
+				// Start before DOMContentLoaded to include earlier paints. A task
+				// after each rAF samples the observer result for that paint.
+				const record = () => requestAnimationFrame(() => setTimeout(() => {
+					const l = document.getElementById('message-list'), items = document.getElementById('message-items');
+					if (l && items?.lastElementChild) {
 						// Include the reading column's existing bottom gutter.
 						const bottom = items.lastElementChild.getBoundingClientRect().bottom + parseFloat(getComputedStyle(items).paddingBottom);
 						window.composerFrames.push({top: l.scrollTop, gap: l.getBoundingClientRect().bottom - bottom});
-						if (window.composerFrames.length < 8) record();
-					}, 0));
-					record();
-				}, {once: true});
+					}
+					if (window.composerFrames.length < 8 && performance.now() < deadline) record();
+				}, 0));
+				record();
 			})()`)
 			step("set load viewport")
 			page.MustSetViewport(tc.width, 600, 1, false)
@@ -107,7 +114,11 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 				return '';
 			}`
 			check("first paint and settled newest anchor", anchored)
-			check("viewport fallback and initial quote cap", `quoted => {
+			deduction := 353
+			if tc.width < 852 { // desk breakpoint: --breakpoint-desk in web/styles/app.css.
+				deduction = 337
+			}
+			check("viewport fallback and initial quote cap", `(quoted, deduction) => {
 				const frame = document.getElementById('organization-stream'), b = document.getElementById('message-body');
 				if (document.documentElement.style.length !== 0) return 'html has inline styles';
 				if (frame.style.getPropertyValue('--composer-viewport-h') || frame.style.getPropertyValue('--composer-viewport-top')) return 'desktop/equal viewport override';
@@ -115,11 +126,11 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 				const extra = q ? q + parseFloat(getComputedStyle(b.form).rowGap) : 0;
 				if (quoted && !(Math.abs(parseFloat(b.form.style.getPropertyValue('--composer-quote-h')) - extra) <= 0.01)) return 'quote deduction incorrect';
 				if (quoted && !b.form.style.getPropertyValue('--composer-quote-h')) return 'quote was not measured';
-				const cap = Math.max(82, Math.min(innerHeight / 2, innerHeight - (quoted ? 337 : 353) - extra));
+				const cap = Math.max(82, Math.min(innerHeight / 2, innerHeight - deduction - extra));
 				if (!(Math.abs(parseFloat(getComputedStyle(b).maxHeight) - cap) <= 0.01)) return 'dvh/quote cap incorrect';
 				if (b.value && (b.clientHeight !== Math.floor(cap) || b.scrollHeight <= b.clientHeight)) return 'preset did not reach quote-aware cap';
 				return '';
-			}`, tc.query != "")
+			}`, tc.query != "", deduction)
 			check("newest remains anchored after cap check", anchored)
 		})
 	}

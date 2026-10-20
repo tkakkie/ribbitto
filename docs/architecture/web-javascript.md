@@ -48,8 +48,8 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 - `member-mentions-v1.js` marks resolved references matching `data-member-id` to `#organization-stream`'s `data-member` on scoped `htmx:load`, including the initial body event after deferred scripts. Live posts, duplicate replay and moves use `htmx.swap`; Load older selects/prepends server-rendered items. Both run inserted-node load tasks, including replacements/destination insertions; no DOM observer/polling. Token utilities add a 2 px dashed `brand` outline, no offset, versus the solid 2 px
   offset focus ring: a shape cue with ≥3:1 contrast against message background and `selected` chip in both themes ([contrast](../ui-colours.md#contrast-wcag-22-aa)). Shared server renders are identical for all readers; unresolved/other-organisation references have no ID. Quote snapshots stay plain text.
 - `mention-picker-v1.js` owns only the active token, dismissal and selection. It triggers server-rendered search, rejects stale results/picks and captures plain Enter/Tab before send/navigation. Token boundaries mirror posting; code checks are conservative. IME keys and the 100 ms commit Enter are suppressed; textarea focus/listbox ARIA stay ([composer](web-composer.md#composer)).
-- `message-composer-v20.js` anchors [growth](../ui-composer.md) via ResizeObserver
-  before paint; end caret after layout; post scroll wins.
+- `message-composer-v20.js` anchors [growth](../ui-composer.md) to newest/visible
+  item; shows end caret after layout; post-success scroll wins.
   Quote closes popover; swaps focus Remove (Tab → Quote only part), part
   `#quote-text`, body on removal; 422/409 keep focus/caret/selection.
   [Autofocus](web-composer.md#composer): native on plain loads, script on swaps.

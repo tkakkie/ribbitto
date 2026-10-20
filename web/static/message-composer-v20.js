@@ -320,7 +320,7 @@
   };
   const pane = document.getElementById("message-list");
   if (pane) {
-    let height, position, settling = false;
+    let height, position, measured = false, settling = false;
     const remember = () => {
       const top = pane.getBoundingClientRect().top;
       let item;
@@ -330,12 +330,18 @@
       position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
         item, offset: item ? item.getBoundingClientRect().top - top : 0 };
     };
-    rememberPost = () => { height = pane.clientHeight; remember(); };
+    rememberPost = () => {
+      // A background-tab settle can precede the initial observer delivery.
+      if (!measured) return;
+      height = pane.clientHeight;
+      remember();
+    };
     // A resize can clamp scrollTop before its scroll event. Keep the state
     // from the old height until the observer has restored the reader.
-    pane.addEventListener("scroll", () => { if (position && !quoteResized && pane.clientHeight === height) remember(); });
+    pane.addEventListener("scroll", () => { if (measured && !quoteResized && pane.clientHeight === height) remember(); });
     const resize = new ResizeObserver(() => {
-      if (!position) {
+      if (!measured) {
+        measured = true;
         // The observer supplies initial layout before paint. Save newest (or
         // the native fragment position) before writing the quote cap, so no
         // read forces its layout. The deeper textarea/form observations let

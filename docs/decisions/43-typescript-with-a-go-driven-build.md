@@ -13,11 +13,9 @@ is not a goal in itself.
 
 ## Decided now
 
-These are approved rules, not an installed toolchain. Implementation is
-assigned below; current scripts and checks remain until their replacements
-land. The [toolchain page](../architecture/web-toolchain.md) proposes concrete
+These are approved rules, not an installed toolchain; current scripts and
+checks remain until the assigned implementations land. The [toolchain page](../architecture/web-toolchain.md) proposes concrete
 mechanics, pending maintainer confirmation; PR #1465 lists them in its body.
-This decision changes no application behaviour.
 
 ### Build and delivery
 
@@ -133,29 +131,36 @@ build-output evidence, not a real-browser performance gain.
   budget/report (§5). Type annotations add no runtime code and are not a
   library under that gate; this adopts no UI library.
 
-The maintainer's
-[approval comment](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
-explicitly approves TypeScript, Node for type checking, tests and dependency
-management only, and the Go-driven esbuild build; it is not a blanket
-authorization. Number 42 is reserved for the pending language-list decision
-(#1437, open draft PR #1441). When that lands, this approval will be entered
-in its language list. The language list and enforcement table must change
-with the toolchain pull request so code and table agree. Any needed exception
-records one exact path,
-issue and approving maintainer comment URL per line; this record changes
-neither the table nor the exceptions list.
+[Decision 42](42-repository-languages-and-formats.md) is merged (#1437/#1441).
+Decision 43 accepts the approval through #1356 as decision 42 anticipates. The
+maintainer's [approval record](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
+approves TypeScript, Node for type checking, tests and dependency management
+only, and the Go-driven esbuild build; it is not blanket authorization.
+
+The language list and path-and-kind table in
+[`tools/languagecheck`](../../tools/languagecheck/rules.go) change in the
+toolchain PR (#1410, adding build/test files), together with the files and a
+reference to that approval, so code and table agree. Each location's table
+change belongs to the PR introducing its first file (#1410, #1411, #1412 or
+#1413); their acceptance criteria must require it. The kinds and locations are
+listed on the toolchain page. The language check will fail any PR adding
+unlisted files unless it adds the table entries. Exact-path exceptions use
+[`docs/language-exceptions.txt`](../language-exceptions.txt) only under decision
+42's rules, with the issue and approving maintainer comment URL.
+
+Decision 42 leaves commands to review: languagecheck does not scan Makefile
+recipes or workflow steps for `node`/`npm` command words. #1410 must record and
+review its runtime commands against the limited approval; command use alone
+needs no path-and-kind entry. This PR adds no `.ts`, `.mjs`, `package.json`,
+`package-lock.json` or table entry and edits neither decision 42 nor the table.
 
 ## Boundary with #1361
 
-This decides no client-side cache, optimistic state, upload, request made by a
-script on its own, Web Push or service worker. All twelve toolchain rules
-above assume nothing about #1361's outcome. That later decision can build on
-typed modules holding already-allowed state, generated contracts, the build,
-tests and measurement gates without gaining any UX permission here. The
-amendment to 19 changes only where already-allowed state lives; any other/new
-client-side state (including caches, optimistic states and uploads) and
-scripts' own requests are for #1361. It remains free to amend 19, 30, 37 (c)
-and 41 afterwards.
+This decides no client-side cache, optimistic state, upload, script-owned
+request, Web Push or service worker. All twelve toolchain rules above assume
+nothing about #1361's outcome. It can build on the typed modules, contracts,
+build, tests and measurement gates without gaining UX permission here. Decision 19 changes only the in-memory location of already-allowed state;
+#1361 remains free to amend decisions 19, 30, 37 (c) and 41.
 
 ## Built later by
 
@@ -169,12 +174,11 @@ and 41 afterwards.
 
 ## Trade-offs
 
-A bare `go build` from a fresh clone no longer works directly after the build
-migration: generation must precede embedding. Development and CI gain Node and
-an npm package with platform dependencies, although build and deployment need
-no Node. The native checker's newness and editor compatibility remain
-integration risks. Regex checks remain incomplete; size evidence does not
-establish browser responsiveness.
+A bare `go build` from a fresh clone no longer works directly after the
+build migration: generation must precede embedding. Development and CI gain
+Node and an npm package with platform dependencies; build and deployment need
+no Node. Native checker/editor compatibility remains a risk. Regex checks are
+incomplete; size evidence does not establish browser responsiveness.
 
 **Why:** the existing composer already coordinates state, retries, drafts and
 reset across scripts. Typed boundaries and logic tests address the

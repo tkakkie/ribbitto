@@ -3,8 +3,8 @@
 The maintainer chose option B on 2026-10-19
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Pending. Generated-file packages stay CI-only (`NOT VERIFIED`).
-Verify excludes generation; adding it needs a `process` issue.
+Pending. Generated-file packages stay CI-only (`NOT VERIFIED`);
+generation in verify needs a `process` issue.
 
 ## Status
 
@@ -192,13 +192,13 @@ checks (`argonreview implement-check`,
 [#1435](https://github.com/tkakkie/ribbitto/issues/1435)), container check
 and verify server. These implementations are pending.
 
-Until each [#1436] stage is compared and verified before use, with rollback,
-keep the Python guard and zsh scripts in use: guard first, then checks and
-run command. Each stage keeps full preflight and no weaker boundary; failed
-comparison, preflight or restoration stops the next real run.
-Unverified code never runs on the host. Only after the staged switches are
-the scripts reference only, with no Python in the run path. #1436 keeps MCP
-off and its file empty.
+Production hooks use the Go `implement-guard` ([#1436] Stage 1, done
+2026-10-20); the Python guard is reference only. The zsh scripts stay until the
+checks and run command are compared and verified, with rollback.
+Each stage keeps the full preflight and no weaker boundary; a failed
+comparison, preflight or restoration stops the next real run. Unverified
+code never runs on the host. After the switches the scripts are reference
+only. #1436 keeps MCP off and its file empty.
 
 If option B cannot be built, the maintainer's fallback, option C, runs
 checks in the launcher between runs.

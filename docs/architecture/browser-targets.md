@@ -64,5 +64,11 @@ versus a device) is a different record: WebKit is not iOS Safari.
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |
-| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified (manual check on a real iOS device planned in #1426; #1426 plans four separately recorded levels — the existing Chrome go-rod tests, a WebKit run recorded as WebKit and never as iOS Safari, a real iOS device run, and an Android Chrome run) | unverified |
-| Android Chrome | latest two major versions | not verified (manual check on Android Chrome planned in #1426) | unverified |
+| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified (manual check on a real iOS device planned in #1426; see the planned levels below) | unverified |
+| Android Chrome | latest two major versions | not verified (check on a real Android device or an emulator planned in #1426; a real device and an emulator are different records, each recorded as what it is) | unverified |
+
+[#1426](https://github.com/tkakkie/ribbitto/issues/1426) plans four
+separately recorded verification levels: the existing Chrome go-rod tests,
+a WebKit run recorded as WebKit and never as iOS Safari, a real iOS device
+run, and an Android Chrome run (on a real device or an emulator, each
+recorded as what it is).

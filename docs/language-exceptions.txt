@@ -1,0 +1,8 @@
+# Language exceptions approved by the maintainer; no entries in the baseline.
+# Format: <exact path> #<issue> <approving issue comment URL> [-- <reason>]
+# URL: https://github.com/tkakkie/ribbitto/issues/<issue>#issuecomment-<digits>
+# Only whitespace-only lines and lines beginning exactly "# " are ignored.
+# A directory prefix, trailing slash or glob metacharacter (* ? [ ] { } \)
+# requires a nonempty trailing -- <reason>; it never expands the exact path.
+# Every entry must name one tracked, otherwise refused file; remove stale ones.
+# Shebangs, symlinks and special files cannot be admitted by an exception.

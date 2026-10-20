@@ -109,7 +109,7 @@ so local notes and tools do not change the output.
 ### Checks
 
 `make check` must pass before a pull request; for another AI's code,
-green draft CI before review instead
+green draft CI must pass before review instead
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
 It runs `check-static`, `check-test`, then `check-tools`. CI runs
 `check-static` and `check-tools` in `checks`, each named `testshard` shard
@@ -143,11 +143,11 @@ docs or `make vuln`, which CI runs separately.
 
 The Argon launcher's Go tests run with other command tests in
 `make check`. CI's `vuln` job runs
-`make vuln` (pinned `govulncheck` on the application module), which
-fails if a known vulnerability is statically reachable from our code.
+`make vuln` (pinned `govulncheck` on the application module),
+failing if a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:
 bump the dependency in its own pull request, or upgrade Go for a
-standard-library finding; if no fix exists, the maintainer decides.
+standard-library finding; without a fix, the maintainer decides.
 
 CodeQL (`.github/workflows/codeql.yml`) runs on `main` and weekly, not on
 pull requests; alerts are in the Security tab.

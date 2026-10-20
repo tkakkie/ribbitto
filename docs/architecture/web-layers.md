@@ -1,6 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
 Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
+Target browsers, compatibility rules and verification status: [`browser-targets.md`](browser-targets.md).
 
 ## Progressive enhancement
 

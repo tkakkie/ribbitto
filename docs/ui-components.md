@@ -24,7 +24,7 @@ Two uses make a look an `internal/web/view` component; pages reuse it.
 | `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | 44 px actions button (#1159): popover from `desk`; below it, a sheet with the button under the avatar |
 | `mentionPicker` | `internal/web/view/mention.templ` | the composer's @-picker listbox ([contract](architecture/web-composer.md#composer)) |
-| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty without quote; Quote selection opens it; `message-composer-v19.js` sets focus |
+| `ComposerQuote` | `internal/web/view/composer_quote.templ` | author, one-line whole excerpt/Quote only part or labelled `quote_text`; hidden ID, 44 px Remove; 422 keeps text/alert; empty without quote; Quote selection opens it; `message-composer-v20.js` sets focus |
 | `PinControl` | `internal/web/view/message.templ` | 44 px Pin/Unpin (#890), swapped in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link, covering the conversation below `wide` ([side panels](#side-panels)); a header link, icon-only below `desk` with its accessible name kept, that opens one panel, `aria-current="true"` and a Filled icon while it is open |
@@ -111,7 +111,7 @@ The list keeps 128 px (`h-32`), a few short messages.
 Here `#conversation` scrolls as a whole (`short:overflow-y-auto`)
 and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
 composer, history and stream scripts move, so they need no change. The
-frame uses `h-conversation-viewport` (`dvh` without the visual viewport).
+frame uses `h-conversation-viewport` (`dvh` unless the visual viewport differs).
 A minimum height would let the sidebar and adjacent panel grow to their
 content and stop scrolling themselves.
 

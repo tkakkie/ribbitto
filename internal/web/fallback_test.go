@@ -143,13 +143,13 @@ func assertFullConversationPage(t *testing.T, body string) {
 			continue
 		}
 		src := attr(n, "src")
-		if src == "/static/message-composer-v19.js" {
+		if src == "/static/message-composer-v20.js" {
 			composer = true
 		} else if strings.HasPrefix(src, "/static/message-composer-") {
 			t.Errorf("unexpected composer script %q", src)
 		}
 	}
 	if !composer {
-		t.Error("conversation page missing /static/message-composer-v19.js")
+		t.Error("conversation page missing /static/message-composer-v20.js")
 	}
 }

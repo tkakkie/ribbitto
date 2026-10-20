@@ -200,12 +200,18 @@ func (c *implementChecker) read(path string, limit int64, shared bool) ([]byte, 
 	}
 	return data, true
 }
-func (c *implementChecker) equal(a, b, label string, limit int64) {
+func (c *implementChecker) equal(a, b, label string, limit int64) bool {
 	left, ok := c.read(a, limit, false)
 	right, other := c.read(b, limit, false)
-	if ok && other && !bytes.Equal(left, right) {
-		c.problem("%s: %q differs from %q", label, a, b)
+	if !ok || !other {
+		c.problem("%s: cannot compare %q and %q", label, a, b)
+		return false
 	}
+	if !bytes.Equal(left, right) {
+		c.problem("%s: %q differs from %q", label, a, b)
+		return false
+	}
+	return true
 }
 func (c *implementChecker) check(home, worktree, saved, expected, agy string) {
 	shared := filepath.Join(c.deps.accountHome, ".gemini/antigravity-cli/settings.json")
@@ -220,9 +226,12 @@ func (c *implementChecker) check(home, worktree, saved, expected, agy string) {
 	c.scan(home, true)
 	c.builtin(home, agy)
 	c.agent(home)
-	c.equal(filepath.Join(worktree, ".git"), saved, ".git file changed", 64<<10)
+	gitUnchanged := c.equal(filepath.Join(worktree, ".git"), saved, ".git file changed", 64<<10)
 	c.scan(worktree, false)
-	c.baseline(worktree)
+	// A replaced .git could select attacker-controlled config and clean filters.
+	if gitUnchanged {
+		c.baseline(worktree)
+	}
 }
 
 // implementMCPContract currently requires feature off: an existing, empty regular
@@ -492,8 +501,9 @@ func implementGitEnv() []string {
 
 // Known limit: filter.<driver>.clean in .git/config plus .git/info/attributes
 // still runs during git diff; that is a program run on the host.
+// Empty untracked directories under .github are not detected (#1463).
 func (c *implementChecker) baseline(worktree string) {
-	out, status, err := c.deps.git("merge-base", "HEAD", "origin/main")
+	out, status, err := c.deps.git("merge-base", "HEAD", "refs/remotes/origin/main")
 	if err != nil || status != 0 || !implementMatch(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})\n$`, string(out)) {
 		if err == nil && status == 1 {
 			c.problem("no merge base with origin/main")

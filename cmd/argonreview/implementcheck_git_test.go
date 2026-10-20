@@ -123,7 +123,7 @@ func TestImplementCheckGitAbsenceAndPresence(t *testing.T) {
 				calls = append(calls, strings.Join(args, " "))
 				switch args[0] {
 				case "merge-base":
-					if strings.Join(args, " ") != "merge-base HEAD origin/main" {
+					if strings.Join(args, " ") != "merge-base HEAD refs/remotes/origin/main" {
 						t.Errorf("args %v", args)
 					}
 					return []byte(mb + "\n"), 0, nil
@@ -427,6 +427,101 @@ func TestImplementCheckGitNoLazyFetch(t *testing.T) {
 	}
 	if _, err := os.Lstat(marker); err != nil {
 		t.Fatalf("control did not run configured program: %v", err)
+	}
+}
+
+func TestImplementCheckGitFileGate(t *testing.T) {
+	for _, mode := range []string{"mismatch", "actual missing", "saved missing", "actual directory", "saved directory", "equal"} {
+		t.Run(mode, func(t *testing.T) {
+			f := implementCheckFixture(t)
+			path := filepath.Join(f.tree, ".git")
+			if strings.HasPrefix(mode, "saved") {
+				path = f.saved
+			}
+			switch {
+			case mode == "mismatch":
+				implementCheckWrite(t, path, "changed")
+			case strings.HasSuffix(mode, "missing"):
+				implementCheckRemove(t, path)
+			case strings.HasSuffix(mode, "directory"):
+				implementCheckRemove(t, path)
+				implementCheckMkdir(t, path)
+			}
+			calls := 0
+			git := f.deps.git
+			f.deps.git = func(args ...string) ([]byte, int, error) {
+				calls++
+				return git(args...)
+			}
+			code, out, stderr := f.run()
+			if mode == "equal" {
+				if code != 0 || calls == 0 || out != "implement-check: ok\n" || stderr != "" {
+					t.Fatalf("git calls %d, exit %d: %s %s", calls, code, out, stderr)
+				}
+			} else if code != 1 || calls != 0 || !strings.Contains(out, ".git file changed") {
+				t.Fatalf("git calls %d, exit %d: %s %s", calls, code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestImplementCheckRealGitReplacedGit(t *testing.T) {
+	for _, mode := range []string{"directory", "gitdir pointer"} {
+		t.Run(mode, func(t *testing.T) {
+			f, _ := implementCheckGitFixture(t, true)
+			path := filepath.Join(f.tree, ".git")
+			implementCheckRemove(t, path)
+			implementCheckGitOK(t, f.tree, "init", "--initial-branch=main")
+			implementCheckGitOK(t, f.tree, "add", "--", "AGENTS.md")
+			implementCheckGitOK(t, f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "attacker baseline")
+			implementCheckGitOK(t, f.tree, "update-ref", "refs/remotes/origin/main", "HEAD")
+			gitdir := path
+			if mode == "gitdir pointer" {
+				gitdir = filepath.Join(f.root, "evil-git")
+				if err := os.Rename(path, gitdir); err != nil {
+					t.Fatal(err)
+				}
+				implementCheckWrite(t, path, "gitdir: "+gitdir+"\n")
+			}
+			marker := filepath.Join(f.root, "filter-executed")
+			script := filepath.Join(f.root, "evil-clean")
+			implementCheckWrite(t, script, "#!/bin/sh\nprintf ran > '"+marker+"'\n/bin/cat\n")
+			if err := os.Chmod(script, 0700); err != nil {
+				t.Fatal(err)
+			}
+			implementCheckWrite(t, filepath.Join(gitdir, "info/attributes"), "AGENTS.md filter=evil\n")
+			implementCheckGitOK(t, f.tree, "config", "filter.evil.clean", "'"+script+"'")
+			implementCheckWrite(t, filepath.Join(f.tree, "AGENTS.md"), "attacker change\n")
+			code, out, stderr := f.run()
+			if code != 1 || !strings.Contains(out, ".git file changed") {
+				t.Errorf("exit %d: %s %s", code, out, stderr)
+			}
+			if _, err := os.Lstat(marker); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("clean filter ran outside the worktree: marker stat %v", err)
+			}
+		})
+	}
+}
+
+func TestImplementCheckRealGitShadowedRemote(t *testing.T) {
+	for _, mode := range []string{"tag", "branch", "unshadowed"} {
+		t.Run(mode, func(t *testing.T) {
+			f, _ := implementCheckGitFixture(t, true)
+			implementCheckWrite(t, filepath.Join(f.tree, "AGENTS.md"), "committed change")
+			implementCheckGitOK(t, f.tree, "add", "--", "AGENTS.md")
+			implementCheckGitOK(t, f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "changed baseline")
+			if mode != "unshadowed" {
+				ref := "refs/tags/origin/main"
+				if mode == "branch" {
+					ref = "refs/heads/origin/main"
+				}
+				implementCheckGitOK(t, f.tree, "update-ref", ref, "HEAD")
+			}
+			code, out, stderr := f.run()
+			if code != 1 || !strings.Contains(out, `"AGENTS.md" differs from origin/main in HEAD`) {
+				t.Fatalf("exit %d: %s %s", code, out, stderr)
+			}
+		})
 	}
 }
 

@@ -742,13 +742,20 @@ func TestImplementCheckWorktree(t *testing.T) {
 				implementCheckMkdir(t, filepath.Join(f.tree, "sub/deep"))
 				implementCheckLink(t, "missing", filepath.Join(f.tree, "sub/deep/link"))
 			}
+			calls := 0
+			git := f.deps.git
+			f.deps.git = func(args ...string) ([]byte, int, error) {
+				calls++
+				return git(args...)
+			}
 			code, out, _ := f.run()
 			want := 1
 			if name == "valid" {
 				want = 0
 			}
-			if code != want {
-				t.Fatalf("%d %s", code, out)
+			wantGit := name == "valid" || name == "deep symlink"
+			if code != want || (calls != 0) != wantGit {
+				t.Fatalf("git calls %d, exit %d: %s", calls, code, out)
 			}
 		})
 	}

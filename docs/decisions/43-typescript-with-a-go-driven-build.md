@@ -28,8 +28,8 @@ manifest and `go:embed` agree. Make, CI, Docker and release procedures must
 explicitly generate before compiling; the build itself requires no Node.
 
 Start with one classic IIFE bundle per page kind, content-hashed and selected
-through a manifest. Vendor files and the synchronous `arrival` script stay
-separate. Shared chunks and dynamic import wait for a measured need; no
+through a manifest. The toolchain page proposes the `[name]-[hash].js` naming.
+Vendor files and the synchronous `arrival` script stay separate. Shared chunks and dynamic import wait for a measured need; no
 whole-graph hash prefix is adopted now.
 
 ### Type checking and Node
@@ -65,7 +65,8 @@ generate their TypeScript representation. Generated names alone are not
 enough: typed accessors and a Go check must reject stray contract string
 literals outside the adapter. State already allowed by decisions 34/37/41 and
 UX settings (pending posts, idempotency keys, drafts and bounded unread
-recovery state) belongs in typed in-memory modules, not `dataset`. JavaScript
+recovery state) has its in-memory working copy in typed modules, not
+`dataset`; persistence rules in decisions 37/41 are unchanged. JavaScript
 owns no application state, never the message list, sidebar or counts, subject
 to those existing exceptions. Server attributes and necessary derived DOM
 projections remain adapters; any other/new client-side state is for #1361 to
@@ -117,9 +118,9 @@ build-output evidence, not a real-browser performance gain.
   Node/npm uses above. Keep server-rendered HTML, htmx/SSE and the
   no-JavaScript core.
 - [Decision 19](19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md):
-  amend only where already-allowed state lives: typed in-memory modules,
-  not `dataset`. JavaScript owns no application state, never the message
-  list, sidebar or counts, subject to the existing exceptions in decisions
+  amend only the in-memory working copy of already-allowed state: typed modules,
+  not `dataset`; decisions 37/41's persistence rules stay. JavaScript owns no
+  application state, never the message list, sidebar or counts, subject to the existing exceptions in decisions
   34/37/41 and UX settings above. Those permissions and the no-requests rule
   stay unchanged; any other/new client-side state is decided by #1361.
 - [Decision 35](35-tooling-in-go.md): add exactly one exception, the pinned
@@ -132,13 +133,15 @@ build-output evidence, not a real-browser performance gain.
   budget/report (§5). Type annotations add no runtime code and are not a
   library under that gate; this adopts no UI library.
 
-The maintainer approves TypeScript, Node for type checking, tests and
-dependency management only, and the Go-driven esbuild build under this
-decision, in the terms of decision 42 (#1437), reserved by draft PR #1441. His
+The maintainer's
 [approval comment](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
-is the explicit approval record; it is not a blanket authorization. The
-language list and enforcement table must change with the toolchain pull
-request so code and table agree. Any needed exception records one exact path,
+explicitly approves TypeScript, Node for type checking, tests and dependency
+management only, and the Go-driven esbuild build; it is not a blanket
+authorization. Number 42 is reserved for the pending language-list decision
+(#1437, open draft PR #1441). When that lands, this approval will be entered
+in its language list. The language list and enforcement table must change
+with the toolchain pull request so code and table agree. Any needed exception
+records one exact path,
 issue and approving maintainer comment URL per line; this record changes
 neither the table nor the exceptions list.
 
@@ -156,10 +159,11 @@ and 41 afterwards.
 
 ## Built later by
 
-- #1410: type checking, pins, safe install and npm dependency updates;
+- #1410: Node setup, type checking, pins, safe install and npm dependency updates;
   #1411: Go builder, hashed delivery, manifest/embed and map handling.
 - #1412: unit tests and source-check adaptation; #1413: generated DOM
-  contract; #1414: keep new code typed; #1415: Node provisioning and AI workflow.
+  contract; #1414: keep new code typed; #1415: document and verify trusted Node
+  provisioning for AI sandboxes, handoffs and measurements.
 - #1409: conventions; #1416–#1421: stateful-first conversions;
   #1426: whole-milestone review, measurements and browser verification.
 

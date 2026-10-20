@@ -138,7 +138,7 @@ htmx does only requests/swaps; the server and templ own HTML.
 ## JavaScript
 
 See [JavaScript responsibilities and constraints](web-javascript.md).
-[Decision 43's toolchain page](web-toolchain.md) covers the planned amendment.
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) covers the planned amendment.
 
 **Current exceptions** to the no-application-state rule:
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own sidebar

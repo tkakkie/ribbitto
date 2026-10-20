@@ -2,7 +2,7 @@
 
 ## JavaScript
 
-[Decision 43's toolchain](web-toolchain.md): planned.
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md).
 
 JavaScript: no HTML generation/application state; only focus, scroll, keyboard,
 local time, selection constraints, clipboard and htmx/SSE glue.
@@ -64,11 +64,11 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 - `message-drafts-v5.js` saves after 300 ms or lifecycle flush using monotonic input times. Blank/over-limit text writes tombstones; 4,000-code-point/50-entry limits apply from the first write. Equal/later stored edits win against the observed read; eviction is best effort. Sign-out/deadline stop writes and cancel saves. Sweep/restore share validity checks; restore seeds edit time without input/typing/focus, and server text wins. Bubbling `message-sending` (`{key, body, inPlace}`) snapshots
   immediately before emptying, cancelling debounce; Retry/busy drops emit none. `message-sent` (`{key, message}`) follows posted-message state and ordinary prefix removal (after IME). Pending success requires 200; in-place 409 requires prefix recovery. Pending events retain snapshot keys across 409 request-key rotation, including Edit/resend. Only this tab's unchanged last write becomes current text/tombstone for matching send snapshots or typing after in-place sends. Later sends, pending-path
   edits and other tabs' writes survive; failures/unknown keys do nothing. After prefix removal, dirty in-place text refreshes, retaining edit time/debounce even if storage differs; saves check edit times. Bubbling textarea `message-pending-action` (`{key, kind}`): `edit` saves now, cancelling stale debounce without input/typing; `remove` replaces that key's unchanged send snapshot. Markers toggle `hidden` for valid non-empty own member/session drafts. Hrefs map feed/topics to channels, topics to
-  themselves; hide the open row. Refresh: scoped `#sidebar-channels` `htmx:load` (SSE/resync), draft `storage`, `message-sent`, persisted `pageshow`, even on list pages. Sign-out notice/deadline hide markers. [Drafts](web-composer.md#drafts): races/cleanup.
+  themselves; hide the open row. Refresh: scoped `#sidebar-channels` `htmx:load` (SSE/resync), draft `storage`, `message-sent`, persisted `pageshow`, even on list pages. Sign-out notice/deadline hide markers. [Drafts][dr]: races/cleanup.
 - `message-link-v1.js` handles actions-menu "Copy link" (#1159) with the Clipboard API and browser-resolved absolute `href`, keeping shared live renders origin-free. `data-copied` shows "Link copied" until menu close; that label also goes to polite `#message-status`. Modifiers, missing API or copy failures open the link, as without JavaScript.
 - SSE `reset` closes htmx's event source. DOM observer holds reload for composer `htmx-request`/#1179's failure alert or queued/sending/failed (even unconfirmed) pending forms. Localised status: plain reload link. Nothing at stake: one uniform 0–5 s timer reloads for a fresh snapshot; new at-stake state cancels; firing rechecks. Confirmed items await reload delivery; drafts never hold it.
 - **No requests of its own:** no `fetch`, `XMLHttpRequest`, `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`. HTML forms, links and htmx own requests. Scripts may set controls/call `requestSubmit()`, `htmx.trigger` and `htmx.process` on server-rendered/template-cloned elements. Request URLs come from server attributes, never script-built. Only `message-stream-v13.js` rewrites `sse-connect`'s `after` parameter (above).
-- **Storage:** `sessionStorage` holds only non-sensitive UX settings whose loss affects no function/server state (e.g. panel open/display preference). `localStorage` allows only [drafts](web-composer.md#drafts), in the drafts script ([decision 37][d37]). Neither holds messages, credentials, session tokens or other server-derived application data except bounded draft text (possibly quoting messages), owner metadata and sign-out notice. IndexedDB requires [decision
+- **Storage:** `sessionStorage` holds only non-sensitive UX settings whose loss affects no function/server state (e.g. panel open/display preference). `localStorage` allows only [drafts][dr], in the drafts script ([decision 37][d37]). Neither holds messages, credentials, session tokens or other server-derived application data except bounded draft text (possibly quoting messages), owner metadata and sign-out notice. IndexedDB requires [decision
   41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s data classes.
 - **Files:** scripts are external in `web/static`, loaded with the response nonce. Application scripts define no globals; immutable assets require versioned names (`-vN`, [rendering](rendering.md)). Vendored htmx/idiomorph retain their globals and upstream names ([a11y]).
 - **htmx events:** an `htmx:load` handler works only on the inserted element and descendants, never the document (#168).
@@ -88,3 +88,4 @@ or later move from shown topic; no move history ([decision 37][d37]).
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md
 
 [c]: web-composer.md#composer
+[dr]: web-composer.md#drafts

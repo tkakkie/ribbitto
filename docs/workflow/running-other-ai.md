@@ -38,7 +38,7 @@ case $tier in A|B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
 Claude reviews Codex's work directly, or with
 `limit 1800 claude -p "…" < /dev/null`.
 
-Post with `gh issue comment` / `gh pr comment`. Do not rely on
+Post: `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
 On an Argon pull request, the pull request example above does not
@@ -78,18 +78,18 @@ For code Codex or Argon wrote (maintainer, 2026-10-16,
 difference between the AIs, enough safety for practice, little to operate.
 
 - **In its own sandbox,** the implementing AI may build and test as before:
-  Codex: [profile](#running-codex); Argon only within [boundary][b].
+  Codex: [profile][c]; Argon only within [boundary][b].
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
-  `go test`, a build, `make dev` or any tool from that tree. No AI runs
-  transferred `node_modules`, npm scripts or Node tests on the host.
+  `go test`, a build, `make dev` or any tool from that tree. Nor transferred
+  `node_modules`, npm scripts or Node tests.
 - The only standing exception is an [approved performance measurement](investigations.md#host-measurements).
 - **CI is the check.** GitHub Actions runs PR code with read-only access
   and no secrets. Green draft CI replaces `make check` before the
   first review; green CI on each follow-up head replaces `make prepush`;
   closure verification and follow-up checks read CI without re-running code.
 - **Still done on the host:** code and diff review, the credential grep on
-  `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
+  `PR_BODY.md` ([below][c]), and Argon's protected-file and
   workspace checks ([boundary][b]).
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
 - Argon's [container verify](argon-verify.md#status): pending. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
@@ -112,7 +112,7 @@ Maintainer setup, not general Codex limits (codex-cli 0.153; evidence: #48).
 - network access only to localhost, the Go module proxy and checksum
   database, GitHub and the npm registry.
 
-Other hosts are refused. Use bash/zsh for the arrays, with `limit` above:
+Other hosts are refused. Use bash/zsh and `limit` above:
 
 ```bash
 perms=(
@@ -150,7 +150,7 @@ default, no effort flag. Tier A/B is always `normal`, including gate documents u
 
 The brief also includes:
 
-- **Node:** [toolchain](../architecture/web-toolchain.md).
+- Node only after #1410 and #1415: [decision 43](../decisions/43-typescript-with-a-go-driven-build.md).
 - **Go caches.** Only the worktree is writable, so use
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
@@ -229,3 +229,4 @@ above; implementation effort follows size.
 [r]: argon-pull-requests.md#who-reviews
 [b]: argon-implementer.md#the-boundary
 [h]: #handoff-of-another-ais-code
+[c]: #running-codex

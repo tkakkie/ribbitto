@@ -3,8 +3,8 @@
 The maintainer chose option B on 2026-10-19
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Implementation pending. Packages needing generated files stay CI-only
-(`NOT VERIFIED`) until an issue adds container generation.
+Pending. Generated-file packages stay CI-only (`NOT VERIFIED`).
+Verify excludes generation; adding it needs a `process` issue.
 
 ## Status
 

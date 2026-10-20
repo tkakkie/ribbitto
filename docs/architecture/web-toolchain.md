@@ -1,31 +1,30 @@
 # Web toolchain (planned)
 
-[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) decides
-the principles. This page proposes concrete mechanics, pending maintainer
-confirmation (PR #1465 lists them), except the approved source-map policy. None is installed by the
-decision pull request. #1410–#1415 build the foundation; #1416–#1421 convert
-scripts. Current versioned JavaScript delivery and source checks apply until
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
+including the checker and `.mjs` harnesses. Proposals below await maintainer
+confirmation (listed in PR #1465). This pull request installs nothing.
+#1410–#1415 build the foundation; #1416–#1421 convert scripts. Current versioned JavaScript delivery and source checks apply until
 their replacements land. #1409 writes module conventions; this page covers
 toolchain mechanics only.
 
 ## Build, manifest and embedding — #1411
 
-#1411 will use esbuild's per-bundle `[name]-[hash].js` names and minification.
+**Naming — proposed, pending maintainer confirmation:** #1411 uses esbuild
+per-bundle `[name]-[hash].js` names. Content hashes and a manifest are decided.
+Minify bundles.
 A Go registry declares page entries; templ looks up logical names rather
 than spelling output filenames.
 During conversion, bundle migrated sources without loading their old script
 a second time; unchanged scripts keep their current tags and `-vN` names.
 
-The generated manifest records each logical entry, its bundle filename,
-matching external-map filename and the commit SHA. Embed generated bundles and
-the runtime manifest, never maps. Build checks must reject missing/unknown
-registry entries, missing bundles, unexpected output and manifest paths
-outside the output tree; verify every referenced bundle is embedded and its
-name agrees with the pinned builder's output. An explicit dist embed
-requirement or required generated manifest must fail compilation when
-generation is missing, even if other static files exist. CI generates in a
-clean output directory and packages that exact result: there is no committed
-dist to diff for freshness.
+The manifest records logical entries, bundle/map filenames and commit SHA.
+Embed bundles and the runtime manifest, never maps. Checks reject
+missing/unknown registry entries, missing bundles, unexpected output and
+paths outside the output tree; prove each referenced bundle is embedded and
+named by the pinned builder. Missing generation must fail compilation through
+an explicit dist embed or required generated manifest, even if other static
+files exist. CI generates into clean output and packages that exact result;
+dist is not committed.
 
 Make, CI, Docker and release entry points must state and run Go generation
 before Go compilation. Prove generation and embedding work with Node absent
@@ -78,10 +77,11 @@ bypasses review or the exact-pin rule.
 erasable-only TypeScript (no enums, runtime namespaces or parameter
 properties); the maintainer's twelve points do not decide this restriction.
 
-Relative imports name `.ts` with `allowImportingTsExtensions`. Do not rely on
-tsconfig path aliases for Node resolution: Node ignores tsconfig. #1412 starts
-`.mjs` harnesses importing DOM-free `.ts` logic and runs `node --test`
-separately from the type check.
+**Imports — proposed, pending maintainer confirmation:** relative imports
+name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
+path aliases. Point 5 decides `.mjs` harnesses without `@types/node`; #1412
+runs them against DOM-free `.ts` logic with `node --test`, separately from
+type checking.
 
 ## Generated contract and state — #1413, #1416, #1417
 
@@ -104,9 +104,10 @@ prove. Unconverted scripts retain their current contract until their
 conversion; the coverage ratchet expands with them (#1414).
 
 Keep server controls/attributes as the boundary and any necessary derived
-CSS/test projection. Typed in-memory modules hold only state already allowed
-by decisions 34/37/41 and UX settings: pending posts, idempotency keys, drafts
-and bounded unread recovery state. JavaScript owns no application state, never
+CSS/test projection. Typed modules hold the in-memory working copy of state
+already allowed by decisions 34/37/41 and UX settings: pending posts,
+idempotency keys, drafts and bounded unread recovery. Decisions 37/41's
+persistence rules stay unchanged. JavaScript owns no application state, never
 the message list, sidebar or counts, subject to those existing exceptions. Any
 other/new client-side state (caches, optimistic states, uploads) and scripts'
 own requests are for #1361. #1416/#1417 must coordinate composer and stream
@@ -123,7 +124,7 @@ Development maps may be served locally. Production maps follow
 [decision 43](../decisions/43-typescript-with-a-go-driven-build.md)'s approved
 policy: a maintainer-only private GitHub repository, 30-day retention with
 automatic deletion, minimal access, no new service. Each map matches its bundle
-by build SHA, run id and content hash (`[name]-[hash].js.map`); the manifest
+by build SHA, run id and content hash; the manifest
 records SHA and run id. Failing to store a map must fail visibly, and no step
 may put one in a public artifact. A separate store-preparation issue precedes
 #1411.
@@ -163,23 +164,24 @@ unstated exemption. #1426 sets milestone limits before `ready` too.
 ## Transition from current rules — #1410–#1421
 
 The architecture pages retain today's contracts. Decision 43 changes only
-where already-allowed state lives, not its permitted scope: typed in-memory
-modules replace authoritative `dataset` state when converted. Server HTML, the
-no-JavaScript core, current request ownership and decisions 34/37/41's
+the in-memory working copy of already-allowed state: typed modules replace
+authoritative `dataset` state when converted; persistence is unchanged. Server
+HTML, the no-JavaScript core, current request ownership and decisions 34/37/41's
 permissions remain. The checks transition to typed sources, module scope,
 generated contracts and hashed delivery; preserve their intent and browser
 tests. Current IIFEs, `-vN` assets and state adapters stay until replaced.
 
-For Codex, until #1410 lands there is no routine Node toolchain. Afterwards,
-its sandbox permits pinned Node for type checking, tests, dependency
+For Codex, no routine Node use until both #1410 (toolchain/setup) and #1415
+(documenting and verifying trusted Node provisioning for AI sandboxes) land.
+Only then may its sandbox use pinned Node for checking, tests, dependency
 management and `npm ci --ignore-scripts` from a reviewed lockfile. Trusted
-setup supplies Node; Codex gains no downloader or network expansion. #1415
-documents provisioning, sandbox-local install/cache writes and handoff. No AI
-runs transferred `node_modules`, npm scripts or Node tests on the host after
+setup supplies Node; no downloader or network expansion. #1415 also documents
+sandbox-local install/cache writes and handoff. No AI runs transferred `node_modules`, npm scripts or Node tests on the host after
 handoff; CI remains the check.
 
 Argon gains no Node/npm commands. Verify remains implementation pending, not
 in force, under its existing gates. Its exact Go build/vet/test checklist
 excludes generation and TypeScript checking. Packages needing generated assets
-stay CI-only (`NOT VERIFIED`); adding generation to the container needs its
-own issue. #1415 cannot enable verify or widen those permissions.
+stay CI-only (`NOT VERIFIED`); container generation is outside verify and
+needs its own `process` issue. #1415 cannot enable verify or widen those
+permissions.

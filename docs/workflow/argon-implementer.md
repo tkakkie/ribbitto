@@ -74,7 +74,7 @@ but enforced by configuration, not by the prompt.
   command tool are refused by `command(*)` and the guard. #1206 found
   loopback reach outside `agy --sandbox`; allowing commands needs its own
   `process` issue. Pending: only the fixed [verify][v] MCP tool.
-  [Decision 43's toolchain](../architecture/web-toolchain.md) adds no commands.
+  [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) adds no commands.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two

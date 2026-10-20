@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -116,6 +117,79 @@ func TestSweepForgedProcessRow(t *testing.T) {
 	live, err := s.live(c)
 	if err != nil || live || reads != 1 {
 		t.Fatalf("forged client: live=%v reads=%d err=%v", live, reads, err)
+	}
+}
+
+func TestSweepOrphanClientReporting(t *testing.T) {
+	for _, mode := range []string{"dry", "normal"} {
+		for _, kind := range []string{"forged-changed", "forged-zero", "matching", "error", "gone"} {
+			t.Run(mode+"/"+kind, func(t *testing.T) {
+				s, out, _ := sweepFixture(t)
+				s.dry = mode == "dry"
+				p := sweepProc()
+				listed := sweepProcessRow(p)
+				wantRows := 1
+				if strings.HasPrefix(kind, "forged-") {
+					wantRows = 2
+					actual := sweepProc()
+					actual.pid = 50
+					// The orphan-looking row is part of another process's argv.
+					actual.command = "/bin/other argument\n" + strings.TrimSuffix(listed, "\n")
+					listed = sweepProcessRow(actual)
+				}
+				procs, err := parseSweepProcesses(listed)
+				if err != nil || len(procs) != wantRows || procs[len(procs)-1] != p {
+					t.Fatalf("parse=%+v err=%v", procs, err)
+				}
+				reads := 0
+				table := &fakeProcessTable{procs: procs}
+				single := psTable{run: func(args ...string) ([]procInfo, error) {
+					reads++
+					if !reflect.DeepEqual(args, []string{"-p", "41", "-ww", "-o", "pid=,ppid=,uid=,lstart=,command="}) {
+						t.Fatalf("ps args=%q", args)
+					}
+					switch kind {
+					case "error":
+						return nil, errors.New("single-pid read failed")
+					case "forged-zero", "gone":
+						return nil, nil
+					case "forged-changed":
+						real := p
+						real.command = "/bin/unrelated"
+						return parseSweepProcesses(sweepProcessRow(real))
+					default:
+						return table.procs, nil
+					}
+				}}
+				table.readFn = single.read
+				s.processes = table
+				err = s.run()
+				wantFailure := kind == "error" || kind == "matching" && s.dry
+				if (err != nil) != wantFailure {
+					t.Errorf("sweep=%v, want failure=%v", err, wantFailure)
+				}
+				wantReport := ""
+				wantReads := 1
+				var wantSignals []syscall.Signal
+				var wantPIDs []int
+				switch kind {
+				case "matching":
+					wantReport = "leftover client 41\n"
+					if !s.dry {
+						wantReport += "reclaimed client 41\n"
+						// Reporting, pre-TERM and wait-loop reads all remain required.
+						wantReads = 3
+						wantSignals = []syscall.Signal{syscall.SIGTERM}
+						wantPIDs = []int{p.pid}
+					}
+				case "error":
+					wantReport = "unreclaimed client 41\n"
+				}
+				if out.String() != wantReport || reads != wantReads || !reflect.DeepEqual(table.signals, wantSignals) || !reflect.DeepEqual(table.signalled, wantPIDs) {
+					t.Fatalf("report=%q reads=%d signals=%v pids=%v; want report=%q reads=%d signals=%v pids=%v", out, reads, table.signals, table.signalled, wantReport, wantReads, wantSignals, wantPIDs)
+				}
+			})
+		}
 	}
 }
 

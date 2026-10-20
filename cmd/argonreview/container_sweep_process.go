@@ -170,6 +170,14 @@ func (s *containerSweep) clients() {
 		if !s.orphan(p) {
 			continue
 		}
+		same, err := s.sameClient(p)
+		if err != nil {
+			s.unreclaimed("client", strconv.Itoa(p.pid))
+			continue
+		}
+		if !same {
+			continue
+		}
 		s.line("leftover client %d", p.pid)
 		if s.dry {
 			s.fail("detecting leftover client")

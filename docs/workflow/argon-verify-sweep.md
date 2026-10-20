@@ -19,8 +19,11 @@ configuration.
 
 - Clients must belong to this uid, have parent PID 1, and match the runner's
   absolute Docker executable and fixed run/name/network command prefix.
-  Re-read PID, start time, uid, parent and exact command before each signal;
-  send TERM, wait up to five seconds, then KILL and wait again.
+  Every orphan client row is re-read with single-PID `ps` before it is reported
+  or signalled, including in dry-run mode. Changed or absent entries are silently
+  ignored; read errors report an unreclaimed client and fail the sweep.
+  Re-read PID, start time, uid, parent and exact command again before each
+  signal; send TERM, wait up to five seconds, then KILL and wait again.
 - Containers need the exact lowercase 32-hex verification name,
   `argonreview.owner=verify` label and pinned Go image. Inspect again before
   removing by full 64-hex ID, then confirm absence. A matching name and label

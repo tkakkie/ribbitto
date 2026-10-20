@@ -93,7 +93,7 @@ func TestContainerArgumentsGolden(t *testing.T) {
 			}
 			want := []string{
 				"run", "--pull=never", "--name", "argonreview-check-fixed",
-				"--network", "none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
+				"--network", "none", "--label", "argonreview.owner=verify", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
 				"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
 				"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
 				"--mount", "type=bind,src=/var/cache/argonreview/go-mod,dst=/go/pkg/mod,readonly",

@@ -37,6 +37,10 @@ const (
 	// avoids GOPATH, GOENV, HOME or a worktree selecting an arbitrary host mount.
 	containerModuleCache = "/var/cache/argonreview/go-mod"
 	containerPath        = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+	containerCopyParent  = "/tmp"
+	containerOwnerLabel  = "argonreview.owner"
+	containerOwnerValue  = "verify"
+	containerNamePattern = `^argonreview-check-[0-9a-f]{32}$`
 	containerScope       = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 )
 
@@ -67,7 +71,7 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 	// Explicit removal below replaces --rm: verification waits for Docker to
 	// acknowledge removal, and interruption cannot race automatic removal.
 	args := []string{"run", "--pull=never", "--name", name,
-		"--network", "none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
+		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
 		// Both tmpfs mounts allow execution: Go executes test binaries from its
 		// temporary build/cache directories. nosuid/nodev still apply.
 		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
@@ -139,12 +143,19 @@ func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	info, ok := debug.ReadBuildInfo()
 	_, err := trusted(info, ok, func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) })
+	return startContainerCheck(args, stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent)
+}
+
+func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string) int {
 	code := 1
+	if err == nil {
+		err = sweep(stderr)
+	}
 	if err == nil {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var report string
-		report, err = runContainerCheck(ctx, args[0], args[1], args[2], dockerRunner{}, "/tmp")
+		report, err = runContainerCheck(ctx, args[0], args[1], args[2], runner, copyParent)
 		// Cleanup has completed before writing to a potentially closed pipe.
 		if _, writeErr := io.WriteString(stdout, report); writeErr != nil {
 			err = errors.Join(err, fmt.Errorf("writing container report: %w", writeErr))
@@ -176,8 +187,12 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	if err != nil {
 		return "", fmt.Errorf("creating source copy: %w", err)
 	}
+	lock, lockErr := lockContainerCopy(dir)
+	// Register before removal: the lock must outlive source cleanup.
+	if lockErr == nil {
+		defer func() { _ = lock.Close() }()
+	}
 	defer func() {
-
 		if removeErr := os.RemoveAll(dir); removeErr != nil {
 			report = "FAILED: source cleanup failed\n" + containerScope + "\n"
 			err = errors.Join(err, fmt.Errorf("removing source copy: %w", removeErr))
@@ -189,6 +204,9 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 			}
 		}
 	}()
+	if lockErr != nil {
+		return "", fmt.Errorf("locking source copy: %w", lockErr)
+	}
 	copyDir := filepath.Join(dir, "tree")
 	if err := copyContainerSource(ctx, tree, copyDir, listContainerFiles, nil); err != nil {
 		return "", err

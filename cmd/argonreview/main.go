@@ -26,6 +26,8 @@
 // verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
 // MCP tool, verify, over stdio; it runs the container check on the fixed
 // worktree (#1430).
+// container-sweep [--dry-run] reclaims abandoned verification clients, labelled
+// containers and private source copies using the trusted build (#1433).
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
@@ -54,6 +56,9 @@ func main() {
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "verify-mcp" {
 		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "container-sweep" {
+		return containerSweepCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
@@ -136,7 +141,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | verify-mcp --trusted-source <abs path> --worktree <abs path>")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test> <package-pattern> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path>")
 	return 2
 }
 

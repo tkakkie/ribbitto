@@ -54,7 +54,7 @@ func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 	return startVerifyMCP(ctx, args, environ, func(source string) error {
 		info, ok := debug.ReadBuildInfo()
 		return checkTrustedSource(source, info, ok, git)
-	}, nil, stdin, stdout, stderr)
+	}, sweepContainers, nil, stdin, stdout, stderr)
 }
 
 // Match containerGit's executable search path, including the stage-1 Git check.
@@ -150,7 +150,7 @@ func verifyEnvironment(environ []string) error {
 	return nil
 }
 
-func startVerifyMCP(ctx context.Context, args, environ []string, trust func(string) error, v verifier, stdin io.Reader, stdout, stderr io.Writer) int {
+func startVerifyMCP(ctx context.Context, args, environ []string, trust func(string) error, sweep func(io.Writer) error, v verifier, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) != 4 || args[0] != "--trusted-source" || args[2] != "--worktree" {
 		_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
 		return 2
@@ -172,8 +172,12 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 		_, _ = fmt.Fprintf(stderr, "argonreview verify-mcp: %v\n", err)
 		return 1
 	}
+	if err := sweep(stderr); err != nil {
+		_, _ = fmt.Fprintf(stderr, "argonreview verify-mcp: %v\n", err)
+		return 1
+	}
 	if v == nil {
-		v = containerVerifier{args[3], dockerRunner{ownGroup: true}, "/tmp"}
+		v = containerVerifier{args[3], dockerRunner{ownGroup: true}, containerCopyParent}
 	}
 	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
 		// Recheck because the worker can replace paths after startup. This

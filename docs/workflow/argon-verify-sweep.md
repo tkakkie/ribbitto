@@ -32,9 +32,9 @@ configuration.
   including stopped and unrelated ones, are inspected for mounts equal to,
   inside or above a copy, comparing cleaned lexical paths and resolved paths.
   Any source component equal to the unique copy name also protects it.
-  Ancestor comparisons strip only the known host-mount prefixes `/host_mnt`,
-  `/run/host_mnt` and `/run/desktop/mnt/host`, on component boundaries, before
-  comparing with the copy's `/tmp` and `/private/tmp` spellings. Unrelated
+  Before resolving symlinks, strip only the known host-mount prefixes `/host_mnt`,
+  `/run/host_mnt` and `/run/desktop/mnt/host`, on component boundaries. Compare
+  with the copy's `/tmp` and `/private/tmp` spellings. Unrelated
   sources such as `/var/tmp`, `/home/me/tmp` and `/something/private/tmp`
   do not protect a copy. The copy-name component rule also works with unknown
   prefixes. Missing sources (ENOENT or ENOTDIR), including VM volume paths,
@@ -67,8 +67,20 @@ grace counts from the copy directory's mtime (when `tree` is created), covering
 creation before locking. A server killed within 90 seconds leaves its leftovers
 for a later sweep. A run by an older, pre-flock binary is protected only by its
 mount. A container is in use if its `/work` bind
-source's copy parent is live, a client of this uid matches its name, or its
+source's copy parent is live, a non-orphan client of this uid matches its name, or its
 creation is less than 90 seconds old. Each predicate alone protects it.
+The bind source loses any known host-mount prefix before symlink resolution.
+Orphaned clients (parent PID 1) never prove liveness. Each matching client is
+re-read with single-PID `ps`; PID, uid, parent, start time and exact command
+must still match. A changed or absent entry is not liveness evidence; a read
+error prevents reclamation. Zero rows in single-PID output mean the process
+is gone; multiple rows or a row with another PID fail the sweep.
+
+Process rows require PID, parent, uid and a valid five-field start time before
+the command. Other lines continue the preceding command, preserving embedded
+newlines; a nonempty continuation before any row fails parsing. A row-looking
+line inside argv can appear as a table entry, so liveness always requires the
+independent single-PID check.
 Live or mounted entries report `skipped (in use)` and are not errors.
 
 ## Status and limits
@@ -120,8 +132,9 @@ cannot confirm these real Docker CLI assumptions:
 - Record the bind Source form of `/work` exactly as real inspection reports it,
   including any Docker Desktop prefix.
 - Confirm macOS `ps -axww -o pid=,ppid=,uid=,lstart=,command=` output parses by
-  running `container-sweep --dry-run` on the host: one unparsable line fails
-  every sweep.
+  running `container-sweep --dry-run` on the host, including multiline argv
+  and the matching client's single-PID re-read. Continuations must stay with
+  the preceding command; an invalid first row fails parsing.
 - Measure that the startup sweep finishes within agy's MCP start timeout.
   An orphan client can take up to about 10 seconds of TERM/KILL waits.
 

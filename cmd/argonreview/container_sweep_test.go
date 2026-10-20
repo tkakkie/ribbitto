@@ -839,7 +839,6 @@ func TestSweepDryRun(t *testing.T) {
 				sweepContainerFixture(t, s, dir)
 				copyDir = sweepCopyFixture(t, s)
 				table.procs = []procInfo{sweepProc()}
-				table.procs[0].command = strings.Replace(table.procs[0].command, sweepTestName, "argonreview-check-"+strings.Repeat("b", 32), 1)
 			}
 			if err := s.run(); (err != nil) != dirty {
 				t.Fatalf("result: %v", err)

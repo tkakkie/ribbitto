@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,92 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+func TestSweepOwnedMountPrefixes(t *testing.T) {
+	for _, prefix := range filepath.SplitList(sweepHostMountPrefixes) {
+		for _, held := range []string{"lock", "client", "neither"} {
+			t.Run(prefix+"/"+held, func(t *testing.T) {
+				s, out, fixture := sweepFixture(t)
+				dir := sweepCopyFixture(t, s)
+				c := sweepContainerFixture(t, s, fixture)
+				c.Mounts = []sweepMount{{"bind", prefix + filepath.Join(dir, "tree"), "/work"}}
+				saveSweepContainer(t, fixture, c, ".json")
+				switch held {
+				case "lock":
+					f, err := lockContainerCopy(dir)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() { _ = f.Close() }()
+				case "client":
+					p := sweepProc()
+					p.ppid = 200
+					s.processes = &fakeProcessTable{procs: []procInfo{p}}
+				}
+				if err := s.run(); err != nil {
+					t.Fatalf("sweep: %v; %s", err, out)
+				}
+				if held == "neither" {
+					if !strings.Contains(out.String(), "reclaimed container "+c.ID) {
+						t.Fatalf("report %q", out)
+					}
+				} else {
+					assertNoSweepRM(t, fixture)
+					if !strings.Contains(out.String(), "skipped (in use) container "+c.ID) {
+						t.Fatalf("report %q", out)
+					}
+				}
+				sweepExists(t, dir, held != "neither")
+			})
+		}
+	}
+}
+
+func TestSweepMountedPrefixSymlink(t *testing.T) {
+	for _, prefix := range append(filepath.SplitList(sweepHostMountPrefixes), "/host_mntx", "/host_mnt2") {
+		t.Run(prefix, func(t *testing.T) {
+			s, _, fixture := sweepFixture(t)
+			dir := sweepCopyFixture(t, s)
+			alias := filepath.Join(resolved(t, t.TempDir()), "alias")
+			symlink(t, filepath.Join(dir, "tree"), alias)
+			c := sweepContainerFixture(t, s, fixture)
+			c.Mounts = []sweepMount{{"bind", prefix + alias, "/work"}}
+			saveSweepContainer(t, fixture, c, ".json")
+			lookalike := prefix == "/host_mntx" || prefix == "/host_mnt2"
+			wantPath := alias
+			if lookalike {
+				wantPath = prefix + alias
+			}
+			calls := 0
+			s.resolveMount = func(path string) (string, error) {
+				calls++
+				if path != wantPath {
+					return "", fmt.Errorf("unexpected mount path %q, want %q", path, wantPath)
+				}
+				return filepath.EvalSymlinks(path)
+			}
+			mounted, err := s.mounted(dir)
+			if err != nil || mounted == lookalike || calls != 1 {
+				t.Fatalf("mounted=%v calls=%d err=%v", mounted, calls, err)
+			}
+		})
+	}
+}
+
+func TestSweepOwnedInvalidMount(t *testing.T) {
+	for _, source := range []string{"", "relative/argonreview-container-123/tree", "/tmp/argonreview-container-123\x00/tree", "/tmp/../argonreview-container-123/tree"} {
+		t.Run(source, func(t *testing.T) {
+			s, out, fixture := sweepFixture(t)
+			c := sweepContainerFixture(t, s, fixture)
+			c.Mounts = []sweepMount{{"bind", source, "/work"}}
+			saveSweepContainer(t, fixture, c, ".json")
+			if err := s.run(); err == nil || !strings.Contains(out.String(), "unreclaimed container "+c.ID) {
+				t.Fatalf("uninterpretable source: %v; %s", err, out)
+			}
+			assertNoSweepRM(t, fixture)
+		})
+	}
+}
 
 func TestSweepMountForms(t *testing.T) {
 	const copyDir = "/private/tmp/argonreview-container-123"

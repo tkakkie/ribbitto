@@ -21,37 +21,51 @@ type processTable interface {
 	read(int) (procInfo, bool, error)
 	signal(int, syscall.Signal) error
 }
-type psTable struct{}
+type psTable struct {
+	run func(...string) ([]procInfo, error)
+}
 
 func parseSweepProcesses(data string) ([]procInfo, error) {
 	var result []procInfo
-	for _, line := range strings.Split(data, "\n") {
-		if strings.TrimSpace(line) == "" {
+	for _, line := range strings.Split(strings.TrimSuffix(data, "\n"), "\n") {
+		if p, ok := parseSweepProcessHeader(line); ok {
+			result = append(result, p)
 			continue
 		}
-		// Consume fixed columns without normalizing command whitespace: command
-		// identity must remain stable between the listing and each signal.
-		fields := make([]string, 0, 8)
-		rest := line
-		for range 8 {
-			rest = strings.TrimLeft(rest, " \t")
-			end := strings.IndexAny(rest, " \t")
-			if end < 0 {
-				return nil, errors.New("invalid process listing")
+		if len(result) == 0 {
+			if strings.TrimSpace(line) == "" {
+				continue
 			}
-			fields = append(fields, rest[:end])
-			rest = rest[end:]
-		}
-		pid, e1 := strconv.Atoi(fields[0])
-		ppid, e2 := strconv.Atoi(fields[1])
-		uid, e3 := strconv.Atoi(fields[2])
-		start := strings.Join(fields[3:], " ")
-		if _, err := time.Parse("Mon Jan 2 15:04:05 2006", start); err != nil || e1 != nil || e2 != nil || e3 != nil || pid <= 0 || ppid < 0 || uid < 0 || strings.TrimSpace(rest) == "" {
 			return nil, errors.New("invalid process listing")
 		}
-		result = append(result, procInfo{pid, ppid, uid, start, strings.TrimLeft(rest, " \t")})
+		// ps prints literal newlines in argv. Only the fixed prefix can start a
+		// row; row-looking argv is checked again by single-PID reads before use.
+		result[len(result)-1].command += "\n" + line
 	}
 	return result, nil
+}
+
+func parseSweepProcessHeader(line string) (procInfo, bool) {
+	// Preserve command whitespace for identity checks between reads and signals.
+	fields := make([]string, 0, 8)
+	rest := line
+	for range 8 {
+		rest = strings.TrimLeft(rest, " \t")
+		end := strings.IndexAny(rest, " \t")
+		if end < 0 {
+			return procInfo{}, false
+		}
+		fields = append(fields, rest[:end])
+		rest = rest[end:]
+	}
+	pid, e1 := strconv.Atoi(fields[0])
+	ppid, e2 := strconv.Atoi(fields[1])
+	uid, e3 := strconv.Atoi(fields[2])
+	start := strings.Join(fields[3:], " ")
+	if _, err := time.Parse("Mon Jan 2 15:04:05 2006", start); err != nil || e1 != nil || e2 != nil || e3 != nil || pid <= 0 || ppid < 0 || uid < 0 || strings.TrimSpace(rest) == "" {
+		return procInfo{}, false
+	}
+	return procInfo{pid, ppid, uid, start, strings.TrimLeft(rest, " \t")}, true
 }
 func sweepPS(args ...string) ([]procInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
@@ -73,13 +87,22 @@ func sweepPS(args ...string) ([]procInfo, error) {
 	}
 	return parseSweepProcesses(out.stdout.String())
 }
-func (psTable) list() ([]procInfo, error) {
-	return sweepPS("-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+func (p psTable) query(args ...string) ([]procInfo, error) {
+	if p.run != nil {
+		return p.run(args...)
+	}
+	return sweepPS(args...)
 }
-func (psTable) read(pid int) (procInfo, bool, error) {
-	procs, err := sweepPS("-p", strconv.Itoa(pid), "-ww", "-o", "pid=,ppid=,uid=,lstart=,command=")
-	if err != nil || len(procs) == 0 {
+func (p psTable) list() ([]procInfo, error) {
+	return p.query("-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+}
+func (p psTable) read(pid int) (procInfo, bool, error) {
+	procs, err := p.query("-p", strconv.Itoa(pid), "-ww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+	if err != nil {
 		return procInfo{}, false, err
+	}
+	if len(procs) == 0 {
+		return procInfo{}, false, nil
 	}
 	if len(procs) != 1 || procs[0].pid != pid {
 		return procInfo{}, false, errors.New("invalid process identity")

@@ -72,6 +72,31 @@ func (s *containerSweep) openCopy(parent int, name string) (*os.File, unix.Stat_
 // Real Docker's host-mount form must be recorded by the host preflight.
 const sweepHostMountPrefixes = "/host_mnt:/run/host_mnt:/run/desktop/mnt/host"
 
+func stripSweepHostMountPrefix(source string) string {
+	for _, prefix := range filepath.SplitList(sweepHostMountPrefixes) {
+		if source == prefix {
+			return "/"
+		}
+		if strings.HasPrefix(source, prefix+"/") {
+			return strings.TrimPrefix(source, prefix)
+		}
+	}
+	return source
+}
+
+func sweepMountSource(source string) (string, error) {
+	if !filepath.IsAbs(source) || strings.ContainsRune(source, 0) {
+		return "", errors.New("invalid mount source")
+	}
+	for _, component := range strings.Split(source, "/") {
+		if component == ".." {
+			return "", errors.New("parent traversal in mount source")
+		}
+	}
+	// Docker Desktop prefixes describe VM paths, not host symlink locations.
+	return stripSweepHostMountPrefix(filepath.Clean(source)), nil
+}
+
 // A mount of either a copy subtree or its ancestor can expose the copy.
 func sweepPathsOverlap(a, b string) bool {
 	a, b = filepath.Clean(a), filepath.Clean(b)
@@ -92,15 +117,7 @@ func sweepPathsOverlap(a, b string) bool {
 	} else if strings.HasPrefix(a, "/tmp/") {
 		alias = "/private" + a
 	}
-	for _, prefix := range filepath.SplitList(sweepHostMountPrefixes) {
-		if b == prefix || strings.HasPrefix(b, prefix+"/") {
-			b = strings.TrimPrefix(b, prefix)
-			if b == "" {
-				b = "/"
-			}
-			break
-		}
-	}
+	b = stripSweepHostMountPrefix(b)
 	if within(a, b) || within(b, a) || within(alias, b) || within(b, alias) {
 		return true
 	}
@@ -127,15 +144,11 @@ func (s *containerSweep) mounted(dir string) (bool, error) {
 				}
 				return false, errors.New("empty bind source")
 			}
-			if !filepath.IsAbs(m.Source) || strings.ContainsRune(m.Source, 0) {
-				return false, errors.New("invalid mount source")
+			source, err := sweepMountSource(m.Source)
+			if err != nil {
+				return false, err
 			}
-			for _, component := range strings.Split(m.Source, "/") {
-				if component == ".." {
-					return false, errors.New("parent traversal in mount source")
-				}
-			}
-			real, err := s.resolveMount(m.Source)
+			real, err := s.resolveMount(source)
 			// Non-bind Sources need lexical protection even when host resolution fails.
 			if m.Type == "bind" && err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENOTDIR) {
 				return false, err

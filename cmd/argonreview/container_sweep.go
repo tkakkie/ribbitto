@@ -171,15 +171,29 @@ func (s *containerSweep) live(c sweepContainer) (bool, error) {
 		return false, err
 	}
 	for _, p := range procs {
-		if p.uid == s.uid() && dockerClientName(p.command) == strings.TrimPrefix(c.Name, "/") {
-			return true, nil
+		if p.uid == s.uid() && !s.orphan(p) && dockerClientName(p.command) == strings.TrimPrefix(c.Name, "/") {
+			again, exists, err := s.processes.read(p.pid)
+			if err != nil {
+				return false, err
+			}
+			if exists && again.pid == p.pid && again.uid == p.uid && again.ppid == p.ppid &&
+				again.start == p.start && again.command == p.command && !s.orphan(again) {
+				return true, nil
+			}
 		}
 	}
 	for _, m := range c.Mounts {
-		if m.Type != "bind" || m.Destination != "/work" || filepath.Base(m.Source) != "tree" {
+		if m.Type != "bind" || m.Destination != "/work" {
 			continue
 		}
-		dir := filepath.Dir(m.Source)
+		source, err := sweepMountSource(m.Source)
+		if err != nil {
+			return false, err
+		}
+		if filepath.Base(source) != "tree" {
+			continue
+		}
+		dir := filepath.Dir(source)
 		if s.copyRoot == nil {
 			return false, errors.New("copy parent unavailable")
 		}

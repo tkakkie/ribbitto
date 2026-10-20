@@ -157,6 +157,8 @@
             savedKey = entry.key;
             source = savedKey;
             lastWrite = storage.getItem(key);
+            // Composer must load before drafts: otherwise this key is silently
+            // lost and an unchanged resend can create a duplicate.
             body.dispatchEvent(new CustomEvent("message-draft-restored", { bubbles: true, detail: { key: savedKey } }));
           }
         }
@@ -187,7 +189,6 @@
         } catch { /* Storage errors leave sending usable. */ }
       };
       body.addEventListener("message-sent", (event) => {
-        if (savedKey === event.detail.key && sending?.key !== event.detail.key) replaceSnapshot(event.detail.key, true);
         if (sending?.key !== event.detail.key) return;
         const { key: sendKey, inPlace } = sending;
         sending = null;

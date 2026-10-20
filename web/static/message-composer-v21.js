@@ -37,7 +37,7 @@
   };
   // A deliberate Remove only protects an unchanged resend briefly (#1328).
   const removedKeyRetention = 5 * 60 * 1000;
-  // Conversation navigation replaces the document, so this is one place.
+  const removedKey = (form, text) => JSON.stringify([form.dataset.draftChannel, form.dataset.draftTopic || "feed", text]);
   const removedKeys = new Map();
   window.addEventListener("pagehide", () => removedKeys.clear());
   document.addEventListener("message-draft-restored", (event) => {
@@ -133,8 +133,8 @@
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
-    const removed = removedKeys.get(body.value);
-    removedKeys.delete(body.value);
+    const removed = removedKeys.get(removedKey(form, body.value));
+    removedKeys.delete(removedKey(form, body.value));
     sending.elements.idempotency_key.value = restoredKey ||
       (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
     if (removed && sending.elements.idempotency_key.value === removed.key) sending.dataset.unconfirmed = "true";
@@ -223,7 +223,7 @@
       for (const [text, held] of removedKeys) {
         if (performance.now() - held.at >= removedKeyRetention) removedKeys.delete(text);
       }
-      const text = form.elements.body.value;
+      const text = removedKey(body.form, form.elements.body.value);
       const held = { key: form.elements.idempotency_key.value, at: performance.now() };
       removedKeys.set(text, held);
       setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);

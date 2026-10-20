@@ -2,77 +2,82 @@
 
 ## Composer
 
-Bounded state ([decision 37][d37]): keys, send glue, feed/topic pending items.
+Bounded state ([decision 37][d37]): server-rendered keys, send glue, feed/topic pending
+items; *planned* parts await issues.
 
-Idle ordinary path: blank/quoted text, >4,000 normalised/trimmed code points,
-or no `crypto.randomUUID()`.
+Idle feed/topic sends use the ordinary path for blank/quoted text, >4,000
+code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 
 - **Ordinary sending** (input glue, #1173): textarea usable in flight:
   answers replace only `#message-composer-state`. 200 removes sent body
   (htmx request parameters) only if still a textarea prefix, via
   `setRangeText("", 0, length, "preserve")`: caret/selection stay on
   remaining text; no `input`, hence no typing signal.
-  A `WeakMap` waits for `compositionend`, retaining the confirmation ID before
-  stream settle. Answers copy `data-invalid` to textarea
+  A `WeakMap` defers removal until `compositionend`, keeping the confirmation
+  ID before stream settle consumes it. Answers copy `data-invalid` to textarea
   `aria-invalid`.
 - **Ordinary failures** (#1179) keep the text and the key; `#message-send-alert` says
-  which. 400/404/413/422 reject before writing; 429 by spec:
+  which. 400/404/413/422 reject before any write; 429 by spec:
   *not sent*, or with the mark, *this retry was refused and the
   earlier send is still unconfirmed*. Network errors, timeouts, 5xx or
   other 4xx (except 409) may follow a commit: *could not confirm*, marking the
   key in `data-unconfirmed-key`. Only 200/409 follow the
   key lookup; both renew the key. The mark clears exactly on key change.
   A 409 carries `data-sent-body` and omits its error only in the same channel,
-  neither body quoted, and the stored typed-body byte length/SHA-256 verify
-  the retry prefix without resolving handles. It removes that prefix by the
-  same rules (*the earlier message was sent*), or says the 409 error if changed.
-  Otherwise text/error stay, including legacy rows without proof.
+  with neither stored nor retried text quoted, and when stored typed-body byte length and SHA-256 digest
+  verify that prefix of the retry text (without resolving handles): the
+  script removes that prefix by the same rules (*the earlier message was
+  sent*), or says the 409's error if the start changed. Otherwise
+  text/error stay, including legacy rows without proof.
 - **Pending own posts** (#1156, #1188, #1174, #1180):
-  [Decision 37 (a)][d37]: state, lifetime, rendering, arrival. Latest feeds/topics
-  use `#message-pending-template` and `#message-pending` after `#message-items`.
-  Each item's htmx form holds raw text,
-  key, generation and shown cursor. Composer clears, keeps focus, takes
-  `crypto.randomUUID()`. Queued forms get fresh UUIDs unless restored or held
-  after Remove (#1328). At most 10 items per tab, including failures
+  [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
+  rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
+  after `#message-items`. Each item's htmx form holds original text,
+  key, generation and shown cursor. Composer clears immediately, keeps
+  focus, takes `crypto.randomUUID()`. Each queued form gets a fresh UUID unless
+  Edit, a device draft or the Remove hold supplies one.
+  At most 10 items per tab in all states, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
-  text; Retry takes no slot. Delivery/move-out/Remove/Edit free slots.
-  FIFO: classify predecessors first; one request at a time. Ordinary requests
-  block submits; pending items/requests block quoted/invalid ordinary submits.
-  Not sent lets later items continue; Retry moves it to the list/queue's end.
-  Unknown outcomes pause later items (showing Sending).
-  Same-key Retry keeps its place; success resumes dispatch. Refusal keeps the
-  pause while the earlier outcome is unknown. Remove/Edit resume
-  without resolving the request: it may commit later; delivery stays visible.
-  Storage follows send order on uninterrupted success or
+  the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
+  FIFO: one form at a time, predecessor classified first.
+  Ordinary requests block composer submits; pending items or requests block
+  quoted or invalid ordinary submits, preventing overlap between forms' requests.
+  A Not sent item lets later items continue; Retry moves it to the list and
+  queue's end. Unknown outcomes pause later items (showing Sending).
+  Same-key Retry keeps its place; success resumes dispatch. A refused retry
+  keeps the pause while the earlier outcome is unknown. Remove and Edit resume
+  without resolving that request: it may commit later; real delivery stays
+  visible. Storage follows send order on uninterrupted success or
   successful same-key Retry; Remove or Edit may reorder it.
   200 swaps composer state and out-of-band typing form, sets
   `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
   textarea text.
-  `data-posted-message` links delivery. A `MutationObserver` removes confirmed
-  items before paint when their ID appears in `#message-items`.
+  `data-posted-message` links the item to delivery. A `MutationObserver` removes
+  confirmed items before paint when their ID appears in `#message-items`.
   Stream-first briefly shows both until the response; replay and feed moves
   preserve the real ID. Topic responses also remove the item if its
   `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
   has reached `data-posted-seq`. Read attributes once, never keep them
   on the item. Once confirmed, `htmx:sseBeforeMessage` removes it when
   a `messages-moved` payload names its ID with this topic as source.
-  Ordering proves absent applied posts moved ([topic replay](replay.md#ordering-and-replay)).
+  Ordering allows removal of absent, already-applied posts
+  ([topic replay](replay.md#ordering-and-replay)).
   Failed responses never swap; the failure classes above fill only
   the item's empty polite status. Retry uses form text/key,
   even after an unconfirmed send's refused retry. A 409
-  shows `message.error.repeat` and renews the item's key. Remove drops the item
-  and draft snapshot. For unconfirmed items it holds raw text/key in memory
-  for 5 minutes, in this feed/topic only: identical text reuses the key;
-  different text or at/after the limit gets a fresh key. Pagehide drops the hold.
-  Remove then reload loses it even within 5 minutes; a stored post is visible.
-  Edit requires failure, empty composer and no IME; otherwise visible but
-  disabled with a localised description. It never overwrites drafts. It restores
-  raw text/key/unconfirmed mark, focuses the end, removes the item.
-  The key follows text across state swaps
+  shows `message.error.repeat` and renews the item's key. Remove discards
+  the item with the [hold below](#remove-hold); an uncertain committed post
+  can still arrive later.
+  Edit requires either failure, an empty composer and no IME
+  composition; otherwise visible but disabled with an associated
+  localised explanation. It never overwrites a draft. It restores raw
+  text, key and any unconfirmed mark, focuses the textarea with caret at
+  end, then removes the item. The key follows text across state swaps
   until sent/emptied; its unconfirmed mark stays in composer
   `data-unconfirmed-key` for either path. A pending resend transfers
-  it to its form and clears the composer mark; emptying clears it and renews the
-  UUID. Edit of a known refusal clears stale marks.
+  it to its form and clears the composer's mark; emptying restored
+  text clears it and takes a fresh UUID.
+  Editing a known refusal clears stale composer marks.
   Unused keys post normally; used keys return the stored message for a body
   matching the [retry rule](posting.md), otherwise that pending 409.
   Pending sends bypass prefix removal, ordinary send alerts/failure
@@ -109,22 +114,26 @@ or no `crypto.randomUUID()`.
 
 ### Drafts
 
-Only `message-drafts-vN.js` uses `localStorage` (checked).
-`message-drafts-v6.js`: cleanup, saving, feed/topic restore, never history.
-Restore seeds `at` without input/typing/focus;
+Only `message-drafts-vN.js` may use `localStorage` (checked).
+`message-drafts-v6.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+restore (#1162), never history. Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.
+At dispatch, save raw text and its send key before the request leaves or the
+textarea empties (#1328), including in-flight reload/navigation. Restore the key
+only with valid text in the same session/place; reuse it only while that text is
+unchanged. Any edit or emptying renews it. A 200 or stored-key confirmation clears
+the saved key while keeping newer text. Only the latest send dispatched in a
+place is kept: an unconfirmed item followed by another send loses its key on
+reload, as its text did before.
 Retry keeps unsaved edits. In-place 409 confirms recovered prefixes;
-dirty cleanup keeps edit time/debounce. Dispatch saves text/key before the request
-leaves (#1328), including in-flight navigation/reload. Restore uses that key only
-while text is unchanged; any edit/emptying renews it. Matching stored-message
-confirmation clears the saved key; several tabs may safely send one key.
+dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
-- **Value:** JSON `{member, session, expires, text, at, key}`; `key` is a send
-  UUID or null (older entries may omit it); `expires` and `at`
-  are Unix milliseconds. Limit: 4,000 code points, 50 entries per member
+- **Value:** JSON `{member, session, expires, text, at, key}`; `expires` and `at`
+  are Unix milliseconds; `key` is a send UUID or null (older entries may omit it).
+  Limit: 4,000 code points, 50 entries per member
   and session. Retention: last edit (`at`), checked only at load.
 - **Saving:** latest htmx forms carry `data-draft-channel`/optional
   `data-draft-topic` outside state swaps. Tab-monotonic edit times, never save
@@ -132,24 +141,26 @@ confirmation clears the saved key; several tabs may safely send one key.
   Clean tabs never flush. Blank/over-limit input and confirmed blank text write
   empty tombstones at edit time, never delete keys. Tombstones restore nothing,
   count toward 50; only eviction, session end or retention removes them.
-- **Races and cap:** equal/later stored edits win pre-write reads; tab stays clean.
-  Sort own entries by edit time (oldest first), then key;
+- **Races and cap:** pre-write reads skip equal/later stored edits, leaving
+  the tab clean. Sort own entries by edit time (oldest first), then key;
   trim other entries to 49 before insertion, all to 50 after every write.
-  Best effort: overlapping reads may leave older text; eviction may remove a
-  concurrent update. No repair; textarea unchanged. Next input saves again.
+  Both rules are best effort on observed values: overlapping reads may
+  leave older text; eviction may remove a concurrent update. No repair;
+  textarea unchanged. Only next input saves again.
   Foreign values unread, keys unwritten.
-- **Stopping:** sign-out notice/deadline cancel saves and stop writes until
-  reload; every save checks the deadline. Storage errors leave typing/sending usable.
+- **Stopping:** sign-out notices and deadline cancel pending saves,
+  stop writes until reload; every save checks the deadline. Storage errors
+  leave typing/sending usable.
 - **Notice:** `ribbitto.signed-out.v1` holds only the horizon;
   every write fires `storage` in other tabs.
 - **Millisecond rule:** cleanup removes malformed `ribbitto.draft.v1:` keys
   and entries whose session's 48-bit millisecond prefix (first 12 hex digits)
   strictly precedes its horizon's. Foreign sessions at/after that millisecond
   stay unread: stale pages cannot remove newer sessions' entries.
-- **Sign-in page:** only signed-out renders (including errors) carry
-  `data-drafts-horizon`: PostgreSQL `uuidv7()` from `identity.SessionHorizon`
-  (session-id clock). Cleanup then notice run once/load, never on back-forward
-  cache restore. Storage errors leave the page usable.
+- **Sign-in page:** `data-drafts-horizon` is PostgreSQL's `uuidv7()`
+  (`identity.SessionHorizon`, session-id clock), only when
+  signed out, including sign-in errors. Cleanup then notice run once per
+  document load, never on back-forward cache restore. Storage errors keep it usable.
 - **Organisation pages:** channel/list pages' `#organization-stream` has
   `data-session` (id, never token/hash), `data-session-expires` and
   `data-rendered-at` (Unix milliseconds) beside `data-member`. Once per load,
@@ -160,7 +171,16 @@ confirmation clears the saved key; several tabs may safely send one key.
   or `at` at least 7 days old or over a day ahead. At the deadline (expiry
   minus render time; `performance.now()` from document time origin),
   remove own session's keys unread.
-- **Sign-out:** successful `POST /signout` adds `Clear-Site-Data: "storage"`
-  (Chromium); sign-in cleanup covers other browsers.
+- **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
+  where supported (Chromium); the sign-in page covers the rest.
+
+### Remove hold
+
+Remove keeps an unconfirmed item's raw text and key only in page memory, scoped
+to its feed/topic, for five minutes (`removedKeyRetention`, one named constant).
+Identical raw text sent in that place before expiry reuses the key; different
+text takes a fresh key. Expiry, confirmation or `pagehide` clears the hold.
+Remove then reload loses the held identity, even within five minutes; a stored
+message is visible in the conversation (#1328).
 
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md

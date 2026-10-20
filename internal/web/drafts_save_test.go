@@ -226,12 +226,18 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		p = p.Context(ctx)
 		t.Cleanup(func() { closePage(t, p) })
-		// Only the drafts debounce is gated, including cancellation. Lifecycle
+		// Draft debounce and Remove expiry are gated, including cancellation. Lifecycle
 		// events and clocks are controlled independently of focus and real sleeps.
 		step(t, p, "install draft controls").MustEvalOnNewDocument(`(() => {
-   const timers = new Map(), set = window.setTimeout, clear = window.clearTimeout; let id = 0;
-   window.setTimeout = (f, d, ...a) => { if (d > 60000) window.expireDrafts = () => f(...a); return d === 300 ? (timers.set(--id, {run: () => f(...a), left:d}), id) : set(f, d, ...a); };
-   window.clearTimeout = id => { timers.delete(id); clear(id); };
+   const timers = new Map(), removedTimers = new Map(), set = window.setTimeout, clear = window.clearTimeout; let id = 0;
+   window.setTimeout = (f, d, ...a) => {
+    const gated = d === 300 ? timers : d === 300000 ? removedTimers : null;
+    if (gated) { gated.set(--id, {run: () => f(...a), left:d}); return id; }
+    if (d > 60000) window.expireDrafts = () => f(...a);
+    return set(f, d, ...a);
+   };
+   window.clearTimeout = id => { timers.delete(id); removedTimers.delete(id); clear(id); };
+   window.expireRemoved = () => { check(removedTimers.size === 1, 'missing Remove expiry timer'); for (const [id, task] of [...removedTimers]) { removedTimers.delete(id); task.run(); } };
    window.tickDrafts = ms => { for (const [id, task] of [...timers]) { task.left -= ms; if (task.left <= 0) { timers.delete(id); task.run(); } } };
    window.releaseDrafts = () => tickDrafts(300);
    window.pendingDrafts = () => timers.size;
@@ -426,7 +432,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			return pendingRequest{}, nil
 		}
 	}
-	for _, mode := range []string{"remove", "reload", "reload-ordinary", "navigate-held", "restored-edit", "restored-edit-ordinary", "restored-empty", "other-topic", "other-channel", "other-member", "other-session", "expired-draft", "draft-key-type", "remove-different", "remove-inside", "remove-boundary", "remove-after", "remove-reload", "remove-other-topic", "remove-other-channel", "stored-arrival"} {
+	for _, mode := range []string{"remove", "reload", "reload-ordinary", "navigate-held", "restored-edit", "restored-edit-ordinary", "restored-empty", "other-topic", "other-channel", "other-member", "other-session", "expired-draft", "draft-key-type", "remove-different", "remove-inside", "remove-boundary", "remove-after", "remove-timer", "remove-reload", "remove-other-topic", "remove-other-channel", "stored-arrival"} {
 		t.Run("keep-key/"+mode, func(t *testing.T) {
 			holdPosts.Store(true)
 			defer holdPosts.Store(false)
@@ -468,12 +474,21 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 					run(t, p, `elapsed=300000;`)
 				case "remove-after":
 					run(t, p, `elapsed=300001;`)
+				case "remove-timer":
+					// Fire cleanup without advancing performance.now: a fresh key
+					// then proves the map entry was deleted, not merely too old.
+					run(t, p, `expireRemoved(); elapsed=0;`)
 				case "remove-reload":
 					reload(t, p, "")
-				case "remove-other-topic":
-					navigate(view.ConversationURL("acme", place.Channel, &place.Topic))
-				case "remove-other-channel":
-					navigate(view.ChannelURL("acme", kernel.ID{9}))
+				case "remove-other-topic", "remove-other-channel":
+					// Simulate in-document navigation by changing the form's place
+					// attributes: the same document and its hold map stay alive.
+					// Draft saving still binds to its initial place, so read that
+					// snapshot when checking confirmation after the simulated move.
+					eval(t, p, "change place within document", `mode => { const f=document.querySelector('#message-composer'), source=scope();
+      window.entry=()=>JSON.parse(localStorage.getItem(source));
+      if (mode === 'remove-other-topic') f.dataset.draftTopic='03000000-0000-0000-0000-000000000000';
+      else f.dataset.draftChannel='09000000-0000-0000-0000-000000000000'; }`, mode)
 				}
 			case mode == "navigate-held" || mode == "other-topic":
 				navigate(view.ConversationURL("acme", place.Channel, &place.Topic))
@@ -515,7 +530,16 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				})
 			}
 			if mode == "stored-arrival" {
-				eval(t, p, "clear stored key", `key => { document.querySelector('#message-body').dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key,message:'stored'}})); check(!entry().key, 'stored arrival retained draft key'); }`, key)
+				// A same-key resend gets the stored message through the actual
+				// htmx response path, which makes the composer emit message-sent.
+				run(t, p, `document.querySelector('#message-composer').requestSubmit();`)
+				confirmed, confirm := nextPost(t)
+				if confirmed.values.Get("idempotency_key") != key || count() != 1 {
+					t.Error("stored-key lookup did not reuse the restored identity")
+				}
+				confirm(pendingAnswer(t, place.Channel))
+				step(t, p, "stored arrival clears draft key").MustWait(`() => entry()?.key===null && entry()?.text==='' && sentEvents.length===1`)
+				eval(t, p, "stored confirmation event", `key => check(sentEvents[0].key===key && !entry().key, 'stored arrival retained draft key')`, key)
 			}
 			if mode == "restored-empty" {
 				run(t, p, `edit('',++editNow);`)

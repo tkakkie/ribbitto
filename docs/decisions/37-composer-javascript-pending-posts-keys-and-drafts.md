@@ -1,8 +1,8 @@
 # 37. Composer JavaScript: pending posts, idempotency keys and drafts on the device
 
-**Decided** (#1151, approved by the maintainer on 2026-10-16). Each use names
-the issue that implements it. Use (a) is now implemented on the feed and topic views, including #1174’s queue. It is the second
-narrow exception to
+**Decided** (#1151, maintainer, 2026-10-16); amended by #1328 (2026-10-21).
+Each use names its implementation issue. Use (a) covers feed/topic views and
+#1174’s queue. This is the second narrow exception to
 [decision 19](19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
 beside [decision 34](34-live-unread-counts.md). The rules apply to any
 composer code, plain JavaScript or a Svelte island if #1152 adopts one; #1152
@@ -10,40 +10,41 @@ may change them only through its own decision, with its measurements.
 
 ## (a) Pending own post (#1156, #1174)
 
-After the person sends, one composer script may show the post as *sending*
-before the server answers. Only enhanced composers on pages that receive live
-messages get pending posts: the latest channel feed and latest topic
-views (#1188). `?before=` and `?around=` pages and every other
-plain composer keep plain submission.
+One composer script may show *sending* before the answer, only on enhanced
+composers receiving live messages: latest channel feeds/topics (#1188).
+`?before=`, `?around=` and other plain composers keep plain submission.
 
 The item is cloned from a server-rendered, localised `<template>`
 (`content.cloneNode(true)`); the body goes in only through `textContent`, the
 key and retry text in form controls' `value`s.
-Pending items live in their own list next to `#message-items`, never inside it,
-so the stream script's ordering by `data-event-seq` and bounded insertion stay
-as they are. They never move `data-event-cursor` or `data-applied-cursor`, send
-a reading POST, change unread counts or appear in `#message-status`.
+Pending items live beside `#message-items`, never inside, preserving stream
+ordering by `data-event-seq` and bounded insertion. They never move
+`data-event-cursor`/`data-applied-cursor`, send reading POSTs, change unread counts
+or appear in `#message-status`.
 
 - **State:** per item, its form-control values (text, key, composer
-  generation, shown `data-event-cursor`), its state and the message ID its own
-  response names in `data-posted-message`, associated through the request's
-  element, never by comparing text. The states are *queued* (#1174),
+  generation, shown `data-event-cursor`), state and its response's message ID
+  (`data-posted-message`), associated through the request element, never text.
+  States: *queued* (#1174),
   *sending*, *Not sent*, *Could not confirm sending*, and confirmed but
   awaiting stream delivery.
 - **Bound:** at most 10 items per tab, counting every state; an eleventh send
-  keeps its text in the composer. #1156 allows one item, #1174 up to 10.
+  keeps composer text. #1156 allows one item, #1174 up to 10.
 - **Lifetime:** DOM only, never storage. An item is removed when the message
   its response names is in `#message-items`, when that message has moved out
   of the shown topic, or when the member chooses Remove. A failure keeps the
   text and the key, with a retry. A reload drops pending items; their text may
-  survive only as a draft (d).
+  survive only as a draft with its key (d). Remove holds an unconfirmed item's
+  raw text/key only in memory per feed/topic for 5 minutes (#1328; retention
+  proposal for review). Identical text before the limit reuses it; different
+  text takes a fresh key. Expiry/pagehide drops the hold. Remove then reload loses it even
+  within 5 minutes; a stored post is visible in the conversation.
 
 ## (b) Idempotency key (#1155)
 
-Each send carries an opaque key in the composer's hidden `idempotency_key`. The
-server renders a fresh one on the initial render, after a success and with a
-409; a 422 keeps the submitted key exactly, so plain forms are deduplicated
-too. The composer script may replace it with `crypto.randomUUID()` when it
+Each send carries an opaque hidden `idempotency_key`. The server renders a fresh
+one on load, success and 409; 422 keeps it exactly, deduplicating plain forms
+too. The composer may replace it with `crypto.randomUUID()` when it
 empties the composer before the answer (#1156); that needs a secure context
 (HTTPS or a potentially trustworthy origin such as localhost). The server scopes the key to the organisation
 and member of the authorised membership, which `registerOrgRoutes` gets from
@@ -55,7 +56,7 @@ and shared by every member's stream, and matching uses `data-posted-message`.
 
 ## (c) Requests stay with htmx (#1173)
 
-Composer JavaScript sends no requests itself: no `fetch`, `XMLHttpRequest`,
+Composer JavaScript sends no requests: no `fetch`, `XMLHttpRequest`,
 `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`. It may
 set form-control values and call `requestSubmit()`, `htmx.trigger` and
 `htmx.process` on server-rendered or template-cloned elements. Every composer
@@ -64,24 +65,29 @@ Mention suggestions (#1310, #1312) come as server-rendered fragments over `hx-ge
 
 ## (d) Drafts on this device (#1178, #1181, #1162, #1177)
 
-One drafts script may keep unsent composer text in `localStorage`: it must
-survive reloads and closed tabs, and `sessionStorage` does not. **Bound:** text
+One drafts script may keep unsent text/key in `localStorage` across reloads/closed
+tabs (`sessionStorage` cannot). **Bound:** text
 up to the message limit (4,000 code points) and at most 50 entries per member
 and session, evicting the least recently edited; across tabs the cap and
 eviction are best effort (#1186). An entry is removed 7 days
 after its last edit. A storage error drops only the stored copy, never the
-text on the page. Order: #1178 → #1181 → #1162 → #1177.
+text on the page.
+Save the key at dispatch, before the request leaves (#1328), covering in-flight
+navigation/reload. Restored unchanged text reuses it; any edit/emptying renews it.
+Stored-message confirmation clears the saved key; confirmed sends, emptying and
+Edit follow the [draft rules](../architecture/web-composer.md#drafts).
+Several tabs may hold/send one key safely: the server deduplicates. No notice needed.
 
-- **Each entry is bound to its session.** Organisation pages render on
-  `#organization-stream` the member UUID (`data-member`), the session marker
-  `data-session`, the session's expiry and the render time (#1181). The marker
-  is the session's id, a UUIDv7 that PostgreSQL generates, so it is
-  time-ordered. It is not a credential (sessions are found only by token
-  hash); the page never carries the token or its hash. Key:
+- **Session-bound entries.** Organisation pages' `#organization-stream` renders
+  member UUID (`data-member`), session marker (`data-session`), expiry and render
+  time (#1181). The marker is a PostgreSQL-generated, time-ordered UUIDv7 session
+  id, not a credential: sessions resolve only by token hash; neither token nor
+  hash reaches the page. Key:
   `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, where the place
   is the literal `feed` or the topic's canonical UUID; value: JSON
-  `{member, session, expires, text, at}` (#1178 fixes the format). No owner
-  record is shared between sessions.
+  `{member, session, expires, text, at, key}` (#1328 adds the send UUID or null;
+  older entries may omit it). No owner
+  record crosses sessions.
 - **Restore checks the owner** (#1162). A page reads only its own member and
   session keys and restores an entry only if its stored member, session and
   expiry equal its own and the expiry has not passed. However tabs interleave
@@ -128,10 +134,9 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
 
 ## (e) The send-key preference is server-side (#1158, #1175)
 
-It applies on all of a member's devices and changes what Enter does, so it is
-not a disposable UX setting. The server stores it (#1175 chooses the owning
-module) and renders it as an attribute the composer script reads; it never
-lives in browser storage.
+It applies across a member's devices and changes Enter, so is not disposable UX
+state. The server stores it (#1175 chooses ownership) and renders an attribute
+for the composer script; never browser storage.
 
 ## What stays forbidden
 
@@ -146,7 +151,7 @@ lives in browser storage.
   decision 34, except toggling (d)'s draft marker. These stay server-rendered;
   a pending item is never turned into a real message in place.
 
-**Kept:** `message-stream-v13.js` rewrites only the `after` parameter of the
+**Kept:** `message-stream-v13.js` rewrites only `after` in the
 server-rendered `sse-connect` URL
 ([decision 30](30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md#amendment-transport-progress-1103));
 it is not composer code.

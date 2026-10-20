@@ -63,7 +63,7 @@
     // 2^31 - 1 ms, under a session's 30 days, so long waits are chained.
     const deadline = expires - rendered;
     let stopped = false, timer, dirty = false, composing = false, at = 0, text = "";
-    let lastWrite, source, sending;
+    let lastWrite, source, sending, savedKey = null;
     const stop = () => { stopped = true; dirty = false; clearTimeout(timer); markers(); };
     const read = (key) => {
       try { return JSON.parse(storage.getItem(key)); } catch { return null; }
@@ -124,7 +124,7 @@
         // or update an entry after trim selects it. Neither race is repaired.
         if (read(key)?.at >= at) return;
         trim(49, key);
-        const value = JSON.stringify({ member, session, expires, text, at });
+        const value = JSON.stringify({ member, session, expires, text, at, key: savedKey });
         storage.setItem(key, value);
         lastWrite = value;
         trim(50);
@@ -137,6 +137,7 @@
       if (performance.now() >= deadline) { stop(); return; }
       // Snapshot the input, not a later save or a send's textarea cleanup.
       source = null;
+      savedKey = null;
       at = Math.max(Date.now(), at + 1);
       text = body.value;
       if (!text.trim() || [...text].length > 4000) text = "";
@@ -149,7 +150,16 @@
       const entry = read(key);
       if (performance.now() < deadline) {
         if (body.value) { at = typeof entry?.at === "number" ? entry.at : 0; edited(); save(); }
-        else if (valid(entry)) { at = entry.at; body.value = entry.text; }
+        else if (valid(entry)) {
+          at = entry.at;
+          body.value = entry.text;
+          if (entry.text && typeof entry.key === "string" && new RegExp("^" + uuid + "$").test(entry.key)) {
+            savedKey = entry.key;
+            source = savedKey;
+            lastWrite = storage.getItem(key);
+            body.dispatchEvent(new CustomEvent("message-draft-restored", { bubbles: true, detail: { key: savedKey } }));
+          }
+        }
       }
       body.addEventListener("message-sending", (event) => {
         const { key: sendKey, body: raw, inPlace } = event.detail;
@@ -157,6 +167,7 @@
         edited();
         text = raw.trim() && [...raw].length <= 4000 ? raw : "";
         source = sendKey;
+        savedKey = text ? sendKey : null;
         sending = { key: sendKey, inPlace };
         at = Math.max(at, (read(key)?.at || 0) + 1);
         save(true);
@@ -176,6 +187,7 @@
         } catch { /* Storage errors leave sending usable. */ }
       };
       body.addEventListener("message-sent", (event) => {
+        if (savedKey === event.detail.key && sending?.key !== event.detail.key) replaceSnapshot(event.detail.key, true);
         if (sending?.key !== event.detail.key) return;
         const { key: sendKey, inPlace } = sending;
         sending = null;
@@ -183,7 +195,7 @@
         replaceSnapshot(sendKey, inPlace);
       });
       body.addEventListener("message-pending-action", (event) => {
-        if (event.detail.kind === "edit") { edited(); save(); }
+        if (event.detail.kind === "edit") { edited(); savedKey = event.detail.restoredKey || null; save(); }
         else if (event.detail.kind === "remove") replaceSnapshot(event.detail.key);
       });
       body.addEventListener("input", edited);

@@ -67,7 +67,7 @@ func testOrgDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	own := func(n int) string { return key(alice, session, place(n)) }
 	// value is an own entry edited at, with fields replaced or removed (nil).
 	value := func(expires, at time.Time, change map[string]any) string {
-		entry := map[string]any{"member": alice, "session": session, "expires": expires.UnixMilli(), "text": "draft", "at": at.UnixMilli()}
+		entry := map[string]any{"member": alice, "session": session, "expires": expires.UnixMilli(), "text": "draft", "at": at.UnixMilli(), "key": "00000000-0000-4000-8000-000000000001"}
 		for k, v := range change {
 			entry[k] = v
 			if v == nil {

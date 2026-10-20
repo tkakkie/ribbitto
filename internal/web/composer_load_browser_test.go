@@ -80,14 +80,8 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 			step("install early settle and first-paint recorder")
 			page.MustEvalOnNewDocument(`(() => {
 				window.composerFrames = [];
-				document.addEventListener('DOMContentLoaded', () => {
-					// A stream settle in a background tab can precede measurement.
-					const item = document.getElementById('message-items').lastElementChild;
-					item.dispatchEvent(new CustomEvent('htmx:afterSettle', {bubbles: true, detail: {target: item}}));
-				}, {once: true});
 				const deadline = performance.now() + 5000;
-				// Start before DOMContentLoaded to include earlier paints. A task
-				// after each rAF samples the observer result for that paint.
+				// A task after each rAF samples the observer result for that paint.
 				const record = () => requestAnimationFrame(() => setTimeout(() => {
 					const l = document.getElementById('message-list'), items = document.getElementById('message-items');
 					if (l && items?.lastElementChild) {
@@ -97,7 +91,16 @@ func testComposerLoadBrowser(t *testing.T, browser *rod.Browser) {
 					}
 					if (window.composerFrames.length < 8 && performance.now() < deadline) record();
 				}, 0));
-				record();
+				// Deferred scripts have all run at DOMContentLoaded. A paint before
+				// them shows the unscrolled list in every composer version, so the
+				// recorder starts here, at the first rendering opportunity after the
+				// composer script is evaluated.
+				document.addEventListener('DOMContentLoaded', () => {
+					// A stream settle in a background tab can precede measurement.
+					const item = document.getElementById('message-items').lastElementChild;
+					item.dispatchEvent(new CustomEvent('htmx:afterSettle', {bubbles: true, detail: {target: item}}));
+					record();
+				}, {once: true});
 			})()`)
 			step("set load viewport")
 			page.MustSetViewport(tc.width, 600, 1, false)

@@ -29,8 +29,8 @@ func openSweepParent(parent string) (int, error) {
 // Keep the successful probe locked until inspection/removal finishes, so two
 // sweepers cannot concurrently reclaim the same copy.
 func (s *containerSweep) openCopy(parent int, name string) (*os.File, unix.Stat_t, bool, error) {
-	var before, st unix.Stat_t
-	if err := unix.Fstatat(parent, name, &before, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+	var before, st, parentStat unix.Stat_t
+	if err := s.statAt(parent, name, &before, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return nil, st, false, err
 	}
 	if before.Mode&unix.S_IFMT != unix.S_IFDIR {
@@ -44,6 +44,10 @@ func (s *containerSweep) openCopy(parent int, name string) (*os.File, unix.Stat_
 	if err := unix.Fstat(fd, &st); err != nil {
 		_ = f.Close()
 		return nil, st, false, err
+	}
+	if err := unix.Fstat(parent, &parentStat); err != nil || !s.sameDevice(uint64(parentStat.Dev), uint64(st.Dev)) {
+		_ = f.Close()
+		return nil, st, false, errors.New("copy root crosses device")
 	}
 	if st.Mode&unix.S_IFMT != unix.S_IFDIR || before.Dev != st.Dev || before.Ino != st.Ino || int(st.Uid) != s.uid() || st.Mode&0o7777 != 0o700 {
 		_ = f.Close()
@@ -71,7 +75,28 @@ func sweepPathsOverlap(a, b string) bool {
 	within := func(parent, child string) bool {
 		return parent == child || strings.HasPrefix(child, strings.TrimSuffix(parent, string(filepath.Separator))+string(filepath.Separator))
 	}
-	return within(a, b) || within(b, a)
+	if within(a, b) || within(b, a) {
+		return true
+	}
+	for _, component := range strings.Split(b, string(filepath.Separator)) {
+		if component == filepath.Base(a) {
+			return true
+		}
+	}
+	alias := a
+	if strings.HasPrefix(a, "/private/tmp/") {
+		alias = strings.TrimPrefix(a, "/private")
+	}
+	// Docker Desktop may prepend host-path components. Even a prefixed
+	// ancestor protects conservatively; never compare the empty remainder (/).
+	for remainder := strings.TrimPrefix(b, "/"); remainder != ""; {
+		path := "/" + remainder
+		if within(a, path) || within(path, a) || within(alias, path) || within(path, alias) {
+			return true
+		}
+		_, remainder, _ = strings.Cut(remainder, "/")
+	}
+	return false
 }
 
 func (s *containerSweep) mounted(dir string) (bool, error) {
@@ -89,11 +114,21 @@ func (s *containerSweep) mounted(dir string) (bool, error) {
 		}
 		for _, m := range c.Mounts {
 			if m.Source == "" {
-				continue
+				if m.Type != "bind" {
+					continue
+				}
+				return false, errors.New("empty bind source")
+			}
+			if !filepath.IsAbs(m.Source) || strings.ContainsRune(m.Source, 0) {
+				return false, errors.New("invalid mount source")
+			}
+			for _, component := range strings.Split(m.Source, "/") {
+				if component == ".." {
+					return false, errors.New("parent traversal in mount source")
+				}
 			}
 			real, err := filepath.EvalSymlinks(m.Source)
-			// Docker Desktop volume paths can exist only inside its VM. Such a
-			// source cannot resolve to an existing host copy; retain lexical checks.
+			// Missing VM paths still need prefix and copy-name protection.
 			if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENOTDIR) {
 				return false, err
 			}
@@ -110,28 +145,26 @@ func (s *containerSweep) copies() {
 	}
 	f := s.copyRoot
 	fd, parent := int(f.Fd()), s.resolvedParent
-	for {
-		entries, err := f.ReadDir(128)
-		if err != nil && !errors.Is(err, io.EOF) {
-			s.fail("listing copies")
-			return
+	entries, err := s.readDir(f, -1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		s.fail("listing copies")
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !sweepCopyName.MatchString(name) {
+			continue
 		}
-		for _, entry := range entries {
-			name := entry.Name()
-			if !sweepCopyName.MatchString(name) {
-				continue
-			}
-			dir := filepath.Join(parent, name)
-			copy, st, live, err := s.openCopy(fd, name)
-			if err != nil {
-				s.unreclaimed("copy", dir)
-				continue
-			}
-			s.copy(fd, name, dir, copy, st, live)
+		dir := filepath.Join(parent, name)
+		copy, st, live, err := s.openCopy(fd, name)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
 		}
-		if errors.Is(err, io.EOF) {
-			return
+		if err != nil {
+			s.unreclaimed("copy", dir)
+			continue
 		}
+		s.copy(fd, name, dir, copy, st, live)
 	}
 }
 func (s *containerSweep) copy(parent int, name, dir string, f *os.File, st unix.Stat_t, live bool) {
@@ -161,36 +194,61 @@ func (s *containerSweep) copy(parent int, name, dir string, f *os.File, st unix.
 	}
 	// Refuse replacement of the root pathname before the final unlinkat.
 	var current unix.Stat_t
-	if err := unix.Fstatat(parent, name, &current, unix.AT_SYMLINK_NOFOLLOW); err != nil || current.Dev != st.Dev || current.Ino != st.Ino {
+	if err := s.statAt(parent, name, &current, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) && s.copyEntryGone(parent, name) {
+		s.line("reclaimed copy %s", dir)
+		return
+	} else if err != nil || current.Dev != st.Dev || current.Ino != st.Ino {
 		s.unreclaimed("copy", dir)
 		return
 	}
-	if err := unix.Unlinkat(parent, name, unix.AT_REMOVEDIR); err != nil {
+	if err := s.unlinkAt(parent, name, unix.AT_REMOVEDIR); err != nil && (!errors.Is(err, unix.ENOENT) || !s.copyEntryGone(parent, name)) {
 		s.unreclaimed("copy", dir)
 		return
 	}
 	s.line("reclaimed copy %s", dir)
 }
 
+func (s *containerSweep) copyEntryGone(fd int, name string) bool {
+	var st unix.Stat_t
+	return errors.Is(s.statAt(fd, name, &st, unix.AT_SYMLINK_NOFOLLOW), unix.ENOENT)
+}
+
 func (s *containerSweep) removeCopy(f *os.File, root unix.Stat_t, depth int) error {
 	if depth > 256 {
 		return errors.New("copy nesting limit")
 	}
-	for {
-		entries, err := f.ReadDir(128)
+	for pass := 0; pass < 8; pass++ {
+		// Reopen through the held descriptor: deleting while reading can skip
+		// entries on macOS, and each full pass must start at the beginning.
+		reader, err := unix.Openat(int(f.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != nil {
+			return fmt.Errorf("reopening copy: %w", err)
+		}
+		listing := os.NewFile(uintptr(reader), f.Name())
+		entries, err := s.readDir(listing, -1)
+		_ = listing.Close()
 		if err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("reading copy: %w", err)
+		}
+		if len(entries) == 0 {
+			return nil
 		}
 		for _, entry := range entries {
 			fd, name := int(f.Fd()), entry.Name()
 			var st unix.Stat_t
-			if err := unix.Fstatat(fd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			if err := s.statAt(fd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				if errors.Is(err, unix.ENOENT) && s.copyEntryGone(fd, name) {
+					continue
+				}
 				return fmt.Errorf("examining copy entry: %w", err)
 			}
 			flags := 0
 			if st.Mode&unix.S_IFMT == unix.S_IFDIR {
 				child, err := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 				if err != nil {
+					if errors.Is(err, unix.ENOENT) && s.copyEntryGone(fd, name) {
+						continue
+					}
 					return fmt.Errorf("opening copy entry: %w", err)
 				}
 				sub := os.NewFile(uintptr(child), name)
@@ -208,15 +266,15 @@ func (s *containerSweep) removeCopy(f *os.File, root unix.Stat_t, depth int) err
 				flags = unix.AT_REMOVEDIR
 			}
 			var again unix.Stat_t
-			if err := unix.Fstatat(fd, name, &again, unix.AT_SYMLINK_NOFOLLOW); err != nil || st.Dev != again.Dev || st.Ino != again.Ino {
+			if err := s.statAt(fd, name, &again, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) && s.copyEntryGone(fd, name) {
+				continue
+			} else if err != nil || st.Dev != again.Dev || st.Ino != again.Ino {
 				return errors.New("copy entry changed")
 			}
-			if err := unix.Unlinkat(fd, name, flags); err != nil {
+			if err := s.unlinkAt(fd, name, flags); err != nil && (!errors.Is(err, unix.ENOENT) || !s.copyEntryGone(fd, name)) {
 				return fmt.Errorf("unlinking copy entry: %w", err)
 			}
 		}
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
 	}
+	return errors.New("copy removal pass limit")
 }

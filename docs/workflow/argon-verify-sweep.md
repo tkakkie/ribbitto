@@ -23,19 +23,30 @@ configuration.
   send TERM, wait up to five seconds, then KILL and wait again.
 - Containers need the exact lowercase 32-hex verification name,
   `argonreview.owner=verify` label and pinned Go image. Inspect again before
-  removing by full 64-hex ID, then confirm absence.
+  removing by full 64-hex ID, then confirm absence. A matching name and label
+  with a different image reports an unreclaimed container without removal.
 - Copies must be direct children of the runner's fixed `/tmp` parent, named
   `argonreview-container-` followed by 1–20 digits, real directories owned by
   this uid with exactly mode 0700. `/tmp` is resolved once (including macOS's
   symlink); `TMPDIR` cannot redirect either the runner or sweep. All containers,
   including stopped and unrelated ones, are inspected for mounts equal to,
   inside or above a copy, comparing cleaned lexical paths and resolved paths.
-  A Source missing on the host (ENOENT or ENOTDIR), such as a Docker Desktop
-  volume inside its VM, uses only the lexical comparison. Other resolution
-  errors prevent deletion. A failed inspection is ignored only if a fresh
+  Any source component equal to the unique copy name also protects it.
+  Docker Desktop prefixes are handled by removing leading components and
+  comparing each nonempty remainder with the copy's real and `/tmp` paths;
+  prefixed ancestor mounts conservatively protect copies too. Missing sources
+  (ENOENT or ENOTDIR), including VM volume paths, retain these comparisons.
+  An empty bind source, relative path, NUL, `..` component or other resolution
+  error leaves the copy unreclaimed and fails the sweep. An absolute named-volume
+  source elsewhere does not block removal. A failed inspection is ignored only if a fresh
   listing confirms that ID is gone; otherwise discovery failure prevents deletion.
-  Recursive removal uses directory descriptors and never crosses devices;
-  unsafe entries or mount boundaries remain and fail the sweep.
+  Recursive removal uses directory descriptors and never crosses devices,
+  including between the resolved parent and copy root. It reads all entries
+  before unlinking, reopening for full passes until empty, at most eight passes
+  per directory. Unsafe entries, mount boundaries or exhausted passes fail the sweep.
+  Concurrent disappearance is accepted: failed container removal needs a fresh
+  absence listing; ENOENT during copy removal needs a confirming descriptor-relative
+  stat. A copy gone before opening is ignored. Other errors remain failures.
 
 ## Liveness
 
@@ -45,8 +56,11 @@ it. Close-on-exec prevents the Docker child inheriting the lock; server death,
 including SIGKILL, releases it. The sweep holds a successful nonblocking
 exclusive lock probe through removal, also excluding concurrent sweepers.
 
-A locked copy or a copy modified less than 90 seconds ago is in use. The grace
-covers creation before locking. A container is in use if its `/work` bind
+A locked copy or a copy modified less than 90 seconds ago is in use. The copy
+grace counts from the copy directory's mtime (when `tree` is created), covering
+creation before locking. A server killed within 90 seconds leaves its leftovers
+for a later sweep. A run by an older, pre-flock binary is protected only by its
+mount. A container is in use if its `/work` bind
 source's copy parent is live, a client of this uid matches its name, or its
 creation is less than 90 seconds old. Each predicate alone protects it.
 Live or mounted entries report `skipped (in use)` and are not errors.
@@ -73,7 +87,14 @@ cannot confirm these real Docker CLI assumptions:
 - `Config.Image` equals the pinned `golang@sha256:...` string exactly.
 - The label and inspect JSON field names are `Id`, `Name`, `Created`,
   `Config.Image`, `Config.Labels` and `Mounts[].Type/Source/Destination`.
+- Record the bind Source form of `/work` exactly as real inspection reports it,
+  including any Docker Desktop prefix.
+- Confirm macOS `ps -axww -o pid=,ppid=,uid=,lstart=,command=` output parses by
+  running `container-sweep --dry-run` on the host: one unparsable line fails
+  every sweep.
+- Measure that the startup sweep finishes within agy's MCP start timeout.
+  An orphan client can take up to about 10 seconds of TERM/KILL waits.
 
-Confirm both as preflight items, including the ownership label and mount
+Record these preflight results, including the ownership label and mount
 sources in that real container's inspection. This implementation has not run
 Docker or the built sweep; host validation remains pending.

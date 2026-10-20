@@ -87,6 +87,7 @@ inspect)
  ;;
 rm)
  [ "$#" = 3 ] && [ "$2" = -f ] || exit 91
+ [ ! -f "$dir/vanish-rm" ] || { : > "$dir/gone-$3"; exit 1; }
  [ ! -f "$dir/fail-rm" ] || { echo PRIVATE-DIAGNOSTIC >&2; exit 1; }
  [ -f "$dir/keep" ] || : > "$dir/gone-$3"
  ;;
@@ -233,7 +234,7 @@ func TestSweepContainerRevalidation(t *testing.T) {
 			}
 			write(t, filepath.Join(dir, sweepTestID+".next"), string(data))
 			err = s.run()
-			if (err != nil) != (change == "id") {
+			if (err != nil) != (change == "id" || change == "image") {
 				t.Fatalf("result: %v", err)
 			}
 			assertNoSweepRM(t, dir)
@@ -241,7 +242,7 @@ func TestSweepContainerRevalidation(t *testing.T) {
 	}
 }
 func TestSweepContainerScope(t *testing.T) {
-	for _, change := range []string{"no label", "wrong label", "image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
+	for _, change := range []string{"no label", "wrong label", "image", "unlabelled image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
 		t.Run(change, func(t *testing.T) {
 			s, out, dir := sweepFixture(t)
 			c := sweepContainerFixture(t, s, dir)
@@ -252,6 +253,9 @@ func TestSweepContainerScope(t *testing.T) {
 				c.Config.Labels[containerOwnerLabel] = "other"
 			case "image":
 				c.Config.Image = "other"
+			case "unlabelled image":
+				c.Config.Image = "other"
+				c.Config.Labels = nil
 			case "xyz":
 				c.Name = "/argonreview-check-xyz"
 			case "31 hex":
@@ -264,7 +268,12 @@ func TestSweepContainerScope(t *testing.T) {
 				c.Name = "//" + sweepTestName
 			}
 			saveSweepContainer(t, dir, c, ".json")
-			if err := s.run(); err != nil || out.Len() != 0 {
+			err := s.run()
+			if change == "image" {
+				if err == nil || out.String() != "unreclaimed container "+c.ID+"\n" {
+					t.Fatalf("image mismatch: %v %q", err, out)
+				}
+			} else if err != nil || out.Len() != 0 {
 				t.Fatalf("scope: %v %q", err, out)
 			}
 			assertNoSweepRM(t, dir)
@@ -590,7 +599,7 @@ func TestSweepCopyMissingMountSource(t *testing.T) {
 			}
 			c.Mounts = []sweepMount{{"volume", mount, "/anywhere"}}
 			saveSweepContainer(t, dir, c, ".json")
-			if err := s.run(); err != nil {
+			if err := s.run(); (err != nil) != (source == "lexical") {
 				t.Fatal(err)
 			}
 			protected := source != "volume"
@@ -598,6 +607,9 @@ func TestSweepCopyMissingMountSource(t *testing.T) {
 			want := "reclaimed copy "
 			if protected {
 				want = "skipped (in use) copy "
+			}
+			if source == "lexical" {
+				want = "unreclaimed copy "
 			}
 			if !strings.Contains(out.String(), want+copyDir) {
 				t.Fatalf("report %q", out)

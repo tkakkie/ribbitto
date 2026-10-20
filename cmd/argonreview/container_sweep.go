@@ -13,6 +13,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 const sweepGrace = 90 * time.Second
@@ -33,6 +35,9 @@ type containerSweep struct {
 	now            func() time.Time
 	sleep          func(time.Duration)
 	sameDevice     func(uint64, uint64) bool
+	readDir        func(*os.File, int) ([]os.DirEntry, error)
+	statAt         func(int, string, *unix.Stat_t, int) error
+	unlinkAt       func(int, string, int) error
 	out            io.Writer
 	dry            bool
 	err            error
@@ -40,7 +45,8 @@ type containerSweep struct {
 
 func newContainerSweep(out io.Writer, dry bool) *containerSweep {
 	return &containerSweep{runner: dockerRunner{ownGroup: true}, processes: psTable{}, parent: containerCopyParent,
-		uid: os.Getuid, now: time.Now, sleep: time.Sleep, sameDevice: func(a, b uint64) bool { return a == b }, out: out, dry: dry}
+		uid: os.Getuid, now: time.Now, sleep: time.Sleep, sameDevice: func(a, b uint64) bool { return a == b },
+		readDir: (*os.File).ReadDir, statAt: unix.Fstatat, unlinkAt: unix.Unlinkat, out: out, dry: dry}
 }
 
 func sweepContainers(out io.Writer) error { return newContainerSweep(out, false).run() }
@@ -150,7 +156,7 @@ func (s *containerSweep) inspect(id string) (sweepContainer, error) {
 	return c, nil
 }
 func (c sweepContainer) owned() bool {
-	return strings.HasPrefix(c.Name, "/") && sweepContainerName.MatchString(strings.TrimPrefix(c.Name, "/")) && c.Config.Labels[containerOwnerLabel] == containerOwnerValue && c.Config.Image == containerGoImage
+	return strings.HasPrefix(c.Name, "/") && sweepContainerName.MatchString(strings.TrimPrefix(c.Name, "/")) && c.Config.Labels[containerOwnerLabel] == containerOwnerValue
 }
 func (s *containerSweep) live(c sweepContainer) (bool, error) {
 	if c.Created.IsZero() {
@@ -228,6 +234,10 @@ func (s *containerSweep) containers() {
 		if !c.owned() {
 			continue
 		}
+		if c.Config.Image != containerGoImage {
+			s.unreclaimed("container", id)
+			continue
+		}
 		live, err := s.live(c)
 		if err != nil {
 			s.unreclaimed("container", id)
@@ -254,6 +264,10 @@ func (s *containerSweep) containers() {
 		if !again.owned() {
 			continue
 		}
+		if again.Config.Image != containerGoImage {
+			s.unreclaimed("container", id)
+			continue
+		}
 		live, err = s.live(again)
 		if err != nil {
 			s.unreclaimed("container", id)
@@ -263,7 +277,8 @@ func (s *containerSweep) containers() {
 			s.line("skipped (in use) container %s", id)
 			continue
 		}
-		if _, err := s.docker("rm", "-f", id); err != nil || !s.absent(id) {
+		_, _ = s.docker("rm", "-f", id)
+		if !s.absent(id) {
 			s.unreclaimed("container", id)
 			continue
 		}

@@ -61,16 +61,15 @@ gets minimal credentials, Docker and host rights, with no interface
 for arbitrary commands. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
-A fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
-variables, a trusted binary path and fixed start-up arguments for the
-trusted source path and worktree. Neither agy's environment nor a tool
-argument supplies these. The server serves only if its build matches
-the trusted revision, checked against that source. Pre- and post-run checks
-include the MCP file and server.
+A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
+with a trusted binary and fixed source and worktree arguments. Neither agy's
+environment nor a tool argument supplies these. The server serves only if
+its build matches the trusted revision, checked against that source.
+Pre- and post-run checks include the MCP file and server.
 
-The server checks preflight's fixed environment allowlist. The
-runner uses only constants and fixed Docker variables. `FAILED` and `NOT
-VERIFIED` results set `isError`.
+The server allows only `PATH` in its environment. Docker connection settings
+are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
+`FAILED` and `NOT VERIFIED` results set `isError`.
 
 ## Verification container
 

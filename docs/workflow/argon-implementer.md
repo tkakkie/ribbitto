@@ -116,17 +116,16 @@ but enforced by configuration, not by the prompt.
   holds a symlink. Guard/configuration stay outside the
   worktree, where Argon cannot write. [Go](argon-verify.md#control-code-in-go)
   awaits staged checks; scripts stay.
-- **No workspace hooks or customisation.** Workspace hooks run commands
-  outside the sandbox ([running Argon](running-argon.md#the-boundary)).
-  Before every run, fix runs included, Claude checks that the worktree has
-  no symlink, no nested `.git`, none of the guard's refused names and no
-  other workspace-loaded configuration, at any depth, except the trusted
-  baseline: `.github` and the root `AGENTS.md`, `CLAUDE.md`, `.gitattributes`
-  and `.gitmodules`, each present only if `origin/main` tracks it and then
-  identical to it; and that its
-  `.git` file is unchanged. It stops otherwise. The two tracked files are
-  loaded as instructions, as in reviews, and the guard keeps Argon from
-  editing them.
+- **No workspace hooks or customisation.** Hooks run commands outside the
+  sandbox ([running Argon](running-argon.md#the-boundary)). Before each run, fixes
+  included, Claude refuses symlinks, nested `.git` (even in `.github`),
+  guard-refused names and workspace configuration at any depth except the
+  trusted baseline: for each baseline path (`.github` and the root `AGENTS.md`,
+  `CLAUDE.md`, `.gitattributes` and `.gitmodules`), the path is present only if
+  `origin/main` tracks it, and HEAD, the index and the worktree all match the
+  merge base; index flags hiding edits fail. The root `.git` file must be
+  unchanged. Otherwise stop. Baseline instructions
+  load as in reviews; the guard denies edits.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   (the [verify][v] exception is pending, not in force) and URL reads.
   Argon never holds GitHub credentials, never pushes, and

@@ -195,14 +195,13 @@ checks (`argonreview implement-check`,
 [#1435](https://github.com/tkakkie/ribbitto/issues/1435)), container check
 and verify server. These implementations are pending.
 
-The Python guard and zsh scripts remain in use until each stage of
-[#1436] is compared and
-verified before use, with rollback: first the guard, then checks and run
-command. Each stage keeps the full preflight and no weaker boundary; a
-failed comparison, preflight or restoration stops the next real run.
-Unverified code never runs on the host. Only after the staged switches are
-the scripts reference only, with no Python in the run path. #1436 keeps MCP
-off and its file empty.
+Production hooks use the Go `implement-guard` ([#1436] Stage 1, done
+2026-10-20); the Python guard is reference only. The zsh scripts stay until the
+checks and run command are compared and verified, with rollback.
+Each stage keeps the full preflight and no weaker boundary; a failed
+comparison, preflight or restoration stops the next real run. Unverified
+code never runs on the host. After the switches the scripts are reference
+only. #1436 keeps MCP off and its file empty.
 
 If option B cannot be built, the maintainer's fallback is option C: the
 launcher runs the checks between runs.

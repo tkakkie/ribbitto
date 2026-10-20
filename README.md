@@ -131,8 +131,8 @@ An existing path wins. Otherwise, a final dot-separated known extension
 selectors such as `package.Identifier` or `package.Type.Method`: every name
 after the package must be a Go identifier, exported or not, and the
 package directory must hold a regular `.go` file.
-Historical decision records skip this check; their links and
-anchors are still checked.
+Historical decision records skip this path check; links and
+anchors are checked.
 
 `make prepush` is a quick subset for follow-up pushes: it
 regenerates templates, SQL and CSS and fails if that changes a file, then
@@ -143,9 +143,9 @@ docs or `make vuln`, which CI runs separately.
 
 The Argon launcher's Go tests run with other command tests in
 `make check`. CI's `vuln` job runs
-`make vuln` (pinned `govulncheck` over the application module), which
-fails when a known vulnerability is statically reachable from our code.
-It needs the network, so `make check` skips it. When it fails:
+`make vuln` (pinned `govulncheck` on the application module), which
+fails if a known vulnerability is statically reachable from our code.
+It needs the network, so it is not part of `make check`. When it fails:
 bump the dependency in its own pull request, or upgrade Go for a
 standard-library finding; if no fix exists, the maintainer decides.
 

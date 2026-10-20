@@ -2,7 +2,7 @@ name: codeql
 
 on:
   # No pull request trigger: this 11-minute scan is not a required check.
-  # No path filters: skipped workflows never report (see ci.yml); scan every main push.
+  # No path filters: every push to main is scanned.
   push:
     branches: [main]
   schedule:

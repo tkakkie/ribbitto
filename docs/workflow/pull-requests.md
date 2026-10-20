@@ -12,6 +12,9 @@ the lifecycle of an issue are in [`README.md`](README.md).
    CI runs on every push (`make check`'s parts in parallel jobs, and
    `make vuln`; see [Checks](../../README.md#checks)); follow the
    [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
+   CodeQL runs from `.github/workflows/codeql.yml` on pushes to `main` and
+   weekly, not on pull requests; read alerts on `main` in the repository's
+   Security tab (code scanning alerts).
 3. [Cross-review](reviewing.md#review-independence-and-rounds); the implementer
    applies the review. When eligible,
    [closure verification](reviewing.md#closure-verification).

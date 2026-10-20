@@ -185,7 +185,7 @@ func TestVerifyMCPWorktreeRechecked(t *testing.T) {
 			var log bytes.Buffer
 			done := make(chan int, 1)
 			go func() {
-				done <- startVerifyMCP(ctx, []string{"--trusted-source", source, "--worktree", tree}, nil, func(string) error { return nil }, v, in, recv, &log)
+				done <- startVerifyMCP(ctx, []string{"--trusted-source", source, "--worktree", tree}, nil, func(string) error { return nil }, noSweep, v, in, recv, &log)
 				_ = recv.Close()
 			}()
 			reader := bufio.NewReader(out)
@@ -414,6 +414,9 @@ func TestVerifyMCPEnvironmentNoLeak(t *testing.T) {
 		{"malformed arbitrary", []string{"arbitrary-" + secret}, "environment entry without an equals sign"},
 		{"duplicate", []string{"PATH=" + secret + "=first", "PATH=" + secret + "=second"}, `environment variable "PATH" repeats`},
 		{"forbidden", []string{"UNKNOWN=" + secret + "=value"}, `environment variable "UNKNOWN" is forbidden`},
+		{"DOCKER_HOST", []string{"DOCKER_HOST=" + secret + "=value"}, `environment variable "DOCKER_HOST" is forbidden`},
+		{"DOCKER_CONFIG", []string{"DOCKER_CONFIG=" + secret + "=value"}, `environment variable "DOCKER_CONFIG" is forbidden`},
+		{"TMPDIR", []string{"TMPDIR=" + secret + "=value"}, `environment variable "TMPDIR" is forbidden`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := verifyEnvironment(tc.env)
@@ -427,8 +430,8 @@ func TestVerifyMCPEnvironmentNoLeak(t *testing.T) {
 			code := startVerifyMCP(context.Background(), []string{"--trusted-source", "/source", "--worktree", "/tree"}, tc.env, func(string) error {
 				t.Error("trust check ran after environment refusal")
 				return nil
-			}, noVerify(t), strings.NewReader(mcpInit), &out, &log)
-			if code != 1 || out.Len() != 0 || !strings.Contains(log.String(), tc.want) || strings.Contains(out.String()+log.String(), secret) {
+			}, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+			if code != 1 || out.Len() != 0 || log.String() != "argonreview verify-mcp: "+tc.want+"\n" || strings.Contains(out.String()+log.String(), secret) {
 				t.Fatalf("exit %d stdout %q stderr %q", code, &out, &log)
 			}
 		})
@@ -474,17 +477,17 @@ func TestVerifyMCPStartup(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, log bytes.Buffer
-			code := startVerifyMCP(context.Background(), tc.args, nil, func(string) error { return nil }, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+			code := startVerifyMCP(context.Background(), tc.args, nil, func(string) error { return nil }, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
 			if code != tc.code || out.Len() != 0 || log.Len() == 0 {
 				t.Fatalf("%d stdout %q stderr %q", code, &out, &log)
 			}
 		})
 	}
-	for _, name := range []string{"HOME", "GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "GIT_ASKPASS", "GEMINI_API_KEY", "GEMINI_OTHER", "RIBBITTO_ARGON_SOURCE", "UNKNOWN"} {
+	for _, name := range []string{"HOME", "GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "GIT_ASKPASS", "GEMINI_API_KEY", "GEMINI_OTHER", "RIBBITTO_ARGON_SOURCE", "DOCKER_HOST", "DOCKER_CONFIG", "TMPDIR", "UNKNOWN"} {
 		t.Run(name, func(t *testing.T) {
 			var out, log bytes.Buffer
 			value := "/dedicated-home/private-sentinel"
-			code := startVerifyMCP(context.Background(), good, []string{name + "=" + value}, func(string) error { return nil }, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+			code := startVerifyMCP(context.Background(), good, []string{name + "=" + value}, func(string) error { return nil }, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
 			if code != 1 || out.Len() != 0 || !strings.Contains(log.String(), name) || strings.Contains(log.String(), value) {
 				t.Fatalf("%d %q %q", code, &out, &log)
 			}
@@ -492,17 +495,17 @@ func TestVerifyMCPStartup(t *testing.T) {
 	}
 	for _, env := range [][]string{{"PATH"}, {"PATH=x", "PATH=y"}} {
 		var out, log bytes.Buffer
-		if code := startVerifyMCP(context.Background(), good, env, func(string) error { return nil }, noVerify(t), strings.NewReader(mcpInit), &out, &log); code != 1 || out.Len() != 0 {
+		if code := startVerifyMCP(context.Background(), good, env, func(string) error { return nil }, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log); code != 1 || out.Len() != 0 {
 			t.Fatal("invalid env accepted")
 		}
 	}
 	var out, log bytes.Buffer
-	if code := startVerifyMCP(context.Background(), good, []string{"PATH=/usr/bin:/bin", "TMPDIR=/tmp", "DOCKER_HOST=local", "DOCKER_CONFIG=/nonexistent"}, func(s string) error {
+	if code := startVerifyMCP(context.Background(), good, []string{"PATH=/usr/bin:/bin"}, func(s string) error {
 		if s != source {
 			t.Error("source changed")
 		}
 		return nil
-	}, noVerify(t), strings.NewReader(mcpInit), &out, &log); code != 0 || len(readMCPResponses(t, out.String())) != 1 {
+	}, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log); code != 0 || len(readMCPResponses(t, out.String())) != 1 {
 		t.Fatalf("allowed env: %d %q", code, &log)
 	}
 }
@@ -542,7 +545,7 @@ func TestVerifyMCPTrustFailures(t *testing.T) {
 				return "abc", nil
 			}
 			var out, log bytes.Buffer
-			code := startVerifyMCP(context.Background(), []string{"--trusted-source", source, "--worktree", tree}, nil, func(s string) error { return checkTrustedSource(s, info, ok, gitFn) }, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+			code := startVerifyMCP(context.Background(), []string{"--trusted-source", source, "--worktree", tree}, nil, func(s string) error { return checkTrustedSource(s, info, ok, gitFn) }, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
 			if code != 1 || out.Len() != 0 || log.Len() == 0 {
 				t.Fatalf("%d %q %q", code, &out, &log)
 			}
@@ -998,7 +1001,7 @@ func TestVerifyMCPCaseAliasOverlap(t *testing.T) {
 	overlap := os.SameFile(sourceInfo, aliasInfo)
 	for _, paths := range [][2]string{{source, alias}, {source, filepath.Join(alias, "child")}, {filepath.Join(source, "child"), alias}} {
 		var out, log bytes.Buffer
-		code := startVerifyMCP(context.Background(), []string{"--trusted-source", paths[0], "--worktree", paths[1]}, nil, func(string) error { return nil }, noVerify(t), strings.NewReader(mcpInit), &out, &log)
+		code := startVerifyMCP(context.Background(), []string{"--trusted-source", paths[0], "--worktree", paths[1]}, nil, func(string) error { return nil }, noSweep, noVerify(t), strings.NewReader(mcpInit), &out, &log)
 		if overlap {
 			if code != 1 || out.Len() != 0 || !strings.Contains(log.String(), "overlap") {
 				t.Fatalf("aliased overlap accepted: %v code %d stdout %q stderr %q", paths, code, &out, &log)

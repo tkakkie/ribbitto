@@ -1,10 +1,12 @@
 # Argon verification
 
-The maintainer chose option B on 2026-10-19
+Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Pending. Generated-file packages stay CI-only (`NOT VERIFIED`);
-generation in verify needs a `process` issue.
+Implementation pending. Generated files stay CI-only; verify generation needs
+a `process` issue.
+
+[Leftover sweep](argon-verify-sweep.md).
 
 ## Status
 
@@ -14,7 +16,7 @@ The `verify` permission is **NOT in force**. It requires
 [#1431],
 [#1432](https://github.com/tkakkie/ribbitto/issues/1432) and #1442
 to be merged; [#1436] Stage 1 to be complete before [#1433]'s extended
-real-path preflight (agy's real normal-operation hook already uses the trusted-revision Go
+real-path preflight (agy's real normal hook already uses the trusted-revision Go
 guard, after Stage 1's whole existing preflight passed through it and one
 real run completed with it); that preflight to pass and be recorded; and the
 maintainer to explicitly approve enabling.
@@ -61,15 +63,15 @@ minimal credentials, Docker and host rights, and no arbitrary-command
 interface. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
-A fixed `mcp_config.json` starts it via `/usr/bin/env -i` with fixed
-variables, a trusted binary path and fixed trusted-source-path/worktree
-start-up arguments. Neither agy's environment nor tool arguments supply these. The server serves only if its build matches
-the trusted revision, checked against that source. Pre- and post-run checks
-include the MCP file and server.
+A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
+with a trusted binary and fixed source and worktree arguments. Neither agy's
+environment nor a tool argument supplies these. The server serves only if
+its build matches the trusted revision, checked against that source.
+Pre- and post-run checks include the MCP file and server.
 
-The server checks preflight's fixed environment allowlist. The
-runner uses only constants and fixed Docker variables. `FAILED` and `NOT
-VERIFIED` results set `isError`.
+The server allows only `PATH` in its environment. Docker connection settings
+are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
+`FAILED` and `NOT VERIFIED` results set `isError`.
 
 ## Verification container
 
@@ -183,7 +185,7 @@ above; the Start gate then points to #1433's record.
 
 ## Control code in Go
 
-The direction is Go in `cmd/argonreview`, built from the trusted revision:
+Use Go in `cmd/argonreview`, built from the trusted revision:
 the implementer guard (`argonreview implement-guard`,
 [#1431]), pre- and post-run
 checks (`argonreview implement-check`,

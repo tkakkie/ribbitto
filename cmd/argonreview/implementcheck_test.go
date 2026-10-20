@@ -857,10 +857,13 @@ func implementCheckFixture(t *testing.T) *implementCheckTestFixture {
 	f.deps.accountHome = f.account
 	f.deps.version = func(string) ([]byte, error) { return []byte("1.4.0\n"), nil }
 	f.deps.git = func(args ...string) ([]byte, int, error) {
+		if args[0] == "rev-parse" {
+			return []byte("sha1\n"), 0, nil
+		}
 		if args[0] == "merge-base" {
 			return []byte(strings.Repeat("a", 40) + "\n"), 0, nil
 		}
-		if args[0] != "ls-tree" && args[0] != "diff-tree" && args[0] != "ls-files" && args[0] != "diff" {
+		if args[0] != "ls-tree" && args[0] != "ls-files" {
 			t.Errorf("unexpected git %v", args)
 		}
 		return nil, 0, nil

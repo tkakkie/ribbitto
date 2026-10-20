@@ -26,10 +26,14 @@
 // verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
 // MCP tool, verify, over stdio; it runs the container check on the fixed
 // worktree (#1430).
+// container-sweep [--dry-run] reclaims abandoned verification clients, labelled
+// containers and private source copies using the trusted build (#1433).
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
 // implement-check checks the implementer's home and worktree from a trusted build.
+// implement-config generates and checks the trusted implementer configuration
+// in a separate output directory without running the binary (#1433).
 package main
 
 import (
@@ -53,8 +57,14 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "implement-config" {
+		return implementConfigCommand(args[1:], stdout, stderr)
+	}
 	if len(args) > 0 && args[0] == "verify-mcp" {
 		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "container-sweep" {
+		return containerSweepCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
@@ -140,7 +150,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>]")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test> <package-pattern> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] | "+implementConfigUsage)
 	return 2
 }
 

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ribbitto-verify": {
+      "args": [
+        "-i",
+        "PATH=/usr/bin:/bin",
+        "/trusted/bin/argonreview",
+        "verify-mcp",
+        "--trusted-source",
+        "/trusted/source",
+        "--worktree",
+        "/trusted/worktree"
+      ],
+      "command": "/usr/bin/env",
+      "disabled": false
+    }
+  }
+}

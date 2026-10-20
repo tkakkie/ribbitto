@@ -100,15 +100,22 @@ type dockerRunner struct {
 	path     string
 }
 
-func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
-	// Look up only in trusted directories, never the caller's PATH or cwd.
-	var binary string
-	searchPath := r.path
+func dockerExecutablePaths(searchPath string) []string {
 	if searchPath == "" {
 		searchPath = containerPath
 	}
+	var paths []string
 	for _, dir := range filepath.SplitList(searchPath) {
-		if path, err := exec.LookPath(filepath.Join(dir, "docker")); err == nil {
+		paths = append(paths, filepath.Join(dir, "docker"))
+	}
+	return paths
+}
+
+func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stderr io.Writer) (int, error) {
+	// Look up only in trusted directories, never the caller's PATH or cwd.
+	var binary string
+	for _, candidate := range dockerExecutablePaths(r.path) {
+		if path, err := exec.LookPath(candidate); err == nil {
 			binary = path
 			break
 		}

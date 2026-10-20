@@ -69,6 +69,9 @@ func (s *containerSweep) openCopy(parent int, name string) (*os.File, unix.Stat_
 	return f, st, s.now().Sub(info.ModTime()) < sweepGrace, nil
 }
 
+// Real Docker's host-mount form must be recorded by the host preflight.
+const sweepHostMountPrefixes = "/host_mnt:/run/host_mnt:/run/desktop/mnt/host"
+
 // A mount of either a copy subtree or its ancestor can expose the copy.
 func sweepPathsOverlap(a, b string) bool {
 	a, b = filepath.Clean(a), filepath.Clean(b)
@@ -86,15 +89,20 @@ func sweepPathsOverlap(a, b string) bool {
 	alias := a
 	if strings.HasPrefix(a, "/private/tmp/") {
 		alias = strings.TrimPrefix(a, "/private")
+	} else if strings.HasPrefix(a, "/tmp/") {
+		alias = "/private" + a
 	}
-	// Docker Desktop may prepend host-path components. Even a prefixed
-	// ancestor protects conservatively; never compare the empty remainder (/).
-	for remainder := strings.TrimPrefix(b, "/"); remainder != ""; {
-		path := "/" + remainder
-		if within(a, path) || within(path, a) || within(alias, path) || within(path, alias) {
-			return true
+	for _, prefix := range filepath.SplitList(sweepHostMountPrefixes) {
+		if b == prefix || strings.HasPrefix(b, prefix+"/") {
+			b = strings.TrimPrefix(b, prefix)
+			if b == "" {
+				b = "/"
+			}
+			break
 		}
-		_, remainder, _ = strings.Cut(remainder, "/")
+	}
+	if within(a, b) || within(b, a) || within(alias, b) || within(b, alias) {
+		return true
 	}
 	return false
 }
@@ -127,9 +135,9 @@ func (s *containerSweep) mounted(dir string) (bool, error) {
 					return false, errors.New("parent traversal in mount source")
 				}
 			}
-			real, err := filepath.EvalSymlinks(m.Source)
-			// Missing VM paths still need prefix and copy-name protection.
-			if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENOTDIR) {
+			real, err := s.resolveMount(m.Source)
+			// Non-bind Sources need lexical protection even when host resolution fails.
+			if m.Type == "bind" && err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, unix.ENOTDIR) {
 				return false, err
 			}
 			if sweepPathsOverlap(dir, m.Source) || err == nil && sweepPathsOverlap(dir, real) {
@@ -217,7 +225,8 @@ func (s *containerSweep) removeCopy(f *os.File, root unix.Stat_t, depth int) err
 	if depth > 256 {
 		return errors.New("copy nesting limit")
 	}
-	for pass := 0; pass < 8; pass++ {
+	// The ninth listing only verifies the eight deletion passes.
+	for pass := 0; pass <= 8; pass++ {
 		// Reopen through the held descriptor: deleting while reading can skip
 		// entries on macOS, and each full pass must start at the beginning.
 		reader, err := unix.Openat(int(f.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
@@ -232,6 +241,9 @@ func (s *containerSweep) removeCopy(f *os.File, root unix.Stat_t, depth int) err
 		}
 		if len(entries) == 0 {
 			return nil
+		}
+		if pass == 8 {
+			return errors.New("copy removal pass limit")
 		}
 		for _, entry := range entries {
 			fd, name := int(f.Fd()), entry.Name()

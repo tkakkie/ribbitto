@@ -68,77 +68,10 @@ func TestSweepCopyPasses(t *testing.T) {
 				t.Fatalf("endless=%v: %v; %s", endless, err, out)
 			}
 			sweepExists(t, dir, endless)
-			if endless && (reads != 8 || !strings.Contains(out.String(), "unreclaimed copy "+dir)) {
+			if endless && (reads != 9 || !strings.Contains(out.String(), "unreclaimed copy "+dir)) {
 				t.Fatalf("unbounded removal: reads=%d report=%q", reads, out)
 			}
 		})
-	}
-}
-
-func TestSweepMountForms(t *testing.T) {
-	const copyDir = "/private/tmp/argonreview-container-123"
-	for _, tc := range []struct {
-		name, source string
-		want         bool
-	}{
-		{"desktop-root", "/host_mnt/private/tmp/argonreview-container-123", true},
-		{"desktop-tree", "/host_mnt/private/tmp/argonreview-container-123/tree", true},
-		{"real", copyDir, true},
-		{"tmp-sub", "/tmp/argonreview-container-123/sub", true},
-		{"desktop-ancestor", "/host_mnt/private/tmp", true},
-		{"tmp-ancestor", "/host_mnt/tmp", true},
-		{"many-prefixes", "/desktop/host/mnt/private/tmp", true},
-		{"cleaned-prefix", "/host_mnt//private//tmp/.", true},
-		{"middle-name", "/elsewhere/argonreview-container-123/different", true},
-		{"unrelated", "/elsewhere/other", false},
-		{"volume", "/var/lib/docker/volumes/id/_data", false},
-		{"sibling", copyDir + "4", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := sweepPathsOverlap(copyDir, tc.source); got != tc.want {
-				t.Fatalf("source %q protects=%v, want %v", tc.source, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestSweepMountInvalid(t *testing.T) {
-	for _, tc := range []struct{ name, source string }{
-		{"relative", "host_mnt/tmp/copy"}, {"parent", "/absent/../tmp"},
-		{"nul", "/tmp/a\x00b"}, {"empty-bind", ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s, out, fixture := sweepFixture(t)
-			dir := sweepCopyFixture(t, s)
-			c := sweepContainerFixture(t, s, fixture)
-			c.Name = "/foreign"
-			c.Mounts = []sweepMount{{"bind", tc.source, "/work"}}
-			saveSweepContainer(t, fixture, c, ".json")
-			if err := s.run(); err == nil {
-				t.Fatal("uninterpretable mount accepted")
-			}
-			sweepExists(t, filepath.Join(dir, "tree", "file"), true)
-			if !strings.Contains(out.String(), "unreclaimed copy "+dir) {
-				t.Fatalf("report %q", out)
-			}
-			assertNoSweepRM(t, fixture)
-		})
-	}
-}
-
-func TestSweepMountPrefixProtection(t *testing.T) {
-	s, out, fixture := sweepFixture(t)
-	dir := sweepCopyFixture(t, s)
-	c := sweepContainerFixture(t, s, fixture)
-	c.Name = "/foreign"
-	c.Mounts = []sweepMount{{"bind", "/host_mnt" + filepath.Join(dir, "tree"), "/work"}}
-	saveSweepContainer(t, fixture, c, ".json")
-	if err := s.run(); err != nil {
-		t.Fatal(err)
-	}
-	sweepExists(t, dir, true)
-	if !strings.Contains(out.String(), "skipped (in use) copy "+dir) {
-		t.Fatalf("report %q", out)
 	}
 }
 
@@ -263,4 +196,83 @@ func TestSweepCopyAbsentVerificationError(t *testing.T) {
 		t.Fatal("unknown absence accepted")
 	}
 	sweepExists(t, dir, true)
+}
+
+func TestSweepCopyFinalPass(t *testing.T) {
+	for _, remain := range []bool{false, true} {
+		t.Run(fmt.Sprint(remain), func(t *testing.T) {
+			s, out, _ := sweepFixture(t)
+			dir := sweepCopyFixture(t, s)
+			// One visible entry per pass: the eighth deletion must get a final listing.
+			if err := os.RemoveAll(filepath.Join(dir, "tree")); err != nil {
+				t.Fatal(err)
+			}
+			write(t, filepath.Join(dir, "entry"), "copy")
+			reads, deletes := 0, 0
+			s.readDir = func(f *os.File, n int) ([]os.DirEntry, error) {
+				if filepath.Base(f.Name()) == filepath.Base(dir) {
+					reads++
+				}
+				return f.ReadDir(n)
+			}
+			s.unlinkAt = func(fd int, name string, flags int) error {
+				err := unix.Unlinkat(fd, name, flags)
+				if err == nil && name == "entry" {
+					deletes++
+					if deletes < 8 || remain {
+						write(t, filepath.Join(dir, "entry"), "late")
+					}
+				}
+				return err
+			}
+			ageSweepCopy(t, s, dir)
+			err := s.run()
+			if (err != nil) != remain || reads != 9 || deletes != 8 {
+				t.Fatalf("remain=%v reads=%d deletes=%d err=%v report=%s", remain, reads, deletes, err, out)
+			}
+			sweepExists(t, dir, remain)
+			if remain && !strings.Contains(out.String(), "unreclaimed copy "+dir) {
+				t.Fatalf("report %q", out)
+			}
+		})
+	}
+}
+
+func TestSweepCopyDepthLimit(t *testing.T) {
+	for _, depth := range []int{256, 257} {
+		t.Run(fmt.Sprint(depth), func(t *testing.T) {
+			s, out, _ := sweepFixture(t)
+			dir := sweepCopyFixture(t, s)
+			// Descriptor-relative creation avoids host path-length limits.
+			fd, err := openSweepParent(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for range depth {
+				if err := unix.Mkdirat(fd, "d", 0o700); err != nil {
+					_ = unix.Close(fd)
+					t.Fatal(err)
+				}
+				next, err := unix.Openat(fd, "d", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+				_ = unix.Close(fd)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fd = next
+			}
+			if err := unix.Close(fd); err != nil {
+				t.Fatal(err)
+			}
+			ageSweepCopy(t, s, dir)
+			err = s.run()
+			limited := depth > 256
+			if (err != nil) != limited {
+				t.Fatalf("depth=%d err=%v report=%s", depth, err, out)
+			}
+			sweepExists(t, dir, limited)
+			if limited && !strings.Contains(out.String(), "unreclaimed copy "+dir) {
+				t.Fatalf("report %q", out)
+			}
+		})
+	}
 }

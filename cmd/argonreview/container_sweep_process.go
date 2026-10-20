@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -90,7 +90,7 @@ func (psTable) signal(pid int, sig syscall.Signal) error { return syscall.Kill(p
 
 func dockerClientName(command string) string {
 	first, rest, ok := strings.Cut(command, " ")
-	if !ok || !filepath.IsAbs(first) || !strings.HasSuffix(first, "/docker") {
+	if !ok || !slices.Contains(dockerExecutablePaths(""), first) {
 		return ""
 	}
 	rest, ok = strings.CutPrefix(rest, "run --pull=never --name ")

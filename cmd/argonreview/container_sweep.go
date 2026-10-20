@@ -35,6 +35,7 @@ type containerSweep struct {
 	now            func() time.Time
 	sleep          func(time.Duration)
 	sameDevice     func(uint64, uint64) bool
+	resolveMount   func(string) (string, error)
 	readDir        func(*os.File, int) ([]os.DirEntry, error)
 	statAt         func(int, string, *unix.Stat_t, int) error
 	unlinkAt       func(int, string, int) error
@@ -46,7 +47,7 @@ type containerSweep struct {
 func newContainerSweep(out io.Writer, dry bool) *containerSweep {
 	return &containerSweep{runner: dockerRunner{ownGroup: true}, processes: psTable{}, parent: containerCopyParent,
 		uid: os.Getuid, now: time.Now, sleep: time.Sleep, sameDevice: func(a, b uint64) bool { return a == b },
-		readDir: (*os.File).ReadDir, statAt: unix.Fstatat, unlinkAt: unix.Unlinkat, out: out, dry: dry}
+		resolveMount: filepath.EvalSymlinks, readDir: (*os.File).ReadDir, statAt: unix.Fstatat, unlinkAt: unix.Unlinkat, out: out, dry: dry}
 }
 
 func sweepContainers(out io.Writer) error { return newContainerSweep(out, false).run() }

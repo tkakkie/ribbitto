@@ -32,18 +32,24 @@ configuration.
   including stopped and unrelated ones, are inspected for mounts equal to,
   inside or above a copy, comparing cleaned lexical paths and resolved paths.
   Any source component equal to the unique copy name also protects it.
-  Docker Desktop prefixes are handled by removing leading components and
-  comparing each nonempty remainder with the copy's real and `/tmp` paths;
-  prefixed ancestor mounts conservatively protect copies too. Missing sources
-  (ENOENT or ENOTDIR), including VM volume paths, retain these comparisons.
-  An empty bind source, relative path, NUL, `..` component or other resolution
-  error leaves the copy unreclaimed and fails the sweep. An absolute named-volume
-  source elsewhere does not block removal. A failed inspection is ignored only if a fresh
-  listing confirms that ID is gone; otherwise discovery failure prevents deletion.
+  Ancestor comparisons strip only the known host-mount prefixes `/host_mnt`,
+  `/run/host_mnt` and `/run/desktop/mnt/host`, on component boundaries, before
+  comparing with the copy's `/tmp` and `/private/tmp` spellings. Unrelated
+  sources such as `/var/tmp`, `/home/me/tmp` and `/something/private/tmp`
+  do not protect a copy. The copy-name component rule also works with unknown
+  prefixes. Missing sources (ENOENT or ENOTDIR), including VM volume paths,
+  retain these comparisons. An empty bind source, relative path, NUL or `..`
+  component leaves the copy unreclaimed and fails the sweep. Other resolution
+  errors, including EACCES, fail safe only for bind mounts. For volume, tmpfs
+  and other mount types, a resolution error retains lexical comparisons
+  without failing: their Sources need not be accessible host paths. An
+  absolute named-volume source elsewhere does not block removal. A failed
+  inspection is ignored only if a fresh listing confirms that ID is gone; otherwise discovery failure prevents deletion.
   Recursive removal uses directory descriptors and never crosses devices,
   including between the resolved parent and copy root. It reads all entries
   before unlinking, reopening for full passes until empty, at most eight passes
-  per directory. Unsafe entries, mount boundaries or exhausted passes fail the sweep.
+  per directory, followed by a final empty-directory check. Unsafe entries,
+  mount boundaries or exhausted passes fail the sweep.
   Concurrent disappearance is accepted: failed container removal needs a fresh
   absence listing; ENOENT during copy removal needs a confirming descriptor-relative
   stat. A copy gone before opening is ignored. Other errors remain failures.
@@ -77,6 +83,30 @@ Containers made before the ownership label was added are never reclaimed;
 inspect them manually and use `docker rm -f <id>` with their exact ID.
 Their mounted copies remain protected. The sweep can be called independently
 before and after checks; the shell launcher does not yet add those calls.
+
+For `unreclaimed container <id>` caused by an image mismatch, run
+`docker inspect <id>` and confirm it is ours: the name must be exactly
+`argonreview-check-` plus 32 lowercase hex digits, and the
+`argonreview.owner=verify` label must match. Then remove it with
+`docker rm -f <id>`, using that exact ID. Typical causes are a change to
+`containerGoImage` since creation, or a real `Config.Image` form differing
+from what the preflight recorded. This refuses `verify-mcp` and
+`container-check` startup until the container is removed or its run finishes
+and cleans it up. It requires our exact name AND label, which only this tool
+creates; unrelated image mismatches do not cause this refusal.
+
+For an `unreclaimed copy`, or a copy protected forever by a mount, inspect
+containers with `docker inspect <id>` to find which one mounts it. If it is
+a stale verification container, confirm its exact name and label and remove
+it by exact ID. Alternatively, delete the copy directory by hand after
+checking that nothing mounts it. A blocked copy may report `skipped (in use)`
+while its mount remains, even when its run is no longer active.
+
+An ancestor mount of the whole `/tmp` under a not-yet-known VM prefix is not
+detected by the ancestor check; only the copy-name component rule applies
+there. The host preflight records the real Source form. If its prefix is
+missing, add it to `sweepHostMountPrefixes` in
+`cmd/argonreview/container_sweep_copy.go` before relying on ancestor protection.
 
 ## Host preflight
 

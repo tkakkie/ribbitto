@@ -1,15 +1,13 @@
 # Web layers: how the rules are checked
 
-Rules: [layers](web-layers.md), [DOM contract](web-contracts.md),
+Rules: [layers](web-layers.md), [contracts](web-contracts.md),
 [JavaScript](web-javascript.md).
-[Decision 43](web-toolchain.md) amends checks for typed sources/modules,
-contracts and hashed delivery, implemented later by #1410–#1414. Current
-checks stay until replaced; keep browser tests. Regex is no security boundary.
+[43's toolchain](web-toolchain.md): planned.
 
 ## How the rules are checked
 
-Checks: imports (depguard), no `templ.Raw` (forbidigo),
-markup (`TestPagesMarkup`, [a11y]).
+Tools check layer imports (depguard), no `templ.Raw` (forbidigo),
+and markup in `TestPagesMarkup` ([a11y]).
 Depguard forbids non-test `internal/web/view` imports of `internal/identity`,
 `internal/org` or `internal/conversation`, including sub-packages.
 `TestPagesMarkup` follows each case's `hx-get`/`hx-post` in both languages
@@ -17,14 +15,14 @@ with `HX-Request: true`: `hx-target` ids in the requesting page, `hx-select`
 response matches, every `hx-select-oob` response match and page destination id.
 Selection may use response-only ids. Selectors support `#id`, `#id > tag` and comma-separated lists;
 new syntax needs test support. Non-id targets `this`, `closest …` and `find …` are allowed;
-any ids they name are still checked in the page. Composer
+any ids they name are still checked in the page. The composer's
 `hx-disabled-elt='find button[type="submit"]:not([form])'` and `hx-sync="this:drop"`
 are not swap selectors. The sibling typing form is checked for its POST
 route, action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
 
-Tests assert [DOM-contract](web-contracts.md) attributes on their producing
-elements (#351): `TestMessagePagingHandler` on full
+The data attributes in the [DOM contract](web-contracts.md) are asserted on the elements that
+own them, where they are produced (#351): `TestMessagePagingHandler` on full
 pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
 pages (`data-topic`), `TestMessageRendererSharesRenders` on the `message`
 and `messages-moved` stream payloads, and `TestPagesCarryOwnSession` on the
@@ -33,7 +31,7 @@ session marker of both organisation pages.
 `TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
 and `LiveMessageItem` alone in both languages and applies the fragment
 markup rules.
-`TestPagesMarkup` also checks handler composer fragments.
+`TestPagesMarkup` also checks the composer fragments returned by handlers.
 
 `TestPagesMarkup` checks plain fallbacks (`fallback_test.go`): matching URL/method,
 except the read-only quote form's conversation GET and channel chip POST (#1160).
@@ -42,15 +40,16 @@ URLs compare structurally; `TestMessagePagingHandler` checks paging success.
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
 errors (422) for feeds and topics; an HX topic fragment targets the posted
 message's topic. `TestTopicPostScopeAgainstPostgreSQL` keeps unknown,
-other-channel and non-member topic posts 404 with and without HX. `TestMessagePagingHandler`: Load older with/without HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
+other-channel and non-member topic posts 404 with and without HX. `TestMessagePagingHandler` covers Load older with and without
+HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
 for unenhanced channel creation (303/422). Plain posting errors and history
 responses assert the full layout; enhanced posting responses assert the
 composer alone, without another history read.
 
-Review checks what patterns cannot prove: stored values stay within UX settings,
+Reviewers check what patterns cannot prove: stored values stay within UX settings,
 decision 37's drafts or [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
 classes (1 public, 2 organisation, 3 message content, requiring its own
-decision); current scripts own no application state beyond decisions 34 and 37;
+decision); a script owns no application state beyond decisions 34 and 37;
 composer request URLs come from server-rendered attributes; components make
 no authorisation decisions.
 
@@ -85,7 +84,7 @@ queued success, tombstones, backspacing, newer text.
 
 ### Shared browser tests
 
-`TestBrowser` scenarios: `registerBrowserScenarios` in
+`TestBrowser` scenarios are registered in `registerBrowserScenarios` in
 `internal/web/message_stream_browser_test.go`.
 `RIBBITTO_BROWSER_SHARD=k/n` runs one local shard; if shell-exported,
 `make check` silently runs a subset.
@@ -151,12 +150,13 @@ It rejects:
 - `var`/`let`/`const` and named `function` declarations at zero brace and
   parenthesis depth (a keyword after `.`, such as `options.var`, is a
   property name and passes), plus direct dot-property assignments and increments
-  or decrements on `window`/`globalThis`. Multiple IIFEs and scoped event
-  handlers pass; no file structure is required.
+  or decrements on `window`/`globalThis`. No particular file structure is
+  required; multiple IIFEs and scoped event handlers pass.
 
-This is a bounded pattern check, not a JavaScript parser. It cannot resolve aliases, computed properties, multiline expressions or
-template interpolations. Regex literals are unrecognized; their contents can look like code,
-comments or delimiters. Delimiter
+This is a bounded pattern check, not a JavaScript parser. It does not
+resolve aliases, computed properties, expressions split across lines or
+template interpolations. Regular-expression literals are not recognized;
+their contents can be mistaken for code, comments or delimiters. Delimiter
 depth is not scope analysis: block-level `var`, implicit globals and other
 indirect writes can escape it, while some named function expressions can
 look like declarations. Reviewers check these cases, all HTML writes and
@@ -164,9 +164,9 @@ globals by hand. Stored values need the review described above.
 
 ## Audit, 2026-10-01 (M3)
 
-Every HTML handler in `internal/web`, templ component and application
-script in `web/static` was audited against these rules on 2026-09-30
-and after M3 (#163).
+Every HTML handler in `internal/web`, every templ component and every
+application script in `web/static` was read against these rules, first on
+2026-09-30 and again after M3 (#163).
 
 | Where | Finding | Fixed by |
 |---|---|---|
@@ -174,7 +174,7 @@ and after M3 (#163).
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
 | `message-stream-v13.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
-Other findings:
+Everything else conforms:
 
 - **Handlers.** Pages, the composer fragment and the event stream render
   view models through templ.

@@ -1,6 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
-Browser responsibilities: [decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md).
+Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
+Target browsers, compatibility rules and verification status: [`browser-targets.md`](browser-targets.md).
 
 ## Progressive enhancement
 
@@ -62,7 +63,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   Feed/topic pending items use the [composer contract](web-composer.md#composer):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v19.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v20.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one. Events on `#message-body`:
   `message-sending` and `message-sent` bind draft snapshots/confirmation to each
@@ -137,20 +138,17 @@ htmx does only requests/swaps; the server and templ own HTML.
 ## JavaScript
 
 See [JavaScript responsibilities and constraints](web-javascript.md).
-[Decision 43](web-toolchain.md) amends the source/build and client-state
-rules: typed in-memory modules, with server HTML and the no-JavaScript core
-retained. Implemented later by #1410–#1415 and #1416–#1421; current script
-delivery and state adapters apply until replaced. Requests await #1361.
+[Decision 43's toolchain page](web-toolchain.md) covers the planned amendment.
 
-**Current state exceptions:**
+**Current exceptions** to the no-application-state rule:
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own sidebar
 badge numbers and bounded recovery state, never creating elements or making
 requests; the server still renders the badges and htmx sends resync requests.
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
 allows bounded composer state (pending posts, idempotency keys, session-bound
 drafts); implemented uses follow the [composer contract](web-composer.md).
-Requests stay with htmx. [Composer growth](../ui-composer.md) is CSS;
-the script preserves the reader's position as the list resizes.
+Requests stay with htmx. [Composer growth](../ui-composer.md) uses CSS;
+the composer script preserves the reader's position as the list resizes.
 
 ## How the rules are checked
 

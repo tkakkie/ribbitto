@@ -19,13 +19,23 @@ caret positions and selections keep native scrolling. Below `short:` the cap
 is three lines and the conversation still scrolls as a whole
 ([short heights](ui-components.md#short-heights)).
 
-The script sets `--composer-viewport-h` from `visualViewport.height` on load,
-viewport resize/scroll and window resize/orientation changes, writing only
-changed values. Without that API, the cap uses `dvh`. iOS Safari's keyboard
-shrinks the visual viewport but not `dvh`. `h-conversation-viewport` ends the
-frame at the visible bottom (height plus `offsetTop`), keeping the composer
-top visible when Safari pans. These size changes trigger the existing
-list/textarea observer; no second scroll handler is needed.
+The script sets `--composer-viewport-h` / `--composer-viewport-top` on
+`#organization-stream`, which carries `h-conversation-viewport` and contains
+the textarea. It writes only when `visualViewport.height` differs from
+`innerHeight` or `offsetTop` from zero by more than 1 px; matching again removes
+both overrides. Normal desktop loads and browsers without that API use the
+CSS `100dvh` fallback. Viewport resize/scroll and window resize/orientation
+listeners write only changed values. iOS Safari's keyboard shrinks the visual
+viewport but not `dvh`; height plus `offsetTop` keeps the frame's bottom at the
+visible bottom when Safari pans. The frame is outside every htmx swap target;
+navigation uses full pages, so no htmx history restore replaces it.
+
+First layout measurements wait for the list/textarea/form ResizeObserver,
+before paint. It scrolls to newest (or keeps the native message fragment),
+remembers that anchor, then measures/writes the quote deduction last. CSS's
+zero fallback needs no write without a chip. If the deduction resizes the
+composer, another observer delivery restores the anchor before paint without
+forcing layout after that first write.
 
 The composer script remembers whether `#message-list` is at its newest
 message (gap at most 2 px), or its first visible item and offset. On a list

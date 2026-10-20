@@ -161,4 +161,4 @@ handlers and mount/unmount, minified with esbuild, in gzip bytes — plain DOM
 Solid 7,685, Preact with `@preact/signals` 7,956, Svelte 17,496
 ([samples and build](https://github.com/tkakkie/ribbitto/issues/1245#issuecomment-6219079003)).
 
-**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) (TypeScript default, Go-driven build and limited Node/npm; island gate, per-feature route and §5 budget retained).
+**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) (TypeScript default, Go-driven build and limited Node/npm; §3 island gate/per-feature route, §4 HTML rule and §5 budget retained).

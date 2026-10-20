@@ -54,6 +54,18 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		if !placed {
 			t.Fatalf("%s: the menu is not open where it belongs", what)
 		}
+		for selector, name := range map[string]string{button: "message.actions", menu + " a": "message.copy_link", menu + " button[form=quote-form]": "message.quote", menu + " [data-pin-action=false]": "message.pin"} {
+			tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: page.MustElement(selector).Object.ObjectID}).Call(page)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tree.Nodes) == 0 || tree.Nodes[0].Ignored || tree.Nodes[0].Name == nil || tree.Nodes[0].Name.Value.Str() != name {
+				t.Fatalf("%s: %s lost its accessible name", what, selector)
+			}
+			if selector == button && (tree.Nodes[0].Description == nil || tree.Nodes[0].Description.Value.Str() != "hello") {
+				t.Fatalf("%s: actions button lost its message description", what)
+			}
+		}
 		page.MustElement(menu + " a").MustClick()
 		page.MustWait(`menu => document.querySelector(menu + ' a').hasAttribute('data-copied')`, menu)
 		got := page.MustEval(`async menu => [await navigator.clipboard.readText(), location.pathname,

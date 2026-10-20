@@ -10,12 +10,16 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
 func testPinsBrowser(t *testing.T, browser *rod.Browser) {
+	for _, width := range []int{1440, 390} {
+		t.Run(fmt.Sprintf("submit/width=%d", width), func(t *testing.T) { testPinSubmitBrowser(t, browser, width) })
+	}
 	t.Run("frame", func(t *testing.T) {
 		testPinFrameBrowser(t, browser)
 	})
@@ -24,6 +28,161 @@ func testPinsBrowser(t *testing.T, browser *rod.Browser) {
 			testPinRaceBrowser(t, browser, refused)
 		})
 	}
+}
+
+func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	snapshot := feedFixture(t, 2)
+	snapshot.Before = 20 // no automatic read POSTs
+	type request struct {
+		path, hx, source, target string
+		reply                    chan browserReply
+	}
+	requests := make(chan request, 8)
+	mux := messagePageMux(t, snapshot, http.FileServerFS(static.FS()))
+	mux.HandleFunc("POST /organizations/acme/channels/{rest...}", func(w http.ResponseWriter, r *http.Request) {
+		q := request{r.URL.Path, r.Header.Get("HX-Request"), r.Header.Get("HX-Trigger"), r.Header.Get("HX-Target"), make(chan browserReply, 1)}
+		requests <- q
+		select {
+		case reply := <-q.reply:
+			if reply.status == 0 {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				_ = conn.Close() // real network error, not an HTTP error response
+				return
+			}
+			if reply.status == 303 {
+				w.Header().Set("Location", "/done")
+			}
+			w.WriteHeader(reply.status)
+			_, _ = w.Write(reply.body)
+		case <-r.Context().Done():
+		}
+	})
+	mux.HandleFunc("GET /done", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("done")) })
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	defer page.MustClose()
+	page.MustSetViewport(width, 900, 1, width < 768)
+	if err := navigateLoaded(page, server.URL); err != nil {
+		t.Fatal(err)
+	}
+	// Observe the real promise's outcomes, but return a never-settling promise
+	// to production glue: retries must also work through lifecycle events.
+	page.MustEval(`() => {
+	  window.answered = 0; window.settled = [];
+	  const ajax = htmx.ajax;
+	  htmx.ajax = (...args) => { ajax(...args).then(() => window.settled.push('ok'), () => window.settled.push('error')); return new Promise(() => {}); };
+	  document.addEventListener('htmx:afterRequest', () => window.answered++);
+	}`)
+	next := func(entry view.Message, pinned bool) request {
+		t.Helper()
+		select {
+		case q := <-requests:
+			action := "/pin"
+			if pinned {
+				action = "/unpin"
+			}
+			if q.path != entry.PinURL+action || q.hx != "true" || q.source != fmt.Sprintf("pin-%t-", pinned)+view.MessageDOMID(entry.ID) || q.target != "pin-form-"+view.MessageDOMID(entry.ID) {
+				t.Fatalf("wrong delegated request: %+v", q)
+			}
+			return q
+		case <-ctx.Done():
+			t.Fatal("pin request did not arrive")
+			return request{}
+		}
+	}
+	noExtra := func() {
+		t.Helper()
+		select {
+		case q := <-requests:
+			t.Fatalf("duplicate pin request: %s", q.path)
+		case <-time.After(noReadWindow):
+		}
+	}
+	activate := func(entry view.Message, pinned bool, key input.Key) {
+		t.Helper()
+		page.MustEval(`id => { const m = document.getElementById(id); if (!m.matches(':popover-open')) m.showPopover(); }`, fmt.Sprintf("message-actions-%x", entry.ID))
+		button := page.MustElement(fmt.Sprintf("#pin-%t-", pinned) + view.MessageDOMID(entry.ID))
+		if key == 0 {
+			button.MustClick().MustClick()
+		} else {
+			button.MustFocus()
+			page.Keyboard.MustType(key, key)
+		}
+	}
+	answered := 0
+	wait := func(outcome string) {
+		t.Helper()
+		answered++
+		page.MustWait(`(n, outcome) => window.answered === n && window.settled.length === n && window.settled[n-1] === outcome`, answered, outcome)
+	}
+	a, b := snapshot.Messages[0], snapshot.Messages[1]
+	for _, key := range []input.Key{0, input.Enter, input.Space} {
+		for _, pinned := range []bool{false, true} {
+			activate(a, pinned, key)
+			q := next(a, pinned)
+			noExtra()
+			changed := a
+			changed.Pinned = !pinned
+			q.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(changed, "")))}
+			wait("ok")
+			page.MustWait(`state => document.activeElement.dataset.pinAction === state && document.activeElement.form.dataset.pinned === state`, fmt.Sprint(!pinned))
+			noExtra() // duplicates must be dropped, never queued after completion
+		}
+	}
+	// 404 represents the permission rejection covered by TestPinRoutes.
+	// HTTP errors settle successfully in 2.0.7; only network errors reject.
+	for _, status := range []int{409, 404, 503, 0, 200} {
+		activate(a, false, input.Enter)
+		q := next(a, false)
+		page.MustEval(`() => window.beforePin = document.querySelector('[data-pin-control]')`)
+		q.reply <- browserReply{status, []byte(renderIn(t, "en", view.PinControl(a, "pins.error.limit")))}
+		outcome := "ok"
+		if status == 0 {
+			outcome = "error"
+		}
+		wait(outcome)
+		if !page.MustEval(`status => {
+		  const f = document.querySelector('[data-pin-control]');
+		  return f.dataset.pinned === 'false' && !f.querySelector('[data-pin-action=false]').hidden &&
+		    (status === 409 ? !!f.querySelector('[role=alert]')?.checkVisibility() : true) &&
+		    ([404,503,0].includes(status) ? f === window.beforePin : f !== window.beforePin);
+		}`, status).Bool() {
+			t.Fatalf("status %d changed state or lost error/no-swap behaviour", status)
+		}
+	}
+	// B remains pending while A completes; B's later response cannot touch A.
+	activate(b, false, input.Enter)
+	qb := next(b, false)
+	activate(a, false, 0)
+	qa := next(a, false)
+	a.Pinned, b.Pinned = true, true
+	qa.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(a, "")))}
+	wait("ok")
+	qb.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(b, "")))}
+	wait("ok")
+	if !page.MustEval(`() => [...document.querySelectorAll('[data-pin-control]')].every(f => f.dataset.pinned === 'true') && document.activeElement === document.querySelector('[data-pin-action=true]')`).Bool() {
+		t.Fatal("independent requests changed another control or stole focus")
+	}
+	noExtra()
+	page.MustEval(`() => { window.htmx = undefined; }`)
+	page.MustElement("#pin-true-" + view.MessageDOMID(a.ID)).MustClick()
+	select {
+	case q := <-requests:
+		if q.hx != "" || q.path != a.PinURL+"/unpin" {
+			t.Fatalf("missing-htmx fallback: %+v", q)
+		}
+		q.reply <- browserReply{status: 303}
+	case <-ctx.Done():
+		t.Fatal("native fallback did not POST")
+	}
+	page.MustWait(`() => location.pathname === '/done'`)
 }
 
 func testPinFrameBrowser(t *testing.T, browser *rod.Browser) {

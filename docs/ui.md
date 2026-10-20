@@ -157,6 +157,10 @@ poses, the channel illustrations and details are in [`brand.md`](brand.md).
 
 The markup and accessibility rules, which `TestPagesMarkup` checks, and how to check a UI
 change in a browser are in [`accessibility.md`](accessibility.md).
+Message actions retain each native popover, Copy link anchor, Quote button and
+two-action pin form. Stage 1 (#1455/#1457) removes only the pin `hx-*`
+attributes and duplicated request URLs; delegated submits preserve keyboard
+and pointer focus. No shared menu or new CSS component layer is introduced.
 
 ## Planned directions (from the maintainer, #9)
 

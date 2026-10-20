@@ -1,5 +1,26 @@
 (() => {
   const focused = new WeakSet();
+  const inFlight = new WeakSet();
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    const button = event.submitter;
+    if (!form.matches("[data-pin-control]") || !window.htmx || !button?.matches("[data-pin-action]")) return;
+    event.preventDefault();
+    if (inFlight.has(form)) return;
+    inFlight.add(form);
+    const clear = () => inFlight.delete(form);
+    try {
+      window.htmx.ajax("POST", button.getAttribute("formaction"), { source: button, target: form, swap: "outerHTML" }).then(clear, clear);
+    } catch (error) {
+      clear();
+      throw error;
+    }
+  });
+  // 2.0.7 sends afterRequest on the source (or its surviving ancestor after
+  // a swap). Do not rely on its promise: an onload exception can leave it pending.
+  const answered = (event) => inFlight.delete(event.detail.requestConfig?.elt.closest("[data-pin-control]"));
+  document.addEventListener("htmx:afterRequest", answered);
+  document.addEventListener("htmx:sendError", answered);
   const section = () => document.getElementById("pins-section");
   const stale = (incoming) => section() && BigInt(incoming.dataset.pinsSeq) < BigInt(section().dataset.pinsSeq);
   const sync = (control) => {

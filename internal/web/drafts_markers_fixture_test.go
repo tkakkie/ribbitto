@@ -90,7 +90,16 @@ func TestDraftMarkerStreams(t *testing.T) {
 					t.Fatalf("connection %d: missing broadcast", stream.id)
 				}
 			}
-			if ended != "not-yet-cancelled" && len(old.frames) != 0 {
+			if ended == "not-yet-cancelled" {
+				select {
+				case out := <-old.frames:
+					if out.Name != "sidebar" {
+						t.Fatalf("old connection %d: got %q", old.id, out.Name)
+					}
+				default:
+					t.Fatalf("old connection %d: missing broadcast", old.id)
+				}
+			} else if len(old.frames) != 0 {
 				t.Fatal("published to an ended connection")
 			}
 		})

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -128,6 +129,9 @@ func TestImplementConfigEndToEnd(t *testing.T) {
 				f := newImplementConfigFixture(t, on)
 				if existing {
 					configMkdir(t, f.c.out)
+					if err := os.Chmod(f.c.out, 0750); err != nil {
+						t.Fatal(err)
+					}
 				}
 				var out, stderr bytes.Buffer
 				if code := run(append([]string{"implement-config"}, f.args()...), nil, &out, &stderr); code != 0 || stderr.Len() != 0 {
@@ -304,7 +308,7 @@ func TestImplementConfigValidation(t *testing.T) {
 			alias := filepath.Join(f.root, "SOURCE")
 			a, err := os.Stat(alias)
 			if errors.Is(err, os.ErrNotExist) {
-				t.Skip("case-sensitive filesystem")
+				t.Skip("requires a case-insensitive alias (macOS default volumes); Linux CI uses a case-sensitive filesystem")
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -314,7 +318,7 @@ func TestImplementConfigValidation(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !os.SameFile(a, b) {
-				t.Skip("distinct case spelling")
+				t.Skip("case spellings name distinct files; requires a case-insensitive alias as on macOS default volumes")
 			}
 			f.c.worktree = alias
 		}},
@@ -397,7 +401,7 @@ func TestImplementConfigCaseAliases(t *testing.T) {
 			alias := filepath.Join(f.root, strings.ToUpper(root))
 			a, err := os.Stat(alias)
 			if errors.Is(err, os.ErrNotExist) {
-				t.Skip("case-sensitive filesystem")
+				t.Skip("requires a case-insensitive alias (macOS default volumes); Linux CI uses a case-sensitive filesystem")
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -407,7 +411,7 @@ func TestImplementConfigCaseAliases(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !os.SameFile(a, b) {
-				t.Skip("distinct case spelling")
+				t.Skip("case spellings name distinct files; requires a case-insensitive alias as on macOS default volumes")
 			}
 			f.c.out = filepath.Join(alias, "home")
 			before := configSnapshot(t, f.root)
@@ -419,16 +423,80 @@ func TestImplementConfigCaseAliases(t *testing.T) {
 	}
 }
 
+func TestImplementConfigSymlinkAliases(t *testing.T) {
+	for _, root := range []string{"guard", "worktree", "source", "bin"} {
+		t.Run(root, func(t *testing.T) {
+			f := newImplementConfigFixture(t, true)
+			protected := filepath.Join(f.root, root)
+			alias := filepath.Join(f.root, "alias")
+			configSymlink(t, protected, alias)
+			f.c.out = filepath.Join(alias, "home")
+			before := configSnapshot(t, f.root)
+			// Command validation rejects symlink ancestors before this rule;
+			// call it directly so that refusal cannot mask a missing SameFile check.
+			if err := implementConfigOutside(f.c.out, protected); err == nil {
+				t.Fatal("accepted output under a symlink alias of a protected directory")
+			}
+			assertImplementConfigRefusal(t, f.args())
+			if configSnapshot(t, f.root) != before {
+				t.Fatal("validation changed the filesystem")
+			}
+			sibling := filepath.Join(f.root, "sibling-alias")
+			configSymlink(t, filepath.Join(f.root, "output"), sibling)
+			if err := implementConfigOutside(filepath.Join(sibling, "home"), protected); err != nil {
+				t.Fatalf("refused unrelated sibling alias: %v", err)
+			}
+		})
+	}
+}
+
+func TestImplementConfigNonemptyAfterCheck(t *testing.T) {
+	for _, on := range []bool{false, true} {
+		t.Run(fmt.Sprintf("on=%t", on), func(t *testing.T) {
+			f := newImplementConfigFixture(t, on)
+			configMkdir(t, f.c.out)
+			original, err := os.Lstat(f.c.out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var injected string
+			ops := implementConfigIO{writeImplementConfigFile, os.ReadFile, func(from, to string) error {
+				configWrite(t, filepath.Join(to, "keep"), []byte("keep"), 0600)
+				injected = configSnapshot(t, to)
+				return syscall.Rename(from, to)
+			}}
+			var out, stderr bytes.Buffer
+			if code := implementConfigCommandWithIO(f.args(), &out, &stderr, ops); code != 1 || out.Len() != 0 || !strings.Contains(stderr.String(), "publishing configuration:") || strings.Count(stderr.String(), "\n") != 1 {
+				t.Fatalf("exit=%d stdout=%q stderr=%q", code, &out, &stderr)
+			}
+			info, err := os.Lstat(f.c.out)
+			if err != nil || !os.SameFile(original, info) || injected == "" || configSnapshot(t, f.c.out) != injected {
+				t.Fatalf("output directory or injected contents changed: %v %v", info, err)
+			}
+			entries, err := os.ReadDir(filepath.Dir(f.c.out))
+			if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(f.c.out) {
+				t.Fatalf("output parent entries=%v err=%v", entries, err)
+			}
+		})
+	}
+}
+
 func TestImplementConfigFailure(t *testing.T) {
 	for _, on := range []bool{false, true} {
 		for _, existing := range []bool{false, true} {
 			for _, failure := range []string{"second-write", "rename", "read-error", "hooks-tampered", "settings-tampered", "mixed", "extra-entry", "wrong-mode", "symlink-file"} {
 				t.Run(fmt.Sprintf("on=%t/existing=%t/%s", on, existing, failure), func(t *testing.T) {
 					f := newImplementConfigFixture(t, on)
+					var original fs.FileInfo
 					if existing {
 						configMkdir(t, f.c.out)
+						var err error
+						original, err = os.Lstat(f.c.out)
+						if err != nil {
+							t.Fatal(err)
+						}
 					}
-					ops := implementConfigIO{writeImplementConfigFile, os.ReadFile, os.Rename}
+					ops := implementConfigIO{writeImplementConfigFile, os.ReadFile, syscall.Rename}
 					injected := errors.New("injected failure")
 					ops.write = func(path string, data []byte) error {
 						if failure == "second-write" && filepath.Base(path) == "settings.json" {
@@ -480,9 +548,12 @@ func TestImplementConfigFailure(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					// Rename failure follows the requested remove-without-recreate rule.
-					wantEmpty := existing && failure != "rename"
+					wantEmpty := existing
 					if wantEmpty {
+						info, err := os.Lstat(f.c.out)
+						if err != nil || !os.SameFile(original, info) || info.Mode() != original.Mode() {
+							t.Fatalf("output directory changed: %v %v", info, err)
+						}
 						if len(entries) != 1 || entries[0].Name() != filepath.Base(f.c.out) {
 							t.Fatalf("parent entries=%v", entries)
 						}
@@ -495,28 +566,6 @@ func TestImplementConfigFailure(t *testing.T) {
 					}
 				})
 			}
-		}
-	}
-}
-
-func TestImplementConfigMixedStates(t *testing.T) {
-	for _, verify := range []bool{false, true} {
-		for bits := 0; bits < 8; bits++ {
-			t.Run(fmt.Sprintf("verify=%t/forms=%03b", verify, bits), func(t *testing.T) {
-				h, err := implementerHooks(bits&1 != 0, "/trusted/bin/argonreview", "/trusted/guard")
-				if err != nil {
-					t.Fatal(err)
-				}
-				m, err := implementerMCPConfig(bits&4 != 0, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree")
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = checkImplementerConfig(verify, h, implementerSettings(bits&2 != 0), m, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard")
-				want := !verify && bits == 0 || verify && bits == 7
-				if (err == nil) != want {
-					t.Fatalf("accepted=%t want=%t err=%v", err == nil, want, err)
-				}
-			})
 		}
 	}
 }

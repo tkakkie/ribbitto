@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode"
 	"unicode/utf8"
 )
@@ -129,7 +130,7 @@ func implementConfigOutside(out, root string) error {
 	if err != nil {
 		return fmt.Errorf("examining protected directory: %w", err)
 	}
-	// The output may not exist. Its existing ancestors still catch case aliases.
+	// The output may not exist. Its existing ancestors catch case and symlink aliases.
 	for current := out; ; current = filepath.Dir(current) {
 		info, err := os.Stat(current)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -224,9 +225,9 @@ func writeImplementConfig(c implementConfig, fs implementConfigIO) (string, erro
 	if err := implementConfigEmptyOut(c.out); err != nil {
 		return "", fmt.Errorf("rechecking output: %w", err)
 	}
-	if err := os.Remove(c.out); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("removing empty output directory: %w", err)
-	}
+	// syscall.Rename atomically replaces an empty directory on macOS/Linux;
+	// os.Rename refuses it. Never Remove out: a failed rename must preserve it,
+	// including anything another writer added after the emptiness recheck.
 	if err := fs.rename(temp, c.out); err != nil {
 		return "", fmt.Errorf("publishing configuration: %w", err)
 	}
@@ -239,7 +240,7 @@ func writeImplementConfig(c implementConfig, fs implementConfigIO) (string, erro
 }
 
 func implementConfigCommand(args []string, stdout, stderr io.Writer) int {
-	return implementConfigCommandWithIO(args, stdout, stderr, implementConfigIO{writeImplementConfigFile, os.ReadFile, os.Rename})
+	return implementConfigCommandWithIO(args, stdout, stderr, implementConfigIO{writeImplementConfigFile, os.ReadFile, syscall.Rename})
 }
 
 func implementConfigCommandWithIO(args []string, stdout, stderr io.Writer, fs implementConfigIO) int {

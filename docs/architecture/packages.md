@@ -25,13 +25,13 @@ cleanup on shutdown. It imports no application packages; `bin/ai-db run`
 applies worktree configuration to templ and its server.
 `cmd/argonreview` imports no application packages. `verify` requires a clean
 `origin/main` build; `prepare` configures a dedicated `HOME`; `check` lists
-models with supervision. `prompt` prints prompts; `review` runs them;
-`issue` reviews issues; `copilot-check` checks follow-ups;
+models with supervision. `prompt` prints a PR review prompt; `review` runs it;
+`issue` reviews issues; `copilot-check` checks Copilot follow-ups;
 `probe` uses scratch repositories; `guard` is the tool hook.
 Failed or non-counting Copilot checks fall back to Codex for Claude's,
 Claude for Codex's ([workflow](../workflow/copilot.md)).
 `implement-guard` enforces the seven-tool file boundary.
-`implement-config` generates and checks trusted configuration (#1433).
+`implement-config` generates checked configuration.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

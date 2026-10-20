@@ -1,9 +1,11 @@
 # Argon verification
 
-The maintainer chose option B on 2026-10-19
+Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Implementation is pending.
+Implementation pending.
+
+[Leftover sweep](argon-verify-sweep.md).
 
 ## Status
 
@@ -183,7 +185,7 @@ above; the Start gate then points to #1433's record.
 
 ## Control code in Go
 
-The direction is Go in `cmd/argonreview`, built from the trusted revision:
+Use Go in `cmd/argonreview`, built from the trusted revision:
 the implementer guard (`argonreview implement-guard`,
 [#1431]), pre- and post-run
 checks (`argonreview implement-check`,

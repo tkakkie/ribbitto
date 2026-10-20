@@ -16,6 +16,7 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
@@ -94,7 +95,12 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	otherHandler, _, _, _ := composerHandler(t, false, setup, func(s *Services) {
 		s.Messages = sidebarReader{page: conversation.ChannelPage{Current: conversation.Channel{ID: kernel.ID{9}, DefaultTopicID: kernel.ID{2}}, EventCursor: new(int64(42))}}
 	})
-	var noticeOnly, holdPosts atomic.Bool
+	// The page's member comes from the membership, not the login: serve the
+	// other-member case from a handler whose membership is another member.
+	otherMemberHandler, _, _, _ := composerHandler(t, false, setup, func(s *Services) {
+		s.Authz = composerMember{membership: org.Membership{Organization: org.Organization{ID: kernel.ID{7}, Slug: "acme"}, Member: org.Member{ID: kernel.ID{9}, Handle: "bob"}}}
+	})
+	var noticeOnly, holdPosts, otherMember atomic.Bool
 	type postGate struct {
 		done     chan struct{}
 		requests chan pendingRequest
@@ -158,7 +164,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			_, _ = w.Write(rec.Body.Bytes())
 			return
 		}
-		if strings.Contains(r.URL.Path, "/channels/09000000-") {
+		if otherMember.Load() {
+			otherMemberHandler.ServeHTTP(w, r)
+		} else if strings.Contains(r.URL.Path, "/channels/09000000-") {
 			otherHandler.ServeHTTP(w, r)
 		} else if strings.Contains(r.URL.Path, "/topics/") {
 			handler.ServeHTTP(w, r)
@@ -481,6 +489,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				next := *previous
 				if mode == "other-member" {
 					next.member = "09000000-0000-0000-0000-000000000000"
+					otherMember.Store(true)
+					defer otherMember.Store(false)
 				} else {
 					next.session = "019a1b2c-3d50-7000-8000-000000000000"
 				}

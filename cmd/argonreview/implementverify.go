@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // Fixed names prevent a caller from selecting another server or command. The
 // guard and settings are two permission layers that must agree. This feature is
 // off by default; these pure generators and checks do not enable it anywhere.
 const verifyServerName = "ribbitto-verify"
+
+const maxVerifyMetadataBytes = 1024
 
 func implementVerifyCall(input, args []byte) error {
 	// Check the whole input before decoding fields: even an unused nested object
@@ -23,8 +26,22 @@ func implementVerifyCall(input, args []byte) error {
 	if err != nil {
 		return fmt.Errorf("reading MCP arguments: %w", err)
 	}
-	if len(fields) != 3 {
-		return errors.New("MCP requires exactly ServerName, ToolName and Arguments")
+	for key, raw := range fields {
+		switch key {
+		case "ServerName", "ToolName", "Arguments":
+		case "toolAction", "toolSummary":
+			var value string
+			if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &value) != nil || len(value) > maxVerifyMetadataBytes {
+				return errors.New("MCP metadata must be a bounded string")
+			}
+		default:
+			return errors.New("MCP argument key is not allowed")
+		}
+	}
+	for _, key := range []string{"ServerName", "ToolName", "Arguments"} {
+		if _, ok := fields[key]; !ok {
+			return errors.New("MCP requires ServerName, ToolName and Arguments")
+		}
 	}
 	var server, tool string
 	if json.Unmarshal(fields["ServerName"], &server) != nil || server != verifyServerName ||
@@ -36,6 +53,38 @@ func implementVerifyCall(input, args []byte) error {
 		return fmt.Errorf("validating MCP Arguments: %w", err)
 	}
 	return nil
+}
+
+// implementerHooks generates the Go command form used by #1436 Stage 1.
+// Like the settings goldens, its goldens use placeholder paths and the same
+// template; they cannot match today's production hooks, which use Python.
+func implementerHooks(verify bool, binary, dir string) ([]byte, error) {
+	// sh -c interprets this command, so quote both paths and refuse text that
+	// could break out of the quotes or produce a different command line.
+	for _, path := range []string{binary, dir} {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "'\n") {
+			return nil, errors.New("hook paths must be absolute, clean and safely quotable")
+		}
+	}
+	command := "'" + binary + "' implement-guard '" + dir + "'"
+	if verify {
+		command += " --allow-verify"
+	}
+	type hook struct {
+		Command string `json:"command"`
+		Timeout int    `json:"timeout"`
+	}
+	type matcher struct {
+		Matcher string `json:"matcher"`
+		Hooks   []hook `json:"hooks"`
+	}
+	data, err := json.MarshalIndent(map[string]map[string][]matcher{
+		"ribbitto-implementer-guard": {"PreToolUse": {{"*", []hook{{command, 20}}}}},
+	}, "", "  ")
+	if err != nil {
+		return nil, errors.New("encoding implementer hooks")
+	}
+	return append(data, '\n'), nil
 }
 
 func implementerSettings(verify bool) []byte {
@@ -80,12 +129,17 @@ func implementerMCPConfig(verify bool, binary, source, worktree string) ([]byte,
 }
 
 // checkImplementerConfig is for implement-check (#1434) and preflight (#1433)
-// before and after each run. verify is their one trusted switch; guardVerify and
-// the file bytes are observed state. The launchers must also reject changed
-// hooks/settings/MCP files and denied_actions; those checks live outside here.
-func checkImplementerConfig(verify, guardVerify bool, settings, mcpConfig []byte, binary, source, worktree string) error {
-	if guardVerify != verify {
-		return errors.New("implementer guard mode does not match verify switch")
+// before and after each run. verify is their one trusted switch; hooks.json is
+// the one place the guard mode is read from. All file bytes are observed state.
+// The launchers must also reject changed hooks/settings/MCP files and
+// denied_actions; those checks live outside here.
+func checkImplementerConfig(verify bool, hooks, settings, mcpConfig []byte, binary, source, worktree, guardDir string) error {
+	expectedHooks, err := implementerHooks(verify, binary, guardDir)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(hooks, expectedHooks) {
+		return errors.New("implementer hooks do not match verify switch")
 	}
 	if !bytes.Equal(settings, implementerSettings(verify)) {
 		return errors.New("implementer settings do not match verify switch")

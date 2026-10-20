@@ -124,30 +124,33 @@ graph, module API summaries and documents. `tools/sourcecheck` enforces
 [product vocabulary](docs/domain/vocabulary.md) and
 [UI colour rules](docs/ui-colours.md#colour-tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 paths in backticks must exist. Placeholders and globs are skipped;
-brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
+brace sets expand; `:line` suffixes and trailing slashes are accepted.
 An existing path wins. Otherwise, a final dot-separated known extension
 (`go`, `md`, `sql`, `templ`, `toml`, `js`, `css`, `json`, `yml`,
 `yaml`, `txt`, `sh`) marks a missing file. Only other spans can be package
 selectors such as `package.Identifier` or `package.Type.Method`: every name
-after the package must be a valid Go identifier, exported or unexported, and
-the package directory must contain at least one regular `.go` file.
-Historical decision records skip this path check; their Markdown links and
-anchors are still checked.
+after the package must be a Go identifier, exported or not, and the
+package directory must hold a regular `.go` file.
+Historical decision records skip this path check; links and
+anchors are checked.
 
-`make prepush` is a quick subset to run before pushing a follow-up commit: it
-regenerates templates, SQL and CSS and fails if that changes any file, then
+`make prepush` is a quick subset for follow-up pushes: it
+regenerates templates, SQL and CSS and fails if that changes a file, then
 checks the API and dependency manifests, document sizes and lint, stopping at
 the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.
 
-The Argon launcher's Go tests run with the other command tests in
-`make check`. CI's separate `vuln` job runs
-`make vuln`, which runs the pinned `govulncheck` over the application module
-and fails when a known vulnerability is statically reachable from our code.
+The Argon launcher's Go tests run with other command tests in
+`make check`. CI's `vuln` job runs
+`make vuln` (pinned `govulncheck` on the application module),
+failing if a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:
 bump the dependency in its own pull request, or upgrade Go for a
-standard-library finding; if no fix exists yet, the maintainer decides.
+standard-library finding; without a fix, the maintainer decides.
+
+CodeQL (`.github/workflows/codeql.yml`) runs on `main` and weekly, not on
+pull requests; alerts are in the Security tab.
 
 ## First-run setup
 

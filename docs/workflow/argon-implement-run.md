@@ -1,10 +1,9 @@
 # Implementer run command
 
 `argonreview implement-run` adds the implementer sequence to the
-trusted Go launcher. It is **not in use until
-[#1436](https://github.com/tkakkie/ribbitto/issues/1436)** compares the two
-runners and verifies the switch. The existing `run.zsh`,
-[Start gate and boundary](argon-implementer.md#the-boundary), and
+trusted Go launcher, in production since 2026-10-22 through the
+[`run.zsh` wrapper](argon-implement-switch.md).
+The [Start gate and boundary](argon-implementer.md#the-boundary) and
 [verify status](argon-verify.md#status) still apply.
 
 ## Arguments
@@ -170,6 +169,7 @@ The fixed trusted PATH matches the script while retaining the unchanged
 shared `agyEnvironment` helper. Locale variables are
 forwarded through that helper rather than hardcoding `LANG=en_US.UTF-8`.
 
-Until #1436 compares runners, generated Go hooks must equal production
+The #1436 comparison and production switch are [recorded](argon-implement-switch.md).
+Generated feature-off Go hooks must equal production
 `<home>/implementer/hooks.json` bytes (already using the Go guard after
-Stage 1). Adding this command switches no workflow.
+Stage 1).

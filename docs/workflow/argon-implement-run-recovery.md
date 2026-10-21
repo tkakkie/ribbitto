@@ -5,11 +5,9 @@ The [run command](argon-implement-run.md) and `implement-check` require
 are refused. `implement-check` still requires `--home`, `--worktree`,
 `--git-file` and `--shared-settings-sha256`; `--agy` remains optional.
 Both commands require `--trusted-source <abs>` with `on`; `off` forbids it.
-The caller chooses `--verify`. At the switch, the host wrapper must derive
-it from the maintainer's trusted verify-mode file; that wrapper is outside
-this PR.
-The worktree is always explicit. No production switch changes here:
-[production operation](argon-verify-operation.md) still uses the scripts.
+The caller chooses `--verify`: the host wrappers derive it from the
+maintainer's trusted verify-mode file ([switch record](argon-implement-switch.md)).
+The worktree is always explicit.
 
 ## Feature states
 
@@ -126,6 +124,6 @@ Before the first run after any abnormal end, do these in order:
 5. Only then remove the stale marker by hand. Do not run again if restoration
    or the at-rest check fails. Keep the failed run's output uncounted.
 
-The host comparison, real agy preflight in both modes, abnormal-session
-recovery check and rollback drill remain requirements of
-[#1436](https://github.com/tkakkie/ribbitto/issues/1436) before Stage 2.
+The host comparison, real agy preflight in both modes, the failure cases and
+the rollback drill were recorded on
+[#1436](https://github.com/tkakkie/ribbitto/issues/1436) when Stage 2 switched.

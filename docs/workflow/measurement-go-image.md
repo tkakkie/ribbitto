@@ -8,17 +8,16 @@ measurement use to cross-compile is:
 It is the official `golang:1.27.3` image (Go 1.27.3 linux/arm64). Pull it by
 digest, never by tag.
 
-The digest is the index digest of the official tag, verified on 2026-10-21:
-linux/arm64 and linux/amd64 manifests are present, and `go version` in the
-pulled image (`--network none --pull=never`) prints `go1.27.3 linux/arm64`.
+The digest is the index digest of the official tag, looked up on 2026-10-21
+with `docker buildx imagetools inspect golang:1.27.3` (manifest metadata
+only; it lists linux/arm64 and linux/amd64 manifests).
 
 ## Approval
 
-The maintainer approved the `golang:1.27.3` digest in chat on 2026-10-21, on
-condition that it equals the official tag and has linux/arm64 and
-linux/amd64, for the fix of
-[#1492](https://github.com/tkakkie/ribbitto/issues/1492) (GO-2026-6809). The
-verification is in that issue's comments.
+The maintainer approved fixing the vulnerable toolchain first on
+[#1492](https://github.com/tkakkie/ribbitto/issues/1492) on 2026-10-21
+(GO-2026-6809), and the `golang:1.27.3` digest is approved in writing on that
+issue.
 
 Earlier pin `golang@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8`
 (`golang:1.27.2`): the maintainer approved the digest that the official tag

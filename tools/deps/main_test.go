@@ -71,7 +71,7 @@ func git(t *testing.T, root string, args ...string) {
 func TestGeneration(t *testing.T) {
 	root := t.TempDir()
 	for path, source := range map[string]string{
-		"go.mod":                             "module example.invalid/deps\n\ngo 1.27.3\n",
+		"go.mod":                             "module example.invalid/deps\n\ngo 1.27.2\n",
 		"internal/a/a.go":                    "package a\nimport _ \"example.invalid/deps/internal/b\"\n",
 		"internal/a/a_test.go":               "package a\nimport _ \"example.invalid/deps/internal/d\"\n",
 		"internal/a/platform_linux_amd64.go": "package a\nimport _ \"example.invalid/deps/internal/c\"\n",

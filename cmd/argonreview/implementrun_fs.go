@@ -71,7 +71,7 @@ func (r *implementRun) markRecoveryDurable(syncFile func(*os.File) error, syncDi
 		return fmt.Errorf("opening in-progress marker directory: %w", err)
 	}
 	defer closeFD(parent)
-	f, err := implementRunOpenAt(parent, r.recoveryMarker(), false)
+	f, err := implementRunOpenAt(parent, r.recoveryMarker(), false, 0o600)
 	if err != nil {
 		return fmt.Errorf("writing recovery marker: %w", err)
 	}
@@ -163,16 +163,16 @@ func implementRunMkdir(path string) error {
 
 // Keep the parent descriptor across unlink/create; a swapped parent cannot
 // redirect writes. O_EXCL refuses any replacement of the old regular leaf.
-func implementRunOpen(path string, replace bool) (*os.File, error) {
+func implementRunOpen(path string, replace bool, mode os.FileMode) (*os.File, error) {
 	parent, err := walk(filepath.Dir(path))
 	if err != nil {
 		return nil, err
 	}
 	defer closeFD(parent)
-	return implementRunOpenAt(parent, path, replace)
+	return implementRunOpenAt(parent, path, replace, mode)
 }
 
-func implementRunOpenAt(parent int, path string, replace bool) (*os.File, error) {
+func implementRunOpenAt(parent int, path string, replace bool, mode os.FileMode) (*os.File, error) {
 	name := filepath.Base(path)
 	var st unix.Stat_t
 	err := unix.Fstatat(parent, name, &st, unix.AT_SYMLINK_NOFOLLOW)
@@ -186,18 +186,18 @@ func implementRunOpenAt(parent int, path string, replace bool) (*os.File, error)
 	} else if !errors.Is(err, unix.ENOENT) {
 		return nil, err
 	}
-	fd, err := unix.Openat(parent, name, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	fd, err := unix.Openat(parent, name, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, uint32(mode))
 	if err != nil {
 		return nil, err
 	}
 	return os.NewFile(uintptr(fd), path), nil
 }
 
-func implementRunWrite(path string, data []byte) error {
+func implementRunWrite(path string, data []byte, mode os.FileMode) error {
 	if err := implementRunMkdir(filepath.Dir(path)); err != nil {
 		return err
 	}
-	f, err := implementRunOpen(path, true)
+	f, err := implementRunOpen(path, true, mode)
 	if err != nil {
 		return err
 	}

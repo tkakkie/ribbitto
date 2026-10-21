@@ -406,6 +406,11 @@ func checkSharedFiles(accountHome string, files []ownedFile, owned map[string]pl
 	return nil
 }
 
+var (
+	errAccountHome = errors.New("it is the account's home or an ancestor of it")
+	errSharedHome  = errors.New("it overlaps the account's shared .gemini")
+)
+
 // separate compares identities up the directory chains, so neither a symlink
 // nor a differently spelled path (Darwin's case-insensitive names) can make
 // HOME the account's home or overlap its shared .gemini. A chain it cannot
@@ -420,7 +425,7 @@ func separate(root int, s shared) error {
 		return err
 	}
 	if accountUp[h] {
-		return errors.New("refusing RIBBITTO_ARGON_HOME: it is the account's home or an ancestor of it")
+		return fmt.Errorf("refusing RIBBITTO_ARGON_HOME: %w", errAccountHome)
 	}
 	up, err := ancestors(root)
 	if err != nil {
@@ -428,7 +433,7 @@ func separate(root int, s shared) error {
 	}
 	for i, g := range s.gemini {
 		if up[g] || s.parents[i][h] {
-			return errors.New("refusing RIBBITTO_ARGON_HOME: it overlaps the account's shared .gemini")
+			return fmt.Errorf("refusing RIBBITTO_ARGON_HOME: %w", errSharedHome)
 		}
 	}
 	return nil

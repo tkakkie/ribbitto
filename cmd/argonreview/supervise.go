@@ -34,6 +34,40 @@ type supervisor struct {
 	ops          cleanupOps
 }
 
+type supervisorResult struct {
+	code       int
+	err        error
+	stragglers []string
+}
+
+func (s supervisor) runResult(path string, args, env []string, dir string, stdout, stderr *os.File) supervisorResult {
+	var result supervisorResult
+	seen := map[int]bool{}
+	kill := s.ops.killMember
+	s.ops.killMember = func(pid int, c *child) {
+		if c.exited && !seen[pid] {
+			seen[pid] = true
+			// Capture before KILL removes the command line. Diagnostics must
+			// not change cleanup confirmation or the run's verdict.
+			result.stragglers = append(result.stragglers, s.ops.commandLine(pid))
+		}
+		kill(pid, c)
+	}
+	result.code, result.err = s.run(path, args, env, dir, stdout, stderr)
+	return result
+}
+
+func processCommandLine(pid int) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-ww", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	command := strings.TrimSpace(string(out))
+	if err != nil || command == "" {
+		return fmt.Sprintf("pid %d (command line unavailable)", pid)
+	}
+	return command
+}
+
 // run starts path in its own session with stdin closed and returns its exit
 // status: 124 when the time limit ends it, 128 plus the signal when an INT or
 // TERM received here does, as timeout(1) and shells report them. A leader
@@ -131,6 +165,7 @@ type cleanupOps struct {
 	scan        func(int) ([]int, error)
 	killMember  func(int, *child)
 	held        func(int) bool
+	commandLine func(int) string
 	// reapWithin bounds the wait for a killed leader.
 	reapWithin time.Duration
 }
@@ -141,7 +176,7 @@ func systemCleanup() cleanupOps {
 			return syscall.Wait4(pid, status, syscall.WNOHANG, nil)
 		},
 		func(pid int, sig syscall.Signal) { _ = syscall.Kill(-pid, sig) },
-		sessionMembers, killMember, pidHeld, 5 * time.Second,
+		sessionMembers, killMember, pidHeld, processCommandLine, 5 * time.Second,
 	}
 }
 

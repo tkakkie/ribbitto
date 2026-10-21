@@ -99,7 +99,7 @@ The textarea is never replaced (#1173): it keeps drafts and text typed while a
 post is in flight, keeps `aria-describedby` and takes
 `aria-invalid` from every swapped state (`"false"` on pending success).
 Help shows errors or guidance; focus left on the disabled send button
-returns to it. Pending sends queue ([contract](architecture/web-composer.md#composer)).
+returns to it. Pending sends queue ([contract](architecture/web-composer-pending.md)).
 A polite `role="status"` shows "Sending…" over the help, which turns invisible but keeps its space. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.

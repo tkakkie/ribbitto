@@ -2,9 +2,23 @@
 
 Unread-script contracts for [web JavaScript](web-javascript.md#javascript).
 
-- `message-stream-v13.js`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
+`message-stream-v14.js` parks only a non-CLOSED source reported by
+`htmx:sseClose` during persisted `pagehide` cleanup of `#organization-stream`.
+Persisted `pageshow` dispatches `error` on that closed source once, then
+forgets it. The vendored SSE extension retries after 500 ms, reads the current
+`sse-connect` (including `after`), and rebinds the children. This behaviour is
+version-pinned: extension upgrades must rerun `TestStreamBFCacheBrowser`.
+No internal source slot, reprocessing or independent connection is used.
+The cleanup is a bubbling `htmx:beforeCleanupElement` on `#organization-stream`
+that every listener sees, so such listeners (`sidebar-unread-v3.js`) must leave
+state usable for the next persisted `pageshow`.
+Recreated sources have no `Last-Event-ID`; replay, deduplication and reset
+remain unchanged. Already-CLOSED sources are not parked; any pending
+extension retry remains its only retry.
+
+- `message-stream-v14.js`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
   cursors. A 429 retries until success/hide/removal/navigation: jittered exponential backoff, initial 8 s cap; `Retry-After` is a minimum even above it. Success resets backoff, flushes newer shown work; other failures flush strictly newer work only. Same cursor awaits another trigger. Cleanup clears timers. Composer responses/unapplied events cannot advance it.
-- `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open events.
+- `sidebar-unread-v3.js` attaches to scoped `htmx:load` and SSE open events.
   It increments server-rendered badges only for newer, unseen `unread` frames
   from other members; `message` frames never increment. Snapshots apply in
   stream order, dropping retained events at or below their sequence. Eligible
@@ -21,7 +35,7 @@ Unread-script contracts for [web JavaScript](web-javascript.md#javascript).
   request resync after uniform 0–2 s jitter. Recovery clearing is unchanged.
   A 429 counts as a request failure, keeps recovery open and retries
   through that backoff.
-  Removing its stream container clears its timer.
+  Cleanup of its stream container, including the persisted `pagehide` one, clears and forgets its timer.
 
   | Attribute / target | Contract |
   |---|---|

@@ -1,4 +1,24 @@
 (() => {
+  let parked = null;
+  let hiding = false;
+  document.addEventListener("htmx:sseClose", (event) => {
+    if (hiding && event.detail.source.readyState !== 2) parked = event.detail.source;
+  });
+  window.addEventListener("pagehide", (event) => {
+    if (!event.persisted) return;
+    hiding = true;
+    try {
+      htmx.trigger(document.getElementById("organization-stream"), "htmx:beforeCleanupElement");
+    } finally {
+      hiding = false;
+    }
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted || !parked) return;
+    // The extension retries CLOSED sources and rebinds their children.
+    parked.dispatchEvent(new Event("error"));
+    parked = null;
+  });
   // Successful posts may arrive through the stream only after a reconnect.
   // Keep their scroll intent independently of later composer replacements.
   const pending = new Set();

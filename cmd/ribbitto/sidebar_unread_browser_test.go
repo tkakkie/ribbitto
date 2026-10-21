@@ -28,7 +28,9 @@ const sidebarUnreadBrowserClock = `(() => {
  window.sidebarTest = {started: 0, delays: []};
  Math.random = () => 0.999999;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!/sidebar-unread-v2.js|message-stream-v13.js/.test(new Error().stack)) return original(fn, ms, ...args);
+  const stack = new Error().stack;
+  // The SSE extension's own reconnect timer (started from a script-dispatched error) stays real.
+  if (!/sidebar-unread-v3.js|message-stream-v14.js/.test(stack) || /htmx-ext-sse/.test(stack)) return original(fn, ms, ...args);
   window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };
@@ -77,7 +79,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		}
 	})
 
-	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow", "reset-delay"} {
+	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow", "reset-delay", "stream-release"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
@@ -240,6 +242,54 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				if !page.MustEval(`() => window.sidebarTest.delays.at(-1) > 4999 && window.sidebarTest.delays.at(-1) <= 5000`).Bool() {
 					t.Fatal("reset reload jitter outside 0–5s")
 				}
+				return
+			}
+			if kind == "stream-release" {
+				// The persisted pagehide releases the stream through a bubbling
+				// htmx:beforeCleanupElement that the sidebar script also hears.
+				hide := func() {
+					page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))`)
+				}
+				show := func() {
+					page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))`)
+				}
+				reopened := func() {
+					t.Helper()
+					select {
+					case want := <-interests:
+						if want != wantInterests {
+							t.Fatalf("interests = %s, want %s", want, wantInterests)
+						}
+					case <-ctx.Done():
+						t.Fatal("persisted restore did not reopen the stream")
+					}
+				}
+				// A restore with no resync pending.
+				hide()
+				show()
+				reopened()
+				finish(next(), 204)
+				exact(7, 0)
+				// The user leaves again within the 0–2 s window of the restore's
+				// resync (rapid switching): the next restore must schedule it again.
+				hide()
+				show()
+				reopened()
+				if !page.MustEval(`() => window.sidebarTest.pending() === 1`).Bool() {
+					t.Fatal("a stream release left the sidebar resync permanently unscheduled")
+				}
+				hide()
+				if !page.MustEval(`() => window.sidebarTest.pending() === 0`).Bool() {
+					t.Fatal("the persisted pagehide did not clear the pending resync")
+				}
+				show()
+				reopened()
+				if !page.MustEval(`() => window.sidebarTest.pending() === 1`).Bool() {
+					t.Fatal("no resync scheduled after a pagehide within the restore's resync window")
+				}
+				finish(next(), 204)
+				exact(8, 0)
+				noRetry(2)
 				return
 			}
 			other := kernel.ID{99}

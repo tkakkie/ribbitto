@@ -499,6 +499,12 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					size(width, 800)
 					wait("the layout takes the new width", `width => innerWidth === width`, width)
 					seq++
+					if persisted {
+						// A persisted pagehide releases the stream (#1499); a
+						// pageshow while still hidden lets it reconnect so the
+						// unread work still arrives while hidden.
+						page.MustEval(`() => dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))`)
+					}
 					live(seq) // unread work arrives while hidden
 					page.MustEval(`persisted => {
 						panelTest.hidden = false;

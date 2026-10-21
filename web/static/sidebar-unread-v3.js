@@ -161,7 +161,7 @@
         catch (_) { recover(); }
       }
     });
-    const state = { unread, sidebar, schedule, cleanup: () => clearTimeout(timer) };
+    const state = { unread, sidebar, schedule, cleanup: () => { clearTimeout(timer); timer = null; } };
     states.set(connection, state);
     return state;
   };

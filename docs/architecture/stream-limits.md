@@ -3,6 +3,15 @@
 What bounds the cost of open Server-Sent Event streams. Ordering and replay
 are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.md).
 
+- Production uses HTTP/2 (decision 25); HTTP/1.1 allows six connections per
+  origin. Keep the stream's `Cache-Control: no-store`, but do not rely on it
+  to prevent bfcache. On persisted `pagehide`, the stream script releases
+  the connection through htmx's SSE cleanup; persisted `pageshow` resumes
+  through the extension's CLOSED-source retry, with the current `after`.
+  One stream per tab remains the rule (decision 30). The HTTP/1.1 browser
+  test removes no-store only in its response wrapper, proves real bfcache
+  restores at 4x CPU throttle, and checks release against a negative control.
+
 - Each cache (events, renders) runs at most 16 loaders at once, second
   loads included; a slot is held until its loader returns, even after a
   timeout. Waiting for a slot shares the 10 s load timeout, and a caller

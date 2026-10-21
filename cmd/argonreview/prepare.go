@@ -28,13 +28,34 @@ const settingsJSON = `{
 }
 `
 
+const reviewerAgentName = "argon-reviewer"
+
+// Kept at rest so every prepare uses the same byte-checking mechanism,
+// without a per-run placement/removal window or cleanup to trust.
+const reviewerAgent = `---
+name: ` + reviewerAgentName + `
+description: Read-only reviewer for ribbitto; reads and searches the checkout, changes nothing.
+mainAgent: true
+tools:
+  - view_file
+  - list_dir
+  - grep_search
+  - find_by_name
+---
+
+# Argon reviewer
+
+You review one pull request or issue. You can only read and search files in the current checkout.
+`
+
 // Customisation that could add tools, hooks or instructions: global and
-// plugin hooks, skills, rules, agents and workflows (#1069). Its presence
+// plugin hooks, skills, rules, agents and workflows (#1069), except the
+// owned reviewer agent under config/agents. Its presence
 // stops the run instead of being deleted, so nothing put there is lost.
 var refusedCustomisation = []string{"config.json", "skills.json", "rules.json", "agents.json", "plugins.json", "plugins", "skills", "rules", "agents", "workflows"}
 
 // The directories the launcher owns under HOME/.gemini.
-var ownedDirs = []string{"antigravity-cli", "config"}
+var ownedDirs = []string{"antigravity-cli", "config", "config/agents"}
 
 type ownedFile struct {
 	dir, name string
@@ -67,10 +88,11 @@ func owned(guardPath string) ([]ownedFile, error) {
 		{"config", "hooks.json", append(hooks, '\n')},
 		// Antigravity creates this file empty: no MCP servers.
 		{"config", "mcp_config.json", []byte{}},
+		{"config/agents", reviewerAgentName + ".md", []byte(reviewerAgent)},
 	}, nil
 }
 
-// prepare writes the three files the launcher owns in the dedicated HOME and
+// prepare writes the four files the launcher owns in the dedicated HOME and
 // checks them, refusing to run on anything else (#1069). The sign-in, logs,
 // caches and Antigravity's other state are neither written nor removed.
 // accountHome is the account's home, whose .gemini other projects share.
@@ -242,7 +264,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := separate(again, final); err != nil {
 		return "", err
 	}
-	if err := checkBeforeWrite(again, dirs3, nil); err != nil {
+	if err := checkBeforeWrite(again, dirs3, files); err != nil {
 		return "", err
 	}
 	if err := checkSharedFiles(accountHome, files, written); err != nil {
@@ -285,7 +307,7 @@ func identity(fd int) (place, error) {
 
 // shared holds what HOME must stay apart from, opened following symlinks:
 // the account's home, which HOME may lie inside but not be or contain, and
-// its .gemini with the two directories under it that the launcher writes in
+// its .gemini with the owned directories under it that the launcher writes in
 // its own HOME, which HOME may not be, lie inside or contain.
 type shared struct {
 	account int
@@ -300,7 +322,7 @@ func openShared(accountHome string) (shared, error) {
 		return s, fmt.Errorf("opening the account's home: %w", err)
 	}
 	s.account = fd
-	for _, rel := range []string{".gemini", ".gemini/antigravity-cli", ".gemini/config"} {
+	for _, rel := range []string{".gemini", ".gemini/antigravity-cli", ".gemini/config", ".gemini/config/agents"} {
 		path := filepath.Join(accountHome, rel)
 		fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 		if errors.Is(err, unix.ENOENT) {
@@ -475,11 +497,23 @@ func openOwned(root int) (int, map[string]int, error) {
 		return gemini, dirs, err
 	}
 	for _, name := range ownedDirs {
-		if dirs[name], err = openDir(gemini, name); err != nil {
-			return gemini, dirs, err
+		parent := ownedParent(gemini, dirs, name)
+		if parent < 0 {
+			continue
+		}
+		if dirs[name], err = openDir(parent, filepath.Base(name)); err != nil {
+			return gemini, dirs, fmt.Errorf("refusing customisation in .gemini/%s: %w", name, err)
 		}
 	}
 	return gemini, dirs, nil
+}
+
+// Parents precede children in ownedDirs; nested names never reach openat.
+func ownedParent(gemini int, dirs map[string]int, name string) int {
+	if parent := filepath.Dir(name); parent != "." {
+		return dirs[parent]
+	}
+	return gemini
 }
 
 // matchOwned opens .gemini and the owned directories again without creating
@@ -535,7 +569,7 @@ func createMissing(root, gemini int, dirs map[string]int, notShared func(int) er
 	}
 	for _, name := range ownedDirs {
 		if dirs[name] < 0 {
-			if dirs[name], err = mkdirOpen(gemini, name, afterMkdir); err != nil {
+			if dirs[name], err = mkdirOpen(ownedParent(gemini, dirs, name), filepath.Base(name), afterMkdir); err != nil {
 				return gemini, err
 			}
 		}
@@ -583,11 +617,36 @@ func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
 		if fd < 0 {
 			continue
 		}
+		if name == "config/agents" {
+			// A fresh open, not dup, starts at offset zero on every recheck.
+			fresh, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+			if err != nil {
+				return fmt.Errorf("refusing customisation: listing agents: %w", err)
+			}
+			dir := os.NewFile(uintptr(fresh), name)
+			entries, err := dir.Readdirnames(-1)
+			err = errors.Join(err, dir.Close())
+			if err != nil {
+				return fmt.Errorf("refusing customisation: listing agents: %w", err)
+			}
+			for _, entry := range entries {
+				owned := false
+				for _, f := range files {
+					owned = owned || f.dir == name && f.name == entry
+				}
+				if !owned {
+					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store)", name, entry)
+				}
+			}
+		}
 		names := refusedCustomisation
 		if name == "antigravity-cli" {
 			names = append([]string{"hooks.json", "mcp_config.json"}, names...)
 		}
 		for _, n := range names {
+			if name == "config" && n == "agents" {
+				continue
+			}
 			if found, err := exists(fd, n); err != nil || found {
 				return errors.Join(fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions", name, n), err)
 			}

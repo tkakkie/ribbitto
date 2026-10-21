@@ -17,7 +17,7 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Reviewing](reviewing.md#review-independence-and-rounds) | Cross-review, closure, follow-up, risk |
 | [Copilot](copilot.md#copilot) | Requesting, follow-up, docs-only exception |
 | [Adversarial review](adversarial-review.md#adversarial-review) | Tiers and completion |
-| [Running Argon](running-argon.md#running-argon) | Trusted review launcher |
+| [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
 | [Argon verify](argon-verify.md) | In-force permissions, container, results |

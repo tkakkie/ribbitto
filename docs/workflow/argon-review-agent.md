@@ -1,0 +1,65 @@
+# Argon review agent
+
+Reviews, issue reviews, Copilot checks and probes launch with
+`--agent argon-reviewer`; `--model` still selects `gemini-4-argon-high`.
+The custom agent's `tools` list names exactly `view_file`, `list_dir`,
+`grep_search` and `find_by_name`. This does not establish that `agy` offers
+nothing else. With MCP configured, `manage_task`, `call_mcp_tool`,
+`list_resources` and `read_resource` escape a custom agent's `tools` list
+([#1427 spike part 2](argon-verify.md#tool-permissions), also recorded for the
+[implementer](argon-implementer.md#the-boundary)). Reviews keep
+`config/mcp_config.json` empty, retain the `mcp(*)` deny rule and use the
+guard to refuse all four escape tools.
+
+Deny rules refuse writes, commands, URL reads and MCP. The guard, the
+only hook, allows `view_file`, `list_dir`, `grep_search` and `find_by_name`
+and denies everything else, including `read_file`. It is the only layer
+that can refuse `search_web`, subagents, `generate_image` and `schedule`,
+which no deny rule can name. The agent lists no `read_file` and nothing
+grants it; deny rules and headless mode refuse reads outside the checkout.
+The host probe records those refusals and which tools the model is actually
+told it has.
+
+## Preparation
+
+`prepare` owns four files beneath the dedicated HOME's `.gemini`:
+`antigravity-cli/settings.json`, `config/hooks.json`,
+`config/mcp_config.json` and `config/agents/argon-reviewer.md`.
+The agent's static bytes come from trusted code, never PR or issue input.
+Every review, issue review, Copilot check, probe and `check` starts with
+`prepare`, which rewrites and byte-compares all four files on every run.
+
+The agent stays at rest. This is simpler and stricter: one mechanism,
+nothing to remove, and no per-run placement window. Every other entry in
+`.gemini/config/agents` is refused as customisation, including hidden files,
+subdirectories, other agents and case aliases. The refusal names the entry:
+customisation could add tools, hooks or instructions; remove it by hand if
+it is a leftover (a killed run's `.argonreview-<pid>` temporary file or a
+`.DS_Store`). Owned directories and files
+refuse symlinks and non-directory/non-regular types respectively. Nested
+`agents` is opened through its parent's descriptor; the account's shared
+agents directory and agent file have the same overlap and alias protections
+as the other owned configuration.
+
+## Remaining limits
+
+- `AGENTS.md` and `GEMINI.md` in the checkout are loaded as instructions: a
+  pull request can change what the reviewer is told, not what it can do.
+- Antigravity treats a hook that prints nothing and exits 0 as an allow.
+  The guard exits 0 only after writing an allow, so a lost answer is a
+  refusal (#1130).
+- A guard refusal ends the tool call, not the run, which can still count;
+  the refusal stays in the transcript.
+- A process running as you can change the dedicated `HOME` between
+  `prepare` and launch; it could change your configuration anyway.
+- The review `HOME` is not rechecked after a run. The next `prepare`
+  byte-compares the owned files; an extra entry in `config/agents` makes
+  it refuse, while a changed `argon-reviewer.md` is rewritten. The host
+  probe should list `config/agents` after its run.
+- The supervisor stops every process in `agy`'s session; a descendant that
+  calls `setsid` leaves it and is not stopped.
+
+See [running Argon](running-argon.md#evidence) for recorded probes and the
+pending #1501 host probe. Pre-merge tests do not establish that a live `agy`
+accepts this agent, advertises its four tools or leaves the agents directory
+otherwise untouched.

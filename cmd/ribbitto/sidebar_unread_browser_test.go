@@ -28,7 +28,9 @@ const sidebarUnreadBrowserClock = `(() => {
  window.sidebarTest = {started: 0, delays: []};
  Math.random = () => 0.999999;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!/sidebar-unread-v3.js|message-stream-v14.js/.test(new Error().stack)) return original(fn, ms, ...args);
+  const stack = new Error().stack;
+  // The SSE extension's own reconnect timer (started from a script-dispatched error) stays real.
+  if (!/sidebar-unread-v3.js|message-stream-v14.js/.test(stack) || /htmx-ext-sse/.test(stack)) return original(fn, ms, ...args);
   window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };

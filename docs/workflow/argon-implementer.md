@@ -23,7 +23,7 @@ adversarial tier C or B and its case
 and only if it can be verified without running its code locally: no `make dev`
 or browser check unless the maintainer runs it. Go code and tests are eligible;
 verification follows the [boundary](#the-boundary) and
-[handoff](running-other-ai.md#handoff-of-another-ais-code).
+[handoff][h].
 [Issue review](reviewing.md#issue-review) checks the tier.
 No M7 issue is picked unless the maintainer names it.
 
@@ -31,7 +31,7 @@ No M7 issue is picked unless the maintainer names it.
 matches tier A or touches a `high` risk path, it leaves Argon and the
 maintainer decides; Claude checks this against `origin/main` before every
 push and does not push such a change. See [Argon's review
-assignments](argon-pull-requests.md#who-reviews).
+assignments][r].
 
 Claude implements only when named by the maintainer for a specific issue
 (maintainer, 2026-10-17,
@@ -40,13 +40,13 @@ issues naming Claude are reassigned when started, without a bulk edit.
 
 ## Who does what
 
-- Cross-review assignments and rounds: [reviewing](reviewing.md#review-independence-and-rounds).
-  Copilot and adversarial checks: [who reviews](argon-pull-requests.md#who-reviews).
+- Cross-review assignments and rounds: [reviewing][i].
+  Copilot and adversarial checks: [who reviews][r].
   Claude prepares [mutation evidence](argon-pull-requests.md#mutation-evidence).
 - **Argon** applies the review, Copilot and adversarial fixes, in further
   runs in the same worktree. If it cannot finish a fix in one more run, the
   maintainer decides: reassign or stop. A reassigned issue restarts from a clean `origin/main`.
-- For a fix Claude writes itself, [review independence](reviewing.md#review-independence-and-rounds)
+- For a fix Claude writes itself, [review independence][i]
   applies. Codex reads CI and a diff Claude makes with
   the hardened git settings below and passes on stdin, and it runs in a clean
   worktree of `origin/main`, never in Argon's. See the
@@ -54,7 +54,7 @@ issues naming Claude are reassigned when started, without a bulk edit.
 
 ## The boundary
 
-Like [Codex's handoff](running-other-ai.md#running-codex), but enforced by
+Like [Codex's handoff][c], but enforced by
 configuration rather than the prompt.
 
 - **Invocation.** Claude creates the worktree (`../wt/<name>`, branch
@@ -71,6 +71,7 @@ configuration rather than the prompt.
   command tool are refused by `command(*)` and the guard. #1206 found
   loopback reach outside `agy --sandbox`; allowing commands needs its own
   `process` issue. Pending: only the fixed [verify][v] MCP tool.
+  [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) adds no commands.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
@@ -132,12 +133,12 @@ configuration rather than the prompt.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   (the [verify][v] exception is pending, not in force) and URL reads.
   Argon holds no GitHub credentials, pushes nothing, neither opens nor merges a PR.
-- **Handoff: the [shared rule](running-other-ai.md#handoff-of-another-ais-code)
+- **Handoff: the [shared rule][h]
   for Codex and Argon.** Argon leaves
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
   supervisor has confirmed that no process from the run is left, Claude
   repeats the pre-run checks, reads the diff and runs the credential grep
-  from [running Codex](running-other-ai.md#running-codex). Before every
+  from [running Codex][c]. Before every
   commit and push, Claude repeats the pre-run checks. Every git command Claude runs in the worktree has
   `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`,
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, and
@@ -189,3 +190,8 @@ Changing the eligibility, the boundary or the reviewers is a new `process`
 issue.
 
 [v]: argon-verify.md#tool-permissions
+
+[h]: running-other-ai.md#handoff-of-another-ais-code
+[r]: argon-pull-requests.md#who-reviews
+[i]: reviewing.md#review-independence-and-rounds
+[c]: running-other-ai.md#running-codex

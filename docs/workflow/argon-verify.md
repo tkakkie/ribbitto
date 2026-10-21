@@ -3,7 +3,8 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Implementation pending.
+Implementation pending. Generated files stay CI-only; verify generation needs
+a `process` issue.
 
 [Leftover sweep](argon-verify-sweep.md).
 
@@ -15,10 +16,9 @@ The `verify` permission is **NOT in force**. It requires
 [#1431],
 [#1432](https://github.com/tkakkie/ribbitto/issues/1432) and #1442
 to be merged; [#1436] Stage 1 to be complete before [#1433]'s extended
-real-path preflight (the real Argon run path, the hook that agy uses in normal
-operation, already runs the Go guard built from the trusted revision, after
-Stage 1's whole existing preflight passed through it and one real run
-completed with it); that preflight to pass and be recorded; and the
+real-path preflight (agy's real normal hook already uses the trusted-revision Go
+guard, after Stage 1's whole existing preflight passed through it and one
+real run completed with it); that preflight to pass and be recorded; and the
 maintainer to explicitly approve enabling.
 #1436 Stage 2 is independent of enabling. After enabling and a passing smoke
 test, a later small docs change records the permission as in force, not
@@ -58,9 +58,9 @@ in #1430/#1432 code.
 
 ## Trusted server
 
-Outside `agy`'s sandbox, the MCP server is trusted computing base code. It
-gets minimal credentials, Docker and host rights, with no interface
-for arbitrary commands. `argonreview verify-mcp` offers one tool and only
+Outside `agy`'s sandbox, the MCP server is trusted computing base code with
+minimal credentials, Docker and host rights, and no arbitrary-command
+interface. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
@@ -202,8 +202,8 @@ comparison, preflight or restoration stops the next real run. Unverified
 code never runs on the host. After the switches the scripts are reference
 only. #1436 keeps MCP off and its file empty.
 
-If option B cannot be built, the maintainer's fallback is option C: the
-launcher runs the checks between runs.
+If option B cannot be built, the maintainer's fallback, option C, runs
+checks in the launcher between runs.
 
 [#1431]: https://github.com/tkakkie/ribbitto/issues/1431
 [#1433]: https://github.com/tkakkie/ribbitto/issues/1433

@@ -14,10 +14,13 @@ only; it lists linux/arm64 and linux/amd64 manifests).
 
 ## Approval
 
-The maintainer approved fixing the vulnerable toolchain first on
-[#1492](https://github.com/tkakkie/ribbitto/issues/1492) on 2026-10-21
-(GO-2026-6809), and the `golang:1.27.3` digest is approved in writing on that
-issue.
+The maintainer approved the `golang:1.27.3` digest in chat on 2026-10-21 for
+the fix of [#1492](https://github.com/tkakkie/ribbitto/issues/1492)
+(GO-2026-6809), on condition that it matches the official tag and has
+linux/arm64 and linux/amd64. The
+[verification](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308907313)
+and the [approval record](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)
+are on that issue.
 
 Earlier pin `golang@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8`
 (`golang:1.27.2`): the maintainer approved the digest that the official tag

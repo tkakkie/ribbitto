@@ -76,15 +76,14 @@ proposes generation mechanics and records usage and acceptance requirements.
 
 Provide development source maps. Production maps are external, private
 CI/release artifacts, never public, inlined or in the deployment image. The
-maintainer approved this storage policy on 2026-10-20 (in chat): the first
-choice is a maintainer-only private GitHub repository, with 30-day retention
-and automatic deletion, minimal access, and no new external service or
-infrastructure. Each map corresponds to its bundle by build SHA, run id and
-content hash. A failure to store a map must be detectable, and nothing may let
-a map end up in a public artifact. Creating the repository is not part of this
-pull request: a separate issue, "Prepare the private source-map store", has it
-ready before #1411, which depends on it. The toolchain page proposes whether
-maps carry `sourcesContent`.
+maintainer approved private storage of production maps (2026-10-21). The
+store's form (for example a repository), access, retention period, deletion
+and failure handling are decided in the separate store-preparation issue
+(#1469), not here; retention is to be decided from how long a production
+release runs and what incident investigation needs. Each map corresponds to
+its bundle by build SHA, run id and content hash. A failure to store a map
+must be detectable, and nothing may let a map end up in a public artifact. The
+store issue precedes #1411, which depends on it.
 
 Keep the nonce-only CSP and verify the initial classic bundle in a browser.
 Before ES-module delivery, shared chunks, lazy loading or `modulepreload`,
@@ -102,7 +101,7 @@ types; review and behaviour tests still cover those limits.
 
 ### Migration and acceptance
 
-Keep #1404's staged foundation and stateful-first conversions after M7. Before
+Keep #1404's staged foundation and stateful-first conversions after M7. #1410–#1415 keep the default M9 staged order. Before
 any implementation issue is made `ready`, set its measurement method and
 numeric tolerance for gzip bytes, request count, input latency, INP and
 own-post latency. The details page lists the fields to record; existing

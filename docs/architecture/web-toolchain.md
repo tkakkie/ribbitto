@@ -134,9 +134,8 @@ assertions.
 
 Serve development maps locally. Production maps follow
 [decision 43](../decisions/43-typescript-with-a-go-driven-build.md)'s approved
-private-store, access, retention and failure policy. Match maps/bundles by SHA,
-run id and content hash; the manifest records SHA/run id. The separate
-store-preparation issue precedes #1411.
+private-storage policy; store details are fixed in issue #1469, before #1411. Match maps/bundles by SHA, run id and
+content hash; the manifest records SHA/run id.
 
 **Map contents — proposed:** include
 `sourcesContent`.

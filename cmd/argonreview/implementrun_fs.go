@@ -62,12 +62,45 @@ func (r *implementRun) checkRecovery() error {
 }
 
 func (r *implementRun) markRecovery() error {
-	f, err := implementRunOpen(r.recoveryMarker(), false)
+	return r.markRecoveryDurable(func(f *os.File) error { return f.Sync() }, unix.Fsync)
+}
+
+func (r *implementRun) markRecoveryDurable(syncFile func(*os.File) error, syncDir func(int) error) error {
+	parent, err := walk(filepath.Dir(r.recoveryMarker()))
+	if err != nil {
+		return fmt.Errorf("opening in-progress marker directory: %w", err)
+	}
+	defer closeFD(parent)
+	f, err := implementRunOpenAt(parent, r.recoveryMarker(), false)
 	if err != nil {
 		return fmt.Errorf("writing recovery marker: %w", err)
 	}
 	_, writeErr := fmt.Fprintf(f, "manual recovery needed; time=%s worktree=%q\n", time.Now().UTC().Format(time.RFC3339Nano), r.tree)
-	return errors.Join(writeErr, f.Sync(), f.Close())
+	fileErr := errors.Join(writeErr, syncFile(f), f.Close())
+	// A durable file without a durable directory entry does not protect a
+	// crashed installer. Keep any partial marker on every failure.
+	return errors.Join(fileErr, syncDir(parent))
+}
+
+func (r *implementRun) clearRecovery() error {
+	return r.clearRecoveryDurable(unix.Fsync)
+}
+
+func (r *implementRun) clearRecoveryDurable(syncDir func(int) error) error {
+	parent, err := walk(filepath.Dir(r.recoveryMarker()))
+	if err != nil {
+		return fmt.Errorf("opening marker removal directory: %w", err)
+	}
+	defer closeFD(parent)
+	if err := unix.Unlinkat(parent, filepath.Base(r.recoveryMarker()), 0); err != nil {
+		return fmt.Errorf("removing in-progress marker: %w", err)
+	}
+	if err := syncDir(parent); err != nil {
+		// Removal did not become durable: leave an explicit refusal for the
+		// next invocation even when the current filesystem lost the entry.
+		return errors.Join(fmt.Errorf("syncing marker removal: %w", err), r.markRecovery())
+	}
+	return nil
 }
 
 // Validate even the currently absent suffix before creating any directory.
@@ -136,9 +169,13 @@ func implementRunOpen(path string, replace bool) (*os.File, error) {
 		return nil, err
 	}
 	defer closeFD(parent)
+	return implementRunOpenAt(parent, path, replace)
+}
+
+func implementRunOpenAt(parent int, path string, replace bool) (*os.File, error) {
 	name := filepath.Base(path)
 	var st unix.Stat_t
-	err = unix.Fstatat(parent, name, &st, unix.AT_SYMLINK_NOFOLLOW)
+	err := unix.Fstatat(parent, name, &st, unix.AT_SYMLINK_NOFOLLOW)
 	if err == nil {
 		if !replace || st.Mode&unix.S_IFMT != unix.S_IFREG {
 			return nil, fmt.Errorf("refusing existing target %q", path)

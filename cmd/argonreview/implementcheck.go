@@ -45,6 +45,8 @@ import (
 // implementCheckDeps supplies filesystem and process operations for tests.
 type implementCheckDeps struct {
 	trust       func() error
+	sourceTrust func(string) error
+	executable  func() (string, error)
 	accountHome string
 	readDir     func(string) ([]os.DirEntry, error)
 	lstat       func(string) (fs.FileInfo, error)
@@ -61,6 +63,7 @@ func implementCheckDefaults() implementCheckDeps {
 			_, err := trusted(info, ok, func() (string, error) { return sourceRevision(source, git) })
 			return err
 		},
+		sourceTrust: implementTrustedSource, executable: implementExecutable,
 		accountHome: os.Getenv("HOME"), readDir: os.ReadDir, lstat: os.Lstat, readlink: os.Readlink,
 		version: func(path string) ([]byte, error) {
 			out, status, err := implementProcess(path, []string{"--version"}, os.Environ(), 30*time.Second)
@@ -95,11 +98,12 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	flags := flag.NewFlagSet("implement-check", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	home, worktree, saved, hash, agy := &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}
+	verify, source := &implementOnceFlag{}, &implementOnceFlag{}
 	for _, f := range []struct {
 		name  string
 		value *implementOnceFlag
 	}{
-		{"home", home}, {"worktree", worktree}, {"git-file", saved}, {"shared-settings-sha256", hash}, {"agy", agy},
+		{"verify", verify}, {"trusted-source", source}, {"home", home}, {"worktree", worktree}, {"git-file", saved}, {"shared-settings-sha256", hash}, {"agy", agy},
 	} {
 		flags.Var(f.value, f.name, f.name)
 	}
@@ -112,6 +116,9 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	}
 	if flags.NArg() != 0 {
 		return usage("no positional arguments allowed")
+	}
+	if err := implementFeatureArguments(verify.value, source.value); err != nil {
+		return usage(err.Error())
 	}
 	if home.value == "" || worktree.value == "" || saved.value == "" || hash.value == "" {
 		return usage("--home, --worktree, --git-file and --shared-settings-sha256 are required")
@@ -133,7 +140,7 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	if deps.accountHome == "" || !filepath.IsAbs(deps.accountHome) {
 		return usage("HOME must be non-empty and absolute")
 	}
-	c := &implementChecker{deps: deps, out: stdout}
+	c := &implementChecker{deps: deps, out: stdout, verify: verify.value == "on", source: source.value}
 	for _, path := range []string{home.value, worktree.value} {
 		if err := implementRealDirectory(path, deps.lstat); err != nil {
 			c.problem("invalid directory %q: %q", path, err)
@@ -154,12 +161,19 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 		if c.deps.git == nil {
 			c.deps.git = implementGit(worktree.value)
 		}
+		if c.verify {
+			if err := implementFeatureSource(home.value, worktree.value, c.source, deps.sourceTrust); err != nil {
+				c.problem("trusted source: %q", err)
+			}
+		}
 		c.check(home.value, worktree.value, saved.value, strings.ToLower(hash.value), agy.value)
 	}
 	return c.finish()
 }
 
 type implementChecker struct {
+	verify      bool
+	source      string
 	deps        implementCheckDeps
 	out         io.Writer
 	problems    int
@@ -219,9 +233,7 @@ func (c *implementChecker) check(home, worktree, saved, expected, agy string) {
 			c.problem("shared settings hash changed: %q", shared)
 		}
 	}
-	c.equal(filepath.Join(home, ".gemini/antigravity-cli/settings.json"), filepath.Join(home, "implementer/settings.json"), "home settings.json differs", 1<<20)
-	c.equal(filepath.Join(home, ".gemini/config/hooks.json"), filepath.Join(home, "implementer/hooks.json"), "home hooks.json differs", 1<<20)
-	implementMCPContract(c, home)
+	implementMCPContract(c, home, worktree)
 	c.scan(home, true)
 	c.builtin(home, agy)
 	c.agent(home)
@@ -233,15 +245,30 @@ func (c *implementChecker) check(home, worktree, saved, expected, agy string) {
 	}
 }
 
-// implementMCPContract currently requires feature off: an existing, empty regular
-// file. Every nonempty file is refused, including an exact implementer copy.
-// Pending #1432: replace this body with the one definition of the feature on/off
-// contract (settings, hooks, guard mode, MCP file). Feature-on consistency belongs
-// to that contract, not this interim check.
-func implementMCPContract(c *implementChecker, home string) {
-	path := filepath.Join(home, ".gemini/config/mcp_config.json")
-	if data, ok := c.read(path, 1<<20, false); ok && len(data) != 0 {
-		c.problem("mcp_config.json not empty: %q; feature-on state must be checked by #1432's contract, not here", path)
+// implementMCPContract keeps the feature switch and all three observed files
+// together. Off retains the trusted-copy comparisons and regular empty MCP rule.
+func implementMCPContract(c *implementChecker, home, worktree string) {
+	if !c.verify {
+		c.equal(filepath.Join(home, ".gemini/antigravity-cli/settings.json"), filepath.Join(home, "implementer/settings.json"), "home settings.json differs", 1<<20)
+		c.equal(filepath.Join(home, ".gemini/config/hooks.json"), filepath.Join(home, "implementer/hooks.json"), "home hooks.json differs", 1<<20)
+		path := filepath.Join(home, ".gemini/config/mcp_config.json")
+		if data, ok := c.read(path, 1<<20, false); ok && len(data) != 0 {
+			c.problem("mcp_config.json not empty: %q; use explicit --verify on for the feature-on contract", path)
+		}
+		return
+	}
+	binary, err := c.deps.executable()
+	if err != nil {
+		c.problem("finding running binary: %q", err)
+		return
+	}
+	settings, s := c.read(filepath.Join(home, ".gemini/antigravity-cli/settings.json"), 1<<20, false)
+	hooks, h := c.read(filepath.Join(home, ".gemini/config/hooks.json"), 1<<20, false)
+	mcp, m := c.read(filepath.Join(home, ".gemini/config/mcp_config.json"), 1<<20, false)
+	if s && h && m {
+		if err := checkImplementerConfig(true, hooks, settings, mcp, binary, c.source, worktree, filepath.Join(home, "guard")); err != nil {
+			c.problem("feature-on configuration: %q", err)
+		}
 	}
 }
 

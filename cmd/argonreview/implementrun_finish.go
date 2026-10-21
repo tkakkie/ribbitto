@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 			_ = f.Close()
 		}
 	}()
-	for _, name := range []string{"status", "out.jsonl", "err.txt", "pre.txt", "post.txt"} {
+	for _, name := range []string{"status", "out.jsonl", "err.txt", "pre.txt", "post.txt", "at-rest.txt"} {
 		f, err := implementRunOpen(filepath.Join(r.logs, name), false)
 		if err != nil {
 			return 1, err
@@ -56,6 +57,9 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 	var signals <-chan os.Signal
 	_, _ = r.deps.withSignals(func(caught <-chan os.Signal) (int, error) {
 		signals = caught
+		if step("mark-in-progress", r.markRecovery) != nil {
+			return 1, reasons
+		}
 		tmp, err = r.deps.mkdirTemp(filepath.Dir(r.tree), filepath.Base(r.tree)+".tmp-*")
 		if err != nil {
 			reasons = fmt.Errorf("creating TMPDIR: %w", err)
@@ -76,8 +80,11 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 				reasons = r.agyOutside(tmp)
 			}
 			if reasons == nil {
-				pre = r.check(logs["pre.txt"])
-				if pre != 0 {
+				_ = step("pre-check", func() error {
+					pre = r.check(logs["pre.txt"])
+					return nil
+				})
+				if pre != 0 && reasons == nil {
 					reasons = errors.New("pre-check failed")
 				}
 			}
@@ -114,7 +121,22 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 			}
 		}
 		if confirmed && placement {
-			for _, file := range r.files()[:2] {
+			if r.verify == "on" {
+				_ = step("post-check", func() error {
+					post = r.check(logs["post.txt"])
+					if post != 0 {
+						return errors.New("post-check failed")
+					}
+					return nil
+				})
+			}
+			restored := r.files()[:3]
+			restored[0].data, restored[1].data, restored[2].data = r.offSettings, r.offHooks, r.offMCP
+			if r.verify == "off" {
+				// Off's original post-check must still see a tampered MCP file.
+				restored = restored[:2]
+			}
+			for _, file := range restored {
 				name := "restore-" + file.name
 				err := step(name, func() error { return implementRunWrite(file.path, file.data) })
 				cleanup = append(cleanup, name+"="+strconv.FormatBool(err == nil))
@@ -129,9 +151,11 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 				err := step(task.name, task.run)
 				cleanup = append(cleanup, task.name+"="+strconv.FormatBool(err == nil))
 			}
-			post = r.check(logs["post.txt"])
-			if post != 0 {
-				reasons = errors.Join(reasons, errors.New("post-check failed"))
+			if r.verify == "off" {
+				post = r.check(logs["post.txt"])
+				if post != 0 {
+					reasons = errors.Join(reasons, errors.New("post-check failed"))
+				}
 			}
 			if agentAttempted {
 				agent := r.files()[4].path
@@ -141,11 +165,16 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 				cleanup = append(cleanup, "remove-agents="+strconv.FormatBool(err == nil))
 			}
 		}
+		if confirmed {
+			_ = step("at-rest-check", func() error {
+				if r.checkState("off", logs["at-rest.txt"]) != 0 || logs["at-rest.txt"].Sync() != nil {
+					return errors.New("at-rest check failed; inspect restored settings, hooks, MCP and home")
+				}
+				return nil
+			})
+		}
 		if !confirmed {
 			reasons = errors.Join(reasons, errors.New("manual recovery needed: session stop unconfirmed; normal completion stopped"))
-			if err := r.markRecovery(); err != nil {
-				reasons = errors.Join(reasons, fmt.Errorf("recovery marker failed: %w", err))
-			}
 		}
 		if confirmed && code >= 0 && agyStarted {
 			transcript, readErr := implementRunReadLog(logs["out.jsonl"])
@@ -180,6 +209,19 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 			reasons = errors.Join(reasons, fmt.Errorf("log/status after output failed: %w", err))
 		}
 	}
+	if reasons == nil {
+		err := r.deps.step("remove-marker")
+		if err == nil {
+			err = r.clearRecovery()
+		}
+		if err != nil {
+			reasons = fmt.Errorf("in-progress marker removal failed: %w", err)
+			status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+			reasons = errors.Join(reasons, r.deps.saveStatus(logs["status"], status))
+			_, outputErr := io.WriteString(out, status)
+			reasons = errors.Join(reasons, outputErr)
+		}
+	}
 	if reasons != nil {
 		return max(code, 1), reasons
 	}
@@ -188,6 +230,10 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 
 func (r *implementRun) status(code int, reasons error, pre, post int, confirmed bool, cleanup []string, tmp string) string {
 	status := fmt.Sprintf("exit=%d\ncounts=%t\npre-check=%d\npost-check=%d\nstop-confirmed=%t\nsession-left=%s\n", code, reasons == nil, pre, post, confirmed, map[bool]string{true: "0", false: "unknown"}[confirmed])
+	status += "verify=" + r.verify + "\n"
+	for _, file := range r.files()[:3] {
+		status += fmt.Sprintf("generated-%s-sha256=%x\n", file.name, sha256.Sum256(file.data))
+	}
 	for _, line := range cleanup {
 		status += "cleanup-" + line + "\n"
 	}
@@ -198,18 +244,21 @@ func (r *implementRun) status(code int, reasons error, pre, post int, confirmed 
 		}
 		status += "recovery=" + strconv.Quote("inspect cleanup results; retry checks before another run") + "\n"
 	}
-	if !confirmed {
+	if reasons != nil {
 		status += "recovery-marker=" + strconv.Quote(r.recoveryMarker()) + "\n"
+	}
+	if !confirmed {
 		for _, path := range []string{tmp, r.files()[4].path, r.files()[0].path, r.files()[1].path, r.files()[2].path, r.files()[3].path, r.brain()} {
 			status += "manual-recovery-needed=" + strconv.Quote(path) + "\n"
 		}
 	} else if reasons != nil {
-		for _, path := range []string{tmp, r.files()[4].path, r.files()[0].path, r.files()[1].path, r.brain()} {
+		for _, path := range []string{tmp, r.files()[4].path, r.files()[0].path, r.files()[1].path, r.files()[2].path, r.brain()} {
 			if path != "" {
 				status += "recovery-inspect=" + strconv.Quote(path) + "\n"
 			}
 		}
 	}
+
 	return status
 }
 
@@ -219,12 +268,19 @@ func implementRunSaveStatus(f *os.File, status string) error {
 }
 
 func (r *implementRun) check(out *os.File) int {
-	args := []string{"--home", r.home, "--worktree", r.tree, "--git-file", r.saved, "--shared-settings-sha256", r.hash, "--agy", r.agy}
-	code := r.deps.check(args, out, out)
+	code := r.checkState(r.verify, out)
 	if err := out.Sync(); err != nil {
 		return 1
 	}
 	return code
+}
+
+func (r *implementRun) checkState(state string, out io.Writer) int {
+	args := []string{"--home", r.home, "--worktree", r.tree, "--git-file", r.saved, "--shared-settings-sha256", r.hash, "--agy", r.agy, "--verify", state}
+	if state == "on" {
+		args = append(args, "--trusted-source", r.source)
+	}
+	return r.deps.check(args, out, out)
 }
 
 func implementRunReadLog(f *os.File) ([]byte, error) {

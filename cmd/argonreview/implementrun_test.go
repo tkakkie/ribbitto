@@ -69,26 +69,35 @@ exit "$(cat '` + x.fake + `/status')"
 	x.deps.check = func(args []string, out, stderr io.Writer) int {
 		x.checks++
 		x.order = append(x.order, "check")
+		on := false
+		for i := 0; i < len(x.args); i += 2 {
+			if x.args[i] == "--verify" {
+				on = x.args[i+1] == "on"
+			}
+		}
+		if x.checks == 3 && !on && !strings.Contains(strings.Join(x.order, ","), "restore-hooks,empty-brain,remove-tmp,check") {
+			t.Errorf("off post-check before cleanup: %v", x.order)
+		}
+		placed := strings.Contains(strings.Join(x.order, ","), "place-agent")
 		if x.checks == 1 {
 			if _, err := os.Stat(filepath.Join(x.fake, "args")); !os.IsNotExist(err) {
-				t.Error("agy ran before pre-check")
-			}
-		} else if !strings.Contains(strings.Join(x.order, ","), "restore-hooks,empty-brain,remove-tmp,check") {
-			t.Errorf("post-check before cleanup: %v", x.order)
-		}
-		for _, file := range []string{".gemini/config/agents/argon-implementer.md", "guard/implementer-worktree"} {
-			if _, err := os.Stat(filepath.Join(f.home, file)); err != nil {
-				// Placement-failure tests install their own check.
-				t.Errorf("check missing %s: %v", file, err)
+				t.Error("agy ran before initial at-rest check")
 			}
 		}
-		marker, err := os.ReadFile(filepath.Join(f.home, "guard/implementer-worktree"))
-		if err != nil || string(marker) != f.tree+"\n" {
-			t.Errorf("guard worktree marker %q: %v", marker, err)
+		if placed && !strings.Contains(strings.Join(x.order, ","), "remove-agent") {
+			for _, file := range []string{".gemini/config/agents/argon-implementer.md", "guard/implementer-worktree"} {
+				if _, err := os.Stat(filepath.Join(f.home, file)); err != nil {
+					t.Errorf("check missing %s: %v", file, err)
+				}
+			}
+			marker, err := os.ReadFile(filepath.Join(f.home, "guard/implementer-worktree"))
+			if err != nil || string(marker) != f.tree+"\n" {
+				t.Errorf("guard worktree marker %q: %v", marker, err)
+			}
 		}
 		return implementCheckCommand(args, out, stderr, f.deps)
 	}
-	x.args = []string{"--home", f.home, "--worktree", f.tree, "--git-file", f.saved, "--prompt-file", filepath.Join(f.root, "prompt"), "--log-dir", x.logs, "--shared-settings-sha256", f.hash, "--agy", agy, "--timeout", "2s"}
+	x.args = []string{"--verify", "off", "--home", f.home, "--worktree", f.tree, "--git-file", f.saved, "--prompt-file", filepath.Join(f.root, "prompt"), "--log-dir", x.logs, "--shared-settings-sha256", f.hash, "--agy", agy, "--timeout", "2s"}
 	return x
 }
 
@@ -169,7 +178,7 @@ func TestImplementRun(t *testing.T) {
 	if filepath.Dir(wantEnv["TMPDIR"]) != filepath.Dir(x.f.tree) || !strings.HasPrefix(wantEnv["TMPDIR"], x.f.tree+".tmp-") {
 		t.Fatalf("TMPDIR not beside worktree: %s", tmp)
 	}
-	wantOrder := []string{"trust", "place-settings", "place-hooks", "place-mcp", "place-worktree", "place-agent", "place-brain", "check", "stop", "restore-settings", "restore-hooks", "empty-brain", "remove-tmp", "check", "remove-agent", "remove-agents"}
+	wantOrder := []string{"trust", "check", "mark-in-progress", "place-settings", "place-hooks", "place-mcp", "place-worktree", "place-agent", "place-brain", "pre-check", "check", "stop", "restore-settings", "restore-hooks", "empty-brain", "remove-tmp", "check", "remove-agent", "remove-agents", "at-rest-check", "check", "remove-marker"}
 	if !reflect.DeepEqual(x.order, wantOrder) {
 		t.Errorf("order %v, want %v", x.order, wantOrder)
 	}
@@ -251,7 +260,7 @@ func TestImplementRunCheckFailures(t *testing.T) {
 			check := x.deps.check
 			x.deps.check = func(args []string, out, stderr io.Writer) int {
 				code := check(args, out, stderr)
-				if phase == "pre" && x.checks == 1 || phase == "post" && x.checks == 2 {
+				if phase == "pre" && x.checks == 2 || phase == "post" && x.checks == 3 {
 					return 1
 				}
 				return code
@@ -263,7 +272,13 @@ func TestImplementRunCheckFailures(t *testing.T) {
 				write(t, filepath.Join(x.fake, "mutate"), "echo changed >> '"+filepath.Join(x.f.account, ".gemini/antigravity-cli/settings.json")+"'\n")
 			}
 			status := x.run(t, 1)
-			if !strings.Contains(status, "counts=false") || x.checks != 2 {
+			if phase == "shared-before" {
+				if x.checks != 1 || !strings.Contains(status, "initial at-rest check failed") {
+					t.Fatal(status)
+				}
+				return
+			}
+			if !strings.Contains(status, "counts=false") || x.checks != 4 {
 				t.Fatalf("checks %d status %s", x.checks, status)
 			}
 			if phase == "pre" || phase == "shared-before" {
@@ -392,7 +407,7 @@ func TestImplementRunUnconfirmedStop(t *testing.T) {
 			t.Errorf("missing recovery hint %q: %s", want, status)
 		}
 	}
-	if x.checks != 1 || strings.Contains(strings.Join(x.order, ","), "restore-") {
+	if x.checks != 2 || strings.Contains(strings.Join(x.order, ","), "restore-") {
 		t.Fatalf("normal completion continued: %v", x.order)
 	}
 	if _, err := os.Stat(filepath.Join(x.f.home, ".gemini/config/agents/argon-implementer.md")); err != nil {

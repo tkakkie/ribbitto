@@ -184,7 +184,9 @@ func TestImplementRunTemporaryCreationFailure(t *testing.T) {
 	}
 	before := implementRunSnapshot(t, x.f.home)
 	status := x.run(t, 1)
-	if !strings.Contains(status, "creating TMPDIR") || x.checks != 0 || !reflect.DeepEqual(before, implementRunSnapshot(t, x.f.home)) {
+	after := implementRunSnapshot(t, x.f.home)
+	delete(after, filepath.Join(x.f.home, "guard/implement-run.recovery-needed"))
+	if !strings.Contains(status, "creating TMPDIR") || x.checks != 2 || !reflect.DeepEqual(before, after) {
 		t.Fatalf("temporary failure wrote configuration: %s", status)
 	}
 	data, _ := os.ReadFile(filepath.Join(existing, "keep"))

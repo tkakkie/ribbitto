@@ -14,12 +14,13 @@ import (
 	"unicode/utf8"
 )
 
-const implementRunUsage = "implement-run --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>]"
+const implementRunUsage = "implement-run --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>]"
 
 // Operations are injected at the same boundary as implement-check. The step
 // hook only injects failures in tests; production always performs each step.
 type implementRunDeps struct {
 	trust       func() error
+	sourceTrust func(string) error
 	accountHome string
 	executable  func() (string, error)
 	check       func([]string, io.Writer, io.Writer) int
@@ -35,13 +36,7 @@ func implementRunDefaults() implementRunDeps {
 	c := implementCheckDefaults()
 	return implementRunDeps{
 		trust: c.trust, accountHome: c.accountHome,
-		executable: func() (string, error) {
-			path, err := os.Executable()
-			if err != nil {
-				return "", err
-			}
-			return filepath.EvalSymlinks(path)
-		},
+		sourceTrust: c.sourceTrust, executable: c.executable,
 		check: func(args []string, out, stderr io.Writer) int {
 			return implementCheckCommand(args, out, stderr, implementCheckDefaults())
 		},
@@ -53,6 +48,8 @@ func implementRunDefaults() implementRunDeps {
 
 type implementRun struct {
 	home, tree, saved, prompt, logs, hash, agy, model string
+	verify, source                                    string
+	offSettings, offHooks, offMCP                     []byte
 	limit                                             time.Duration
 	settings, hooks, agent, mcp                       []byte
 	deps                                              implementRunDeps
@@ -71,6 +68,16 @@ func implementRunCommand(args []string, stdout, stderr io.Writer, deps implement
 	// All validation, including trusted byte comparison, precedes log creation.
 	if err := r.validate(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
+		return 1
+	}
+	if err := r.checkRecovery(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
+		return 1
+	}
+	// Check the untouched home before even creating its lock file.
+	var atRest bytes.Buffer
+	if r.checkState("off", &atRest) != 0 {
+		_, _ = fmt.Fprintf(stderr, "implement-run: initial at-rest check failed: %s", atRest.String())
 		return 1
 	}
 	lock, err := implementRunLock(r.home)
@@ -93,7 +100,7 @@ func implementRunCommand(args []string, stdout, stderr io.Writer, deps implement
 func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) (*implementRun, error) {
 	flags := flag.NewFlagSet("implement-run", flag.ContinueOnError)
 	flags.SetOutput(out)
-	names := []string{"home", "worktree", "git-file", "prompt-file", "log-dir", "shared-settings-sha256", "agy", "model", "timeout"}
+	names := []string{"home", "worktree", "git-file", "prompt-file", "log-dir", "shared-settings-sha256", "agy", "model", "timeout", "verify", "trusted-source"}
 	values := make([]implementOnceFlag, len(names))
 	for i, name := range names {
 		flags.Var(&values[i], name, name)
@@ -103,6 +110,9 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 	}
 	if flags.NArg() != 0 {
 		return nil, errors.New("no positional arguments allowed")
+	}
+	if err := implementFeatureArguments(values[9].value, values[10].value); err != nil {
+		return nil, err
 	}
 	for i := range 6 {
 		if values[i].value == "" {
@@ -130,7 +140,7 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 	}
 	return &implementRun{home: values[0].value, tree: values[1].value, saved: values[2].value,
 		prompt: values[3].value, logs: values[4].value, hash: strings.ToLower(values[5].value),
-		agy: values[6].value, model: values[7].value, limit: limit, deps: deps}, nil
+		agy: values[6].value, model: values[7].value, limit: limit, deps: deps, verify: values[9].value, source: values[10].value}, nil
 }
 
 func (r *implementRun) validate() error {
@@ -261,6 +271,16 @@ func (r *implementRun) validate() error {
 	}
 	if err := implementRunTarget(filepath.Join(r.home, "guard"), true); err != nil {
 		return err
+	}
+	r.offSettings, r.offHooks, r.offMCP = r.settings, r.hooks, r.mcp
+	if r.verify == "on" {
+		if err := implementFeatureSource(r.home, r.tree, r.source, r.deps.sourceTrust); err != nil {
+			return err
+		}
+		r.hooks, r.settings, r.mcp, err = implementConfigFiles(true, binary, filepath.Join(r.home, "guard"), r.source, r.tree)
+		if err != nil {
+			return err
+		}
 	}
 	return implementRunTarget(r.brain(), true)
 }

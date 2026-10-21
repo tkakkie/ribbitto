@@ -145,7 +145,7 @@ func TestImplementCheckTrustAndUsage(t *testing.T) {
 		}
 		var out, stderr bytes.Buffer
 		args := f.args()
-		if code := implementCheckCommand(args[:8], &out, &stderr, f.deps); code != 0 {
+		if code := implementCheckCommand(append(args[:8], "--verify", "off"), &out, &stderr, f.deps); code != 0 {
 			t.Fatalf("%d %s %s", code, &out, &stderr)
 		}
 	})
@@ -305,7 +305,7 @@ func TestImplementCheckMCP(t *testing.T) {
 			if code != want || want == 1 && !strings.Contains(out, "mcp_config.json") {
 				t.Fatalf("exit %d: %s", code, out)
 			}
-			if strings.HasPrefix(name, "nonempty") && !strings.Contains(out, "feature-on state must be checked by #1432's contract, not here") {
+			if strings.HasPrefix(name, "nonempty") && !strings.Contains(out, "use explicit --verify on for the feature-on contract") {
 				t.Fatalf("missing feature-on contract explanation: %s", out)
 			}
 		})
@@ -890,7 +890,7 @@ func (f *implementCheckTestFixture) addAgent(t *testing.T) {
 	implementCheckWrite(t, filepath.Join(f.home, "implementer/argon-implementer.md"), "agent")
 }
 func (f *implementCheckTestFixture) args() []string {
-	return []string{"--home", f.home, "--worktree", f.tree, "--git-file", f.saved, "--shared-settings-sha256", f.hash, "--agy", filepath.Join(f.root, "fake-agy")}
+	return []string{"--home", f.home, "--worktree", f.tree, "--git-file", f.saved, "--shared-settings-sha256", f.hash, "--agy", filepath.Join(f.root, "fake-agy"), "--verify", "off"}
 }
 func (f *implementCheckTestFixture) run() (int, string, string) {
 	var out, stderr bytes.Buffer

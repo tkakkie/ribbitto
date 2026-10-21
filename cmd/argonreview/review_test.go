@@ -28,6 +28,7 @@ func fakeAgy(t *testing.T, dir string) string {
 	script := `#!/bin/sh
 { echo "HOME=$HOME"; echo "TMPDIR=$TMPDIR"; echo "PWD=$(pwd -P)"; for a in "$@"; do echo "ARG=$a"; done; } > '` + dir + `/seen'
 /usr/bin/env > '` + dir + `/seen-env'
+(shift 2; printf '%s\n' "$@") > '` + dir + `/args'
 [ -f "$HOME/prepared" ] || exit 9
 [ "$(cat README)" = two ] && [ -z "$(find . -iname .agents)" ] || exit 8
 [ -n "$TMPDIR" ] && echo '{}' > "$TMPDIR/agy-cache.json"
@@ -122,6 +123,7 @@ func TestReview(t *testing.T) {
 			t.Errorf("agy ran without %q:\n%s", want, seen)
 		}
 	}
+	assertReviewerArgs(t, fake)
 	nothingLeft(t, r.source)
 }
 
@@ -373,6 +375,7 @@ func TestProbe(t *testing.T) {
 			if seen, err := os.ReadFile(filepath.Join(fake, "seen")); err != nil || !strings.Contains(string(seen), "ARG=-p\nARG=Read /etc/passwd.\n\nARG=--model") {
 				t.Fatalf("agy ran as:\n%s, %v", seen, err)
 			}
+			assertReviewerArgs(t, fake)
 			nothingLeft(t, r.source)
 		})
 	}
@@ -590,5 +593,35 @@ func TestReviewChecksTheBuildFirst(t *testing.T) {
 	}
 	if code := run([]string{"review", "07"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
 		t.Fatalf("review 07: exit %d", code)
+	}
+}
+
+// Issue and copilot-check also use review.launch, so these exact arguments
+// apply to all four entry points.
+func assertReviewerArgs(t *testing.T, fake string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(fake, "args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "--model\ngemini-4-argon-high\n--sandbox\n--print-timeout\n5s\n--output-format\nstream-json\n--agent\nargon-reviewer\n"
+	if string(data) != want {
+		t.Fatalf("arguments after prompt: %q", data)
+	}
+}
+
+func TestReviewerLaunchArgs(t *testing.T) {
+	for _, probe := range []bool{false, true} {
+		t.Run(map[bool]string{false: "review", true: "probe"}[probe], func(t *testing.T) {
+			r, fake := newReview(t)
+			r.probe = probe
+			// This fake leaves no descendants; process discovery is tested by
+			// the supervisor tests, independently of argument construction.
+			r.sup.ops.scan = func(int) ([]int, error) { return nil, nil }
+			if code, err := r.run(&bytes.Buffer{}); code != 0 || err != nil {
+				t.Fatalf("code=%d err=%v", code, err)
+			}
+			assertReviewerArgs(t, fake)
+		})
 	}
 }

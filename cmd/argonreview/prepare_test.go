@@ -535,6 +535,7 @@ func TestPrepareRefusesASharedDirectoryMovedInDuringCreation(t *testing.T) {
 	for _, tc := range []struct{ created, shared string }{
 		{".gemini", ".gemini"},
 		{"config", ".gemini/config"},
+		{"agents", ".gemini/config/agents"},
 	} {
 		t.Run(tc.created, func(t *testing.T) {
 			account := resolved(t, t.TempDir())
@@ -548,10 +549,7 @@ func TestPrepareRefusesASharedDirectoryMovedInDuringCreation(t *testing.T) {
 			if tc.created == "config" {
 				mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
 			}
-			ours := filepath.Join(home, ".gemini")
-			if tc.created == "config" {
-				ours = filepath.Join(ours, "config")
-			}
+			ours := filepath.Join(home, tc.shared)
 			swap := func(name string) {
 				if name != tc.created {
 					return
@@ -713,6 +711,7 @@ func TestPrepareRefusesASharedFileAliasingAnOwnedFile(t *testing.T) {
 		{"antigravity-cli", "settings.json"},
 		{"config", "hooks.json"},
 		{"config", "mcp_config.json"},
+		{"config/agents", "argon-reviewer.md"},
 	} {
 		for _, dangling := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%s dangling=%v", f.dir, f.name, dangling), func(t *testing.T) {
@@ -720,6 +719,7 @@ func TestPrepareRefusesASharedFileAliasingAnOwnedFile(t *testing.T) {
 				home := filepath.Join(account, "dev", "agy-home")
 				mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
 				mkdir(t, filepath.Join(home, ".gemini/config"))
+				mkdir(t, filepath.Join(home, ".gemini", f.dir))
 				target := filepath.Join(home, ".gemini", f.dir, f.name)
 				if !dangling {
 					write(t, target, "mine")

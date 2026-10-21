@@ -80,7 +80,7 @@ or accidental build, not a malicious one, whose own code could skip it.
 | Subcommand | Does |
 |---|---|
 | `verify` | prints the trusted revision, or refuses |
-| `prepare` | writes the launcher's three files in the dedicated `HOME` and refuses customisation |
+| `prepare` | writes the launcher's four files in the dedicated `HOME` and refuses customisation |
 | `check` | `prepare`, then `agy models` under the supervisor: Argon must be listed |
 | `prompt <pr>` | prints the prompt a review would send, and leaves nothing |
 | `review <pr>` | the review; prints the report only if the run counts |
@@ -108,7 +108,7 @@ exits 0 only for an allow, and non-zero for a deny or a failed write.
 4. The prompt is `.github/prompts/adversarial.md` from the trusted revision
    plus one `UNTRUSTED_PAYLOAD_JSON` line with the original diff.
 5. The tree is recorded; `agy -p … --model gemini-4-argon-high --sandbox
-   --print-timeout … --output-format stream-json` runs under the supervisor,
+   --print-timeout … --output-format stream-json --agent argon-reviewer` runs under the supervisor,
    in the checkout, with the dedicated `HOME` and a `TMPDIR` inside the
    workspace.
 6. The run does not count on any of: a non-zero exit or the time limit;
@@ -148,28 +148,12 @@ variables are not passed: behind a proxy, `agy` may not connect until a pull
 request adds them to the list. Record a live `check` and
 `issue`/`review` run from the trusted build.
 
-Deny rules refuse writes, commands, URL reads and MCP. The guard, the
-only hook, allows `view_file`, `list_dir`, `grep_search` and `find_by_name`
-and denies everything else, including `search_web`, subagents,
-`generate_image` and `schedule`, which no deny rule can name. Reads outside
-the checkout are refused because nothing grants `read_file`.
-
-Remaining limits:
-
-- `AGENTS.md` and `GEMINI.md` in the checkout are loaded as instructions: a
-  pull request can change what the reviewer is told, not what it can do.
-- Antigravity treats a hook that prints nothing and exits 0 as an allow.
-  The guard exits 0 only after writing an allow, so a lost answer is a
-  refusal (#1130).
-- A guard refusal ends the tool call, not the run, which can still count;
-  the refusal stays in the transcript.
-- A process running as you can change the dedicated `HOME` between
-  `prepare` and launch; it could change your configuration anyway.
-- The supervisor stops every process in `agy`'s session; a descendant that
-  calls `setsid` leaves it and is not stopped.
+The [review agent and guard](argon-review-agent.md) provide exactly four
+read tools, with deny rules and headless mode confining reads to the checkout.
+That document also records the remaining limits.
 
 Reports appear only after workspace removal. The dedicated `HOME` keeps
-the sign-in, the launcher's three files and Antigravity's state (logs,
+the sign-in, the launcher's four files and Antigravity's state (logs,
 conversation store, caches); `prepare` refuses customisation there but
 does not police the rest.
 
@@ -197,3 +181,8 @@ isolated checkout with `.agents` removed, and one JSON payload line. Guard
 and deny rules are unchanged. After merge, record the first live
 `copilot-check` run on #1270 with its duration and whether it counted or
 fell back.
+
+For #1501, pre-merge tests cover agent bytes and refusals. The recorded
+`argonreview probe` on a scratch repository (checkout reads through
+`view_file`, `list_dir`, `grep_search`; `read_file`, a write, a command and
+an outside read refused) is host work after the PR is reviewed.

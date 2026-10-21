@@ -223,6 +223,7 @@ func TestIssueReview(t *testing.T) {
 	// transcript. No AI CLI is used.
 	r.agy = filepath.Join(fake, "issue-runner")
 	write(t, r.agy, `#!/bin/sh
+(shift 2; printf '%s\n' "$@") > '`+fake+`/args'
 [ -f "$HOME/prepared" ] && [ "$(cat README)" = one ] && [ -z "$(find . -iname .agents)" ] || exit 8
 cat '`+fake+`/stdout'
 `)
@@ -242,4 +243,5 @@ cat '`+fake+`/stdout'
 	if want := "Argon review of issue tkakkie/ribbitto#1263 at " + revision + "\nLauncher built from " + revision + "\n\n" + report; out.String() != want {
 		t.Fatalf("report %q; want %q", out.String(), want)
 	}
+	assertReviewerArgs(t, fake)
 }

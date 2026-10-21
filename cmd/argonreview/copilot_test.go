@@ -285,6 +285,7 @@ func TestCopilotReview(t *testing.T) {
 			} else if code != tc.code || err == nil || !strings.Contains(err.Error(), tc.want) || out.Len() != 0 {
 				t.Fatalf("code %d, error %v, output %q", code, err, out.String())
 			}
+			assertReviewerArgs(t, fake)
 			nothingLeft(t, source)
 		})
 	}

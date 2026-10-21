@@ -204,7 +204,7 @@ func (r review) launch(w *workspace) (int, []byte, []byte, error) {
 		printLimit = r.sup.limit / 2
 	}
 	args := []string{"-p", w.prompt, "--model", argonModel, "--sandbox",
-		"--print-timeout", printLimit.String(), "--output-format", "stream-json"}
+		"--print-timeout", printLimit.String(), "--output-format", "stream-json", "--agent", reviewerAgentName}
 	// agy writes its own temporary files (a feature-flag cache, seen live);
 	// a TMPDIR inside the workspace removes them with it (#1071).
 	tmp := filepath.Join(w.dir, "tmp")

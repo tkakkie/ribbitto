@@ -96,6 +96,31 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		mux.ServeHTTP(bfcacheCacheWriter{w}, r)
 	}))
 	defer server.Close()
+	defer server.CloseClientConnections()
+	// The negative control runs the same assertions with the pagehide handling
+	// suppressed and must trip one of them. Whether Chrome then keeps the
+	// page's stream (bfcache restore without reopen) or refuses bfcache, the
+	// acceptance assertions below fail; fail records that instead of ending
+	// the test, and a run that passes is the real failure.
+	fail := func(format string, args ...any) {
+		t.Helper()
+		if blocked {
+			panic(controlFailure(fmt.Sprintf(format, args...)))
+		}
+		t.Fatalf(format, args...)
+	}
+	if blocked {
+		defer func() {
+			switch r := recover().(type) {
+			case nil:
+				t.Fatal("negative control passed: removing the pagehide handling went undetected")
+			case controlFailure:
+				t.Logf("negative control tripped as required: %s", string(r))
+			default:
+				panic(r)
+			}
+		}()
+	}
 	page, closePage := boundedPage(t, browser, ctx, "bfcache")
 	defer closePage()
 	page.MustActivate()
@@ -125,25 +150,25 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		t.Helper()
 		stepCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
-		p := page.Context(stepCtx).WithPanic(func(v any) { t.Fatalf("channel %d history %d (5 s deadline): %v", index, delta, v) })
+		p := page.Context(stepCtx).WithPanic(func(v any) { fail("channel %d history %d (5 s deadline): %v", index, delta, v) })
 		path := view.ChannelURL("acme", channels[index].ID)
 		if delta == 0 {
 			p.MustNavigate(server.URL + path)
 		} else {
 			history, err := proto.PageGetNavigationHistory{}.Call(p)
 			if err != nil {
-				t.Fatal(err)
+				fail("%v", err)
 			}
 			if err := (proto.PageNavigateToHistoryEntry{EntryID: history.Entries[history.CurrentIndex+delta].ID}).Call(p); err != nil {
-				t.Fatal(err)
+				fail("%v", err)
 			}
 		}
 		p.MustWait(`path => location.pathname === path && window.shown && document.readyState === 'complete'`, path)
 		if delta != 0 && !p.MustEval(`() => window.restored`).Bool() {
-			t.Fatalf("no real pageshow.persisted restore for %s; notRestoredReasons: %s", path,
+			fail("no real pageshow.persisted restore for %s; notRestoredReasons: %s", path,
 				p.MustEval(`() => JSON.stringify(performance.getEntriesByType('navigation')[0]?.notRestoredReasons)`).Str())
 		}
-		if delta == 0 || !blocked {
+		{
 			want := cursors[index]
 			if want == "" {
 				want = "42"
@@ -152,10 +177,10 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 			case got := <-requests:
 				channel := strings.TrimPrefix(path, "/organizations/acme/channels/")
 				if got != (request{channel, want, ""}) {
-					t.Fatalf("stream request = %+v, want channel=%s after=%s and no Last-Event-ID", got, channel, want)
+					fail("stream request = %+v, want channel=%s after=%s and no Last-Event-ID", got, channel, want)
 				}
 			case <-stepCtx.Done():
-				t.Fatal("restore did not reopen exactly once: ", stepCtx.Err())
+				fail("restore did not reopen exactly once: %v", stepCtx.Err())
 			}
 			expected++
 			opens[index]++
@@ -168,39 +193,30 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 			window.sources.length === count && window.sources.filter(s => s.readyState === 1).length === 1`, cursors[index], opens[index])
 		p.MustEval(`() => new Promise(done => setTimeout(done, 1000))`)
 		if total.Load() != expected || !p.MustEval(`count => window.sources.length === count && window.sources.filter(s => s.readyState !== 2).length === 1`, opens[index]).Bool() {
-			t.Fatalf("second stream in tab: requests=%d want=%d", total.Load(), expected)
+			fail("second stream in tab: requests=%d want=%d", total.Load(), expected)
 		}
 		if peak.Load() >= 6 {
-			t.Fatalf("concurrent HTTP/1.1 streams reached %d (six stalls navigation)", peak.Load())
+			fail("concurrent HTTP/1.1 streams reached %d (six stalls navigation)", peak.Load())
 		}
-		wantActive := int32(1)
-		if blocked && (index == 1 || delta != 0) {
-			wantActive = 2
-		}
-		if active.Load() != wantActive {
-			t.Fatalf("active streams=%d want=%d; pagehide release regression", active.Load(), wantActive)
+		if active.Load() != 1 {
+			fail("active streams=%d want=1; a cached page kept its stream (pagehide release regression)", active.Load())
 		}
 		if !p.MustEval(`() => document.querySelectorAll('#message-items > li').length ===
 			(document.getElementById('organization-stream').dataset.eventCursor === '52' ? 2 : 1)`).Bool() {
-			t.Fatal("replay duplicated or lost a message")
+			fail("replay duplicated or lost a message")
 		}
 	}
 	navigate(0, 0)
-	limit := 8
-	if blocked {
-		limit = 1
-	}
-	for i := 1; i <= limit; i++ {
+	for i := 1; i <= 8; i++ {
 		navigate(i, 0)
 		navigate(i-1, -1)
 		navigate(i, 1)
 	}
-	if blocked {
-		t.Log("negative control: two retained streams and no restore reopen; positive assertions reject this mutation")
-	} else {
-		t.Logf("8 phone navigations and 16 persisted restores within 5 s each; peak concurrent SSE requests=%d", peak.Load())
-	}
+	t.Logf("8 phone navigations and 16 persisted restores within 5 s each; peak concurrent SSE requests=%d", peak.Load())
 }
+
+// controlFailure marks an expected failure of the negative control.
+type controlFailure string
 
 // bfcacheCacheWriter removes no-store only in this HTTP/1.1 fixture, including
 // from pages: session middleware also uses it. Production headers stay intact.

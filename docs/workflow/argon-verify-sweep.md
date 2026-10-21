@@ -128,22 +128,25 @@ missing, add it to `sweepHostMountPrefixes` in
 
 ## Host preflight
 
-Before relying on the sweep, the #1433 preflight on the host must run it once
-with `--dry-run` against real Docker with a real labelled container. Fake tests
-cannot confirm these real Docker CLI assumptions:
+Before relying on the sweep, host preflight must run it once with `--dry-run`
+against real Docker with a real labelled container.
+The [#1433 host preflight][preflight] ran the sweep against real Docker
+with a real SIGKILL leftover and reclaimed the client, container and copy.
+It confirmed these Docker CLI assumptions that fake tests cannot establish:
 
 - `Config.Image` equals the pinned `golang@sha256:...` string exactly.
 - The label and inspect JSON field names are `Id`, `Name`, `Created`,
   `Config.Image`, `Config.Labels` and `Mounts[].Type/Source/Destination`.
-- Record the bind Source form of `/work` exactly as real inspection reports it,
-  including any Docker Desktop prefix.
-- Confirm macOS `ps -axww -o pid=,ppid=,uid=,lstart=,command=` output parses by
-  running `container-sweep --dry-run` on the host, including multiline argv
-  and the matching client's single-PID re-read. Continuations must stay with
-  the preceding command; an invalid first row fails parsing.
-- Measure that the startup sweep finishes within agy's MCP start timeout.
-  An orphan client can take up to about 10 seconds of TERM/KILL waits.
+- The `/work` bind Source is a plain `/tmp/argonreview-container-<digits>/tree`
+  path with no Docker Desktop prefix.
+- macOS `ps -axww -o pid=,ppid=,uid=,lstart=,command=` output with multiline
+  argv parses, and the client's single-PID re-read matched. Continuations must
+  stay with the preceding command; an invalid first row fails parsing.
+- A sweep with nothing to do takes about 0.06 seconds; an orphan client adds
+  up to about 10 seconds of TERM/KILL waits, far below any MCP start timeout.
+  The startup sweep must finish within agy's MCP start timeout.
 
-Record these preflight results, including the ownership label and mount
-sources in that real container's inspection. This implementation has not run
-Docker or the built sweep; host validation remains pending.
+The preflight record includes the ownership label and mount sources from
+the real container's inspection.
+
+[preflight]: https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6304130212

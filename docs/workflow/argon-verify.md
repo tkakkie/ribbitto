@@ -9,19 +9,18 @@ Generated files stay CI-only; verify generation needs a `process` issue.
 
 ## Status
 
-The `verify` permission is **in force since 2026-10-21**. Production runs
-use zsh scripts until [#1436] Stage 2. After reading [#1433]'s record, the
-maintainer approved enabling in chat that day. Evidence: [step 1][step1],
-[preflight][preflight], [enabling and passing smoke test][smoke].
-The Start gate and review independence stay. #1436 Stage 2 is independent
-of enabling. Feature-on settings replace the blanket `mcp(*)` deny as in
-[Tool permissions](#tool-permissions), only during a run; the home returns
+The `verify` permission is **in force since 2026-10-21**. Production uses
+zsh until [#1436] Stage 2. The maintainer approved enabling in
+chat after reading [#1433]'s record. Evidence: [step 1][step1],
+[preflight][preflight], [enabling and smoke test][smoke].
+The Start gate and review independence stay. Only during a run, feature-on
+settings replace the blanket `mcp(*)` deny; the home returns
 to feature-off at rest. See [operation](argon-verify-operation.md).
 
 ## Tool permissions
 
 Argon keeps no arbitrary shell, `run_command` or other
-command tool. MCP admits only one fixed `verify` tool through two agreeing
+command tool. On-mode MCP admits one fixed `verify` tool through two agreeing
 layers:
 
 - The guard allows `call_mcp_tool` only for the exact configured server,
@@ -34,6 +33,9 @@ layers:
   `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
   today's, including all command and URL denies.
   The review launcher's settings and guard stay unchanged.
+
+In [preflight][preflight], the guard refused every invalid call first;
+the settings and server layers were not probed separately.
 
 With MCP configured, the custom agent's `tools` list is no barrier:
 `call_mcp_tool`, `list_resources`, `read_resource` and `manage_task` remain
@@ -125,9 +127,8 @@ the container by #1429.
 
 ## Extended preflight
 
-Extend the [existing preflight](argon-implementer.md#preflight): keep current
-items; replace only the MCP refusal with "MCP other than the
-exact `verify` call". Claude runs the real Argon → MCP → Docker → test-result
+Extend the [existing preflight](argon-implementer.md#preflight), keeping every
+refusal. Claude runs the real Argon → MCP → Docker → test-result
 path on the host in a throwaway repository with the dedicated worker home:
 
 - **Allow:** `verify` passes on a real package; a deliberately broken
@@ -149,7 +150,6 @@ path on the host in a throwaway repository with the dedicated worker home:
 - **Skips:** a database-backed package reports `NOT VERIFIED` and its
   skipped test names, never `verified`.
 
-Preflight's temporary permission is not the normal-operation permission.
 Only during preflight, the managed temporary configuration uses #1432's
 feature-on settings, guard mode and MCP file. After success or failure,
 restore and check feature-off settings, hooks and MCP file byte for byte,
@@ -176,11 +176,11 @@ gate refers to [#1433]'s [preflight record][preflight].
 
 ## Control code in Go
 
-Use Go in `cmd/argonreview`, built from the trusted revision. The guard
+Use Go in `cmd/argonreview`, built from the trusted revision: guard
 (`implement-guard`, [#1431]), checks (`implement-check`,
 [#1434](https://github.com/tkakkie/ribbitto/issues/1434)), verify server
 (`verify-mcp`), container check (`container-check`), sweep (`container-sweep`)
-and config generator (`implement-config`) exist. `implement-run` is pending
+and `implement-config`. `implement-run` is pending
 ([#1435](https://github.com/tkakkie/ribbitto/issues/1435),
 [#1483](https://github.com/tkakkie/ribbitto/issues/1483)).
 
@@ -190,7 +190,10 @@ checks and run command are compared and verified, with rollback.
 Each stage keeps the full preflight and no weaker boundary; a failed
 comparison, preflight or restoration stops the next real run. Unverified
 code never runs on the host. After the switches the scripts are reference
-only. #1436 Stage 2 is independent of verify enabling.
+only. #1436 Stage 2 is independent of the enabling decision but must reproduce
+on-mode operation before scripts retire: the `verify-mode` switch,
+pinned generated settings and hook hashes and pinned trusted source,
+the post-run check before restore, and feature-off files at rest.
 
 If option B cannot be built, the maintainer's fallback, option C, runs
 checks in the launcher between runs.

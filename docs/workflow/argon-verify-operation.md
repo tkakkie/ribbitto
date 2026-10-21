@@ -12,6 +12,18 @@ that day. Evidence: [step 1][step1], [preflight][preflight],
 The trusted `verify-mode` file in the maintainer's harness, outside any
 repository, holds `on` or `off`. Any other value stops the run.
 
+The complete config-generator invocation is:
+
+```text
+implement-config --mode off|on --binary <abs> --guard-dir <abs> [--trusted-source <abs> --worktree <abs>] --out <dir>
+```
+
+Both modes require `--mode`, `--binary`, `--guard-dir` and `--out`.
+On mode requires `--trusted-source` and `--worktree`; off mode forbids them.
+All paths, including `--out`, must be absolute and clean.
+The output contains `settings.json`, `hooks.json` and `mcp_config.json`.
+`--out` must be absent or an existing empty real directory.
+
 In `on` mode:
 
 1. `run.zsh` asks the trusted binary's `argonreview implement-config --mode on`
@@ -27,8 +39,10 @@ In `on` mode:
 4. The home returns to feature-off settings, hook and empty MCP file;
    an idle check confirms it. At rest the home never holds the permission.
 
-MCP admits only the exact `verify` call through agreeing guard and settings
-layers; arbitrary shell and `run_command` remain refused. Database and
+On-mode MCP admits only the exact `verify` call through agreeing guard and
+settings layers. In [preflight][preflight], the guard refused every invalid
+call first; the settings and server layers were not probed separately.
+Arbitrary shell and `run_command` remain refused. Database and
 browser tests stay CI-only. `verified` never replaces CI, review or handoff
 checks. The Start gate and review independence stay.
 

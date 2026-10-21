@@ -225,6 +225,7 @@
       }
       const text = removedKey(body.form, form.elements.body.value);
       const held = { key: form.elements.idempotency_key.value, at: performance.now() };
+      removedKeys.set(text, held);
       setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);
     }
     sendEvent("message-pending-action", { key: form.dataset.draftKey, restoredKey: edit ? restoredKey : null, kind: edit ? "edit" : "remove" });

@@ -5,8 +5,10 @@ The [run command](argon-implement-run.md) and `implement-check` require
 are refused. `implement-check` still requires `--home`, `--worktree`,
 `--git-file` and `--shared-settings-sha256`; `--agy` remains optional.
 Both commands require `--trusted-source <abs>` with `on`; `off` forbids it.
-The caller chooses `--verify`: the host wrappers derive it from the
-maintainer's trusted verify-mode file ([switch record](argon-implement-switch.md)).
+The caller chooses `--verify`. At the switch, the host wrapper must derive
+it from the maintainer's trusted verify-mode file; that wrapper is outside
+this PR. Since 2026-10-22 the host wrappers do so
+([switch record](argon-implement-switch.md)).
 The worktree is always explicit.
 
 ## Feature states

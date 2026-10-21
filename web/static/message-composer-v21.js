@@ -136,7 +136,7 @@
     const removed = removedKeys.get(removedKey(form, body.value));
     removedKeys.delete(removedKey(form, body.value));
     sending.elements.idempotency_key.value = restoredKey ||
-      (removed && performance.now() - removed.at <= removedKeyRetention ? removed.key : crypto.randomUUID());
+      (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
     if (removed && sending.elements.idempotency_key.value === removed.key) sending.dataset.unconfirmed = "true";
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;

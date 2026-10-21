@@ -169,7 +169,7 @@
         edited();
         text = raw.trim() && [...raw].length <= 4000 ? raw : "";
         source = sendKey;
-        savedKey = null;
+        savedKey = text ? sendKey : null;
         sending = { key: sendKey, inPlace };
         at = Math.max(at, (read(key)?.at || 0) + 1);
         save(true);

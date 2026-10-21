@@ -16,7 +16,6 @@
   window.addEventListener("pageshow", (event) => {
     if (!event.persisted || !parked) return;
     // The extension retries CLOSED sources and rebinds their children.
-    parked.dispatchEvent(new Event("error"));
     parked = null;
   });
   // Successful posts may arrive through the stream only after a reconnect.

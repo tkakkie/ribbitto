@@ -143,6 +143,7 @@ func (x *implementRunFixture) cleaned(t *testing.T) {
 func TestImplementRun(t *testing.T) {
 	x := newImplementRun(t)
 	wantEnv := testAgyParentEnvironment(t)
+	wantEnv["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin:" + filepath.Join(x.f.account, ".local/bin")
 	t.Setenv("GITHUB_TOKEN", "dummy-excluded")
 	t.Setenv("SSH_AUTH_SOCK", "dummy-excluded")
 	write(t, filepath.Join(x.f.home, ".gemini/antigravity-cli/brain/stale"), "previous conversation")
@@ -350,9 +351,9 @@ func TestImplementRunStartAndSignals(t *testing.T) {
 			x := newImplementRun(t)
 			want := 1
 			if phase == "start" {
-				if err := os.Chmod(filepath.Join(x.fake, "agy"), 0o600); err != nil {
-					t.Fatal(err)
-				}
+				// Validation now refuses non-executable files; keep exercising a
+				// genuine start failure with an executable missing its interpreter.
+				write(t, filepath.Join(x.fake, "agy"), "#!/missing/implement-run-interpreter\n")
 			} else {
 				signals := make(chan os.Signal, 1)
 				x.deps.withSignals = func(run func(<-chan os.Signal) (int, error)) (int, error) { return run(signals) }

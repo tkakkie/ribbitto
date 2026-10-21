@@ -6,9 +6,69 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
+
+func implementRunLock(home string) (*os.File, error) {
+	guard := filepath.Join(home, "guard")
+	path := filepath.Join(guard, "implement-run.lock")
+	// A recovery marker can outlive a manually removed lock file. Refuse
+	// without recreating that file; the caller rechecks under the held lock.
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		if err := (&implementRun{home: home}).checkRecovery(); err != nil {
+			return nil, err
+		}
+	}
+	if err := implementRunMkdir(guard); err != nil {
+		return nil, err
+	}
+	parent, err := walk(guard)
+	if err != nil {
+		return nil, err
+	}
+	defer closeFD(parent)
+	fd, err := unix.Openat(parent, filepath.Base(path), unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("opening implement-run lock: %w", err)
+	}
+	f := os.NewFile(uintptr(fd), path)
+	info, err := f.Stat()
+	if err == nil && !info.Mode().IsRegular() {
+		err = errors.New("implement-run lock must be a regular file")
+	}
+	if err == nil {
+		err = unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("acquiring implement-run lock (another run may be active): %w", err)
+	}
+	return f, nil
+}
+
+func (r *implementRun) recoveryMarker() string {
+	return filepath.Join(r.home, "guard/implement-run.recovery-needed")
+}
+
+func (r *implementRun) checkRecovery() error {
+	if _, err := os.Lstat(r.recoveryMarker()); err == nil {
+		return fmt.Errorf("manual recovery needed: recovery marker exists: %q", r.recoveryMarker())
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking recovery marker: %w", err)
+	}
+	return nil
+}
+
+func (r *implementRun) markRecovery() error {
+	f, err := implementRunOpen(r.recoveryMarker(), false)
+	if err != nil {
+		return fmt.Errorf("writing recovery marker: %w", err)
+	}
+	_, writeErr := fmt.Fprintf(f, "manual recovery needed; time=%s worktree=%q\n", time.Now().UTC().Format(time.RFC3339Nano), r.tree)
+	return errors.Join(writeErr, f.Sync(), f.Close())
+}
 
 // Validate even the currently absent suffix before creating any directory.
 func implementRunTarget(path string, directory bool) error {

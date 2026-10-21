@@ -26,6 +26,8 @@ type implementRunDeps struct {
 	ops         cleanupOps
 	step        func(string) error
 	mkdirTemp   func(string, string) (string, error)
+	environ     func() []string
+	saveStatus  func(*os.File, string) error
 	withSignals func(func(<-chan os.Signal) (int, error)) (int, error)
 }
 
@@ -45,6 +47,7 @@ func implementRunDefaults() implementRunDeps {
 		},
 		ops: systemCleanup(), step: func(string) error { return nil },
 		mkdirTemp: os.MkdirTemp, withSignals: withSignals,
+		environ: os.Environ, saveStatus: implementRunSaveStatus,
 	}
 }
 
@@ -67,6 +70,16 @@ func implementRunCommand(args []string, stdout, stderr io.Writer, deps implement
 	}
 	// All validation, including trusted byte comparison, precedes log creation.
 	if err := r.validate(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
+		return 1
+	}
+	lock, err := implementRunLock(r.home)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
+		return 1
+	}
+	defer func() { _ = lock.Close() }()
+	if err := r.checkRecovery(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
 		return 1
 	}
@@ -139,6 +152,30 @@ func (r *implementRun) validate() error {
 			return fmt.Errorf("directory %q: %w", path, err)
 		}
 	}
+	resolvedHome, err := filepath.EvalSymlinks(r.home)
+	if err != nil {
+		return err
+	}
+	resolvedAccount, err := filepath.EvalSymlinks(r.deps.accountHome)
+	if err != nil {
+		return err
+	}
+	for _, pair := range [][2]string{{r.home, r.deps.accountHome}, {resolvedHome, resolvedAccount}} {
+		if implementRunInside(pair[0], pair[1]) || implementRunInside(pair[1], pair[0]) {
+			return errors.New("implementer home must not overlap calling account home")
+		}
+		for _, direction := range [][2]string{pair, {pair[1], pair[0]}} {
+			inside, err := implementContains(direction[0], direction[1], os.Stat)
+			if err != nil || inside {
+				return fmt.Errorf("implementer home must not overlap calling account home: %v", err)
+			}
+		}
+	}
+	for _, root := range []string{r.tree, r.home, r.logs} {
+		if err := r.agyOutside(root); err != nil {
+			return err
+		}
+	}
 	for _, pair := range [][2]string{{r.home, r.tree}, {r.tree, r.home}, {r.tree, r.saved}, {r.home, r.saved}, {r.tree, r.prompt}, {r.tree, r.logs}, {r.home, r.logs}} {
 		// A new log directory is compared via its existing parent.
 		child := pair[1]
@@ -181,8 +218,8 @@ func (r *implementRun) validate() error {
 	if err := implementRunTarget(r.agy, false); err != nil {
 		return fmt.Errorf("agy: %w", err)
 	}
-	if info, err := os.Lstat(r.agy); err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("agy must be an existing regular file: %v", err)
+	if info, err := os.Lstat(r.agy); err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("agy must be an existing regular executable file: %v", err)
 	}
 	binary, err := r.deps.executable()
 	if err != nil {
@@ -215,7 +252,50 @@ func (r *implementRun) validate() error {
 			return err
 		}
 	}
+	data, err := implementRead(r.files()[2].path, 1<<20, false)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("existing MCP configuration: %w", err)
+	}
+	if len(data) != 0 {
+		return errors.New("existing MCP configuration must be absent or empty for a feature-off run")
+	}
+	if err := implementRunTarget(filepath.Join(r.home, "guard"), true); err != nil {
+		return err
+	}
 	return implementRunTarget(r.brain(), true)
+}
+
+// A new log directory need not exist yet, so compare clean path components.
+func implementRunInside(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func (r *implementRun) agyOutside(root string) error {
+	if implementRunInside(root, r.agy) {
+		return fmt.Errorf("agy must be outside Argon-writable location %q", root)
+	}
+	// Compare identities as well, including on case-insensitive filesystems.
+	if _, err := os.Lstat(root); err == nil {
+		inside, err := implementContains(root, r.agy, os.Lstat)
+		if err != nil || inside {
+			return fmt.Errorf("unsafe agy location %q: %v", root, err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+func (r *implementRun) environment(tmp string) []string {
+	parent := make([]string, 0)
+	for _, entry := range r.deps.environ() {
+		if !strings.HasPrefix(entry, "PATH=") {
+			parent = append(parent, entry)
+		}
+	}
+	parent = append(parent, "PATH=/usr/bin:/bin:/usr/sbin:/sbin:"+filepath.Join(r.deps.accountHome, ".local/bin"))
+	return agyEnvironment(parent, r.home, tmp)
 }
 
 type implementRunFile struct {

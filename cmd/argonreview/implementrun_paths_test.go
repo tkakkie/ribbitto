@@ -173,6 +173,15 @@ func TestImplementRunTemporaryCreationFailure(t *testing.T) {
 		}
 		return "", os.Mkdir(existing, 0o700)
 	}
+	// Lock creation now precedes TMPDIR creation. Seed that persistent file
+	// so the snapshot still proves failed creation never places configuration.
+	lock, err := implementRunLock(x.f.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lock.Close(); err != nil {
+		t.Fatal(err)
+	}
 	before := implementRunSnapshot(t, x.f.home)
 	status := x.run(t, 1)
 	if !strings.Contains(status, "creating TMPDIR") || x.checks != 0 || !reflect.DeepEqual(before, implementRunSnapshot(t, x.f.home)) {

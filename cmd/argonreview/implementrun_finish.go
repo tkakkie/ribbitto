@@ -39,7 +39,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		logs[name] = f
 	}
 	code, pre, post := -1, -1, -1
-	confirmed, agentAttempted, placement := true, false, false
+	confirmed, agentAttempted, placement, agyStarted := true, false, false, false
 	var reasons error
 	var cleanup []string
 	step := func(name string, action func() error) error {
@@ -73,9 +73,20 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 				_ = step("place-brain", func() error { return implementRunEmpty(r.brain()) })
 			}
 			if reasons == nil {
+				reasons = r.agyOutside(tmp)
+			}
+			if reasons == nil {
 				pre = r.check(logs["pre.txt"])
 				if pre != 0 {
 					reasons = errors.New("pre-check failed")
+				}
+			}
+			if reasons == nil {
+				select {
+				case sig := <-signals:
+					code = 128 + int(sig.(syscall.Signal))
+					reasons = fmt.Errorf("interrupted by %v", sig)
+				default:
 				}
 			}
 			if reasons == nil {
@@ -91,7 +102,8 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 					return wait(pid, status)
 				}
 				sup := supervisor{r.limit, 5 * time.Second, signals, ops}
-				code, err = sup.run(r.agy, args, agyEnvironment(os.Environ(), r.home, tmp), r.tree, logs["out.jsonl"], logs["err.txt"])
+				code, err = sup.run(r.agy, args, r.environment(tmp), r.tree, logs["out.jsonl"], logs["err.txt"])
+				agyStarted = started
 				reasons = errors.Join(reasons, err)
 				if !started {
 					code = -1
@@ -131,8 +143,11 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		}
 		if !confirmed {
 			reasons = errors.Join(reasons, errors.New("manual recovery needed: session stop unconfirmed; normal completion stopped"))
+			if err := r.markRecovery(); err != nil {
+				reasons = errors.Join(reasons, fmt.Errorf("recovery marker failed: %w", err))
+			}
 		}
-		if confirmed && code >= 0 {
+		if confirmed && code >= 0 && agyStarted {
 			transcript, readErr := implementRunReadLog(logs["out.jsonl"])
 			diagnostics, stderrErr := implementRunReadLog(logs["err.txt"])
 			_, judgeErr := judge(code, transcript, diagnostics)
@@ -148,6 +163,30 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		reasons = errors.Join(reasons, fmt.Errorf("interrupted by %v", sig))
 	default:
 	}
+	status := r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+	if err := r.deps.saveStatus(logs["status"], status); err != nil {
+		reasons = errors.Join(reasons, fmt.Errorf("log/status save failed: %w", err))
+		status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+		if err := r.deps.saveStatus(logs["status"], status); err != nil {
+			reasons = errors.Join(reasons, fmt.Errorf("log/status retry failed: %w", err))
+			status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+		}
+	}
+	_, outputErr := io.WriteString(out, status)
+	if outputErr != nil {
+		reasons = errors.Join(reasons, fmt.Errorf("status output failed: %w", outputErr))
+		status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+		if err := r.deps.saveStatus(logs["status"], status); err != nil {
+			reasons = errors.Join(reasons, fmt.Errorf("log/status after output failed: %w", err))
+		}
+	}
+	if reasons != nil {
+		return max(code, 1), reasons
+	}
+	return 0, nil
+}
+
+func (r *implementRun) status(code int, reasons error, pre, post int, confirmed bool, cleanup []string, tmp string) string {
 	status := fmt.Sprintf("exit=%d\ncounts=%t\npre-check=%d\npost-check=%d\nstop-confirmed=%t\nsession-left=%s\n", code, reasons == nil, pre, post, confirmed, map[bool]string{true: "0", false: "unknown"}[confirmed])
 	for _, line := range cleanup {
 		status += "cleanup-" + line + "\n"
@@ -160,6 +199,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		status += "recovery=" + strconv.Quote("inspect cleanup results; retry checks before another run") + "\n"
 	}
 	if !confirmed {
+		status += "recovery-marker=" + strconv.Quote(r.recoveryMarker()) + "\n"
 		for _, path := range []string{tmp, r.files()[4].path, r.files()[0].path, r.files()[1].path, r.files()[2].path, r.files()[3].path, r.brain()} {
 			status += "manual-recovery-needed=" + strconv.Quote(path) + "\n"
 		}
@@ -170,18 +210,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 			}
 		}
 	}
-	reasons = errors.Join(reasons, implementRunSaveStatus(logs["status"], status))
-	_, outputErr := io.WriteString(out, status)
-	reasons = errors.Join(reasons, outputErr)
-	if outputErr != nil {
-		status = strings.Replace(status, "counts=true\n", "counts=false\n", 1)
-		status += "reason=" + strconv.Quote("status output failed: "+outputErr.Error()) + "\n"
-		reasons = errors.Join(reasons, implementRunSaveStatus(logs["status"], status))
-	}
-	if reasons != nil {
-		return max(code, 1), reasons
-	}
-	return 0, nil
+	return status
 }
 
 func implementRunSaveStatus(f *os.File, status string) error {

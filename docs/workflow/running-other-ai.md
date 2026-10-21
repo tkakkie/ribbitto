@@ -92,7 +92,7 @@ difference between the AIs, enough safety for practice, little to operate.
   `PR_BODY.md` ([below][c]), and Argon's protected-file and
   workspace checks ([boundary][b]).
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
-- Argon's [container verify](argon-verify.md#status): pending. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
+- Argon's [container verify](argon-verify.md#status): in force. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
 
 A branch with only Claude's own code on top of `main` is not a handoff:
 Claude follows the [local checks](../../AGENTS.md#commands) and

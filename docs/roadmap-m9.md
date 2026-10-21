@@ -1,11 +1,13 @@
 # M9: Front-end foundation and UX
 
 Goal and plan for milestone M9 (#1404) in the [roadmap](roadmap.md#after-the-mvp):
-a front end that stays safe to change as it grows, and faster switching.
+a front end that stays safe to change as it grows, and conversations that
+open at a bounded cost.
 
-Toolchain choices (#1356) and client-side UX rules (#1361) are pending
-decisions; M9 records their planned order and outcomes without deciding them
-in advance.
+The toolchain is decided
+([decision 43](decisions/43-typescript-with-a-go-driven-build.md), #1356).
+The client-side UX rules (#1361) are a pending decision; its item A1
+(conversation swap and in-memory cache) is deferred after #1467.
 
 ## Outcomes
 
@@ -32,9 +34,9 @@ M9's foundation (phases 1–5) starts first and runs alongside the *Basics*
 track (private channels → direct messages → invitations). *Basics* does not
 wait for M9 as a whole, and M9's UX items (phase 6) do not block *Basics*.
 Where both change the same code, the two issues state their dependency and
-order before either is made `ready`; in particular, private channels and the
-conversation cache share one access model (pending decision #1361), and
-whichever lands second adds the tests for the other.
+order before either is made `ready`; in particular, if #1361's A1 is
+revisited, private channels and the conversation cache share one access
+model (#1361), and whichever lands second adds the tests for the other.
 
 ## Order
 
@@ -46,23 +48,27 @@ Phases may overlap where nothing depends on it:
    network-delay profile. Both use #1149's harness; ask for one approval and
    cap ([investigations](workflow/investigations.md)) and run them in one
    session to save tokens.
-3. **Decisions (pending):** #1356 first (toolchain; to amend decisions
+3. **Decisions:** #1356 first, decided as
+   [decision 43](decisions/43-typescript-with-a-go-driven-build.md)
+   (toolchain; amends decisions
    [2](decisions/02-server-rendered-html-with-htmx-not-an-spa.md),
    [19](decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
    [35](decisions/35-tooling-in-go.md) and
    [40](decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)),
-   then #1361 (client-side UX; to amend decisions 19,
-   [30](decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md),
+   then #1361 (client-side UX, pending; its item A1 is deferred, so it does
+   not amend decisions 19 and
+   [30](decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
+   now; it amends decisions
    [37](decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
-   (c) and
-   [41](decisions/41-client-storage-indexeddb-by-data-class.md), and record
-   the cache's accepted safety model), so the two never edit decision 19 at
-   once. Then #1409 front-end conventions.
+   (c) and [41](decisions/41-client-storage-indexeddb-by-data-class.md)
+   where needed, and keeps the cache's accepted safety model on file for
+   A1). Then #1409 front-end conventions.
 4. **Toolchain:** #1410 type check · #1411 hashed script delivery · #1412
    unit tests · #1413 DOM contract · #1414 keep new code typed · #1415 Node
-   in the AI workflow. The Svelte-path issues (#1172, #1194, #1187, #1166)
-   are closed as superseded by #1356's decision pull request, not re-scoped,
-   because decision 40 cites them by number.
+   in the AI workflow. The Svelte-path issues (#1166, #1172, #1187, #1194)
+   stay open as independent issues: decision 43 does not close, re-scope or
+   relabel them. No Svelte-specific implementation starts without a new
+   performance evaluation and the maintainer's explicit approval.
 5. **Conversions,** stateful first: #1416 composer queue state machine →
    #1417 render from queue state · #1418 drafts and unread counts · #1419
    stream scripts · #1420 composer helpers · #1421 remaining small scripts.

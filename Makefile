@@ -74,6 +74,7 @@ check-test: db-health
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 
 check-tools: $(TEMPL)
+	go -C tools run ./languagecheck ..
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
@@ -86,12 +87,13 @@ check-tools: $(TEMPL)
 
 # A quick subset of make check to run before pushing a follow-up commit
 # (#848): generated files and CSS are current, the API and dependency
-# manifests and document sizes match, and lint passes. Each check is its own
-# recipe line, so make stops at the first non-zero status; nothing pipes a
-# check's output, which once hid a docscheck failure. It does not run Go or
-# templ formatting, the doc.go check, go vet, sourcecheck or the tests
-# (make check does), nor the schema docs or make vuln (CI does).
+# manifests and document sizes match, file kinds pass, and lint passes. Each
+# check is its own recipe line, so make stops at the first non-zero status;
+# nothing pipes a check's output, which once hid a docscheck failure. It does
+# not run Go or templ formatting, the doc.go check, go vet, sourcecheck or
+# the tests (make check does), nor the schema docs or make vuln (CI does).
 prepush: $(TEMPL) $(TAILWIND)
+	go -C tools run ./languagecheck ..
 	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..

@@ -5,12 +5,48 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// failAtTestLine preserves the Must call's location, which testing otherwise
+// attributes to this shared WithPanic callback.
+func failAtTestLine(t *testing.T) func(any) {
+	t.Helper()
+	return func(v any) {
+		t.Helper()
+		file, line := browserTestCallSite()
+		t.Fatalf("%v (at %s:%d)", v, file, line)
+	}
+}
+
+func browserTestCallSite() (string, int) {
+	var pcs [64]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.File, "_test.go") && !strings.Contains(frame.Function, ".failAtTestLine.") {
+			return filepath.Base(frame.File), frame.Line
+		}
+		if !more {
+			return "unknown_test.go", 0
+		}
+	}
+}
+
+func TestBrowserTestCallSite(t *testing.T) {
+	_, callerFile, callerLine, _ := runtime.Caller(0)
+	file, line := browserTestCallSite()
+	if file != filepath.Base(callerFile) || line != callerLine+1 {
+		t.Fatalf("call site = %s:%d, want %s:%d", file, line, filepath.Base(callerFile), callerLine+1)
+	}
+}
 
 // runBounded runs fn until ctx ends and fails naming what, with the time since
 // started, so a stalled browser action says where it stalled instead of

@@ -1,33 +1,26 @@
 # Argon verification
 
-The maintainer chose option B on 2026-10-19
+Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Implementation is pending.
+Generated files stay CI-only; verify generation needs a `process` issue.
+
+[Leftover sweep](argon-verify-sweep.md).
 
 ## Status
 
-The `verify` permission is **NOT in force**. It requires
-[#1429](https://github.com/tkakkie/ribbitto/issues/1429),
-[#1430](https://github.com/tkakkie/ribbitto/issues/1430),
-[#1431],
-[#1432](https://github.com/tkakkie/ribbitto/issues/1432) and #1442
-to be merged; [#1436] Stage 1 to be complete before [#1433]'s extended
-real-path preflight (the real Argon run path, the hook that agy uses in normal
-operation, already runs the Go guard built from the trusted revision, after
-Stage 1's whole existing preflight passed through it and one real run
-completed with it); that preflight to pass and be recorded; and the
-maintainer to explicitly approve enabling.
-#1436 Stage 2 is independent of enabling. After enabling and a passing smoke
-test, a later small docs change records the permission as in force, not
-#1442. The Start gate and review independence stay. Until then Argon runs
-keep today's rules and settings unchanged: no MCP, no `verify`, the
-`mcp(*)` deny stays.
+The `verify` permission is **in force since 2026-10-21**. Production uses
+zsh until [#1436] Stage 2. The maintainer approved enabling in
+chat after reading [#1433]'s record. Evidence: [step 1][step1],
+[preflight][preflight], [enabling and smoke test][smoke].
+The Start gate and review independence stay. Only during a run, feature-on
+settings replace the blanket `mcp(*)` deny; the home returns
+to feature-off at rest. See [operation](argon-verify-operation.md).
 
 ## Tool permissions
 
-(When in force) Argon keeps no arbitrary shell, `run_command` or other
-command tool. MCP admits only one fixed `verify` tool through two agreeing
+Argon keeps no arbitrary shell, `run_command` or other
+command tool. On-mode MCP admits one fixed `verify` tool through two agreeing
 layers:
 
 - The guard allows `call_mcp_tool` only for the exact configured server,
@@ -40,6 +33,9 @@ layers:
   `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
   today's, including all command and URL denies.
   The review launcher's settings and guard stay unchanged.
+
+In [preflight][preflight], the guard refused every invalid call first;
+the settings and server layers were not probed separately.
 
 With MCP configured, the custom agent's `tools` list is no barrier:
 `call_mcp_tool`, `list_resources`, `read_resource` and `manage_task` remain
@@ -56,21 +52,20 @@ in #1430/#1432 code.
 
 ## Trusted server
 
-Outside `agy`'s sandbox, the MCP server is trusted computing base code. It
-gets minimal credentials, Docker and host rights, with no interface
-for arbitrary commands. `argonreview verify-mcp` offers one tool and only
+Outside `agy`'s sandbox, the MCP server is trusted computing base code with
+minimal credentials, Docker and host rights, and no arbitrary-command
+interface. `argonreview verify-mcp` offers one tool and only
 calls `argonreview container-check`.
 
-A fixed `mcp_config.json` starts it through `/usr/bin/env -i` with fixed
-variables, a trusted binary path and fixed start-up arguments for the
-trusted source path and worktree. Neither agy's environment nor a tool
-argument supplies these. The server serves only if its build matches
-the trusted revision, checked against that source. Pre- and post-run checks
-include the MCP file and server.
+A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
+with a trusted binary and fixed source and worktree arguments. Neither agy's
+environment nor a tool argument supplies these. The server serves only if
+its build matches the trusted revision, checked against that source.
+Pre- and post-run checks include the MCP file and server.
 
-The server checks preflight's fixed environment allowlist. The
-runner uses only constants and fixed Docker variables. `FAILED` and `NOT
-VERIFIED` results set `isError`.
+The server allows only `PATH` in its environment. Docker connection settings
+are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
+`FAILED` and `NOT VERIFIED` results set `isError`.
 
 ## Verification container
 
@@ -132,10 +127,8 @@ the container by #1429.
 
 ## Extended preflight
 
-For [#1433]'s preflight and once in force,
-extend the [existing preflight](argon-implementer.md#preflight): keep current
-items; replace only the MCP refusal with "MCP other than the
-exact `verify` call". Claude runs the real Argon → MCP → Docker → test-result
+Extend the [existing preflight](argon-implementer.md#preflight), keeping every
+refusal. Claude runs the real Argon → MCP → Docker → test-result
 path on the host in a throwaway repository with the dedicated worker home:
 
 - **Allow:** `verify` passes on a real package; a deliberately broken
@@ -157,7 +150,6 @@ path on the host in a throwaway repository with the dedicated worker home:
 - **Skips:** a database-backed package reports `NOT VERIFIED` and its
   skipped test names, never `verified`.
 
-Preflight's temporary permission is not the normal-operation permission.
 Only during preflight, the managed temporary configuration uses #1432's
 feature-on settings, guard mode and MCP file. After success or failure,
 restore and check feature-off settings, hooks and MCP file byte for byte,
@@ -179,32 +171,36 @@ an unlisted MCP tool and an extra argument are refused; settings, hooks and
 MCP file match the expected files; the account's shared settings hash is
 unchanged; nothing unexpected changed. If any smoke check fails, switch off
 immediately, restore and check the old configuration, and investigate before
-another attempt. After a passing smoke test, make the later Status change
-above; the Start gate then points to #1433's record.
+another attempt. The passing smoke test is [recorded][smoke]; the Start
+gate refers to [#1433]'s [preflight record][preflight].
 
 ## Control code in Go
 
-The direction is Go in `cmd/argonreview`, built from the trusted revision:
-the implementer guard (`argonreview implement-guard`,
-[#1431]), pre- and post-run
-checks (`argonreview implement-check`,
-[#1434](https://github.com/tkakkie/ribbitto/issues/1434)), run command
-(`argonreview implement-run`,
-[#1435](https://github.com/tkakkie/ribbitto/issues/1435)), container check
-and verify server. These implementations are pending.
+Use Go in `cmd/argonreview`, built from the trusted revision: guard
+(`implement-guard`, [#1431]), checks (`implement-check`,
+[#1434](https://github.com/tkakkie/ribbitto/issues/1434)), verify server
+(`verify-mcp`), container check (`container-check`), sweep (`container-sweep`)
+and `implement-config`. `implement-run` is pending
+([#1435](https://github.com/tkakkie/ribbitto/issues/1435),
+[#1483](https://github.com/tkakkie/ribbitto/issues/1483)).
 
-The Python guard and zsh scripts remain in use until each stage of
-[#1436] is compared and
-verified before use, with rollback: first the guard, then checks and run
-command. Each stage keeps the full preflight and no weaker boundary; a
-failed comparison, preflight or restoration stops the next real run.
-Unverified code never runs on the host. Only after the staged switches are
-the scripts reference only, with no Python in the run path. #1436 keeps MCP
-off and its file empty.
+Production hooks use the Go `implement-guard` ([#1436] Stage 1, done
+2026-10-20); the Python guard is reference only. The zsh scripts stay until the
+checks and run command are compared and verified, with rollback.
+Each stage keeps the full preflight and no weaker boundary; a failed
+comparison, preflight or restoration stops the next real run. Unverified
+code never runs on the host. After the switches the scripts are reference
+only. #1436 Stage 2 is independent of the enabling decision but must reproduce
+on-mode operation before scripts retire: the `verify-mode` switch,
+pinned generated settings and hook hashes and pinned trusted source,
+the post-run check before restore, and feature-off files at rest.
 
-If option B cannot be built, the maintainer's fallback is option C: the
-launcher runs the checks between runs.
+If option B cannot be built, the maintainer's fallback, option C, runs
+checks in the launcher between runs.
 
 [#1431]: https://github.com/tkakkie/ribbitto/issues/1431
 [#1433]: https://github.com/tkakkie/ribbitto/issues/1433
 [#1436]: https://github.com/tkakkie/ribbitto/issues/1436
+[step1]: https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6303761064
+[preflight]: https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6304130212
+[smoke]: https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6304812132

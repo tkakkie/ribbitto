@@ -38,14 +38,14 @@ case $tier in A|B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
 Claude reviews Codex's work directly, or with
 `limit 1800 claude -p "…" < /dev/null`.
 
-Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
+Post: `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
 On an Argon pull request, the pull request example above does not
 apply: Codex runs in a clean worktree of `origin/main`, never at the pull
 request's head, and gets the diff on stdin
 ([who does what](argon-implementer.md#who-does-what); for a follow-up
-check also [more context](argon-pull-requests.md#who-reviews)):
+check also [more context][r]):
 
 ```sh
 # $W: Argon's worktree; $clean: clean origin/main; $base: merge base with
@@ -69,7 +69,7 @@ case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
 ```
 
 Argon's setup: [boundary and preflight](argon-implementer.md#argon-as-implementer);
-review differences: [Argon's pull requests](argon-pull-requests.md#who-reviews).
+review differences: [Argon's pull requests][r].
 
 ## Handoff of another AI's code
 
@@ -78,20 +78,21 @@ For code Codex or Argon wrote (maintainer, 2026-10-16,
 difference between the AIs, enough safety for practice, little to operate.
 
 - **In its own sandbox,** the implementing AI may build and test as before:
-  Codex: [profile](#running-codex); Argon only within [boundary](argon-implementer.md#the-boundary).
+  Codex: [profile][c]; Argon only within [boundary][b].
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
-  `go test`, a build, `make dev` or any tool from that tree.
+  `go test`, a build, `make dev` or any tool from that tree. Nor transferred
+  `node_modules`, npm scripts or Node tests.
 - The only standing exception is an [approved performance measurement](investigations.md#host-measurements).
 - **CI is the check.** GitHub Actions runs PR code with read-only access
   and no secrets. Green draft CI replaces `make check` before the
   first review; green CI on each follow-up head replaces `make prepush`;
   closure verification and follow-up checks read CI without re-running code.
 - **Still done on the host:** code and diff review, the credential grep on
-  `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
-  workspace checks ([boundary](argon-implementer.md#the-boundary)).
+  `PR_BODY.md` ([below][c]), and Argon's protected-file and
+  workspace checks ([boundary][b]).
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
-- Argon's [container verify](argon-verify.md#status): pending. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
+- Argon's [container verify](argon-verify.md#status): in force. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
 
 A branch with only Claude's own code on top of `main` is not a handoff:
 Claude follows the [local checks](../../AGENTS.md#commands) and
@@ -111,8 +112,7 @@ Maintainer setup, not general Codex limits (codex-cli 0.153; evidence: #48).
 - network access only to localhost, the Go module proxy and checksum
   database, GitHub and the npm registry.
 
-Other hosts are refused. Use bash or zsh for the arrays, with `limit`
-as above:
+Other hosts are refused. Use bash/zsh and `limit` above:
 
 ```bash
 perms=(
@@ -150,6 +150,7 @@ default, no effort flag. Tier A/B is always `normal`, including gate documents u
 
 The brief also includes:
 
+- Node only after #1410 and #1415: [decision 43](../decisions/43-typescript-with-a-go-driven-build.md).
 - **Go caches.** Only the worktree is writable, so use
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
@@ -163,7 +164,7 @@ The brief also includes:
   `check-test` fails in `cmd/argonreview`, `cmd/capacity` and `cmd/dev`
   process tests; `make check` stops before `check-tools`
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
-  expected; CI runs the full check ([handoff](#handoff-of-another-ais-code)).
+  expected; CI runs the full check ([handoff][h]).
 
   ```sh
   if ! docker ps --format '{{.Names}}' | grep -qx ribbitto-codex-pg; then
@@ -191,7 +192,7 @@ The brief also includes:
   inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
   no other AI CLIs (claude, agy), no browser or Computer Use: reviews are the
   orchestrator's, and browser checks follow the
-  [handoff](#handoff-of-another-ais-code). It never re-signs, patches or
+  [handoff][h]. It never re-signs, patches or
   replaces a tool binary to make it run, and reports the failure instead. It
   puts scratch files outside the worktree when the runner allows it; this
   profile does not, so Codex may create them in the worktree but deletes
@@ -203,7 +204,7 @@ The brief also includes:
 ### Handoff checks
 
 The orchestrator then, running nothing from the tree
-([handoff](#handoff-of-another-ais-code)):
+([handoff][h]):
 
 1. reviews the diff;
 2. checks the PR text before it is published (#358): this prints nothing,
@@ -217,10 +218,15 @@ The orchestrator then, running nothing from the tree
    ```
 
 3. commits, pushes and opens the draft PR under the
-   [handoff rule](#handoff-of-another-ais-code).
+   [handoff rule][h].
 
 ### Review context
 
 **Reviews.** Supply the issue and, for a PR, the PR with comments, diff
 and CI; never supply or fetch Status #1. Review effort follows the tier
 above; implementation effort follows size.
+
+[r]: argon-pull-requests.md#who-reviews
+[b]: argon-implementer.md#the-boundary
+[h]: #handoff-of-another-ais-code
+[c]: #running-codex

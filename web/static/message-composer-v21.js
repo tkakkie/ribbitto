@@ -2,9 +2,11 @@
   // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
   const viewport = window.visualViewport;
   const updateViewport = () => {
-    const style = document.documentElement.style;
+    const style = document.getElementById("organization-stream")?.style;
+    if (!style) return;
+    const differs = viewport && (Math.abs(viewport.height - window.innerHeight) > 1 || Math.abs(viewport.offsetTop) > 1);
     for (const [name, value] of [["--composer-viewport-h", viewport?.height], ["--composer-viewport-top", viewport?.offsetTop]]) {
-      const next = value === undefined ? "" : value + "px";
+      const next = differs ? value + "px" : "";
       if (style.getPropertyValue(name) === next) continue;
       if (next) style.setProperty(name, next);
       else style.removeProperty(name);
@@ -21,6 +23,38 @@
   // An edited send keeps its identity even when another queue response swaps
   // the hidden controls. Only sending or emptying this text releases it.
   let restoredKey = null;
+  let restoredText = null;
+  let freshRestoredKey = null;
+  const releaseRestored = (body) => {
+    restoredKey = null;
+    restoredText = null;
+    delete body.form.dataset.unconfirmedKey;
+    body.form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey;
+    freshRestoredKey = null;
+  };
+  const changedRestoration = (body) => {
+    if (restoredKey && (body.value === "" || (restoredText !== null && body.value !== restoredText))) releaseRestored(body);
+  };
+  // A deliberate Remove only protects an unchanged resend briefly (#1328).
+  const removedKeyRetention = 5 * 60 * 1000;
+  const removedKey = (form, text) => JSON.stringify([form.dataset.draftChannel, form.dataset.draftTopic || "feed", text]);
+  const removedKeys = new Map();
+  window.addEventListener("pagehide", () => removedKeys.clear());
+  document.addEventListener("message-draft-restored", (event) => {
+    // The ordinary fallback still has the fresh key rendered by the server.
+    freshRestoredKey = event.target.form.elements.idempotency_key.value;
+    restoredKey = event.detail.key;
+    restoredText = event.target.value;
+    event.target.form.elements.idempotency_key.value = restoredKey;
+    event.target.form.dataset.unconfirmedKey = restoredKey;
+  });
+  document.addEventListener("message-sent", (event) => {
+    for (const [text, held] of removedKeys) {
+      if (held.key === event.detail.key) removedKeys.delete(text);
+    }
+    if (restoredKey !== event.detail.key) return;
+    releaseRestored(event.target);
+  });
   const updateEdits = () => {
     const body = document.getElementById("message-body");
     const occupied = body.value !== "" || composing.has(body);
@@ -69,6 +103,7 @@
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
     const template = document.getElementById("message-pending-template");
+    changedRestoration(event.target.elements.body);
     const inPlace = () => sendEvent("message-sending", { key: event.target.elements.idempotency_key?.value, body: event.target.elements.body.value, inPlace: true });
     if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) {
       if (!event.target.classList.contains("htmx-request")) inPlace();
@@ -98,10 +133,15 @@
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
-    sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
+    const removed = removedKeys.get(removedKey(form, body.value));
+    removedKeys.delete(removedKey(form, body.value));
+    sending.elements.idempotency_key.value = restoredKey ||
+      (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
+    if (removed && sending.elements.idempotency_key.value === removed.key) sending.dataset.unconfirmed = "true";
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;
     restoredKey = null;
+    restoredText = null;
     // Correlate draft cleanup even after a 409 renews the request key.
     sending.dataset.draftKey = sending.elements.idempotency_key.value;
     sending.elements.body.value = body.value;
@@ -174,12 +214,21 @@
       if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
+      restoredText = null;
       body.form.elements.idempotency_key.value = restoredKey;
       if (form.dataset.unconfirmed) body.form.dataset.unconfirmedKey = restoredKey;
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
+    } else if (form.dataset.unconfirmed) {
+      for (const [text, held] of removedKeys) {
+        if (performance.now() - held.at >= removedKeyRetention) removedKeys.delete(text);
+      }
+      const text = removedKey(body.form, form.elements.body.value);
+      const held = { key: form.elements.idempotency_key.value, at: performance.now() };
+      removedKeys.set(text, held);
+      setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);
     }
-    sendEvent("message-pending-action", { key: form.dataset.draftKey, kind: edit ? "edit" : "remove" });
+    sendEvent("message-pending-action", { key: form.dataset.draftKey, restoredKey: edit ? restoredKey : null, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -288,23 +337,17 @@
     const height = quote?.getBoundingClientRect().height || 0;
     // A visible chip adds one flex gap as well as its own height.
     const next = (height ? height + parseFloat(getComputedStyle(body.form).rowGap) : 0) + "px";
-    if (body.form.style.getPropertyValue("--composer-quote-h") === next) return;
+    // The CSS fallback already covers an absent chip, without invalidation.
+    if ((body.form.style.getPropertyValue("--composer-quote-h") || "0px") === next) return;
     body.form.style.setProperty("--composer-quote-h", next);
     // Measuring a removed chip can briefly grow the list and clamp its scroll,
     // even when the updated cap brings the list back to the same height.
     quoteResized = true;
   };
-  updateQuoteHeight();
-  // The first measurement is the initial layout, not a change to restore from.
-  quoteResized = false;
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));
-    if (restoredKey && event.target.value === "") {
-      restoredKey = null;
-      delete event.target.form.dataset.unconfirmedKey;
-      event.target.form.elements.idempotency_key.value = crypto.randomUUID();
-    }
+    changedRestoration(event.target);
     updateEdits();
   });
   document.addEventListener("input", signal);
@@ -318,10 +361,9 @@
     if (target && target.parentElement?.id === "message-items") return;
     if (list) list.scrollTop = list.scrollHeight;
   };
-  newest();
   const pane = document.getElementById("message-list");
   if (pane) {
-    let height = pane.clientHeight, position, settling = false;
+    let height, position, measured = false, settling = false;
     const remember = () => {
       const top = pane.getBoundingClientRect().top;
       let item;
@@ -331,12 +373,29 @@
       position = { newest: pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2,
         item, offset: item ? item.getBoundingClientRect().top - top : 0 };
     };
-    remember();
-    rememberPost = () => { height = pane.clientHeight; remember(); };
+    rememberPost = () => {
+      // A background-tab settle can precede the initial observer delivery.
+      if (!measured) return;
+      height = pane.clientHeight;
+      remember();
+    };
     // A resize can clamp scrollTop before its scroll event. Keep the state
     // from the old height until the observer has restored the reader.
-    pane.addEventListener("scroll", () => { if (!quoteResized && pane.clientHeight === height) remember(); });
+    pane.addEventListener("scroll", () => { if (measured && !quoteResized && pane.clientHeight === height) remember(); });
     const resize = new ResizeObserver(() => {
+      if (!measured) {
+        measured = true;
+        // The observer supplies initial layout before paint. Save newest (or
+        // the native fragment position) before writing the quote cap, so no
+        // read forces its layout. The deeper textarea/form observations let
+        // a cap resize deliver again and restore that intent before paint.
+        newest();
+        rememberPost();
+        if (body) revealEnd(body);
+        updateQuoteHeight();
+        quoteResized = false;
+        return;
+      }
       updateQuoteHeight();
       if (pane.clientHeight !== height || quoteResized) {
         quoteResized = false;

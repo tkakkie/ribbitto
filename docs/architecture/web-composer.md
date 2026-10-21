@@ -29,57 +29,7 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   script removes that prefix by the same rules (*the earlier message was
   sent*), or says the 409's error if the start changed. Otherwise
   text/error stay, including legacy rows without proof.
-- **Pending own posts** (#1156, #1188, #1174, #1180):
-  [decision 37 (a)][d37] defines the state, lifetime, rendering and arrival
-  rules. Latest feeds/topics use `#message-pending-template` and `#message-pending`,
-  after `#message-items`. Each item's htmx form holds original text,
-  key, generation and shown cursor. Composer clears immediately, keeps
-  focus, takes `crypto.randomUUID()`. Each queued form gets a fresh UUID unless
-  Edit restored it. At most 10 items per tab in all states, including failures
-  and confirmed items awaiting delivery. At capacity a localised alert keeps
-  the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
-  FIFO: one form at a time, predecessor classified first.
-  Ordinary requests block composer submits; pending items or requests block
-  quoted or invalid ordinary submits, preventing overlap between forms' requests.
-  A Not sent item lets later items continue; Retry moves it to the list and
-  queue's end. Unknown outcomes pause later items (showing Sending).
-  Same-key Retry keeps its place; success resumes dispatch. A refused retry
-  keeps the pause while the earlier outcome is unknown. Remove and Edit resume
-  without resolving that request: it may commit later; real delivery stays
-  visible. Storage follows send order on uninterrupted success or
-  successful same-key Retry; Remove or Edit may reorder it.
-  200 swaps composer state and out-of-band typing form, sets
-  `aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
-  textarea text.
-  `data-posted-message` links the item to delivery. A `MutationObserver` removes
-  confirmed items before paint when their ID appears in `#message-items`.
-  Stream-first briefly shows both until the response; replay and feed moves
-  preserve the real ID. Topic responses also remove the item if its
-  `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
-  has reached `data-posted-seq`. Read attributes once, never keep them
-  on the item. Once confirmed, `htmx:sseBeforeMessage` removes it when
-  a `messages-moved` payload names its ID with this topic as source.
-  Ordering allows removal of absent, already-applied posts
-  ([topic replay](replay.md#ordering-and-replay)).
-  Failed responses never swap; the failure classes above fill only
-  the item's empty polite status. Retry uses form text/key,
-  even after an unconfirmed send's refused retry. A 409
-  shows `message.error.repeat` and renews the item's key. Remove discards
-  item and text; an uncertain committed post can still arrive later.
-  Edit requires either failure, an empty composer and no IME
-  composition; otherwise visible but disabled with an associated
-  localised explanation. It never overwrites a draft. It restores raw
-  text, key and any unconfirmed mark, focuses the textarea with caret at
-  end, then removes the item. The key follows text across state swaps
-  until sent/emptied; its unconfirmed mark stays in composer
-  `data-unconfirmed-key` for either path. A pending resend transfers
-  it to its form and clears the composer's mark; emptying restored
-  text clears it and takes a fresh UUID.
-  Editing a known refusal clears stale composer marks.
-  Unused keys post normally; used keys return the stored message for a body
-  matching the [retry rule](posting.md), otherwise that pending 409.
-  Pending sends bypass prefix removal, ordinary send alerts/failure
-  classification and 409 cleanup.
+- **Pending own posts:** see [web-composer-pending.md](web-composer-pending.md).
 - **Idempotency key** (#1155): hidden `idempotency_key`, fresh on load, success/409; kept on 422. Scoped to authorised membership; never in streams. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
@@ -113,17 +63,25 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v5.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+`message-drafts-v6.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
 restore (#1162), never history. Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.
+At dispatch, save raw text and its send key before the request leaves or the
+textarea empties (#1328), including in-flight reload/navigation. Restore the key
+only with valid text in the same session/place; reuse it only while that text is
+unchanged. Any edit or emptying renews it. A 200 or stored-key confirmation clears
+the saved key while keeping newer text. Only the latest send dispatched in a
+place is kept: an unconfirmed item followed by another send loses its key on
+reload, as its text did before.
 Retry keeps unsaved edits. In-place 409 confirms recovered prefixes;
 dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
-- **Value:** JSON `{member, session, expires, text, at}`; `expires` and `at`
-  are Unix milliseconds. Limit: 4,000 code points, 50 entries per member
+- **Value:** JSON `{member, session, expires, text, at, key}`; `expires` and `at`
+  are Unix milliseconds; `key` is a send UUID or null (older entries may omit it).
+  Limit: 4,000 code points, 50 entries per member
   and session. Retention: last edit (`at`), checked only at load.
 - **Saving:** latest htmx forms carry `data-draft-channel`/optional
   `data-draft-topic` outside state swaps. Tab-monotonic edit times, never save

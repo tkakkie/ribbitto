@@ -51,4 +51,4 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the draft key's session, cleanup horizon and deadline for stopping writes ([drafts](web-composer.md#drafts)) |
 
   Member identity, selected topic and the resync trigger are specified in the
-  [sidebar script contract](web-javascript.md#javascript).
+  [sidebar script contract](web-javascript-unread.md).

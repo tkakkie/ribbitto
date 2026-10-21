@@ -46,7 +46,13 @@ func implementGuard(dir string, stdin io.Reader, stdout, stderr io.Writer) int {
 func implementGuardWithFS(dir string, stdin io.Reader, stdout, stderr io.Writer,
 	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
 ) int {
-	reason := implementGuardReason(dir, stdin, walk, lstat)
+	return implementGuardMode(dir, false, stdin, stdout, stderr, walk, lstat)
+}
+
+func implementGuardMode(dir string, verify bool, stdin io.Reader, stdout, stderr io.Writer,
+	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
+) int {
+	reason := implementGuardReason(dir, verify, stdin, walk, lstat)
 	decision := struct {
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
@@ -77,7 +83,7 @@ func implementGuardWithFS(dir string, stdin io.Reader, stdout, stderr io.Writer,
 	return 0
 }
 
-func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
+func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
 	lstat func(string) (fs.FileInfo, error),
 ) string {
 	data, err := os.ReadFile(filepath.Join(dir, "implementer-worktree"))
@@ -88,16 +94,18 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	root := strings.TrimFunc(string(data), func(r rune) bool {
 		return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
 	})
-	resolved, err := filepath.EvalSymlinks(root)
-	if !utf8.Valid(data) || !filepath.IsAbs(root) || err != nil || resolved != root || filepath.Clean(root) != root {
+	if !utf8.Valid(data) {
 		return "worktree path is not a clean real path"
 	}
-	info, err := lstat(root)
-	if err != nil {
-		return fmt.Errorf("guard error: checking worktree: %w", err).Error()
-	}
-	if !info.IsDir() {
-		return "guard error: worktree is not a directory"
+	if err := implementRealDirectory(root, lstat); err != nil {
+		switch {
+		case errors.Is(err, errImplementRealPath):
+			return "worktree path is not a clean real path"
+		case errors.Is(err, errImplementDirectory):
+			return "guard error: worktree is not a directory"
+		default:
+			return fmt.Errorf("guard error: checking worktree: %w", err).Error()
+		}
 	}
 	input, err := io.ReadAll(io.LimitReader(stdin, maxGuardInput+1))
 	if err != nil {
@@ -112,7 +120,7 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	if !implementGuardJSONLimits(input) {
 		return "guard error: JSON exceeds safe parsing limits"
 	}
-	paths, reason := implementGuardPaths(input)
+	paths, reason := implementGuardPaths(input, verify)
 	if reason != "" {
 		return reason
 	}
@@ -144,7 +152,7 @@ func implementGuardReason(dir string, stdin io.Reader, walk func(string, fs.Walk
 	return ""
 }
 
-func implementGuardPaths(input []byte) ([]string, string) {
+func implementGuardPaths(input []byte, verify bool) ([]string, string) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(input, &envelope); err != nil {
 		return nil, "guard error: unreadable hook input"
@@ -156,6 +164,9 @@ func implementGuardPaths(input []byte) ([]string, string) {
 	var name string
 	if err := json.Unmarshal(call["name"], &name); err != nil || bytes.Equal(call["name"], []byte("null")) {
 		return nil, "tool name is not a string"
+	}
+	if verify && name == "call_mcp_tool" && implementVerifyCall(input, call["args"]) == nil {
+		return nil, ""
 	}
 	switch name {
 	case "view_file", "list_dir", "grep_search", "find_by_name", "write_to_file", "replace_file_content", "multi_replace_file_content":

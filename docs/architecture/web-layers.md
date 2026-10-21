@@ -1,6 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
 Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
+Target browsers, compatibility rules and verification status: [`browser-targets.md`](browser-targets.md).
 
 ## Progressive enhancement
 
@@ -60,9 +61,9 @@ htmx does only requests/swaps; the server and templ own HTML.
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  Feed/topic pending items use the [composer contract](web-composer.md#composer):
+  Feed/topic pending items use the [composer contract](web-composer-pending.md#pending-own-posts):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v19.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v21.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one. Events on `#message-body`:
   `message-sending` and `message-sent` bind draft snapshots/confirmation to each
@@ -141,6 +142,7 @@ htmx does only requests/swaps; the server and templ own HTML.
 ## JavaScript
 
 See [JavaScript responsibilities and constraints](web-javascript.md).
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) covers the planned amendment.
 
 **Current exceptions** to the no-application-state rule:
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own sidebar

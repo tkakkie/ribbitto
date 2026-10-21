@@ -26,7 +26,7 @@ func containerFixture(t *testing.T) string {
 	t.Helper()
 	dir := resolved(t, t.TempDir())
 	gitT(t, dir, "init", "--quiet", "--template=")
-	write(t, filepath.Join(dir, "go.mod"), "module example.invalid/check\n\ngo 1.27.2\n")
+	write(t, filepath.Join(dir, "go.mod"), "module example.invalid/check\n\ngo 1.27.3\n")
 	write(t, filepath.Join(dir, "check.go"), "package check\n")
 	return dir
 }
@@ -93,7 +93,7 @@ func TestContainerArgumentsGolden(t *testing.T) {
 			}
 			want := []string{
 				"run", "--pull=never", "--name", "argonreview-check-fixed",
-				"--network", "none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
+				"--network", "none", "--label", "argonreview.owner=verify", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
 				"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
 				"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
 				"--mount", "type=bind,src=/var/cache/argonreview/go-mod,dst=/go/pkg/mod,readonly",
@@ -101,7 +101,7 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 				"--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
-				"golang@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8", "go", check,
+				"golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261", "go", check,
 			}
 			if check == "build" {
 				want = append(want, "-o", "/dev/null")
@@ -128,16 +128,16 @@ func TestContainerGoVersion(t *testing.T) {
 		data  string
 		valid bool
 	}{
-		{"module x\n\ngo 1.27.2\n", true}, {"go\t1.27.2 // image\n", true},
-		{"go 1.27\n", false}, {"go 1.27.3\n", false}, {"module x\n", false}, {"go\n", false},
-		{"go 1.27.2\ngo 1.27.2\n", false}, {"go 1.27.2 extra\n", false},
+		{"module x\n\ngo 1.27.3\n", true}, {"go\t1.27.3 // image\n", true},
+		{"go 1.27\n", false}, {"go 1.27.2\n", false}, {"module x\n", false}, {"go\n", false},
+		{"go 1.27.3\ngo 1.27.3\n", false}, {"go 1.27.3 extra\n", false},
 	} {
 		if err := checkContainerGoVersion([]byte(tc.data)); (err == nil) != tc.valid {
 			t.Fatalf("%q: %v", tc.data, err)
 		}
 	}
 	dir := containerFixture(t)
-	write(t, filepath.Join(dir, "go.mod"), "module x\ngo 1.27.3\n")
+	write(t, filepath.Join(dir, "go.mod"), "module x\ngo 1.27.2\n")
 	runner := fakeContainerRunner{func(context.Context, []string, []string, io.Writer, io.Writer) (int, error) {
 		t.Fatal("Docker ran for mismatched Go version")
 		return 0, nil

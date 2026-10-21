@@ -30,3 +30,5 @@ boundaries; without written rules each change would pick its own (#193).
 real-time updates); a headless-browser test dependency such as go-rod
 (deferred until after M3, if needed); a client-side framework (`DECISIONS.md`
 2).
+
+**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) changes only the in-memory working copy of state already allowed by decisions 34/37/41 and UX settings: typed modules, not `dataset` (pending posts, idempotency keys, drafts, bounded unread recovery state). Decisions 37/41's persistence rules are unchanged. JavaScript owns no application state, never the message list, sidebar or counts, subject to those existing exceptions. Any other/new client-side state (caches, optimistic states, uploads) and scripts' own requests are for #1361; existing permissions stay unchanged.

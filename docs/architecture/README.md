@@ -46,9 +46,14 @@ Read the file for the area you change:
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
-| [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, pending own posts, the idempotency key, drafts and the send key |
+| [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, the idempotency key, drafts and the send key |
+| [`web-composer-pending.md`](web-composer-pending.md) | pending own posts and the Remove hold |
+| [`web-javascript-unread.md`](web-javascript-unread.md) | stream checkpoints, visible reads and sidebar badge scripts |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
+| [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts, private maps and acceptance mechanics (#1410–#1415, #1426) |
+| [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
+| [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
 [org](../api/org.txt), [conversation](../api/conversation.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).

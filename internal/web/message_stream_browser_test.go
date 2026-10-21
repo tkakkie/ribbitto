@@ -78,10 +78,12 @@ func TestBrowser(t *testing.T) {
 }
 
 func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) {
+	run("htmx-load-count", testFeedGuardHTMXLoad)
 	run("typing/indicator", testTypingIndicatorBrowser)
 	run("composer/send-key", testSendKeyBrowser)
 	run("composer/typing", testTypingComposerBrowser)
 	run("composer/growth", testComposerGrowthBrowser)
+	run("composer/load", testComposerLoadBrowser)
 	run("composer/no-javascript", testComposerWithoutJavaScript)
 	run("composer/in-flight", testComposerInFlightBrowser)
 	run("composer/send-failure", testComposerFailureBrowser)

@@ -92,7 +92,7 @@ organisation: reading A clears A and reduces the channel while preserving B;
 reading the feed clears its related displayed topics in every tab. Posting's
 read writes use the existing durable trigger, without a duplicate read signal.
 [Read results and acceptance](../measurements/read-advance-results.md) cover the per-tab cost;
-browser badge increments follow the [script contract](web-javascript.md).
+browser badge increments follow the [script contract](web-javascript-unread.md).
 
 Read sets and gaps use `conversation.SequenceRange`; unread owns the counters,
 conversation's wiring returns concrete stores. SQL receives bound arrays or one

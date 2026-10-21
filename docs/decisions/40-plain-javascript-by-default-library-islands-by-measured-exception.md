@@ -160,3 +160,5 @@ handlers and mount/unmount, minified with esbuild, in gzip bytes — plain DOM
 219, `@preact/signals-core` 1,816, Preact with hooks 5,453, Lit 5,790,
 Solid 7,685, Preact with `@preact/signals` 7,956, Svelte 17,496
 ([samples and build](https://github.com/tkakkie/ribbitto/issues/1245#issuecomment-6219079003)).
+
+**Amended by:** [decision 43](43-typescript-with-a-go-driven-build.md) (TypeScript default, Go-driven build and limited Node/npm; §3 island gate/per-feature route, §4 HTML rule and §5 budget retained).

@@ -18,9 +18,26 @@ import (
 )
 
 // Only message actions omit type to avoid htmx's explicit-submit selector.
+// Each branch repeats the data the real markup in view/message.templ renders,
+// so an unrelated untyped button that shares one attribute is still reported.
 func messageSubmitButton(n *html.Node) bool {
-	return n.Data == "button" && (attr(n, "form") == "quote-form" && attr(n, "name") == "quote" ||
-		feedHas(n, "data-pin-action") && n.Parent != nil && feedHas(n.Parent, "data-pin-control"))
+	if n.Data != "button" {
+		return false
+	}
+	if attr(n, "form") == "quote-form" && attr(n, "name") == "quote" {
+		if attr(n, "value") == "" {
+			return false
+		}
+		// The hidden Quote-selection button also names the body it describes.
+		if feedHas(n, "data-quote-selection") {
+			return feedHas(n, "hidden") && attr(n, "aria-describedby") != ""
+		}
+		return true
+	}
+	// A pin control's two buttons, each with the route it submits to.
+	pinned := attr(n, "data-pin-action")
+	return (pinned == "true" || pinned == "false") && attr(n, "formaction") != "" &&
+		n.Parent != nil && n.Parent.Data == "form" && feedHas(n.Parent, "data-pin-control")
 }
 
 func plainMessageSubmit(n *html.Node) bool {

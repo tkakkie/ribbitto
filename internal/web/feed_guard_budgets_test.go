@@ -12,7 +12,7 @@ const (
 	// #1478: explicit submits participate in htmx processing; zero headroom.
 	feedBudgetSubmitFixed = 7
 	// #1500: message submits participate in htmx processing; zero headroom.
-	feedBudgetSubmitSlope = 0
+	feedBudgetSubmitSlope = 1
 	// #1478: fixed hx carriers are an independent markup ratchet; zero headroom.
 	feedBudgetHXFixed = 10
 	// #1500: message hx carriers must not regrow; zero headroom.

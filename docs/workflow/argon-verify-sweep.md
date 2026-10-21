@@ -1,5 +1,8 @@
 # Verification leftover sweep
 
+The separate [implementer run command](argon-implement-run.md) documents
+its feature-off session cleanup and staged adoption.
+
 The trusted launcher provides `argonreview container-sweep [--dry-run]`.
 Set `RIBBITTO_ARGON_SOURCE` to the trusted source checkout, as for
 [container verification](argon-verify.md#trusted-server). The binary must

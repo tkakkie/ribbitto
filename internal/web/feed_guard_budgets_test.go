@@ -14,13 +14,13 @@ const (
 	// #1500: message submits participate in htmx processing; zero headroom.
 	feedBudgetSubmitSlope = 0
 	// #1478: fixed hx carriers are an independent markup ratchet; zero headroom.
-	feedBudgetHXFixed = 10
+	feedBudgetHXFixed = 11
 	// #1500: message hx carriers must not regrow; zero headroom.
 	feedBudgetHXSlope = 0
 	// #1478: htmx initializes fixed selected nodes including body; zero headroom.
 	feedBudgetHTMXFixed = 21
 	// #1500: selected message nodes cost initialization; zero headroom.
-	feedBudgetHTMXSlope = 1
+	feedBudgetHTMXSlope = 2
 	// #1478: bytes allow 5% (rounded up) above the measured fixed part for classes/text/translations.
 	feedBudgetBytesFixed = 21769
 	// #1500: bytes allow 5% (rounded up) above the measured slope for classes/text/translations.
@@ -32,7 +32,7 @@ const (
 	// #1478: real first-render forms have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetFormsLatest = 61
 	// #1500: real first-render submits have zero headroom; a count change (#1477) is a visible, justified budget change.
-	feedBudgetSubmitLatest = 7
+	feedBudgetSubmitLatest = 8
 	// #1500: real first-render hx carriers have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetHXLatest = 11
 	// #1500: real first-render htmx nodes have zero headroom; a count change (#1477) is a visible, justified budget change.

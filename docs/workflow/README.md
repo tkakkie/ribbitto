@@ -1,9 +1,8 @@
 # AI development workflow
 
-How work moves from an idea to `main` in ribbitto. Written for the AI tools
-that do most of the work and for the maintainer who decides. `AGENTS.md`
-covers how to write code; these files cover how work flows. If the two ever
-disagree, fix the disagreement in a pull request.
+How work moves from idea to `main` in ribbitto, for AIs and the maintainer.
+`AGENTS.md` covers coding; these files cover workflow. Correct any
+disagreement in a pull request.
 
 ## Index
 
@@ -21,7 +20,9 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running Argon](running-argon.md#running-argon) | Trusted review launcher |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
-| [Argon verify](argon-verify.md) | Pending rule |
+| [Argon verify](argon-verify.md) | In-force permissions, container, results |
+| [Verify operation](argon-verify-operation.md) | Switch and checks |
+| [Sweep](argon-verify-sweep.md) | Leftovers |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |
 | [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target, host measurements |
 

@@ -8,7 +8,8 @@ Argon stops at once; the maintainer decides.
 
 **Start gate.** Each run requires an issue recording a full passing preflight
 for its `agy` version and custom agent.
-[Verify](argon-verify.md#status) is not in force; this boundary stands.
+[Verify](argon-verify.md#status) is in force since 2026-10-21; preflight:
+[#1433](https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6304130212).
 
 ## Which issues
 
@@ -70,7 +71,7 @@ configuration rather than the prompt.
 - **No commands** (maintainer, 2026-10-16). `run_command` and every other
   command tool are refused by `command(*)` and the guard. #1206 found
   loopback reach outside `agy --sandbox`; allowing commands needs its own
-  `process` issue. Pending: only the fixed [verify][v] MCP tool.
+  `process` issue.
   [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) adds no commands.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
@@ -94,9 +95,12 @@ configuration rather than the prompt.
   conversation store (`brain/`) is emptied before and after every run,
   Argon's or #1207's.
 - **A custom agent.** `--agent argon-implementer` lists seven file tools in
-  `tools`; `grep_search`, `find_by_name`, `list_dir` need this. With MCP it
-  cannot restrict `call_mcp_tool`, `list_resources`, `read_resource`
-  or `manage_task` (#1427 spike part 2); the guard does. MCP is unconfigured.
+  `tools`; `grep_search`, `find_by_name`, `list_dir` need this. MCP's
+  `call_mcp_tool`, `list_resources`, `read_resource`
+  and `manage_task` escape that list (#1427 spike part 2); the guard restricts them.
+  MCP is unconfigured at rest and with verify-mode off; between runs the
+  home holds feature-off files and an empty MCP file. On-mode MCP offers
+  only `verify`.
   Claude copies the trusted home definition to `.gemini/config/agents/`
   per run, checked byte-for-byte and removed.
 - **A fail-closed tool allowlist.** Denies cannot name `search_web`,
@@ -107,13 +111,13 @@ configuration rather than the prompt.
   `_agents`, `_agent`, `.gemini`, `.claude`, `.codex`, `.mcp.json`,
   `hooks.json`, `plugin.json`, `skills.json`, `plugins.json`, `GEMINI.md`,
   `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md`. It
-  denies every other tool. Pending [verify][v] adds one `call_mcp_tool`: exact server, `verify`,
-  arguments; resource/task tools stay denied.
+  denies every other tool. [Verify][v] adds one on-mode `call_mcp_tool`:
+  exact server, `verify` and arguments; resource/task tools stay denied.
   Failure or silence denies. Check path components without following
   symlinks; refuse symlinks, outside paths and all file calls if the tree
   holds a symlink. Guard/configuration stay outside the
-  worktree, where Argon cannot write. [Go](argon-verify.md#control-code-in-go)
-  awaits staged checks; scripts stay.
+  worktree, where Argon cannot write. The Go [guard](argon-verify.md#control-code-in-go)
+  runs in production; the zsh scripts stay until Stage 2.
 - **No workspace hooks or customisation.** Hooks run commands outside the
   sandbox ([running Argon](running-argon.md#the-boundary)). Before each run, fixes
   included, Claude refuses symlinks, nested `.git` (even in `.github`),
@@ -131,7 +135,7 @@ configuration rather than the prompt.
   unchanged; otherwise stop. Baseline instructions load as in reviews;
   the guard denies edits.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
-  (the [verify][v] exception is pending, not in force) and URL reads.
+  except exact on-mode [verify][v] calls, and URL reads.
   Argon holds no GitHub credentials, pushes nothing, neither opens nor merges a PR.
 - **Handoff: the [shared rule][h]
   for Codex and Argon.** Argon leaves
@@ -163,7 +167,7 @@ tools. Each is refused or has no effect:
   `_agents/plugin.json`;
 - in the dedicated home: reading the sign-in token, changing its settings
   or hooks, and reading or writing a regular file in `brain/`;
-- URL reads, MCP, browser tools, `search_web`, a subagent,
+- URL reads, MCP other than the exact `verify` call, browser tools, `search_web`, a subagent,
   `generate_image`, `schedule` and a failing guard;
 - commit, push, `gh` and another AI CLI.
 
@@ -173,16 +177,12 @@ home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any is unverified,
 Argon does not run; tell the maintainer why.
 
-For #1433's preflight and once in force, [extend preflight](argon-verify.md#extended-preflight):
-keep items; replace only the MCP refusal with "MCP other than the exact
-`verify` call".
-
 ## Records
 
 Per Argon PR, one #2 comment: issue, final tier, review rounds/blockers, runs
 (count/time/failures), rework (Argon fixes, Claude/Codex changes), CI failures,
-CI round trips/fix effort due to no commands, mutation runs. Once in force,
-add `verify` calls/verdicts; keep CI round-trip/mutation CI-run counts as in
+CI round trips/fix effort due to no commands, mutation runs,
+`verify` calls/verdicts; keep CI round-trip/mutation CI-run counts as in
 #1233/#1235/#1256/#1260
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427)).
 

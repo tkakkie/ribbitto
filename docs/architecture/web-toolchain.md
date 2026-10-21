@@ -65,7 +65,7 @@ it before
 the run. Codex downloads no Node and expands no network profile; report missing
 or mismatched runtimes. #1415 documents/verifies setup and sandbox-local writes;
 it does not supply the toolchain or language-table changes. Argon's command
-prohibition and pending verify boundary remain unchanged.
+prohibition and verify boundary remain unchanged.
 
 The root `package.json` will pin `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
@@ -185,9 +185,9 @@ sandbox-local install/cache writes and handoff. No AI runs transferred
 `node_modules`, npm scripts or Node tests on the host after
 handoff; CI remains the check.
 
-Argon gains no Node/npm commands. Verify remains implementation pending, not
-in force, under its existing gates. Its exact Go build/vet/test checklist
+Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
+under its existing gates. Its exact Go build/vet/test checklist
 excludes generation and TypeScript checking. Packages needing generated assets
 stay CI-only (`NOT VERIFIED`); container generation is outside verify and
-needs its own `process` issue. #1415 cannot enable verify or widen those
+needs its own `process` issue. #1415 cannot widen verify or those
 permissions.

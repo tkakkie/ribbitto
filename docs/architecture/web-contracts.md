@@ -16,6 +16,9 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
+- Menu Quote also omits `type` and `hx-*`, retaining `form="quote-form"`,
+  `name="quote"` and its message ID value. The existing composer glue copies
+  the native submitter name/value into htmx parameters (#1500).
 - **Script-read data attributes are a contract too** (#351). The same renaming
   rule covers `data-event-cursor`, `data-posted-message`, `data-invalid`, `data-announcement` and:
 
@@ -28,13 +31,15 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-pin-control` | pin form | always | message ID |
   | `data-pinned` | pin form | always | pin state |
   | `data-pin-action` | pin button | always | `true`: Unpin; `false`: Pin |
+  | `method`, `action` | pin form | always | normal POST fallback; no `hx-*` on this form or its buttons |
+  | `formaction`, `hidden` | pin button | action always; hidden on inactive action | native submit with no `type` or `hx-*`; delegated submit uses `event.submitter`, or the non-hidden pin button when absent |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-quote-handle` | body member reference | always, empty if unresolved | viewer-independent handle for selection extraction |
-  | `data-quote-selection` | submit button immediately after each body | always, initially `hidden` | selection-only submitter of `#quote-form`; shared across viewers |
+  | `data-quote-selection` | submit button immediately after each body | always, initially `hidden` | selection-only submitter of `#quote-form`; no `type` or `hx-*`; shared across viewers |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
   | `data-snapshot-seq` | `#sidebar-channels` | always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-unread-count` | every sidebar badge, including the heading badge | always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |

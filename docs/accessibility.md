@@ -5,7 +5,7 @@ every HTML route/state in both languages, enforcing ✓ rules; new routes
 fail until covered by a rendered case.
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
-  `type` and a name (its text, or `aria-label` when it has none); a link is
+  `type` (#1500) and a name (its text, or `aria-label` when it has none); a link is
   an `<a href>`. Never a `div` or `span` with `role="button"` or a click
   handler. Listbox options are the exception (the composer's @-picker): the
   textarea keeps focus, `aria-activedescendant` names the option, and options

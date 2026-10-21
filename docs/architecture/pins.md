@@ -96,7 +96,18 @@ presence/typing, so decision 31's memory-only owners remain unchanged.
 
 The section carries `data-pins-seq` from its repeatable-read snapshot and
 `data-pinned-ids`. Pin responses include the same current section out of band;
-`pins-sync-v1.js` rejects older frames or responses before swapping. This
+`pins-sync-v2.js` rejects older frames or responses before swapping. This
 orders racing transports without changing durable or applied cursors. Loaded
 controls render both explicit actions; the script only selects visibility and
 restores focus. Closing the overview unsubscribes; its controls recover on reload.
+Forms and both buttons retain their DOM contract and native POST/303 fallback.
+Both buttons omit `type` (native submit) and `hx-*` (#1500), as do the message
+actions' Quote and Quote selection buttons. These four are the only exception to the
+[button `type` rule](../accessibility.md); popover triggers keep `type="button"`.
+One delegated submit handler uses the submitter's server-rendered `formaction`
+(the non-hidden button if no submitter) with htmx (button source, form target,
+`outerHTML`); per-form in-flight drops
+replace `hx-sync`, so different messages remain independent. No per-message
+pin element carries `hx-*`. ConfigRequest on the source adds `X-Pins-Section`
+when the overview is present. A 409 swaps the server's unchanged control and
+limit alert; 404/5xx do not swap. Missing htmx leaves native submission alone.

@@ -130,7 +130,7 @@ templ messageItem(entry Message, announcement string) {
 			@messageQuote(*entry.Quote)
 		}
 		@messageBody(entry)
-		<button type="submit" form="quote-form" name="quote" value={ idValue(entry.ID) } data-quote-selection hidden aria-describedby={ "body-" + MessageDOMID(entry.ID) } class="self-start min-h-6 rounded-md px-2 text-caption text-brand hover:bg-hover max-desk:min-h-11 max-desk:min-w-11">{ i18n.T(ctx, "message.quote_selection") }</button>
+		<button form="quote-form" name="quote" value={ idValue(entry.ID) } data-quote-selection hidden aria-describedby={ "body-" + MessageDOMID(entry.ID) } class="self-start min-h-6 rounded-md px-2 text-caption text-brand hover:bg-hover max-desk:min-h-11 max-desk:min-w-11">{ i18n.T(ctx, "message.quote_selection") }</button>
 		<div class="absolute left-0 top-0">
 			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
 		</div>
@@ -174,7 +174,7 @@ templ messageActions(entry Message) {
 			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
 			<span data-copied-label class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
-		<button type="submit" form="quote-form" name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
+		<button form="quote-form" name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
 		@PinControl(entry, "")
 	</div>
 }
@@ -188,7 +188,7 @@ templ PinControl(entry Message, errorKey string) {
 			action = entry.PinURL + "/unpin"
 		}
 	}}
-	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } hx-target="closest form" hx-swap="outerHTML" data-pin-control={ idValue(entry.ID) } data-pinned={ fmt.Sprint(entry.Pinned) }>
+	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } data-pin-control={ idValue(entry.ID) } data-pinned={ fmt.Sprint(entry.Pinned) }>
 		for _, pinned := range []bool{false, true} {
 			{{
 				action, label := entry.PinURL+"/pin", "message.pin"
@@ -196,7 +196,7 @@ templ PinControl(entry Message, errorKey string) {
 					action, label = entry.PinURL+"/unpin", "message.unpin"
 				}
 			}}
-			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } type="submit" formaction={ templ.SafeURL(action) } hx-post={ action } hx-sync="closest form:drop" data-pin-action={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
+			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } data-pin-action={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
 		}
 		if errorKey != "" {
 			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>

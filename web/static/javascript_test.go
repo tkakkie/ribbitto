@@ -50,10 +50,14 @@ func checkJavaScript(name, source string) []javascriptFinding {
 	}
 	rules := []rule{
 		{"HTML generation", regexp.MustCompile(`\b(?:innerHTML|outerHTML)\s*` + assignment + `|\b(?:insertAdjacentHTML|createContextualFragment)\s*\(|\bdocument\s*\.\s*(?:write|writeln)\s*\(`)},
-		{"requests", regexp.MustCompile(`\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource)\b|\bhtmx\s*\.\s*ajax\b`)},
+		{"requests", regexp.MustCompile(`\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource)\b`)},
 		{"IndexedDB", regexp.MustCompile(`\bindexedDB\b`)},
 		{"code evaluation", regexp.MustCompile("\\beval\\s*\\(|\\bnew\\s+Function\\b|\\b(?:setTimeout|setInterval)\\s*\\(\\s*[\"'`]")},
 		{"global write", regexp.MustCompile(`\b(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*\s*(?:` + assignment + `|\+\+|--)|(?:\+\+|--)\s*(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*`)},
+	}
+	// Stage 1 pins delegate native submits to htmx using server-rendered URLs.
+	if name != "pins-sync-v2.js" {
+		rules = append(rules, rule{"requests", regexp.MustCompile(`\bhtmx\s*\.\s*ajax\b`)})
 	}
 	// Only the drafts script may keep data that outlives the tab (decision 37 (d)).
 	if !regexp.MustCompile(`^message-drafts-v[0-9]+\.js$`).MatchString(name) {
@@ -211,6 +215,14 @@ func TestJavaScriptPatterns(t *testing.T) {
 }
 
 func TestJavaScriptAllowedPatterns(t *testing.T) {
+	if got := checkJavaScript("pins-sync-v2.js", `window.htmx.ajax("POST", button.getAttribute("formaction"), {source: button, target: form, swap: "outerHTML"});`); len(got) != 0 {
+		t.Errorf("delegated pins request: %v", got)
+	}
+	for _, name := range []string{"pins-sync-v0.js", "other-pins-sync-v2.js", "pins-sync-v2.js.bak-v1.js", "pins-sync-v3.js"} {
+		if got := checkJavaScript(name, `htmx.ajax("POST", url);`); len(got) != 1 || got[0].rule != "requests" {
+			t.Errorf("%s: got %v, want one requests finding", name, got)
+		}
+	}
 	for _, source := range []string{
 		`use(node.innerHTML); use(node.outerHTML);`,
 		`if (node.innerHTML === node.outerHTML) use(node);`,

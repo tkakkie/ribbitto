@@ -18,6 +18,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
 )
 
 // fakePinning records each desired change and answers with err.
@@ -61,6 +62,7 @@ func TestPinRoutes(t *testing.T) {
 		{name: "other channel", path: base + "/pin", err: conversation.ErrChannelNotFound, status: 404, calls: 1},
 		{name: "other message", path: base + "/unpin", err: conversation.ErrMessageNotFound, status: 404, calls: 1},
 		{name: "not a member", path: base + "/pin", err: org.ErrNotFound, status: 404, calls: 1},
+		{name: "enhanced not a member", path: base + "/pin", err: org.ErrNotFound, hx: true, status: 404, calls: 1},
 		{name: "malformed message", path: view.ChannelURL("acme", kernel.ID{1}) + "/messages/x/pin", status: 404},
 		{name: "cross-site", path: base + "/pin", headers: map[string]string{"Sec-Fetch-Site": "cross-site"}, status: 403},
 	} {
@@ -127,8 +129,51 @@ func TestPinControlMarkup(t *testing.T) {
 				action, label = "/unpin", map[string]string{"en": "Unpin", "ja": "ピン留めを外す"}[lang]
 			}
 			form := `<form id="pin-form-` + view.MessageDOMID(kernel.ID{8}) + `" method="post" action="` + view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + action + `"`
-			if !strings.Contains(got, form) || !strings.Contains(got, `type="submit"`) || !strings.Contains(got, ">"+label+"</button>") || strings.Contains(got, `role="alert"`) {
+			if !strings.Contains(got, form) || !strings.Contains(got, ">"+label+"</button>") || strings.Contains(got, `role="alert"`) {
 				t.Fatalf("%s pinned=%v: %s", lang, pinned, got)
+			}
+			doc, err := html.Parse(strings.NewReader(got))
+			if err != nil {
+				t.Fatal(err)
+			}
+			controls := 0
+			for n := range doc.Descendants() {
+				if n.Data != "form" || attr(n, "data-pin-control") == "" {
+					continue
+				}
+				controls++
+				if attr(n, "data-pinned") != fmt.Sprint(pinned) || attr(n, "data-pin-control") != "08000000-0000-0000-0000-000000000000" {
+					t.Fatal("pin form state contract changed")
+				}
+				if countElements(n, nil) != 2 {
+					t.Fatal("pin form must contain exactly its two buttons")
+				}
+				for button := n.FirstChild; button != nil; button = button.NextSibling {
+					if button.Type != html.ElementNode {
+						continue
+					}
+					state := attr(button, "data-pin-action")
+					wantAttrs := 4
+					if state != fmt.Sprint(pinned) {
+						wantAttrs++
+					}
+					_, hidden := attrOK(button, "hidden")
+					suffix := map[string]string{"false": "/pin", "true": "/unpin"}[state]
+					if len(button.Attr) != wantAttrs || attr(button, "class") != "min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" || suffix == "" || attr(button, "id") != "pin-"+state+"-"+view.MessageDOMID(kernel.ID{8}) || !plainMessageSubmit(button) || attr(button, "formaction") != view.PinURL("acme", kernel.ID{1}, kernel.ID{8})+suffix || hidden != (state != fmt.Sprint(pinned)) {
+						t.Fatal("pin button contract changed")
+					}
+				}
+				for _, a := range n.Attr {
+					if strings.HasPrefix(a.Key, "hx-") {
+						t.Fatal("pin form carries htmx attributes")
+					}
+				}
+				if countElements(n, hasHTMXAttribute) != 0 {
+					t.Fatal("pin buttons carry htmx attributes")
+				}
+			}
+			if controls != 1 {
+				t.Fatalf("pin form count = %d, want 1", controls)
 			}
 		}
 	}

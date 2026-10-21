@@ -90,6 +90,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   text in the POST body; menu Quote, Quote only part and Remove leave the hidden
   input empty/disabled. Composer sends use only the chip's editable part.
 - DOM ids and script-read data attributes follow the [htmx contract](web-contracts.md).
+- Pin forms have no `hx-*` ([pins](pins.md)).
 - Every channel/topic page (`?before=` and panel pages included) and the
   channel list page carry `data-event-cursor` on `#organization-stream`, the outer layout div outside
   every swap target. It wraps the sidebar, conversation and any panel (the list page: the list), with `hx-ext="sse"`

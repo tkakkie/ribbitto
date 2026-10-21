@@ -78,7 +78,7 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   page's composer posts into that topic with htmx, replacing only the
   composer's state, never the textarea (#1173). A pending own post shows
   immediately until confirmed delivery or move-out (#1188;
-  [composer contract](../architecture/web-composer.md#composer)); the real
+  [composer contract](../architecture/web-composer-pending.md#pending-own-posts)); the real
   message arrives over the topic's stream. Without
   JavaScript, and on older pages, it posts plainly and redirects back.
   Invalid bodies preserve the draft (422). Its latest page updates live through a stream of that

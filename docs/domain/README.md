@@ -26,6 +26,7 @@ index below for everything else.
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
+| [`message-posting.md`](message-posting.md) | channel-page posting, pending items, device drafts, repeated sends and message URLs |
 | [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
 | [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (including live delivery) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |

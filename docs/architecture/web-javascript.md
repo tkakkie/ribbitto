@@ -17,35 +17,7 @@ a recovering flag, loss generations and the highest possibly lost sequence.
 It changes only server-rendered badge text/visibility, never creates elements
 or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 
-- `message-stream-v13.js`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
-  cursors. A 429 retries until success/hide/removal/navigation: jittered exponential backoff, initial 8 s cap; `Retry-After` is a minimum even above it. Success resets backoff, flushes newer shown work; other failures flush strictly newer work only. Same cursor awaits another trigger. Cleanup clears timers. Composer responses/unapplied events cannot advance it.
-- `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open events.
-  It increments server-rendered badges only for newer, unseen `unread` frames
-  from other members; `message` frames never increment. Snapshots apply in
-  stream order, dropping retained events at or below their sequence. Eligible
-  retained events above it reapply while not recovering, or when an answered
-  resync has no loss since dispatch and its sequence covers every possibly lost
-  event. Overflow records the highest dropped sequence; malformed or unapplied
-  frames record the highest sequence seen, including a parsable failed frame.
-  Retention itself is not loss. Overflow, malformed frames and DOM/request
-  failures stop increments; losses during a
-  request reserve another, including repeated losses during retries. One pending
-  htmx request and one timer merge duplicate triggers, with exponential backoff
-  starting at 250 ms and capped at 8 s; each retry chooses uniformly between
-  half and all of that backoff. Visibility return and persisted `pageshow`
-  request resync after uniform 0–2 s jitter. Recovery clearing is unchanged.
-  A 429 counts as a request failure, keeps recovery open and retries
-  through that backoff.
-  Removing its stream container clears its timer.
-
-  | Attribute / target | Contract |
-  |---|---|
-  | `data-member` on `#organization-stream` | session-resolved member UUID for own-post exclusion |
-  | `data-sidebar-topic` on that container | selected topic UUID, present only on topic pages; routes the unlisted heading badge |
-  | `data-snapshot-seq` on `#sidebar-channels` | exact counts' organisation sequence; replaced by every snapshot |
-  | `data-unread-count` on every badge | raw numeric count, including hidden zero; only its number, text and visibility change |
-  | `#sidebar-resync` | hidden htmx trigger; custom `sidebar-resync` event sends the member-scoped POST, without a swap |
-
+- [Unread scripts](web-javascript-unread.md): stream checkpoints, visible reads and sidebar badges.
 - `pins-sync-v1.js` compares server snapshot sequences before pins/response swaps and selects loaded controls' server-rendered actions from the section's pin IDs. It restores button focus, preserving history/draft/cursors.
 - `member-mentions-v1.js` marks resolved references matching `data-member-id` to `#organization-stream`'s `data-member` on scoped `htmx:load`, including the initial body event after deferred scripts. Live posts, duplicate replay and moves use `htmx.swap`; Load older selects/prepends server-rendered items. Both run inserted-node load tasks, including replacements/destination insertions; no DOM observer/polling. Token utilities add a 2 px dashed `brand` outline, no offset, versus the solid 2 px
   offset focus ring: a shape cue with ≥3:1 contrast against message background and `selected` chip in both themes ([contrast](../ui-colours.md#contrast-wcag-22-aa)). Shared server renders are identical for all readers; unresolved/other-organisation references have no ID. Quote snapshots stay plain text.
@@ -68,7 +40,7 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
   themselves; hide the open row. Refresh: scoped `#sidebar-channels` `htmx:load` (SSE/resync), draft `storage`, `message-sent`, persisted `pageshow`, even on list pages. Sign-out notice/deadline hide markers. [Drafts][dr]: races/cleanup.
 - `message-link-v1.js` handles actions-menu "Copy link" (#1159) with the Clipboard API and browser-resolved absolute `href`, keeping shared live renders origin-free. `data-copied` shows "Link copied" until menu close; that label also goes to polite `#message-status`. Modifiers, missing API or copy failures open the link, as without JavaScript.
 - SSE `reset` closes htmx's event source. DOM observer holds reload for composer `htmx-request`/#1179's failure alert or queued/sending/failed (even unconfirmed) pending forms. Localised status: plain reload link. Nothing at stake: one uniform 0–5 s timer reloads for a fresh snapshot; new at-stake state cancels; firing rechecks. Confirmed items await reload delivery; drafts never hold it.
-- **No requests of its own:** no `fetch`, `XMLHttpRequest`, `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`. HTML forms, links and htmx own requests. Scripts may set controls/call `requestSubmit()`, `htmx.trigger` and `htmx.process` on server-rendered/template-cloned elements. Request URLs come from server attributes, never script-built. Only `message-stream-v13.js` rewrites `sse-connect`'s `after` parameter (above).
+- **No requests of its own:** no `fetch`, `XMLHttpRequest`, `navigator.sendBeacon`, `WebSocket`, new `EventSource` or `htmx.ajax`. HTML forms, links and htmx own requests. Scripts may set controls/call `requestSubmit()`, `htmx.trigger` and `htmx.process` on server-rendered/template-cloned elements. Request URLs come from server attributes, never script-built. Only `message-stream-v13.js` rewrites `sse-connect`'s `after` parameter ([unread scripts](web-javascript-unread.md)).
 - **Storage:** `sessionStorage` holds only non-sensitive UX settings whose loss affects no function/server state (e.g. panel open/display preference). `localStorage` allows only [drafts][dr], in the drafts script ([decision 37][d37]). Neither holds messages, credentials, session tokens or other server-derived application data except bounded draft text (possibly quoting messages), send key, owner metadata and sign-out notice. IndexedDB requires [decision
   41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s data classes.
 - **Files:** scripts are external in `web/static`, loaded with the response nonce. Application scripts define no globals; immutable assets require versioned names (`-vN`, [rendering](rendering.md)). Vendored htmx/idiomorph retain their globals and upstream names ([a11y]).
@@ -76,12 +48,12 @@ or requests; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 
 ## Composer
 
-[Composer queue][c]: ≤10 pending items, FIFO; unknown outcomes pause.
+[Composer queue][p]: ≤10 pending items, FIFO; unknown outcomes pause.
 Not sent Retry goes last; unknown Retry stays. Edit restores failed text/key only into an
 empty composer outside IME, preserving drafts; removes item, frees slot, resumes queue.
 Else visible disabled button explains why. Restored keys survive state swaps,
 move to pending forms on send, renew on emptying.
-[Remove hold](web-composer.md#remove-hold) defines its lifetime and reload limit.
+[Remove hold](web-composer-pending.md#remove-hold) defines its lifetime and reload limit.
 Unused keys post;
 [matching bodies](posting.md) return stored ID; different bodies under used keys get
 409/fresh Retry keys. Topic items settle by confirmed ID, response topic/applied sequence
@@ -92,3 +64,4 @@ or later move from shown topic; no move history ([decision 37][d37]).
 
 [c]: web-composer.md#composer
 [dr]: web-composer.md#drafts
+[p]: web-composer-pending.md#pending-own-posts

@@ -23,38 +23,6 @@
   // An edited send keeps its identity even when another queue response swaps
   // the hidden controls. Only sending or emptying this text releases it.
   let restoredKey = null;
-  let restoredText = null;
-  let freshRestoredKey = null;
-  const releaseRestored = (body) => {
-    restoredKey = null;
-    restoredText = null;
-    delete body.form.dataset.unconfirmedKey;
-    body.form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey;
-    freshRestoredKey = null;
-  };
-  const changedRestoration = (body) => {
-    if (restoredKey && (body.value === "" || (restoredText !== null && body.value !== restoredText))) releaseRestored(body);
-  };
-  // A deliberate Remove only protects an unchanged resend briefly (#1328).
-  const removedKeyRetention = 5 * 60 * 1000;
-  const removedKey = (form, text) => JSON.stringify([form.dataset.draftChannel, form.dataset.draftTopic || "feed", text]);
-  const removedKeys = new Map();
-  window.addEventListener("pagehide", () => removedKeys.clear());
-  document.addEventListener("message-draft-restored", (event) => {
-    // The ordinary fallback still has the fresh key rendered by the server.
-    freshRestoredKey = event.target.form.elements.idempotency_key.value;
-    restoredKey = event.detail.key;
-    restoredText = event.target.value;
-    event.target.form.elements.idempotency_key.value = restoredKey;
-    event.target.form.dataset.unconfirmedKey = restoredKey;
-  });
-  document.addEventListener("message-sent", (event) => {
-    for (const [text, held] of removedKeys) {
-      if (held.key === event.detail.key) removedKeys.delete(text);
-    }
-    if (restoredKey !== event.detail.key) return;
-    releaseRestored(event.target);
-  });
   const updateEdits = () => {
     const body = document.getElementById("message-body");
     const occupied = body.value !== "" || composing.has(body);
@@ -103,7 +71,6 @@
     const cursor = event.target.elements.cursor;
     if (stream && cursor) cursor.value = stream.dataset.eventCursor;
     const template = document.getElementById("message-pending-template");
-    changedRestoration(event.target.elements.body);
     const inPlace = () => sendEvent("message-sending", { key: event.target.elements.idempotency_key?.value, body: event.target.elements.body.value, inPlace: true });
     if (!template || !crypto.randomUUID || !event.target.elements.idempotency_key || !cursor) {
       if (!event.target.classList.contains("htmx-request")) inPlace();
@@ -133,15 +100,10 @@
     const item = template.content.firstElementChild.cloneNode(true);
     const sending = item.querySelector("form");
     for (const name of ["idempotency_key", "composer", "cursor"]) sending.elements[name].value = form.elements[name]?.value || "";
-    const removed = removedKeys.get(removedKey(form, body.value));
-    removedKeys.delete(removedKey(form, body.value));
-    sending.elements.idempotency_key.value = restoredKey ||
-      (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
-    if (removed && sending.elements.idempotency_key.value === removed.key) sending.dataset.unconfirmed = "true";
+    sending.elements.idempotency_key.value = restoredKey || crypto.randomUUID();
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;
     restoredKey = null;
-    restoredText = null;
     // Correlate draft cleanup even after a 409 renews the request key.
     sending.dataset.draftKey = sending.elements.idempotency_key.value;
     sending.elements.body.value = body.value;
@@ -214,21 +176,12 @@
       if (body.value || composing.has(body) || form.dataset.state !== "failed") return;
       body.value = form.elements.body.value;
       restoredKey = form.elements.idempotency_key.value;
-      restoredText = null;
       body.form.elements.idempotency_key.value = restoredKey;
       if (form.dataset.unconfirmed) body.form.dataset.unconfirmedKey = restoredKey;
       else delete body.form.dataset.unconfirmedKey;
       body.setSelectionRange(body.value.length, body.value.length);
-    } else if (form.dataset.unconfirmed) {
-      for (const [text, held] of removedKeys) {
-        if (performance.now() - held.at >= removedKeyRetention) removedKeys.delete(text);
-      }
-      const text = removedKey(body.form, form.elements.body.value);
-      const held = { key: form.elements.idempotency_key.value, at: performance.now() };
-      removedKeys.set(text, held);
-      setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);
     }
-    sendEvent("message-pending-action", { key: form.dataset.draftKey, restoredKey: edit ? restoredKey : null, kind: edit ? "edit" : "remove" });
+    sendEvent("message-pending-action", { key: form.dataset.draftKey, kind: edit ? "edit" : "remove" });
     event.target.closest("li").remove();
     updateEdits();
     say("");
@@ -347,7 +300,11 @@
   document.addEventListener("input", (event) => {
     if (event.target.id !== "message-body") return;
     requestAnimationFrame(() => revealEnd(event.target));
-    changedRestoration(event.target);
+    if (restoredKey && event.target.value === "") {
+      restoredKey = null;
+      delete event.target.form.dataset.unconfirmedKey;
+      event.target.form.elements.idempotency_key.value = crypto.randomUUID();
+    }
     updateEdits();
   });
   document.addEventListener("input", signal);

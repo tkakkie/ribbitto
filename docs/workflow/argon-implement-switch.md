@@ -7,8 +7,9 @@ Evidence: [runner comparison][comparison] and [switch record][switch].
 
 ## Wrappers and trusted inputs
 
-The worker home's `~/dev/ribbitto/agy-worker-home/implementer/run.zsh` and
-`checks.zsh` are thin wrappers around `argonreview implement-run` and
+In the maintainer's worker home (`<worker-home>`, the dedicated Antigravity
+home of the [boundary](argon-implementer.md#the-boundary)),
+`<worker-home>/implementer/run.zsh` and `checks.zsh` are thin wrappers around `argonreview implement-run` and
 `argonreview implement-check`, respectively. Usage:
 
 ```text

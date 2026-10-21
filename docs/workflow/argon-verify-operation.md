@@ -60,7 +60,7 @@ superseded by the `97d19a2` rollback set. See the
 
 If a run shows a problem, switch off with `verify-mode`, restore and check
 the old configuration, and investigate before another attempt. For
-an uncounted run, the recovery marker blocks another run until
+a started run that does not count, the recovery marker blocks another run until
 [manual recovery](argon-implement-run-recovery.md#manual-recovery).
 For leftovers, follow the [sweep procedure](argon-verify-sweep.md).
 

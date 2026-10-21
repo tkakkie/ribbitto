@@ -14,8 +14,8 @@ is not a goal in itself.
 ## Decided now
 
 These are approved rules, not an installed toolchain; current scripts and
-checks remain until the assigned implementations land. The [toolchain page](../architecture/web-toolchain.md) proposes concrete
-mechanics, pending maintainer confirmation; PR #1465 lists them in its body.
+checks remain until the assigned implementations land. The [toolchain page](../architecture/web-toolchain.md) holds the concrete
+mechanics, confirmed by the maintainer 2026-10-21 ([record](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388)).
 
 ### Build and delivery
 
@@ -26,7 +26,7 @@ manifest and `go:embed` agree. Make, CI, Docker and release procedures must
 explicitly generate before compiling; the build itself requires no Node.
 
 Start with one classic IIFE bundle per page kind, content-hashed and selected
-through a manifest. The toolchain page proposes the `[name]-[hash].js` naming.
+through a manifest. The `[name]-[hash].js` naming is confirmed (toolchain page).
 Vendor files and the synchronous `arrival` script stay separate. Shared chunks and dynamic import wait for a measured need; no
 whole-graph hash prefix is adopted now.
 
@@ -41,7 +41,7 @@ checkers are not parallel dependencies.
 
 Node 26.8.1 is the initial baseline, pinned reproducibly across CI, the
 implementer's sandbox and local development. Record the version-pin mechanism
-and update procedure; the toolchain page proposes their mechanics. Node/npm
+and update procedure; the toolchain page records their mechanics. Node/npm
 are limited to type checking, unit tests and dependency management, never the
 asset build or run time.
 
@@ -70,7 +70,7 @@ to those existing exceptions. Server attributes and necessary derived DOM
 projections remain adapters; any other/new client-side state is for #1361 to
 decide. Composer migration must preserve stream reset notifications and
 immutable `draftKey` identity across request-key rotation. The toolchain page
-proposes generation mechanics and records usage and acceptance requirements.
+specifies generation and records usage and acceptance requirements.
 
 ### Source maps and CSP
 

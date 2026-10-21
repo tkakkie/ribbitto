@@ -1,7 +1,7 @@
 # Web toolchain (planned)
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
-including the checker and `.mjs` harnesses. **Proposed** mechanics await maintainer confirmation (PR #1465). #1410–#1415 build the foundation;
+including the checker and `.mjs` harnesses. Mechanics marked **confirmed** were confirmed by the maintainer on 2026-10-21 ([record][cf]). #1410–#1415 build the foundation;
 #1416–#1421 convert scripts; #1409 writes module conventions. Current delivery
 and checks apply until replaced.
 
@@ -31,7 +31,7 @@ or table entry and edits neither decision 42 nor the table.
 
 ## Build, manifest and embedding — #1411
 
-**Naming — proposed:** esbuild `[name]-[hash].js` per bundle. Hashes/manifest
+**Naming — confirmed:** esbuild `[name]-[hash].js` per bundle. Hashes/manifest
 are decided. Minify. A Go registry declares page entries; templ uses logical
 names. Load converted bundles without their old script; unchanged scripts keep
 their tags and `-vN` names.
@@ -49,13 +49,13 @@ Make, CI, Docker and release entry points must document/run Go generation
 before compilation. Prove generation/embedding work without Node in PATH;
 update build instructions, including fresh-clone generation.
 
-**Development serving — proposed:** rebuild edits; serve matching disk
+**Development serving — confirmed:** rebuild edits; serve matching disk
 bundles/manifest with `no-store`, without rebuilding the binary. Use per-bundle
 hashes, no whole-graph prefix.
 
 ## Versions and installation — #1410, #1415
 
-**Node pin mechanics — proposed:** #1410
+**Node pin mechanics — confirmed:** #1410
 introduces one root `.node-version` containing `26.8.1`. CI setup, local
 development and sandbox setup read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
@@ -78,20 +78,19 @@ the executable; no manual platform pins. Classic `6.0.3` replaces it only for a
 recorded migration/checker/editor incompatibility. #1410 checks diagnostics and
 editor/language-service use on supported platforms; the spike tested no editors.
 
-**Pin updates — proposed:** ordinary
+**Pin updates — confirmed:** ordinary
 dependency PRs: change the exact checker pin and lockfile together; for a Node
 update also change `.node-version` and regenerate the lockfile with that
 release's bundled npm. CI must prove installation, type checking and, once
 #1412 lands, unit tests with the changed pins.
 
-**Dependabot — proposed:** #1356 says "same as Go"; the twelve points do not
-mention it. #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
+**Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
 cooldown; updates still need review and exact pins.
 
-**Syntax — proposed:** erasable TypeScript only: no enums, runtime namespaces
-or parameter properties (#1356 proposal, absent from the twelve points).
+**Syntax — confirmed:** erasable TypeScript only: no enums, runtime namespaces
+or parameter properties.
 
-**Imports — proposed:** relative imports
+**Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
 path aliases. Point 5 decides `.mjs` harnesses without `@types/node`; #1412
 runs them against DOM-free `.ts` logic with `node --test`, separately from
@@ -99,7 +98,7 @@ type checking.
 
 ## Generated contract and state — #1413, #1416, #1417
 
-**Generated-file commitment — proposed:**
+**Generated-file commitment — confirmed:**
 #1413 commits web/src/contracts.gen.ts rather than generating it uncommitted.
 Go definitions used by templ own ids, attribute names, custom event names and
 payload fields/types. A Go generator under `tools/`, reached by `go generate`,
@@ -137,8 +136,8 @@ Serve development maps locally. Production maps follow
 private-storage policy; store details are fixed in issue #1469, before #1411. Match maps/bundles by SHA, run id and
 content hash; the manifest records SHA/run id.
 
-**Map contents — proposed:** include
-`sourcesContent`.
+**Map contents — confirmed:** include `sourcesContent`, once the private store
+of #1469 is decided.
 
 Keep maps out of the image, embedded files and public static routes; no inline
 maps or public `sourceMappingURL` link. Match a stack to the exact output.
@@ -191,3 +190,5 @@ excludes generation and TypeScript checking. Packages needing generated assets
 stay CI-only (`NOT VERIFIED`); container generation is outside verify and
 needs its own `process` issue. #1415 cannot widen verify or those
 permissions.
+
+[cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

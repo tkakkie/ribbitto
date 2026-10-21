@@ -281,21 +281,29 @@ func (r *implementRun) separateHome() error {
 	account := r.deps.accountHome
 	gemini := filepath.Join(account, ".gemini")
 	if implementRunInside(r.home, account) || implementRunInside(r.home, gemini) || implementRunInside(gemini, r.home) {
-		return errors.New("implementer home must not equal or contain calling account home, or overlap shared .gemini")
+		return errors.New("--home (implementer home) must not equal or contain calling account home, or overlap shared .gemini")
 	}
 	shared, err := openShared(account)
 	defer shared.close()
 	if err != nil {
-		return fmt.Errorf("checking implementer home separation: %w", err)
+		return fmt.Errorf("checking --home (implementer home) separation: %w", err)
 	}
 	root, err := walk(r.home)
 	if err != nil {
-		return fmt.Errorf("opening implementer home: %w", err)
+		return fmt.Errorf("opening --home (implementer home): %w", err)
 	}
 	defer closeFD(root)
 	// The review launcher's identity chains also protect shared directories
 	// relocated by symlinks and aliases on case-insensitive filesystems.
-	return separate(root, shared)
+	if err := separate(root, shared); err != nil {
+		for _, cause := range []error{errAccountHome, errSharedHome} {
+			if errors.Is(err, cause) {
+				return fmt.Errorf("refusing --home (implementer home): %w", cause)
+			}
+		}
+		return fmt.Errorf("checking --home (implementer home) separation: %w", err)
+	}
+	return nil
 }
 
 func (r *implementRun) agyOutside(root string) error {

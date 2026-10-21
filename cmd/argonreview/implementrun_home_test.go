@@ -31,10 +31,31 @@ func TestImplementRunHomeUnderAccount(t *testing.T) {
 }
 
 func TestImplementRunHomeSeparation(t *testing.T) {
-	for _, scope := range []string{"account", "ancestor", "gemini", "inside-gemini", "contains-gemini"} {
-		for _, alias := range []string{"literal", "account-symlink", "home-symlink", "case"} {
-			t.Run(scope+"/"+alias, func(t *testing.T) {
-				root := filepath.Join(t.TempDir(), "Scope")
+	const (
+		textual     = "must not equal or contain calling account home, or overlap shared .gemini"
+		accountHome = "refusing --home (implementer home): it is the account's home or an ancestor of it"
+		sharedHome  = "refusing --home (implementer home): it overlaps the account's shared .gemini"
+		symlinkHome = "opening --home (implementer home): Alias: not a directory"
+	)
+	for _, scope := range []struct {
+		name string
+		want [4]string
+	}{
+		{"account", [4]string{textual, accountHome, symlinkHome, accountHome}},
+		{"ancestor", [4]string{textual, accountHome, symlinkHome, accountHome}},
+		{"gemini", [4]string{textual, sharedHome, symlinkHome, sharedHome}},
+		// Config's parent still spells .gemini identically, so the textual check wins.
+		{"inside-gemini", [4]string{textual, sharedHome, symlinkHome, textual}},
+		{"contains-gemini", [4]string{sharedHome, sharedHome, symlinkHome, sharedHome}},
+	} {
+		for i, alias := range []string{"literal", "account-symlink", "home-symlink", "case"} {
+			t.Run(scope.name+"/"+alias, func(t *testing.T) {
+				// A system temp-directory symlink must not mask the tested alias.
+				base, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				root := filepath.Join(base, "Scope")
 				account := filepath.Join(root, "Account")
 				gemini := filepath.Join(account, ".gemini")
 				implementCheckMkdir(t, filepath.Join(gemini, "Config"))
@@ -42,8 +63,8 @@ func TestImplementRunHomeSeparation(t *testing.T) {
 					"account": account, "ancestor": root, "gemini": gemini,
 					"inside-gemini":   filepath.Join(gemini, "Config"),
 					"contains-gemini": filepath.Join(root, "Worker"),
-				}[scope]
-				if scope == "contains-gemini" {
+				}[scope.name]
+				if scope.name == "contains-gemini" {
 					// Isolate shared containment from account containment: shared
 					// .gemini lives outside the account via a symlink.
 					implementCheckMkdir(t, home)
@@ -58,6 +79,7 @@ func TestImplementRunHomeSeparation(t *testing.T) {
 					symlink(t, account, link)
 					account = link
 				case "home-symlink":
+					// walk refuses the alias before directory identities are compared.
 					link := filepath.Join(filepath.Dir(root), "Alias")
 					symlink(t, home, link)
 					home = link
@@ -77,8 +99,12 @@ func TestImplementRunHomeSeparation(t *testing.T) {
 					home = other
 				}
 				r := &implementRun{home: home, deps: implementRunDeps{accountHome: account}}
-				if err := r.separateHome(); err == nil {
-					t.Fatal("accepted protected home scope")
+				err = r.separateHome()
+				if err == nil || !strings.Contains(err.Error(), scope.want[i]) {
+					t.Fatalf("separateHome() = %v, want refusal containing %q", err, scope.want[i])
+				}
+				if !strings.Contains(err.Error(), "--home") || strings.Contains(err.Error(), "RIBBITTO_ARGON_HOME") {
+					t.Fatalf("refusal names the wrong home setting: %v", err)
 				}
 			})
 		}

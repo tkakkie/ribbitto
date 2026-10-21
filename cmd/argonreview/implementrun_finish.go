@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 func (r *implementRun) execute(out io.Writer) (int, error) {
@@ -240,6 +241,13 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 func (r *implementRun) status(code int, reasons error, pre, post int, confirmed bool, cleanup, stragglers []string, tmp string) string {
 	status := fmt.Sprintf("exit=%d\ncounts=%t\npre-check=%d\npost-check=%d\nstop-confirmed=%t\nsession-left=%s\n", code, reasons == nil, pre, post, confirmed, map[bool]string{true: "0", false: "unknown"}[confirmed])
 	for _, command := range stragglers {
+		if len(command) > 4096 {
+			command = command[:4096]
+			for !utf8.ValidString(command) {
+				command = command[:len(command)-1]
+			}
+			command += "...(truncated)"
+		}
 		status += "straggler=" + strconv.Quote(command) + "\n"
 	}
 	status += "verify=" + r.verify + "\n"

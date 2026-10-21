@@ -123,7 +123,9 @@ launched, except an interrupted run records 128 plus the signal number),
 exit statuses (`-1` if not run), `stop-confirmed` and `session-left` describe
 session cleanup. Each process stopped after agy exits adds one quoted
 `straggler=<command line>` line, captured before stopping it; a clean run
-has none. These lines do not change whether the run counts; an unconfirmed
+has none. Each command keeps at most 4096 bytes at a UTF-8 boundary, with
+`...(truncated)` appended inside the quotes when truncated.
+These lines do not change whether the run counts; an unconfirmed
 stop still disqualifies it. Status also records `verify` and the three generated-file
 SHA-256 hashes. Repeated quoted `reason` lines explain failure;
 `cleanup-*` booleans describe attempted steps. `recovery` gives the next

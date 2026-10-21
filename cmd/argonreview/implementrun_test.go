@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestImplementRunStraggler(t *testing.T) {
@@ -87,6 +88,36 @@ func TestImplementRunStragglerStatus(t *testing.T) {
 		t.Fatalf("missing per-process quoted status: %s %v", status, err)
 	}
 	x.cleaned(t)
+}
+
+func TestImplementRunStragglerStatusBound(t *testing.T) {
+	exact := strings.Repeat("a", 4093) + "\"\n\\"
+	for _, tt := range []struct {
+		name, command, want string
+	}{
+		{"exact", exact, exact},
+		{"long", exact + "tail", exact + "...(truncated)"},
+		{"multibyte", strings.Repeat("a", 4095) + "界tail", strings.Repeat("a", 4095) + "...(truncated)"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &implementRun{home: t.TempDir()}
+			status := r.status(0, nil, 0, 0, true, nil, []string{tt.command}, "")
+			count := 0
+			for _, line := range strings.Split(status, "\n") {
+				if !strings.HasPrefix(line, "straggler=") {
+					continue
+				}
+				count++
+				command, err := strconv.Unquote(strings.TrimPrefix(line, "straggler="))
+				if err != nil || !utf8.ValidString(command) || command != tt.want {
+					t.Fatalf("straggler has %d bytes, valid UTF-8=%t, unquote error=%v; want %d bytes with matching content", len(command), utf8.ValidString(command), err, len(tt.want))
+				}
+			}
+			if count != 1 {
+				t.Fatalf("got %d straggler lines, want 1", count)
+			}
+		})
+	}
 }
 
 type implementRunFixture struct {

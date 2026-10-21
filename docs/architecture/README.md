@@ -48,6 +48,7 @@ Read the file for the area you change:
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, pending own posts, the idempotency key, drafts and the send key |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
+| [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts, private maps and acceptance mechanics (#1410–#1415, #1426) |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 | [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |

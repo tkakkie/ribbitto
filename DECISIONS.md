@@ -71,3 +71,4 @@ coverage and the normal document size limit for both the index and entries.
 - [40. Front-end JavaScript: plain by default, UI-library islands by measured exception](docs/decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
 - [41. Client storage: IndexedDB by data class](docs/decisions/41-client-storage-indexeddb-by-data-class.md)
 - [42. Repository languages and formats need explicit approval](docs/decisions/42-repository-languages-and-formats.md)
+- [43. TypeScript with a Go-driven front-end build](docs/decisions/43-typescript-with-a-go-driven-build.md)

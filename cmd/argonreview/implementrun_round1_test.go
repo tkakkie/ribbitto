@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -85,8 +87,8 @@ func TestImplementRunExclusiveLock(t *testing.T) {
 	}
 	write(t, x.f.tree+".tmp-existing/keep", "unchanged")
 	implementRunRefusedUnchanged(t, x, "acquiring implement-run lock")
-	if x.checks != 0 {
-		t.Fatal("locked run reached checks")
+	if x.checks != 1 {
+		t.Fatal("locked run reached more than the untouched at-rest check")
 	}
 }
 
@@ -131,8 +133,8 @@ func TestImplementRunRecoveryLifecycle(t *testing.T) {
 			marker := filepath.Join(x.f.home, "guard/implement-run.recovery-needed")
 			data, err := os.ReadFile(marker)
 			if confirmed {
-				if !os.IsNotExist(err) {
-					t.Fatalf("confirmed failure wrote marker: %s %v", data, err)
+				if err != nil {
+					t.Fatalf("confirmed failure lost marker: %s %v", data, err)
 				}
 				x.cleaned(t)
 				return
@@ -162,15 +164,20 @@ func TestImplementRunRecoveryLifecycle(t *testing.T) {
 
 func TestImplementRunRecoveryMarkerWriteFailure(t *testing.T) {
 	x := newImplementRun(t)
-	x.deps.ops.held = func(int) bool { return false }
-	x.deps.ops.scan = func(int) ([]int, error) {
-		implementCheckMkdir(t, filepath.Join(x.f.home, "guard/implement-run.recovery-needed"))
-		return nil, errors.New("cannot scan")
+	x.deps.step = func(name string) error {
+		if name == "mark-in-progress" {
+			return errors.New("injected marker creation")
+		}
+		return nil
 	}
 	status := x.run(t, 1)
-	if !strings.Contains(status, "recovery marker failed") || !strings.Contains(status, "counts=false") {
+	if !strings.Contains(status, "injected marker creation") || !strings.Contains(status, "counts=false") {
 		t.Fatal(status)
 	}
+	if _, err := os.Stat(filepath.Join(x.fake, "args")); !os.IsNotExist(err) {
+		t.Fatal("started without marker")
+	}
+
 }
 
 func TestImplementRunLockHeldThroughStatus(t *testing.T) {
@@ -196,7 +203,7 @@ func TestImplementRunLockSymlink(t *testing.T) {
 	x := newImplementRun(t)
 	implementCheckMkdir(t, filepath.Join(x.f.home, "guard"))
 	symlink(t, x.f.saved, filepath.Join(x.f.home, "guard/implement-run.lock"))
-	implementRunRefusedUnchanged(t, x, "opening implement-run lock")
+	implementRunRefusedUnchanged(t, x, "symlink in home")
 }
 
 func TestImplementRunAccountHomeOverlap(t *testing.T) {
@@ -302,6 +309,8 @@ func TestImplementRunExistingMCP(t *testing.T) {
 				return
 			case "absent":
 				implementCheckRemove(t, path)
+				implementRunRefusedUnchanged(t, x, "initial at-rest check failed")
+				return
 			}
 			x.run(t, 0)
 			x.cleaned(t)
@@ -331,8 +340,11 @@ func TestImplementRunStatusSaveFailure(t *testing.T) {
 			code := implementRunCommand(x.args, writer, &stderr, x.deps)
 			if kind == "success" {
 				data, err := os.ReadFile(filepath.Join(x.logs, "status"))
+				settings, _ := os.ReadFile(filepath.Join(x.f.home, "implementer/settings.json"))
+				hooks, _ := os.ReadFile(filepath.Join(x.f.home, "implementer/hooks.json"))
 				want := "exit=0\ncounts=true\npre-check=0\npost-check=0\nstop-confirmed=true\nsession-left=0\n" +
-					"cleanup-restore-settings=true\ncleanup-restore-hooks=true\ncleanup-empty-brain=true\ncleanup-remove-tmp=true\ncleanup-remove-agent=true\ncleanup-remove-agents=true\n"
+					fmt.Sprintf("verify=off\nin-progress-marker=remains\nin-progress-marker-path=%q\ngenerated-settings-sha256=%x\ngenerated-hooks-sha256=%x\ngenerated-mcp-sha256=%x\n", filepath.Join(x.f.home, "guard/implement-run.recovery-needed"), sha256.Sum256(settings), sha256.Sum256(hooks), sha256.Sum256(nil)) +
+					"cleanup-restore-settings=true\ncleanup-restore-hooks=true\ncleanup-restore-mcp=true\ncleanup-empty-brain=true\ncleanup-remove-tmp=true\ncleanup-remove-agent=true\ncleanup-remove-agents=true\nin-progress-marker=removed\n"
 				if code != 0 || calls != 1 || err != nil || string(data) != want || out.String() != want {
 					t.Fatalf("success changed: code=%d calls=%d out=%s saved=%s err=%v", code, calls, out.String(), data, err)
 				}
@@ -368,7 +380,7 @@ func TestImplementRunSignalBeforeLaunch(t *testing.T) {
 				check := x.deps.check
 				x.deps.check = func(args []string, out, stderr io.Writer) int {
 					code := check(args, out, stderr)
-					if x.checks == 1 {
+					if x.checks == 2 {
 						signals <- syscall.SIGTERM
 					}
 					return code
@@ -384,7 +396,7 @@ func TestImplementRunSignalBeforeLaunch(t *testing.T) {
 			}
 			var out, stderr bytes.Buffer
 			code := implementRunCommand(x.args, &out, &stderr, x.deps)
-			if code != 143 || !strings.Contains(out.String(), "counts=false") || strings.Count(out.String(), "interrupted by terminated") != 1 || strings.Contains(out.String(), "stream-json") || x.checks != 2 {
+			if code != 143 || !strings.Contains(out.String(), "counts=false") || strings.Count(out.String(), "interrupted by terminated") != 1 || strings.Contains(out.String(), "stream-json") || x.checks != 4 {
 				t.Fatalf("signal lost or repeated: code=%d checks=%d out=%s stderr=%s", code, x.checks, out.String(), stderr.String())
 			}
 			if _, err := os.Stat(filepath.Join(x.fake, "args")); !os.IsNotExist(err) {

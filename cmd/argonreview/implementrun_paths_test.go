@@ -184,7 +184,9 @@ func TestImplementRunTemporaryCreationFailure(t *testing.T) {
 	}
 	before := implementRunSnapshot(t, x.f.home)
 	status := x.run(t, 1)
-	if !strings.Contains(status, "creating TMPDIR") || x.checks != 0 || !reflect.DeepEqual(before, implementRunSnapshot(t, x.f.home)) {
+	after := implementRunSnapshot(t, x.f.home)
+	delete(after, filepath.Join(x.f.home, "guard/implement-run.recovery-needed"))
+	if !strings.Contains(status, "creating TMPDIR") || x.checks != 2 || !reflect.DeepEqual(before, after) {
 		t.Fatalf("temporary failure wrote configuration: %s", status)
 	}
 	data, _ := os.ReadFile(filepath.Join(existing, "keep"))
@@ -207,20 +209,28 @@ mkdir -p "$HOME/.gemini/antigravity-cli/brain/nested"
 echo conversation > "$HOME/.gemini/antigravity-cli/brain/nested/file"
 ln -s '`+x.fake+`' "$HOME/.gemini/antigravity-cli/brain/link"
 `)
-	x.run(t, 0)
+	x.run(t, 1)
+	post, err := os.ReadFile(filepath.Join(x.logs, "post.txt"))
+	if err != nil || !strings.Contains(string(post), "symlink in home:") {
+		t.Fatalf("post-check did not observe brain symlink before cleanup: %s %v", post, err)
+	}
+	atRest, err := os.ReadFile(filepath.Join(x.logs, "at-rest.txt"))
+	if err != nil || !strings.Contains(string(atRest), "implement-check: ok") {
+		t.Fatalf("cleanup did not restore at rest: %s %v", atRest, err)
+	}
 	data, _ := os.ReadFile(filepath.Join(x.logs, "out.jsonl"))
 	if string(data) != okResult {
 		t.Fatalf("transcript changed: %q", data)
 	}
 	data, _ = os.ReadFile(filepath.Join(x.logs, "status"))
-	if !strings.Contains(string(data), "counts=true") || strings.Contains(string(data), "forged") {
+	if !strings.Contains(string(data), "counts=false") || !strings.Contains(string(data), "post-check=1") || strings.Contains(string(data), "forged") {
 		t.Fatalf("status changed: %q", data)
 	}
 	data, _ = os.ReadFile(x.f.saved)
 	if string(data) != "gitdir: fixture\n" {
 		t.Fatalf("comparison changed: %q", data)
 	}
-	data, err := os.ReadFile(filepath.Join(x.fake, "stdout"))
+	data, err = os.ReadFile(filepath.Join(x.fake, "stdout"))
 	if err != nil || string(data) != okResult {
 		t.Fatalf("removal followed brain symlink: %q %v", data, err)
 	}

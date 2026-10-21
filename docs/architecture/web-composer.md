@@ -35,7 +35,8 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   after `#message-items`. Each item's htmx form holds original text,
   key, generation and shown cursor. Composer clears immediately, keeps
   focus, takes `crypto.randomUUID()`. Each queued form gets a fresh UUID unless
-  Edit restored it. At most 10 items per tab in all states, including failures
+  Edit, a device draft or the Remove hold supplies one.
+  At most 10 items per tab in all states, including failures
   and confirmed items awaiting delivery. At capacity a localised alert keeps
   the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
   FIFO: one form at a time, predecessor classified first.
@@ -65,7 +66,8 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   the item's empty polite status. Retry uses form text/key,
   even after an unconfirmed send's refused retry. A 409
   shows `message.error.repeat` and renews the item's key. Remove discards
-  item and text; an uncertain committed post can still arrive later.
+  the item with the [hold below](#remove-hold); an uncertain committed post
+  can still arrive later.
   Edit requires either failure, an empty composer and no IME
   composition; otherwise visible but disabled with an associated
   localised explanation. It never overwrites a draft. It restores raw
@@ -113,17 +115,25 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v5.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+`message-drafts-v6.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
 restore (#1162), never history. Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.
+At dispatch, save raw text and its send key before the request leaves or the
+textarea empties (#1328), including in-flight reload/navigation. Restore the key
+only with valid text in the same session/place; reuse it only while that text is
+unchanged. Any edit or emptying renews it. A 200 or stored-key confirmation clears
+the saved key while keeping newer text. Only the latest send dispatched in a
+place is kept: an unconfirmed item followed by another send loses its key on
+reload, as its text did before.
 Retry keeps unsaved edits. In-place 409 confirms recovered prefixes;
 dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
-- **Value:** JSON `{member, session, expires, text, at}`; `expires` and `at`
-  are Unix milliseconds. Limit: 4,000 code points, 50 entries per member
+- **Value:** JSON `{member, session, expires, text, at, key}`; `expires` and `at`
+  are Unix milliseconds; `key` is a send UUID or null (older entries may omit it).
+  Limit: 4,000 code points, 50 entries per member
   and session. Retention: last edit (`at`), checked only at load.
 - **Saving:** latest htmx forms carry `data-draft-channel`/optional
   `data-draft-topic` outside state swaps. Tab-monotonic edit times, never save
@@ -163,5 +173,14 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   remove own session's keys unread.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
   where supported (Chromium); the sign-in page covers the rest.
+
+### Remove hold
+
+Remove keeps an unconfirmed item's raw text and key only in page memory, scoped
+to its feed/topic, for five minutes (`removedKeyRetention`, one named constant).
+Identical raw text sent in that place before expiry reuses the key; different
+text takes a fresh key. Expiry, confirmation or `pagehide` clears the hold.
+Remove then reload loses the held identity, even within five minutes; a stored
+message is visible in the conversation (#1328).
 
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md

@@ -8,6 +8,8 @@ beside [decision 34](34-live-unread-counts.md). The rules apply to any
 composer code, plain JavaScript or a Svelte island if #1152 adopts one; #1152
 may change them only through its own decision, with its measurements.
 
+Amended by #1328 (2026-10-21).
+
 ## (a) Pending own post (#1156, #1174)
 
 After the person sends, one composer script may show the post as *sending*
@@ -37,6 +39,10 @@ a reading POST, change unread counts or appear in `#message-status`.
   of the shown topic, or when the member chooses Remove. A failure keeps the
   text and the key, with a retry. A reload drops pending items; their text may
   survive only as a draft (d).
+  Remove holds unconfirmed raw text/key per place in page memory for 5 minutes
+  (one named constant). Same text reuses it before expiry; different text
+  gets a fresh key. Expiry/confirmation/pagehide clears it. Reload loses it;
+  stored posts stay visible.
 
 ## (b) Idempotency key (#1155)
 
@@ -80,7 +86,7 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   hash); the page never carries the token or its hash. Key:
   `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, where the place
   is the literal `feed` or the topic's canonical UUID; value: JSON
-  `{member, session, expires, text, at}` (#1178 fixes the format). No owner
+  `{member, session, expires, text, at, key}` (#1178 fixes the format). No owner
   record is shared between sessions.
 - **Restore checks the owner** (#1162). A page reads only its own member and
   session keys and restores an entry only if its stored member, session and

@@ -14,6 +14,9 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
@@ -89,10 +92,19 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	handler, _, _, place := composerHandler(t, true, setup)
 	feedHandler, _, _, _ := composerHandler(t, false, setup)
-	var noticeOnly, holdPosts atomic.Bool
+	otherHandler, _, _, _ := composerHandler(t, false, setup, func(s *Services) {
+		s.Messages = sidebarReader{page: conversation.ChannelPage{Current: conversation.Channel{ID: kernel.ID{9}, DefaultTopicID: kernel.ID{2}}, EventCursor: new(int64(42))}}
+	})
+	// The page's member comes from the membership, not the login: serve the
+	// other-member case from a handler whose membership is another member.
+	otherMemberHandler, _, _, _ := composerHandler(t, false, setup, func(s *Services) {
+		s.Authz = composerMember{membership: org.Membership{Organization: org.Organization{ID: kernel.ID{7}, Slug: "acme"}, Member: org.Member{ID: kernel.ID{9}, Handle: "bob"}}}
+	})
+	var noticeOnly, holdPosts, otherMember atomic.Bool
 	type postGate struct {
 		done     chan struct{}
 		requests chan pendingRequest
+		stored   sync.Map
 	}
 	var gate atomic.Pointer[postGate]
 	stop := make(chan struct{})
@@ -107,6 +119,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			request := pendingRequest{r.PostForm, make(chan browserReply, 1)}
 			current := gate.Load()
+			// Model the server's same-key lookup before releasing its answer.
+			current.stored.LoadOrStore(r.PostForm.Get("idempotency_key"), r.PostForm.Get("body"))
 			select {
 			case current.requests <- request:
 			case <-current.done:
@@ -150,7 +164,11 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			_, _ = w.Write(rec.Body.Bytes())
 			return
 		}
-		if strings.Contains(r.URL.Path, "/topics/") {
+		if otherMember.Load() {
+			otherMemberHandler.ServeHTTP(w, r)
+		} else if strings.Contains(r.URL.Path, "/channels/09000000-") {
+			otherHandler.ServeHTTP(w, r)
+		} else if strings.Contains(r.URL.Path, "/topics/") {
 			handler.ServeHTTP(w, r)
 		} else {
 			feedHandler.ServeHTTP(w, r)
@@ -208,12 +226,18 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		p = p.Context(ctx)
 		t.Cleanup(func() { closePage(t, p) })
-		// Only the drafts debounce is gated, including cancellation. Lifecycle
+		// Draft debounce and Remove expiry are gated, including cancellation. Lifecycle
 		// events and clocks are controlled independently of focus and real sleeps.
 		step(t, p, "install draft controls").MustEvalOnNewDocument(`(() => {
-   const timers = new Map(), set = window.setTimeout, clear = window.clearTimeout; let id = 0;
-   window.setTimeout = (f, d, ...a) => { if (d > 60000) window.expireDrafts = () => f(...a); return d === 300 ? (timers.set(--id, {run: () => f(...a), left:d}), id) : set(f, d, ...a); };
-   window.clearTimeout = id => { timers.delete(id); clear(id); };
+   const timers = new Map(), removedTimers = new Map(), set = window.setTimeout, clear = window.clearTimeout; let id = 0;
+   window.setTimeout = (f, d, ...a) => {
+    const gated = d === 300 ? timers : d === 300000 ? removedTimers : null;
+    if (gated) { gated.set(--id, {run: () => f(...a), left:d}); return id; }
+    if (d > 60000) window.expireDrafts = () => f(...a);
+    return set(f, d, ...a);
+   };
+   window.clearTimeout = id => { timers.delete(id); removedTimers.delete(id); clear(id); };
+   window.expireRemoved = () => { check(removedTimers.size === 1, 'missing Remove expiry timer'); for (const [id, task] of [...removedTimers]) { removedTimers.delete(id); task.run(); } };
    window.tickDrafts = ms => { for (const [id, task] of [...timers]) { task.left -= ms; if (task.left <= 0) { timers.delete(id); task.run(); } } };
    window.releaseDrafts = () => tickDrafts(300);
    window.pendingDrafts = () => timers.size;
@@ -267,7 +291,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		eval(t, p, "read draft scope", `() => { const f = document.querySelector('#message-composer').dataset, p = document.querySelector('#organization-stream').dataset;
    window.draftKey = 'ribbitto.draft.v1:' + p.member + ':' + p.session + ':' + f.draftChannel + ':' + (f.draftTopic || 'feed'); }`)
 		if holdPosts.Load() {
-			current := &postGate{make(chan struct{}), make(chan pendingRequest, 8)}
+			current := &postGate{done: make(chan struct{}), requests: make(chan pendingRequest, 8)}
 			gate.Store(current)
 			t.Cleanup(func() { close(current.done) })
 		}
@@ -359,7 +383,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			p := open(t, false, fmt.Sprintf(`document.addEventListener('readystatechange', () => {
     if (document.readyState !== 'interactive') return;
     localStorage.clear(); const p=document.querySelector('#organization-stream').dataset;
-    const e={member:p.member,session:p.session,expires:+p.sessionExpires,text:'seed',at:editNow};
+    const e={member:p.member,session:p.session,expires:+p.sessionExpires,text:'seed',at:editNow,key:'00000000-0000-4000-8000-000000000001'};
     switch (%q) {
      case 'member': e.member='09000000-0000-0000-0000-000000000000'; break;
      case 'session': e.session='019a1b2c-3d50-7000-8000-000000000000'; break;
@@ -407,6 +431,143 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatal("await held composer POST")
 			return pendingRequest{}, nil
 		}
+	}
+	for _, mode := range []string{"remove", "reload", "reload-ordinary", "navigate-held", "restored-edit", "restored-edit-ordinary", "restored-empty", "other-topic", "other-channel", "other-member", "other-session", "expired-draft", "draft-key-type", "remove-different", "remove-inside", "remove-boundary", "remove-after", "remove-timer", "remove-reload", "remove-other-topic", "remove-other-channel", "stored-arrival"} {
+		t.Run("keep-key/"+mode, func(t *testing.T) {
+			holdPosts.Store(true)
+			defer holdPosts.Store(false)
+			p := openClean(t, false, `Object.defineProperty(crypto,'randomUUID',{value:draftUUID});`)
+			run(t, p, `edit('original', editNow); document.querySelector('#message-composer').requestSubmit();`)
+			first, release := nextPost(t)
+			key := first.values.Get("idempotency_key")
+			store := gate.Load()
+			count := func() int {
+				n := 0
+				store.stored.Range(func(_, _ any) bool { n++; return true })
+				return n
+			}
+			t.Run("stored-and-kept", func(t *testing.T) {
+				if count() != 1 {
+					t.Error("first request was not stored once")
+				}
+				eval(t, p, "draft saved before answer", `key => check(entry().text==='original' && entry().key===key, 'dispatch did not keep text/key')`, key)
+			})
+			if strings.HasSuffix(mode, "-ordinary") {
+				step(t, p, "ordinary restored send").MustEvalOnNewDocument(`Object.defineProperty(crypto,'randomUUID',{value:undefined});`)
+			}
+			if mode != "navigate-held" {
+				release(browserReply{status: 500})
+				step(t, p, "unconfirmed send").MustWait(`() => !!document.querySelector('[data-state=failed][data-unconfirmed]')`)
+			}
+			wantReuse := mode == "remove" || mode == "reload" || mode == "reload-ordinary" || mode == "navigate-held" || mode == "remove-inside"
+			navigate := func(path string) {
+				step(t, p, "navigate draft place").MustNavigate(server.URL + path).MustWaitLoad()
+			}
+			switch {
+			case strings.HasPrefix(mode, "remove"):
+				// Freeze only the retention clock; exercise its exact boundary.
+				run(t, p, `performance.now=()=>elapsed; document.querySelector('[data-pending-remove]').click(); check(!entry().key && entry().text==='', 'Remove retained storage');`)
+				switch mode {
+				case "remove-inside":
+					run(t, p, `elapsed=299999;`)
+				case "remove-boundary":
+					run(t, p, `elapsed=300000;`)
+				case "remove-after":
+					run(t, p, `elapsed=300001;`)
+				case "remove-timer":
+					// Fire cleanup without advancing performance.now: a fresh key
+					// then proves the map entry was deleted, not merely too old.
+					run(t, p, `expireRemoved(); elapsed=0;`)
+				case "remove-reload":
+					reload(t, p, "")
+				case "remove-other-topic", "remove-other-channel":
+					// Simulate in-document navigation by changing the form's place
+					// attributes: the same document and its hold map stay alive.
+					// Draft saving still binds to its initial place, so read that
+					// snapshot when checking confirmation after the simulated move.
+					eval(t, p, "change place within document", `mode => { const f=document.querySelector('#message-composer'), source=scope();
+      window.entry=()=>JSON.parse(localStorage.getItem(source));
+      if (mode === 'remove-other-topic') f.dataset.draftTopic='03000000-0000-0000-0000-000000000000';
+      else f.dataset.draftChannel='09000000-0000-0000-0000-000000000000'; }`, mode)
+				}
+			case mode == "navigate-held" || mode == "other-topic":
+				navigate(view.ConversationURL("acme", place.Channel, &place.Topic))
+				if mode == "navigate-held" {
+					navigate(view.ChannelURL("acme", place.Channel))
+					restored(t, p, "original")
+					release(browserReply{status: 500})
+				}
+			case mode == "other-channel":
+				navigate(view.ChannelURL("acme", kernel.ID{9}))
+			case mode == "other-member" || mode == "other-session":
+				previous := login.Load()
+				next := *previous
+				if mode == "other-member" {
+					next.member = "09000000-0000-0000-0000-000000000000"
+					otherMember.Store(true)
+					defer otherMember.Store(false)
+				} else {
+					next.session = "019a1b2c-3d50-7000-8000-000000000000"
+				}
+				login.Store(&next)
+				defer login.Store(previous)
+				reload(t, p, "")
+			case mode == "expired-draft":
+				run(t, p, `const e=entry(); e.at=Date.now()-7*86400000; localStorage.setItem(scope(),JSON.stringify(e));`)
+				reload(t, p, "")
+			case mode == "draft-key-type":
+				run(t, p, `const e=entry(); e.key=[e.key]; localStorage.setItem(scope(),JSON.stringify(e));`)
+				reload(t, p, "original")
+			default:
+				reload(t, p, "original")
+			}
+			if mode == "navigate-held" || mode == "reload" || mode == "reload-ordinary" {
+				t.Run("stored-and-kept-after-navigation", func(t *testing.T) {
+					if count() != 1 {
+						t.Error("navigation changed stored messages")
+					}
+					eval(t, p, "restored dispatch identity", `key => check(entry().key===key && document.querySelector('#message-body').value==='original', 'navigation lost kept text/key')`, key)
+				})
+			}
+			if mode == "stored-arrival" {
+				// A same-key resend gets the stored message through the actual
+				// htmx response path, which makes the composer emit message-sent.
+				run(t, p, `document.querySelector('#message-composer').requestSubmit();`)
+				confirmed, confirm := nextPost(t)
+				if confirmed.values.Get("idempotency_key") != key || count() != 1 {
+					t.Error("stored-key lookup did not reuse the restored identity")
+				}
+				confirm(pendingAnswer(t, place.Channel))
+				step(t, p, "stored arrival clears draft key").MustWait(`() => entry()?.key===null && entry()?.text==='' && sentEvents.length===1`)
+				eval(t, p, "stored confirmation event", `key => check(sentEvents[0].key===key && !entry().key, 'stored arrival retained draft key')`, key)
+			}
+			if mode == "restored-empty" {
+				run(t, p, `edit('',++editNow);`)
+			}
+			text := "original"
+			if strings.HasPrefix(mode, "restored-edit") || mode == "remove-different" {
+				text = "changed"
+			}
+			eval(t, p, "send kept text", `text => { if(document.querySelector('#message-body').value!==text) edit(text,++editNow); document.querySelector('#message-composer').requestSubmit(); }`, text)
+			second, finish := nextPost(t)
+			t.Run("actual-duplicate-on-resend", func(t *testing.T) {
+				if second.values.Get("body") != text {
+					t.Errorf("resent body=%q, want %q", second.values.Get("body"), text)
+				}
+				if got := second.values.Get("idempotency_key"); (got == key) != wantReuse {
+					t.Errorf("key reused=%t, want %t", got == key, wantReuse)
+				}
+				want := 2
+				if wantReuse {
+					want = 1
+				}
+				if count() != want {
+					t.Errorf("stored messages=%d, want %d", count(), want)
+				}
+			})
+			finish(pendingAnswer(t, place.Channel))
+			step(t, p, "confirmed resend clears saved key").MustWait(`() => entry()?.key===null && entry()?.text===''`)
+		})
 	}
 	for _, pending := range []bool{false, true} {
 		for _, mode := range []string{"success", "422", "404", "429", "500", "network", "reload-held", "typing-success", "typing-failure", "tab-write", "tab-write-dirty", "tab-write-newer-dirty", "composition", "409", "409-recovered", "409-changed", "busy"} {
@@ -763,7 +924,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    const at = editNow; edit('first', at - 1); tickDrafts(299); check(!entry(), 'early save');
    edit('  🐸\n', at); tickDrafts(299); check(!entry(), 'debounce did not restart'); editNow += 50; tickDrafts(1);
    const e = entry(), page = document.querySelector('#organization-stream').dataset;
-   check(e.text === '  🐸\n' && e.at === at && e.member === page.member && e.session === page.session && e.expires === +page.sessionExpires, 'value or input time');
+   check(e.text === '  🐸\n' && e.at === at && e.member === page.member && e.session === page.session && e.expires === +page.sessionExpires && e.key === null, 'value or input time');
    edit('next', at - 1); hide(); check(entry().at === at + 1, 'clock rollback');
    edit('same millisecond', at - 1); flush(); check(entry().at === at + 2, 'repeated clock time');
    edit('before composition', at + 50); check(pendingDrafts() === 1, 'missing pending save');

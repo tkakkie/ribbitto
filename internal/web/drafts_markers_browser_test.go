@@ -131,7 +131,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 	path := view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{3})
 	t.Run("row-predicate", func(t *testing.T) {
 		p := open(t, path, true)
-		source, err := fs.ReadFile(static.FS(), "message-drafts-v5.js")
+		source, err := fs.ReadFile(static.FS(), "message-drafts-v6.js")
 		if err != nil {
 			t.Fatal(err)
 		}

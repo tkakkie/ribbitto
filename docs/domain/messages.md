@@ -142,6 +142,11 @@ before posting; non-members get 404.
 
 [Device drafts](../architecture/web-composer.md#drafts): session-scoped feed/topic
 restore; confirmation keeps newer text; Retry never snapshots.
+Text and key are saved at dispatch, including in-flight reload/navigation (#1328).
+Restore reuses the saved key only while text is unchanged; editing or emptying
+renews it. A 200 or stored-key confirmation clears the saved key.
+See the [Remove hold](../architecture/web-composer.md#remove-hold) for its lifetime
+and reload limit.
 
 [Send-key modes](../architecture/identity.md) define shortcuts; IME never sends.
 Pages start at newest; live delivery follows only at the bottom. The sender's

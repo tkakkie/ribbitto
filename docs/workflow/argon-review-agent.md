@@ -2,11 +2,23 @@
 
 Reviews, issue reviews, Copilot checks and probes launch with
 `--agent argon-reviewer`; `--model` still selects `gemini-4-argon-high`.
-The custom agent tells `agy` to offer exactly `view_file`, `list_dir`,
-`grep_search` and `find_by_name`. It offers no MCP, shell, write, URL,
-subagent or schedule tool. The guard is the second layer: its unchanged
-allowlist refuses everything else, including `read_file`. Deny rules and
-headless mode refuse reads outside the checkout.
+The custom agent's `tools` list names exactly `view_file`, `list_dir`,
+`grep_search` and `find_by_name`. This does not establish that `agy` offers
+nothing else. With MCP configured, `manage_task`, `call_mcp_tool`,
+`list_resources` and `read_resource` escape a custom agent's `tools` list
+([#1427 spike part 2](argon-verify.md#tool-permissions), also recorded for the
+[implementer](argon-implementer.md#the-boundary)). Reviews keep
+`config/mcp_config.json` empty, retain the `mcp(*)` deny rule and use the
+guard to refuse all four escape tools.
+
+Deny rules refuse writes, commands, URL reads and MCP. The guard, the
+only hook, allows `view_file`, `list_dir`, `grep_search` and `find_by_name`
+and denies everything else, including `read_file`. It is the only layer
+that can refuse `search_web`, subagents, `generate_image` and `schedule`,
+which no deny rule can name. The agent lists no `read_file` and nothing
+grants it; deny rules and headless mode refuse reads outside the checkout.
+The host probe records those refusals and which tools the model is actually
+told it has.
 
 ## Preparation
 
@@ -20,7 +32,10 @@ Every review, issue review, Copilot check, probe and `check` starts with
 The agent stays at rest. This is simpler and stricter: one mechanism,
 nothing to remove, and no per-run placement window. Every other entry in
 `.gemini/config/agents` is refused as customisation, including hidden files,
-subdirectories, other agents and case aliases. Owned directories and files
+subdirectories, other agents and case aliases. The refusal names the entry:
+customisation could add tools, hooks or instructions; remove it by hand if
+it is a leftover (a killed run's `.argonreview-<pid>` temporary file or a
+`.DS_Store`). Owned directories and files
 refuse symlinks and non-directory/non-regular types respectively. Nested
 `agents` is opened through its parent's descriptor; the account's shared
 agents directory and agent file have the same overlap and alias protections
@@ -37,6 +52,10 @@ as the other owned configuration.
   the refusal stays in the transcript.
 - A process running as you can change the dedicated `HOME` between
   `prepare` and launch; it could change your configuration anyway.
+- The review `HOME` is not rechecked after a run. The next `prepare`
+  byte-compares the owned files; an extra entry in `config/agents` makes
+  it refuse, while a changed `argon-reviewer.md` is rewritten. The host
+  probe should list `config/agents` after its run.
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 

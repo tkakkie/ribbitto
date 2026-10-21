@@ -635,7 +635,7 @@ func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
 					owned = owned || f.dir == name && f.name == entry
 				}
 				if !owned {
-					return fmt.Errorf("refusing .gemini/%s/%s: customisation", name, entry)
+					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store)", name, entry)
 				}
 			}
 		}

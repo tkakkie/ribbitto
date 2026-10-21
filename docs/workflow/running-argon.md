@@ -148,9 +148,11 @@ variables are not passed: behind a proxy, `agy` may not connect until a pull
 request adds them to the list. Record a live `check` and
 `issue`/`review` run from the trusted build.
 
-The [review agent and guard](argon-review-agent.md) provide exactly four
-read tools, with deny rules and headless mode confining reads to the checkout.
-That document also records the remaining limits.
+The [review agent](argon-review-agent.md) lists exactly `view_file`,
+`list_dir`, `grep_search` and `find_by_name`. Its tools list does not
+establish what else `agy` offers; the linked page records MCP tools that
+escape that list, the deny rules, the guard (the only hook), outside-read
+refusals and the remaining limits.
 
 Reports appear only after workspace removal. The dedicated `HOME` keeps
 the sign-in, the launcher's four files and Antigravity's state (logs,
@@ -185,4 +187,5 @@ fell back.
 For #1501, pre-merge tests cover agent bytes and refusals. The recorded
 `argonreview probe` on a scratch repository (checkout reads through
 `view_file`, `list_dir`, `grep_search`; `read_file`, a write, a command and
-an outside read refused) is host work after the PR is reviewed.
+an outside read refused) is host work after the PR is reviewed. Record which
+tools the model is actually told it has, and list `config/agents` after the run.

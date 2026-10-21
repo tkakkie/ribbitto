@@ -1,11 +1,12 @@
 # AI development workflow
 
-Workflow from idea to `main`. `AGENTS.md` covers code; these files cover
-workflow. Correct disagreements in a pull request.
+How work moves from idea to `main` in ribbitto, for AIs and the maintainer.
+`AGENTS.md` covers coding; these files cover workflow. Correct any
+disagreement in a pull request.
 
 ## Index
 
-Roles: [Codex implementer](#implementer-codex),
+Start with your role: [Codex implementer](#implementer-codex),
 [Argon implementer](#implementer-argon), [reviewer](#reviewer), or
 [orchestrator/handoff](#orchestrator-and-handoff).
 
@@ -16,8 +17,7 @@ Roles: [Codex implementer](#implementer-codex),
 | [Reviewing](reviewing.md#review-independence-and-rounds) | Cross-review, closure, follow-up, risk |
 | [Copilot](copilot.md#copilot) | Requesting, follow-up, docs-only exception |
 | [Adversarial review](adversarial-review.md#adversarial-review) | Tiers and completion |
-| [Running Argon](running-argon.md#running-argon) | Trusted review launcher |
-| [Review agent](argon-review-agent.md) | Tools and preparation |
+| [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
 | [Argon verify](argon-verify.md) | In-force permissions, container, results |

@@ -145,7 +145,7 @@ func TestPrepareRefusesOtherAgents(t *testing.T) {
 				write(t, path, "untrusted")
 			}
 			before := snapshot(t, home)
-			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") {
+			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "remove it by hand") {
 				t.Fatalf("err = %v", err)
 			}
 			if !equal(before, snapshot(t, home)) {

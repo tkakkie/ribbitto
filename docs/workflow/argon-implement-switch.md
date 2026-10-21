@@ -16,8 +16,8 @@ run.zsh <worktree> <saved .git file> <prompt-file> <logdir> [timeout]
 checks.zsh <worktree> <saved .git file> [idle]
 ```
 
-Both derive `--verify` from the trusted `verify-mode` file and set
-`LANG=en_US.UTF-8`. The mode is `on` as of 2026-10-22. To switch verify
+Both derive `--verify` from the trusted `verify-mode` file (`checks.zsh idle`
+always uses `off`, the state at rest) and set `LANG=en_US.UTF-8`. The mode is `on` as of 2026-10-22. To switch verify
 off, write `off` to `verify-mode`; the Go commands accept `--verify off|on`.
 See [verify operation](argon-verify-operation.md) for the run sequence.
 
@@ -28,7 +28,8 @@ as `--trusted-source`.
 
 ## Recovery and rollback
 
-A run that does not count leaves `guard/implement-run.recovery-needed`.
+A started run that does not count leaves `guard/implement-run.recovery-needed`
+(a run refused before it starts, for example by the at-rest check, leaves none).
 The next run is refused until the ordered
 [Manual recovery](argon-implement-run-recovery.md#manual-recovery) is done.
 
@@ -36,7 +37,8 @@ The rollback set is kept in the worker home: `hooks.97d19a2.json`,
 `checks.zsh.97d19a2` and `run.zsh.97d19a2`. Their SHA-256 hashes were
 recorded before the switch. To roll back, restore them as `hooks.json`,
 `checks.zsh` and `run.zsh`, respectively, and copy `hooks.json` to
-`.gemini/config/hooks.json`. This rollback was drilled with a real run on
+`.gemini/config/hooks.json`; `guard/argonreview-97d19a2` stays in place for the old
+hook. Then run the old `checks.zsh <worktree> <saved .git file> idle`. This rollback was drilled with a real run on
 2026-10-22. The set supersedes `run.zsh.verify-off` and `checks.zsh.verify-off`.
 
 No Python is in the run path. `guard/implementer-guard.py` and

@@ -364,11 +364,11 @@ func TestImplementRunInstallCrash(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := implementRunWrite(filepath.Join(home, file.to), data); err != nil {
+		if err := implementRunWrite(filepath.Join(home, file.to), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := implementRunWrite(filepath.Join(home, ".gemini/config/mcp_config.json"), nil); err != nil {
+	if err := implementRunWrite(filepath.Join(home, ".gemini/config/mcp_config.json"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f := implementCheckFixture(t)

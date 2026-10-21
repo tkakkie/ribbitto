@@ -207,15 +207,13 @@ func TestImplementRunLockSymlink(t *testing.T) {
 }
 
 func TestImplementRunAccountHomeOverlap(t *testing.T) {
-	for _, kind := range []string{"equal", "nested", "enclosing", "home-alias", "resolved-equal"} {
+	for _, kind := range []string{"equal", "enclosing", "home-alias", "resolved-equal"} {
 		t.Run(kind, func(t *testing.T) {
 			x := newImplementRun(t)
-			reason := "must not overlap calling account home"
+			reason := "must not equal or contain calling account home"
 			switch kind {
 			case "equal":
 				x.deps.accountHome = x.f.home
-			case "nested":
-				x.deps.accountHome = x.f.root
 			case "enclosing":
 				x.deps.accountHome = filepath.Join(x.f.home, "account")
 				implementCheckMkdir(t, x.deps.accountHome)
@@ -230,6 +228,7 @@ func TestImplementRunAccountHomeOverlap(t *testing.T) {
 				alias := filepath.Join(x.f.root, "alias")
 				symlink(t, x.f.root, alias)
 				x.deps.accountHome = filepath.Join(alias, "home")
+				reason = "account's home or an ancestor"
 			}
 			implementRunRefusedUnchanged(t, x, reason)
 		})

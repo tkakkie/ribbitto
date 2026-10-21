@@ -7,10 +7,87 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 )
+
+func TestImplementRunStraggler(t *testing.T) {
+	x := newImplementRun(t)
+	pidFile := filepath.Join(x.fake, "child")
+	ready := filepath.Join(x.fake, "child-ready")
+	// The child publishes readiness from Perl itself, so the leader cannot
+	// exit before exec has established the command line we want to observe.
+	write(t, filepath.Join(x.fake, "mutate"), `/usr/bin/perl -e 'open my $ready, ">", $ARGV[0] or die $!; close $ready; sleep 1511' '`+ready+`' &
+echo $! > '`+pidFile+`'
+while [ ! -f '`+ready+`' ]; do sleep 0.01; done
+`)
+	stopped := false
+	t.Cleanup(func() {
+		if stopped {
+			return
+		}
+		data, _ := os.ReadFile(pidFile)
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+	x.deps.ops = systemCleanup()
+	status := x.run(t, 0)
+	stopped = true
+	var command string
+	for _, line := range strings.Split(status, "\n") {
+		if value, ok := strings.CutPrefix(line, "straggler="); ok {
+			var err error
+			command, err = strconv.Unquote(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if strings.Count(status, "straggler=") != 1 || !strings.Contains(command, "sleep 1511") || !strings.Contains(command, ready) || !strings.Contains(status, "stop-confirmed=true\nsession-left=0\n") {
+		t.Fatalf("missing surviving child's command line: %s", status)
+	}
+	data, err := os.ReadFile(filepath.Join(x.logs, "status"))
+	if err != nil || !strings.Contains(string(data), "straggler="+strconv.Quote(command)+"\n") {
+		t.Fatalf("straggler not saved: %s %v", data, err)
+	}
+	x.cleaned(t)
+}
+
+func TestImplementRunStragglerStatus(t *testing.T) {
+	x := newImplementRun(t)
+	command := "worker \"quoted\"\nargument"
+	captured := map[int]bool{}
+	scans := 0
+	x.deps.ops.scan = func(int) ([]int, error) {
+		scans++
+		if scans <= 2 {
+			return []int{101, 102}, nil
+		}
+		return nil, nil
+	}
+	x.deps.ops.commandLine = func(pid int) string {
+		if captured[pid] {
+			t.Fatal("captured the same process twice")
+		}
+		captured[pid] = true
+		return command
+	}
+	x.deps.ops.killMember = func(pid int, _ *child) {
+		if !captured[pid] {
+			t.Fatal("stopped process before capturing command line")
+		}
+	}
+	status := x.run(t, 0)
+	want := "straggler=" + strconv.Quote(command) + "\n"
+	data, err := os.ReadFile(filepath.Join(x.logs, "status"))
+	if err != nil || strings.Count(status, want) != 2 || strings.Count(string(data), want) != 2 || len(captured) != 2 {
+		t.Fatalf("missing per-process quoted status: %s %v", status, err)
+	}
+	x.cleaned(t)
+}
 
 type implementRunFixture struct {
 	f      *implementCheckTestFixture
@@ -155,6 +232,9 @@ func TestImplementRun(t *testing.T) {
 	write(t, filepath.Join(x.f.home, ".gemini/antigravity-cli/brain/stale"), "previous conversation")
 	x.set("shared-settings-sha256", strings.ToUpper(x.f.hash))
 	status := x.run(t, 0)
+	if strings.Contains(status, "straggler=") {
+		t.Fatalf("clean run reported stragglers: %s", status)
+	}
 	for _, want := range []string{"exit=0\ncounts=true\n", "pre-check=0\npost-check=0\nstop-confirmed=true\nsession-left=0\n", "cleanup-remove-agents=true"} {
 		if !strings.Contains(status, want) {
 			t.Errorf("status missing %q: %s", want, status)

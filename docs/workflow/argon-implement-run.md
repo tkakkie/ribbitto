@@ -20,9 +20,11 @@ argonreview implement-run --verify off|on [--trusted-source <abs>] \
 Each flag is accepted once; positional arguments are refused. Paths must be
 absolute, clean and free of symlink components. The home and worktree must
 be real directories that do not overlap. The implementer home must also
-neither equal, contain nor be inside the calling account's home, compared
-both literally and after resolving symlinks. This protects the account's
-own `.gemini` settings. Logs and the saved `.git` file
+not equal or contain the calling account's home, or equal, contain or lie
+inside its shared `.gemini`. A dedicated home elsewhere under the account
+home is accepted. Comparisons use literal paths and the review launcher's
+directory identities up the resolved chains, protecting shared `.gemini`
+even through symlinks or case-insensitive aliases. Logs and the saved `.git` file
 must be outside the worktree and home; the log directory cannot contain
 either. The saved file must be regular with one hard link. The prompt is
 read from outside the worktree, capped at 1 MiB; the saved file is capped
@@ -72,9 +74,10 @@ An absent MCP file fails the full initial at-rest check.
    see [states and recovery](argon-implement-run-recovery.md).
    Create a fresh random exclusive TMPDIR beside the worktree.
 4. Place the selected state's generated settings, hooks and MCP file, the guard's
-   worktree path plus newline, and a byte copy of the trusted agent.
+   worktree path plus newline, and a mode-0400 byte copy of the trusted agent.
    Home writes refuse symlinks and non-regular leaves, replace regular
-   leaves with exclusive creation and fsync the bytes. Empty only the
+   leaves (including a read-only agent left from an earlier run) with exclusive
+   creation and fsync the bytes. Empty only the
    children of the real `brain/` directory, without following links.
 5. Call `implement-check` in-process with the home, worktree, saved file,
    maintainer's hash and agy path. A failed pre-check prevents launch.
@@ -118,7 +121,10 @@ Status uses `key=value` lines: `exit` is agy's exit status (`-1` if never
 launched, except an interrupted run records 128 plus the signal number),
 `counts` is a boolean, `pre-check` and `post-check` are check
 exit statuses (`-1` if not run), `stop-confirmed` and `session-left` describe
-session cleanup. Status also records `verify` and the three generated-file
+session cleanup. Each process stopped after agy exits adds one quoted
+`straggler=<command line>` line, captured before stopping it; a clean run
+has none. These lines do not change whether the run counts; an unconfirmed
+stop still disqualifies it. Status also records `verify` and the three generated-file
 SHA-256 hashes. Repeated quoted `reason` lines explain failure;
 `cleanup-*` booleans describe attempted steps. `recovery` gives the next
 action; `recovery-inspect` names paths to inspect after other failures;

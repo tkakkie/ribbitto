@@ -33,7 +33,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		}
 	}()
 	for _, name := range []string{"status", "out.jsonl", "err.txt", "pre.txt", "post.txt", "at-rest.txt"} {
-		f, err := implementRunOpen(filepath.Join(r.logs, name), false)
+		f, err := implementRunOpen(filepath.Join(r.logs, name), false, 0o600)
 		if err != nil {
 			return 1, err
 		}
@@ -42,7 +42,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 	code, pre, post := -1, -1, -1
 	confirmed, agentAttempted, placement, agyStarted := true, false, false, false
 	var reasons error
-	var cleanup []string
+	var cleanup, stragglers []string
 	step := func(name string, action func() error) error {
 		err := r.deps.step(name)
 		if err == nil {
@@ -69,7 +69,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 				if file.name == "agent" {
 					agentAttempted = true
 				}
-				if step("place-"+file.name, func() error { return implementRunWrite(file.path, file.data) }) != nil {
+				if step("place-"+file.name, func() error { return implementRunWrite(file.path, file.data, file.mode) }) != nil {
 					break
 				}
 			}
@@ -109,7 +109,8 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 					return wait(pid, status)
 				}
 				sup := supervisor{r.limit, 5 * time.Second, signals, ops}
-				code, err = sup.run(r.agy, args, r.environment(tmp), r.tree, logs["out.jsonl"], logs["err.txt"])
+				result := sup.runResult(r.agy, args, r.environment(tmp), r.tree, logs["out.jsonl"], logs["err.txt"])
+				code, err, stragglers = result.code, result.err, result.stragglers
 				agyStarted = started
 				reasons = errors.Join(reasons, err)
 				if !started {
@@ -134,7 +135,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 			restored[0].data, restored[1].data, restored[2].data = r.offSettings, r.offHooks, r.offMCP
 			for _, file := range restored {
 				name := "restore-" + file.name
-				err := step(name, func() error { return implementRunWrite(file.path, file.data) })
+				err := step(name, func() error { return implementRunWrite(file.path, file.data, file.mode) })
 				cleanup = append(cleanup, name+"="+strconv.FormatBool(err == nil))
 			}
 			for _, task := range []struct {
@@ -188,19 +189,19 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		reasons = errors.Join(reasons, fmt.Errorf("interrupted by %v", sig))
 	default:
 	}
-	status := r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+	status := r.status(code, reasons, pre, post, confirmed, cleanup, stragglers, tmp)
 	if err := r.deps.saveStatus(logs["status"], status); err != nil {
 		reasons = errors.Join(reasons, fmt.Errorf("log/status save failed: %w", err))
-		status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+		status = r.status(code, reasons, pre, post, confirmed, cleanup, stragglers, tmp)
 		if err := r.deps.saveStatus(logs["status"], status); err != nil {
 			reasons = errors.Join(reasons, fmt.Errorf("log/status retry failed: %w", err))
-			status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+			status = r.status(code, reasons, pre, post, confirmed, cleanup, stragglers, tmp)
 		}
 	}
 	_, outputErr := io.WriteString(out, status)
 	if outputErr != nil {
 		reasons = errors.Join(reasons, fmt.Errorf("status output failed: %w", outputErr))
-		status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+		status = r.status(code, reasons, pre, post, confirmed, cleanup, stragglers, tmp)
 		if err := r.deps.saveStatus(logs["status"], status); err != nil {
 			reasons = errors.Join(reasons, fmt.Errorf("log/status after output failed: %w", err))
 		}
@@ -224,7 +225,7 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 		}
 		if err != nil {
 			reasons = fmt.Errorf("in-progress marker completion failed: %w", err)
-			status = r.status(code, reasons, pre, post, confirmed, cleanup, tmp)
+			status = r.status(code, reasons, pre, post, confirmed, cleanup, stragglers, tmp)
 			reasons = errors.Join(reasons, r.deps.saveStatus(logs["status"], status))
 			_, outputErr := io.WriteString(out, status)
 			reasons = errors.Join(reasons, outputErr)
@@ -236,8 +237,11 @@ func (r *implementRun) execute(out io.Writer) (int, error) {
 	return 0, nil
 }
 
-func (r *implementRun) status(code int, reasons error, pre, post int, confirmed bool, cleanup []string, tmp string) string {
+func (r *implementRun) status(code int, reasons error, pre, post int, confirmed bool, cleanup, stragglers []string, tmp string) string {
 	status := fmt.Sprintf("exit=%d\ncounts=%t\npre-check=%d\npost-check=%d\nstop-confirmed=%t\nsession-left=%s\n", code, reasons == nil, pre, post, confirmed, map[bool]string{true: "0", false: "unknown"}[confirmed])
+	for _, command := range stragglers {
+		status += "straggler=" + strconv.Quote(command) + "\n"
+	}
 	status += "verify=" + r.verify + "\n"
 	markerState := "remains"
 	if _, err := os.Lstat(r.recoveryMarker()); errors.Is(err, os.ErrNotExist) {

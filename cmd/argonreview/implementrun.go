@@ -164,24 +164,8 @@ func (r *implementRun) validate() error {
 			return fmt.Errorf("directory %q: %w", path, err)
 		}
 	}
-	resolvedHome, err := filepath.EvalSymlinks(r.home)
-	if err != nil {
+	if err := r.separateHome(); err != nil {
 		return err
-	}
-	resolvedAccount, err := filepath.EvalSymlinks(r.deps.accountHome)
-	if err != nil {
-		return err
-	}
-	for _, pair := range [][2]string{{r.home, r.deps.accountHome}, {resolvedHome, resolvedAccount}} {
-		if implementRunInside(pair[0], pair[1]) || implementRunInside(pair[1], pair[0]) {
-			return errors.New("implementer home must not overlap calling account home")
-		}
-		for _, direction := range [][2]string{pair, {pair[1], pair[0]}} {
-			inside, err := implementContains(direction[0], direction[1], os.Stat)
-			if err != nil || inside {
-				return fmt.Errorf("implementer home must not overlap calling account home: %v", err)
-			}
-		}
 	}
 	for _, root := range []string{r.tree, r.home, r.logs} {
 		if err := r.agyOutside(root); err != nil {
@@ -293,6 +277,27 @@ func implementRunInside(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+func (r *implementRun) separateHome() error {
+	account := r.deps.accountHome
+	gemini := filepath.Join(account, ".gemini")
+	if implementRunInside(r.home, account) || implementRunInside(r.home, gemini) || implementRunInside(gemini, r.home) {
+		return errors.New("implementer home must not equal or contain calling account home, or overlap shared .gemini")
+	}
+	shared, err := openShared(account)
+	defer shared.close()
+	if err != nil {
+		return fmt.Errorf("checking implementer home separation: %w", err)
+	}
+	root, err := walk(r.home)
+	if err != nil {
+		return fmt.Errorf("opening implementer home: %w", err)
+	}
+	defer closeFD(root)
+	// The review launcher's identity chains also protect shared directories
+	// relocated by symlinks and aliases on case-insensitive filesystems.
+	return separate(root, shared)
+}
+
 func (r *implementRun) agyOutside(root string) error {
 	if implementRunInside(root, r.agy) {
 		return fmt.Errorf("agy must be outside Argon-writable location %q", root)
@@ -323,15 +328,16 @@ func (r *implementRun) environment(tmp string) []string {
 type implementRunFile struct {
 	name, path string
 	data       []byte
+	mode       os.FileMode
 }
 
 func (r *implementRun) files() []implementRunFile {
 	return []implementRunFile{
-		{"settings", filepath.Join(r.home, ".gemini/antigravity-cli/settings.json"), r.settings},
-		{"hooks", filepath.Join(r.home, ".gemini/config/hooks.json"), r.hooks},
-		{"mcp", filepath.Join(r.home, ".gemini/config/mcp_config.json"), r.mcp},
-		{"worktree", filepath.Join(r.home, "guard/implementer-worktree"), []byte(r.tree + "\n")},
-		{"agent", filepath.Join(r.home, ".gemini/config/agents/argon-implementer.md"), r.agent},
+		{"settings", filepath.Join(r.home, ".gemini/antigravity-cli/settings.json"), r.settings, 0o600},
+		{"hooks", filepath.Join(r.home, ".gemini/config/hooks.json"), r.hooks, 0o600},
+		{"mcp", filepath.Join(r.home, ".gemini/config/mcp_config.json"), r.mcp, 0o600},
+		{"worktree", filepath.Join(r.home, "guard/implementer-worktree"), []byte(r.tree + "\n"), 0o600},
+		{"agent", filepath.Join(r.home, ".gemini/config/agents/argon-implementer.md"), r.agent, 0o400},
 	}
 }
 

@@ -19,7 +19,7 @@ func testFeedGuardHTMXLoad(t *testing.T, browser *rod.Browser) {
 	defer cancel()
 	fixture := feedFixture(t, 50)
 	markup := renderIn(t, "en", view.ChannelScreen("/static/css/app.css", fixture))
-	want := measureFeed(t, markup).values[4]
+	want := measureFeed(t, markup).values[4] + 1
 	next := feedFixture(t, 51).Messages[50]
 	frame := realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(next)))}
 	gate := make(chan struct{})

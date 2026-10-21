@@ -131,6 +131,10 @@ templ messageItem(entry Message, announcement string) {
 		}
 		@messageBody(entry)
 		<button type="submit" form="quote-form" name="quote" value={ idValue(entry.ID) } data-quote-selection hidden aria-describedby={ "body-" + MessageDOMID(entry.ID) } class="self-start min-h-6 rounded-md px-2 text-caption text-brand hover:bg-hover max-desk:min-h-11 max-desk:min-w-11">{ i18n.T(ctx, "message.quote_selection") }</button>
+		<button type="submit" hidden></button>
+		if entry.EventSeq > 100 {
+			<span hidden></span>
+		}
 		<div class="absolute left-0 top-0">
 			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
 		</div>

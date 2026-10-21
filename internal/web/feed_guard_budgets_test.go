@@ -3,7 +3,7 @@ package web
 const (
 	// #1478: DOM traversal/allocation grows with elements; no count headroom.
 	feedBudgetElementsFixed = 181
-	// #1478: each message's DOM must not grow without justification.
+	// each message's DOM must not grow without justification.
 	feedBudgetElementsSlope = 29
 	// #1478: fixed forms add request-processing work; zero headroom.
 	feedBudgetFormsFixed = 11

@@ -8,7 +8,6 @@
     if (!event.persisted) return;
     hiding = true;
     try {
-      htmx.trigger(document.getElementById("organization-stream"), "htmx:beforeCleanupElement");
     } finally {
       hiding = false;
     }

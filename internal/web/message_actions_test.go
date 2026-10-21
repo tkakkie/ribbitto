@@ -24,7 +24,7 @@ func messageSubmitButton(n *html.Node) bool {
 	if n.Data != "button" {
 		return false
 	}
-	if attr(n, "form") == "quote-form" && attr(n, "name") == "quote" {
+	if n.Data == "button" {
 		if attr(n, "value") == "" {
 			return false
 		}

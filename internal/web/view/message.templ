@@ -174,7 +174,7 @@ templ messageActions(entry Message) {
 			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
 			<span data-copied-label class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
-		<button form="quote-form" name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
+		<button type="submit" form="quote-form" name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
 		@PinControl(entry, "")
 	</div>
 }
@@ -196,7 +196,7 @@ templ PinControl(entry Message, errorKey string) {
 					action, label = entry.PinURL+"/unpin", "message.unpin"
 				}
 			}}
-			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } data-pin-action={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
+			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } data-pin-action={ fmt.Sprint(pinned) } hx-post="/x" class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
 		}
 		if errorKey != "" {
 			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>

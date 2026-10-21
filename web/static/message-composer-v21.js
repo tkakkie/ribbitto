@@ -202,7 +202,6 @@
     // Closing the popover restores focus, clearing htmx's remembered button.
     // The native submit event retains it, including for live-delivered menus.
     const button = event.detail.triggeringEvent?.submitter;
-    if (button?.name) event.detail.parameters[button.name] = button.value;
   });
   document.addEventListener("click", (event) => {
     event.target.closest('[form="quote-form"]')?.closest("[popover]")?.hidePopover();

@@ -16,8 +16,12 @@ in advance.
    content-hashed names.
 3. **Written conventions and browser targets.** Front-end conventions and
    target browsers are written down.
-4. **Faster conversation switching.** Switching a conversation keeps the
-   shell and stream, and recently visited conversations show at once.
+4. **Opening a conversation stays cheap.** The cost of opening a
+   conversation stays bounded as messages and features grow: a smaller first
+   render (#1477, with shown-interval read state, #1486, and permalinks to
+   recent messages that still land on a page showing them), the phone
+   first-paint fix (#1480), smaller per-message markup (#1466's F-series with
+   #1455 and #1457) and a standing per-message budget check in CI (#1478).
 5. **Unread indicators on the tab.** Unread counts reach the tab title and
    favicon.
 
@@ -62,10 +66,28 @@ Phases may overlap where nothing depends on it:
 5. **Conversions,** stateful first: #1416 composer queue state machine →
    #1417 render from queue state · #1418 drafts and unread counts · #1419
    stream scripts · #1420 composer helpers · #1421 remaining small scripts.
-6. **Client-side UX:** #1422 tab title and favicon · #1424 conversation
-   swap → #1425 in-memory cache.
+6. **Client-side UX:** #1422 tab title and favicon. #1424 (conversation
+   swap) and #1425 (in-memory cache) are held: #1467 kept full-page
+   navigation (server-rendered HTML with htmx), and #1361's item A1 is
+   deferred. #1408 is the only route to reconsider partial navigation, and
+   only through a new design, a new measurement and the maintainer's
+   explicit approval, never the held design restored as is.
 7. **Review:** #1426 whole-milestone review, measurement and browser
    verification.
+
+## Acceptance criteria
+
+#1426 checks M9 as a whole against the criteria in #1404, each with a test,
+a measurement or a recorded test step. In short: switching (rapid switches,
+back and forward) ends on the right conversation and stream; a lost or
+interrupted navigation leaves no second stream; a disconnect and recovery
+loses and duplicates nothing; unsent text and pending or failed own posts
+survive a switch, a reconnect and recovery; reading, posting and switching
+work with JavaScript off; opening a conversation at 50 and 200 messages
+stays within the limits stated before measuring, and the per-message budget
+check (#1478) passes; nothing regresses beyond the stated limits. The cache
+criteria (fail-closed, discard on loss of access) apply only if #1361's A1
+is revisited.
 
 ## Out of scope
 

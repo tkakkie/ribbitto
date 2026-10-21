@@ -116,7 +116,7 @@ Left for later: a manual light/dark switch.
 
 | Milestone | Goal | Done when |
 |---|---|---|
-| **M9 Front end** (#1404) | A front end that stays safe to change as it grows, and faster switching | The five outcomes in [M9](roadmap-m9.md) |
+| **M9 Front end** (#1404) | A front end that stays safe to change as it grows, and conversations that open at a bounded cost | The five outcomes in [M9](roadmap-m9.md) |
 
 The repository is public, but a release — a
 container image and a Compose file with PostgreSQL and Caddy

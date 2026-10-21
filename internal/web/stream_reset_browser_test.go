@@ -21,7 +21,7 @@ func resetClock(page *rod.Page) {
   window.name='1'; window.reloadTimers=new Map(); let id=-1;
   const schedule=window.setTimeout, cancel=window.clearTimeout;
   window.setTimeout=(fn,ms,...args)=>{
-   if(!new Error().stack.includes('message-stream-v13.js')) return schedule(fn,ms,...args);
+   if(!new Error().stack.includes('message-stream-v14.js')) return schedule(fn,ms,...args);
    if(ms<0 || ms>5000) throw new Error('reset jitter out of range');
    window.reloadTimers.set(id,()=>fn(...args)); return id--;
   };

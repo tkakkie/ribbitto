@@ -88,7 +88,7 @@ queued success, tombstones, backspacing, newer text.
 `internal/web/message_stream_browser_test.go`.
 `RIBBITTO_BROWSER_SHARD=k/n` runs one local shard; if shell-exported,
 `make check` silently runs a subset.
-Stream cases run the embedded `message-stream-v13.js`, vendored htmx and SSE extension
+Stream cases run the embedded `message-stream-v14.js`, vendored htmx and SSE extension
 in headless Chrome via go-rod, with database-free `ChannelScreen` and
 `MovedMessageItems` test servers. Controlled SSE and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
@@ -170,7 +170,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v13.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v14.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

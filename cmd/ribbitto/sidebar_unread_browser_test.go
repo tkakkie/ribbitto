@@ -28,7 +28,7 @@ const sidebarUnreadBrowserClock = `(() => {
  window.sidebarTest = {started: 0, delays: []};
  Math.random = () => 0.999999;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!/sidebar-unread-v2.js|message-stream-v13.js/.test(new Error().stack)) return original(fn, ms, ...args);
+  if (!/sidebar-unread-v2.js|message-stream-v14.js/.test(new Error().stack)) return original(fn, ms, ...args);
   window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };

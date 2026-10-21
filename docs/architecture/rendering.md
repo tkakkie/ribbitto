@@ -133,7 +133,7 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v13.js` listens to the vendored SSE extension's
+`message-stream-v14.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes server HTML to htmx for append or
 same-id replacement, settling synchronously to order replay and localise
 timestamps before scrolling. Only appends update the separate polite

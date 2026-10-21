@@ -152,7 +152,7 @@ lives in browser storage.
   decision 34, except toggling (d)'s draft marker. These stay server-rendered;
   a pending item is never turned into a real message in place.
 
-**Kept:** `message-stream-v13.js` rewrites only the `after` parameter of the
+**Kept:** `message-stream-v14.js` rewrites only the `after` parameter of the
 server-rendered `sse-connect` URL
 ([decision 30](30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md#amendment-transport-progress-1103));
 it is not composer code.

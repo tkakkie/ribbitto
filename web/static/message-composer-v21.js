@@ -33,7 +33,7 @@
     freshRestoredKey = null;
   };
   const changedRestoration = (body) => {
-    if (restoredKey && (body.value === "" || (restoredText !== null && body.value !== restoredText))) releaseRestored(body);
+    if (restoredKey && body.value === "") releaseRestored(body);
   };
   // A deliberate Remove only protects an unchanged resend briefly (#1328).
   const removedKeyRetention = 5 * 60 * 1000;
@@ -136,7 +136,7 @@
     const removed = removedKeys.get(removedKey(form, body.value));
     removedKeys.delete(removedKey(form, body.value));
     sending.elements.idempotency_key.value = restoredKey ||
-      (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
+      (removed && performance.now() - removed.at <= removedKeyRetention ? removed.key : crypto.randomUUID());
     if (removed && sending.elements.idempotency_key.value === removed.key) sending.dataset.unconfirmed = "true";
     if (restoredKey && form.dataset.unconfirmedKey === restoredKey) sending.dataset.unconfirmed = "true";
     delete form.dataset.unconfirmedKey;
@@ -225,7 +225,6 @@
       }
       const text = removedKey(body.form, form.elements.body.value);
       const held = { key: form.elements.idempotency_key.value, at: performance.now() };
-      removedKeys.set(text, held);
       setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);
     }
     sendEvent("message-pending-action", { key: form.dataset.draftKey, restoredKey: edit ? restoredKey : null, kind: edit ? "edit" : "remove" });

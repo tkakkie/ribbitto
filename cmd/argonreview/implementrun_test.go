@@ -69,14 +69,11 @@ exit "$(cat '` + x.fake + `/status')"
 	x.deps.check = func(args []string, out, stderr io.Writer) int {
 		x.checks++
 		x.order = append(x.order, "check")
-		on := false
-		for i := 0; i < len(x.args); i += 2 {
-			if x.args[i] == "--verify" {
-				on = x.args[i+1] == "on"
+		if log, ok := out.(*os.File); ok && filepath.Base(log.Name()) == "post.txt" {
+			order := strings.Join(x.order, ",")
+			if strings.Contains(order, "restore-") || strings.Contains(order, "place-settings") && !strings.Contains(order, "post-check,check") {
+				t.Errorf("post-check must precede restoration: %v", x.order)
 			}
-		}
-		if x.checks == 3 && !on && !strings.Contains(strings.Join(x.order, ","), "restore-hooks,empty-brain,remove-tmp,check") {
-			t.Errorf("off post-check before cleanup: %v", x.order)
 		}
 		placed := strings.Contains(strings.Join(x.order, ","), "place-agent")
 		if x.checks == 1 {
@@ -178,7 +175,7 @@ func TestImplementRun(t *testing.T) {
 	if filepath.Dir(wantEnv["TMPDIR"]) != filepath.Dir(x.f.tree) || !strings.HasPrefix(wantEnv["TMPDIR"], x.f.tree+".tmp-") {
 		t.Fatalf("TMPDIR not beside worktree: %s", tmp)
 	}
-	wantOrder := []string{"trust", "check", "mark-in-progress", "place-settings", "place-hooks", "place-mcp", "place-worktree", "place-agent", "place-brain", "pre-check", "check", "stop", "restore-settings", "restore-hooks", "empty-brain", "remove-tmp", "check", "remove-agent", "remove-agents", "at-rest-check", "check", "remove-marker"}
+	wantOrder := []string{"trust", "check", "mark-in-progress", "place-settings", "place-hooks", "place-mcp", "place-worktree", "place-agent", "place-brain", "pre-check", "check", "stop", "post-check", "check", "restore-settings", "restore-hooks", "restore-mcp", "empty-brain", "remove-tmp", "remove-agent", "remove-agents", "at-rest-check", "check", "remove-marker"}
 	if !reflect.DeepEqual(x.order, wantOrder) {
 		t.Errorf("order %v, want %v", x.order, wantOrder)
 	}
@@ -328,7 +325,8 @@ echo conversation > "$HOME/.gemini/antigravity-cli/brain/file"
 				t.Fatal("post-check skipped")
 			}
 			order := strings.Join(x.order, ",")
-			if strings.Contains(order, "remove-agent") && !strings.Contains(order, "check,remove-agent") {
+			postIndex, agentIndex := strings.Index(order, "check,restore-settings"), strings.Index(order, "remove-agent")
+			if agentIndex >= 0 && (postIndex < 0 || postIndex >= agentIndex) {
 				t.Fatalf("agent removed before post-check: %s", order)
 			}
 			if strings.HasPrefix(fail, "place-") {

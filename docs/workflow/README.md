@@ -6,6 +6,10 @@ disagreement in a pull request.
 
 ## Index
 
+Start with your role: [Codex implementer](#implementer-codex),
+[Argon implementer](#implementer-argon), [reviewer](#reviewer), or
+[orchestrator/handoff](#orchestrator-and-handoff).
+
 | File | Covers |
 |---|---|
 | This file | Principles, role entries, issues, state, audit, labels |
@@ -17,7 +21,6 @@ disagreement in a pull request.
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
 | [Argon verify](argon-verify.md) | In-force permissions, container, results |
-| [Implementer run recovery](argon-implement-run-recovery.md) | Feature states, marker and abnormal ends |
 | [Verify operation](argon-verify-operation.md) | Switch and checks |
 | [Sweep](argon-verify-sweep.md) | Leftovers |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |

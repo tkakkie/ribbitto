@@ -29,6 +29,7 @@ type implementRunDeps struct {
 	mkdirTemp   func(string, string) (string, error)
 	environ     func() []string
 	saveStatus  func(*os.File, string) error
+	syncLog     func(*os.File) error
 	withSignals func(func(<-chan os.Signal) (int, error)) (int, error)
 }
 
@@ -43,6 +44,7 @@ func implementRunDefaults() implementRunDeps {
 		ops: systemCleanup(), step: func(string) error { return nil },
 		mkdirTemp: os.MkdirTemp, withSignals: withSignals,
 		environ: os.Environ, saveStatus: implementRunSaveStatus,
+		syncLog: func(f *os.File) error { return f.Sync() },
 	}
 }
 

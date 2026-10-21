@@ -92,13 +92,12 @@ An absent MCP file fails the full initial at-rest check.
    The existing supervisor uses the limit, five seconds' grace and INT/TERM
    handling, then stops and confirms the session.
 7. Follow the [completion and recovery sequence](argon-implement-run-recovery.md):
-   on-mode post-check before feature-off restoration, at-rest check,
+   post-check before feature-off restoration in both modes, at-rest check,
    saved status, then marker removal after confirmed stop. A failed
    step disqualifies the run and keeps the marker. An unconfirmed stop
    retains the files for manual recovery, as before.
-8. Off mode keeps its post-check after restoring settings and hooks,
-   emptying brain and removing TMPDIR, with the trusted agent still present.
-   Remove the agent and directory and run the final at-rest check.
+8. Restore off settings, hooks and empty MCP after the post-check; empty
+   brain and remove TMPDIR, agent and directory, then run the at-rest check.
    Attempt every applicable cleanup step even if another fails.
 9. Apply the shared transcript judge after cleanup and write status.
    Signals during completion are reported after cleanup.

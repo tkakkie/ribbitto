@@ -343,8 +343,8 @@ func TestImplementRunStatusSaveFailure(t *testing.T) {
 				settings, _ := os.ReadFile(filepath.Join(x.f.home, "implementer/settings.json"))
 				hooks, _ := os.ReadFile(filepath.Join(x.f.home, "implementer/hooks.json"))
 				want := "exit=0\ncounts=true\npre-check=0\npost-check=0\nstop-confirmed=true\nsession-left=0\n" +
-					fmt.Sprintf("verify=off\ngenerated-settings-sha256=%x\ngenerated-hooks-sha256=%x\ngenerated-mcp-sha256=%x\n", sha256.Sum256(settings), sha256.Sum256(hooks), sha256.Sum256(nil)) +
-					"cleanup-restore-settings=true\ncleanup-restore-hooks=true\ncleanup-empty-brain=true\ncleanup-remove-tmp=true\ncleanup-remove-agent=true\ncleanup-remove-agents=true\n"
+					fmt.Sprintf("verify=off\nin-progress-marker=remains\nin-progress-marker-path=%q\ngenerated-settings-sha256=%x\ngenerated-hooks-sha256=%x\ngenerated-mcp-sha256=%x\n", filepath.Join(x.f.home, "guard/implement-run.recovery-needed"), sha256.Sum256(settings), sha256.Sum256(hooks), sha256.Sum256(nil)) +
+					"cleanup-restore-settings=true\ncleanup-restore-hooks=true\ncleanup-restore-mcp=true\ncleanup-empty-brain=true\ncleanup-remove-tmp=true\ncleanup-remove-agent=true\ncleanup-remove-agents=true\nin-progress-marker=removed\n"
 				if code != 0 || calls != 1 || err != nil || string(data) != want || out.String() != want {
 					t.Fatalf("success changed: code=%d calls=%d out=%s saved=%s err=%v", code, calls, out.String(), data, err)
 				}

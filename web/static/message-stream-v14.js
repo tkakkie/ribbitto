@@ -7,8 +7,11 @@
   window.addEventListener("pagehide", (event) => {
     if (!event.persisted) return;
     hiding = true;
-    htmx.trigger(document.getElementById("organization-stream"), "htmx:beforeCleanupElement");
-    hiding = false;
+    try {
+      htmx.trigger(document.getElementById("organization-stream"), "htmx:beforeCleanupElement");
+    } finally {
+      hiding = false;
+    }
   });
   window.addEventListener("pageshow", (event) => {
     if (!event.persisted || !parked) return;

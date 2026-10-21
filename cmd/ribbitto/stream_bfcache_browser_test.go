@@ -97,15 +97,17 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 	}))
 	defer server.Close()
 	defer server.CloseClientConnections()
-	// The negative control runs the same assertions with the pagehide handling
-	// suppressed and must trip one of them. Whether Chrome then keeps the
-	// page's stream (bfcache restore without reopen) or refuses bfcache, the
-	// acceptance assertions below fail; fail records that instead of ending
-	// the test, and a run that passes is the real failure.
-	fail := func(format string, args ...any) {
+	// The negative control runs the same assertions with the stream's pagehide
+	// handling suppressed and must trip a release symptom (a retained stream, a
+	// missing reopen or a refused restore) after the first navigation has
+	// completed. Whether Chrome keeps the page's stream or refuses bfcache, the
+	// acceptance assertions below fail; fail records that instead of ending the
+	// test, and a run that passes, or trips anything else, is the real failure.
+	completed := 0
+	fail := func(release bool, format string, args ...any) {
 		t.Helper()
 		if blocked {
-			panic(controlFailure(fmt.Sprintf(format, args...)))
+			panic(controlFailure{completed, release, fmt.Sprintf(format, args...)})
 		}
 		t.Fatalf(format, args...)
 	}
@@ -115,7 +117,10 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 			case nil:
 				t.Fatal("negative control passed: removing the pagehide handling went undetected")
 			case controlFailure:
-				t.Logf("negative control tripped as required: %s", string(r))
+				if !r.release || r.completed == 0 {
+					t.Fatalf("negative control tripped for the wrong reason (after %d completed navigations, release symptom %t): %s", r.completed, r.release, r.message)
+				}
+				t.Logf("negative control tripped as required after %d completed navigations: %s", r.completed, r.message)
 			default:
 				panic(r)
 			}
@@ -137,9 +142,16 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		window.addEventListener('pagehide', () => window.shown = false, true);
 		window.addEventListener('pageshow', e => { window.shown = true; window.restored = e.persisted; });`)
 	if blocked {
-		// In-process mutation: prevent the application's pagehide handler from
-		// running, without editing an asset or weakening the positive test.
-		page.MustEvalOnNewDocument(`window.addEventListener('pagehide', e => e.stopImmediatePropagation(), true)`)
+		// In-process mutation: drop only pagehide listeners registered by the
+		// stream script (found by its stack frame), leaving the drafts, composer
+		// and read-visibility handlers and the asset itself untouched.
+		page.MustEvalOnNewDocument(`(() => {
+			const add = window.addEventListener;
+			window.addEventListener = function (type, ...rest) {
+				if (type === 'pagehide' && /message-stream-v14\.js/.test(new Error().stack)) return;
+				return add.call(this, type, ...rest);
+			};
+		})()`)
 	}
 	cursors := make([]string, len(channels))
 	opens := make([]int, len(channels))
@@ -150,22 +162,22 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		t.Helper()
 		stepCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
-		p := page.Context(stepCtx).WithPanic(func(v any) { fail("channel %d history %d (5 s deadline): %v", index, delta, v) })
+		p := page.Context(stepCtx).WithPanic(func(v any) { fail(true, "channel %d history %d (5 s deadline): %v", index, delta, v) })
 		path := view.ChannelURL("acme", channels[index].ID)
 		if delta == 0 {
 			p.MustNavigate(server.URL + path)
 		} else {
 			history, err := proto.PageGetNavigationHistory{}.Call(p)
 			if err != nil {
-				fail("%v", err)
+				fail(false, "%v", err)
 			}
 			if err := (proto.PageNavigateToHistoryEntry{EntryID: history.Entries[history.CurrentIndex+delta].ID}).Call(p); err != nil {
-				fail("%v", err)
+				fail(false, "%v", err)
 			}
 		}
 		p.MustWait(`path => location.pathname === path && window.shown && document.readyState === 'complete'`, path)
 		if delta != 0 && !p.MustEval(`() => window.restored`).Bool() {
-			fail("no real pageshow.persisted restore for %s; notRestoredReasons: %s", path,
+			fail(true, "no real pageshow.persisted restore for %s; notRestoredReasons: %s", path,
 				p.MustEval(`() => JSON.stringify(performance.getEntriesByType('navigation')[0]?.notRestoredReasons)`).Str())
 		}
 		{
@@ -177,10 +189,10 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 			case got := <-requests:
 				channel := strings.TrimPrefix(path, "/organizations/acme/channels/")
 				if got != (request{channel, want, ""}) {
-					fail("stream request = %+v, want channel=%s after=%s and no Last-Event-ID", got, channel, want)
+					fail(false, "stream request = %+v, want channel=%s after=%s and no Last-Event-ID", got, channel, want)
 				}
 			case <-stepCtx.Done():
-				fail("restore did not reopen exactly once: %v", stepCtx.Err())
+				fail(true, "restore did not reopen exactly once: %v", stepCtx.Err())
 			}
 			expected++
 			opens[index]++
@@ -193,18 +205,19 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 			window.sources.length === count && window.sources.filter(s => s.readyState === 1).length === 1`, cursors[index], opens[index])
 		p.MustEval(`() => new Promise(done => setTimeout(done, 1000))`)
 		if total.Load() != expected || !p.MustEval(`count => window.sources.length === count && window.sources.filter(s => s.readyState !== 2).length === 1`, opens[index]).Bool() {
-			fail("second stream in tab: requests=%d want=%d", total.Load(), expected)
+			fail(true, "second stream in tab: requests=%d want=%d", total.Load(), expected)
 		}
 		if peak.Load() >= 6 {
-			fail("concurrent HTTP/1.1 streams reached %d (six stalls navigation)", peak.Load())
+			fail(true, "concurrent HTTP/1.1 streams reached %d (six stalls navigation)", peak.Load())
 		}
 		if active.Load() != 1 {
-			fail("active streams=%d want=1; a cached page kept its stream (pagehide release regression)", active.Load())
+			fail(true, "active streams=%d want=1; a cached page kept its stream (pagehide release regression)", active.Load())
 		}
 		if !p.MustEval(`() => document.querySelectorAll('#message-items > li').length ===
 			(document.getElementById('organization-stream').dataset.eventCursor === '52' ? 2 : 1)`).Bool() {
-			fail("replay duplicated or lost a message")
+			fail(false, "replay duplicated or lost a message")
 		}
+		completed++
 	}
 	navigate(0, 0)
 	for i := 1; i <= 8; i++ {
@@ -215,8 +228,13 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 	t.Logf("8 phone navigations and 16 persisted restores within 5 s each; peak concurrent SSE requests=%d", peak.Load())
 }
 
-// controlFailure marks an expected failure of the negative control.
-type controlFailure string
+// controlFailure is a failure of the negative control: how many navigations
+// had completed, whether it is a stream-release symptom, and its message.
+type controlFailure struct {
+	completed int
+	release   bool
+	message   string
+}
 
 // bfcacheCacheWriter removes no-store only in this HTTP/1.1 fixture, including
 // from pages: session middleware also uses it. Production headers stay intact.

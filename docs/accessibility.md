@@ -4,12 +4,13 @@ Target: WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`) renders
 every HTML route/state in both languages, enforcing ✓ rules; new routes
 fail until covered by a rendered case.
 
-- **Things that act are buttons or links.** ✓ A `<button>` always has a
-  `type` and a name (its text, or `aria-label` when it has none); a link is
-  an `<a href>`. Never a `div` or `span` with `role="button"` or a click
-  handler. Listbox options are the exception (the composer's @-picker): the
-  textarea keeps focus, `aria-activedescendant` names the option, and options
-  are at least 44 px tall below `desk` ([contract](architecture/web-composer.md#composer)).
+- **Use buttons or links.** ✓ Buttons need accessible names (text or
+  `aria-label`) and `type`; message Quote/Quote selection/Pin/Unpin omit
+  `type` and `hx-*` (#1500). Popover triggers keep `type="button"`.
+  Links use `<a href>`. Never use `div`/`span` with `role="button"` or click
+  handlers. Picker listbox exception: textarea focus,
+  `aria-activedescendant` naming the option, and ≥44 px height below `desk`
+  ([contract](architecture/web-composer.md#composer)).
 - **Pages are titled.** ✓ Every page's `<title>` names the page first and
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
   or the channel and organisation (`general · Acme · ribbitto`); the channel

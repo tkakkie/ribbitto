@@ -129,7 +129,7 @@ func TestPinControlMarkup(t *testing.T) {
 				action, label = "/unpin", map[string]string{"en": "Unpin", "ja": "ピン留めを外す"}[lang]
 			}
 			form := `<form id="pin-form-` + view.MessageDOMID(kernel.ID{8}) + `" method="post" action="` + view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + action + `"`
-			if !strings.Contains(got, form) || !strings.Contains(got, `type="submit"`) || !strings.Contains(got, ">"+label+"</button>") || strings.Contains(got, `role="alert"`) {
+			if !strings.Contains(got, form) || !strings.Contains(got, ">"+label+"</button>") || strings.Contains(got, `role="alert"`) {
 				t.Fatalf("%s pinned=%v: %s", lang, pinned, got)
 			}
 			doc, err := html.Parse(strings.NewReader(got))
@@ -153,9 +153,13 @@ func TestPinControlMarkup(t *testing.T) {
 						continue
 					}
 					state := attr(button, "data-pin-action")
+					wantAttrs := 4
+					if state != fmt.Sprint(pinned) {
+						wantAttrs++
+					}
 					_, hidden := attrOK(button, "hidden")
 					suffix := map[string]string{"false": "/pin", "true": "/unpin"}[state]
-					if suffix == "" || attr(button, "id") != "pin-"+state+"-"+view.MessageDOMID(kernel.ID{8}) || attr(button, "type") != "submit" || attr(button, "formaction") != view.PinURL("acme", kernel.ID{1}, kernel.ID{8})+suffix || hidden != (state != fmt.Sprint(pinned)) {
+					if len(button.Attr) != wantAttrs || attr(button, "class") != "min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" || suffix == "" || attr(button, "id") != "pin-"+state+"-"+view.MessageDOMID(kernel.ID{8}) || !plainMessageSubmit(button) || attr(button, "formaction") != view.PinURL("acme", kernel.ID{1}, kernel.ID{8})+suffix || hidden != (state != fmt.Sprint(pinned)) {
 						t.Fatal("pin button contract changed")
 					}
 				}

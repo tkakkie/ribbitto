@@ -86,6 +86,7 @@ func TestFeedGuardHTMXSelection(t *testing.T) {
 		markup string
 		want   int
 	}{
+		{`<form><button></button></form><button form="quote-form" name="quote"></button><button data-quote-selection></button>`, 1},
 		{`<template hx-trigger><form><button type="submit"></button></form></template>`, 1},
 		{`<div hx-boost><a></a><span></span></div><a data-hx-boost></a>`, 2},
 		{`<form hx-post="/"><button type="SuBmIt"></button></form><i type="ſubmit"></i>`, 2},

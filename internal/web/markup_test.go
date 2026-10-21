@@ -117,7 +117,11 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 			}
 			lastHeading = level
 		case atom.Button:
-			if attr(n, "type") == "" {
+			if messageSubmitButton(n) {
+				if !plainMessageSubmit(n) {
+					add("message submit button has type or hx-* attributes")
+				}
+			} else if attr(n, "type") == "" {
 				add("<button> without a type")
 			}
 			if strings.TrimSpace(text(n)) == "" && strings.TrimSpace(attr(n, "aria-label")) == "" {

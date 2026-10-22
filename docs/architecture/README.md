@@ -42,7 +42,8 @@ Read the file for the area you change:
 | [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
 | [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
-| [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
+| [`unread-writes.md`](unread-writes.md) | how read ranges are written: the shared write, changed and publication, read admission and the HTTP caller |
+| [`unread-scope-writes.md`](unread-scope-writes.md) | the current feed, topic-view, branch-notice and posting writes |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |

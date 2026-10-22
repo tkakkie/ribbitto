@@ -56,7 +56,7 @@ A reply opens in the stream like any other message
 ([decision 22](22-replies-stay-in-the-stream-with-a-reply-chain-panel.md));
 the link does not open the reply-chain panel. A GET never changes read
 state, and a link grants no read scope
-([unread](../domain/unread.md#advancing-it)). A permalink pasted into a
+([unread](../domain/unread-reading.md#advancing-it)). A permalink pasted into a
 message is plain text; how a future message format renders it belongs to
 that format's decision
 ([decision 18](18-stored-message-formats-never-change-meaning.md)):

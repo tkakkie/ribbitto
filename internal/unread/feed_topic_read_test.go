@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -13,6 +12,7 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
+// A zero field uses the readingState default.
 type readSpy struct {
 	readingState
 	t            *testing.T
@@ -29,7 +29,6 @@ type readSpy struct {
 	failure      error
 	steps        []string
 	merged       conversation.SequenceRange
-	mergeCalled  bool
 	addedLos     []int64
 	addedHis     []int64
 	addedCursor  int64
@@ -74,7 +73,7 @@ func (s *readSpy) MergeCovered(ctx context.Context, scope Scope, joined int64, r
 	if ctx != s.t.Context() || scope != s.scope.Scope || joined != s.joined {
 		s.t.Fatalf("MergeCovered args = (%v, %+v, %d, %+v)", ctx, scope, joined, r)
 	}
-	s.mergeCalled, s.merged = true, r
+	s.merged = r
 	if err := s.step("merge"); err != nil {
 		return nil, err
 	}
@@ -155,17 +154,18 @@ func TestFeedWriterRead(t *testing.T) {
 		wantErr      string
 		wantSteps    []string
 	}{
-		{name: "negative cursor", cursor: -1, wantErrIs: ErrInvalidCursor},
+		{name: "negative cursor", cursor: -1, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor"},
 		// Committed is MaxInt64 if reached so cursor > committed cannot mask removing the MaxInt64 guard.
-		{name: "max int64 cursor", cursor: math.MaxInt64, committed: math.MaxInt64, wantErrIs: ErrInvalidCursor},
-		{name: "cursor above committed", cursor: 11, wantErrIs: ErrInvalidCursor, wantSteps: []string{"cursor"}},
+		{name: "max int64 cursor", cursor: math.MaxInt64, committed: math.MaxInt64, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor"},
+		{name: "cursor above committed", cursor: 11, committed: 10, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor", wantSteps: []string{"cursor"}},
 		{name: "next is cursor plus one when no later message", cursor: 0, changed: true, wantMerge: conversation.SequenceRange{Lo: 0, Hi: 1}, wantChanged: true, wantSteps: []string{"cursor", "next", "merge", "has"}},
+		{name: "single covered range checks messages", cursor: 4, covered: []conversation.SequenceRange{{Lo: 2, Hi: 5}}, changed: true, wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantChanged: true, wantSteps: []string{"cursor", "next", "merge", "has"}},
 		{name: "next taken from first message after cursor", cursor: 10, firstAfter: 15, covered: []conversation.SequenceRange{{Lo: 2, Hi: 5}, {Lo: 7, Hi: 15}}, wantMerge: conversation.SequenceRange{Lo: 0, Hi: 15}, wantSteps: []string{"cursor", "next", "merge", "has"}},
 		{name: "empty covered skips has messages", cursor: 4, emptyCovered: true, changed: true, wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantSteps: []string{"cursor", "next", "merge"}},
-		{name: "cursor limit error", cursor: 4, fail: "cursor", wantErrIs: failure, wantErr: "reading feed cursor limit: ", wantSteps: []string{"cursor"}},
-		{name: "next message error", cursor: 4, fail: "next", wantErrIs: failure, wantErr: "finding next feed message: ", wantSteps: []string{"cursor", "next"}},
-		{name: "merge covered error", cursor: 4, fail: "merge", wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantErrIs: failure, wantErr: "reading feed: ", wantSteps: []string{"cursor", "next", "merge"}},
-		{name: "has messages error", cursor: 4, fail: "has", wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantErrIs: failure, wantErr: "checking newly read feed messages: ", wantSteps: []string{"cursor", "next", "merge", "has"}},
+		{name: "cursor limit error", cursor: 4, fail: "cursor", wantErrIs: failure, wantErr: "reading feed cursor limit: boom", wantSteps: []string{"cursor"}},
+		{name: "next message error", cursor: 4, fail: "next", wantErrIs: failure, wantErr: "finding next feed message: boom", wantSteps: []string{"cursor", "next"}},
+		{name: "merge covered error", cursor: 4, fail: "merge", wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantErrIs: failure, wantErr: "reading feed: boom", wantSteps: []string{"cursor", "next", "merge"}},
+		{name: "has messages error", cursor: 4, fail: "has", wantMerge: conversation.SequenceRange{Lo: 0, Hi: 5}, wantErrIs: failure, wantErr: "checking newly read feed messages: boom", wantSteps: []string{"cursor", "next", "merge", "has"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			spy := &readSpy{
@@ -190,15 +190,14 @@ func TestFeedWriterRead(t *testing.T) {
 			if changed != tc.wantChanged {
 				t.Fatalf("changed = %t, want %t", changed, tc.wantChanged)
 			}
-			if !errors.Is(err, tc.wantErrIs) || (tc.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tc.wantErr))) {
+			if !errors.Is(err, tc.wantErrIs) || (tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr)) {
 				t.Fatalf("err = %v, want %q wrapping %v", err, tc.wantErr, tc.wantErrIs)
 			}
 			if !slices.Equal(spy.steps, tc.wantSteps) {
 				t.Fatalf("steps = %v, want %v", spy.steps, tc.wantSteps)
 			}
-			wantMergeCalled := slices.Contains(tc.wantSteps, "merge")
-			if spy.mergeCalled != wantMergeCalled || spy.merged != tc.wantMerge {
-				t.Fatalf("merge called = %t (%+v), want %t (%+v)", spy.mergeCalled, spy.merged, wantMergeCalled, tc.wantMerge)
+			if spy.merged != tc.wantMerge {
+				t.Fatalf("merged = %+v, want %+v", spy.merged, tc.wantMerge)
 			}
 		})
 	}
@@ -226,15 +225,16 @@ func TestTopicWriterRead(t *testing.T) {
 		wantErr     string
 		wantSteps   []string
 	}{
-		{name: "negative cursor", cursor: -1, wantErrIs: ErrInvalidCursor},
-		{name: "max int64 cursor", cursor: math.MaxInt64, committed: math.MaxInt64, wantErrIs: ErrInvalidCursor},
-		{name: "cursor above committed", cursor: 11, wantErrIs: ErrInvalidCursor, wantSteps: []string{"cursor"}},
+		{name: "negative cursor", cursor: -1, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor"},
+		{name: "max int64 cursor", cursor: math.MaxInt64, committed: math.MaxInt64, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor"},
+		{name: "cursor above committed", cursor: 11, committed: 10, wantErrIs: ErrInvalidCursor, wantErr: "invalid read cursor", wantSteps: []string{"cursor"}},
+		{name: "single candidate mapped to add and marks changed", cursor: 0, changed: true, candidates: []conversation.SequenceRange{{Lo: 2, Hi: 4}}, wantLos: []int64{2}, wantHis: []int64{4}, wantChanged: true, wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
 		{name: "candidates mapped to add and mark changed", cursor: 10, changed: true, candidates: []conversation.SequenceRange{{Lo: 2, Hi: 4}, {Lo: 7, Hi: 9}}, wantLos: []int64{2, 7}, wantHis: []int64{4, 9}, wantChanged: true, wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
-		{name: "empty candidates still call add with cursor", cursor: 0, wantLos: []int64{}, wantHis: []int64{}, wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
-		{name: "cursor limit error", cursor: 4, fail: "cursor", wantErrIs: failure, wantErr: "reading topic cursor limit: ", wantSteps: []string{"cursor"}},
-		{name: "prepare error", cursor: 4, fail: "prepare", wantErrIs: failure, wantErr: "preparing topic read: ", wantSteps: []string{"cursor", "prepare"}},
-		{name: "candidate ranges error", cursor: 4, fail: "ranges", wantErrIs: failure, wantErr: "finding topic read candidates: ", wantSteps: []string{"cursor", "prepare", "state", "ranges"}},
-		{name: "add error", cursor: 4, changed: true, fail: "add", wantLos: []int64{2}, wantHis: []int64{3}, wantErrIs: failure, wantErr: "reading topic: ", wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
+		{name: "empty candidates still call add with cursor", cursor: 7, wantLos: []int64{}, wantHis: []int64{}, wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
+		{name: "cursor limit error", cursor: 4, fail: "cursor", wantErrIs: failure, wantErr: "reading topic cursor limit: boom", wantSteps: []string{"cursor"}},
+		{name: "prepare error", cursor: 4, fail: "prepare", wantErrIs: failure, wantErr: "preparing topic read: boom", wantSteps: []string{"cursor", "prepare"}},
+		{name: "candidate ranges error", cursor: 4, fail: "ranges", wantErrIs: failure, wantErr: "finding topic read candidates: boom", wantSteps: []string{"cursor", "prepare", "state", "ranges"}},
+		{name: "add error", cursor: 4, changed: true, fail: "add", wantLos: []int64{2}, wantHis: []int64{3}, wantErrIs: failure, wantErr: "reading topic: boom", wantSteps: []string{"cursor", "prepare", "state", "ranges", "add"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			spy := &readSpy{
@@ -268,7 +268,7 @@ func TestTopicWriterRead(t *testing.T) {
 			if changed != tc.wantChanged {
 				t.Fatalf("changed = %t, want %t", changed, tc.wantChanged)
 			}
-			if !errors.Is(err, tc.wantErrIs) || (tc.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tc.wantErr))) {
+			if !errors.Is(err, tc.wantErrIs) || (tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr)) {
 				t.Fatalf("err = %v, want %q wrapping %v", err, tc.wantErr, tc.wantErrIs)
 			}
 			if !slices.Equal(spy.steps, tc.wantSteps) {

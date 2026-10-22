@@ -103,7 +103,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	}
 	names, err := s.accounts(snapshot).LookupDisplayNames(ctx, accountIDs)
 	if err != nil {
-		return nil, fmt.Errorf("reading pin names: %w", err)
+		return nil, fmt.Errorf("reading pin names: %v", err)
 	}
 	pins := make([]Pin, len(pinned))
 	for i, p := range pinned {

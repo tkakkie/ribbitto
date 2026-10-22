@@ -76,7 +76,7 @@ func (s *Reader) Overview(ctx context.Context, m org.Membership, channelID kerne
 // pinners and chat_v1 bodies' references in the same organisation-scoped
 // member batch: a bounded number of reads, never one per pin.
 func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads ReadStore, m org.Membership, channelID kernel.ID) ([]Pin, error) {
-	pinned, err := reads.ListChannelPins(ctx, m.Organization.ID, channelID)
+	pinned, err := reads.ListChannelPins(ctx, m.Member.OrganizationID, channelID)
 	if err != nil {
 		return nil, err
 	}

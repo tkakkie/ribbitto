@@ -142,14 +142,16 @@ func (s historyReader) One(ctx context.Context, m org.Membership, channelID kern
 // Many reads exactly the requested messages with current labels and authors,
 // oldest first. The ID list bounds the read; an incomplete batch fails replay.
 func (s historyReader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) ([]Entry, error) {
-	messages, err := s.Reads.GetMessages(ctx, m.Organization.ID, channelID, ids)
+	messages, err := s.Reads.GetMessages(ctx, m.Member.OrganizationID, channelID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading messages: %w", err)
 	}
 	if len(messages) != len(ids) {
 		return nil, ErrMessageNotFound
 	}
-	return s.entries(ctx, m, channelID, messages)
+	entries, err := s.entries(ctx, m, channelID, messages)
+	slices.Reverse(entries)
+	return entries, err
 }
 
 // entries adds topic labels, author names, quoted authors and chat_v1 bodies
@@ -195,20 +197,14 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 		author, ok := members[msg.MemberID]
-		name, named := names[author.AccountID]
-		if !ok || !named {
+		name := names[author.AccountID]
+		if !ok {
 			return nil, fmt.Errorf("missing author for message %x", msg.ID)
 		}
-		topic, ok := topics[msg.TopicID]
-		if !ok {
-			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
-		}
+		topic := topics[msg.TopicID]
 		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
 		if msg.Quote != nil {
-			quoted, ok := members[msg.Quote.MemberID]
-			if !ok {
-				return nil, fmt.Errorf("missing quoted author for message %x", msg.ID)
-			}
+			quoted := members[msg.Quote.MemberID]
 			entry.QuoteAuthor = Reference{DisplayName: names[quoted.AccountID], Handle: quoted.Handle}
 		}
 		if bodies[i] != nil {

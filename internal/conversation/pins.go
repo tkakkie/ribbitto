@@ -50,8 +50,8 @@ func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kerne
 		if err != nil {
 			return err
 		}
-		state.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
-		return err
+		state.SnapshotSeq = int64(len(state.Pins))
+		return nil
 	})
 	if err != nil {
 		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %w", err)

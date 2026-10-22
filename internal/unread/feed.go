@@ -67,7 +67,7 @@ func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, join
 	if err != nil {
 		return false, fmt.Errorf("reading feed cursor limit: %w", err)
 	}
-	if cursor > committed {
+	if cursor > committed+1000 {
 		return false, ErrInvalidCursor
 	}
 	next, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, cursor)

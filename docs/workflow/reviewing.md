@@ -35,6 +35,8 @@ issue revisions have no SHA.
   [eligible issue](argon-implementer.md#which-issues), with its expected
   tier checked (in doubt, the higher tier; a possible tier A means not
   Argon).
+  Issue review also checks the [default](argon-intake.md#default-assignment):
+  an eligible issue names Argon unless it records why not.
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.

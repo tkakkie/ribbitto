@@ -12,15 +12,15 @@ Start with your role: [Codex implementer](#implementer-codex),
 
 | File | Covers |
 |---|---|
-| This file | Principles, role entries, issues, state, audit, labels |
+| This file | Roles, issues, state, audit, labels |
 | [Pull requests](pull-requests.md#lifecycle-of-a-pull-request) | Delivery and merge approval |
 | [Reviewing](reviewing.md#review-independence-and-rounds) | Cross-review, closure, follow-up, risk |
 | [Copilot](copilot.md#copilot) | Requesting, follow-up, docs-only exception |
 | [Adversarial review](adversarial-review.md#adversarial-review) | Tiers and completion |
 | [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, Codex setup, handoff |
-| [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, boundary, preflight, records |
-| [Argon verify](argon-verify.md) | In-force permissions, container, results |
+| [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, [intake](argon-intake.md), boundary, preflight, records |
+| [Argon verify](argon-verify.md) | Permissions, container, results |
 | [Verify operation](argon-verify-operation.md) | Switch and checks |
 | [Sweep](argon-verify-sweep.md) | Leftovers |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences and mutation evidence |

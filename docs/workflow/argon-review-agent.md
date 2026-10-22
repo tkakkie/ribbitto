@@ -33,6 +33,10 @@ and write on an exclusive lock at the dedicated HOME's `.argonreview.lock`.
 After about two minutes of waiting, `prepare` refuses and names the lock file.
 The lock file stays at rest, created empty on first use and left even when
 `prepare` refuses; the kernel releases the lock when the process exits.
+Each review also verifies read-only under the same lock that the dedicated
+HOME still holds exactly the four byte-checked files just before `agy` launches
+and after it exits; failure before launch starts no `agy`, and failure afterwards
+means the run does not count.
 A leftover `.argonreview-<pid>` refusal means a killed run's file only when
 every writer takes the lock: a launcher built before the lock was added,
 or another tool writing there, does not wait and may still be writing.
@@ -59,12 +63,9 @@ as the other owned configuration.
   refusal (#1130).
 - A guard refusal ends the tool call, not the run, which can still count;
   the refusal stays in the transcript.
-- A process running as you can change the dedicated `HOME` between
-  `prepare` and launch; it could change your configuration anyway.
-- The review `HOME` is not rechecked after a run. The next `prepare`
-  byte-compares the owned files; an extra entry in `config/agents` makes
-  it refuse, while a changed `argon-reviewer.md` is rewritten. The host
-  probe should list `config/agents` after its run.
+- A process running as you can still change the dedicated `HOME` during
+  the run. The post-run check detects changes left there but cannot prevent
+  them or detect changes restored before the check.
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 

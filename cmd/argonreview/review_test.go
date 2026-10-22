@@ -68,9 +68,10 @@ func newReview(t *testing.T) (testReview, string) {
 	source, revision, pr := pullRequests(t)
 	return testReview{review{
 		revision: revision, home: home, shared: shared, agy: agy,
-		prepare: func() error { write(t, filepath.Join(home, "prepared"), ""); return nil },
-		build:   func() (*workspace, error) { return newWorkspace(source, revision, originOf(source), pr, rawGit) },
-		sup:     supervisor{10 * time.Second, time.Second, nil, systemCleanup()},
+		prepare:    func() error { write(t, filepath.Join(home, "prepared"), ""); return nil },
+		verifyHome: func() error { return nil },
+		build:      func() (*workspace, error) { return newWorkspace(source, revision, originOf(source), pr, rawGit) },
+		sup:        supervisor{10 * time.Second, time.Second, nil, systemCleanup()},
 	}, source, pr}, fake
 }
 

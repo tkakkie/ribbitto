@@ -100,7 +100,7 @@ exits 0 only for an allow, and non-zero for a deny or a failed write.
 
 ## What a review does
 
-1. `prepare`, then a hash of the shared settings.
+1. `prepare`, then hash the shared settings.
 2. One `gh pr view` snapshot; the base and head are fetched from the pinned
    GitHub URL into a temporary repository of its own, never a worktree of
    the source, so the source's hooks, `insteadOf`, filters and replace refs
@@ -110,14 +110,14 @@ exits 0 only for an allow, and non-zero for a deny or a failed write.
    `.agents/hooks.json` would run shell commands outside the sandbox.
 4. The prompt is `.github/prompts/adversarial.md` from the trusted revision
    plus one `UNTRUSTED_PAYLOAD_JSON` line with the original diff.
-5. The tree is recorded; `agy -p … --model gemini-4-argon-high --sandbox
+5. Record tree; verify HOME; `agy -p … --model gemini-4-argon-high --sandbox
    --print-timeout … --output-format stream-json --agent argon-reviewer` runs under the supervisor,
    in the checkout, with the dedicated `HOME` and a `TMPDIR` inside the
    workspace.
 6. The run does not count on any of: a non-zero exit or the time limit;
    `AGY_ERROR`; a malformed, incomplete or duplicate-keyed transcript; a
    result that is not a `SUCCESS`, has no response or an empty one, or lists
-   `denied_actions`; a changed tree; changed shared settings; a process
+   `denied_actions`; changed tree, HOME or shared settings; a process
    cleanup the supervisor cannot confirm; a workspace it cannot remove.
 7. The workspace is removed, then the report is written, headed with the
    target and the launcher revision.

@@ -171,18 +171,28 @@ func probeArgs(source, revision, repo, promptFile string, out io.Writer) (int, e
 // from the user database rather than HOME, which a caller can change, and
 // this binary as the guard.
 func prepareHere() (string, error) {
+	accountHome, guardPath, err := preparePaths()
+	if err != nil {
+		return "", err
+	}
+	return prepare(os.Getenv("RIBBITTO_ARGON_HOME"), accountHome, guardPath)
+}
+
+// preparePaths returns the account's home and the guard binary, as prepare
+// and the review's HOME verification both need them.
+func preparePaths() (accountHome, guardPath string, err error) {
 	account, err := user.Current()
 	if err != nil {
-		return "", fmt.Errorf("finding the account's home: %w", err)
+		return "", "", fmt.Errorf("finding the account's home: %w", err)
 	}
 	self, err := os.Executable()
 	if err == nil {
 		self, err = filepath.EvalSymlinks(self)
 	}
 	if err != nil {
-		return "", fmt.Errorf("finding this binary: %w", err)
+		return "", "", fmt.Errorf("finding this binary: %w", err)
 	}
-	return prepare(os.Getenv("RIBBITTO_ARGON_HOME"), account.HomeDir, self)
+	return account.HomeDir, self, nil
 }
 
 // sourceRevision resolves origin/main in the launcher's source checkout, never

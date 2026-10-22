@@ -293,6 +293,79 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	return home, nil
 }
 
+// verifyPrepared checks, without writing anything, that HOME still holds
+// exactly what prepare left, for a review to call just before launching agy
+// and after it exits. It takes prepare's lock, so it never sees another
+// prepare's temporary file, and releases it before returning.
+func verifyPrepared(home, accountHome, guardPath string) error {
+	return verifyPreparedWith(home, accountHome, guardPath, hooks{})
+}
+
+// verifyPreparedWith is verifyPrepared with test hooks.
+func verifyPreparedWith(home, accountHome, guardPath string, test hooks) error {
+	files, err := owned(guardPath)
+	if err != nil {
+		return err
+	}
+	if home == "" || !filepath.IsAbs(home) || filepath.Clean(home) != home {
+		return errors.New("RIBBITTO_ARGON_HOME must be a clean absolute path of a dedicated directory")
+	}
+	shared, err := openShared(accountHome)
+	defer shared.close()
+	if err != nil {
+		return err
+	}
+	root, err := walk(home)
+	if err != nil {
+		return fmt.Errorf("opening RIBBITTO_ARGON_HOME %s without symlinks: %w", home, err)
+	}
+	defer closeFD(root)
+	if err := separate(root, shared); err != nil {
+		return err
+	}
+	// Even a read-only scan must wait out prepare's temporary-file window.
+	test.run(test.beforeLock)
+	lock, err := lockPrepare(root, home, test)
+	if err != nil {
+		return err
+	}
+	defer closeFD(lock)
+	gemini, dirs, err := openOwned(root)
+	defer closeAll(gemini, dirs)
+	if err != nil {
+		return err
+	}
+	if err := checkBeforeWrite(root, dirs, files); err != nil {
+		return err
+	}
+	checked := map[string]place{}
+	for _, name := range ownedDirs {
+		if dirs[name] < 0 {
+			return fmt.Errorf("refusing: .gemini/%s is missing", name)
+		}
+		p, err := identity(dirs[name])
+		if err != nil {
+			return err
+		}
+		checked[name] = p
+	}
+	if err := checkSharedFiles(accountHome, files, checked); err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := checkOwned(dirs[f.dir], f.name, f.content); err != nil {
+			return fmt.Errorf("refusing .gemini/%s/%s: %w", f.dir, f.name, err)
+		}
+	}
+	// Descriptors alone would keep reading a directory moved out of HOME.
+	again, matched, err := matchOwned(root, gemini, dirs)
+	defer closeAll(again, matched)
+	if err != nil {
+		return err
+	}
+	return sameHome(home, root)
+}
+
 func lockPrepare(root int, home string, test hooks) (int, error) {
 	// Outside .gemini so no customisation exception is needed. Never unlink
 	// it: waiters must keep locking the same inode, even after a killed run.

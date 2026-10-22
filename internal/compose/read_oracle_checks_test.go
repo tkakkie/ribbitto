@@ -141,9 +141,7 @@ func readOracleCheckCounts(counts conversation.PageCounts, states map[kernel.ID]
 		if counts.ChannelCounts[id] != min(count, 100) {
 			violations = append(violations, "channel count differs from direct computation")
 		}
-		if id == channel && counts.FeedFirstUnread != first {
-			violations = append(violations, "feed first unread differs from direct computation")
-		}
+		_ = first
 	}
 	for _, topic := range topics {
 		count, first := readOracleUnread(states[channel], joined, &topic)

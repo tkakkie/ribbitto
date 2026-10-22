@@ -17,16 +17,16 @@ import (
 
 type membersFake struct {
 	fullHistory
-	t                  *testing.T
-	organizationID     kernel.ID
-	channelID          kernel.ID
-	wantAfter          *kernel.ID
-	members            []org.ListedMember
-	names              map[kernel.ID]string
-	memberErr, nameErr error
-	gotLimit           int32
-	gotAccountIDs      []kernel.ID
-	calls              []string
+	t                              *testing.T
+	organizationID                 kernel.ID
+	channelID                      kernel.ID
+	wantAfter                      *kernel.ID
+	members                        []org.ListedMember
+	names                          map[kernel.ID]string
+	channelErr, memberErr, nameErr error
+	gotLimit                       int32
+	gotAccountIDs                  []kernel.ID
+	calls                          []string
 }
 
 func (f *membersFake) ListMembers(_ context.Context, organizationID kernel.ID, after *kernel.ID, limit int32) ([]org.ListedMember, error) {
@@ -60,7 +60,11 @@ func (r membersReadStore) GetChannel(ctx context.Context, organizationID, channe
 	if organizationID != r.organizationID || channelID != r.f.channelID {
 		r.t.Fatalf("GetChannel(%x, %x), want (%x, %x)", organizationID, channelID, r.organizationID, r.f.channelID)
 	}
-	return r.snapshotFake.GetChannel(ctx, organizationID, channelID)
+	ch, err := r.snapshotFake.GetChannel(ctx, organizationID, channelID)
+	if r.f.channelErr != nil {
+		return conversation.Channel{}, r.f.channelErr
+	}
+	return ch, err
 }
 
 func memberRows(n int) ([]org.ListedMember, map[kernel.ID]string, []conversation.ChannelMember, []kernel.ID) {
@@ -91,20 +95,20 @@ func TestReaderMembers(t *testing.T) {
 	fullCalls := []string{"channel", "members", "names"}
 
 	for _, tt := range []struct {
-		name               string
-		orgID, channelID   kernel.ID
-		after              *kernel.ID
-		members            []org.ListedMember
-		names              map[kernel.ID]string
-		memberErr, nameErr error
-		wantLimit          int32
-		wantAccounts       []kernel.ID
-		wantPage           conversation.MembersPage
-		checkPage          bool
-		wantErr            error
-		wantError          string
-		wantSnapshotCalls  []string
-		wantCalls          []string
+		name                           string
+		orgID, channelID               kernel.ID
+		after                          *kernel.ID
+		members                        []org.ListedMember
+		names                          map[kernel.ID]string
+		channelErr, memberErr, nameErr error
+		wantLimit                      int32
+		wantAccounts                   []kernel.ID
+		wantPage                       conversation.MembersPage
+		checkPage                      bool
+		wantErr                        error
+		wantError                      string
+		wantSnapshotCalls              []string
+		wantCalls                      []string
 	}{
 		{name: "limit is page size plus one", wantLimit: conversation.MemberPageSize + 1},
 		{name: "exact page has nil next", members: fullListed, names: fullNames, wantPage: conversation.MembersPage{Members: fullWant}, checkPage: true},
@@ -112,6 +116,7 @@ func TestReaderMembers(t *testing.T) {
 		{name: "only trimmed account IDs reach display-name lookup", members: extraListed, names: fullNames, wantAccounts: fullAccounts},
 		{name: "forwards organisation and after cursor", orgID: kernel.ID{5}, channelID: kernel.ID{6}, after: &afterCursor, members: fullListed[:1], names: fullNames, wantPage: conversation.MembersPage{Members: fullWant[:1]}, checkPage: true},
 		{name: "missing display name", members: fullListed[:2], names: map[kernel.ID]string{fullAccounts[0]: fullWant[0].DisplayName}, wantError: "missing name for member"},
+		{name: "get channel error is wrapped", channelErr: failure, wantErr: failure, wantError: "finding channel", wantSnapshotCalls: []string{"snapshot", "reads", "channel"}, wantCalls: []string{"channel"}},
 		{name: "list members error is wrapped", memberErr: failure, wantErr: failure, wantError: "listing channel members", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "members"}, wantCalls: []string{"channel", "members"}},
 		{name: "lookup display names error is wrapped", members: extraListed, nameErr: failure, wantErr: failure, wantError: "reading member names"},
 	} {
@@ -123,7 +128,7 @@ func TestReaderMembers(t *testing.T) {
 			if channelID == (kernel.ID{}) {
 				channelID = kernel.ID{2}
 			}
-			f := &membersFake{t: t, organizationID: orgID, channelID: channelID, wantAfter: tt.after, members: tt.members, names: tt.names, memberErr: tt.memberErr, nameErr: tt.nameErr}
+			f := &membersFake{t: t, organizationID: orgID, channelID: channelID, wantAfter: tt.after, members: tt.members, names: tt.names, channelErr: tt.channelErr, memberErr: tt.memberErr, nameErr: tt.nameErr}
 			_, snapshot := testReader(t, f)
 			snapshot.organizationID = orgID
 			reads := membersReadStore{snapshotFake: snapshot, f: f}
@@ -133,7 +138,9 @@ func TestReaderMembers(t *testing.T) {
 				func(s platform.Snapshot) conversation.AccountDirectory { snapshot.bound(s, "accounts"); return f },
 				nil, nil)
 
-			membership := org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{99}, OrganizationID: orgID}}
+			// Member.OrganizationID differs from Organization.ID so a read from the
+			// wrong field fails the organisation checks in GetChannel and ListMembers.
+			membership := org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{99}, OrganizationID: kernel.ID{98}}}
 			got, err := reader.Members(t.Context(), membership, channelID, tt.after)
 
 			wantSnapshotCalls := tt.wantSnapshotCalls

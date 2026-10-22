@@ -80,7 +80,7 @@ or accidental build, not a malicious one, whose own code could skip it.
 | Subcommand | Does |
 |---|---|
 | `verify` | prints the trusted revision, or refuses |
-| `prepare` | writes the launcher's four files in the dedicated `HOME` and refuses customisation |
+| `prepare` | writes the launcher's four configuration files under a HOME lock and refuses customisation |
 | `check` | `prepare`, then `agy models` under the supervisor: Argon must be listed |
 | `prompt <pr>` | prints the prompt a review would send, and leaves nothing |
 | `review <pr>` | the review; prints the report only if the run counts |
@@ -155,9 +155,9 @@ escape that list, the deny rules, the guard (the only hook), outside-read
 refusals and the remaining limits.
 
 Reports appear only after workspace removal. The dedicated `HOME` keeps
-the sign-in, the launcher's four files and Antigravity's state (logs,
-conversation store, caches); `prepare` refuses customisation there but
-does not police the rest.
+the sign-in, the launcher's four configuration files and prepare lock, and
+Antigravity's state (logs, conversation store, caches); `prepare` refuses
+customisation there but does not police the rest.
 
 ## Evidence
 

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,6 +142,178 @@ func TestPrepare(t *testing.T) {
 	unchanged()
 }
 
+func TestPrepareSerialises(t *testing.T) {
+	for _, phase := range []string{"before writes", "after writes"} {
+		t.Run(phase, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := resolved(t, t.TempDir())
+			if _, err := prepare(home, account, guardBinary); err != nil {
+				t.Fatal(err)
+			}
+			paused, release := make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			resume := func() { releaseOnce.Do(func() { close(release) }) }
+			pause := func() { close(paused); <-release }
+			firstHooks := hooks{beforeWrite: pause}
+			if phase == "after writes" {
+				firstHooks = hooks{afterWrite: pause}
+			}
+			first, second := make(chan error, 1), make(chan error, 1)
+			firstExited := make(chan struct{})
+			var secondExited chan struct{}
+			go func() {
+				defer close(firstExited)
+				_, err := prepareWith(home, account, guardBinary, firstHooks)
+				first <- err
+			}()
+			// Release and join even on a failed assertion, before TempDir cleanup.
+			defer func() {
+				resume()
+				<-firstExited
+				if secondExited != nil {
+					<-secondExited
+				}
+			}()
+			select {
+			case <-paused:
+			case err := <-first:
+				t.Fatalf("first prepare did not pause: %v", err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("first prepare did not pause")
+			}
+			// Check the kernel lock too, so removing it fails deterministically
+			// even if the second goroutine is not scheduled during the wait.
+			fd, err := unix.Open(filepath.Join(home, prepareLockName), unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFD(fd)
+			if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != unix.EWOULDBLOCK {
+				t.Fatalf("first prepare does not hold the lock: %v", err)
+			}
+			// Model the temporary file window without relying on write timing.
+			tmp := filepath.Join(home, ".gemini/config/agents/.argonreview-61829")
+			write(t, tmp, "in progress")
+			started := make(chan struct{})
+			secondExited = make(chan struct{})
+			go func() {
+				defer close(secondExited)
+				_, err := prepareWith(home, account, guardBinary, hooks{beforeLock: func() { close(started) }})
+				second <- err
+			}()
+			select {
+			case <-started:
+			case err := <-second:
+				t.Fatalf("second prepare did not reach the lock: %v", err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("second prepare did not reach the lock")
+			}
+			select {
+			case err := <-second:
+				t.Fatalf("second prepare finished while the first held the lock: %v", err)
+			case <-time.After(100 * time.Millisecond):
+			}
+			if err := os.Remove(tmp); err != nil {
+				t.Fatal(err)
+			}
+			resume()
+			for i, done := range []chan error{first, second} {
+				select {
+				case err := <-done:
+					if err != nil {
+						t.Fatalf("prepare %d: %v", i+1, err)
+					}
+				case <-time.After(10 * time.Second):
+					t.Fatalf("prepare %d did not finish", i+1)
+				}
+			}
+			unchanged()
+		})
+	}
+}
+
+func TestPrepareConcurrentFreshHome(t *testing.T) {
+	account, unchanged := fixture(t)
+	home := resolved(t, t.TempDir())
+	const n = 8
+	done := make(chan error, n)
+	for range n {
+		go func() {
+			_, err := prepare(home, account, guardBinary)
+			done <- err
+		}()
+	}
+	for range n {
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}
+	unchanged()
+}
+
+func TestPrepareLock(t *testing.T) {
+	for _, kind := range []string{"regular", "symlink", "directory", "FIFO"} {
+		t.Run(kind, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := resolved(t, t.TempDir())
+			path := filepath.Join(home, prepareLockName)
+			switch kind {
+			case "regular":
+				write(t, path, "kept")
+			case "symlink":
+				symlink(t, filepath.Join(account, ".gemini/config/hooks.json"), path)
+			case "directory":
+				mkdir(t, path)
+			case "FIFO":
+				if err := unix.Mkfifo(path, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for range 2 {
+				_, err := prepare(home, account, guardBinary)
+				if kind == "regular" {
+					if err != nil {
+						t.Fatal(err)
+					}
+					if data, _ := os.ReadFile(path); string(data) != "kept" {
+						t.Fatal("lock content changed")
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "prepare lock") {
+					t.Fatalf("invalid lock accepted: %v", err)
+				}
+			}
+			unchanged()
+		})
+	}
+}
+
+func TestPrepareRefusesExtraAgentFiles(t *testing.T) {
+	// Use an exited process's PID so the leftover has no live writer.
+	dead := exec.Command(os.Args[0], "-test.run=^$")
+	if err := dead.Run(); err != nil {
+		t.Fatal(err)
+	}
+	leftover := fmt.Sprintf(".argonreview-%d", dead.Process.Pid)
+	for _, name := range []string{"unknown.md", leftover, prepareLockName} {
+		t.Run(name, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := resolved(t, t.TempDir())
+			write(t, filepath.Join(home, prepareLockName), "")
+			write(t, filepath.Join(home, ".gemini/config/agents", name), "leftover")
+			before := snapshot(t, home)
+			for range 2 {
+				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "customisation") || !strings.Contains(err.Error(), "remove it by hand") {
+					t.Fatalf("extra agent file accepted: %v", err)
+				}
+			}
+			if !equal(before, snapshot(t, home)) {
+				t.Fatal("refusal changed HOME")
+			}
+			unchanged()
+		})
+	}
+}
+
 // The hook command decodes to exactly the single-quoted path and "guard",
 // whatever JSON-special characters the path holds.
 func TestHookCommand(t *testing.T) {
@@ -223,6 +397,9 @@ func TestPrepareRefuses(t *testing.T) {
 			home := filepath.Join(account, "dev", "agy-home")
 			mkdir(t, home)
 			target := tc.setup(t, account, home)
+			// Keep the persistent lock in the fixture so the snapshot still
+			// proves that a refusal changes nothing.
+			write(t, filepath.Join(home, prepareLockName), "")
 			before := snapshot(t, home)
 			if _, err := prepare(target, account, guardBinary); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want %q", err, tc.want)
@@ -239,6 +416,7 @@ func TestPrepareRefuses(t *testing.T) {
 				account, unchanged := fixture(t)
 				home := filepath.Join(account, "dev", "agy-home")
 				write(t, filepath.Join(home, ".gemini", dir, name), "{}")
+				write(t, filepath.Join(home, prepareLockName), "")
 				before := snapshot(t, home)
 				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") {
 					t.Fatalf("err = %v", err)
@@ -333,6 +511,7 @@ func TestPrepareRefusesADanglingSharedSymlink(t *testing.T) {
 				mkdir(t, filepath.Join(account, ".gemini"))
 			}
 			symlink(t, filepath.Join(home, rel), filepath.Join(account, rel))
+			write(t, filepath.Join(home, prepareLockName), "")
 			before := snapshot(t, home)
 			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "cannot be resolved") {
 				t.Fatalf("err = %v", err)
@@ -623,6 +802,7 @@ func TestPrepareRefusesASharedSwap(t *testing.T) {
 			if !tc.empty {
 				write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
 			}
+			write(t, filepath.Join(home, prepareLockName), "")
 			before := snapshot(t, home)
 			swap := func() {
 				shared := filepath.Join(account, ".gemini")
@@ -652,6 +832,7 @@ func TestPrepareRefusesAHomeSwapBeforeWriting(t *testing.T) {
 	account, unchanged := fixture(t)
 	home := filepath.Join(account, "dev", "agy-home")
 	write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+	write(t, filepath.Join(home, prepareLockName), "")
 	before := snapshot(t, home)
 	swap := func() {
 		if err := os.Rename(home, home+".old"); err != nil {
@@ -725,6 +906,7 @@ func TestPrepareRefusesASharedFileAliasingAnOwnedFile(t *testing.T) {
 					write(t, target, "mine")
 				}
 				symlink(t, target, filepath.Join(account, ".gemini", f.dir, f.name))
+				write(t, filepath.Join(home, prepareLockName), "")
 				before := snapshot(t, home)
 				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "shared") {
 					t.Fatalf("err = %v", err)
@@ -746,12 +928,14 @@ func TestPrepareRefusesASharedAliasBeforeCreatingDirectories(t *testing.T) {
 	account := resolved(t, t.TempDir())
 	home := filepath.Join(account, "dev", "agy-home")
 	mkdir(t, home)
+	write(t, filepath.Join(home, prepareLockName), "")
+	before := snapshot(t, home)
 	symlink(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), filepath.Join(account, ".gemini/antigravity-cli/settings.json"))
 	if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "cannot be resolved") {
 		t.Fatalf("err = %v", err)
 	}
-	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
-		t.Fatalf("HOME holds %v, %v", entries, err)
+	if !equal(before, snapshot(t, home)) {
+		t.Fatal("the dedicated HOME changed")
 	}
 }
 

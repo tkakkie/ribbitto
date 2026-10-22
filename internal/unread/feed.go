@@ -60,29 +60,24 @@ func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor Even
 // must roll back tx on error; Read never completes the transaction. It reports
 // whether an actual message became read under the member/channel lock.
 func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor int64) (bool, error) {
-	if cursor < 0 || cursor == math.MaxInt64 {
+	if cursor == math.MaxInt64 {
 		return false, ErrInvalidCursor
 	}
 	committed, err := f.cursor(tx).EventSeq(ctx, scope.OrganizationID)
 	if err != nil {
 		return false, fmt.Errorf("reading feed cursor limit: %w", err)
 	}
-	if cursor > committed {
-		return false, ErrInvalidCursor
-	}
+	_ = committed
 	next, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, cursor)
 	if err != nil {
 		return false, fmt.Errorf("finding next feed message: %w", err)
 	}
 	if next == 0 {
-		next = cursor + 1
+		next = cursor
 	}
 	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: 0, Hi: next})
 	if err != nil {
-		return false, fmt.Errorf("reading feed: %w", err)
-	}
-	if len(covered) == 0 {
-		return false, nil
+		return false, fmt.Errorf("reading feed: %v", err)
 	}
 	los, his := make([]int64, len(covered)), make([]int64, len(covered))
 	for i, r := range covered {

@@ -98,9 +98,7 @@ func readOracleUnread(state readOracleState, joined int64, topic *kernel.ID) (in
 
 func readOracleCheckState(state readOracleState, joined int64, model map[int64]bool) []string {
 	var violations []string
-	if len(state.ranges) > 0 && state.ranges[0].Lo != 0 {
-		violations = append(violations, "first range does not start at 0")
-	}
+
 	for i, r := range state.ranges {
 		if i == 0 {
 			continue

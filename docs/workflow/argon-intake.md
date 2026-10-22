@@ -20,19 +20,27 @@ Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 
 ## Steps and approval
 
-1. **Approved:** tests, documents, small validators, and normal-risk tier C
-   ordinary feature implementation and small bug fixes that meet the existing
-   [eligibility](argon-implementer.md#which-issues), to ease weekly Claude/Codex
-   token limits.
+1. **Approved:** tests, documents, small validators, normal-risk
+   [tier C](adversarial-review.md#which-review-runs) ordinary feature
+   implementation (ordinary feature work outside tiers A and B) and tier C small
+   bug fixes (a bug fix that is tier B is step 2, not approved), to ease weekly
+   Claude/Codex token limits. Every step-1 item also meets the existing
+   [eligibility](argon-implementer.md#which-issues), including that it can be
+   verified without running its code locally: no `make dev` or browser check
+   unless the maintainer runs it, so a tier C feature that needs one is not
+   eligible.
 2. **Unapproved:** small behaviour fixes in tier B code where the issue supplies
    the failing test.
 3. **Unapproved:** larger tier B changes.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
-stay out of Argon in every step. Organisation scoping, authorisation, sessions
-and SSE delivery (the tier A areas) are excluded from every step, including
-the tier B code in steps 2 and 3
+stay out of Argon in every step. So do production changes to organisation
+scoping, authorisation, sessions and SSE delivery, including the tier B code in
+steps 2 and 3
 ([#1561, Out of scope](https://github.com/tkakkie/ribbitto/issues/1561)).
+Tests that only assert those areas are tier B
+([adversarial-review.md](adversarial-review.md#which-review-runs)) and belong
+to step 1.
 
 **PROPOSAL — the maintainer may change this gate:** over the last ten counted
 runs of the previous step, no merged defect found later, and average rework

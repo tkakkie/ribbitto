@@ -14,17 +14,26 @@ import (
 const channelHasMessages = `-- name: ChannelHasMessages :one
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = $1 AND channel_id = $2
-   AND $3::int8multirange @> event_seq)
+   AND $3::bigint <= event_seq AND event_seq < $4::bigint
+   AND $5::int8multirange @> event_seq)
 `
 
 type ChannelHasMessagesParams struct {
 	OrganizationID pgtype.UUID
 	ChannelID      pgtype.UUID
+	Lowest         int64
+	Highest        int64
 	CoveredSet     pgtype.Multirange[pgtype.Range[pgtype.Int8]]
 }
 
 func (q *Queries) ChannelHasMessages(ctx context.Context, arg ChannelHasMessagesParams) (bool, error) {
-	row := q.db.QueryRow(ctx, channelHasMessages, arg.OrganizationID, arg.ChannelID, arg.CoveredSet)
+	row := q.db.QueryRow(ctx, channelHasMessages,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.Lowest,
+		arg.Highest,
+		arg.CoveredSet,
+	)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

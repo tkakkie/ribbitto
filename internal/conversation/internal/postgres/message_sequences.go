@@ -40,11 +40,20 @@ func (m MessageSequences) HasMessages(ctx context.Context, organizationID, chann
 	if len(los) != len(his) {
 		return false, fmt.Errorf("checking channel messages: unequal bound lengths")
 	}
+	if len(los) == 0 {
+		return false, nil
+	}
+	lowest, highest := los[0], his[0]
 	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(los))
+	// Scan all inputs so bounds do not depend on their order or MergeCovered's
+	// output order. They only narrow the index range; multirange containment
+	// still decides membership.
 	for i, lo := range los {
+		lowest = min(lowest, lo)
+		highest = max(highest, his[i])
 		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: lo, Valid: true}, Upper: pgtype.Int8{Int64: his[i], Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}
 	}
-	exists, err := m.queries.ChannelHasMessages(ctx, sqlcgen.ChannelHasMessagesParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), CoveredSet: ranges})
+	exists, err := m.queries.ChannelHasMessages(ctx, sqlcgen.ChannelHasMessagesParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), Lowest: lowest, Highest: highest, CoveredSet: ranges})
 	if err != nil {
 		return false, fmt.Errorf("checking channel messages: %w", err)
 	}

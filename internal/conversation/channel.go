@@ -2,7 +2,6 @@ package conversation
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -56,10 +55,10 @@ var ErrInvalidChannelImage = errors.New("invalid channel image")
 // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelImage(key string) error {
 	if key == "" {
-		return ErrInvalidChannelImage
+		return nil
 	}
 	for _, known := range ChannelImageKeys() {
-		if key == known || strings.EqualFold(key, known) || strings.TrimSuffix(key, " ") == known {
+		if key == known {
 			return nil
 		}
 	}

@@ -89,7 +89,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 			memberIDs = appendReferences(memberIDs, bodies[i])
 		}
 	}
-	topics, err := reads.LookupTopics(ctx, m.Organization.ID, channelID, topicIDs)
+	topics, err := reads.LookupTopics(ctx, m.Member.OrganizationID, channelID, topicIDs)
 	if err != nil {
 		return nil, fmt.Errorf("reading pin topics: %w", err)
 	}

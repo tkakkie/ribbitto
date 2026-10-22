@@ -73,6 +73,8 @@ A newly read message
   `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
   so detection sorts returned neighbours for subtraction (`O(R log R)`),
   plus the batched existence probe, and stays `O(1)` in normal use.
+  Besides containment, the probe is bounded by the covered set's lowest and highest
+  sequence, so it scans the channel's index from the first interval.
 - **Branch notice (current):** conversation's organisation- and channel-scoped
   predecessor query returns `p` (or 0). An injected `unreadpg.WriterIn` adapter
   calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after

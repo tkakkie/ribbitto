@@ -33,11 +33,10 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		// The listing is organisation-wide, so the channel check is what
 		// keeps another organisation's or a missing channel out.
-		if _, err := s.reads(snapshot).GetChannel(ctx, m.Organization.ID, channelID); err != nil {
-			return fmt.Errorf("finding channel: %v", err) // (i)
+		if _, err := s.reads(snapshot).GetChannel(ctx, m.Member.OrganizationID, channelID); err != nil {
+			return fmt.Errorf("finding channel: %w", err)
 		}
-		members, err := s.members(snapshot).ListMembers(ctx, m.Member.OrganizationID, after, // (h) 
-			MemberPageSize+1)
+		members, err := s.members(snapshot).ListMembers(ctx, m.Organization.ID, after, MemberPageSize+1)
 		if err != nil {
 			return fmt.Errorf("listing channel members: %w", err)
 		}

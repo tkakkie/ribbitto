@@ -144,6 +144,7 @@ func TestPrepareRefusesOtherAgents(t *testing.T) {
 			} else {
 				write(t, path, "untrusted")
 			}
+			write(t, filepath.Join(home, prepareLockName), "")
 			before := snapshot(t, home)
 			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "remove it by hand") {
 				t.Fatalf("err = %v", err)
@@ -194,6 +195,7 @@ func TestPrepareRefusesSharedAgentsOverlap(t *testing.T) {
 			mkdir(t, home)
 			// Only agents aliases this tree; the shared config itself is separate.
 			symlink(t, shared, filepath.Join(account, ".gemini/config/agents"))
+			write(t, filepath.Join(home, prepareLockName), "")
 			before := snapshot(t, home)
 			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "overlaps") {
 				t.Fatalf("err = %v", err)

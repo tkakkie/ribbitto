@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -29,6 +30,8 @@ const settingsJSON = `{
 `
 
 const reviewerAgentName = "argon-reviewer"
+
+const prepareLockName = ".argonreview.lock"
 
 // Kept at rest so every prepare uses the same byte-checking mechanism,
 // without a per-run placement/removal window or cleanup to trust.
@@ -92,20 +95,23 @@ func owned(guardPath string) ([]ownedFile, error) {
 	}, nil
 }
 
-// prepare writes the four files the launcher owns in the dedicated HOME and
-// checks them, refusing to run on anything else (#1069). The sign-in, logs,
-// caches and Antigravity's other state are neither written nor removed.
+// prepare writes and checks the four configuration files in the dedicated
+// HOME, under its prepare lock, refusing customisation (#1069). The sign-in,
+// logs, caches and Antigravity's other state are neither written nor removed.
 // accountHome is the account's home, whose .gemini other projects share.
 func prepare(home, accountHome, guardPath string) (string, error) {
 	return prepareWith(home, accountHome, guardPath, hooks{})
 }
 
-// hooks run just before the first write, after each directory prepare
-// creates (before it is opened), and just after the last write; a test swaps
-// directories or files there.
+// hooks run before locking, just before the first write, after each directory
+// prepare creates (before it is opened), and just after the last write;
+// tests coordinate concurrent calls or swap directories and files there.
+// Zero lock timing values use the production defaults.
 type hooks struct {
+	beforeLock              func()
 	beforeWrite, afterWrite func()
 	afterMkdir              func(name string)
+	lockWait, lockPoll      time.Duration
 }
 
 func (h hooks) run(f func()) {
@@ -120,9 +126,9 @@ func (h hooks) run(f func()) {
 // symlinks, and every directory below it the same way. Files are created and
 // renamed relative to those descriptors, and places are compared by device
 // and inode, not by spelling, so case-insensitive aliases and symlinks cannot
-// lead a write into the shared configuration. Every check runs before the
-// first write, any error a check meets refuses, and the whole path is walked
-// again after the last write (Codex on #1075).
+// lead a write into the shared configuration. Every configuration check runs
+// before the first configuration write, any error a check meets refuses, and
+// the whole path is walked again after the last write (Codex on #1075).
 func prepareWith(home, accountHome, guardPath string, test hooks) (string, error) {
 	files, err := owned(guardPath)
 	if err != nil {
@@ -144,6 +150,15 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := separate(root, shared); err != nil {
 		return "", err
 	}
+	// Every configuration scan and write shares the lock: even the first scan
+	// could see another prepare's temporary agent file. Closing releases it on all
+	// returns; O_CLOEXEC keeps a launched process from holding it afterwards.
+	test.run(test.beforeLock)
+	lock, err := lockPrepare(root, home, true, test)
+	if err != nil {
+		return "", err
+	}
+	defer closeFD(lock)
 
 	gemini, dirs, err := openOwned(root)
 	defer closeAll(gemini, dirs)
@@ -276,6 +291,144 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 		}
 	}
 	return home, nil
+}
+
+// verifyPrepared checks, without writing anything, that HOME still holds
+// exactly what prepare left, for a review to call just before launching agy
+// and after it exits. It acquires the existing lock without creating it, so
+// it never sees another prepare's temporary file, and releases it on return.
+// The topology checks that decide the result run with the lock held.
+func verifyPrepared(home, accountHome, guardPath string) error {
+	return verifyPreparedWith(home, accountHome, guardPath, hooks{})
+}
+
+// verifyPreparedWith is verifyPrepared with test hooks.
+func verifyPreparedWith(home, accountHome, guardPath string, test hooks) error {
+	files, err := owned(guardPath)
+	if err != nil {
+		return err
+	}
+	if home == "" || !filepath.IsAbs(home) || filepath.Clean(home) != home {
+		return errors.New("RIBBITTO_ARGON_HOME must be a clean absolute path of a dedicated directory")
+	}
+	shared, err := openShared(accountHome)
+	defer shared.close()
+	if err != nil {
+		return err
+	}
+	root, err := walk(home)
+	if err != nil {
+		return fmt.Errorf("opening RIBBITTO_ARGON_HOME %s without symlinks: %w", home, err)
+	}
+	defer closeFD(root)
+	if err := separate(root, shared); err != nil {
+		return err
+	}
+	// Even a read-only scan must wait out prepare's temporary-file window.
+	test.run(test.beforeLock)
+	lock, err := lockPrepare(root, home, false, test)
+	if err != nil {
+		return err
+	}
+	defer closeFD(lock)
+	fresh, err := openShared(accountHome)
+	defer fresh.close()
+	if err != nil {
+		return err
+	}
+	if err := separate(root, fresh); err != nil {
+		return err
+	}
+	gemini, dirs, err := openOwned(root)
+	defer closeAll(gemini, dirs)
+	if err != nil {
+		return err
+	}
+	if err := checkBeforeWrite(root, dirs, files); err != nil {
+		return err
+	}
+	checked := map[string]place{}
+	for _, name := range ownedDirs {
+		if dirs[name] < 0 {
+			return fmt.Errorf("refusing: .gemini/%s is missing", name)
+		}
+		p, err := identity(dirs[name])
+		if err != nil {
+			return err
+		}
+		checked[name] = p
+	}
+	if err := checkSharedFiles(accountHome, files, checked); err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := checkOwned(dirs[f.dir], f.name, f.content); err != nil {
+			return fmt.Errorf("refusing .gemini/%s/%s: %w", f.dir, f.name, err)
+		}
+	}
+	// Descriptors alone would keep reading a directory moved out of HOME.
+	again, matched, err := matchOwned(root, gemini, dirs)
+	defer closeAll(again, matched)
+	if err != nil {
+		return err
+	}
+	return sameHome(home, root)
+}
+
+// lockPrepare acquires the existing lock, creating it only when prepare asks.
+// The caller must close the returned descriptor to release it.
+func lockPrepare(root int, home string, create bool, test hooks) (int, error) {
+	// Outside .gemini so no customisation exception is needed. Never unlink
+	// it: waiters must keep locking the same inode, even after a killed run.
+	// Non-blocking open avoids hanging on a FIFO before its type is checked.
+	flags := unix.O_RDWR | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
+	var fd int
+	var err error
+	if create {
+		// Exclusive creation makes contenders open the winner's file instead of
+		// racing O_CREAT opens on a fresh HOME.
+		fd, err = unix.Openat(root, prepareLockName, flags|unix.O_CREAT|unix.O_EXCL, 0o600)
+		if errors.Is(err, unix.EEXIST) {
+			fd, err = unix.Openat(root, prepareLockName, flags, 0)
+		}
+	} else {
+		fd, err = unix.Openat(root, prepareLockName, flags, 0)
+		if errors.Is(err, unix.ENOENT) {
+			return -1, fmt.Errorf("refusing: lock file %s is missing; run prepare first", filepath.Join(home, prepareLockName))
+		}
+	}
+	if err != nil {
+		return -1, fmt.Errorf("opening prepare lock: %w", err)
+	}
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG {
+		closeFD(fd)
+		return -1, errors.Join(errors.New("refusing prepare lock: not a regular file"), err)
+	}
+	wait, poll := test.lockWait, test.lockPoll
+	if wait == 0 {
+		wait = 2 * time.Minute
+	}
+	if poll == 0 {
+		poll = 50 * time.Millisecond
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		if remaining := time.Until(deadline); remaining <= 0 {
+			closeFD(fd)
+			return -1, fmt.Errorf("refusing: another argonreview holds lock %s; wait for it or kill it", filepath.Join(home, prepareLockName))
+		}
+		err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			return fd, nil
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EINTR) {
+			closeFD(fd)
+			return -1, fmt.Errorf("locking prepare: %w", err)
+		}
+		// A stalled holder must not strand every review sharing this HOME.
+		time.Sleep(min(poll, max(0, time.Until(deadline))))
+	}
 }
 
 // sameHome refuses when the path no longer leads to the directory checked.
@@ -640,7 +793,7 @@ func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
 					owned = owned || f.dir == name && f.name == entry
 				}
 				if !owned {
-					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store)", name, entry)
+					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store); a temporary file may belong to a still-running launcher without the lock, so check no argonreview is running first", name, entry)
 				}
 			}
 		}

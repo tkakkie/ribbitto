@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -27,6 +26,7 @@ type review struct {
 	revision          string
 	home, shared, agy string
 	prepare           func() error
+	verifyHome        func() error
 	build             func() (*workspace, error)
 	sup               supervisor
 	// stop ends the catching of INT and TERM before the report is written;
@@ -48,16 +48,18 @@ func here(revision string, build func() (*workspace, error), probe bool, out io.
 	if err != nil {
 		return 1, fmt.Errorf("finding agy: %w", err)
 	}
-	account, err := user.Current()
+	accountHome, guardPath, err := preparePaths()
 	if err != nil {
-		return 1, fmt.Errorf("finding the account's home: %w", err)
+		return 1, err
 	}
+	home := os.Getenv("RIBBITTO_ARGON_HOME")
 	return review{
-		revision: revision, home: os.Getenv("RIBBITTO_ARGON_HOME"), shared: filepath.Join(account.HomeDir, sharedSettings), agy: agy,
-		prepare: func() error { _, err := prepareHere(); return err },
-		build:   build,
-		sup:     supervisor{limit, 5 * time.Second, nil, systemCleanup()},
-		probe:   probe,
+		revision: revision, home: home, shared: filepath.Join(accountHome, sharedSettings), agy: agy,
+		prepare:    func() error { _, err := prepare(home, accountHome, guardPath); return err },
+		verifyHome: func() error { return verifyPrepared(home, accountHome, guardPath) },
+		build:      build,
+		sup:        supervisor{limit, 5 * time.Second, nil, systemCleanup()},
+		probe:      probe,
 	}.runCatching(out)
 }
 
@@ -103,6 +105,9 @@ func (r review) runCatching(out io.Writer) (int, error) {
 // the verdict either way. The workspace is removed before anything is
 // written, so a closed stdout cannot skip it.
 func (r review) run(out io.Writer) (code int, err error) {
+	if r.verifyHome == nil {
+		return 1, errors.New("missing review HOME verifier")
+	}
 	if err := r.prepare(); err != nil {
 		return 1, err
 	}
@@ -126,6 +131,9 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if err != nil {
 		return 1, errors.Join(err, w.remove())
 	}
+	if err := r.verifyHome(); err != nil {
+		return 1, errors.Join(err, w.remove())
+	}
 	code, transcript, diagnostics, err := r.launch(w)
 	var response string
 	if err == nil {
@@ -139,6 +147,7 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if after, hashErr := hashFile(r.shared); hashErr != nil || after != before {
 		err = errors.Join(err, hashErr, errors.New("the shared Antigravity settings changed during the run"))
 	}
+	err = errors.Join(err, r.verifyHome())
 	if removeErr := w.remove(); removeErr != nil {
 		err = errors.Join(err, removeErr)
 	}

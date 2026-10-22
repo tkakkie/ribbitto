@@ -28,6 +28,29 @@ told it has.
 The agent's static bytes come from trusted code, never PR or issue input.
 Every review, issue review, Copilot check, probe and `check` starts with
 `prepare`, which rewrites and byte-compares all four files on every run.
+Reviews may run in parallel: `prepare` serialises every configuration scan
+and write on an exclusive lock at the dedicated HOME's `.argonreview.lock`.
+After about two minutes of waiting, `prepare` refuses and names the lock file.
+The lock file stays at rest, created empty by `prepare` on first use and left
+even when `prepare` refuses; the kernel releases the lock when the process exits.
+Each review also verifies read-only under the same lock that the dedicated
+HOME still holds exactly the four byte-checked files just before `agy` launches
+and after it exits; failure before launch starts no `agy`, and failure afterwards
+means the run does not count.
+Verification never creates the lock file and refuses when it is missing.
+It repeats the shared-configuration separation checks with the lock held.
+These pre-launch and post-run checks are point-in-time checks under the lock.
+The lock is not held across the run, which would serialise all reviews, so a
+concurrent `prepare` from a trusted launcher rewrites all four files with identical
+bytes, each through a `.argonreview-<pid>` temporary file in its directory, while
+`agy` runs. The post-run check still refuses
+any state other than exactly the four byte-checked files.
+Reviews sharing a HOME must use the same launcher build: `hooks.json` contains
+the guard path, so different builds write different bytes and refuse each other.
+A leftover `.argonreview-<pid>` refusal means a killed run's file only when
+every writer takes the lock: a launcher built before the lock was added,
+or another tool writing there, does not wait and may still be writing.
+Wait and retry before removing it, and check no argonreview is running first.
 
 The agent stays at rest. This is simpler and stricter: one mechanism,
 nothing to remove, and no per-run placement window. Every other entry in
@@ -50,12 +73,9 @@ as the other owned configuration.
   refusal (#1130).
 - A guard refusal ends the tool call, not the run, which can still count;
   the refusal stays in the transcript.
-- A process running as you can change the dedicated `HOME` between
-  `prepare` and launch; it could change your configuration anyway.
-- The review `HOME` is not rechecked after a run. The next `prepare`
-  byte-compares the owned files; an extra entry in `config/agents` makes
-  it refuse, while a changed `argon-reviewer.md` is rewritten. The host
-  probe should list `config/agents` after its run.
+- A process running as you can still change the dedicated `HOME` during
+  the run. The post-run check detects changes left there but cannot prevent
+  them or detect changes restored before the check.
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 

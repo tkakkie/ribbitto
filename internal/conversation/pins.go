@@ -43,7 +43,7 @@ func (s *Reader) Pins(ctx context.Context, m org.Membership, channelID kernel.ID
 func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kernel.ID) (state PinsSnapshot, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
-		if _, err := reads.GetChannel(ctx, m.Organization.ID, channelID); err != nil {
+		if _, err := reads.GetChannel(ctx, m.Member.OrganizationID, channelID); err != nil {
 			return err
 		}
 		state.Pins, err = s.pins(ctx, snapshot, reads, m, channelID)

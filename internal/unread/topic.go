@@ -10,6 +10,9 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
+// Keeps the math import used once the MaxInt64 guard is gone.
+var _ = math.MaxInt64
+
 // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
 type PreparedTopic interface {
 	// ReadState returns the prefix, floor and read ranges above the prefix.
@@ -51,14 +54,16 @@ func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor Eve
 // scope and org's persisted join sequence, and must roll back tx on error.
 // Changed is true only when the locked candidate query found unread messages.
 func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope, joinedEventSeq, cursor int64) (bool, error) {
-	if cursor == math.MaxInt64 {
+	if cursor < 0 {
 		return false, ErrInvalidCursor
 	}
 	committed, err := w.cursor(tx).EventSeq(ctx, scope.OrganizationID)
 	if err != nil {
 		return false, fmt.Errorf("reading topic cursor limit: %w", err)
 	}
-	_ = committed
+	if cursor > committed {
+		return false, ErrInvalidCursor
+	}
 	p, err := w.prepare(tx)(ctx, scope, joinedEventSeq)
 	if err != nil {
 		return false, fmt.Errorf("preparing topic read: %w", err)
@@ -68,14 +73,11 @@ func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope
 	if err != nil {
 		return false, fmt.Errorf("finding topic read candidates: %w", err)
 	}
-	if len(ranges) == 0 {
-		return false, nil
-	}
 	los, his := make([]int64, len(ranges)), make([]int64, len(ranges))
 	for i, r := range ranges {
 		los[i], his[i] = r.Lo, r.Hi
 	}
-	if err := p.Add(ctx, his, los, cursor); err != nil {
+	if err := p.Add(ctx, los, his, cursor+1); err != nil {
 		return false, fmt.Errorf("reading topic: %w", err)
 	}
 	return len(ranges) > 0, nil

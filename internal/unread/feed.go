@@ -11,6 +11,9 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
+// Keeps the math import used once the MaxInt64 guard is gone.
+var _ = math.MaxInt64
+
 // ErrInvalidCursor means the cursor is negative, unrepresentable or ahead of committed events.
 var ErrInvalidCursor = errors.New("invalid read cursor")
 
@@ -60,24 +63,27 @@ func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor Even
 // must roll back tx on error; Read never completes the transaction. It reports
 // whether an actual message became read under the member/channel lock.
 func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor int64) (bool, error) {
-	if cursor == math.MaxInt64 {
+	if cursor < 0 {
 		return false, ErrInvalidCursor
 	}
 	committed, err := f.cursor(tx).EventSeq(ctx, scope.OrganizationID)
 	if err != nil {
 		return false, fmt.Errorf("reading feed cursor limit: %w", err)
 	}
-	_ = committed
+	if cursor > committed {
+		return false, ErrInvalidCursor
+	}
 	next, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, cursor)
 	if err != nil {
 		return false, fmt.Errorf("finding next feed message: %w", err)
 	}
-	if next == 0 {
-		next = cursor
-	}
+	next = cursor + 1
 	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: 0, Hi: next})
 	if err != nil {
-		return false, fmt.Errorf("reading feed: %v", err)
+		return false, fmt.Errorf("reading feed: %w", err)
+	}
+	if len(covered) == 0 {
+		return false, nil
 	}
 	los, his := make([]int64, len(covered)), make([]int64, len(covered))
 	for i, r := range covered {

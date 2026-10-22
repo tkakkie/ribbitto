@@ -43,9 +43,21 @@ func readOracleKinds() []readOracleKind {
 	}
 }
 
+func readOracleKindIndex(t *testing.T, kinds []readOracleKind, name string) int {
+	t.Helper()
+	for i, kind := range kinds {
+		if kind.name == name {
+			return i
+		}
+	}
+	t.Fatalf("unknown read oracle kind %q", name)
+	return 0
+}
+
 type readOracleStep struct {
 	kind, member, channel, topic int
 	cursor                       int64
+	messageIndex                 *int
 }
 
 type readOracleFixture struct {
@@ -75,9 +87,12 @@ func newReadOracle(t *testing.T) readOracleFixture {
 	}
 	_, err := pool.Exec(t.Context(), "UPDATE organization SET event_seq=660,event_log_boundary_seq=660 WHERE id=$1", f.OrganizationID)
 	feedRequire(t, err)
-	m := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "m@example.org", "M"), org.RoleMember, "reader", 5)
+	// Sequence 2 is a default-topic message. M's first topic-a read adds
+	// [3,8), so only the join prefix can preserve the boundary message.
+	const mJoined int64 = 2
+	m := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "m@example.org", "M"), org.RoleMember, "reader", mJoined)
 	for i, id := range []kernel.ID{m, f.MemberID} {
-		joined := int64(5)
+		joined := mJoined
 		if i == 1 {
 			joined = 1
 		}
@@ -155,8 +170,8 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 		// Moves are confined to the channel with two topics. Pick an actual
 		// message, so repeated moves exercise both directions without conflicts.
 		message := before.messages[rng.Intn(len(before.messages))]
-		if step.cursor == -1 {
-			message = before.messages[2] // unread 8 moves after the scripted cursor.
+		if step.messageIndex != nil {
+			message = before.messages[*step.messageIndex]
 		}
 		target := h.topics[0][0]
 		if message.topic == target {
@@ -218,19 +233,64 @@ func TestReadOracle(t *testing.T) {
 			h := newReadOracle(t)
 			rng := rand.New(rand.NewSource(seed + int64(history)))
 			kinds := readOracleKinds()
-			// Guarantee the production mutation witnesses before randomized history:
-			// islands, a stale topic post, moves on both sides of S, newest feed,
-			// then a cursorless post separated from its predecessor by another channel.
-			steps := []readOracleStep{
-				{1, 0, 0, 1, 660}, {1, 1, 0, 0, 660},
-				{2, 1, 0, 1, 0}, {4, 0, 0, 1, 660},
-				{5, 1, 0, 0, -1}, {1, 0, 0, 1, 662}, {1, 0, 0, 1, 664},
-				{0, 0, 0, 0, 664}, {2, 1, 1, 0, 0}, {2, 0, 0, 0, 0},
-				{0, 0, 0, 0, 666}, {3, 1, 1, 0, 665},
+			kind := func(name string) int { return readOracleKindIndex(t, kinds, name) }
+			for _, violation := range h.check(t) {
+				t.Fatal("initial state: " + violation)
 			}
-			for kind := 6; kind < len(kinds); kind++ {
-				for _, cursor := range []int64{668, -1, math.MaxInt64} {
-					steps = append(steps, readOracleStep{kind, 0, 0, 1, cursor})
+			// Guarantee the production mutation witnesses before randomized history:
+			// join-boundary preservation, islands, stale topic posts across an
+			// intervening post and move, then topic reads on both sides of the move.
+			// B's feed cursor 665 must cover M's newest post, still unread for B.
+			// A later cursorless post is separated from its channel predecessor by
+			// only another channel's message.
+			movedMessage := 2 // Channel 0's third message has sequence 8.
+			steps := []readOracleStep{
+				{
+					kind: kind("topic"), member: 0, channel: 0, topic: 1, cursor: 660,
+				},
+				{
+					kind: kind("topic"), member: 1, channel: 0, topic: 0, cursor: 660,
+				},
+				{
+					kind: kind("post without cursor"), member: 1, channel: 0, topic: 1,
+				},
+				{
+					kind: kind("post from topic"), member: 0, channel: 0, topic: 1, cursor: 660,
+				},
+				{
+					kind: kind("move"), member: 1, channel: 0, topic: 0, messageIndex: &movedMessage,
+				},
+				{
+					kind: kind("post from topic"), member: 0, channel: 0, topic: 1, cursor: 662,
+				},
+				{
+					kind: kind("topic"), member: 0, channel: 0, topic: 1, cursor: 662,
+				},
+				{
+					kind: kind("topic"), member: 0, channel: 0, topic: 1, cursor: 664,
+				},
+				{
+					kind: kind("feed"), member: 1, channel: 0, topic: 0, cursor: 665,
+				},
+				{
+					kind: kind("post without cursor"), member: 1, channel: 1, topic: 0,
+				},
+				{
+					kind: kind("post without cursor"), member: 0, channel: 0, topic: 0,
+				},
+				{
+					kind: kind("feed"), member: 0, channel: 0, topic: 0, cursor: 667,
+				},
+				{
+					kind: kind("post from feed"), member: 1, channel: 1, topic: 0, cursor: 666,
+				},
+			}
+			for i, kind := range kinds {
+				if !kind.refused {
+					continue
+				}
+				for _, cursor := range []int64{669, -1, math.MaxInt64} {
+					steps = append(steps, readOracleStep{kind: i, member: 0, channel: 0, topic: 1, cursor: cursor})
 				}
 			}
 			isolated := readOracleRows(t, h.pool, &h.other, true)

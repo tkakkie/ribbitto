@@ -185,15 +185,16 @@ func readOracleCheckRows(before, after []string, name string) []string {
 func TestReadOracleCheckers(t *testing.T) {
 	for _, tc := range []struct {
 		name, ranges, violation string
-		floor                   bool
+		floor, modelRead        bool
 	}{
 		{name: "clean"},
-		{"first range", "(2,3)", "first range does not start at 0", false},
-		{"touching", "(0,3),(3,4)", "ranges overlap or touch", false},
-		{"overlapping", "(0,4),(3,5)", "ranges overlap or touch", false},
-		{"empty gap", "(0,7),(8,9)", "bounded gap has no unread channel message", false},
-		{"floor", "", "topic floor covers an unread message", true},
-		{"model", "(0,3)", "read set differs from model at 2: read=true", false},
+		{name: "first range", ranges: "(2,3)", violation: "first range does not start at 0"},
+		{name: "touching", ranges: "(0,3),(3,4)", violation: "ranges overlap or touch"},
+		{name: "overlapping", ranges: "(0,4),(3,5)", violation: "ranges overlap or touch"},
+		{name: "empty gap", ranges: "(0,7),(8,9)", violation: "bounded gap has no unread channel message"},
+		{name: "floor", floor: true, violation: "topic floor covers an unread message"},
+		{name: "model", ranges: "(0,3)", violation: "read set differs from model at 2: read=true"},
+		{name: "model read database unread", modelRead: true, violation: "read set differs from model at 2: read=false"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pool, scope := feedFixture(t)
@@ -213,6 +214,9 @@ func TestReadOracleCheckers(t *testing.T) {
 				feedRequire(t, err)
 			}
 			model := make(map[int64]bool)
+			if tc.modelRead {
+				model[2] = true
+			}
 			state := readOracleLoad(t, pool, scope)
 			violations := readOracleCheckState(state, 1, model)
 			if tc.violation == "" {
@@ -239,7 +243,7 @@ func TestReadOracleCheckers(t *testing.T) {
 
 	// Isolate each comparison: a broken count must not hide a missing first
 	// unread check, nor may a topic comparison stand in for a channel comparison.
-	for _, field := range []string{"clean", "channel count", "topic count", "feed first unread", "topic first unread"} {
+	for _, field := range []string{"clean counts", "channel count", "topic count", "feed first unread", "topic first unread"} {
 		t.Run(field, func(t *testing.T) {
 			pool, scope := feedFixture(t)
 			var topic kernel.ID
@@ -259,7 +263,7 @@ func TestReadOracleCheckers(t *testing.T) {
 			}
 			states := map[kernel.ID]readOracleState{scope.ChannelID: readOracleLoad(t, pool, scope)}
 			violations := readOracleCheckCounts(page.PageCounts, states, scope.ChannelID, []kernel.ID{topic}, &topic, 1)
-			if field == "clean" {
+			if field == "clean counts" {
 				if len(violations) != 0 {
 					t.Fatalf("clean counts: %v", violations)
 				}

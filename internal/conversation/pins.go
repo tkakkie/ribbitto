@@ -107,7 +107,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	}
 	pins := make([]Pin, len(pinned))
 	for i, p := range pinned {
-		author, pinner, topic := members[p.MemberID], members[p.PinnedByMemberID], topics[p.TopicID]
+		author, pinner, topic := members[p.PinnedByMemberID], members[p.MemberID], topics[p.TopicID]
 		authorName, named := names[author.AccountID]
 		pinnerName, pinnerNamed := names[pinner.AccountID]
 		if !named || !pinnerNamed || topic.ID != p.TopicID {

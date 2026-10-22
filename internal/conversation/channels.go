@@ -54,6 +54,9 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 	if err != nil {
 		return Channel{}, fmt.Errorf("%w: %w", ErrInvalidChannelName, err)
 	}
+	if err := ValidateChannelImage(image); err != nil {
+		return Channel{}, err
+	}
 	var created Channel
 	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
 		writer := s.creator(tx)
@@ -98,8 +101,11 @@ func (s *Channels) Default(ctx context.Context, m org.Membership) (Channel, erro
 // SetImage changes a channel's illustration within the resolved membership's organisation.
 // It writes no event: other members see the image on their next page load.
 func (s *Channels) SetImage(ctx context.Context, m org.Membership, id kernel.ID, image string) error {
-	_ = s.runner.InTx(ctx, func(platform.Tx) error {
-		return s.store.SetChannelImage(ctx, m.Organization.ID, id, image)
-	})
+	if err := ValidateChannelImage(image); err != nil {
+		return err
+	}
+	if err := s.store.SetChannelImage(ctx, m.Organization.ID, id, image); err != nil {
+		return fmt.Errorf("changing channel image: %w", err)
+	}
 	return nil
 }

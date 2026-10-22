@@ -54,7 +54,7 @@ func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kerne
 		return err
 	})
 	if err != nil {
-		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %w", err)
+		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %v", err)
 	}
 	return state, nil
 }

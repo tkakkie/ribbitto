@@ -57,8 +57,14 @@ func TestChannelImage(t *testing.T) {
 	acme, globex := kernel.ID{1}, kernel.ID{2}
 	general := conversation.Channel{ID: kernel.ID{3}, OrganizationID: acme, Name: "general", Image: "lake", IsDefault: true}
 	secret := conversation.Channel{ID: kernel.ID{4}, OrganizationID: globex, Name: "secret", Image: "hills", IsDefault: true}
+	// Member.OrganizationID carries the other organisation's ID as a decoy so
+	// reading it instead of Organization.ID would cross the organisation boundary.
 	member := func(orgID kernel.ID) org.Membership {
-		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{9}, OrganizationID: orgID}}
+		decoy := acme
+		if orgID == acme {
+			decoy = globex
+		}
+		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{9}, OrganizationID: decoy}}
 	}
 	newChannelImageService := func(t *testing.T) (*conversation.Channels, *channelImageStore, *postingFake) {
 		s := &channelImageStore{channelStore: channelStore{channels: map[kernel.ID][]conversation.Channel{acme: {general}, globex: {secret}}}}

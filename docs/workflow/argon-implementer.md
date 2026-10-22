@@ -63,7 +63,7 @@ configuration rather than the prompt.
   closed, a time limit, `--print-timeout`, `--sandbox` and the model the
   maintainer picks (`gemini-4-argon-high` unless he says otherwise). Never
   `--dangerously-skip-permissions`. `agy` runs in its own session under a
-  supervisor like the review launcher's (`cmd/argonreview/supervise.go`),
+  Go supervisor (`cmd/argonreview/supervise.go`),
   which stops every session process after the run and confirms none remains.
   `agy` starts from an empty environment except `PATH`,
   `HOME` and a fresh `TMPDIR` beside the worktree, removed after the run:
@@ -116,8 +116,8 @@ configuration rather than the prompt.
   Failure or silence denies. Check path components without following
   symlinks; refuse symlinks, outside paths and all file calls if the tree
   holds a symlink. Guard/configuration stay outside the
-  worktree, where Argon cannot write. The Go [guard](argon-verify.md#control-code-in-go)
-  runs in production; the zsh scripts stay until Stage 2.
+  worktree, where Argon cannot write. The Go guard, checks and run command
+  [run in production](argon-implement-switch.md).
 - **No workspace hooks or customisation.** Hooks run commands outside the
   sandbox ([running Argon](running-argon.md#the-boundary)). Before each run, fixes
   included, Claude refuses symlinks, nested `.git` (even in `.github`),

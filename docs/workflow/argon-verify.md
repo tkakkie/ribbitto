@@ -10,7 +10,7 @@ Generated files stay CI-only; verify generation needs a `process` issue.
 ## Status
 
 The `verify` permission is **in force since 2026-10-21**. Production uses
-zsh until [#1436] Stage 2. The maintainer approved enabling in
+Go since 2026-10-22 (Stage 2). The maintainer approved enabling in
 chat after reading [#1433]'s record. Evidence: [step 1][step1],
 [preflight][preflight], [enabling and smoke test][smoke].
 The Start gate and review independence stay. Only during a run, feature-on
@@ -180,18 +180,18 @@ Use Go in `cmd/argonreview`, built from the trusted revision: guard
 (`implement-guard`, [#1431]), checks (`implement-check`,
 [#1434](https://github.com/tkakkie/ribbitto/issues/1434)), verify server
 (`verify-mcp`), container check (`container-check`), sweep (`container-sweep`)
-and `implement-config`. `implement-run` is pending
+and `implement-config`. Production also uses `implement-run`
 ([#1435](https://github.com/tkakkie/ribbitto/issues/1435),
 [#1483](https://github.com/tkakkie/ribbitto/issues/1483)).
 
 Production hooks use the Go `implement-guard` ([#1436] Stage 1, done
-2026-10-20); the Python guard is reference only. The zsh scripts stay until the
-checks and run command are compared and verified, with rollback.
+2026-10-20); the Python guard is reference only. [Stage 2](argon-implement-switch.md)
+switched checks and the run command to Go on 2026-10-22, with comparison
+and a rollback drill recorded. The zsh scripts are now thin wrappers.
 Each stage keeps the full preflight and no weaker boundary; a failed
 comparison, preflight or restoration stops the next real run. Unverified
-code never runs on the host. After the switches the scripts are reference
-only. #1436 Stage 2 is independent of the enabling decision but must reproduce
-on-mode operation before scripts retire: the `verify-mode` switch,
+code never runs on the host. Stage 2 is independent of the enabling
+decision; operation must preserve the `verify-mode` switch,
 pinned generated settings and hook hashes and pinned trusted source,
 the post-run check before restore, and feature-off files at rest.
 

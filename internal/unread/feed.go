@@ -77,7 +77,9 @@ func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, join
 	if err != nil {
 		return false, fmt.Errorf("finding next feed message: %w", err)
 	}
-	next = cursor + 1
+	if next == 0 {
+		next = cursor + 1
+	}
 	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: 0, Hi: next})
 	if err != nil {
 		return false, fmt.Errorf("reading feed: %w", err)

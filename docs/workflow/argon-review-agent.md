@@ -38,10 +38,12 @@ HOME still holds exactly the four byte-checked files just before `agy` launches
 and after it exits; failure before launch starts no `agy`, and failure afterwards
 means the run does not count.
 Verification never creates the lock file and refuses when it is missing.
+It repeats the shared-configuration separation checks with the lock held.
 These pre-launch and post-run checks are point-in-time checks under the lock.
 The lock is not held across the run, which would serialise all reviews, so a
-concurrent `prepare` from a trusted launcher may write identical agent bytes
-through its temporary file while `agy` runs. The post-run check still refuses
+concurrent `prepare` from a trusted launcher rewrites all four files with identical
+bytes, each through a `.argonreview-<pid>` temporary file in its directory, while
+`agy` runs. The post-run check still refuses
 any state other than exactly the four byte-checked files.
 Reviews sharing a HOME must use the same launcher build: `hooks.json` contains
 the guard path, so different builds write different bytes and refuse each other.

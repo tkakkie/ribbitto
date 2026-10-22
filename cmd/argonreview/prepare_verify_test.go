@@ -91,6 +91,85 @@ func TestVerifyPreparedMissingLock(t *testing.T) {
 	unchanged()
 }
 
+func TestVerifyPreparedSharedSwap(t *testing.T) {
+	for _, target := range []struct {
+		name, path string
+	}{
+		{"no swap", ""},
+		{"HOME gemini", ".gemini"},
+		{"HOME itself", "."},
+	} {
+		for _, awaited := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/awaited=%t", target.name, awaited), func(t *testing.T) {
+				account, _ := fixture(t)
+				home := resolved(t, t.TempDir())
+				if _, err := prepare(home, account, guardBinary); err != nil {
+					t.Fatal(err)
+				}
+				shared := filepath.Join(account, ".gemini")
+				swap := func() error {
+					if target.path == "" {
+						return nil
+					}
+					if err := os.Rename(shared, shared+".old"); err != nil {
+						return err
+					}
+					return os.Symlink(filepath.Join(home, target.path), shared)
+				}
+				test := hooks{lockWait: 5 * time.Second, lockPoll: time.Millisecond}
+				done := make(chan error, 1)
+				if awaited {
+					fd, err := unix.Open(filepath.Join(home, prepareLockName), unix.O_RDWR|unix.O_CLOEXEC, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer closeFD(fd)
+					if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+						t.Fatal(err)
+					}
+					ready := make(chan struct{})
+					test.beforeLock = func() { close(ready) }
+					go func() {
+						<-ready
+						err := swap()
+						unlockErr := unix.Flock(fd, unix.LOCK_UN)
+						if err == nil {
+							err = unlockErr
+						}
+						done <- err
+					}()
+				} else {
+					test.beforeLock = func() {
+						if target.path != "" {
+							if err := os.Rename(shared, shared+".old"); err != nil {
+								t.Fatal(err)
+							}
+							symlink(t, filepath.Join(home, target.path), shared)
+						}
+					}
+				}
+				before := snapshot(t, home)
+				err := verifyPreparedWith(home, account, guardBinary, test)
+				if awaited {
+					if err := <-done; err != nil {
+						t.Fatal(err)
+					}
+				}
+				if target.path == "" {
+					if err != nil {
+						t.Errorf("verification without swap = %v", err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "overlaps") {
+					t.Errorf("verification after shared swap = %v; want overlaps refusal", err)
+				}
+				if !reflect.DeepEqual(before, snapshot(t, home)) {
+					t.Error("verification changed HOME")
+				}
+			})
+		}
+	}
+}
+
 func TestVerifyPreparedLock(t *testing.T) {
 	for _, timeout := range []bool{false, true} {
 		t.Run(fmt.Sprintf("timeout=%t", timeout), func(t *testing.T) {

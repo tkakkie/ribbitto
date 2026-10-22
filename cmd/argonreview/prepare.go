@@ -297,6 +297,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 // exactly what prepare left, for a review to call just before launching agy
 // and after it exits. It acquires the existing lock without creating it, so
 // it never sees another prepare's temporary file, and releases it on return.
+// The topology checks that decide the result run with the lock held.
 func verifyPrepared(home, accountHome, guardPath string) error {
 	return verifyPreparedWith(home, accountHome, guardPath, hooks{})
 }
@@ -330,6 +331,14 @@ func verifyPreparedWith(home, accountHome, guardPath string, test hooks) error {
 		return err
 	}
 	defer closeFD(lock)
+	fresh, err := openShared(accountHome)
+	defer fresh.close()
+	if err != nil {
+		return err
+	}
+	if err := separate(root, fresh); err != nil {
+		return err
+	}
 	gemini, dirs, err := openOwned(root)
 	defer closeAll(gemini, dirs)
 	if err != nil {

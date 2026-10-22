@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -49,7 +50,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: id, MemberID: m.Member.ID}
+	scope := readScope(r.PostForm, m, id)
 	if p.topicID != nil {
 		err = p.reading.Topic(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor)
 	} else {
@@ -67,4 +68,15 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, id, p.topicID), http.StatusSeeOther)
 	}
+}
+
+// readScope returns the scope a read request advances. The channel page repeats
+// the organisation it was rendered for in its read form, and that wins over the
+// session's when the two differ, so a stale tab advances the state it shows.
+func readScope(form url.Values, m org.Membership, channel kernel.ID) unread.Scope {
+	organization := m.Organization.ID
+	if posted, ok := pathID(form.Get("organization")); ok {
+		organization = posted
+	}
+	return unread.Scope{OrganizationID: organization, ChannelID: channel, MemberID: m.Member.ID}
 }

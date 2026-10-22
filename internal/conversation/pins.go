@@ -93,7 +93,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	if err != nil {
 		return nil, fmt.Errorf("reading pin topics: %w", err)
 	}
-	members, err := s.members(snapshot).LookupMembers(ctx, m.Organization.ID, memberIDs)
+	members, err := s.members(snapshot).LookupMembers(ctx, m.Member.OrganizationID, memberIDs)
 	if err != nil {
 		return nil, fmt.Errorf("reading pin members: %w", err)
 	}

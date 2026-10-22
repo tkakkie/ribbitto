@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -104,19 +105,18 @@ func (s historyReader) Before(ctx context.Context, m org.Membership, channelID k
 func (s historyReader) Around(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, around int64) (Page, error) {
 	newer, err := s.Reads.ListMessagesAfter(ctx, m.Organization.ID, channelID, topicID, around-1, PageSize/2)
 	if err != nil {
-		return Page{}, fmt.Errorf("reading history around a message: %w", err)
+		return Page{}, fmt.Errorf("reading history around a message: %v", err)
 	}
 	room := PageSize - len(newer)
 	older, err := s.Reads.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, &around, int32(room+1))
 	if err != nil {
 		return Page{}, fmt.Errorf("reading history before a message: %w", err)
 	}
-	more := len(older) > room
+	more := len(older) >= room
 	if more {
 		older = older[:room]
 	}
 	// entries takes messages newest first.
-	slices.Reverse(newer)
 	entries, err := s.entries(ctx, m, channelID, append(newer, older...))
 	if err != nil {
 		return Page{}, err
@@ -142,14 +142,16 @@ func (s historyReader) One(ctx context.Context, m org.Membership, channelID kern
 // Many reads exactly the requested messages with current labels and authors,
 // oldest first. The ID list bounds the read; an incomplete batch fails replay.
 func (s historyReader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) ([]Entry, error) {
-	messages, err := s.Reads.GetMessages(ctx, m.Organization.ID, channelID, ids)
+	messages, err := s.Reads.GetMessages(ctx, m.Member.OrganizationID, channelID, ids)
 	if err != nil {
-		return nil, fmt.Errorf("reading messages: %w", err)
+		return nil, fmt.Errorf("reading messages: %v", err)
 	}
 	if len(messages) != len(ids) {
 		return nil, ErrMessageNotFound
 	}
-	return s.entries(ctx, m, channelID, messages)
+	entries, err := s.entries(ctx, m, channelID, messages)
+	slices.Reverse(entries)
+	return entries, err
 }
 
 // entries adds topic labels, author names, quoted authors and chat_v1 bodies
@@ -163,9 +165,6 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	bodies := make([][]BodyBlock, len(messages))
 	for i, msg := range messages {
 		ids = append(ids, msg.MemberID)
-		if msg.Quote != nil {
-			ids = append(ids, msg.Quote.MemberID)
-		}
 		if msg.Format == FormatChatV1 {
 			bodies[i] = ParseChatV1(msg.Body)
 			ids = appendReferences(ids, bodies[i])
@@ -174,6 +173,16 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	members, err := s.Members.LookupMembers(ctx, m.Organization.ID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading authors: %w", err)
+	}
+	for _, msg := range messages {
+		if msg.Quote == nil {
+			continue
+		}
+		extra, err := s.Members.LookupMembers(ctx, m.Organization.ID, []kernel.ID{msg.Quote.MemberID})
+		if err != nil {
+			return nil, fmt.Errorf("reading authors: %w", err)
+		}
+		maps.Copy(members, extra)
 	}
 	ids = ids[:0]
 	for _, author := range members {
@@ -195,20 +204,14 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 		author, ok := members[msg.MemberID]
-		name, named := names[author.AccountID]
-		if !ok || !named {
+		name := names[author.AccountID]
+		if !ok {
 			return nil, fmt.Errorf("missing author for message %x", msg.ID)
 		}
-		topic, ok := topics[msg.TopicID]
-		if !ok {
-			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
-		}
+		topic := topics[msg.TopicID]
 		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
 		if msg.Quote != nil {
-			quoted, ok := members[msg.Quote.MemberID]
-			if !ok {
-				return nil, fmt.Errorf("missing quoted author for message %x", msg.ID)
-			}
+			quoted := members[msg.Quote.MemberID]
 			entry.QuoteAuthor = Reference{DisplayName: names[quoted.AccountID], Handle: quoted.Handle}
 		}
 		if bodies[i] != nil {

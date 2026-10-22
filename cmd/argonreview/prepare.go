@@ -154,7 +154,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	// could see another prepare's temporary agent file. Closing releases it on all
 	// returns; O_CLOEXEC keeps a launched process from holding it afterwards.
 	test.run(test.beforeLock)
-	lock, err := lockPrepare(root, home, test)
+	lock, err := lockPrepare(root, home, true, test)
 	if err != nil {
 		return "", err
 	}
@@ -295,8 +295,8 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 
 // verifyPrepared checks, without writing anything, that HOME still holds
 // exactly what prepare left, for a review to call just before launching agy
-// and after it exits. It takes prepare's lock, so it never sees another
-// prepare's temporary file, and releases it before returning.
+// and after it exits. It acquires the existing lock without creating it, so
+// it never sees another prepare's temporary file, and releases it on return.
 func verifyPrepared(home, accountHome, guardPath string) error {
 	return verifyPreparedWith(home, accountHome, guardPath, hooks{})
 }
@@ -325,7 +325,7 @@ func verifyPreparedWith(home, accountHome, guardPath string, test hooks) error {
 	}
 	// Even a read-only scan must wait out prepare's temporary-file window.
 	test.run(test.beforeLock)
-	lock, err := lockPrepare(root, home, test)
+	lock, err := lockPrepare(root, home, false, test)
 	if err != nil {
 		return err
 	}
@@ -366,16 +366,27 @@ func verifyPreparedWith(home, accountHome, guardPath string, test hooks) error {
 	return sameHome(home, root)
 }
 
-func lockPrepare(root int, home string, test hooks) (int, error) {
+// lockPrepare acquires the existing lock, creating it only when prepare asks.
+// The caller must close the returned descriptor to release it.
+func lockPrepare(root int, home string, create bool, test hooks) (int, error) {
 	// Outside .gemini so no customisation exception is needed. Never unlink
 	// it: waiters must keep locking the same inode, even after a killed run.
 	// Non-blocking open avoids hanging on a FIFO before its type is checked.
 	flags := unix.O_RDWR | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
-	// Exclusive creation makes contenders open the winner's file instead of
-	// racing O_CREAT opens on a fresh HOME.
-	fd, err := unix.Openat(root, prepareLockName, flags|unix.O_CREAT|unix.O_EXCL, 0o600)
-	if errors.Is(err, unix.EEXIST) {
+	var fd int
+	var err error
+	if create {
+		// Exclusive creation makes contenders open the winner's file instead of
+		// racing O_CREAT opens on a fresh HOME.
+		fd, err = unix.Openat(root, prepareLockName, flags|unix.O_CREAT|unix.O_EXCL, 0o600)
+		if errors.Is(err, unix.EEXIST) {
+			fd, err = unix.Openat(root, prepareLockName, flags, 0)
+		}
+	} else {
 		fd, err = unix.Openat(root, prepareLockName, flags, 0)
+		if errors.Is(err, unix.ENOENT) {
+			return -1, fmt.Errorf("refusing: lock file %s is missing; run prepare first", filepath.Join(home, prepareLockName))
+		}
 	}
 	if err != nil {
 		return -1, fmt.Errorf("opening prepare lock: %w", err)
@@ -396,7 +407,7 @@ func lockPrepare(root int, home string, test hooks) (int, error) {
 	for {
 		if remaining := time.Until(deadline); remaining <= 0 {
 			closeFD(fd)
-			return -1, fmt.Errorf("refusing prepare: another argonreview prepare holds lock %s; wait for it or kill it", filepath.Join(home, prepareLockName))
+			return -1, fmt.Errorf("refusing: another argonreview holds lock %s; wait for it or kill it", filepath.Join(home, prepareLockName))
 		}
 		err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
 		if err == nil {

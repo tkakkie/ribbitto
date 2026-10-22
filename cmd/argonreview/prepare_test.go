@@ -139,6 +139,16 @@ func TestPrepare(t *testing.T) {
 	if _, err := prepare(fresh, account, guardBinary); err != nil {
 		t.Fatal(err)
 	}
+	info, err := os.Lstat(filepath.Join(fresh, prepareLockName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() {
+		t.Fatal("fresh HOME lock is not a regular file")
+	}
+	if info.Size() != 0 {
+		t.Fatal("fresh HOME lock is not empty")
+	}
 	unchanged()
 }
 
@@ -261,7 +271,7 @@ func TestPrepareLockTimeout(t *testing.T) {
 				beforeWrite: func() { writing = true },
 			})
 			elapsed := time.Since(start)
-			if got != "" || err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "another argonreview prepare holds") || !strings.Contains(err.Error(), "wait for it or kill it") {
+			if got != "" || err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "another argonreview holds") || !strings.Contains(err.Error(), "wait for it or kill it") {
 				t.Fatalf("prepare = %q, %v; want lock holder refusal naming %s", got, err, path)
 			}
 			if elapsed < wait || elapsed > 10*time.Second {

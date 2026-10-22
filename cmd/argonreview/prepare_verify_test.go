@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,37 @@ func TestVerifyPrepared(t *testing.T) {
 	}
 }
 
+func TestVerifyPreparedMissingLock(t *testing.T) {
+	account, unchanged := fixture(t)
+	home := resolved(t, t.TempDir())
+	if _, err := prepare(home, account, guardBinary); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, prepareLockName)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, home)
+	err := verifyPrepared(home, account, guardBinary)
+	if err == nil {
+		t.Error("verification accepted a missing lock")
+	} else {
+		if !strings.Contains(err.Error(), path) {
+			t.Errorf("refusal does not name lock path %s: %v", path, err)
+		}
+		if !strings.Contains(err.Error(), "missing") {
+			t.Errorf("refusal does not explain missing lock: %v", err)
+		}
+	}
+	if !reflect.DeepEqual(before, snapshot(t, home)) {
+		t.Error("verification changed HOME")
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Errorf("lock file exists after verification or cannot be checked: %v", err)
+	}
+	unchanged()
+}
+
 func TestVerifyPreparedLock(t *testing.T) {
 	for _, timeout := range []bool{false, true} {
 		t.Run(fmt.Sprintf("timeout=%t", timeout), func(t *testing.T) {
@@ -92,7 +124,7 @@ func TestVerifyPreparedLock(t *testing.T) {
 				t.Fatal(err)
 			}
 			if timeout {
-				want := fmt.Sprintf("refusing prepare: another argonreview prepare holds lock %s; wait for it or kill it", path)
+				want := fmt.Sprintf("refusing: another argonreview holds lock %s; wait for it or kill it", path)
 				if err == nil || err.Error() != want || elapsed < wait || elapsed > 2*time.Second {
 					t.Fatalf("verify = %v after %s; want %s", err, elapsed, want)
 				}

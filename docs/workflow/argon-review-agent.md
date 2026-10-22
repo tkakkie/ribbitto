@@ -31,12 +31,20 @@ Every review, issue review, Copilot check, probe and `check` starts with
 Reviews may run in parallel: `prepare` serialises every configuration scan
 and write on an exclusive lock at the dedicated HOME's `.argonreview.lock`.
 After about two minutes of waiting, `prepare` refuses and names the lock file.
-The lock file stays at rest, created empty on first use and left even when
-`prepare` refuses; the kernel releases the lock when the process exits.
+The lock file stays at rest, created empty by `prepare` on first use and left
+even when `prepare` refuses; the kernel releases the lock when the process exits.
 Each review also verifies read-only under the same lock that the dedicated
 HOME still holds exactly the four byte-checked files just before `agy` launches
 and after it exits; failure before launch starts no `agy`, and failure afterwards
 means the run does not count.
+Verification never creates the lock file and refuses when it is missing.
+These pre-launch and post-run checks are point-in-time checks under the lock.
+The lock is not held across the run, which would serialise all reviews, so a
+concurrent `prepare` from a trusted launcher may write identical agent bytes
+through its temporary file while `agy` runs. The post-run check still refuses
+any state other than exactly the four byte-checked files.
+Reviews sharing a HOME must use the same launcher build: `hooks.json` contains
+the guard path, so different builds write different bytes and refuse each other.
 A leftover `.argonreview-<pid>` refusal means a killed run's file only when
 every writer takes the lock: a launcher built before the lock was added,
 or another tool writing there, does not wait and may still be writing.

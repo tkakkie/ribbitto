@@ -191,7 +191,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 				if err != nil {
 					return err
 				}
-				if !intervening {
+				if !intervening || intervening {
 					floor = seq
 				}
 			}

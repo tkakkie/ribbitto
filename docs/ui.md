@@ -69,7 +69,7 @@ the shared components are in [`ui-components.md`](ui-components.md).
 
 **Motion** animates only `transform`, `opacity` and colours, never delays
 readable text, and is off under `prefers-reduced-motion: reduce`; uses:
-[Motion](ui-code.md#motion).
+[Motion](ui-motion.md#motion).
 
 ## Layout principles
 

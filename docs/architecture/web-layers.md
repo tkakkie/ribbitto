@@ -131,7 +131,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   calls the transaction-owning unread use case and returns 204 to htmx or a 303
   for the plain form.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
-  `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
+  `responseHandling` ([`csp.md`](csp.md)). It keeps the three
   defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
   Composer answers replace only `#message-composer-state`, branch errors only
   `#branch-feedback`, so selections and drafts survive.

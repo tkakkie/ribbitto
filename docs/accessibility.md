@@ -68,7 +68,7 @@ fail until covered by a rendered case.
 - **Scripts.** ✓ No inline handlers (`on*` attributes); application-written
   JavaScript is external, in `web/static`, and defines no globals. Vendored
   libraries (htmx, idiomorph) keep theirs. The nonce and external-script
-  rules are in [`architecture/rendering.md`](architecture/rendering.md).
+  rules are in [`architecture/csp.md`](architecture/csp.md).
 - **Icons are decorative.** The shared `Icon` component hides its SVG from
   assistive technology and keyboard focus; icon-only buttons need `aria-label`.
 - **Assets exist.** ✓ Every `/static/` script, stylesheet, icon link, image

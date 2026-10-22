@@ -86,7 +86,6 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 		topicIDs[i], memberIDs = p.TopicID, append(memberIDs, p.MemberID, p.PinnedByMemberID)
 		if p.Format == FormatChatV1 {
 			bodies[i] = ParseChatV1(p.Body)
-			memberIDs = appendReferences(memberIDs, bodies[i])
 		}
 	}
 	topics, err := reads.LookupTopics(ctx, m.Organization.ID, channelID, topicIDs)

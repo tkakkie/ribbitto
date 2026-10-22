@@ -45,6 +45,9 @@ func (m MessageSequences) HasMessages(ctx context.Context, organizationID, chann
 	}
 	lowest, highest := los[0], his[0]
 	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(los))
+	// Scan all inputs so bounds do not depend on their order or MergeCovered's
+	// output order. They only narrow the index range; multirange containment
+	// still decides membership.
 	for i, lo := range los {
 		lowest = min(lowest, lo)
 		highest = max(highest, his[i])

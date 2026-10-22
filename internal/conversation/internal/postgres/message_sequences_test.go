@@ -118,6 +118,9 @@ func hasMessagesPool(t *testing.T, pool *pgxpool.Pool) (*pgxpool.Pool, *hasMessa
 	return traced, trace
 }
 
+// TestHasMessagesPlan structurally checks both sequence bounds in the channel
+// index scan's Index Cond with sequential scans disabled. It makes no latency
+// or planner-preference claim.
 func TestHasMessagesPlan(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
@@ -146,6 +149,8 @@ func TestHasMessagesPlan(t *testing.T) {
 	conn, err := pgx.ConnectConfig(t.Context(), pool.Config().ConnConfig)
 	requireNoError(t, err)
 	defer func() { requireNoError(t, conn.Close(t.Context())) }()
+	// At this table size the planner prefers a sequential scan. Disabling it
+	// checks that the bounded channel index scan is usable, not preferred.
 	_, err = conn.Exec(t.Context(), "SET enable_seqscan = off")
 	requireNoError(t, err)
 	_, err = conn.Prepare(t.Context(), "has_messages", trace.sql)
@@ -176,7 +181,7 @@ func TestHasMessagesPlan(t *testing.T) {
 				}
 			}
 			if !indexScan || !bounded || strings.Contains(plan, "Seq Scan on message") {
-				t.Fatalf("probe must use the channel index with both sequence bounds:\n%s", plan)
+				t.Fatalf("structural check with enable_seqscan=off: channel index scan must have both sequence bounds in Index Cond (no latency or planner-preference claim):\n%s", plan)
 			}
 		})
 	}
@@ -191,15 +196,30 @@ func TestHasMessagesOracle(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "oracle", "general")
 	other := conversationtest.OrganizationWithOwner(t, pool, "decoy", "general")
 	sibling := conversationtest.Channel(t, pool, f.OrganizationID, "sibling", false)
-	// Keep channel IDs equal for the organisation decoys, as in the scope test.
+	// Relax these composite FKs only in this disposable database:
+	// message_organization_id_channel_id_fkey requires a channel in the message's
+	// organisation, but the foreign-organisation decoy reuses f.Channel.ID,
+	// which belongs only to f.OrganizationID. message_topic_fkey requires the
+	// topic to belong to the message's organisation and channel, but the sibling
+	// decoy reuses f.Channel's default topic (also reused by the foreign decoy).
+	// This lets decoys differ only in organization_id or channel_id among the
+	// probe's scope fields, keeping topic_id equal; the foreign decoy still needs
+	// its own organisation's member to satisfy the member FK.
 	_, err := pool.Exec(t.Context(), "ALTER TABLE message DROP CONSTRAINT message_organization_id_channel_id_fkey, DROP CONSTRAINT message_topic_fkey")
 	requireNoError(t, err)
+	// InTx uses pgx.BeginFunc without overriding isolation. This relies on
+	// PostgreSQL's default READ COMMITTED: each probe in the outer transaction
+	// gets a new snapshot of the iteration's DELETE and INSERT, which run on
+	// separate pool connections and commit before the probe. Under REPEATABLE
+	// READ the probe would keep the first snapshot instead of seeing fresh data.
 	requireNoError(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 		bounds := postgres.MessageSequencesIn(tx)
 		for n := range 500 {
 			_, err := pool.Exec(t.Context(), "DELETE FROM message")
 			requireNoError(t, err)
 			var messages []int64
+			var values []string
+			var args []any
 			for seq := int64(1); seq <= 60; seq++ {
 				orgID, channelID, memberID := f.OrganizationID, f.Channel.ID, f.MemberID
 				switch rng.IntN(4) {
@@ -212,8 +232,13 @@ func TestHasMessagesOracle(t *testing.T) {
 				case 3:
 					continue
 				}
+				p := len(args)
+				values = append(values, fmt.Sprintf("($%d,$%d,$%d,$%d,'oracle',$%d)", p+1, p+2, p+3, p+4, p+5))
+				args = append(args, orgID, channelID, f.Channel.DefaultTopicID, memberID, seq)
+			}
+			if len(values) > 0 {
 				_, err := pool.Exec(t.Context(), `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq)
- VALUES ($1,$2,$3,$4,'oracle',$5)`, orgID, channelID, f.Channel.DefaultTopicID, memberID, seq)
+ VALUES `+strings.Join(values, ","), args...)
 				requireNoError(t, err)
 			}
 			var intervals []conversation.SequenceRange

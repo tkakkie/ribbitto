@@ -77,7 +77,7 @@ func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope
 	for i, r := range ranges {
 		los[i], his[i] = r.Lo, r.Hi
 	}
-	if err := p.Add(ctx, los, his, cursor+1); err != nil {
+	if err := p.Add(ctx, los, his, cursor); err != nil {
 		return false, fmt.Errorf("reading topic: %w", err)
 	}
 	return len(ranges) > 0, nil

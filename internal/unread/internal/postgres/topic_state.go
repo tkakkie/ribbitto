@@ -46,7 +46,7 @@ func (r topicStateReader) Read(ctx context.Context, scope unread.Scope, joined i
 	if err != nil {
 		return unread.TopicReadState{}, fmt.Errorf("reading topic state: %w", err)
 	}
-	state := unread.TopicReadState{Prefix: joined + 1, Floors: make(map[kernel.ID]int64, len(ids))}
+	state := unread.TopicReadState{Prefix: joined, Floors: make(map[kernel.ID]int64, len(ids))}
 	for _, row := range rows {
 		if row.TopicN == 0 {
 			// The stored set starts at zero; disjoint ranges never touch it.

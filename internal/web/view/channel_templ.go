@@ -3200,7 +3200,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 
 // selectionPill is the brand indicator of the current row; the row's text
 // colour and weight say the same without colour (docs/ui-colours.md). It grows in
-// only on arrival from another place (arrival-v1.js, docs/motion.md#motion).
+// only on arrival from another place (arrival-v1.js, docs/ui-motion.md#motion).
 func selectionPill() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context

@@ -139,7 +139,7 @@
   --color-current: currentColor;
 }
 
-/* Motion after Fluent 2 (docs/motion.md#motion); only transform, opacity and
+/* Motion after Fluent 2 (docs/ui-motion.md#motion); only transform, opacity and
  * colours animate. Static, so every token reaches the built stylesheet even
  * while no utility uses it yet. */
 @theme static {

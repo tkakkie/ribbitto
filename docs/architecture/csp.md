@@ -1,4 +1,4 @@
-# Rendering security
+# Content Security Policy
 
 Content Security Policy and script delivery for [rendering and assets](rendering.md).
 

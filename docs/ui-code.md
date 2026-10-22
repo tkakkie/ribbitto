@@ -125,7 +125,9 @@ built-in utilities, so no z-index tokens are added: `z-10` for something
 sticky inside a block, `z-20` for a panel over content, `z-30` for menus
 and popovers, `z-40` for dialogs.
 
-See [motion tokens and rules](motion.md#motion).
+## Motion
+
+See [motion tokens and rules](ui-motion.md#motion).
 
 ## Icons
 

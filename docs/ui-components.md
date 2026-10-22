@@ -123,8 +123,8 @@ scrolls the conversation up from the composer.
 
 ## Arrival motion
 
-The selection pill and the side panel move only on arrival
-([motion](motion.md#motion), #921). `arrival-v1.js` marks the root
+The selection pill and side panel move only on arrival
+([motion](ui-motion.md#motion), #921). `arrival-v1.js` marks the root
 (`data-arrive-pill`, `data-arrive-panel`) and CSS animates under those
 marks. It reads `navigation.activation` and stores nothing: only a `push`
 whose previous entry is same-origin (a link, or a form's redirect) is

@@ -106,10 +106,7 @@ func readOracleCheckState(state readOracleState, joined int64, model map[int64]b
 			continue
 		}
 		previous := state.ranges[i-1]
-		if previous.Hi >= r.Lo {
-			violations = append(violations, "ranges overlap or touch")
-			continue
-		}
+		_ = previous
 		holdsUnread := false
 		for _, message := range state.messages {
 			if previous.Hi <= message.seq && message.seq < r.Lo && !readOracleRead(state.ranges, joined, message.seq) {

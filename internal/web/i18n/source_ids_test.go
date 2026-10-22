@@ -21,12 +21,9 @@ func collectSourceIDs(root string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == "testdata" {
-				return filepath.SkipDir
-			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		file, err := parser.ParseFile(fset, path, nil, 0)

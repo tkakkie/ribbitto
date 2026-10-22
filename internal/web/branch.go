@@ -85,7 +85,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	notice := func(destination conversation.Topic) string {
 		name := destination.Name
 		if destination.IsDefault {
-			name = i18n.T(r.Context(), "topic.default")
+			name = i18n.T(r.Context(), "topic.defualt")
 		}
 		return strings.NewReplacer("{topic}", name, "{count}", strconv.Itoa(count)).Replace(i18n.T(r.Context(), "topic.branch_notice"))
 	}

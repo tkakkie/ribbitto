@@ -55,9 +55,6 @@ other = "ribbitto"
 ["hello.title"]
 other = "ribbittoからこんにちは"
 
-["hello.page_title"]
-other = "ホーム"
-
 ["hello.tagline"]
 other = "カエルがロゴの、小さなセルフホスト型チームチャット。"
 

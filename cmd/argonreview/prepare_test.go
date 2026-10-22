@@ -191,8 +191,9 @@ func TestPrepareSerialises(t *testing.T) {
 			if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != unix.EWOULDBLOCK {
 				t.Fatalf("first prepare does not hold the lock: %v", err)
 			}
-			// Model the temporary file window without relying on write timing.
-			tmp := filepath.Join(home, ".gemini/config/agents/.argonreview-61829")
+			// Model another launcher's temporary file without relying on write timing.
+			// PID+1 keeps its name distinct from this process's own temporary file.
+			tmp := filepath.Join(home, ".gemini/config/agents", fmt.Sprintf(".argonreview-%d", os.Getpid()+1))
 			write(t, tmp, "in progress")
 			started := make(chan struct{})
 			secondExited = make(chan struct{})

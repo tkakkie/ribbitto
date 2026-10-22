@@ -139,7 +139,7 @@
   --color-current: currentColor;
 }
 
-/* Motion after Fluent 2 (docs/ui-code.md#motion); only transform, opacity and
+/* Motion after Fluent 2 (docs/motion.md#motion); only transform, opacity and
  * colours animate. Static, so every token reaches the built stylesheet even
  * while no utility uses it yet. */
 @theme static {
@@ -223,7 +223,7 @@
 @custom-variant short (@media (height < 27.25rem));
 
 /* htmx marks the element whose request is in flight with htmx-request; the
-   composer shows its sending state through this (docs/architecture/rendering.md). */
+   composer shows its sending state through this (docs/architecture/csp.md). */
 @custom-variant sending (&:where(.htmx-request *));
 
 @layer base {

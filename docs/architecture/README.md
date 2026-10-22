@@ -34,7 +34,8 @@ Read the file for the area you change:
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`pins.md`](pins.md) | pin ownership and durable writes (#888); channel-state writer and shared pins source implemented (#891–#892), live delivery active (#1205) |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
-| [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
+| [`rendering.md`](rendering.md) | templates, assets, languages |
+| [`csp.md`](csp.md) | the Content Security Policy and script delivery |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
 | [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
@@ -50,7 +51,9 @@ Read the file for the area you change:
 | [`web-composer-pending.md`](web-composer-pending.md) | pending own posts and the Remove hold |
 | [`web-javascript-unread.md`](web-javascript-unread.md) | stream checkpoints, visible reads and sidebar badge scripts |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
-| [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts, private maps and acceptance mechanics (#1410–#1415, #1426) |
+| [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
+| [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1411) |
+| [`web-toolchain-checks.md`](web-toolchain-checks.md) | *planned*: checks and measurement requirements (#1412, #1414, #1426) |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 | [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |

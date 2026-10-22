@@ -808,7 +808,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 
 // selectionPill is the brand indicator of the current row; the row's text
 // colour and weight say the same without colour (docs/ui-colours.md). It grows in
-// only on arrival from another place (arrival-v1.js, docs/ui-code.md#motion).
+// only on arrival from another place (arrival-v1.js, docs/motion.md#motion).
 templ selectionPill() {
 	{{ _ = ctx }}
 	<span data-selection-pill aria-hidden="true" class="absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand"></span>

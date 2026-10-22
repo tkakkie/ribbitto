@@ -8,7 +8,7 @@ import (
 )
 
 // TestReducedMotion proves on the built stylesheet that reduced motion stops
-// every motion (docs/ui-code.md#motion): animations and transitions by one
+// every motion (docs/motion.md#motion): animations and transitions by one
 // universal rule nothing outranks, movement on state changes by existing only
 // for no-preference.
 func TestReducedMotion(t *testing.T) {
@@ -91,7 +91,7 @@ func TestReducedMotion(t *testing.T) {
 
 // TestNoViewTransitions proves the built stylesheet opts into no
 // cross-document view transition: its setup delayed every switch (#921), and
-// the arrival motion runs without it (docs/ui-code.md#motion).
+// the arrival motion runs without it (docs/motion.md#motion).
 func TestNoViewTransitions(t *testing.T) {
 	source, err := os.ReadFile("css/app.css")
 	if err != nil {
@@ -105,7 +105,7 @@ func TestNoViewTransitions(t *testing.T) {
 // TestHoverOnlyWithHover proves on the built stylesheet that every hover
 // style applies only under @media (hover:hover): a tap leaves the tapped
 // element :hover, and a touch screen must not keep it highlighted
-// (docs/ui-code.md#motion). Tailwind's hover: utilities do this; a
+// (docs/motion.md#motion). Tailwind's hover: utilities do this; a
 // hand-written rule must too.
 func TestHoverOnlyWithHover(t *testing.T) {
 	source, err := os.ReadFile("css/app.css")
@@ -128,7 +128,7 @@ func TestHoverOnlyWithHover(t *testing.T) {
 
 // TestArrivalMotion proves on the built stylesheet that the arrival motion,
 // the pill, the panel and below desk its sheet, shows its content from the
-// first frame (docs/ui-code.md#motion): its keyframes only move, never fade
+// first frame (docs/motion.md#motion): its keyframes only move, never fade
 // or hide, and no motion waits for a delay.
 func TestArrivalMotion(t *testing.T) {
 	source, err := os.ReadFile("css/app.css")
@@ -194,7 +194,7 @@ func cssRules(source string) []cssRule {
 }
 
 // TestMotionTokens proves every documented motion token reaches the built
-// stylesheet, used by a utility yet or not (docs/ui-code.md#motion).
+// stylesheet, used by a utility yet or not (docs/motion.md#motion).
 func TestMotionTokens(t *testing.T) {
 	source, err := os.ReadFile("css/app.css")
 	if err != nil {

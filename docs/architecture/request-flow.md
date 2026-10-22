@@ -105,7 +105,7 @@ Outermost first:
    HEAD and OPTIONS through — so **every route that changes state is a
    POST**, and GET handlers never change state.
 4. On everything except `/static/`, `/healthz` and `/readyz`: security headers
-   ([`rendering.md`](rendering.md#content-security-policy)), then i18n.
+   ([`csp.md`](csp.md#content-security-policy)), then i18n.
    `/static/` sets its own `nosniff` and restrictive CSP.
 5. On each **registered** HTML route (the `sessionMux` in `NewHandler`
    wraps routes one by one; `/setup` and `/signup` are registered without

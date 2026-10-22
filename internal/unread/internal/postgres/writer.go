@@ -48,7 +48,7 @@ func (w *Writer) MergeCovered(ctx context.Context, scope unread.Scope, joinedEve
 	if err := w.lock(ctx, params); err != nil {
 		return nil, err
 	}
-	if err := w.merge(ctx, params, conversation.SequenceRange{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
+	if err := w.merge(ctx, params, conversation.SequenceRange{Lo: 0, Hi: joinedEventSeq}); err != nil {
 		return nil, err
 	}
 	return w.mergeCovered(ctx, params, added)

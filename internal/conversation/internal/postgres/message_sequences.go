@@ -53,7 +53,7 @@ func (m MessageSequences) HasMessages(ctx context.Context, organizationID, chann
 		highest = max(highest, his[i])
 		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: lo, Valid: true}, Upper: pgtype.Int8{Int64: his[i], Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}
 	}
-	exists, err := m.queries.ChannelHasMessages(ctx, sqlcgen.ChannelHasMessagesParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), Lowest: lowest, Highest: highest, CoveredSet: ranges})
+	exists, err := m.queries.ChannelHasMessages(ctx, sqlcgen.ChannelHasMessagesParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), Lowest: lowest, Highest: highest - 1, CoveredSet: ranges})
 	if err != nil {
 		return false, fmt.Errorf("checking channel messages: %w", err)
 	}

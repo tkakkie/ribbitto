@@ -6,7 +6,7 @@ under [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
 [Argon entry](README.md#implementer-argon). If a boundary fails,
 Argon stops at once; the maintainer decides.
 
-[Intake and steps](argon-intake.md).
+See [assignment and steps](argon-intake.md).
 
 **Start gate.** Each run requires an issue recording a full passing preflight
 for its `agy` version and custom agent.

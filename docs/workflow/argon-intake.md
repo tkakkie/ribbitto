@@ -2,14 +2,20 @@
 
 Assignment, steps, calibration and throughput follow the maintainer's decisions
 (maintainer, 2026-10-23,
-[#1561](https://github.com/tkakkie/ribbitto/issues/1561), decisions 1–4).
+[#1561](https://github.com/tkakkie/ribbitto/issues/1561),
+[decisions 1–4](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6351468411)).
 
 ## Default assignment
 
 An issue eligible under [Which issues](argon-implementer.md#which-issues)
 names *Implementer* `Argon` unless the issue records why not.
-[Issue review](reviewing.md#issue-review) checks this default. Eligibility
-and the [boundary](argon-implementer.md#the-boundary) are unchanged.
+This default applies only within maintainer-approved steps; today only step 1
+is approved. Until its step is approved, a step-2 or step-3 issue names Argon
+only when the maintainer says so.
+Claude's [issue review](reviewing.md#issue-review) and the maintainer check
+this default. The [trusted issue-review prompt](../../.github/prompts/issue-review.md)
+is unchanged; changing reviewer prompts is a separate maintainer decision.
+Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 
 ## Steps and approval
 
@@ -18,7 +24,10 @@ and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 3. Larger tier B changes.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
-stay out of Argon in every step.
+stay out of Argon in every step. Organisation scoping, authorisation, sessions
+and SSE delivery (the tier A areas) are excluded from every step, including
+the tier B code in steps 2 and 3
+([#1561, Out of scope](https://github.com/tkakkie/ribbitto/issues/1561)).
 
 **PROPOSAL — the maintainer may change this gate:** over the last ten counted
 runs of the previous step, no merged defect found later, and average rework
@@ -29,9 +38,17 @@ to advance on its own.
 
 ## Calibration
 
-The second calibration round, with harder seeded defects in tier B areas as
-[#1514](https://github.com/tkakkie/ribbitto/issues/1514) required, runs before
-step 2. Its result is recorded before any step-2 issue is offered.
+Before step 2, run the second calibration round once in tier B areas, with
+harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/1514):
+
+- bytes versus characters;
+- a missing `organization_id` scope together with the test that should have
+  caught it;
+- a wrong comparison in validation.
+
+Record the results on [#1561](https://github.com/tkakkie/ribbitto/issues/1561)
+before any step-2 issue is offered. Also run Argon as issue reviewer on a few
+seeded issue specs only if the maintainer wants it.
 
 ## Throughput
 

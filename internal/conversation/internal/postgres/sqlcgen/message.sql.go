@@ -420,8 +420,7 @@ const topicChangedBetween = `-- name: TopicChangedBetween :one
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = $1 AND channel_id = $2
    AND topic_id = $3
-   AND ((event_seq > $4::bigint AND event_seq < $5::bigint)
-     OR (moved_event_seq > $4::bigint AND moved_event_seq < $5::bigint)))
+   AND (event_seq > $4::bigint AND event_seq < $5::bigint))
 `
 
 type TopicChangedBetweenParams struct {

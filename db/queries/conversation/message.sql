@@ -74,8 +74,7 @@ ORDER BY m.event_seq;
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
    AND topic_id = sqlc.arg(topic_id)
-   AND ((event_seq > sqlc.arg(after_seq)::bigint AND event_seq < sqlc.arg(before_seq)::bigint)
-     OR (moved_event_seq > sqlc.arg(after_seq)::bigint AND moved_event_seq < sqlc.arg(before_seq)::bigint)));
+   AND (event_seq > sqlc.arg(after_seq)::bigint AND event_seq < sqlc.arg(before_seq)::bigint));
 
 -- name: ChannelHasMessages :one
 SELECT EXISTS (SELECT 1 FROM message

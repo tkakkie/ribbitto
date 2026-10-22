@@ -42,6 +42,31 @@ type script struct {
 	}
 }
 
+// checkScript refuses a script the organisation would reject, so a mistake in
+// conversations.json stops the run before any account exists instead of part
+// way through posting. Names and handles go through the same rules as sign-up.
+func checkScript(data script) error {
+	for _, person := range data.Members {
+		if _, err := identity.ValidateDisplayName(person.Name); err != nil {
+			return fmt.Errorf("member %q: %w", person.Handle, err)
+		}
+		if _, err := org.ValidateHandle(person.Handle); err != nil {
+			return fmt.Errorf("member %q: %w", person.Handle, err)
+		}
+	}
+	for _, channel := range data.Channels {
+		if len(channel.Messages) == 0 {
+			return fmt.Errorf("channel %q has no messages", channel.Name)
+		}
+		for i, line := range channel.Messages {
+			if len(line.Body) > conversation.MaxMessageBodyLength {
+				return fmt.Errorf("channel %q message %d is over %d characters", channel.Name, i+1, conversation.MaxMessageBodyLength)
+			}
+		}
+	}
+	return nil
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -127,6 +152,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	var data script
 	if err := json.Unmarshal(conversations, &data); err != nil {
 		return fmt.Errorf("reading conversations: %w", err)
+	}
+	if err := checkScript(data); err != nil {
+		return fmt.Errorf("checking conversations: %w", err)
 	}
 	password, err := newSecret()
 	if err != nil {

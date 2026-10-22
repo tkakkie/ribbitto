@@ -34,20 +34,20 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 		// The listing is organisation-wide, so the channel check is what
 		// keeps another organisation's or a missing channel out.
 		if _, err := s.reads(snapshot).GetChannel(ctx, m.Organization.ID, channelID); err != nil {
-			_ = err // (k) swallow the GetChannel error
+			return fmt.Errorf("finding channel: %v", err) // (i)
 		}
-		members, err := s.members(snapshot).ListMembers(ctx, m.Organization.ID, nil, // (f) after cursor dropped
-			MemberPageSize) // (a) limit without the extra row
+		members, err := s.members(snapshot).ListMembers(ctx, m.Member.OrganizationID, after, // (h) 
+			MemberPageSize+1)
 		if err != nil {
-			return fmt.Errorf("listing channel members: %v", err) // (j)
+			return fmt.Errorf("listing channel members: %w", err)
 		}
-		ids := make([]kernel.ID, len(members)) // (e) built before the trim, so the extra row's account ID is looked up
+		if len(members) > MemberPageSize {
+			members = members[:MemberPageSize]
+			page.Next = &members[len(members)-1].ID
+		}
+		ids := make([]kernel.ID, len(members))
 		for i, member := range members {
 			ids[i] = member.AccountID
-		}
-		if len(members) >= MemberPageSize { // (c) >= instead of >
-			members = members[:MemberPageSize]
-			page.Next = &members[0].ID // (b) first shown member instead of the last
 		}
 		names, err := s.accounts(snapshot).LookupDisplayNames(ctx, ids)
 		if err != nil {
@@ -55,7 +55,9 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 		}
 		for _, member := range members {
 			name, ok := names[member.AccountID]
-			_ = ok // (d) missing-name check dropped
+			if !ok {
+				return fmt.Errorf("missing name for member %x", member.ID)
+			}
 			page.Members = append(page.Members, ChannelMember{ID: member.ID, DisplayName: name, Handle: member.Handle})
 		}
 		return nil

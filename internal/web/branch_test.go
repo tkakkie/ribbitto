@@ -106,16 +106,15 @@ func TestBranchSelection(t *testing.T) {
 					if w.Code != status {
 						t.Fatalf("status %d, want %d: %s", w.Code, status, w.Body)
 					}
-					if tt.name != "mixed" {
+					if strings.HasPrefix(tt.name, "too many") {
+						// The handler refuses the selection before the use case sees it.
+						if !reflect.DeepEqual(store.got, conversation.Branch{}) {
+							t.Fatalf("branch call: %+v", store)
+						}
+					} else if tt.name != "mixed" {
 						wantBranch := conversation.Branch{From: kernel.ID{0x31}, Messages: []kernel.ID{{8}}, NewName: form.Get("name")}
 						if tt.name == "existing" {
 							wantBranch.To = &kernel.ID{0x32}
-						}
-						if strings.HasPrefix(tt.name, "too many") {
-							wantBranch.Messages = make([]kernel.ID, len(tt.selected))
-							for i := range wantBranch.Messages {
-								wantBranch.Messages[i] = kernel.ID{8}
-							}
 						}
 						if !reflect.DeepEqual(store.got, wantBranch) || store.channel != (kernel.ID{1}) || store.membership.Member.Handle != "alice" || store.membership.Organization.Slug != "acme" {
 							t.Fatalf("branch call: %+v", store)
@@ -159,5 +158,42 @@ func TestBranchSelection(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// TestBranchSelectionBound checks the selection size on both sides of the
+// bound, and that a refused selection never reaches the use case.
+func TestBranchSelectionBound(t *testing.T) {
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const source = "31000000-0000-0000-0000-000000000000"
+	for _, tt := range []struct {
+		name     string
+		count    int
+		status   int
+		wantSent int
+	}{
+		{"one message", 1, 303, 1},
+		{"below the bound", conversation.MaxBranchMessages - 1, 303, conversation.MaxBranchMessages - 1},
+		{"above the bound", conversation.MaxBranchMessages + 1, 422, 0},
+		{"far above the bound", 5 * conversation.MaxBranchMessages, 422, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeBrancher{}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Branching = store; s.Messages = populatedMessages() }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			form := url.Values{"name": {"design"}, "from": {source}}
+			for range tt.count {
+				form.Add("message", "08000000-0000-0000-0000-000000000000")
+			}
+			w := serveForm(handler, "POST", view.ChannelURL("acme", kernel.ID{1})+"/branch", "live", form)
+			if w.Code != tt.status || len(store.got.Messages) != tt.wantSent {
+				t.Fatalf("status %d with %d messages sent, want %d with %d", w.Code, len(store.got.Messages), tt.status, tt.wantSent)
+			}
+		})
 	}
 }

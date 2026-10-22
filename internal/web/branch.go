@@ -43,6 +43,11 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	if !parseForm(w, r) {
 		return
 	}
+	// A selection over the bound is refused before any of its IDs is parsed.
+	if len(r.PostForm["message"]) >= conversation.MaxBranchMessages {
+		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
+		return
+	}
 	// Each selectable item carries its rendered source, including without JS.
 	from := r.PostForm.Get("from")
 	for i, raw := range r.PostForm["message"] {

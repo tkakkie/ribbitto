@@ -29,6 +29,9 @@ covers setup, invocation and the boundary.
 Your own `~/.gemini/antigravity-cli/settings.json` is never loaded or
 changed; a review reads it only to hash it, and fails if the hash changes.
 
+Reviews may run in parallel; `prepare` serialises on a lock in the dedicated
+HOME with a bounded wait of about two minutes, then refuses ([details](argon-review-agent.md#preparation)).
+
 ## The trusted invocation
 
 Build from a clean `origin/main` of the source checkout, outside its tree,

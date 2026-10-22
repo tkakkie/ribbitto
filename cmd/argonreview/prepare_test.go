@@ -232,6 +232,48 @@ func TestPrepareSerialises(t *testing.T) {
 	}
 }
 
+func TestPrepareLockTimeout(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing config=%t", existing), func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := resolved(t, t.TempDir())
+			if existing {
+				for _, f := range ownedFiles(t, guardBinary) {
+					write(t, filepath.Join(home, ".gemini", f.dir, f.name), "must not be rewritten")
+				}
+			}
+			path := filepath.Join(home, prepareLockName)
+			fd, err := unix.Open(path, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFD(fd)
+			if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+				t.Fatal(err)
+			}
+			before := snapshot(t, home)
+			writing := false
+			const wait = 200 * time.Millisecond
+			start := time.Now()
+			got, err := prepareWith(home, account, guardBinary, hooks{
+				lockWait: wait, lockPoll: 10 * time.Millisecond,
+				beforeWrite: func() { writing = true },
+			})
+			elapsed := time.Since(start)
+			if got != "" || err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "another argonreview prepare holds") || !strings.Contains(err.Error(), "wait for it or kill it") {
+				t.Fatalf("prepare = %q, %v; want lock holder refusal naming %s", got, err, path)
+			}
+			if elapsed < wait || elapsed > 2*time.Second {
+				t.Fatalf("prepare took %s; want %s to 2s", elapsed, wait)
+			}
+			if writing || !equal(before, snapshot(t, home)) {
+				t.Fatal("timed-out prepare reached writes or changed HOME, including config/agents")
+			}
+			unchanged()
+		})
+	}
+}
+
 func TestPrepareConcurrentFreshHome(t *testing.T) {
 	account, unchanged := fixture(t)
 	home := resolved(t, t.TempDir())

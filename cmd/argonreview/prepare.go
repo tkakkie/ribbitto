@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -105,10 +106,12 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 // hooks run before locking, just before the first write, after each directory
 // prepare creates (before it is opened), and just after the last write;
 // tests coordinate concurrent calls or swap directories and files there.
+// Zero lock timing values use the production defaults.
 type hooks struct {
 	beforeLock              func()
 	beforeWrite, afterWrite func()
 	afterMkdir              func(name string)
+	lockWait, lockPoll      time.Duration
 }
 
 func (h hooks) run(f func()) {
@@ -151,7 +154,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	// another prepare's temporary agent file. Closing releases it on all
 	// returns; O_CLOEXEC keeps a launched process from holding it afterwards.
 	test.run(test.beforeLock)
-	lock, err := lockPrepare(root)
+	lock, err := lockPrepare(root, home, test)
 	if err != nil {
 		return "", err
 	}
@@ -290,7 +293,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	return home, nil
 }
 
-func lockPrepare(root int) (int, error) {
+func lockPrepare(root int, home string, test hooks) (int, error) {
 	// Outside .gemini so no customisation exception is needed. Never unlink
 	// it: waiters must keep locking the same inode, even after a killed run.
 	// Non-blocking open avoids hanging on a FIFO before its type is checked.
@@ -309,11 +312,30 @@ func lockPrepare(root int) (int, error) {
 		closeFD(fd)
 		return -1, errors.Join(errors.New("refusing prepare lock: not a regular file"), err)
 	}
-	if err := unix.Flock(fd, unix.LOCK_EX); err != nil {
-		closeFD(fd)
-		return -1, fmt.Errorf("locking prepare: %w", err)
+	wait, poll := test.lockWait, test.lockPoll
+	if wait == 0 {
+		wait = 2 * time.Minute
 	}
-	return fd, nil
+	if poll == 0 {
+		poll = 50 * time.Millisecond
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		if remaining := time.Until(deadline); remaining <= 0 {
+			closeFD(fd)
+			return -1, fmt.Errorf("refusing prepare: another argonreview prepare holds lock %s; wait for it or kill it", filepath.Join(home, prepareLockName))
+		}
+		err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			return fd, nil
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EINTR) {
+			closeFD(fd)
+			return -1, fmt.Errorf("locking prepare: %w", err)
+		}
+		// A stalled holder must not strand every review sharing this HOME.
+		time.Sleep(min(poll, max(0, time.Until(deadline))))
+	}
 }
 
 // sameHome refuses when the path no longer leads to the directory checked.
@@ -678,7 +700,7 @@ func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
 					owned = owned || f.dir == name && f.name == entry
 				}
 				if !owned {
-					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store)", name, entry)
+					return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions; remove it by hand if it is a leftover (a killed run's .argonreview-<pid> temporary file, a .DS_Store); a temporary file may belong to a still-running launcher without the lock, so check no argonreview is running first", name, entry)
 				}
 			}
 		}

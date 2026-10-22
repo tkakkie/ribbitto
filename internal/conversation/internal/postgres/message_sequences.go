@@ -41,7 +41,7 @@ func (m MessageSequences) HasMessages(ctx context.Context, organizationID, chann
 		return false, fmt.Errorf("checking channel messages: unequal bound lengths")
 	}
 	if len(los) == 0 {
-		return false, nil
+		return false, fmt.Errorf("checking channel messages: empty bounds")
 	}
 	lowest, highest := los[0], his[0]
 	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(los))

@@ -92,7 +92,7 @@ func TestHistoryPathsMany(t *testing.T) {
 		{name: "complete batch oldest first"},
 		{name: "organisation and channel reach GetMessages", checkScope: true},
 		{name: "quote authors join member batch", checkQuoteBatch: true},
-		{name: "reading messages error is wrapped", readErr: failure, wantErr: failure, wantError: "reading messages", wantCalls: []string{"messages"}},
+		{name: "reading messages error is wrapped", readErr: failure, wantErr: failure, wantError: "reading messages: batch store failed", wantCalls: []string{"messages"}},
 		{name: "missing author", omitMember: firstAuthorID, wantError: fmt.Sprintf("missing author for message %x", olderMsgID)},
 		{name: "missing display name", omitName: firstAccountID, wantError: fmt.Sprintf("missing author for message %x", olderMsgID)},
 		{name: "missing topic", omitTopic: firstTopicID, wantError: fmt.Sprintf("missing topic for message %x", olderMsgID)},
@@ -165,7 +165,7 @@ func TestHistoryPathsMany(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || !tt.checkScope && !tt.checkQuoteBatch && !reflect.DeepEqual(got, wantEntries) {
+			if err != nil || !reflect.DeepEqual(got, wantEntries) {
 				t.Fatalf("Many = %+v, %v; want %+v", got, err, wantEntries)
 			}
 		})
@@ -173,7 +173,7 @@ func TestHistoryPathsMany(t *testing.T) {
 }
 
 func TestHistoryPathsAround(t *testing.T) {
-	orgID, decoyOrgID, callerMemberID := kernel.ID{1}, kernel.ID{98}, kernel.ID{99}
+	orgID, callerMemberID := kernel.ID{1}, kernel.ID{99}
 	channelID, topicID, authorMemberID := kernel.ID{2}, kernel.ID{7}, kernel.ID{3}
 	failure := errors.New("history store failed")
 	prefix := []string{"snapshot", "reads", "channel", "channels", "selected", "topics", "members", "accounts", "history after"}
@@ -193,9 +193,9 @@ func TestHistoryPathsAround(t *testing.T) {
 	}{
 		{name: "newer reversed plus older", messages: 50, around: 40, wantOldest: 1, wantNewest: 50, wantOlder: false, wantSnapshotCalls: fullCalls},
 		{name: "more than room sets older", messages: 60, around: 40, wantOldest: 11, wantNewest: 60, wantOlder: true, wantSnapshotCalls: fullCalls},
-		{name: "reading history around a message error is wrapped", messages: 50, around: 40, fail: "history after", wantError: "reading history around a message", wantSnapshotCalls: prefix},
-		{name: "reading history before a message error is wrapped", messages: 50, around: 40, fail: "history", wantError: "reading history before a message", wantSnapshotCalls: append(slices.Clone(prefix), "history")},
-		{name: "entries error stops before cursor", messages: 1, around: 1, entriesErr: true, wantError: "reading authors", wantSnapshotCalls: append(slices.Clone(prefix), "history")},
+		{name: "reading history around a message error is wrapped", messages: 50, around: 40, fail: "history after", wantError: "reading history around a message: history store failed", wantSnapshotCalls: prefix},
+		{name: "reading history before a message error is wrapped", messages: 50, around: 40, fail: "history", wantError: "reading history before a message: history store failed", wantSnapshotCalls: append(slices.Clone(prefix), "history")},
+		{name: "entries error stops before cursor", messages: 1, around: 1, entriesErr: true, wantError: "reading authors: history store failed", wantSnapshotCalls: append(slices.Clone(prefix), "history")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var data readerData = fullHistory{n: tt.messages}
@@ -212,7 +212,7 @@ func TestHistoryPathsAround(t *testing.T) {
 
 			membership := org.Membership{
 				Organization: org.Organization{ID: orgID},
-				Member:       org.Member{ID: callerMemberID, OrganizationID: decoyOrgID},
+				Member:       org.Member{ID: callerMemberID},
 			}
 			page, err := reader.Around(t.Context(), membership, channelID, &topicID, tt.around)
 			if !reflect.DeepEqual(snapshot.calls, tt.wantSnapshotCalls) {

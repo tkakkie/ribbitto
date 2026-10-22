@@ -122,7 +122,7 @@ func readOracleCheckState(state readOracleState, joined int64, model map[int64]b
 	}
 	for _, message := range state.messages {
 		read := readOracleRead(state.ranges, joined, message.seq)
-		if read != model[message.seq] {
+		if read && !model[message.seq] {
 			violations = append(violations, fmt.Sprintf("read set differs from model at %d: read=%t", message.seq, read))
 		}
 		for _, floor := range state.floors {

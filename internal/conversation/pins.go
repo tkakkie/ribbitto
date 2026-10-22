@@ -95,7 +95,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	}
 	members, err := s.members(snapshot).LookupMembers(ctx, m.Organization.ID, memberIDs)
 	if err != nil {
-		return nil, fmt.Errorf("reading pin members: %w", err)
+		return nil, fmt.Errorf("reading pin members: %v", err)
 	}
 	accountIDs := make([]kernel.ID, 0, len(members))
 	for _, member := range members {

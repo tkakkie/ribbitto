@@ -21,9 +21,12 @@ func collectSourceIDs(root string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
+			if d.Name() == "testdata" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") {
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		file, err := parser.ParseFile(fset, path, nil, 0)
@@ -85,8 +88,8 @@ func TestSourceIDs(t *testing.T) {
 			t.Errorf("%s is not present in both catalogues", id)
 		}
 	}
-	if len(seen) < 50 {
-		t.Fatalf("collected %d literal i18n.T IDs (%d call sites), want at least 50", len(seen), len(ids))
+	if len(seen) < 5000 {
+		t.Fatalf("collected %d literal i18n.T IDs (%d call sites), want at least 5000", len(seen), len(ids))
 	}
 	for _, tt := range []struct{ name, path, code, want string }{
 		{"literal call", "handler.go", `package web; func f() { _ = i18n.T(ctx, "hello.title") }`, "hello.title"},

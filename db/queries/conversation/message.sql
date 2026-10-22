@@ -66,7 +66,6 @@ WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(
   AND (m.event_seq > sqlc.arg(floor)::bigint
        OR (m.event_seq <= sqlc.arg(floor)::bigint AND m.moved_event_seq > sqlc.arg(floor)::bigint))
   AND m.event_seq <= sqlc.arg(cursor)::bigint
-  AND (m.moved_event_seq IS NULL OR m.moved_event_seq <= sqlc.arg(cursor)::bigint)
   AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
 ORDER BY m.event_seq;
 

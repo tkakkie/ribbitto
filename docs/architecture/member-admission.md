@@ -27,3 +27,16 @@ retry with that same key; an admitted committed replay consumes budget but
 adds no message or event. The [composer](web-composer.md) keeps ordinary text
 and keys on 429; queued sends keep their text and key in the pending item for
 Retry. A refused retry of an unknown outcome keeps that outcome unconfirmed.
+
+## Other member budgets
+
+The other member routes use the same limiter with their own, independent
+budgets, set out in [rate limits](rate-limits.md). Beside the two above:
+
+| Requests | Burst | Refill | Concurrent | Retry-After |
+|---|---|---|---|---|
+| Reads | 16 | 4/s | 4 | 1 s |
+| Mention candidates | 8 | 4/s | 4 | 1 s |
+| Branches | 20 | one per 6 s | unlimited | 6 s |
+| Channel creation | 10 | one per minute | unlimited | 60 s |
+| Sidebar resyncs | 32 | 32/s | unlimited | 1 s |

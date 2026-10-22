@@ -3,7 +3,8 @@
 Assignment, steps, calibration and throughput follow the maintainer's decisions
 (maintainer, 2026-10-23,
 [#1561](https://github.com/tkakkie/ribbitto/issues/1561),
-[decisions 1–4](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6351468411)).
+[first set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6351468411),
+[second set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6352203895)).
 
 ## Default assignment
 
@@ -19,9 +20,13 @@ Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 
 ## Steps and approval
 
-1. **Now:** tests, documents and small validators.
-2. Small behaviour fixes in tier B code where the issue supplies the failing test.
-3. Larger tier B changes.
+1. **Approved:** tests, documents, small validators, and normal-risk tier C
+   ordinary feature implementation and small bug fixes that meet the existing
+   [eligibility](argon-implementer.md#which-issues), to ease weekly Claude/Codex
+   token limits.
+2. **Unapproved:** small behaviour fixes in tier B code where the issue supplies
+   the failing test.
+3. **Unapproved:** larger tier B changes.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
 stay out of Argon in every step. Organisation scoping, authorisation, sessions
@@ -33,6 +38,8 @@ the tier B code in steps 2 and 3
 runs of the previous step, no merged defect found later, and average rework
 at most one round per run. Rework counts rounds caused by correctness findings
 from Claude, Codex or Copilot. Read the evidence from the [outcome record](#records).
+At a step change, also evaluate each pull request's quality and rework
+individually from the per-run record.
 The gate is evidence for the maintainer's decision, never a trigger for Claude
 to advance on its own.
 
@@ -47,15 +54,20 @@ harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/15
 - a wrong comparison in validation.
 
 Record the results on [#1561](https://github.com/tkakkie/ribbitto/issues/1561)
-before any step-2 issue is offered. Also run Argon as issue reviewer on a few
-seeded issue specs only if the maintainer wants it.
+before any step-2 issue is offered. This round also includes Argon as issue
+reviewer on a few seeded issue specs.
 
 ## Throughput
 
-Implementer runs stay one at a time: one worker home, one lock. Claude prepares
-the next issue's worktree and prompt while a run executes; reviews run in parallel
-([#1533](https://github.com/tkakkie/ribbitto/issues/1533)). A second worker home
-is outside this work and is not investigated for now.
+Claude prepares the next issue's worktree and prompt while a run executes;
+reviews run in parallel ([#1533](https://github.com/tkakkie/ribbitto/issues/1533)).
+A second worker is investigated, designed and verified in parallel with #1561
+in its own process issue [#1577](https://github.com/tkakkie/ribbitto/issues/1577):
+separate `HOME`, worktree and lock per worker; guard, verify, preflight and
+fail-closed stay unchanged. The first goal is two parallel implementer workers;
+three or four may be considered later if needed. Production use of a second
+worker needs the maintainer's separate approval. Until then, implementer runs
+stay one at a time: one worker home, one lock. Detailed design belongs to #1577.
 
 ## Records
 

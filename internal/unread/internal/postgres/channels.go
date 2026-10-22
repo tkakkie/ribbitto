@@ -29,7 +29,7 @@ func (r channelRanges) Read(ctx context.Context, organizationID, memberID kernel
 	states := make(map[kernel.ID]unread.ChannelReadState, len(channels))
 	for i, id := range channels {
 		ids[i] = pgtype.UUID{Bytes: id, Valid: true}
-		states[id] = unread.ChannelReadState{Prefix: joined + 1}
+		states[id] = unread.ChannelReadState{Prefix: joined}
 	}
 	rows, err := r.queries.FirstChannelReadRanges(ctx, sqlcgen.FirstChannelReadRangesParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},

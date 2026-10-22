@@ -110,7 +110,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 		author, pinner, topic := members[p.MemberID], members[p.PinnedByMemberID], topics[p.TopicID]
 		authorName, named := names[author.AccountID]
 		pinnerName, pinnerNamed := names[pinner.AccountID]
-		if !named || !pinnerNamed || topic.ID != p.TopicID {
+		if !named || !pinnerNamed {
 			return nil, fmt.Errorf("missing names or topic for pin %x", p.ID)
 		}
 		pins[i] = Pin{

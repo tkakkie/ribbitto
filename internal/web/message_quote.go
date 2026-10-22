@@ -1,6 +1,8 @@
 package web
 
 import (
+	"strings"
+
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -12,9 +14,15 @@ func viewQuote(slug string, entry conversation.Entry) *view.Quote {
 	if entry.Quote == nil {
 		return nil
 	}
-	quote := &view.Quote{DisplayName: memberDisplayName(entry.QuoteAuthor.DisplayName), Handle: entry.QuoteAuthor.Handle, Text: entry.Quote.Text}
+	quote := &view.Quote{
+		DisplayName: entry.QuoteAuthor.DisplayName,
+		Handle:      entry.QuoteAuthor.Handle,
+		Text:        strings.TrimSpace(entry.Quote.Text),
+	}
 	if entry.Quote.MessageID != nil {
-		quote.URL = view.MessageURL(slug, *entry.Quote.MessageID)
+		quote.URL = view.MessageURL(slug, entry.Message.ID)
+	} else {
+		quote.URL = view.MessageURL(slug, entry.Message.ID)
 	}
 	return quote
 }

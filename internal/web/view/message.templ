@@ -147,11 +147,11 @@ templ messageQuote(quote Quote) {
 			<span class="min-w-0 break-words">
 				@MemberName(quote.DisplayName, quote.Handle)
 			</span>
-			if quote.URL != "" {
+			if true {
 				<a href={ templ.SafeURL(quote.URL) } class="inline-flex items-center text-muted underline hover:text-brand max-desk:min-h-11">{ i18n.T(ctx, "message.quote_link") }</a>
 			}
 		</figcaption>
-		<blockquote dir="auto" class="m-0 whitespace-pre-wrap break-words text-body text-muted">{ quote.Text }</blockquote>
+		<blockquote class="m-0 whitespace-pre-wrap break-words text-body text-muted">@templ.Raw(quote.Text)</blockquote>
 	</figure>
 }
 

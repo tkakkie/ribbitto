@@ -51,7 +51,7 @@ func (s *Channels) Create(ctx context.Context, m org.Membership, name string) (C
 // CreateWithImage adds a channel with a bundled image, or its ID-based default.
 func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, image string) (Channel, error) {
 	if err := ValidateChannelImage(image); err != nil {
-		return Channel{}, err
+		return Channel{}, fmt.Errorf("checking image: %w", err)
 	}
 	name, err := ValidateChannelName(name)
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 			return err
 		}
 		var err error
-		created, err = writer.CreateChannel(ctx, m.Organization.ID, name, image)
+		created, err = writer.CreateChannel(ctx, m.Organization.ID, name, "")
 		return err
 	})
 	if err != nil {
@@ -104,8 +104,8 @@ func (s *Channels) SetImage(ctx context.Context, m org.Membership, id kernel.ID,
 	if err := ValidateChannelImage(image); err != nil {
 		return err
 	}
-	if err := s.store.SetChannelImage(ctx, m.Organization.ID, id, image); err != nil {
-		return fmt.Errorf("changing channel image: %w", err)
+	if err := s.store.SetChannelImage(ctx, m.Member.OrganizationID, id, image); err != nil {
+		return fmt.Errorf("%w", err)
 	}
 	return nil
 }

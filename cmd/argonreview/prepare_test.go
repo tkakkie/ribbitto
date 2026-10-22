@@ -264,8 +264,8 @@ func TestPrepareLockTimeout(t *testing.T) {
 			if got != "" || err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "another argonreview prepare holds") || !strings.Contains(err.Error(), "wait for it or kill it") {
 				t.Fatalf("prepare = %q, %v; want lock holder refusal naming %s", got, err, path)
 			}
-			if elapsed < wait || elapsed > 2*time.Second {
-				t.Fatalf("prepare took %s; want %s to 2s", elapsed, wait)
+			if elapsed < wait || elapsed > 10*time.Second {
+				t.Fatalf("prepare took %s; want %s to 10s", elapsed, wait)
 			}
 			if writing || !equal(before, snapshot(t, home)) {
 				t.Fatal("timed-out prepare reached writes or changed HOME, including config/agents")

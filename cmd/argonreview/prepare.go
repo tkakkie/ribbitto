@@ -150,8 +150,8 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := separate(root, shared); err != nil {
 		return "", err
 	}
-	// Every scan and write shares the lock: even the first scan could see
-	// another prepare's temporary agent file. Closing releases it on all
+	// Every configuration scan and write shares the lock: even the first scan
+	// could see another prepare's temporary agent file. Closing releases it on all
 	// returns; O_CLOEXEC keeps a launched process from holding it afterwards.
 	test.run(test.beforeLock)
 	lock, err := lockPrepare(root, home, test)

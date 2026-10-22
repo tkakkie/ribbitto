@@ -28,10 +28,11 @@ told it has.
 The agent's static bytes come from trusted code, never PR or issue input.
 Every review, issue review, Copilot check, probe and `check` starts with
 `prepare`, which rewrites and byte-compares all four files on every run.
-Reviews may run in parallel: `prepare` serialises every scan and write on
-an exclusive lock at the dedicated HOME's `.argonreview.lock`.
+Reviews may run in parallel: `prepare` serialises every configuration scan
+and write on an exclusive lock at the dedicated HOME's `.argonreview.lock`.
 After about two minutes of waiting, `prepare` refuses and names the lock file.
-The lock file stays at rest; the kernel releases the lock when the process exits.
+The lock file stays at rest, created empty on first use and left even when
+`prepare` refuses; the kernel releases the lock when the process exits.
 A leftover `.argonreview-<pid>` refusal means a killed run's file only when
 every writer takes the lock: a launcher built before the lock was added,
 or another tool writing there, does not wait and may still be writing.

@@ -14,7 +14,7 @@ import (
 const channelHasMessages = `-- name: ChannelHasMessages :one
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = $1 AND channel_id = $2
-   AND $3::bigint <= event_seq AND event_seq < $4::bigint
+   AND $3::bigint < event_seq AND event_seq < $4::bigint
    AND $5::int8multirange @> event_seq)
 `
 

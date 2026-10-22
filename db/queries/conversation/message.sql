@@ -80,5 +80,5 @@ SELECT EXISTS (SELECT 1 FROM message
 -- name: ChannelHasMessages :one
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
-   AND sqlc.arg(lowest)::bigint <= event_seq AND event_seq < sqlc.arg(highest)::bigint
+   AND sqlc.arg(lowest)::bigint < event_seq AND event_seq < sqlc.arg(highest)::bigint
    AND sqlc.arg(covered_set)::int8multirange @> event_seq);

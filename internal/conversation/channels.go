@@ -98,6 +98,19 @@ func (s *Channels) Default(ctx context.Context, m org.Membership) (Channel, erro
 	return found, nil
 }
 
+// GetOrDefault returns the channel with id in the member's organisation, or
+// the organisation's default channel when id is the zero ID, for entry points
+// that name a channel only sometimes. As with Get, a channel of another
+// organisation is ErrChannelNotFound.
+func (s *Channels) GetOrDefault(ctx context.Context, m org.Membership, id kernel.ID) (Channel, error) {
+	if id != (kernel.ID{}) {
+		if found, err := s.store.GetChannel(ctx, m.Organization.ID, id); err == nil {
+			return found, nil
+		}
+	}
+	return s.Default(ctx, m)
+}
+
 // SetImage changes a channel's illustration within the resolved membership's organisation.
 // It writes no event: other members see the image on their next page load.
 func (s *Channels) SetImage(ctx context.Context, m org.Membership, id kernel.ID, image string) error {

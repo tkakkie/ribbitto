@@ -91,11 +91,13 @@ func newReadOracle(t *testing.T) readOracleFixture {
 	// [3,8), so only the join prefix can preserve the boundary message.
 	const mJoined int64 = 2
 	m := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "m@example.org", "M"), org.RoleMember, "reader", mJoined)
-	for i, id := range []kernel.ID{m, f.MemberID} {
-		joined := mJoined
-		if i == 1 {
-			joined = 1
-		}
+	feedFirst := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "f@example.org", "F"), org.RoleMember, "feed-reader", 4)
+	postFirst := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "p@example.org", "P"), org.RoleMember, "poster", 6)
+	for i, member := range []struct {
+		id     kernel.ID
+		joined int64
+	}{{m, mJoined}, {f.MemberID, 1}, {feedFirst, 4}, {postFirst, 6}} {
+		id, joined := member.id, member.joined
 		h.members = append(h.members, org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: id, JoinedEventSeq: joined}})
 		h.model = append(h.model, make(map[kernel.ID]map[int64]bool))
 		for _, channel := range h.channels {
@@ -237,12 +239,27 @@ func TestReadOracle(t *testing.T) {
 			for _, violation := range h.check(t) {
 				t.Fatal("initial state: " + violation)
 			}
+			for _, premise := range []readOracleStep{{member: 2, channel: 0, cursor: 4}, {member: 3, channel: 1, cursor: 6}} {
+				scope := h.scope(premise)
+				state := readOracleLoad(t, h.pool, scope)
+				var persisted bool
+				feedRequire(t, h.pool.QueryRow(t.Context(), "SELECT EXISTS (SELECT 1 FROM channel_read WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3)", scope.OrganizationID, scope.ChannelID, scope.MemberID).Scan(&persisted))
+				joined := h.members[premise.member].Member.JoinedEventSeq
+				boundary := false
+				for _, message := range state.messages {
+					boundary = boundary || message.seq == premise.cursor
+				}
+				if persisted || len(state.ranges) != 0 || joined != premise.cursor || !boundary {
+					t.Fatalf("first-write premise: member=%d channel=%d persisted=%t ranges=%v joined=%d boundary=%d present=%t", premise.member, premise.channel, persisted, state.ranges, joined, premise.cursor, boundary)
+				}
+			}
 			// Guarantee the production mutation witnesses before randomized history:
 			// join-boundary preservation, islands, stale topic posts across an
 			// intervening post and move, then topic reads on both sides of the move.
 			// B's feed cursor 665 must cover M's newest post, still unread for B.
 			// A later cursorless post is separated from its channel predecessor by
-			// only another channel's message.
+			// only another channel's message. F's feed-first and P's post-first writes
+			// must preserve their boundary messages through MergeCovered's join prefix.
 			movedMessage := 2 // Channel 0's third message has sequence 8.
 			steps := []readOracleStep{
 				{
@@ -293,10 +310,15 @@ func TestReadOracle(t *testing.T) {
 					steps = append(steps, readOracleStep{kind: i, member: 0, channel: 0, topic: 1, cursor: cursor})
 				}
 			}
+			steps = append(steps,
+				readOracleStep{kind: kind("feed"), member: 2, channel: 0, topic: 0, cursor: 0},
+				readOracleStep{kind: kind("post without cursor"), member: 3, channel: 1, topic: 0},
+			)
 			isolated := readOracleRows(t, h.pool, &h.other, true)
 			for index := range 150 {
 				var committed int64
 				feedRequire(t, h.pool.QueryRow(t.Context(), "SELECT event_seq FROM organization WHERE id=$1", h.members[0].Organization.ID).Scan(&committed))
+				// Keep random members limited to M and B; F and P witness only first writes.
 				step := readOracleStep{kind: rng.Intn(len(kinds)), member: rng.Intn(2), channel: rng.Intn(2), cursor: rng.Int63n(committed + 1)}
 				if index < len(steps) {
 					step = steps[index]

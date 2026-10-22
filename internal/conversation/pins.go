@@ -121,6 +121,9 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 			pins[i].Blocks, pins[i].References = bodies[i], resolveReferences(bodies[i], members, names)
 		}
 	}
+	for i, j := 0, len(pins)-1; i < j; i, j = i+1, j-1 {
+		pins[i], pins[j] = pins[j], pins[i]
+	}
 	return pins, nil
 }
 

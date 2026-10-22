@@ -24,7 +24,7 @@ and inserts the message; `Post` is its shorthand for the default topic. It
 encodes the post with `conversation.EncodePosted` and calls its
 transaction-bound `EventAppender.Append` before commit. `Send` with a cursor also
 reads the composer's scope and own message through `PostReadWriterIn` in that
-transaction, under org-first locking ([unread writes](unread-writes.md)).
+transaction, under org-first locking ([unread writes](unread-scope-writes.md)).
 Org's sequence (`orgpg.SequenceIn`) and realtime's appender
 (`realtimepg.AppenderIn`) use that same transaction and sequence.
 `conversation.NewPosting` accepts `conversation.Notifier`

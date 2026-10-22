@@ -126,7 +126,7 @@ Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10
 `RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
 Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
 Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
-`topic-write` measures the set-based flow in [unread writes](unread-writes.md); statement count is
+`topic-write` measures the set-based flow in [unread writes](unread-scope-writes.md); statement count is
 independent of messages read. Range-count diagnostics run after EXPLAIN totals,
 outside timings and instrumentation. `topic-write-per-message` retains one merge
 per message for comparison. Both bound lookups by the primary-key predecessor

@@ -41,7 +41,7 @@ func (w *Writer) Prepare(ctx context.Context, scope unread.TopicScope, joinedEve
 	if err := w.lock(ctx, s); err != nil {
 		return nil, err
 	}
-	if err := w.merge(ctx, s, conversation.SequenceRange{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
+	if err := w.merge(ctx, s, conversation.SequenceRange{Lo: 0, Hi: joinedEventSeq}); err != nil {
 		return nil, err
 	}
 	rs, err := w.queries.TopicReadRanges(ctx, sqlcgen.TopicReadRangesParams(s))

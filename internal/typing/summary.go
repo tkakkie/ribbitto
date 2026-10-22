@@ -80,11 +80,23 @@ func (s *State) Read(organizationID kernel.ID, place Place, viewer kernel.ID) Sn
 	if _, active := p.members[viewer]; active {
 		result.Remaining--
 	}
-	for _, typist := range p.latest[:p.candidates] {
-		if typist.Member != viewer && len(result.Typists) < 3 {
-			result.Typists = append(result.Typists, typist)
-			result.Remaining--
+	result.Typists = othersTyping(p.latest[:p.candidates], viewer)
+	result.Remaining -= len(result.Typists)
+	return result
+}
+
+// maxTypists is how many names an indicator lists; the rest are only counted.
+const maxTypists = 3
+
+// othersTyping returns the first maxTypists entries of latest, newest first,
+// that are not the viewer. The viewer is skipped before the count, so a viewer
+// among the newest typists never takes a place from someone else.
+func othersTyping(latest []Typist, viewer kernel.ID) []Typist {
+	var shown []Typist
+	for _, typist := range latest {
+		if typist.Member != viewer && len(shown) < maxTypists {
+			shown = append(shown, typist)
 		}
 	}
-	return result
+	return shown
 }

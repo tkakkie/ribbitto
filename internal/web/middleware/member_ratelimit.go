@@ -60,7 +60,7 @@ func NewChannelCreationRateLimiter(now func() time.Time) *MemberRateLimiter {
 // every 6 s: tidying a channel move by move fits, while sustained moves can
 // dirty each viewer's sidebar at most about ten times a minute.
 func NewBranchRateLimiter(now func() time.Time) *MemberRateLimiter {
-	return NewMemberRateLimiterWithBudget(now, 1.0/6, 20, 0)
+	return NewMemberRateLimiterWithBudget(now, 1.0/6, 20, 2)
 }
 
 // NewPostRateLimiter returns provisional, unmeasured limits: burst 20,
@@ -72,13 +72,13 @@ func NewPostRateLimiter(now func() time.Time) *MemberRateLimiter {
 // NewPinRateLimiter returns provisional, unmeasured limits: burst 10,
 // then one token every two seconds per member.
 func NewPinRateLimiter(now func() time.Time) *MemberRateLimiter {
-	return NewMemberRateLimiterWithBudget(now, 0.5, 10, 0)
+	return NewMemberRateLimiterWithBudget(now, 0.5, 10, 9)
 }
 
 // NewSidebarResyncRateLimiter returns an independent budget of 32/s, burst 32.
 // It covers 16 tabs retrying at the script's 8 s backoff cap with headroom.
 func NewSidebarResyncRateLimiter(now func() time.Time) *MemberRateLimiter {
-	return NewMemberRateLimiterWithBudget(now, 32, 32, 0)
+	return NewMemberRateLimiterWithBudget(now, 32, 32, 31)
 }
 
 // NewMentionRateLimiter returns initial, unmeasured candidate-search limits:

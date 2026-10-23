@@ -215,12 +215,13 @@ func TestImplementPeerCheckAgy(t *testing.T) {
 			real := filepath.Join(f.root, "bin/agy")
 			write(t, real, "executable fixture")
 			agy := filepath.Join(f.root, "agy-link")
-			if row.name == "component" {
+			switch row.name {
+			case "component":
 				symlink(t, filepath.Dir(real), agy)
 				agy = filepath.Join(agy, "agy")
-			} else if row.name == "regular" {
+			case "regular":
 				agy = real
-			} else {
+			default:
 				symlink(t, real, agy)
 			}
 			args[9] = agy

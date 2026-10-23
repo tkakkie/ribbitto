@@ -46,15 +46,15 @@ func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kerne
 		if _, err := reads.GetChannel(ctx, m.Organization.ID, channelID); err != nil {
 			return err
 		}
-		state.Pins, err = s.pins(ctx, snapshot, reads, m, channelID)
+		state.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
 		if err != nil {
 			return err
 		}
-		state.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
+		state.Pins, err = s.pins(ctx, snapshot, reads, m, channelID)
 		return err
 	})
 	if err != nil {
-		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %w", err)
+		return PinsSnapshot{}, err
 	}
 	return state, nil
 }

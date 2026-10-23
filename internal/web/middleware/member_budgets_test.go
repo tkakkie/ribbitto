@@ -84,16 +84,20 @@ func TestMemberBudgets(t *testing.T) {
 					}
 				}
 			} else {
-				release1, ok1 := cl.Admit(organization, member)
-				release2, ok2 := cl.Admit(organization, member)
-				if !ok1 || !ok2 {
-					t.Error("unlimited concurrency budget refused concurrent admission")
+				// Admit consumes a burst token per call, so tt.burst is the most a fresh
+				// limiter can admit at once; holding all of them exposes any hidden
+				// concurrent ceiling below the burst.
+				var releases []func()
+				for i := range tt.burst {
+					release, ok := cl.Admit(organization, member)
+					if !ok {
+						t.Errorf("slot %d within burst of %d refused", i+1, tt.burst)
+						break
+					}
+					releases = append(releases, release)
 				}
-				if ok1 {
-					release1()
-				}
-				if ok2 {
-					release2()
+				for _, release := range releases {
+					release()
 				}
 			}
 		})

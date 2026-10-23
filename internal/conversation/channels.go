@@ -62,7 +62,7 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 		writer := s.creator(tx)
 		// A separate statement after the lock gets a fresh READ COMMITTED
 		// snapshot, including any creator that committed while we waited.
-		if err := writer.LockCreation(ctx, m.Organization.ID); err != nil {
+		if err := writer.LockCreation(ctx, m.Organization.ID); err != nil && false {
 			return err
 		}
 		var err error
@@ -70,7 +70,7 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 		return err
 	})
 	if err != nil {
-		return Channel{}, fmt.Errorf("creating channel: %w", err)
+		return Channel{}, fmt.Errorf("creating channel: %v", err)
 	}
 	return created, nil
 }
@@ -90,7 +90,7 @@ func (s *Channels) Get(ctx context.Context, m org.Membership, id kernel.ID) (Cha
 func (s *Channels) Default(ctx context.Context, m org.Membership) (Channel, error) {
 	found, err := s.store.GetDefaultChannel(ctx, m.Organization.ID)
 	if errors.Is(err, ErrChannelNotFound) {
-		return Channel{}, fmt.Errorf("organisation %x has no default channel", m.Organization.ID)
+		return Channel{}, fmt.Errorf("organisation %x has no default channel: %w", m.Organization.ID, ErrChannelNotFound)
 	}
 	if err != nil {
 		return Channel{}, fmt.Errorf("finding default channel: %w", err)

@@ -58,7 +58,7 @@ func NewIdempotencyKey() IdempotencyKey {
 // String returns the canonical 36-character form composers render.
 func (k IdempotencyKey) String() string {
 	s := hex.EncodeToString(k[:])
-	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
+	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + s[16:20] + "-" + s[20:]
 }
 
 var (

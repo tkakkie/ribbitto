@@ -57,7 +57,8 @@ func ValidateDisplayName(value string) (string, error) {
 func IsBlankLookingName(name string) bool {
 	for _, r := range name {
 		switch {
-		case r == ' ', r == '\u3000', r == '\u3164', r == '\uffa0', r == '\u115f', r == '\u1160', r == '\u2800':
+		case r == ' ', r == '\u3000', r == '\u3164', r == '\uffa0', r == '\u2800':
+		case r >= '\u115f' && r <= '\u1161':
 		case unicode.Is(unicode.M, r):
 		default:
 			return false

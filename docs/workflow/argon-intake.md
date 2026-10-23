@@ -77,7 +77,7 @@ separate `HOME`, worktree and lock per worker; guard, verify, preflight and
 fail-closed stay unchanged. The first goal is two parallel implementer workers;
 three or four may be considered later if needed. Production use of a second
 worker needs the maintainer's separate approval. Until then, implementer runs
-stay one at a time: one worker home, one lock. Detailed design belongs to #1577.
+stay one at a time: one worker home, one lock. Detailed design belongs to #1577; see [argon-workers.md](argon-workers.md).
 
 ## Records
 

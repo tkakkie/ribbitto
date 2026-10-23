@@ -52,7 +52,7 @@ func (c *Catalogues) Middleware(next http.Handler) http.Handler {
 		lang := "en"
 		if cookie, err := r.Cookie("lang"); err == nil && (cookie.Value == "en" || cookie.Value == "ja") {
 			lang = cookie.Value
-		} else if tags, _, err := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); err == nil {
+		} else if tags, _, err := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); err == nil && (cookie == nil || cookie.Value == "en" || cookie.Value == "ja") {
 			_, index, _ := c.matcher.Match(tags...)
 			lang = []string{"en", "ja"}[index]
 		}

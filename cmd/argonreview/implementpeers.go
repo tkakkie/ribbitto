@@ -40,6 +40,24 @@ func (p implementPeerHomes) validate(home string, lstat func(string) (fs.FileInf
 }
 
 func (p implementPeerHomes) separate(home, tree string, paths []string, lstat func(string) (fs.FileInfo, error)) error {
+	for i, first := range p {
+		for _, second := range p[i+1:] {
+			inside, err := implementContains(first, second, lstat)
+			if err != nil {
+				return fmt.Errorf("checking peer containment %q / %q: %w", first, second, err)
+			}
+			if inside {
+				return fmt.Errorf("peer home %q overlaps peer home %q", first, second)
+			}
+			inside, err = implementContains(second, first, lstat)
+			if err != nil {
+				return fmt.Errorf("checking peer containment %q / %q: %w", second, first, err)
+			}
+			if inside {
+				return fmt.Errorf("peer home %q overlaps peer home %q", first, second)
+			}
+		}
+	}
 	for _, peer := range p {
 		for _, path := range paths {
 			inside, err := implementContains(peer, path, lstat)

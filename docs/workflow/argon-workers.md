@@ -10,12 +10,12 @@ go-live each need the maintainer's separate approval. The existing
 
 ## Layout
 
-Use worker 1's dedicated home at ~/dev/ribbitto/agy-worker-home and worker 2's
-at ~/dev/ribbitto/agy-worker-home-2. The review home is
-~/dev/ribbitto/agy-trial-home. Each worktree must be a direct child
-of ~/dev/ribbitto/wt/, with its own branch and saved Git file. Never reuse a
-worktree between live runs. Host wrappers enforce the direct-child rule;
-Go accepts the validated explicit worktree path.
+Use dedicated homes `<worker-home>` for worker 1, `<worker-home-2>` for worker 2,
+and `<review-home>` for reviews. The host wrapper sets the real paths.
+Each worktree, `<repo-root>/wt/<name>`, must be a direct child of `<repo-root>/wt/`,
+with its own branch and saved Git file. Never reuse a
+worktree between live runs. Host wrappers enforce this rule;
+Go validates the explicit worktree path.
 
 | Per worker or run | Shared by the workers |
 |---|---|
@@ -48,6 +48,8 @@ to an existing real directory, without symlink components or leaf. Root and
 the selected home (including aliases of its directory identity) are refused
 as usage errors (exit 2). Other flags may occur only once; positional arguments
 are refused. Repeated peers count toward the cap; wrappers should list each once.
+Peers must not equal or contain one another; the same device/inode comparison
+refuses overlaps (exit 1).
 
 Before creating logs, TMPDIR or placing files, the run exits 1 if any of
 these equals or lies inside a peer home: selected home, worktree, existing
@@ -86,10 +88,10 @@ Before a separately approved switch, prepare and review each worker's run
 and check wrappers. Hard-code HOME and PEERS; accept no caller-supplied home,
 peer list or worker identity. Use these exact peer sets:
 
-| Wrapper | HOME under ~/dev/ribbitto/ | PEERS under ~/dev/ribbitto/ |
+| Wrapper | HOME | PEERS |
 |---|---|---|
-| Worker 1 | agy-worker-home | agy-worker-home-2, agy-trial-home |
-| Worker 2 | agy-worker-home-2 | agy-worker-home, agy-trial-home |
+| Worker 1 | `<worker-home>` | `<worker-home-2>`, `<review-home>` |
+| Worker 2 | `<worker-home-2>` | `<worker-home>`, `<review-home>` |
 
 Peers must exist before wrappers name them; existence authorizes neither
 sign-in nor execution. Review runs retain the
@@ -118,9 +120,9 @@ without reading worker 1's copies. Hooks, guard worktree files and sign-in
 state are home-specific. Worker 2 sign-in and builtin trust need separate
 maintainer decisions even with equal bytes.
 
-Require a direct-child worktree under ~/dev/ribbitto/wt/; pass its absolute
-path. Allocate a fresh run directory, record worker identity and give Go an
-empty child log directory. Keep prompts and saved Git files outside all
+Require a direct child of `<repo-root>/wt/`; pass its absolute path.
+In a fresh run directory, record worker identity and give Go an empty child
+log directory. Keep prompts and saved Git files outside all
 peer homes and writable trees. Never infer peers from existing directories
 or allow environment overrides to drop the review home. This PR neither
 installs nor modifies host wrappers.
@@ -128,8 +130,8 @@ installs nor modifies host wrappers.
 ## N workers
 
 Each worker needs its own home, guard directory, lock, recovery marker and
-worktree, the latter under ~/dev/ribbitto/wt/. A shared run.zsh with a worker
-argument and a fixed table is the form for N>=3; there is no --worker flag in
+worktree at `<repo-root>/wt/<name>`. For N>=3, use a shared run.zsh with a worker
+argument and fixed table; there is no --worker flag in
 Go, which would compile host paths into the launcher.
 Each worker's run and check wrappers must list ALL other workers' homes as
 `--peer-home`, plus the review home as above. The three-peer cap counts the

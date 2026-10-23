@@ -66,3 +66,37 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 	}
 	return page, nil
 }
+
+// ChannelSummary is what a channel's header shows: how many members it has
+// and how many messages are pinned in it.
+type ChannelSummary struct {
+	// Members is at most MemberPageSize; MoreMembers says there are more, so
+	// the header can read "100+".
+	Members     int
+	MoreMembers bool
+	Pins        int
+}
+
+// Summary counts the channel's members and pins in one snapshot, for the
+// header that sits above the members panel and the overview. Public channels
+// currently include every organisation member, so the member count is the
+// organisation's; both reads are scoped by the resolved membership's
+// organisation, and the pins by the channel as well.
+func (s *Reader) Summary(ctx context.Context, m org.Membership, channelID kernel.ID) (summary ChannelSummary, err error) {
+	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		pins, err := s.reads(snapshot).ListChannelPins(ctx, m.Organization.ID, channelID)
+		if err != nil {
+			return fmt.Errorf("counting channel pins: %w", err)
+		}
+		members, err := s.members(snapshot).ListMembers(ctx, m.Organization.ID, nil, MemberPageSize+1)
+		if err != nil {
+			return fmt.Errorf("counting channel members: %w", err)
+		}
+		summary = ChannelSummary{Members: min(len(members), MemberPageSize), MoreMembers: len(members) > MemberPageSize, Pins: len(pins)}
+		return nil
+	})
+	if err != nil {
+		return ChannelSummary{}, fmt.Errorf("reading channel summary snapshot: %w", err)
+	}
+	return summary, nil
+}

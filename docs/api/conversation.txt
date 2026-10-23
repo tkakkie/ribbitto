@@ -55,6 +55,10 @@ type ChannelStore interface // ChannelStore looks up channels and changes their 
   func (ChannelStore).GetChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).GetDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).SetChannelImage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID, image string) error
+type ChannelSummary struct // ChannelSummary is what a channel's header shows: how many members it has and how many messages are pinned in it.
+  field Members int // Members is at most MemberPageSize; MoreMembers says there are more, so the header can read "100+".
+  field MoreMembers bool
+  field Pins int
 type Channels struct // Channels runs the channel use cases for a member resolved by org.
   func (*Channels).Create(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string) (Channel, error) // Create adds a channel.
   func (*Channels).CreateWithImage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string, image string) (Channel, error) // CreateWithImage adds a channel with a bundled image, or its ID-based default.
@@ -253,6 +257,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).Pins(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]Pin, error) // Pins reads the bounded current pins without exposing their display sequence.
   func (*Reader).ReadPins(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (state PinsSnapshot, err error) // ReadPins reads only the channel's bounded pins, current topics and names in one read-only snapshot.
   func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
+  func (*Reader).Summary(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (summary ChannelSummary, err error) // Summary counts the channel's members and pins in one snapshot, for the header that sits above the members panel and the overview.
 type Reference struct // Reference is a referenced member's current names.
   field DisplayName string
   field Handle string

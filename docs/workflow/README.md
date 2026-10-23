@@ -6,7 +6,7 @@ disagreement in a pull request.
 
 ## Index
 
-Role: [Codex implementer](#implementer-codex),
+Start with your role: [Codex implementer](#implementer-codex),
 [Argon implementer](#implementer-argon), [reviewer](#reviewer), or
 [orchestrator/handoff](#orchestrator-and-handoff).
 
@@ -78,7 +78,7 @@ and [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
 ### Implementer Argon
 
 - [Shared gates](#shared-gates).
-- [Intake, steps and calibration](argon-intake.md).
+- [Intake](argon-intake.md).
 - [Start gate, eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer);
   [verification](argon-verify.md).
 - For fixes: [closure verification](reviewing.md#closure-verification),

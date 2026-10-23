@@ -192,6 +192,12 @@ func TestReaderPins(t *testing.T) {
 		{name: "missing author name", pins: []conversation.PinnedMessage{pin1}, names: map[kernel.ID]string{pinner1Account: "Pinner One"}, wantError: "missing names or topic for pin", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins", "members", "accounts"}, wantCalls: []string{"channel", "pins", "topics", "members", "names"}},
 		{name: "missing pinner name", pins: []conversation.PinnedMessage{pin1}, names: map[kernel.ID]string{author1Account: "Author One"}, wantError: "missing names or topic for pin", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins", "members", "accounts"}, wantCalls: []string{"channel", "pins", "topics", "members", "names"}},
 		{name: "missing topic", pins: []conversation.PinnedMessage{pin1}, topics: map[kernel.ID]conversation.Topic{}, wantError: "missing names or topic for pin", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins", "members", "accounts"}, wantCalls: []string{"channel", "pins", "topics", "members", "names"}},
+		{name: "Pins get channel error is wrapped", pinsOnly: true, channelErr: failure, wantErr: failure, wantError: "reading pins snapshot: store or directory failed", wantSnapshotCalls: []string{"snapshot", "reads", "channel"}, wantCalls: []string{"channel"}},
+		{name: "Pins list pins error is wrapped", pinsOnly: true, pinsErr: failure, wantErr: failure, wantError: "reading pins snapshot: store or directory failed", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins"}, wantCalls: []string{"channel", "pins"}},
+		{name: "Pins lookup topics error is wrapped", pinsOnly: true, topicErr: failure, wantErr: failure, wantError: "reading pin topics: store or directory failed", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins"}, wantCalls: []string{"channel", "pins", "topics"}},
+		{name: "Pins lookup members error is wrapped", pinsOnly: true, memberErr: failure, wantErr: failure, wantError: "reading pin members: store or directory failed", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins", "members"}, wantCalls: []string{"channel", "pins", "topics", "members"}},
+		{name: "Pins lookup display names error is wrapped", pinsOnly: true, nameErr: failure, wantErr: failure, wantError: "reading pin names: store or directory failed", wantSnapshotCalls: []string{"snapshot", "reads", "channel", "pins", "members", "accounts"}, wantCalls: []string{"channel", "pins", "topics", "members", "names"}},
+		{name: "Pins event cursor error is wrapped and drops built pins", pinsOnly: true, cursorErr: failure, wantErr: failure, wantError: "reading pins snapshot: store or directory failed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			orgID, channelID := tt.orgID, tt.channelID
@@ -233,7 +239,14 @@ func TestReaderPins(t *testing.T) {
 			membership := org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{99}, OrganizationID: kernel.ID{98}}}
 			if tt.pinsOnly {
 				gotPins, err := reader.Pins(t.Context(), membership, channelID)
-				if err != nil || !reflect.DeepEqual(gotPins, tt.wantPins) {
+				if tt.wantError != "" {
+					if err == nil || !strings.Contains(err.Error(), "reading pins snapshot: ") || !strings.Contains(err.Error(), tt.wantError) || gotPins != nil {
+						t.Fatalf("Pins = %+v, %v; want nil and error containing %q", gotPins, err, tt.wantError)
+					}
+					if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+						t.Fatalf("error %v does not wrap %v", err, tt.wantErr)
+					}
+				} else if err != nil || !reflect.DeepEqual(gotPins, tt.wantPins) {
 					t.Fatalf("Pins = %+v, %v; want %+v, nil", gotPins, err, tt.wantPins)
 				}
 			} else {

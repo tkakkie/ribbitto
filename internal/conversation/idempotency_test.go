@@ -77,3 +77,55 @@ func TestTypedBodyPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestIdempotencyKey(t *testing.T) {
+	// Distinct bytes across all five 8-4-4-4-12 segments, including hex digits a–f.
+	sample := IdempotencyKey{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x4c, 0xde, 0xaf, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd}
+	for _, tc := range []struct {
+		name  string
+		check func(t *testing.T)
+	}{
+		{
+			name: "String is 8-4-4-4-12 lower-case form",
+			check: func(t *testing.T) {
+				const want = "01234567-89ab-4cde-af01-23456789abcd"
+				if got := sample.String(); got != want {
+					t.Fatalf("String() = %q, want %q", got, want)
+				}
+			},
+		},
+		{
+			name: "version nibble is 4",
+			check: func(t *testing.T) {
+				for range 32 {
+					k := NewIdempotencyKey()
+					if got := k[6] >> 4; got != 4 {
+						t.Fatalf("version nibble = %#x in %s, want 0x4", got, k)
+					}
+				}
+			},
+		},
+		{
+			name: "variant bits are 10",
+			check: func(t *testing.T) {
+				for range 32 {
+					k := NewIdempotencyKey()
+					if got := k[8] >> 6; got != 0b10 {
+						t.Fatalf("variant bits = %02b in %s, want 10", got, k)
+					}
+				}
+			},
+		},
+		{
+			name: "two keys differ",
+			check: func(t *testing.T) {
+				first, second := NewIdempotencyKey(), NewIdempotencyKey()
+				if first == (IdempotencyKey{}) || second == (IdempotencyKey{}) || first == second {
+					t.Fatalf("NewIdempotencyKey() = %s and %s, want distinct non-zero keys", first, second)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, tc.check)
+	}
+}

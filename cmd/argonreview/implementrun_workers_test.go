@@ -39,7 +39,7 @@ func TestImplementRunWorktreeLock(t *testing.T) {
 				implementRunRefusedUnchanged(t, x, "acquiring worktree lock")
 				return
 			}
-			var out io.Writer = io.Discard
+			out := io.Writer(io.Discard)
 			if row == "status" {
 				out = implementTreeLockedWriter{t: t, tree: x.f.tree}
 			}

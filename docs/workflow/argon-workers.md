@@ -1,6 +1,6 @@
 # Isolated implementer workers
 
-The launcher separates two implementers using distinct homes and worktrees.
+The launcher isolates two implementers by home and worktree.
 **A second worker is NOT enabled in production.** Host experiments, installing
 this binary, creating and signing in worker 2, trusting its builtin list, and
 go-live each need the maintainer's separate approval. The existing
@@ -12,10 +12,10 @@ go-live each need the maintainer's separate approval. The existing
 
 Use worker 1's dedicated home at ~/dev/ribbitto/agy-worker-home and worker 2's
 at ~/dev/ribbitto/agy-worker-home-2. The review home is
-~/dev/ribbitto/agy-trial-home. Each worker's worktree must be a direct child
-of ~/dev/ribbitto/wt/, with its own branch and saved Git file. Do not reuse a
-worktree between live runs. The direct-child rule is enforced by the host
-wrappers; the Go commands accept the validated explicit worktree path.
+~/dev/ribbitto/agy-trial-home. Each worktree must be a direct child
+of ~/dev/ribbitto/wt/, with its own branch and saved Git file. Never reuse a
+worktree between live runs. Host wrappers enforce the direct-child rule;
+Go accepts the validated explicit worktree path.
 
 | Per worker or run | Shared by the workers |
 |---|---|
@@ -26,10 +26,10 @@ wrappers; the Go commands accept the validated explicit worktree path.
 | Worktree, branch, saved Git file, prompt, log directory | Verification image and cache infrastructure |
 | Random TMPDIR beside that run's worktree | Container sweep namespace for the calling uid |
 
-Hooks select their own home's guard, so different homes' hooks need not have
-the same bytes. The worktree marker names the explicit worktree; TMPDIR is
-created beside it. Logs and saved Git files remain external to writable homes
-and worktrees under the [run argument rules](argon-implement-run.md#arguments).
+Hooks select their home's guard, so their bytes may differ between homes.
+The marker names the explicit worktree; TMPDIR is created beside it. Logs
+and saved Git files stay outside writable homes and worktrees under the
+[run argument rules](argon-implement-run.md#arguments).
 
 Each verify call names its container `argonreview-check-<random>` (32 lowercase
 hex digits), labelled `argonreview.owner=verify`, with no worker identifier.
@@ -37,106 +37,118 @@ It stops and force-removes that container, confirms removal, then removes its
 private source copy; failed cleanup disqualifies verification. SIGKILL can
 leave leftovers for the sweep.
 
-There is no worker flag. Host wrappers record a `worker` file in each run
-directory to attribute evidence. Keep this wrapper-owned file outside the log
-directory passed to Go: a pre-existing log directory must be empty.
+Host wrappers record a `worker` file in each run directory for attribution.
+Keep it outside Go's log directory: pre-existing log directories must be empty.
 
 ## Peer homes and worktree lock
 
-Both `implement-run` and `implement-check` accept the optional repeatable flag
-`--peer-home <abs>`, up to three values. Every peer must be an absolute, clean
-path to an existing real directory, with no symlink component or leaf. Root
-is refused. A peer equal to the selected home, including the same directory
-identity under another spelling, is refused. These are usage errors (exit 2).
-Every other flag remains accepted only once; positional arguments remain
-refused. A peer may be repeated within the three-value cap, but wrappers
-should list each peer only once.
+Both `implement-run` and `implement-check` accept optional repeatable
+`--peer-home <abs>`, up to three values. Each must be an absolute, clean path
+to an existing real directory, without symlink components or leaf. Root and
+the selected home (including aliases of its directory identity) are refused
+as usage errors (exit 2). Other flags may occur only once; positional arguments
+are refused. Repeated peers count toward the cap; wrappers should list each once.
 
-The run refuses with exit 1 before creating logs, TMPDIR or placing files if
-any of these paths equals or lies inside a peer home: the selected home,
-worktree, existing log directory or its parent, saved Git file, prompt file or agy
-executable. It also refuses if a peer lies inside the worktree or selected
-home. Comparisons walk parent chains and compare device/inode identities,
-as the existing containment checks do; string prefixes alone are insufficient.
-`implement-check` applies the same separation rules to its home, worktree,
-saved Git file and agy path. It has no prompt or log arguments; those two
-checks belong to `implement-run`. Peer validation does not inspect a peer's
-configuration or marker and does not acquire its home lock.
-With peers supplied, standalone checks also refuse symlinked agy leaves or
-components, matching the run's existing regular-file path rule.
+Before creating logs, TMPDIR or placing files, the run exits 1 if any of
+these equals or lies inside a peer home: selected home, worktree, existing
+log directory or its parent, saved Git file, prompt file or agy executable.
+It also refuses peers inside the worktree or selected home. Containment
+checks walk parent chains, comparing device/inode identities, not prefixes.
+`implement-check` applies the same rules to its home, worktree, saved Git
+file and agy path; it has no prompt or log arguments. Peer validation neither
+inspects peer configuration or markers nor acquires peer home locks. With
+peers, standalone checks refuse symlinked agy leaves or components, matching
+the run's regular-file path rule.
 
-The run passes every peer to its in-process initial at-rest, pre-, post- and
-final at-rest checks. Peers do not change the guard or trusted-build contract.
-The wrappers must supply them on standalone checks too. Without peers, peer
-validation adds no checks or output; existing Go behavior remains the same
-except for the new worktree lock, which also protects independent homes.
+The run passes every peer to its initial at-rest, pre-, post- and final
+at-rest checks in process. Peers do not change the guard or trusted-build
+contract. Wrappers must supply them on standalone checks too. Without peers,
+validation adds no checks or output; only the new worktree lock changes
+existing Go behavior, protecting independent homes too.
 
-After taking the existing home lock, the runner opens the worktree directory
-read-only with O_DIRECTORY, O_NOFOLLOW and O_CLOEXEC and takes an exclusive,
-nonblocking flock on that descriptor. Another holder causes exit 1 before
-log/TMPDIR creation or placement. After locking, its descriptor identity must
-match the worktree path's stat; a swapped directory is refused.
-The already acquired home lock can have
-created its persistent lock file; nothing is created in the worktree. With
-that home lock file already present, the refusal changes no files. Both
-locks remain held through cleanup and status delivery and close at the end.
-The worktree descriptor is not inherited by agy or its children. Different
-worktrees have independent locks, even when both runs use the same launcher.
+After taking the home lock, the runner opens the worktree read-only with
+O_DIRECTORY, O_NOFOLLOW and O_CLOEXEC and takes an exclusive, nonblocking
+flock. Another holder causes exit 1 before log/TMPDIR creation or placement.
+The locked descriptor must match the path's stat; swapped directories are
+refused. Only the persistent home lock file may have been created; nothing
+is created in the worktree. If that file existed, refusal changes no files.
+Both locks last through cleanup and status delivery, then close. agy and
+its children do not inherit the worktree descriptor. Worktree locks are
+independent, even with the same launcher.
 
-A crash releases locks but can leave agy alive. The marker still requires
-ordered recovery before reuse of that home or worktree. A released worktree
-lock never means the worktree is free. The cross-worker recovery rule below
-is a host rule, NOT enforced by the launcher.
+Crashes release locks but may leave agy alive. Markers require ordered
+recovery before home or worktree reuse; released locks never imply a free
+worktree. Cross-worker recovery below is host policy, NOT launcher-enforced.
 
 ## Host wrapper contract
 
-Before a separately approved switch, prepare and review each worker's own
-run and check wrappers. Each hard-codes HOME and PEERS; neither takes a home,
-peer list or worker identity from the caller. Use these exact peer sets:
+Before a separately approved switch, prepare and review each worker's run
+and check wrappers. Hard-code HOME and PEERS; accept no caller-supplied home,
+peer list or worker identity. Use these exact peer sets:
 
 | Wrapper | HOME under ~/dev/ribbitto/ | PEERS under ~/dev/ribbitto/ |
 |---|---|---|
 | Worker 1 | agy-worker-home | agy-worker-home-2, agy-trial-home |
 | Worker 2 | agy-worker-home-2 | agy-worker-home, agy-trial-home |
 
-Peer directories must exist before wrappers name them. Their existence does
-not authorize sign-in or execution. Review runs retain the existing
+Peers must exist before wrappers name them; existence authorizes neither
+sign-in nor execution. Review runs retain the
 [review boundary](running-argon.md#the-boundary).
 
-Before starting any run, the host wrapper / Claude lists every worker's
-guard/ directory for an implement-run.recovery-needed marker and reads its
-guard/implementer-worktree to identify the affected worktree. No worker may
-be given a worktree whose last run left a marker or whose stop was not
-confirmed until that run's ordered recovery is complete, including confirmed
-session stop. Missing or uncertain attribution requires recovery before
-assignment. This is host policy, not a launcher check. A launcher refusal
-when a supplied peer home has a marker naming this worktree is possible
-later hardening, not implemented here.
+Before every run, the host wrapper / Claude lists every worker's guard/
+for implement-run.recovery-needed and reads guard/implementer-worktree to
+identify the affected worktree. No worker may receive a worktree whose last
+run left a marker or whose stop is unconfirmed until ordered recovery,
+including confirmed session stop, completes. Missing or uncertain
+attribution requires recovery before assignment. This is host policy;
+launcher refusal for a peer marker naming this worktree is deferred hardening.
 
-Both workers' wrappers read verify-mode from worker 1's implementer/verify-mode.
-Do not copy that switch into a separately editable worker 2 file. Continue
-the existing idle-check rule: idle checks select off, while active checks
-and runs use the trusted mode. Continue pinning the launcher hash and trusted
-source as in the [switch record](argon-implement-switch.md#wrappers-and-trusted-inputs).
-An updated binary needs newly generated home-specific trusted hooks; do not
-make a mismatched configuration pass by bypassing byte comparison.
+Both wrappers read worker 1's implementer/verify-mode; never copy it to an
+editable worker 2 file. Idle checks select off; active checks and runs use
+the trusted mode. Pin launcher hash and trusted source per the
+[switch record](argon-implement-switch.md#wrappers-and-trusted-inputs).
+Updated binaries need regenerated home-specific trusted hooks; never bypass
+byte comparison to accept mismatched configuration.
 
-Before launch, verify SHA-256 equality with worker 1 for the common-content
-files in each home's implementer directory: settings.json, the trusted agent
-file argon-implementer.md and the trusted builtin.agy-<v>.txt list for the
-selected agy version. These checks are wrapper policy; the Go runner checks
-each home's trusted copies and baseline independently, without reading
-worker 1's copies. Home-specific hooks, guard worktree files and sign-in
-state are not common-content files. Signing in worker 2 and trusting its
-builtin list are separate maintainer decisions, even if bytes compare equal.
+Before launch, require SHA-256 equality with worker 1 for common files in
+each home's implementer directory: settings.json, trusted agent argon-implementer.md
+and trusted builtin.agy-<v>.txt for the selected agy version. Wrappers check
+this; Go independently checks each home's trusted copies and baseline,
+without reading worker 1's copies. Hooks, guard worktree files and sign-in
+state are home-specific. Worker 2 sign-in and builtin trust need separate
+maintainer decisions even with equal bytes.
 
-Require the wrapper's worktree to be a direct child of ~/dev/ribbitto/wt/,
-then pass its absolute path explicitly. Allocate a fresh per-run directory,
-record its worker identity, and use an empty child log directory for Go.
-Keep prompts and saved Git files outside all peer homes and writable trees.
-Do not infer a peer set from whichever directories happen to exist or allow
-an environment override to drop the review home. This PR does not install
-or modify host wrappers.
+Require a direct-child worktree under ~/dev/ribbitto/wt/; pass its absolute
+path. Allocate a fresh run directory, record worker identity and give Go an
+empty child log directory. Keep prompts and saved Git files outside all
+peer homes and writable trees. Never infer peers from existing directories
+or allow environment overrides to drop the review home. This PR neither
+installs nor modifies host wrappers.
+
+## N workers
+
+Each worker needs its own home, guard directory, lock, recovery marker and
+worktree, the latter under ~/dev/ribbitto/wt/. A shared run.zsh with a worker
+argument and a fixed table is the form for N>=3; there is no --worker flag in
+Go, which would compile host paths into the launcher.
+Each worker's run and check wrappers must list ALL other workers' homes as
+`--peer-home`, plus the review home as above. The three-peer cap counts the
+review home: N−1+1 ≤ 3, so at most three workers fit this contract. Four or
+more need a cap change and a new review; do not drop the review peer.
+
+Every worker uses shared read-only content and the SHA-256 equality rule
+against worker 1's master copies. All read worker 1's verify-mode.
+Before assigning any worktree, check all N homes for recovery markers:
+no worker receives a worktree whose last run left a marker until recovery.
+The recovery and uncertain-attribution rules above still apply.
+
+container-sweep stays uid-global with its liveness protections. Coupling
+grows with N: one worker's sweep can reclaim another's dead leftovers
+(design note #1577, R4/R5). Reconsider deferred per-worker container tags
+(option S1) at N>2. Quota and Docker capacity remain unknowns deciding
+whether N>2 is useful (design note E1/E2); experiments require the
+maintainer's explicit start. Going beyond two workers needs separate
+maintainer approval, as enabling the second worker does.
 
 ## Operation and rollback
 

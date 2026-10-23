@@ -48,6 +48,21 @@ func implementRunLock(home string) (*os.File, error) {
 	return f, nil
 }
 
+// Lock the directory itself so independent homes cannot supervise the same
+// worktree. No worktree entry is needed, and exec must not retain the lock.
+func implementRunTreeLock(tree string) (*os.File, error) {
+	fd, err := unix.Open(tree, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, fmt.Errorf("opening worktree lock: %w", err)
+	}
+	f := os.NewFile(uintptr(fd), tree)
+	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("acquiring worktree lock (another run may be active): %w", err)
+	}
+	return f, nil
+}
+
 func (r *implementRun) recoveryMarker() string {
 	return filepath.Join(r.home, "guard/implement-run.recovery-needed")
 }

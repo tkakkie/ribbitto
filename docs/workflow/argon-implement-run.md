@@ -13,10 +13,12 @@ argonreview implement-run --verify off|on [--trusted-source <abs>] \
   --home <implementer-home> --worktree <dir> \
   --git-file <saved-file> --prompt-file <file> --log-dir <dir> \
   --shared-settings-sha256 <64-hex> [--agy <path>] [--model <name>] \
-  [--timeout <duration>]
+  [--timeout <duration>] [--peer-home <abs>]...
 ```
 
-Each flag is accepted once; positional arguments are refused. Paths must be
+Only `--peer-home` repeats (at most three); other flags are accepted once.
+See [worker separation](argon-workers.md#peer-homes-and-worktree-lock).
+Positional arguments are refused. Paths must be
 absolute, clean and free of symlink components. The home and worktree must
 be real directories that do not overlap. The implementer home must also
 not equal or contain the calling account's home, or equal, contain or lie

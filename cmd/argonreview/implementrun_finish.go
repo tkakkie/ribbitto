@@ -336,6 +336,9 @@ func (r *implementRun) checkState(state string, out io.Writer) int {
 	if state == "on" {
 		args = append(args, "--trusted-source", r.source)
 	}
+	for _, peer := range r.peers {
+		args = append(args, "--peer-home", peer)
+	}
 	return r.deps.check(args, out, out)
 }
 

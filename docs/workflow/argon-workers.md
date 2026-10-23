@@ -14,8 +14,8 @@ Use dedicated homes `<worker-home>` for worker 1, `<worker-home-2>` for worker 2
 and `<review-home>` for reviews. The host wrapper sets the real paths.
 Each worktree, `<repo-root>/wt/<name>`, must be a direct child of `<repo-root>/wt/`,
 with its own branch and saved Git file. Never reuse a
-worktree between live runs. Host wrappers enforce this rule;
-Go validates the explicit worktree path.
+worktree between live runs. Only wrappers enforce the direct-child rule;
+Go checks given paths against peer homes.
 
 | Per worker or run | Shared by the workers |
 |---|---|
@@ -47,7 +47,7 @@ Both `implement-run` and `implement-check` accept optional repeatable
 to an existing real directory, without symlink components or leaf. Root and
 the selected home (including aliases of its directory identity) are refused
 as usage errors (exit 2). Other flags may occur only once; positional arguments
-are refused. Repeated peers count toward the cap; wrappers should list each once.
+are refused. Repeated peers count toward the cap but fail (exit 1).
 Peers must not equal or contain one another; the same device/inode comparison
 refuses overlaps (exit 1).
 

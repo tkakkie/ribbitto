@@ -168,6 +168,7 @@ func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, eve
 func NewReader(runner SnapshotRunner, countRunner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
+const NoticeNameLength untyped int = 40 // NoticeNameLength bounds a topic's name inside a branch notice, in Unicode code points, ellipsis included, so the notice stays one line in the message list (docs/domain/topics.md).
 type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; callers raise only after commit.
   func (Notifier).Raise(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64)
 type Page struct // Page is one page of a channel's history, oldest first.
@@ -274,6 +275,7 @@ type Sent struct // Sent is what a send produced.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64
+func ShortTopicName(name string) string // ShortTopicName shortens a topic name for a branch notice to NoticeNameLength, ending a shortened one with an ellipsis.
 type SidebarCounter interface // SidebarCounter is the counts-only extension used by independent recounts.
   func (SidebarCounter).ReadCounts(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID) (PageCounts, error) // ReadCounts returns both count maps without computing first unread.
 type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and explicit counts, including zero.

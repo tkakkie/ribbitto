@@ -83,7 +83,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	// The notice is an ordinary message in the brancher's language; its
 	// text names the destination as it is at the time of branching.
 	notice := func(destination conversation.Topic) string {
-		name := destination.Name
+		name := conversation.ShortTopicName(destination.Name)
 		if destination.IsDefault {
 			name = i18n.T(r.Context(), "topic.default")
 		}

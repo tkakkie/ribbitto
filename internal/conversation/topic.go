@@ -2,7 +2,9 @@ package conversation
 
 import (
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
@@ -20,6 +22,25 @@ type Topic struct {
 // code points, the same rule as channel names (docs/domain/topics.md).
 func ValidateTopicName(value string) (string, error) {
 	return validateText(value, 1, 80, "topic name")
+}
+
+// NoticeNameLength bounds a topic's name inside a branch notice, in Unicode
+// code points, ellipsis included, so the notice stays one line in the message
+// list (docs/domain/topics.md).
+const NoticeNameLength = 40
+
+// ShortTopicName shortens a topic name for a branch notice to
+// NoticeNameLength, ending a shortened one with an ellipsis. It cuts on a
+// character boundary, so the result is always valid UTF-8.
+func ShortTopicName(name string) string {
+	if len(name) <= NoticeNameLength {
+		return name
+	}
+	cut := NoticeNameLength - 1
+	for cut > 0 && !utf8.RuneStart(name[cut]) {
+		cut--
+	}
+	return strings.TrimRight(name[:cut], " ") + "…"
 }
 
 // ErrTopicNotFound means the topic does not exist in the given organisation and

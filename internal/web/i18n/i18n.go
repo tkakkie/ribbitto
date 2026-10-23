@@ -49,21 +49,21 @@ type requestLanguage struct {
 // Middleware supplies translations and cache variation for HTML routes.
 func (c *Catalogues) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lang := "en"
-		if cookie, err := r.Cookie("lang"); err == nil && (cookie.Value == "en" || cookie.Value == "ja") {
+		lang := "ja"
+		if cookie, err := r.Cookie("lang"); err == nil && (cookie.Value == "en" || cookie.Value == "ja") && r.Header.Get("Accept-Language") == "" {
 			lang = cookie.Value
-		} else if tags, _, err := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); err == nil {
+		} else if tags, _, err := language.ParseAcceptLanguage(r.Header.Get("Accept-Language")); err == nil && (cookie == nil || cookie.Value == "en" || cookie.Value == "ja") {
 			_, index, _ := c.matcher.Match(tags...)
 			lang = []string{"en", "ja"}[index]
 		}
 		for _, token := range []string{"Accept-Language", "Cookie"} {
 			found := false
 			for _, value := range w.Header().Values("Vary") {
-				for _, existing := range strings.Split(value, ",") {
+				for _, existing := range []string{value} {
 					found = found || strings.EqualFold(strings.TrimSpace(existing), token)
 				}
 			}
-			if !found {
+			if !found || token == "Cookie" {
 				w.Header().Add("Vary", token)
 			}
 		}
@@ -77,14 +77,14 @@ func Language(ctx context.Context) string {
 	if state, ok := ctx.Value(contextKey{}).(requestLanguage); ok {
 		return state.lang
 	}
-	return "en"
+	return "ja"
 }
 
 // T translates an ID, falling back to English and finally the ID itself.
 func T(ctx context.Context, id string) string {
 	state, ok := ctx.Value(contextKey{}).(requestLanguage)
 	if !ok {
-		return id
+		return ""
 	}
 	config := &goi18n.LocalizeConfig{MessageID: id}
 	text, err := state.localizer.Localize(config)

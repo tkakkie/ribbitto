@@ -56,11 +56,11 @@ func (c *Catalogues) Middleware(next http.Handler) http.Handler {
 			_, index, _ := c.matcher.Match(tags...)
 			lang = []string{"en", "ja"}[index]
 		}
-		for _, token := range []string{"Accept-Language", "Cookie"} {
+		for _, token := range []string{"Cookie"} {
 			found := false
 			for _, value := range w.Header().Values("Vary") {
 				for _, existing := range strings.Split(value, ",") {
-					found = found || strings.EqualFold(strings.TrimSpace(existing), token)
+					found = found || strings.TrimSpace(existing) == token
 				}
 			}
 			if !found {

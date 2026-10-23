@@ -130,10 +130,17 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 // an ellipsis. It counts after resolution, so a chat_v1 excerpt never hides
 // markup or a UUID within its length.
 func PinExcerpt(entry Entry, placeholder string) string {
-	text := strings.Join(strings.Fields(entry.Text(placeholder)), " ")
-	if utf8.RuneCountInString(text) <= PinExcerptLength {
+	return shorten(strings.Join(strings.Fields(entry.Text(placeholder)), " "), PinExcerptLength)
+}
+
+// shorten returns text unchanged when it has at most limit code points.
+// Otherwise it keeps the first limit-1 code points, drops the spaces that end
+// them and adds an ellipsis, so the result never has more than limit code
+// points.
+func shorten(text string, limit int) string {
+	if utf8.RuneCountInString(text) <= limit {
 		return text
 	}
 	runes := []rune(text)
-	return strings.TrimRight(string(runes[:PinExcerptLength-1]), " ") + "…"
+	return strings.TrimRight(string(runes[:limit-1]), " ") + "…"
 }

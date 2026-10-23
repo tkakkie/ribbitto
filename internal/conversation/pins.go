@@ -54,7 +54,7 @@ func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kerne
 		return err
 	})
 	if err != nil {
-		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %w", err)
+		return state, fmt.Errorf("reading pins snapshot: %w", err)
 	}
 	return state, nil
 }
@@ -91,11 +91,11 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	}
 	topics, err := reads.LookupTopics(ctx, m.Organization.ID, channelID, topicIDs)
 	if err != nil {
-		return nil, fmt.Errorf("reading pin topics: %w", err)
+		return nil, fmt.Errorf("reading pin topics: %v", err)
 	}
 	members, err := s.members(snapshot).LookupMembers(ctx, m.Organization.ID, memberIDs)
 	if err != nil {
-		return nil, fmt.Errorf("reading pin members: %w", err)
+		return nil, fmt.Errorf("reading pin members: %v", err)
 	}
 	accountIDs := make([]kernel.ID, 0, len(members))
 	for _, member := range members {
@@ -103,7 +103,7 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 	}
 	names, err := s.accounts(snapshot).LookupDisplayNames(ctx, accountIDs)
 	if err != nil {
-		return nil, fmt.Errorf("reading pin names: %w", err)
+		return nil, fmt.Errorf("reading pin names: %v", err)
 	}
 	pins := make([]Pin, len(pinned))
 	for i, p := range pinned {

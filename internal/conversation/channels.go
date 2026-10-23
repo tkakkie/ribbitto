@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -17,6 +18,7 @@ type ChannelStore interface {
 	SetChannelImage(ctx context.Context, organizationID, id kernel.ID, image string) error
 	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
 	GetDefaultChannel(ctx context.Context, organizationID kernel.ID) (Channel, error)
+	ListChannels(ctx context.Context, organizationID kernel.ID) ([]Channel, error)
 }
 
 // Channels runs the channel use cases for a member resolved by org.
@@ -73,6 +75,28 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 		return Channel{}, fmt.Errorf("creating channel: %w", err)
 	}
 	return created, nil
+}
+
+// Ensure returns the member's organisation's channel with the given name,
+// ignoring case as the unique index does, and creates it when there is
+// none. A caller that only needs the channel to exist, such as a script or a
+// setup step, can run it again without ErrChannelNameTaken. An invalid name
+// is ErrInvalidChannelName and a full organisation ErrChannelLimit, as for Create.
+func (s *Channels) Ensure(ctx context.Context, m org.Membership, name string) (Channel, error) {
+	name, err := ValidateChannelName(name)
+	if err != nil {
+		return Channel{}, fmt.Errorf("%w: %w", ErrInvalidChannelName, err)
+	}
+	existing, err := s.store.ListChannels(ctx, m.Organization.ID)
+	if err != nil {
+		return Channel{}, fmt.Errorf("listing channels: %w", err)
+	}
+	for _, found := range existing {
+		if strings.EqualFold(found.Name, name) {
+			return found, nil
+		}
+	}
+	return s.Create(ctx, m, name)
 }
 
 // Get returns a channel of the member's organisation by id, or ErrChannelNotFound.

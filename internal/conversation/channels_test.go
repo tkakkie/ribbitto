@@ -3,6 +3,7 @@ package conversation_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -48,6 +49,10 @@ func (s *channelStore) GetDefaultChannel(_ context.Context, org kernel.ID) (conv
 		}
 	}
 	return conversation.Channel{}, conversation.ErrChannelNotFound
+}
+
+func (s *channelStore) ListChannels(_ context.Context, org kernel.ID) ([]conversation.Channel, error) {
+	return slices.Clone(s.channels[org]), nil
 }
 
 func TestChannels(t *testing.T) {

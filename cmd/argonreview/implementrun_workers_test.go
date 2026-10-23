@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -52,6 +53,39 @@ func TestImplementRunWorktreeLock(t *testing.T) {
 				t.Fatalf("worktree lock not released: %v", err)
 			}
 			_ = lock.Close()
+		})
+	}
+}
+
+func TestImplementRunWorktreeLockIdentity(t *testing.T) {
+	for _, row := range []string{
+		"same",       // Refuse an unchanged directory identity.
+		"swapped",    // Delete the SameFile comparison alone.
+		"stat-error", // Ignore the path stat error alone.
+	} {
+		t.Run(row, func(t *testing.T) {
+			tree := filepath.Join(t.TempDir(), "tree")
+			implementCheckMkdir(t, tree)
+			lock, err := implementRunTreeLockStat(tree, func(path string) (os.FileInfo, error) {
+				if row == "swapped" {
+					if err := os.Rename(path, path+"-old"); err != nil {
+						t.Fatal(err)
+					}
+					implementCheckMkdir(t, path)
+				}
+				if row == "stat-error" {
+					// Same identity isolates the error from the mismatch predicate.
+					info, err := os.Stat(path)
+					return info, errors.Join(err, os.ErrPermission)
+				}
+				return os.Stat(path)
+			})
+			if lock != nil {
+				_ = lock.Close()
+			}
+			if (err != nil) != (row != "same") || row != "same" && !strings.Contains(err.Error(), "identity") {
+				t.Fatalf("worktree identity refusal: %v", err)
+			}
 		})
 	}
 }
@@ -160,7 +194,7 @@ func implementRunWorkersIsolation(t *testing.T, realSession bool) {
 		}
 		pair[0].args = append(pair[0].args, "--peer-home", pair[1].f.home)
 	}
-	a.set("timeout", "2s")
+	a.set("timeout", "6s")
 	b.set("timeout", "20s")
 	write(t, filepath.Join(a.fake, "mutate"), "exec sleep 30\n")
 	write(t, filepath.Join(b.fake, "mutate"), "touch '"+b.fake+"/ready'\nwhile [ ! -f '"+b.fake+"/release' ]; do /bin/sleep 0.01; done\n")
@@ -171,6 +205,11 @@ func implementRunWorkersIsolation(t *testing.T, realSession bool) {
 	go func() { bdone <- implementRunCommand(b.args, &bout, &berr, b.deps) }()
 	defer write(t, filepath.Join(b.fake, "release"), "")
 	waitFor(t, filepath.Join(b.fake, "ready"))
+	select {
+	case <-adone:
+		t.Fatal("A ended before B was active")
+	default:
+	}
 	tmpBytes, err := os.ReadFile(filepath.Join(b.fake, "tmp"))
 	if err != nil {
 		t.Fatal(err)

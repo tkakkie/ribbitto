@@ -167,6 +167,12 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 			c.problem("peer homes: %q", err)
 		}
 	}
+	// Preserve standalone checks' historical behavior when no peers are given.
+	if c.problems == 0 && len(peers) > 0 {
+		if err := implementRunTarget(agy.value, false); err != nil {
+			c.problem("agy: %q", err)
+		}
+	}
 	if c.problems == 0 {
 		if c.deps.git == nil {
 			c.deps.git = implementGit(worktree.value)

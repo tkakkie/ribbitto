@@ -31,6 +31,12 @@ the same bytes. The worktree marker names the explicit worktree; TMPDIR is
 created beside it. Logs and saved Git files remain external to writable homes
 and worktrees under the [run argument rules](argon-implement-run.md#arguments).
 
+Each verify call names its container `argonreview-check-<random>` (32 lowercase
+hex digits), labelled `argonreview.owner=verify`, with no worker identifier.
+It stops and force-removes that container, confirms removal, then removes its
+private source copy; failed cleanup disqualifies verification. SIGKILL can
+leave leftovers for the sweep.
+
 There is no worker flag. Host wrappers record a `worker` file in each run
 directory to attribute evidence. Keep this wrapper-owned file outside the log
 directory passed to Go: a pre-existing log directory must be empty.
@@ -48,7 +54,7 @@ should list each peer only once.
 
 The run refuses with exit 1 before creating logs, TMPDIR or placing files if
 any of these paths equals or lies inside a peer home: the selected home,
-worktree, log directory's existing parent, saved Git file, prompt file or agy
+worktree, existing log directory or its parent, saved Git file, prompt file or agy
 executable. It also refuses if a peer lies inside the worktree or selected
 home. Comparisons walk parent chains and compare device/inode identities,
 as the existing containment checks do; string prefixes alone are insufficient.
@@ -56,6 +62,8 @@ as the existing containment checks do; string prefixes alone are insufficient.
 saved Git file and agy path. It has no prompt or log arguments; those two
 checks belong to `implement-run`. Peer validation does not inspect a peer's
 configuration or marker and does not acquire its home lock.
+With peers supplied, standalone checks also refuse symlinked agy leaves or
+components, matching the run's existing regular-file path rule.
 
 The run passes every peer to its in-process initial at-rest, pre-, post- and
 final at-rest checks. Peers do not change the guard or trusted-build contract.
@@ -66,7 +74,9 @@ except for the new worktree lock, which also protects independent homes.
 After taking the existing home lock, the runner opens the worktree directory
 read-only with O_DIRECTORY, O_NOFOLLOW and O_CLOEXEC and takes an exclusive,
 nonblocking flock on that descriptor. Another holder causes exit 1 before
-log/TMPDIR creation or placement. The already acquired home lock can have
+log/TMPDIR creation or placement. After locking, its descriptor identity must
+match the worktree path's stat; a swapped directory is refused.
+The already acquired home lock can have
 created its persistent lock file; nothing is created in the worktree. With
 that home lock file already present, the refusal changes no files. Both
 locks remain held through cleanup and status delivery and close at the end.
@@ -74,8 +84,9 @@ The worktree descriptor is not inherited by agy or its children. Different
 worktrees have independent locks, even when both runs use the same launcher.
 
 A crash releases locks but can leave agy alive. The marker still requires
-ordered recovery before reuse of that home. A marker in worker 1's home does
-not by itself refuse a run using worker 2's home.
+ordered recovery before reuse of that home or worktree. A released worktree
+lock never means the worktree is free. The cross-worker recovery rule below
+is a host rule, NOT enforced by the launcher.
 
 ## Host wrapper contract
 
@@ -91,6 +102,16 @@ peer list or worker identity from the caller. Use these exact peer sets:
 Peer directories must exist before wrappers name them. Their existence does
 not authorize sign-in or execution. Review runs retain the existing
 [review boundary](running-argon.md#the-boundary).
+
+Before starting any run, the host wrapper / Claude lists every worker's
+guard/ directory for an implement-run.recovery-needed marker and reads its
+guard/implementer-worktree to identify the affected worktree. No worker may
+be given a worktree whose last run left a marker or whose stop was not
+confirmed until that run's ordered recovery is complete, including confirmed
+session stop. Missing or uncertain attribution requires recovery before
+assignment. This is host policy, not a launcher check. A launcher refusal
+when a supplied peer home has a marker naming this worktree is possible
+later hardening, not implemented here.
 
 Both workers' wrappers read verify-mode from worker 1's implementer/verify-mode.
 Do not copy that switch into a separately editable worker 2 file. Continue
@@ -119,9 +140,13 @@ or modify host wrappers.
 
 ## Operation and rollback
 
-The global container sweep is uid-global, with liveness protection; it is
-not partitioned by worker name. See [sweep](argon-verify-sweep.md) for its
-refusals and dry-run behavior. After an abnormal end, run
+The container sweep is uid-global, not partitioned by worker. A held copy
+lock, a matching live non-orphan Docker client, or age under 90 seconds each
+alone protects a container, so the sweep leaves a running worker's container
+alone. It can reclaim dead leftovers from either worker, subject to the
+[sweep validation and mount checks](argon-verify-sweep.md); it provides no
+per-worker ownership or reclamation guarantee. A per-worker container tag is
+a deferred option. After an abnormal end, run
 `container-sweep --dry-run` before the next start of either worker, inspect
 the result and perform the ordered manual recovery. Do one recovery at a
 time. A dry run does not replace independently confirming session stop or

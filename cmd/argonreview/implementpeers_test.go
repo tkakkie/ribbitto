@@ -158,6 +158,85 @@ func TestImplementPeerArguments(t *testing.T) {
 	}
 }
 
+func TestImplementPeerLogDirectory(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		want int
+	}{
+		{"existing-equal", 1},    // Delete the existing-log-in-peer predicate alone.
+		{"existing-inside", 1},   // Delete both log and log-parent predicates (overlap).
+		{"new-parent-inside", 1}, // Delete the log-parent predicate alone; log is absent.
+		{"normal-existing", 0},   // Refuse an existing disjoint log directory.
+		{"normal-new", 0},        // Refuse a new disjoint log directory.
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			x := newImplementRun(t)
+			peer := filepath.Join(x.f.root, "peer")
+			implementCheckMkdir(t, peer)
+			logs := x.logs
+			switch row.name {
+			case "existing-equal":
+				logs = peer
+			case "existing-inside":
+				logs = filepath.Join(peer, "logs")
+			case "new-parent-inside":
+				parent := filepath.Join(peer, "child")
+				implementCheckMkdir(t, parent)
+				logs = filepath.Join(parent, "logs")
+			}
+			if strings.HasPrefix(row.name, "existing-") || row.name == "normal-existing" {
+				implementCheckMkdir(t, logs)
+			}
+			x.set("log-dir", logs)
+			x.args = append(x.args, "--peer-home", peer)
+			if row.want == 1 {
+				implementRunRefusedUnchanged(t, x, "peer home")
+			} else {
+				x.run(t, 0)
+			}
+		})
+	}
+}
+
+func TestImplementPeerCheckAgy(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		peer bool
+		want int
+	}{
+		{"leaf", true, 1},      // Delete the peer-only regular-leaf check alone.
+		{"component", true, 1}, // Delete the real-parent check alone.
+		{"no-peers", false, 0}, // Apply the new rule without peers.
+		{"regular", true, 0},   // Refuse a regular disjoint agy.
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			f := implementCheckFixture(t)
+			args := f.args()
+			real := filepath.Join(f.root, "bin/agy")
+			write(t, real, "executable fixture")
+			agy := filepath.Join(f.root, "agy-link")
+			if row.name == "component" {
+				symlink(t, filepath.Dir(real), agy)
+				agy = filepath.Join(agy, "agy")
+			} else if row.name == "regular" {
+				agy = real
+			} else {
+				symlink(t, real, agy)
+			}
+			args[9] = agy
+			if row.peer {
+				peer := filepath.Join(f.root, "peer")
+				implementCheckMkdir(t, peer)
+				args = append(args, "--peer-home", peer)
+			}
+			var out, stderr bytes.Buffer
+			if code := implementCheckCommand(args, &out, &stderr, f.deps); code != row.want || row.want == 1 && !strings.Contains(out.String(), "agy:") {
+				t.Fatalf("exit=%d stdout=%s stderr=%s", code, &out, &stderr)
+			}
+		})
+	}
+}
+
 func TestImplementPeerForwarding(t *testing.T) {
 	x := newImplementRun(t)
 	peer := filepath.Join(x.f.root, "peer")

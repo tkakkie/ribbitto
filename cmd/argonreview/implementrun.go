@@ -202,6 +202,9 @@ func (r *implementRun) validate() error {
 		if err := implementRealDirectory(r.logs, os.Lstat); err != nil {
 			return err
 		}
+		if err := r.peers.separate(r.home, r.tree, []string{r.logs}, os.Lstat); err != nil {
+			return err
+		}
 		for _, child := range []string{r.tree, r.home} {
 			inside, err := implementContains(r.logs, child, os.Lstat)
 			if err != nil || inside {

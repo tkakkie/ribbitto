@@ -6,13 +6,13 @@ disagreement in a pull request.
 
 ## Index
 
-Start with your role: [Codex implementer](#implementer-codex),
+Role: [Codex implementer](#implementer-codex),
 [Argon implementer](#implementer-argon), [reviewer](#reviewer), or
 [orchestrator/handoff](#orchestrator-and-handoff).
 
 | File | Covers |
 |---|---|
-| This file | Principles, role entries, issues, state, audit, labels |
+| This file | Roles, issues, state, audit, labels |
 | [Pull requests](pull-requests.md#lifecycle-of-a-pull-request) | Delivery, merge approval |
 | [Reviewing](reviewing.md#review-independence-and-rounds) | Cross-review, closure, follow-up, risk |
 | [Copilot](copilot.md#copilot) | Requesting, follow-up, docs-only |
@@ -20,10 +20,10 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, [intake](argon-intake.md), boundary, preflight, records |
-| [Argon verify](argon-verify.md) | In-force permissions, container, results |
+| [Argon verify](argon-verify.md) | Permissions, container, results |
 | [Verify operation](argon-verify-operation.md) | Switch, checks |
 | [Sweep](argon-verify-sweep.md) | Leftovers |
-| [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Review differences, mutation evidence |
+| [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Reviews, mutation evidence |
 | [Investigations](investigations.md#investigations-and-the-performance-target) | Approval, caps, target, host measurements |
 
 ## Principles
@@ -78,6 +78,7 @@ and [handoff rule](running-other-ai.md#handoff-of-another-ais-code).
 ### Implementer Argon
 
 - [Shared gates](#shared-gates).
+- [Intake, steps and calibration](argon-intake.md).
 - [Start gate, eligibility, permissions, preflight and records](argon-implementer.md#argon-as-implementer);
   [verification](argon-verify.md).
 - For fixes: [closure verification](reviewing.md#closure-verification),

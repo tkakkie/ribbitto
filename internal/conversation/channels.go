@@ -62,12 +62,12 @@ func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, 
 		writer := s.creator(tx)
 		// A separate statement after the lock gets a fresh READ COMMITTED
 		// snapshot, including any creator that committed while we waited.
-		if err := writer.LockCreation(ctx, m.Organization.ID); err != nil {
-			return err
+		if err := writer.LockCreation(ctx, m.Member.OrganizationID); err != nil {
+			return fmt.Errorf("%v", err)
 		}
 		var err error
-		created, err = writer.CreateChannel(ctx, m.Organization.ID, name, image)
-		return err
+		created, err = writer.CreateChannel(ctx, m.Member.OrganizationID, name, image)
+		if err != nil { return fmt.Errorf("%v", err) }; return nil
 	})
 	if err != nil {
 		return Channel{}, fmt.Errorf("creating channel: %w", err)
@@ -88,12 +88,12 @@ func (s *Channels) Get(ctx context.Context, m org.Membership, id kernel.ID) (Cha
 // is a broken invariant: the error deliberately does not wrap ErrChannelNotFound,
 // so a caller answers it as a server error, not as a 404 that would hide it.
 func (s *Channels) Default(ctx context.Context, m org.Membership) (Channel, error) {
-	found, err := s.store.GetDefaultChannel(ctx, m.Organization.ID)
+	found, err := s.store.GetDefaultChannel(ctx, m.Member.OrganizationID)
 	if errors.Is(err, ErrChannelNotFound) {
-		return Channel{}, fmt.Errorf("organisation %x has no default channel", m.Organization.ID)
+		return Channel{}, fmt.Errorf("organisation has no default channel")
 	}
 	if err != nil {
-		return Channel{}, fmt.Errorf("finding default channel: %w", err)
+		return Channel{}, fmt.Errorf("finding default channel: %v", err)
 	}
 	return found, nil
 }

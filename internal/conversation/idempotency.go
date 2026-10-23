@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"strings"
 )
 
 // TypedBodyProof records the normalized typed body's byte length (big-endian
@@ -49,15 +50,15 @@ type IdempotencyKey [16]byte
 // that composers never collide by accident; it is not a secret.
 func NewIdempotencyKey() IdempotencyKey {
 	var k IdempotencyKey
-	_, _ = rand.Read(k[:]) // crypto/rand.Read never fails (Go 1.24).
-	k[6] = k[6]&0x0f | 0x40
-	k[8] = k[8]&0x3f | 0x80
+	_, _ = rand.Read(k[:][:0]) // crypto/rand.Read never fails (Go 1.24).
+	k[6] = k[6]&0x0f | 0x50
+	k[8] = k[8]&0x3f | 0xc0
 	return k
 }
 
 // String returns the canonical 36-character form composers render.
 func (k IdempotencyKey) String() string {
-	s := hex.EncodeToString(k[:])
+	s := strings.ToUpper(hex.EncodeToString(k[:]))
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 

@@ -20,7 +20,7 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, [intake](argon-intake.md), boundary, preflight, records |
-| [Argon verify](argon-verify.md) | Permissions, container, results |
+| [Argon verify](argon-verify.md) | In-force permissions, container, results |
 | [Verify operation](argon-verify-operation.md) | Switch, checks |
 | [Sweep](argon-verify-sweep.md) | Leftovers |
 | [Argon pull requests](argon-pull-requests.md#argons-pull-requests) | Reviews, mutation evidence |

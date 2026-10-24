@@ -22,32 +22,22 @@ checks until migrated.
 
 - **One concern per module; pure logic apart from DOM code:** each module owns
   one concern, and logic that decides something (state transitions, queue
-  order, retry classification, key selection or token boundaries) lives in a
-  DOM-free `web/src/<concern>.ts` module. Only that DOM-free `.ts` logic is
-  unit-tested with Node's test runner (`node --test`) through `.mjs` harnesses
-  (`web/src/<concern>.test.mjs`) without `@types/node` (#1412), separate from
-  strict no-emit type checking (#1410). DOM code stays thin and is covered by
-  the go-rod browser tests ([`web-layers-checks.md`](web-layers-checks.md)).
+  order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
+  module. Only that DOM-free `.ts` logic is unit-tested with Node's test runner
+  (`node --test`) through the `.mjs` harnesses without `@types/node` that #1412
+  defines, separately from strict, no-emit type checking (#1410). DOM code
+  stays thin and is covered by the go-rod browser tests
+  ([`web-layers-checks.md`](web-layers-checks.md)).
 
-- **State:** a module's own working state — only the client state allowed by
-  decisions [34](../decisions/34-live-unread-counts.md),
-  [37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md) and
-  [41](../decisions/41-client-storage-indexeddb-by-data-class.md) and UX
-  settings (pending posts, idempotency keys, drafts and bounded unread recovery)
-  — is held in typed in-memory objects, never in `dataset`
-  ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
-  amended by decision 43); JavaScript owns no application state, and persistence
-  rules in decisions 37 and 41 are unchanged. The attributes that
-  [`docs/architecture/web-contracts.md`](web-contracts.md) documents (for
-  example `data-event-cursor`, `data-applied-cursor`, `data-unread-count` and
-  `data-state`) stay in the DOM as the contract between server HTML, CSS,
-  scripts and tests; scripts read and write them only through the typed
-  DOM-contract accessors (#1413), and a value that only the script needs is
-  never put in the DOM. Derived attributes such as `data-state` are rendered
-  from the typed state (#1416, #1417), and changing composer queue state must
-  notify/reset the stream reload guard even without DOM mutations, while keeping
-  immutable `draftKey` identity tied to the original draft snapshot across 409
-  request-key rotation.
+- **State:** a module's own working state is held in typed in-memory objects,
+  never in `dataset`. The attributes that [`web-contracts.md`](web-contracts.md)
+  documents (for example `data-event-cursor`, `data-applied-cursor`,
+  `data-unread-count`, `data-state`) stay in the DOM as the contract between
+  server HTML, CSS, scripts and tests; scripts read and write them only through
+  the typed DOM-contract accessors (#1413), and a value that only the script
+  needs is never put in the DOM. Derived attributes such as `data-state` are
+  rendered from the typed state (#1416, #1417), and the composer queue notifies
+  the stream reload guard when its state changes.
 
 - **How a page declares its scripts:** a page declares its scripts in one Go
   registry (#1411), and `templ` templates reference only logical script names
@@ -61,20 +51,21 @@ checks until migrated.
   duplication appears, as
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
   states. A helper with a second user in another module moves to its own
-  `web/src/<helper>.ts` module, imported by relative `.ts` path, with its own
-  unit tests (`web/src/<helper>.test.mjs`).
+  `web/src/<helper>.ts` module, imported by relative `.ts` path, and its
+  DOM-free `.ts` logic is unit-tested through the `.mjs` harness that #1412
+  defines.
 
 - **How DOM ids and data attributes come from the DOM contract:** Go definitions
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,
   custom event names and payload fields/types; a Go generator under `tools/`,
-  reached by `go generate`, writes the committed web/src/contracts.gen.ts
-  (`web/src/<contracts.gen.ts>`) with constants, types, runtime decoders and
-  typed accessors (#1413). A module never contains a literal contract id,
-  attribute name, `dataset` key, selector or custom event string outside that
-  adapter; runtime validation and type narrowing stay in the adapter because
-  static types cannot validate server attributes or htmx event detail, and a Go
-  check with negative fixtures rejects literal bypasses in authored sources
-  (#1413, #1414).
+  reached by `go generate`, writes the committed generated file
+  `web/src/<contracts.gen.ts>` that the [toolchain page](web-toolchain.md)
+  names, with constants, types, runtime decoders and typed accessors (#1413). A
+  module never contains a literal contract id, attribute name, `dataset` key,
+  selector or custom event string outside that adapter; runtime validation and
+  type narrowing stay in the adapter because static types cannot validate server
+  attributes or htmx event detail, and a Go check with negative fixtures rejects
+  literal bypasses in authored sources (#1413, #1414).
 
 ## Composer queue example: before and after
 
@@ -99,7 +90,9 @@ DOM-free queue logic (`web/src/<composer-queue>.ts`) holds typed state in memory
 with immutable `draftKey` separate from `requestKey`; the thin DOM adapter
 (`web/src/<composer>.ts`) renders `data-state` as an output from the typed queue
 state via the generated accessor (#1413, #1417) and notifies the stream reset
-guard on state transitions:
+guard on state transitions. The sketch leaves out message selection and the
+400/404/413/422/429 alert handling that lines 518–535 of
+`web/static/message-composer-v21.js` also do:
 
 ```ts
 // Illustration (#1416/#1417): pure logic in web/src/<composer-queue>.ts, no DOM.
@@ -130,7 +123,7 @@ export function settlePending(item: PendingItem, status: number, newKey: () => s
 }
 
 // Illustration (#1416/#1417): thin DOM adapter in web/src/<composer>.ts.
-import { setIdempotencyKey, setPendingState, triggerPendingSend } from "./contracts.gen.ts";
+import { setIdempotencyKey, setPendingState } from "./contracts.gen.ts";
 
 function onPendingResponse(item: PendingItem, form: HTMLFormElement, status: number, notifyResetGuard: () => void): void {
   settlePending(item, status, () => crypto.randomUUID());

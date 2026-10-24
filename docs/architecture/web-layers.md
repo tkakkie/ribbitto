@@ -140,12 +140,12 @@ htmx does only requests/swaps; the server and templ own HTML.
 
 See [JavaScript responsibilities and constraints](web-javascript.md) and
 [conventions](web-conventions.md) ([decision 43](../decisions/43-typescript-with-a-go-driven-build.md)
-amendment).
+planned amendment).
 
 **Current exceptions** to the no-application-state rule:
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own sidebar
-badge numbers and bounded recovery state, never creating elements or making
-requests; the server renders the badges and htmx sends resync requests.
+badge numbers and bounded recovery state without creating elements or
+requests; the server still renders the badges and htmx sends resyncs.
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
 allows bounded composer state (pending posts, idempotency keys, session-bound
 drafts); implemented uses follow the [composer contract](web-composer.md).

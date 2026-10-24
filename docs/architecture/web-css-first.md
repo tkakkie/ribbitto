@@ -34,11 +34,14 @@ and so is HTML or CSS that fails one of the four points.
 ## HTML and CSS in today's code
 
 - **Popover API menus (`popover`, `popovertarget`):** `#account-menu` and
-  `#channel-create` in `internal/web/view/shell.templ`, and `messageActions` in
+  `#channel-create` (when `popover` is true, i.e. `Error == ""` and
+  `CreateImageError == ""`; in place on error) in
+  `internal/web/view/shell.templ`, and `messageActions` in
   `internal/web/view/message.templ` (`anchor-below-end` in `web/styles/app.css`).
   The browser opens, dismisses on `Escape` or outside tap, and returns focus
   without JavaScript.
-- **`:has()` in `internal/web/view/branch.templ`:** `#branch-form` uses
+- **`:has()` in `internal/web/view/branch.templ`:** when `BranchError == ""`
+  (otherwise it stays in the column to show its error), `#branch-form` uses
   `peer-not-has-checked/list:hidden` and `peer-has-checked/list:absolute` (or
   `short:peer-has-checked/list:static`) against `#message-list` (`peer/list` in
   `internal/web/view/channel.templ`). It appears from the first paint only while
@@ -63,8 +66,9 @@ and so is HTML or CSS that fails one of the four points.
 ## Scripts that stay
 
 - **`web/static/message-time-v2.js` (`Intl`):** formats `<time data-local-time>`
-  in the reader's locale and time zone with `Intl.DateTimeFormat` on load and
-  scoped `htmx:load`, while the server renders UTC text.
+  in the page's `lang` (`document.documentElement.lang`) and the reader's time
+  zone with `Intl.DateTimeFormat` on load and scoped `htmx:load`, while the
+  server renders UTC text (point 1: CSS cannot do `Intl` formatting).
 - **`web/static/side-panel-v3.js` (`inert`, `aria-modal`, a focus trap):** below
   `wide`, `#side-panel` (`internal/web/view/panel.templ`) covers the
   conversation ([`ui-components.md`](../ui-components.md#side-panels)). CSS
@@ -77,12 +81,16 @@ and so is HTML or CSS that fails one of the four points.
 - **`web/static/branch-selection-v1.js` (`disabled`):** checking a message
   disables checkboxes from other source topics (`data-source`), the source
   topic's `<option>` in `#branch-to`, and `#branch-name` when an existing topic
-  is selected, including on `htmx:load`. CSS cannot set `disabled`.
+  is selected, including on `htmx:load` (points 1 and 3: CSS cannot set
+  `disabled`).
 - **`web/static/arrival-v1.js` (navigation type):** reads
   `navigation.activation` before first paint to set `data-arrive-pill` and
   `data-arrive-panel` on `document.documentElement` only on a same-origin `push`
-  navigation that changed the place or opened a panel, clearing the marks on
-  animation end, `#sidebar-channels` swap or `DOMContentLoaded`.
+  navigation that changed the place or opened a panel (point 1: CSS cannot read
+  `navigation.activation`), clearing each mark on `animationend` or
+  `animationcancel`, `data-arrive-pill` on `#sidebar-channels`
+  `htmx:oobBeforeSwap`, and any mark whose animation is not running on
+  `DOMContentLoaded`.
 - **Composer `visualViewport` handling in `web/static/message-composer-v21.js`:**
   iOS Safari's keyboard shrinks and pans the visual viewport without changing
   `dvh` (point 2). The script writes `--composer-viewport-h` and
@@ -91,7 +99,9 @@ and so is HTML or CSS that fails one of the four points.
   fallback ([`ui-composer.md`](../ui-composer.md)).
 - **Scroll position (`web/static/message-history-v2.js`,
   `web/static/sidebar-scroll-v2.js`, and list anchoring in
-  `web/static/message-composer-v21.js`):** replacing message-list anchoring with
-  `flex-direction: column-reverse` or `overflow-anchor` fails points 3 and 4
-  today, and centring the active sidebar row without moving the window or focus
-  requires `scrollTop`.
+  `web/static/message-composer-v21.js`):** these scripts stay for now. Replacing
+  message-list anchoring with `flex-direction: column-reverse` or
+  `overflow-anchor` fails point 4 today and touches reading order, so it is left
+  to the prototype and measurements of `#1361`; centring an out-of-view
+  `[aria-current='page']` sidebar row on load without moving the window or focus
+  fails point 1.

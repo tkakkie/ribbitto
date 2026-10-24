@@ -13,7 +13,7 @@ ORDER BY lo DESC LIMIT 1;
 
 -- name: DeleteRangeNeighbours :many
 DELETE FROM read_range
-WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3
+WHERE organization_id = $1 AND member_id = $2
   AND sqlc.arg(lower_lo)::bigint <= lo AND lo <= sqlc.arg(hi)::bigint
   AND sqlc.arg(lo)::bigint <= hi
 RETURNING lo, hi;

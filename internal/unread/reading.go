@@ -49,6 +49,18 @@ func (r *Reading) Feed(ctx context.Context, scope Scope, joinedEventSeq, cursor 
 	return err
 }
 
+// FeedShown reads one run of a resolved channel, bounded by the page's cursor.
+func (r *Reading) FeedShown(ctx context.Context, scope Scope, joinedEventSeq, cursor, from, through int64) error {
+	var changed bool
+	err := r.runner.InTx(ctx, func(tx platform.Tx) error {
+		var err error
+		changed, err = r.feed.ReadShown(ctx, tx, scope, joinedEventSeq, cursor, from, through)
+		return err
+	})
+	r.publish(err, changed, scope)
+	return err
+}
+
 // Topic reads a resolved topic through cursor using org's persisted join sequence.
 func (r *Reading) Topic(ctx context.Context, scope TopicScope, joinedEventSeq, cursor int64) error {
 	var changed bool

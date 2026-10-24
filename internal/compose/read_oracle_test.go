@@ -42,6 +42,8 @@ func readOracleKinds() []readOracleKind {
 		{"refused topic", "read", "topic", true},
 		{"refused feed post", "post", "feed", true},
 		{"refused topic post", "post", "topic", true},
+		{"shown feed", "shown", "feed", false},
+		{"refused shown feed", "shown", "feed", true},
 	}
 }
 
@@ -59,6 +61,7 @@ func readOracleKindIndex(t *testing.T, kinds []readOracleKind, name string) int 
 type readOracleStep struct {
 	kind, member, channel, topic int
 	cursor                       int64
+	from, through                int64
 	messageIndex                 *int
 }
 
@@ -128,11 +131,14 @@ func (h readOracleFixture) scope(step readOracleStep) unread.Scope {
 	return unread.Scope{OrganizationID: h.members[step.member].Organization.ID, ChannelID: h.channels[step.channel], MemberID: h.members[step.member].Member.ID}
 }
 
-func readOracleModel(kind readOracleKind, before []readOracleMessage, set map[int64]bool, topic kernel.ID, cursor, own int64) {
+func readOracleModel(kind readOracleKind, before []readOracleMessage, set map[int64]bool, topic kernel.ID, cursor, own, from, through int64) {
 	if kind.refused {
 		return
 	}
 	for _, message := range before {
+		if kind.action == "shown" && from <= message.seq && message.seq <= through {
+			set[message.seq] = true
+		}
 		if kind.action == "read" && message.seq <= cursor && (kind.scope == "feed" || (kind.scope == "topic" && message.topic == topic && message.moved <= cursor)) {
 			set[message.seq] = true
 		}
@@ -150,6 +156,8 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 	var own int64
 	var err error
 	switch kind.action {
+	case "shown":
+		err = unreadpg.NewReading(h.pool, compose.NewFeedWriter(), nil, nil).FeedShown(t.Context(), scope, member.Member.JoinedEventSeq, step.cursor, step.from, step.through)
 	case "read":
 		reading := unreadpg.NewReading(h.pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil)
 		if kind.scope == "feed" {
@@ -213,7 +221,7 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 	if kind.action == "post" && !slices.Equal(before.floors, readOracleLoad(t, h.pool, scope).floors) {
 		t.Error("posting changed topic floors contrary to #1486 (decision 32, amended)")
 	}
-	readOracleModel(kind, before.messages, h.model[step.member][scope.ChannelID], topic, step.cursor, own)
+	readOracleModel(kind, before.messages, h.model[step.member][scope.ChannelID], topic, step.cursor, own, step.from, step.through)
 }
 
 func (h readOracleFixture) check(t *testing.T) []string {
@@ -348,6 +356,15 @@ func TestReadOracle(t *testing.T) {
 					if kinds[step.kind].refused {
 						step.cursor = []int64{committed + 1, -1, math.MaxInt64}[rng.Intn(3)]
 					}
+				}
+				if kinds[step.kind].action == "shown" {
+					// Every valid random run has T < S and F above the oldest
+					// message (2 or 6), exceeding the required half without new checks.
+					if !kinds[step.kind].refused {
+						step.cursor = 9 + rng.Int63n(committed-8)
+					}
+					step.through = 8 + rng.Int63n(max(1, step.cursor-8))
+					step.from = 7 + rng.Int63n(step.through-6)
 				}
 				if !t.Run(fmt.Sprintf("step%03d/%s", index, kinds[step.kind].name), func(t *testing.T) {
 					t.Logf("seed=%d history=%d step=%d action=%+v", seed, history, index, step)

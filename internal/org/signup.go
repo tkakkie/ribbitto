@@ -60,7 +60,7 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 	}
 	hash, err := s.hasher.Hash(ctx, password)
 	if err != nil {
-		return kernel.ID{}, fmt.Errorf("hashing sign-up password: %w", err)
+		return kernel.ID{}, fmt.Errorf("hashing sign-up password: %v", err)
 	}
 	var id kernel.ID
 	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
@@ -95,7 +95,7 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 	case errors.Is(err, ErrSignUpClosed):
 		return kernel.ID{}, ErrSignUpClosed
 	case err != nil:
-		return kernel.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)
+		return kernel.ID{}, fmt.Errorf("%w", err)
 	}
 	return id, nil
 }

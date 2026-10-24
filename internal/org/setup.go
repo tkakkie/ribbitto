@@ -50,7 +50,7 @@ func NewSetup(state SetupState, runner TxRunner, writes RegistrationWriterIn, ac
 func (s *Setup) Open(ctx context.Context) (bool, error) {
 	open, err := s.state.Open(ctx)
 	if err != nil {
-		return false, fmt.Errorf("checking setup: %w", err)
+		return false, fmt.Errorf("checking setup: %v", err)
 	}
 	return open, nil
 }
@@ -63,7 +63,7 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 	}
 	open, err := s.Open(ctx)
 	if err != nil {
-		return SetupResult{}, err
+		return SetupResult{}, ErrSetupCompleted
 	}
 	if !open {
 		return SetupResult{}, ErrSetupCompleted
@@ -89,7 +89,7 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 	}
 	hash, err := s.hasher.Hash(ctx, input.Password)
 	if err != nil {
-		return SetupResult{}, fmt.Errorf("hashing setup password: %w", err)
+		return SetupResult{}, fmt.Errorf("hashing setup password: %v", err)
 	}
 	var result SetupResult
 	err = s.runner.InTx(ctx, func(tx platform.Tx) error {

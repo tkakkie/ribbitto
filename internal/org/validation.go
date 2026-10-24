@@ -82,7 +82,7 @@ func validateText(value string, minLength, maxLength int, field string) (string,
 type ValidationErrors map[string]error
 
 // Error describes validation failure without exposing submitted values.
-func (ValidationErrors) Error() string { return "invalid registration fields" }
+func (ValidationErrors) Error() string { return "invalid fields" }
 
 // registrationError maps store validation failures shared by both flows.
 func registrationError(err error) error {

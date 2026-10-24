@@ -69,8 +69,8 @@ func (a *Authorizer) Stats() AuthorizationStats {
 // capacity stream allows. Non-positive capacity uses DefaultAuthorizationCapacity.
 // Member and HomeSlug always read the store directly.
 func NewCachedAuthorizer(parent context.Context, store MembershipStore, capacity int) *Authorizer {
-	if capacity <= 0 {
-		capacity = DefaultAuthorizationCapacity
+	if capacity < 0 {
+		capacity = 1
 	}
 	return &Authorizer{store: store, stream: &streamAuthorization{
 		parent: parent,

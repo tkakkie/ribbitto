@@ -84,7 +84,7 @@ worktree. Cross-worker recovery below is host policy, NOT launcher-enforced.
 
 ## Host wrapper contract
 
-Each worker has run and check wrappers; review changes before a switch.
+Review each worker's run and check wrapper changes before making them.
 Hard-code HOME and PEERS; accept no caller-supplied home,
 peer list or worker identity. Use these exact peer sets:
 
@@ -153,36 +153,38 @@ maintainer approval.
 
 ## Operation and rollback
 
-The container sweep is uid-global, not partitioned by worker. A held copy
+The container sweep is uid-global, not per-worker. A held copy
 lock, a matching live non-orphan Docker client, or age under 90 seconds each
-alone protects a container, so the sweep leaves a running worker's container
-alone. It can reclaim dead leftovers from either worker, subject to the
-[sweep validation and mount checks](argon-verify-sweep.md); it provides no
-per-worker ownership or reclamation guarantee. A per-worker container tag is
-a deferred option. After an abnormal end, run
+protects a container, including a running worker's. It can reclaim either
+worker's dead leftovers, subject to the
+[sweep validation and mount checks](argon-verify-sweep.md), without per-worker
+ownership or reclamation guarantees. Per-worker container tags remain deferred.
+After an abnormal end, run
 `container-sweep --dry-run` before the next start of either worker, inspect
-the result and perform the ordered manual recovery. Do one recovery at a
-time. A dry run does not replace independently confirming session stop or
+the result, then perform ordered manual recovery, one at a time.
+A dry run does not replace independently confirming session stop or
 the at-rest check, and a released worktree lock is not evidence of stop.
 
-The shared agy executable can auto-update while a worker is running. The
-existing version/builtin checks fail closed when the new version has no
-matching trusted list or the observed builtin bytes differ. Such a failure
-after a run starts retains its recovery marker. The binary is shared, so coordinate updates
-and approvals for both workers' trusted lists. The launcher does not freeze the executable during a run.
+The shared agy executable can auto-update during a run; the launcher does
+not freeze it. Version/builtin checks fail closed if the new version has no
+matching trusted list or observed builtin bytes differ. A failure after
+start retains the recovery marker. Coordinate updates and approvals for
+both workers' trusted lists.
 
 To disable worker 2, remove the execute bit from its run.zsh wrapper. This
 does not stop an active session. Stop and recover active or abnormal runs
 before further changes; do not remove a lock or marker to permit a start.
 
-To roll back the launcher, restore worker 1's complete
-*.c00020d backup set of hooks.json, run.zsh and checks.zsh, including the
-installed off hooks in the home configuration. The set is saved; see
-[operation](argon-workers-operation.md#rollback) for hashes. Preserve and
-verify it before a switch. Restore the pinned binary/source selection with
-those wrappers. Then run the old checks.zsh idle check and one real run,
-under the maintainer's approval, before considering rollback complete.
-The [switch record](argon-implement-switch.md#recovery-and-rollback) also
-records the older backup set; do not mix sets.
-With no peers supplied, Go omits peer checks;
-removing peers is not a substitute for restoring a consistent trusted set.
+If the new launcher binary must also be removed, first disable worker 2,
+then stop and recover both workers. Never run mixed launchers: `c00020d`
+has no `--peer-home` or worktree lock, so rolled-back worker 1 beside a running
+worker 2 has no peer or worktree-lock protection.
+Restore worker 1's complete *.c00020d backup set of hooks.json, run.zsh and
+checks.zsh, including the home's installed off hooks. See
+[operation](argon-workers-operation.md#rollback) for hashes.
+Keep it unchanged and verify it against the recorded hashes before a rollback.
+Restore the pinned binary/source selection with the wrappers. To complete
+rollback, run the old checks.zsh idle check and one real run with maintainer
+approval. A rollback drill with a real run was NOT done.
+Never mix in the [older set](argon-implement-switch.md#recovery-and-rollback).
+Removing peers does not restore a consistent trusted set.

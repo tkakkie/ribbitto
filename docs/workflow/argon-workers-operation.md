@@ -28,8 +28,11 @@ its 21 entries match worker 1's trusted list.
 Before assigning a worktree, Claude lists both workers' `guard/` for
 `implement-run.recovery-needed`. Follow the design's
 [recovery and attribution rules](argon-workers.md#host-wrapper-contract).
-Two runs at once must use different packages and files, with a worktree per
-worker. Never reuse a worktree.
+Each worktree, `<repo-root>/wt/<name>`, must be a direct child of `<repo-root>/wt/`,
+with its own branch and saved Git file. Never reuse a worktree between live runs.
+
+Claude's assignment practice, not a launcher rule: two runs at once only on
+different packages and files.
 
 ## Rollback
 
@@ -41,12 +44,18 @@ for stop, recovery and rollback checks.
 
 Worker 1's rollback set was saved before the switch:
 
-| Backup | SHA-256 as of the switch |
+| Backup | SHA-256 prefix at the switch (8 hex digits) |
 |---|---|
 | `hooks.c00020d.json` | `62c61dfc…` |
 | `run.zsh.c00020d` | `a14b49db…` |
 | `checks.zsh.c00020d` | `1ea67f5e…` |
 
+The full hashes are in the maintainer's record on the host.
+
+If the new launcher binary must also be removed, first disable worker 2,
+then stop and recover both workers. Never run mixed launchers: `c00020d`
+has no `--peer-home` or worktree lock, so rolled-back worker 1 beside a running
+worker 2 has no peer or worktree-lock protection.
 Restore this `*.c00020d` set to roll worker 1 back;
 `guard/argonreview-c00020d` is still in place. Hashes were recorded, but a
 rollback drill with a real run was NOT done, by the maintainer's wish for

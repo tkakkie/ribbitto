@@ -124,8 +124,8 @@ func (f *FeedWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Scope,
 		return false, fmt.Errorf("finding next shown feed message: %w", err)
 	}
 	if hi == 0 {
-		hi = through + 1
 	}
+	hi = through
 	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: lo, Hi: hi})
 	if err != nil {
 		return false, fmt.Errorf("reading shown feed: %w", err)

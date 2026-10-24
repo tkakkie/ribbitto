@@ -138,7 +138,7 @@ htmx does only requests/swaps; the server and templ own HTML.
 
 ## JavaScript
 
-See [JavaScript responsibilities and constraints](web-javascript.md) and
+See [JavaScript](web-javascript.md), [HTML/CSS first](web-css-first.md) and
 [conventions](web-conventions.md) ([decision 43](../decisions/43-typescript-with-a-go-driven-build.md)
 planned amendment).
 

@@ -50,23 +50,26 @@ Directory entries below are direct-only unless stated otherwise:
   with first line `go test fuzz v1`. Neither directory is excluded from checking;
   there is no general testdata, JSON or JSONL allowance.
 - `cmd/argonreview/verifyimage/Dockerfile`: kind "verify image recipe", one
-  file, direct. It may define only the image the trusted `verify` runner uses,
-  with only the tools the approved checks need: the generators (templ, sqlc,
-  Tailwind; #1696) and PostgreSQL 18 (#1697). A browser (Chromium) is not
-  admitted until the maintainer decides `test-browser` (#1698); any other
-  package set or a second recipe needs a new amendment approved by the
-  maintainer. No `.dockerignore`, compose or CI change, or script file.
+  file, direct. It may define only the image the trusted `verify` runner
+  that #1696 adds will use, with only the tools the approved checks need:
+  the generators (templ, sqlc, Tailwind; #1696) and PostgreSQL 18 (#1697).
+  Adding a browser (Chromium) or any other package set to the recipe, or a
+  second recipe, requires a new amendment of this decision approved by the
+  maintainer in each case. The `test-browser` decision (#1698) only decides
+  whether to propose such an amendment. No `.dockerignore`, compose or CI
+  change, or script file.
   Every `FROM` uses an `@sha256:` digest; every download uses an exact version
   with a SHA-256 written in the recipe and checked in the same step; Go tools
   are built from the committed `tools/go.mod` and `tools/go.sum`; apt packages
   use exact versions, from a third-party repository only with its signing-key
   fingerprint written in the recipe; no secrets, no `ADD`, no `VOLUME`; the
-  runner's image-ID constant, not the recipe, is what the runner trusts.
+  runner's image-ID constant that #1696 adds, not the recipe, is what the
+  runner will trust.
   The path-and-kind table row lands with the file in #1696's recipe pull
   request; until then, `tools/languagecheck` keeps refusing the path.
   A Go test in `cmd/argonreview` (#1696) and tier A review check the recipe;
-  neither is a security boundary, which is the container flags and the image
-  ID pinned in trusted code.
+  neither the Go test nor the review is a security boundary. The boundary
+  is the container flags and the image ID that are pinned in trusted code.
 
 TypeScript, Node, Rust/WASM and any other language or runtime are **not
 approved by this rule**; each becomes allowed only when its own accepted

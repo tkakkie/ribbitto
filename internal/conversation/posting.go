@@ -65,7 +65,7 @@ var ErrInvalidPostCursor = errors.New("invalid posting cursor")
 type Send struct {
 	Topic *kernel.ID // A topic of the channel; nil is its default topic.
 	Body  string
-	// Cursor is the page's applied-and-shown cursor; nil reads only the new message.
+	// Cursor is validated but not used for reading; kept for old pages until S5.
 	Cursor *int64
 	// Key makes a repeated send return the first message; nil posts without it.
 	Key *IdempotencyKey
@@ -182,20 +182,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			if err != nil {
 				return err
 			}
-			var floor int64
-			if cursor != nil {
-				floor = *cursor
-			}
-			if topicID != nil && cursor != nil {
-				intervening, err := writer.TopicChangedBetween(ctx, organizationID, channelID, *topicID, *cursor, seq)
-				if err != nil {
-					return err
-				}
-				if !intervening {
-					floor = seq
-				}
-			}
-			if err := p.reads(tx).Read(ctx, m, channelID, topicID, cursor, previous+1, seq+1, floor); err != nil {
+			if err := p.reads(tx).Read(ctx, m, channelID, previous+1, seq+1); err != nil {
 				return err
 			}
 		}

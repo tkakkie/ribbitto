@@ -210,8 +210,8 @@ type Pinning struct // Pinning commits pin changes with their durable invalidati
 type PinsSnapshot struct // PinsSnapshot holds current pins and their snapshot sequence for ordering UI swaps.
   field Pins []Pin
   field SnapshotSeq int64
-type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
-  func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
+type PostReadWriter interface // PostReadWriter adds only the author's own-message range in posting's transaction.
+  func (PostReadWriter).Read(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, lo int64, hi int64) error
 type PostReadWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PostReadWriter // PostReadWriterIn binds read-state writes to posting's transaction.
 type Posted struct // Posted is the decoded payload of KindPosted.
   field AuthorID *github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -261,7 +261,7 @@ func RoutePinsChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
 type Send struct // Send is one composer submission.
   field Body string
-  field Cursor *int64 // Cursor is the page's applied-and-shown cursor; nil reads only the new message.
+  field Cursor *int64 // Cursor is validated but not used for reading; kept for old pages until S5.
   field Key *IdempotencyKey // Key makes a repeated send return the first message; nil posts without it.
   field Quote *github.com/tkakkie/ribbitto/internal/kernel.ID // Quote is a message of the channel to quote (decision 38), or nil.
   field QuoteText *string // QuoteText selects a part; nil copies the whole extracted body.
@@ -319,5 +319,4 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.
   func (Writer).MoveMessages(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, fromTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, toTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageIDs []github.com/tkakkie/ribbitto/internal/kernel.ID, movedEventSeq int64) (int64, error) // MoveMessages moves the given messages still in the source topic of the channel to the destination, recording the move sequence, and returns how many moved.
   func (Writer).QuotedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Message, error) // QuotedMessage returns the channel's message with the ID, or ErrQuoteNotFound when it is missing or in another organisation or channel.
-  func (Writer).TopicChangedBetween(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64) (bool, error) // TopicChangedBetween reports a topic post or move strictly between two sequences.
 type WriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) Writer // WriterIn binds conversation's writes to the caller's transaction.

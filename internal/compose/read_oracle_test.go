@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,13 +27,14 @@ type readOracleKind struct {
 	refused             bool
 }
 
-// The scope column is today's page-scope posting rule. Later stages can add
-// kinds here and change their model rule without copying the history harness.
+// Scope selects the page for reads and cursor compatibility for posts.
+// Under #1486 (decision 32, amended), every post adds only the own message, whatever its page.
 func readOracleKinds() []readOracleKind {
 	return []readOracleKind{
 		{"feed", "read", "feed", false},
 		{"topic", "read", "topic", false},
 		{"post without cursor", "post", "", false},
+		{"repeat post", "post", "", false},
 		{"post from feed", "post", "feed", false},
 		{"post from topic", "post", "topic", false},
 		{"move", "move", "", false},
@@ -131,7 +133,7 @@ func readOracleModel(kind readOracleKind, before []readOracleMessage, set map[in
 		return
 	}
 	for _, message := range before {
-		if message.seq <= cursor && (kind.scope == "feed" || (kind.scope == "topic" && message.topic == topic && message.moved <= cursor)) {
+		if kind.action == "read" && message.seq <= cursor && (kind.scope == "feed" || (kind.scope == "topic" && message.topic == topic && message.moved <= cursor)) {
 			set[message.seq] = true
 		}
 	}
@@ -166,7 +168,19 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 		}
 		posting := conversationpg.NewPagePosting(h.pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil)
 		var sent conversation.Sent
-		sent, err = posting.Send(t.Context(), member, scope.ChannelID, conversation.Send{Topic: selected, Cursor: cursor, Body: "own"})
+		send := conversation.Send{Topic: selected, Cursor: cursor, Body: "own"}
+		if kind.name == "repeat post" {
+			send.Key = new(conversation.NewIdempotencyKey())
+		}
+		sent, err = posting.Send(t.Context(), member, scope.ChannelID, send)
+		if err == nil && send.Key != nil {
+			rows := readOracleRows(t, h.pool, nil, true)
+			repeat, repeatErr := posting.Send(t.Context(), member, scope.ChannelID, send)
+			feedRequire(t, repeatErr)
+			if !repeat.Repeat || repeat.Message.ID != sent.Message.ID || !slices.Equal(rows, readOracleRows(t, h.pool, nil, true)) {
+				t.Fatal("idempotent repeat changed persisted state")
+			}
+		}
 		own = sent.Message.EventSeq
 	case "move":
 		// Moves are confined to the channel with two topics. Pick an actual
@@ -195,6 +209,9 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 		}
 	} else {
 		feedRequire(t, err)
+	}
+	if kind.action == "post" && !slices.Equal(before.floors, readOracleLoad(t, h.pool, scope).floors) {
+		t.Error("posting changed topic floors contrary to #1486 (decision 32, amended)")
 	}
 	readOracleModel(kind, before.messages, h.model[step.member][scope.ChannelID], topic, step.cursor, own)
 }
@@ -254,8 +271,9 @@ func TestReadOracle(t *testing.T) {
 				}
 			}
 			// Guarantee the production mutation witnesses before randomized history:
-			// join-boundary preservation, islands, stale topic posts across an
-			// intervening post and move, then topic reads on both sides of the move.
+			// join-boundary preservation, islands, a topic post with the current cursor
+			// (661) after another member's post, then a topic post with an older cursor
+			// (662) after a move, and topic reads on both sides of the move.
 			// B's feed cursor 665 must cover M's newest post, still unread for B.
 			// A later cursorless post is separated from its channel predecessor by
 			// only another channel's message. F's feed-first and P's post-first writes
@@ -272,7 +290,7 @@ func TestReadOracle(t *testing.T) {
 					kind: kind("post without cursor"), member: 1, channel: 0, topic: 1,
 				},
 				{
-					kind: kind("post from topic"), member: 0, channel: 0, topic: 1, cursor: 660,
+					kind: kind("post from topic"), member: 0, channel: 0, topic: 1, cursor: 661,
 				},
 				{
 					kind: kind("move"), member: 1, channel: 0, topic: 0, messageIndex: &movedMessage,
@@ -293,13 +311,13 @@ func TestReadOracle(t *testing.T) {
 					kind: kind("post without cursor"), member: 1, channel: 1, topic: 0,
 				},
 				{
-					kind: kind("post without cursor"), member: 0, channel: 0, topic: 0,
+					kind: kind("repeat post"), member: 0, channel: 0, topic: 0,
 				},
 				{
 					kind: kind("feed"), member: 0, channel: 0, topic: 0, cursor: 667,
 				},
 				{
-					kind: kind("post from feed"), member: 1, channel: 1, topic: 0, cursor: 666,
+					kind: kind("post from feed"), member: 1, channel: 1, topic: 0, cursor: 667,
 				},
 			}
 			for i, kind := range kinds {

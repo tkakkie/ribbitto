@@ -28,23 +28,9 @@ A newly read message
   overlapping or touching ranges and raise the floor, retaining the lock.
   Cost: `O(R)` for the read set and the candidate rows; 87–88 ms for 9,999
   messages over 10,000 ranges in the benchmark.
-- **Posting (current)** with the composer's cursor `S`: the same write as the page's
-  scope up to `S`, then a range for the new message; from a topic view the
-  floor also rises to the new message when no message of the topic has an
-  `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the
-  newest durable sequence the page has applied, never a sequence only
-  received or the post's own response, so posting never reads past the
-  page's cursor; like every topic read, it covers the whole topic up to `S`,
-  not only the loaded window. `conversation.Posting.Send` with a cursor takes
-  org's sequence first and refuses `S` above the pre-post committed limit.
-  Its injected `PostReadWriterIn`, wired through `compose.PostReads`, binds the feed/topic
-  write and own-message union to that transaction. For a topic post with a
-  cursor, `unread.PostReads` captures the page write's prepared topic after cursor
-  validation and reuses it for the own-message `Add` and final floor update.
-  Preparation runs once; both unions and the event append still commit or
-  roll back together, with no prepared state surviving the transaction.
-  Conversation supplies the
-  predecessor and the scoped post/move guard; unread reads no message table.
-  A post from a `?before=` page has no cursor: posting reads only the author's
-  own message with `[p + 1, m + 1)` in the same transaction, leaving every other
-  message's read state unchanged and raising no topic floor.
+- **Posting (current):** `conversation.Posting.Send` reads only the author's own
+  message with `[p + 1, m + 1)`, leaving every other message's read state and
+  topic floors unchanged. Conversation supplies the channel predecessor;
+  `PostReadWriterIn`, wired through `compose.PostReads`, binds the own-message
+  union and persisted join prefix to posting's transaction. Org is locked before
+  `channel_read`; the union and event append commit or roll back together.

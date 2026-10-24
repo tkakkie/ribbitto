@@ -157,7 +157,7 @@ func readOracleCheckCounts(counts conversation.PageCounts, states map[kernel.ID]
 	return violations
 }
 
-func readOracleRows(t *testing.T, pool *pgxpool.Pool, organization *kernel.ID, messages bool) []string {
+func readOracleRows(t *testing.T, pool *pgxpool.Pool, organization *kernel.ID, messages bool, excluded ...unread.Scope) []string {
 	t.Helper()
 	tables := []string{"read_range", "channel_read", "topic_read_floor"}
 	if messages {
@@ -165,7 +165,13 @@ func readOracleRows(t *testing.T, pool *pgxpool.Pool, organization *kernel.ID, m
 	}
 	var result []string
 	for _, table := range tables {
-		rows, err := pool.Query(t.Context(), fmt.Sprintf("SELECT to_jsonb(r)::text FROM %s r WHERE ($1::uuid IS NULL OR organization_id=$1) ORDER BY to_jsonb(r)::text", table), organization)
+		where, args := "($1::uuid IS NULL OR organization_id=$1)", []any{organization}
+		if len(excluded) > 0 {
+			s := excluded[0]
+			where += " AND (organization_id<>$2 OR channel_id<>$3 OR member_id<>$4)"
+			args = append(args, s.OrganizationID, s.ChannelID, s.MemberID)
+		}
+		rows, err := pool.Query(t.Context(), fmt.Sprintf("SELECT to_jsonb(r)::text FROM %s r WHERE %s ORDER BY to_jsonb(r)::text", table, where), args...)
 		feedRequire(t, err)
 		values, err := pgx.CollectRows(rows, pgx.RowTo[string])
 		feedRequire(t, err)

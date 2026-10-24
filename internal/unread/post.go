@@ -24,5 +24,10 @@ func (w *PostReads) Read(ctx context.Context, tx platform.Tx, scope Scope, joine
 	if err := w.ranges(tx).Merge(ctx, scope, joined, own); err != nil {
 		return fmt.Errorf("reading own post: %w", err)
 	}
+	if own.Lo > 0 {
+		if err := w.ranges(tx).Merge(ctx, scope, joined, conversation.SequenceRange{Lo: 0, Hi: own.Lo}); err != nil {
+			return fmt.Errorf("reading own post: %w", err)
+		}
+	}
 	return nil
 }

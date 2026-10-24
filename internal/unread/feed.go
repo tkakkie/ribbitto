@@ -117,7 +117,7 @@ func (f *FeedWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Scope,
 	}
 	lo := int64(0)
 	if previous != 0 {
-		lo = previous + 1
+		lo = 0
 	}
 	hi, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, through)
 	if err != nil {

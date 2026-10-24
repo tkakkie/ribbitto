@@ -126,6 +126,25 @@ func TestRouteMovedRejects(t *testing.T) {
 			}),
 			wantErr: "move repeats a message ID",
 		},
+		// EncodeMoved only formats valid kernel.IDs, so raw JSON supplies canonical
+		// channel (c1) and topic (f1, f2) IDs to reach the message_ids loop, where
+		// the truncated (0a) and non-hex (g1, g2) message IDs fail ParsePayloadID;
+		// the valid ID a1 precedes an invalid one in the last row.
+		{
+			name:    "truncated message ID",
+			payload: []byte(`{"channel_id":"00000000-0000-0000-0000-0000000000c1","from_topic_id":"00000000-0000-0000-0000-0000000000f1","to_topic_id":"00000000-0000-0000-0000-0000000000f2","message_ids":["00000000-0000-0000-0000-0000000000a"]}`),
+			wantErr: "required ID is not a canonical UUID",
+		},
+		{
+			name:    "non-hex message ID",
+			payload: []byte(`{"channel_id":"00000000-0000-0000-0000-0000000000c1","from_topic_id":"00000000-0000-0000-0000-0000000000f1","to_topic_id":"00000000-0000-0000-0000-0000000000f2","message_ids":["00000000-0000-0000-0000-0000000000g1"]}`),
+			wantErr: "required ID is not a canonical UUID",
+		},
+		{
+			name:    "valid then invalid message ID",
+			payload: []byte(`{"channel_id":"00000000-0000-0000-0000-0000000000c1","from_topic_id":"00000000-0000-0000-0000-0000000000f1","to_topic_id":"00000000-0000-0000-0000-0000000000f2","message_ids":["00000000-0000-0000-0000-0000000000a1","00000000-0000-0000-0000-0000000000g2"]}`),
+			wantErr: "required ID is not a canonical UUID",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			gotChannel, gotTopics, err := conversation.RouteMoved(tt.payload)

@@ -119,12 +119,12 @@ func (f *FeedWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Scope,
 	if previous != 0 {
 		lo = previous + 1
 	}
-	hi, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, through)
+	hi, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, cursor)
 	if err != nil {
 		return false, fmt.Errorf("finding next shown feed message: %w", err)
 	}
 	if hi == 0 {
-		hi = through + 1
+		hi = cursor + 1
 	}
 	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: lo, Hi: hi})
 	if err != nil {

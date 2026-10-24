@@ -13,7 +13,7 @@ import (
 
 const deleteRangeNeighbours = `-- name: DeleteRangeNeighbours :many
 DELETE FROM read_range
-WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3
+WHERE $1::uuid IS NOT NULL AND channel_id = $2 AND member_id = $3
   AND $4::bigint <= lo AND lo <= $5::bigint
   AND $6::bigint <= hi
 RETURNING lo, hi

@@ -27,7 +27,8 @@ func (f feedLatestReader) Page(ctx context.Context, m org.Membership, id kernel.
 	return f.fakeMessages.Page(ctx, m, id, topic, before)
 }
 
-func TestFeedGuardFirstRender(t *testing.T) {
+func feedFirstRender(t *testing.T) feedMeasurement {
+	t.Helper()
 	fixture := feedFixture(t, 120)
 	reader := feedLatestReader{}
 	for _, msg := range fixture.Messages {
@@ -55,10 +56,15 @@ func TestFeedGuardFirstRender(t *testing.T) {
 	if got := countElements(measured.doc, feedMessageItem); got != conversation.PageSize {
 		t.Errorf("first render messages: actual %d, want PageSize %d", got, conversation.PageSize)
 	}
+	return measured
+}
+
+func TestFeedGuardFirstRender(t *testing.T) {
+	measured := feedFirstRender(t)
 	for i, limit := range feedLimits() {
 		t.Logf("first render %s: %d (budget %d)", limit.metric, measured.values[i], limit.latest)
-		if measured.values[i] > limit.latest {
-			t.Errorf("first render %s: actual %d exceeds budget %d", limit.metric, measured.values[i], limit.latest)
+		for _, violation := range checkFeedValue(limit.metric, "first render", float64(measured.values[i]), float64(limit.latest), i == 5) {
+			t.Error(violation)
 		}
 	}
 }

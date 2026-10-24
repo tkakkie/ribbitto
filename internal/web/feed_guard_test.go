@@ -67,7 +67,9 @@ func checkFeedStructure(samples [3][6]int) []string {
 		}{
 			{"fixed", fixed, limit.fixed}, {"per message", slope, limit.slope}, {"linearity", residual, tolerance},
 		} {
-			if check.actual > check.budget {
+			if check.name != "linearity" {
+				violations = append(violations, checkFeedValue(limit.metric, check.name, check.actual, check.budget, i == 5)...)
+			} else if check.actual > check.budget {
 				violations = append(violations, fmt.Sprintf("%s %s: actual %.3f exceeds budget %.3f", limit.metric, check.name, check.actual, check.budget))
 			}
 		}

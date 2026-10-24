@@ -19,11 +19,9 @@ window, older history included, are read with it.
   like the older history an initial reading POST reads (decided 2026-10-10,
   #775). Other topics are untouched.
 
-Posting reads the composer's scope up to the page's `S`, as that POST
-would, and adds the new message, in the posting transaction: a member's own
-messages are never unread for them. A post from a `?before=` page carries no
-cursor and reads only the author's own message, leaving every other message's
-read state and topic floors unchanged. Branching already adds its author's notice
+Posting reads only the author's own message in its transaction, leaving every
+other message's read state and topic floors unchanged. A member's own messages
+are never unread for them. Branching already adds its author's notice
 as `[p + 1, m + 1)` in its transaction, merged with the persisted join prefix;
 the organisation lock keeps the notice newest in its channel. Moving existing
 messages changes no member's read state. A sequence

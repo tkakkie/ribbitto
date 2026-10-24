@@ -60,8 +60,8 @@ package; [modules](modules.md) states the fixture rule.
 - posting (`conversation.Posting`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md)); page posts also
-  write unread's ranges and topic floor through injected `PostReadWriterIn` so
-  the page scope and author's own message become read atomically (#723);
+  write unread's ranges through injected `PostReadWriterIn` so
+  only the author's own message becomes read atomically (#1486);
 - pinning (`conversation.Pinning`) uses existing `EventSequenceIn` (org lock first)
   and `EventAppenderIn` to commit metadata with `pins.changed`, then raises the hub;
   channel access/limit precede writes; failures/no-ops roll back; read state stays untouched (#888);

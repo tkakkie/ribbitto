@@ -267,13 +267,13 @@ func TestReadSidebarPostingHTTP(t *testing.T) {
 				f.badges(t, tab, 2, 3, 5)
 			}
 			path, form := f.feed, url.Values{"body": {"own post"}, "cursor": {"6"}}
-			a, b, channel := 0, 0, 0
+			// Decision 5: posting reads only own; A=2, B=3 remain unread.
+			a, b, channel := 2, 3, 5
 			if kind != "feed" {
-				path, b, channel = f.topicA, 3, 3
+				path = f.topicA
 			}
 			if kind == "history" {
 				form.Del("cursor")
-				a, channel = 2, 5
 			}
 			response, _, err := f.reader.send(f.reader.request(t, "POST", path, form))
 			acceptanceOK(t, err)
@@ -289,9 +289,6 @@ func TestReadSidebarPostingHTTP(t *testing.T) {
 			// Prove this is a connected spy, not an unused counter.
 			f.read(t, f.feed)
 			want := int32(1)
-			if kind == "feed" {
-				want = 0
-			}
 			if p.calls.Load() != want {
 				t.Fatalf("reading spy calls = %d; want %d", p.calls.Load(), want)
 			}

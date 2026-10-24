@@ -79,8 +79,8 @@ a count badge. An unlisted selected topic shows its count beside the heading,
 keeping the sidebar at most 50 topic links. Every topic heading keeps a count
 target, including while listed or at zero; fresh sidebar lists and that target
 share page markup for recounts. A listed selection leaves the heading target empty. The cap limits how many unread messages a count returns,
-not all the work: a topic count can also read the member's own posts made
-while the stream lagged, and a topic's first-unread lookup can scan topic
+not all the work: a topic count also reads the member's own posts above its
+floor until a later topic read raises it; a first-unread lookup can scan topic
 history ([unread count costs](../architecture/unread-count-costs.md)).
 
 ## The unread divider

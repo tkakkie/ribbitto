@@ -22,7 +22,7 @@ index, `R` ranges of the current channel at or above `P`:
   fragmentation (below).
 - **Step 4:** decoding costs `O(R)`; containment costs `O(log R)` per row.
   Counts cap unread candidates at 100 per branch, then 100 together; read
-  moves (at most 100 messages per move) and own posts above the floor add
+  moves (at most 100 messages per move) and own posts above the floor until a later topic read add
   **unbounded** filtering. #283 benchmarks stream lag; unacceptable costs
   require per-topic gap probes.
   On normal pages, first unread is uncapped: a CTE filters `M` rows moved after the selected
@@ -96,15 +96,13 @@ channel); step 4 returns at most 5,100 candidates across 51 topics
 (with up to 100 per branch before the shared cap), plus uncapped read filtering
 and the selected topic's first-unread work described above.
 Each visit sends one POST, then visible-page coalesced POSTs (#710) and
-sidebar recounts (#286). Posting costs its scope's read (with merges)
-and one range row for its author. A topic post with a cursor prepares read
-state once and reuses it for the own-message union and final floor update.
-`TestPostingRead` measures 29 → 23 SQL statements (31 → 25 including BEGIN
-and COMMIT) with an existing channel lock row, for clear, intervening-post
-and moved-message cases. Each now executes one `LockChannelRead`, one
-`TopicReadRanges` and one `TopicReadFloor`; creating a missing lock row adds
-its savepoint, insert and retry. This removes executions; no cheaper SQL plan
-or posting latency is claimed. Stored ranges and floors remain identical.
+sidebar recounts (#286). Posting costs only the author's own-message union.
+`TestPostingRead` expects 13 SQL statements (15 including BEGIN and COMMIT)
+with an existing channel lock row, for clear, intervening-post and moved-message
+cases, derived from its statement list. Each executes one `LockChannelRead`
+and two range unions (join prefix and own message), with no topic preparation
+or floor write; a missing lock row adds its savepoint, insert and retry.
+No posting latency is claimed.
 
 ## Fragmentation
 

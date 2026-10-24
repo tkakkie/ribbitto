@@ -73,8 +73,6 @@ type Writer interface {
 	// KeyedMessage returns the author's message stored with the key in the
 	// organisation, or ErrMessageNotFound. It never looks up by key alone.
 	KeyedMessage(ctx context.Context, organizationID, memberID kernel.ID, key IdempotencyKey) (Message, error)
-	// TopicChangedBetween reports a topic post or move strictly between two sequences.
-	TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error)
 	// CreateTopic creates a named topic. A name the channel already has is
 	// ErrTopicNameTaken; one the database rejects is ErrInvalidTopicName.
 	CreateTopic(ctx context.Context, organizationID, channelID kernel.ID, name string) (Topic, error)
@@ -185,11 +183,10 @@ type ReadRangeWriter interface {
 // ReadRangeWriterIn binds read-state writes to branching's transaction.
 type ReadRangeWriterIn func(platform.Tx) ReadRangeWriter
 
-// PostReadWriter reads the page scope and adds the new message's range; floor
-// is the safe topic floor computed by conversation from its own messages.
-// A nil cursor reads only the new message and leaves topic floors unchanged.
+// PostReadWriter adds only the author's own-message range in posting's transaction.
+// Conversation supplies bounds spanning the gap after the previous channel message.
 type PostReadWriter interface {
-	Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error
+	Read(ctx context.Context, m org.Membership, channelID kernel.ID, lo, hi int64) error
 }
 
 // PostReadWriterIn binds read-state writes to posting's transaction.

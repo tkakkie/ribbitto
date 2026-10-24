@@ -138,6 +138,7 @@ func TestPosting(t *testing.T) {
 		{name: "default failure", body: "hi", fail: "default", err: failure, wantErr: failure},
 		{name: "selected failure", body: "hi", fail: "selected", err: failure, wantErr: failure},
 		{name: "insert failure", body: "hi", fail: "insert", err: failure, wantErr: failure},
+		{name: "read failure", body: "hi", fail: "read", err: failure, wantErr: failure},
 		{name: "append failure", body: "hi", fail: "append", err: failure, wantErr: failure},
 		{name: "commit failure", body: "hi", fail: "commit", err: failure, wantErr: failure},
 	} {
@@ -147,14 +148,18 @@ func TestPosting(t *testing.T) {
 			}
 			t.Run(tt.name+"/"+mode, func(t *testing.T) {
 				f := &postingFake{t: t, fail: tt.fail, err: tt.err, topic: kernel.ID{6}}
-				order := []string{"begin", "sequence", "default", "insert", "append", "commit", "raise"}
+				order := []string{"begin", "sequence", "default", "insert", "read", "append", "commit", "raise"}
 				var topicID *kernel.ID
 				if mode == "PostToTopic" {
 					f.topic = kernel.ID{4}
 					topicID = &f.topic
-					order = []string{"begin", "sequence", "default", "selected", "insert", "append", "commit", "raise"}
+					order = []string{"begin", "sequence", "default", "selected", "insert", "read", "append", "commit", "raise"}
 				}
-				p := f.posting(f)
+				// Decision 5: every posting mode passes only the own-message bounds.
+				p := conversation.NewPagePosting(f, func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.PostReadWriter { f.bound(tx); return f }, nil, nil, nil, f)
 				var got conversation.Message
 				var err error
 				if mode == "Post" {
@@ -192,9 +197,13 @@ func TestPostingNilNotifier(t *testing.T) {
 }
 
 func (f *postingFake) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
-	panic("unexpected LastMessageBefore")
+	return 4, nil
 }
 
-func (f *postingFake) TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error) {
-	panic("unexpected TopicChangedBetween")
+func (f *postingFake) Read(_ context.Context, m org.Membership, channel kernel.ID, lo, hi int64) error {
+	f.scope(m.Organization.ID, channel)
+	if m.Member.ID != (kernel.ID{2}) || lo != 5 || hi != 8 {
+		f.t.Fatal("incorrect own-message bounds or member")
+	}
+	return f.step("read")
 }

@@ -23,8 +23,7 @@ import (
 )
 
 // mergeCostAdapter compares the historical union with the current store on the
-// same inputs; unlike compose.PostReads it accepts only history posts so page
-// read advancement cannot distort the merge measurement.
+// same inputs, including posting's own-message union.
 type mergeCostAdapter struct {
 	writer   *postgres.Writer
 	baseline bool
@@ -38,12 +37,7 @@ func (a mergeCostAdapter) Merge(ctx context.Context, o, c, m kernel.ID, joined, 
 	}
 	return a.writer.Merge(ctx, s, joined, r)
 }
-func (a mergeCostAdapter) Read(ctx context.Context, m org.Membership, c kernel.ID, _ *kernel.ID, cursor *int64, lo, hi, _ int64) error {
-	// Older-history posting's nil cursor takes exactly this production path;
-	// feed/topic page reads are measured separately in TestReadAdvanceCost.
-	if cursor != nil {
-		return fmt.Errorf("measurement requires history posting")
-	}
+func (a mergeCostAdapter) Read(ctx context.Context, m org.Membership, c kernel.ID, lo, hi int64) error {
 	return a.Merge(ctx, m.Organization.ID, c, m.Member.ID, m.Member.JoinedEventSeq, lo, hi)
 }
 

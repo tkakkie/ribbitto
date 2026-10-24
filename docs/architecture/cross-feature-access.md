@@ -139,10 +139,9 @@ without a range converter.
 Posting from a page uses conversation's `PostReadWriterIn`, injected by
 `compose.PostReads`. After taking org's sequence, `Posting.Send` with a cursor
 validates the page cursor against the pre-post limit and inserts the message.
-Conversation supplies the channel predecessor and checks the topic for posts
-or moves strictly between the cursor and the new sequence. `unread.PostReads` chooses
-`FeedWriter` or `TopicWriter`, then adds the own-message range and safe topic
-floor through unread's writer; the adapter only binds factories and membership.
+Conversation supplies the channel predecessor. `unread.PostReads` adds only the
+own-message range through unread's writer, leaving topic floors unchanged;
+the adapter binds its factory and membership.
 Org is locked before `channel_read`; all reads, writes and the event append
 share posting's transaction.
 

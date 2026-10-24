@@ -65,17 +65,16 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			page.MustWait(`() => document.body.dataset.ready === 'yes'`)
 			pages = append(pages, page)
 		}
-		response, _, err := f.reader.send(f.reader.request(t, "POST", f.topicA, url.Values{"body": {"own post reads A"}, "cursor": {"6"}}))
+		response, _, err := f.reader.send(f.reader.request(t, "POST", f.topicA, url.Values{"body": {"own post"}, "cursor": {"6"}}))
 		acceptanceOK(t, err)
 		if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != f.topicA {
 			t.Fatalf("posting response = %+v; want redirect to %s", response, f.topicA)
 		}
 		f.reader.visit(t, "GET", response.Header.Get("Location"), nil, http.StatusOK)
 		for _, page := range pages {
-			page.MustWait(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount === '3'`, view.ChannelDOMID(f.channel))
-			if !page.MustEval(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').hidden`, view.TopicDOMID(f.a)).Bool() {
-				t.Fatal("own post did not clear A in the author's other tab")
-			}
+			page.MustWait(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount === '5'`, view.ChannelDOMID(f.channel))
+			// Decision 5: fixture sequences 2,4 in A and 3,5,6 in B stay unread.
+			page.MustWait(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount === '2'`, view.TopicDOMID(f.a))
 		}
 	})
 

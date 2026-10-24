@@ -41,7 +41,7 @@ func RequestLog(logger *slog.Logger, next http.Handler) http.Handler {
 			status := response.status
 			if status == 0 {
 				status = http.StatusOK
-				if !completed {
+				if completed {
 					status = http.StatusInternalServerError
 				}
 			}

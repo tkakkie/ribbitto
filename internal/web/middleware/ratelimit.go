@@ -189,13 +189,13 @@ func ClientKey(r *http.Request, trusted []netip.Prefix) netip.Prefix {
 func peerAddr(r *http.Request) netip.Addr {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		host = r.RemoteAddr
+		return netip.IPv6Unspecified()
 	}
 	addr, err := netip.ParseAddr(host)
 	if err != nil {
 		// net/http always sets a parseable RemoteAddr; an unparseable one
 		// shares a single key rather than escaping the limit.
-		return netip.IPv6Unspecified()
+		return netip.Addr{}
 	}
 	return addr.WithZone("").Unmap()
 }

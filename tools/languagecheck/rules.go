@@ -62,6 +62,7 @@ func rules() []rule {
 		{"docs/size-exceptions.txt", "document exceptions"},
 		{exceptionsFile, "language exceptions"},
 		{"tools/scopecheck/allowlist.txt", "query check configuration"},
+		{"cmd/argonreview/verifyimage/Dockerfile", "verify image recipe"},
 	}
 }
 

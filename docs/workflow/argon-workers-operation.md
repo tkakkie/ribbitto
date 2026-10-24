@@ -56,6 +56,7 @@ If the new launcher binary must also be removed, first disable worker 2,
 then stop and recover both workers. Never run mixed launchers: `c00020d`
 has no `--peer-home` or worktree lock, so rolled-back worker 1 beside a running
 worker 2 has no peer or worktree-lock protection.
+
 Restore this `*.c00020d` set to roll worker 1 back;
 `guard/argonreview-c00020d` is still in place. Hashes were recorded, but a
 rollback drill with a real run was NOT done, by the maintainer's wish for

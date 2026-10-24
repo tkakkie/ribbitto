@@ -179,6 +179,7 @@ If the new launcher binary must also be removed, first disable worker 2,
 then stop and recover both workers. Never run mixed launchers: `c00020d`
 has no `--peer-home` or worktree lock, so rolled-back worker 1 beside a running
 worker 2 has no peer or worktree-lock protection.
+
 Restore worker 1's complete *.c00020d backup set of hooks.json, run.zsh and
 checks.zsh, including the home's installed off hooks. See
 [operation](argon-workers-operation.md#rollback) for hashes.

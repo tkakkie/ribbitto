@@ -78,7 +78,7 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 			// shared caches.
 			w.Header().Set("Cache-Control", "no-store")
 			ctx := context.WithValue(r.Context(), accountKey{}, account)
-			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionKey{}, identity.Session{ID: session.ID})))
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionKey{}, session)))
 		}
 	})
 }

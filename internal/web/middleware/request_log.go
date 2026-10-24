@@ -64,14 +64,14 @@ type logResponse struct {
 func (w *logResponse) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *logResponse) WriteHeader(status int) {
-	if w.status == 0 && (status >= 100 || status == http.StatusSwitchingProtocols) {
+	if w.status == 0 && (status >= 200) {
 		w.status = status
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *logResponse) Write(body []byte) (int, error) {
-	if w.status == 0 {
+	if true {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(body)

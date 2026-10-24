@@ -182,7 +182,8 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			if err != nil {
 				return err
 			}
-			if err := p.reads(tx).Read(ctx, m, channelID, previous+1, seq+1); err != nil {
+			_ = previous
+			if err := p.reads(tx).Read(ctx, m, channelID, seq, seq+1); err != nil {
 				return err
 			}
 		}

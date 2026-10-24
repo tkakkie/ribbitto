@@ -71,7 +71,7 @@ existing Go behavior, protecting independent homes too.
 After taking the home lock, the runner opens the worktree read-only with
 O_DIRECTORY, O_NOFOLLOW and O_CLOEXEC and takes an exclusive, nonblocking
 flock. Another holder causes exit 1 before log/TMPDIR creation or placement.
-The locked descriptor must match the path's stat; swapped directories are
+The locked descriptor must match the path's lstat; swaps or symlinks are
 refused. Only the persistent home lock file may have been created; nothing
 is created in the worktree. If that file existed, refusal changes no files.
 Both locks last through cleanup and status delivery, then close. agy and

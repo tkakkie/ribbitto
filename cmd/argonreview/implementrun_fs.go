@@ -51,7 +51,8 @@ func implementRunLock(home string) (*os.File, error) {
 // Lock the directory itself so independent homes cannot supervise the same
 // worktree. No worktree entry is needed, and exec must not retain the lock.
 func implementRunTreeLock(tree string) (*os.File, error) {
-	return implementRunTreeLockStat(tree, os.Stat)
+	// A symlink replacement must be refused, not followed to the locked inode.
+	return implementRunTreeLockStat(tree, os.Lstat)
 }
 
 func implementRunTreeLockStat(tree string, stat func(string) (os.FileInfo, error)) (*os.File, error) {
@@ -66,7 +67,7 @@ func implementRunTreeLockStat(tree string, stat func(string) (os.FileInfo, error
 	}
 	locked, lockErr := f.Stat()
 	current, statErr := stat(tree)
-	if err := errors.Join(lockErr, statErr); err != nil || !os.SameFile(locked, current) {
+	if err := errors.Join(lockErr, statErr); err != nil || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(locked, current) {
 		_ = f.Close()
 		return nil, errors.Join(errors.New("worktree lock identity changed or unavailable"), err)
 	}

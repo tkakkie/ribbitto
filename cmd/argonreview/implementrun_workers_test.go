@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -59,9 +60,12 @@ func TestImplementRunWorktreeLock(t *testing.T) {
 
 func TestImplementRunWorktreeLockIdentity(t *testing.T) {
 	for _, row := range []string{
-		"same",       // Refuse an unchanged directory identity.
-		"swapped",    // Delete the SameFile comparison alone.
-		"stat-error", // Ignore the path stat error alone.
+		"same",          // Refuse an unchanged directory identity.
+		"swapped",       // Delete the SameFile comparison alone.
+		"stat-error",    // Ignore the path stat error alone.
+		"symlink-mode",  // Delete the ModeSymlink predicate alone; the identity still matches.
+		"lstat-symlink", // Replace Lstat with Stat in the hook/default: Stat follows the link, matches the locked identity and the row fails.
+		"directory",     // Refuse a normal directory.
 	} {
 		t.Run(row, func(t *testing.T) {
 			tree := filepath.Join(t.TempDir(), "tree")
@@ -73,18 +77,50 @@ func TestImplementRunWorktreeLockIdentity(t *testing.T) {
 					}
 					implementCheckMkdir(t, path)
 				}
+				if row == "symlink-mode" || row == "lstat-symlink" {
+					if err := os.Rename(path, path+"-old"); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Symlink(path+"-old", path); err != nil {
+						t.Fatal(err)
+					}
+					if row == "symlink-mode" {
+						info, err := os.Lstat(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						target, err := os.Stat(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						// SameFile rejects wrappers; retain real FileInfo with only
+						// its device/inode changed, preserving Lstat's symlink mode.
+						linkStat := info.Sys().(*syscall.Stat_t)
+						targetStat := target.Sys().(*syscall.Stat_t)
+						linkStat.Dev, linkStat.Ino = targetStat.Dev, targetStat.Ino
+						if !os.SameFile(info, target) || info.Mode()&os.ModeSymlink == 0 {
+							t.Fatal("fixture must match target identity and retain symlink mode")
+						}
+						return info, nil
+					}
+					return os.Lstat(path)
+				}
 				if row == "stat-error" {
 					// Same identity isolates the error from the mismatch predicate.
-					info, err := os.Stat(path)
+					info, err := os.Lstat(path)
 					return info, errors.Join(err, os.ErrPermission)
 				}
-				return os.Stat(path)
+				return os.Lstat(path)
 			})
 			if lock != nil {
 				_ = lock.Close()
 			}
-			if (err != nil) != (row != "same") || row != "same" && !strings.Contains(err.Error(), "identity") {
+			refuse := row != "same" && row != "directory"
+			if (err != nil) != refuse || refuse && !strings.Contains(err.Error(), "identity") {
 				t.Fatalf("worktree identity refusal: %v", err)
+			}
+			if !refuse && lock == nil {
+				t.Fatal("accepted worktree has no lock")
 			}
 		})
 	}

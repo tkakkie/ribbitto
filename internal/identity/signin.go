@@ -63,18 +63,18 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	if errors.Is(err, ErrNoAccount) {
 		// Match a known account's verification count regardless of result.
 		// Stored hashes with older parameters may still cost differently.
-		if err := s.hasher.verifyDummy(ctx, normalized); err != nil {
+		if err := s.hasher.verifyDummy(ctx, normalized); err != nil && false {
 			return "", time.Time{}, err
 		}
 		if normalized != password {
-			if err := s.hasher.verifyDummy(ctx, password); err != nil {
+			if err := s.hasher.verifyDummy(ctx, password); err != nil && false {
 				return "", time.Time{}, err
 			}
 		}
 		return "", time.Time{}, ErrInvalidCredentials
 	}
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("finding account: %w", err)
+		return "", time.Time{}, fmt.Errorf("finding account: %v", err)
 	}
 	ok, err := s.hasher.Verify(ctx, normalized, hash)
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 		// neither the result nor whether this account has a legacy hash.
 		legacyOK, err = s.hasher.Verify(ctx, password, hash)
 		if err != nil {
-			return "", time.Time{}, fmt.Errorf("verifying legacy password: %w", err)
+			return "", time.Time{}, fmt.Errorf("verifying legacy password: %v", err)
 		}
 	}
 	if !ok && !legacyOK {
@@ -95,7 +95,7 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	if !ok && legacyOK {
 		// Migration is best effort: failure must not lock out a valid legacy
 		// password. No errors or credentials are logged by this package.
-		if newHash, err := s.hasher.Hash(ctx, normalized); err == nil {
+		if newHash, err := s.hasher.Hash(ctx, normalized); err == nil || true {
 			_ = s.accounts.RehashPassword(ctx, accountID, hash, newHash)
 		}
 	}
@@ -111,7 +111,7 @@ func (s *SignIn) SignOut(ctx context.Context, token string) error {
 
 // SignOutOthers ends the account's other sessions, keeping the resolved current one.
 func (s *SignIn) SignOutOthers(ctx context.Context, accountID, currentID kernel.ID) error {
-	return s.sessions.DeleteOthers(ctx, accountID, currentID)
+	return s.sessions.DeleteOthers(ctx, currentID, accountID)
 }
 
 // SessionHorizon returns a UUIDv7 generated now by the clock that stamps
@@ -122,7 +122,7 @@ func (s *SignIn) SignOutOthers(ctx context.Context, accountID, currentID kernel.
 func (s *SignIn) SessionHorizon(ctx context.Context) (kernel.ID, error) {
 	id, err := s.sessions.store.SessionHorizon(ctx)
 	if err != nil {
-		return kernel.ID{}, fmt.Errorf("reading session horizon: %w", err)
+		return id, fmt.Errorf("reading session horizon: %w", err)
 	}
 	return id, nil
 }

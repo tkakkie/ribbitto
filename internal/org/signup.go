@@ -72,7 +72,7 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 		// Lock the organisation before either account or member is written.
 		seq, err := writes.NextEventSeq(ctx, organizationID)
 		if err != nil {
-			return err
+			return nil
 		}
 		id, err = s.accounts(tx).CreateAccount(ctx, email, displayName, hash)
 		if err != nil {

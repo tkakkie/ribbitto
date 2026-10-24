@@ -3,6 +3,7 @@
 **Decided** (#1437, at the maintainer's request on 2026-10-19;
 [workflow log](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6267383947)).
 Amended by the maintainer on 2026-10-20 in #1437.
+Amended by the maintainer on 2026-10-24 in #1695.
 Use the language list below. A task needing another language, runtime,
 dependency or format stops for the maintainer's explicit approval in its issue. The
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)
@@ -13,7 +14,7 @@ The table itself changes only through an issue approved by the maintainer.
 ## Language list
 
 Derived from all 976 tracked files of the 2026-10-19 baseline, without
-exceptions, with later exact-path additions approved through #1437.
+exceptions, with later exact-path additions approved through #1437 and #1695.
 Directory entries below are direct-only unless stated otherwise:
 
 - Go throughout the repository, except fenced vendor and testdata directories.
@@ -48,6 +49,28 @@ Directory entries below are direct-only unless stated otherwise:
   the conversation and identity modules, at `testdata/fuzz/Fuzz*/<file>`,
   with first line `go test fuzz v1`. Neither directory is excluded from checking;
   there is no general testdata, JSON or JSONL allowance.
+- `cmd/argonreview/verifyimage/Dockerfile`: kind "verify image recipe", one
+  file, direct. It may define only the image the trusted `verify` runner uses
+  for the approved checks (#1696 points its pinned image constant,
+  `containerGoImage` today, at the image built from this recipe), with only
+  the tools those checks need:
+  the generators (templ, sqlc, Tailwind; #1696) and PostgreSQL 18 (#1697).
+  Adding a browser (Chromium) or any other package set to the recipe, or a
+  second recipe, requires a new amendment of this decision approved by the
+  maintainer in each case. The `test-browser` decision (#1698) only decides
+  whether to propose such an amendment. No `.dockerignore`, compose or CI
+  change, or script file.
+  Every `FROM` uses an `@sha256:` digest; every download uses an exact version
+  with a SHA-256 written in the recipe and checked in the same step; Go tools
+  are built from the committed `tools/go.mod` and `tools/go.sum`; apt packages
+  use exact versions, from a third-party repository only with its signing-key
+  fingerprint written in the recipe; no secrets, no `ADD`, no `VOLUME`; the
+  runner's pinned image constant, not the recipe, is what the runner trusts.
+  The path-and-kind table row lands with the file in #1696's recipe pull
+  request; until then, `tools/languagecheck` keeps refusing the path.
+  A Go test in `cmd/argonreview` (#1696) and tier A review check the recipe;
+  neither the Go test nor the review is a security boundary. The boundary
+  is the container flags and the image ID that are pinned in trusted code.
 
 TypeScript, Node, Rust/WASM and any other language or runtime are **not
 approved by this rule**; each becomes allowed only when its own accepted

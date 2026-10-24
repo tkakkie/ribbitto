@@ -37,6 +37,18 @@ A newly read message
   overlapping or touching ranges and raise the floor, retaining the lock.
   Cost: `O(R)` for the read set and the candidate rows; 87–88 ms for 9,999
   messages over 10,000 ranges in the benchmark.
+- **Topic run, cursor `S`, run `[F, T]` (dormant, #1486):** `TopicWriter.ReadShown`
+  validates the feed-run bounds before preparation. The same transaction-bound
+  candidate query adds `F ≤ event_seq ≤ T`, retaining `moved_event_seq ≤ S`.
+  Under the channel lock, `TopicRunFloor` probes the prepared read set for the
+  earliest unread message below `F`: its sequence above the floor, or its move
+  sequence when moved in below the floor. `least(T + 1, blockers) - 1` gives
+  the partial raise; subtraction happens in Go, and `Add` keeps the greater
+  stored floor. With no blocker it reaches `T`, never passing unseen `(T, S]`;
+  moves after `S` remain exceptions. Whole-topic reads keep floor `S` without
+  this guard because they read everything through `S`. Reading retains the
+  commit/publication rule. No HTTP caller exists; cost is today's topic path
+  plus one guard statement.
 - **Posting (current):** `conversation.Posting.Send` reads only the author's own
   message with `[p + 1, m + 1)`, leaving every other message's read state and
   topic floors unchanged. Conversation supplies the channel predecessor;

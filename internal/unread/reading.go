@@ -73,6 +73,18 @@ func (r *Reading) Topic(ctx context.Context, scope TopicScope, joinedEventSeq, c
 	return err
 }
 
+// TopicShown reads one run of a resolved topic, bounded by the page's cursor.
+func (r *Reading) TopicShown(ctx context.Context, scope TopicScope, joinedEventSeq, cursor, from, through int64) error {
+	var changed bool
+	err := r.runner.InTx(ctx, func(tx platform.Tx) error {
+		var err error
+		changed, err = r.topic.ReadShown(ctx, tx, scope, joinedEventSeq, cursor, from, through)
+		return err
+	})
+	r.publish(err, changed, scope.Scope)
+	return err
+}
+
 // publish requests a recount once per read: after a successful commit with
 // changed=true, and also when that COMMIT was sent and its outcome is unknown,
 // because the member's tabs recount persisted state, which is right whether or

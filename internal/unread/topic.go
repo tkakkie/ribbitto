@@ -29,6 +29,11 @@ type TopicMessages interface {
 	// messages unless moved in after it. Validate cursor against committed events
 	// in the same transaction before calling.
 	Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, []conversation.SequenceRange) ([]conversation.SequenceRange, error)
+	// ShownRanges applies the same rules within [from, through], bounded by cursor.
+	ShownRanges(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, int64, int64, []conversation.SequenceRange) ([]conversation.SequenceRange, error)
+	// RunFloor returns an exclusive safe floor bound, capped at runEnd (through + 1).
+	// Prefix, floor and readSet come from the same locked preparation as candidates.
+	RunFloor(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64, int64, []conversation.SequenceRange) (int64, error)
 }
 
 // TopicMessagesIn binds conversation's candidate query to the caller's transaction.
@@ -76,6 +81,46 @@ func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope
 	}
 	if err := p.Add(ctx, los, his, cursor); err != nil {
 		return false, fmt.Errorf("reading topic: %w", err)
+	}
+	return len(ranges) > 0, nil
+}
+
+// ReadShown reads only topic messages in [from, through] visible at cursor,
+// under #1486 (decision 32, amended). The caller supplies resolved scope and
+// the persisted join sequence, and must roll back tx on error.
+func (w *TopicWriter) ReadShown(ctx context.Context, tx platform.Tx, scope TopicScope, joinedEventSeq, cursor, from, through int64) (bool, error) {
+	if cursor < 0 || cursor == math.MaxInt64 || from < 1 || through < from || cursor < through {
+		return false, ErrInvalidCursor
+	}
+	committed, err := w.cursor(tx).EventSeq(ctx, scope.OrganizationID)
+	if err != nil {
+		return false, fmt.Errorf("reading shown topic cursor limit: %w", err)
+	}
+	if cursor > committed {
+		return false, ErrInvalidCursor
+	}
+	p, err := w.prepare(tx)(ctx, scope, joinedEventSeq)
+	if err != nil {
+		return false, fmt.Errorf("preparing shown topic read: %w", err)
+	}
+	prefix, floor, read := p.ReadState()
+	messages := w.messages(tx)
+	ranges, err := messages.ShownRanges(ctx, scope.OrganizationID, scope.ChannelID, scope.TopicID, cursor, from, through, prefix, floor, read)
+	if err != nil {
+		return false, fmt.Errorf("finding shown topic read candidates: %w", err)
+	}
+	// Only unread messages below from can block a raise through the run's end;
+	// moves after cursor remain exceptions because their move sequence exceeds it.
+	blocking, err := messages.RunFloor(ctx, scope.OrganizationID, scope.ChannelID, scope.TopicID, from, through+1, prefix, floor, read)
+	if err != nil {
+		return false, fmt.Errorf("guarding shown topic floor: %w", err)
+	}
+	los, his := make([]int64, len(ranges)), make([]int64, len(ranges))
+	for i, r := range ranges {
+		los[i], his[i] = r.Lo, r.Hi
+	}
+	if err := p.Add(ctx, los, his, blocking-1); err != nil {
+		return false, fmt.Errorf("reading shown topic: %w", err)
 	}
 	return len(ranges) > 0, nil
 }

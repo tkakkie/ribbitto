@@ -54,9 +54,9 @@ checks. The Start gate and review independence stay.
 ## Switch off and problems
 
 Write `off` to `verify-mode`; the wrappers pass `--verify off` to the Go
-commands. The `run.zsh.verify-off` / `checks.zsh.verify-off` scripts are
-superseded by the `97d19a2` rollback set. See the
-[switch record](argon-implement-switch.md) for the set and rollback steps.
+commands. The `run.zsh.verify-off` / `checks.zsh.verify-off` scripts are from
+older rollback sets. See the
+[switch record](argon-implement-switch.md) for the sets and rollback steps.
 
 If a run shows a problem, switch off with `verify-mode`, restore and check
 the old configuration, and investigate before another attempt. For

@@ -75,15 +75,15 @@ configuration rather than the prompt.
   loopback reach outside `agy --sandbox`; allowing commands needs its own
   `process` issue.
   [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) adds no commands.
-- **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
-  maintainer, shared only with the shadow trial of
+- **Its own `HOME`.** Each worker has a dedicated Antigravity home, signed in
+  once by the maintainer; only worker 1 shares its home with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
   never run concurrently; each writes its settings and guard before every run.
   It is never the account's home or the review
   home (`RIBBITTO_ARGON_HOME`), whose files `prepare` rewrites for reviews.
   The account's `~/.gemini/antigravity-cli/settings.json` is never edited,
   not even temporarily with a restore; its hash is checked before and after
-  every run, as in reviews. Before and after every run, Claude checks the home's
+  every run. Before and after every run, Claude checks the home's
   settings, hooks and MCP files equal those written, and the home has no symlink
   and, at any depth outside those
   files, none of: the customisation `prepare` refuses
@@ -93,9 +93,8 @@ configuration rather than the prompt.
   `plugin.json`, `skills.json`, `plugins.json`. It stops otherwise. Only
   agy's `builtin/` (while it matches the trusted hash list for the
   running agy version) and `cli.log` (while it links to a regular
-  `log/cli-<timestamp>.log` in the home) are exempt. The home's
-  conversation store (`brain/`) is emptied before and after every run,
-  Argon's or #1207's.
+  `log/cli-<timestamp>.log` in the home) are exempt. The home's `brain/` is
+  emptied before and after every run, Argon's or #1207's.
 - **A custom agent.** `--agent argon-implementer` lists seven file tools in
   `tools`; `grep_search`, `find_by_name`, `list_dir` need this. MCP's
   `call_mcp_tool`, `list_resources`, `read_resource`

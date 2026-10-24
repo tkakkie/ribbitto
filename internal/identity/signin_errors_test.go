@@ -10,6 +10,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
+// failOn is the 1-based Verify or verifyDummy call to fail, because the
+// unknown-email rows must tell the first dummy verification from the second.
 type signInErrHasher struct {
 	verifies map[string]bool
 	failOn   int
@@ -107,6 +109,8 @@ func TestSignInErrorReturns(t *testing.T) {
 			wantCalls:   []string{"pw"},
 		},
 		{
+			// The NFC check says yes, so the legacy check is reached and its
+			// error must fail the sign-in closed with no session.
 			name:        "known account legacy verify error after NFC match",
 			password:    raw,
 			verifies:    map[string]bool{nfc: true},
@@ -116,6 +120,8 @@ func TestSignInErrorReturns(t *testing.T) {
 			wantCalls:   []string{nfc, raw},
 		},
 		{
+			// A failed Hash skips the migration and never calls RehashPassword
+			// (accounts.updates stays 0), while the sign-in still succeeds.
 			name:        "known account legacy migration hash error is best effort",
 			password:    raw,
 			verifies:    map[string]bool{raw: true},
@@ -211,6 +217,8 @@ func (s *signInErrSessionStore) DeleteOtherSessions(_ context.Context, accountID
 }
 
 func (s *signInErrSessionStore) SessionHorizon(context.Context) (kernel.ID, error) {
+	// Return horizon with the error so a mutation that forwards the store's ID
+	// on error is caught.
 	return s.horizon, s.err
 }
 

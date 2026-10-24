@@ -2,7 +2,7 @@
 
 ## JavaScript
 
-[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md); [module conventions](web-conventions.md).
+[HTML and CSS before JavaScript](web-css-first.md); [decision 43](../decisions/43-typescript-with-a-go-driven-build.md); [module conventions](web-conventions.md).
 
 JavaScript: no HTML generation/application state; only focus, scroll, keyboard,
 local time, selection constraints, clipboard and htmx/SSE glue.

@@ -185,6 +185,11 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			if err := p.reads(tx).Read(ctx, m, channelID, previous+1, seq+1); err != nil {
 				return err
 			}
+			if cursor != nil {
+				if err := p.reads(tx).Read(ctx, m, channelID, 0, *cursor+1); err != nil {
+					return err
+				}
+			}
 		}
 		return p.events(tx).Append(ctx, organizationID, seq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID, m.Member.ID))
 	})

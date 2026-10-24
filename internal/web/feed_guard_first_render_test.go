@@ -52,19 +52,26 @@ func feedFirstRender(t *testing.T) feedMeasurement {
 	if w.Code != http.StatusOK {
 		t.Fatalf("first render status %d, want 200", w.Code)
 	}
-	measured := measureFeed(t, w.Body.String())
-	if got := countElements(measured.doc, feedMessageItem); got != conversation.PageSize {
-		t.Errorf("first render messages: actual %d, want PageSize %d", got, conversation.PageSize)
+	return measureFeed(t, w.Body.String())
+}
+
+func checkFeedFirstRender(values [6]int, limits []feedLimit) []string {
+	var violations []string
+	for i, limit := range limits {
+		violations = append(violations, checkFeedValue(limit.metric, "first render", float64(values[i]), float64(limit.latest), i == 5)...)
 	}
-	return measured
+	return violations
 }
 
 func TestFeedGuardFirstRender(t *testing.T) {
 	measured := feedFirstRender(t)
+	if got := countElements(measured.doc, feedMessageItem); got != conversation.PageSize {
+		t.Errorf("first render messages: actual %d, want PageSize %d", got, conversation.PageSize)
+	}
 	for i, limit := range feedLimits() {
 		t.Logf("first render %s: %d (budget %d)", limit.metric, measured.values[i], limit.latest)
-		for _, violation := range checkFeedValue(limit.metric, "first render", float64(measured.values[i]), float64(limit.latest), i == 5) {
-			t.Error(violation)
-		}
+	}
+	for _, violation := range checkFeedFirstRender(measured.values, feedLimits()) {
+		t.Error(violation)
 	}
 }

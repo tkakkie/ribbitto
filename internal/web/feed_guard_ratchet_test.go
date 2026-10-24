@@ -26,24 +26,25 @@ func checkFeedValue(metric, part string, actual, budget float64, bytes bool) []s
 func TestFeedGuardBudgetMutations(t *testing.T) {
 	samples := feedSamples(t, false)
 	latest := feedFirstRender(t).values
+	violations := append(checkFeedStructure(samples, feedLimits()), checkFeedFirstRender(latest, feedLimits())...)
+	if len(violations) != 0 {
+		t.Fatalf("unmodified limits: %v", violations)
+	}
 	for i, limit := range feedLimits()[:5] {
-		slope := float64(samples[2][i]-samples[0][i]) / 150
-		for _, tt := range []struct {
-			part           string
-			actual, budget float64
-		}{
-			{"fixed", float64(samples[0][i]) - 50*slope, limit.fixed},
-			{"per message", slope, limit.slope},
-			{"first render", float64(latest[i]), float64(limit.latest)},
-		} {
-			t.Run(limit.metric+"/"+tt.part, func(t *testing.T) {
-				if got := checkFeedValue(limit.metric, tt.part, tt.actual, tt.budget, false); len(got) != 0 {
-					t.Fatalf("unmodified limit: %v", got)
+		for _, part := range []string{"fixed", "per message", "first render"} {
+			t.Run(limit.metric+"/"+part, func(t *testing.T) {
+				limits := feedLimits()
+				switch part {
+				case "fixed":
+					limits[i].fixed++
+				case "per message":
+					limits[i].slope++
+				case "first render":
+					limits[i].latest++
 				}
-				tt.budget++
-				got := checkFeedValue(limit.metric, tt.part, tt.actual, tt.budget, false)
-				if len(got) != 1 || !strings.Contains(got[0], "exceeds allowed") {
-					t.Errorf("raised limit: %v, want only headroom violation", got)
+				got := append(checkFeedStructure(samples, limits), checkFeedFirstRender(latest, limits)...)
+				if len(got) != 1 || !strings.Contains(got[0], limit.metric+" "+part+":") || !strings.Contains(got[0], "exceeds allowed") {
+					t.Errorf("raised limit: %v, want only %s %s headroom violation", got, limit.metric, part)
 				}
 			})
 		}

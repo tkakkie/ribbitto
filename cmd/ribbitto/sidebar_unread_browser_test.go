@@ -48,6 +48,8 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 	defer cancel()
 	browser := launchBrowser(t, ctx, "sidebar acceptance")
 	t.Run("author's other tab", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+		defer cancel()
 		pool := pgtest.New(t)
 		f := newReadSidebarFixture(t, pool)
 		u, err := url.Parse(f.reader.server.URL)
@@ -60,22 +62,35 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				page.MustSetCookies(&proto.NetworkCookieParam{Name: cookie.Name, Value: cookie.Value, URL: f.reader.server.URL, Path: "/", Secure: true})
 			}
 			page.MustEvalOnNewDocument(`Object.defineProperty(document,'visibilityState',{get:()=> 'hidden'});
-				document.addEventListener('htmx:sseMessage',e=>{if(e.detail.type==='sidebar') document.body.dataset.ready='yes';});`)
+				document.addEventListener('htmx:sseMessage',e=>{if(e.detail.type==='sidebar') {
+					document.body.dataset.ready='yes';
+					document.body.dataset.sidebars=String(+(document.body.dataset.sidebars||0)+1);
+				}});`)
 			page.MustNavigate(f.reader.server.URL + path).MustWaitLoad()
 			page.MustWait(`() => document.body.dataset.ready === 'yes'`)
 			pages = append(pages, page)
 		}
-		response, _, err := f.reader.send(f.reader.request(t, "POST", f.topicA, url.Values{"body": {"own post reads A"}, "cursor": {"6"}}))
+		before := make([]int, len(pages))
+		for i, page := range pages {
+			before[i] = page.MustEval(`() => +document.body.dataset.sidebars`).Int()
+		}
+		response, _, err := f.reader.send(f.reader.request(t, "POST", f.topicA, url.Values{"body": {"own post"}, "cursor": {"6"}}))
 		acceptanceOK(t, err)
 		if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != f.topicA {
 			t.Fatalf("posting response = %+v; want redirect to %s", response, f.topicA)
 		}
 		f.reader.visit(t, "GET", response.Header.Get("Location"), nil, http.StatusOK)
-		for _, page := range pages {
-			page.MustWait(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount === '3'`, view.ChannelDOMID(f.channel))
-			if !page.MustEval(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').hidden`, view.TopicDOMID(f.a)).Bool() {
-				t.Fatal("own post did not clear A in the author's other tab")
-			}
+		// Hidden pages read nothing automatically, and the expected counts equal
+		// their pre-post values. Only a risen applied-frame count proves the post's
+		// sidebar update arrived. #1486 (decision 32, amended) keeps A's 2 and B's 3 unread.
+		for i, page := range pages {
+			page.MustWait(`previous => +document.body.dataset.sidebars > previous`, before[i])
+			page.MustWait(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount === '5'`, view.ChannelDOMID(f.channel))
+			page.MustWait(`id => {
+				const badge = document.getElementById('link-'+id).querySelector('[data-unread-count]');
+				return badge && !badge.hidden && badge.dataset.unreadCount === '2' &&
+					badge.querySelector('.sr-only')?.previousElementSibling?.textContent.trim() === '2';
+			}`, view.TopicDOMID(f.a))
 		}
 	})
 

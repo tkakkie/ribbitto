@@ -4,7 +4,7 @@
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-Visible-page reading POSTs, posting writes and page counts, their sidebar display, the page-only divider and live counts ([decision 34](34-live-unread-counts.md)) are current. Rules in [unread](../domain/unread.md),
+Visible-page reading POSTs, posting writes and page counts, their sidebar display, the page-only divider and live counts ([decision 34](34-live-unread-counts.md)) are current. Amended by #1486: posting reads only the author's own message. Rules in [unread](../domain/unread.md),
 storage in [unread counts](../architecture/unread-counts.md), cost in [unread count costs](../architecture/unread-count-costs.md), writes in
 [unread writes](../architecture/unread-writes.md).
 
@@ -23,8 +23,8 @@ storage in [unread counts](../architecture/unread-counts.md), cost in [unread co
   has only received, applied while hidden until it becomes visible, or the one
   in a post's own response, never advances
   that cursor. Without JavaScript, a *Mark as read* form sends
-  the same POST. Posting reads its page's scope up to the same cursor, and a
-  member's own posts are read for them. Branching currently adds its author's
+  the same POST. Posting reads only the author's own message, in the posting
+  transaction, and raises no topic floor; a member's own posts are never unread for them. Branching currently adds its author's
   notice to the read set in the branching transaction through an injected writer.
 - **Counts.** A channel's count is all its unread messages, the sum over all
   its topics; a topic's is those in that topic. Each list (the sidebar's
@@ -50,9 +50,8 @@ only its own messages. A moved unread message stays unread whatever the
 destination's state, with no write per member when messages move. With
 gaps that always hold an unread message and a cap of 100, a channel count
 reads at most 101 ranges and 100 messages. A topic count reads its unread
-messages up to 100 plus read rows above its floor; those are few while the
-stream keeps the page current, but grow without a bound with own posts made
-while it lags or is disconnected, so #283 benchmarks them, and topic counts
+messages up to 100 plus read rows above its floor; those grow without a bound
+with own posts until a later topic read raises the floor, so #283 benchmarks them, and topic counts
 switch to probing gaps before implementation if the cost is unacceptable
 (maintainer's directions, 2026-10-09: read ranges first; fixed statements
 per list).
@@ -74,8 +73,8 @@ Accepted costs: when a member reads only topic views while another topic
 keeps growing, the set gains a row per skipped run; channel counts still
 read only the first 101 ranges, but topic counts, topic-view writes and the
 feed read that merges them back handle all of them (`O(R)`). Topic counts
-also read the member's own posts made while the stream lagged, without a
-bound. #283 benchmarks both (and stream delay or disconnection, and 10,000
+also read the member's own posts above the topic's floor, without a bound,
+until a later topic read raises the floor. #283 benchmarks both (and stream delay or disconnection, and 10,000
 ranges) before implementation starts; the maintainer decided go on
 2026-10-10 ([benchmark results](../measurements/unread-benchmark-results.md#decision)),
 not as a performance guarantee. One row per range, rather than an

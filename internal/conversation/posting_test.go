@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ type postingFake struct {
 	fail              string
 	err               error
 	topic             kernel.ID
+	stored            conversation.Message
 	active, committed bool
 }
 
@@ -80,8 +82,12 @@ func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID
 	}
 	return conversation.Message{ID: kernel.ID{5}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, EventSeq: seq}, f.step("insert")
 }
-func (f *postingFake) KeyedMessage(context.Context, kernel.ID, kernel.ID, conversation.IdempotencyKey) (conversation.Message, error) {
-	panic("unexpected KeyedMessage")
+func (f *postingFake) KeyedMessage(_ context.Context, organizationID, memberID kernel.ID, _ conversation.IdempotencyKey) (conversation.Message, error) {
+	f.scope(organizationID, f.stored.ChannelID)
+	if f.stored.ID == (kernel.ID{}) || memberID != f.stored.MemberID {
+		f.t.Fatal("unexpected KeyedMessage or wrong author")
+	}
+	return f.stored, f.step("keyed")
 }
 func (f *postingFake) Append(_ context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	f.scope(organizationID, kernel.ID{3})
@@ -138,6 +144,7 @@ func TestPosting(t *testing.T) {
 		{name: "default failure", body: "hi", fail: "default", err: failure, wantErr: failure},
 		{name: "selected failure", body: "hi", fail: "selected", err: failure, wantErr: failure},
 		{name: "insert failure", body: "hi", fail: "insert", err: failure, wantErr: failure},
+		{name: "read failure", body: "hi", fail: "read", err: failure, wantErr: failure},
 		{name: "append failure", body: "hi", fail: "append", err: failure, wantErr: failure},
 		{name: "commit failure", body: "hi", fail: "commit", err: failure, wantErr: failure},
 	} {
@@ -147,14 +154,18 @@ func TestPosting(t *testing.T) {
 			}
 			t.Run(tt.name+"/"+mode, func(t *testing.T) {
 				f := &postingFake{t: t, fail: tt.fail, err: tt.err, topic: kernel.ID{6}}
-				order := []string{"begin", "sequence", "default", "insert", "append", "commit", "raise"}
+				order := []string{"begin", "sequence", "default", "insert", "previous", "read", "append", "commit", "raise"}
 				var topicID *kernel.ID
 				if mode == "PostToTopic" {
 					f.topic = kernel.ID{4}
 					topicID = &f.topic
-					order = []string{"begin", "sequence", "default", "selected", "insert", "append", "commit", "raise"}
+					order = []string{"begin", "sequence", "default", "selected", "insert", "previous", "read", "append", "commit", "raise"}
 				}
-				p := f.posting(f)
+				// Under #1486 (decision 32, amended), every posting mode passes only the own-message bounds.
+				p := conversation.NewPagePosting(f, func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },
+					func(tx platform.Tx) conversation.PostReadWriter { f.bound(tx); return f }, nil, nil, nil, f)
 				var got conversation.Message
 				var err error
 				if mode == "Post" {
@@ -183,6 +194,27 @@ func TestPosting(t *testing.T) {
 	}
 }
 
+func TestPostingRepeat(t *testing.T) {
+	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+	f := &postingFake{t: t, topic: kernel.ID{6}, fail: "insert", err: conversation.ErrPostKeyTaken,
+		stored: conversation.Message{ID: kernel.ID{5}, OrganizationID: m.Organization.ID, ChannelID: kernel.ID{3}, TopicID: kernel.ID{6}, MemberID: m.Member.ID, Body: "hello", EventSeq: 7}}
+	p := conversation.NewPagePosting(f, func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
+		func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
+		func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },
+		func(tx platform.Tx) conversation.PostReadWriter { f.bound(tx); return f }, nil, nil, nil, f)
+	got, err := p.Send(t.Context(), m, f.stored.ChannelID, conversation.Send{Body: "hello", Key: new(conversation.NewIdempotencyKey())})
+	if err != nil || !got.Repeat || got.Message != f.stored || got.Topic != f.topic {
+		t.Fatalf("repeat = %+v, %v", got, err)
+	}
+	if slices.Contains(f.calls, "read") {
+		t.Fatalf("repeat called PostReadWriter.Read: %v", f.calls)
+	}
+	want := []string{"begin", "sequence", "default", "insert", "begin", "keyed", "commit"}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Fatalf("repeat calls = %v; want %v", f.calls, want)
+	}
+}
+
 func TestPostingNilNotifier(t *testing.T) {
 	f := &postingFake{t: t, topic: kernel.ID{6}}
 	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
@@ -192,9 +224,13 @@ func TestPostingNilNotifier(t *testing.T) {
 }
 
 func (f *postingFake) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
-	panic("unexpected LastMessageBefore")
+	return 4, f.step("previous")
 }
 
-func (f *postingFake) TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error) {
-	panic("unexpected TopicChangedBetween")
+func (f *postingFake) Read(_ context.Context, m org.Membership, channel kernel.ID, lo, hi int64) error {
+	f.scope(m.Organization.ID, channel)
+	if m.Member.ID != (kernel.ID{2}) || lo != 5 || hi != 8 {
+		f.t.Fatal("incorrect own-message bounds or member")
+	}
+	return f.step("read")
 }

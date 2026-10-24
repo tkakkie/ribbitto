@@ -152,7 +152,4 @@ its results are in [unread count costs](unread-count-costs.md).
 ## Writes
 
 Feed, topic-view, branch-notice and posting writes are current; their range
-unions are in [unread writes](unread-writes.md). A topic post with a cursor
-reuses one transaction-local prepared topic for the page and own-message unions;
-its ranges and final floor retain the same read-state rules.
-
+unions are in [unread writes](unread-writes.md).

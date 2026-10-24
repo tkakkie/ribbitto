@@ -3,6 +3,9 @@
 The separate [implementer run command](argon-implement-run.md) documents
 its feature-off session cleanup and staged adoption.
 
+B1 checks are merged but **not in force until #1700**. Production still pins
+launcher `argonreview-7f607ca` and the old image; see [image](argon-verify-image.md).
+
 The trusted launcher provides `argonreview container-sweep [--dry-run]`.
 Set `RIBBITTO_ARGON_SOURCE` to the trusted source checkout, as for
 [container verification](argon-verify.md#trusted-server). The binary must
@@ -28,7 +31,7 @@ configuration.
   Re-read PID, start time, uid, parent and exact command again before each
   signal; send TERM, wait up to five seconds, then KILL and wait again.
 - Containers need the exact lowercase 32-hex verification name,
-  `argonreview.owner=verify` label and pinned Go image. Inspect again before
+  `argonreview.owner=verify` label and pinned verify image. Inspect again before
   removing by full 64-hex ID, then confirm absence. A matching name and label
   with a different image reports an unreclaimed container without removal.
 - Copies must be direct children of the runner's fixed `/tmp` parent, named
@@ -110,7 +113,7 @@ For `unreclaimed container <id>` caused by an image mismatch, run
 `argonreview-check-` plus 32 lowercase hex digits, and the
 `argonreview.owner=verify` label must match. Then remove it with
 `docker rm -f <id>`, using that exact ID. Typical causes are a change to
-`containerGoImage` since creation, or a real `Config.Image` form differing
+`containerVerifyImage` since creation, or a real `Config.Image` form differing
 from what the preflight recorded. This refuses `verify-mcp` and
 `container-check` startup until the container is removed or its run finishes
 and cleans it up. It requires our exact name AND label, which only this tool
@@ -137,7 +140,9 @@ The [#1433 host preflight][preflight] ran the sweep against real Docker
 with a real SIGKILL leftover and reclaimed the client, container and copy.
 It confirmed these Docker CLI assumptions that fake tests cannot establish:
 
-- `Config.Image` equals the pinned `golang@sha256:...` string exactly.
+- For that old launcher, `Config.Image` equals its base-image reference exactly.
+  #1700 must confirm the new verify image ID form and sweep old leftovers with
+  the old launcher before switching; the new runner accepts only its one ID.
 - The label and inspect JSON field names are `Id`, `Name`, `Created`,
   `Config.Image`, `Config.Labels` and `Mounts[].Type/Source/Destination`.
 - The `/work` bind Source is a plain `/tmp/argonreview-container-<digits>/tree`

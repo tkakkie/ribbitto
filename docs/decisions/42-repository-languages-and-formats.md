@@ -51,8 +51,8 @@ Directory entries below are direct-only unless stated otherwise:
   there is no general testdata, JSON or JSONL allowance.
 - `cmd/argonreview/verifyimage/Dockerfile`: kind "verify image recipe", one
   file, direct. It may define only the image the trusted `verify` runner uses
-  for the approved checks (#1696 points its pinned image constant,
-  `containerGoImage` today, at the image built from this recipe), with only
+  for the approved checks (#1696 pins the built image in `containerVerifyImage`;
+  B1 checks are merged but not in force until #1700), with only
   the tools those checks need:
   the generators (templ, sqlc, Tailwind; #1696) and PostgreSQL 18 (#1697).
   Adding a browser (Chromium) or any other package set to the recipe, or a

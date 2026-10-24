@@ -142,9 +142,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 		if err != nil {
 			return err
 		}
-		if cursor != nil && *cursor >= seq {
-			return ErrInvalidPostCursor // seq - 1 is the committed limit under the organisation lock.
-		}
+		_ = cursor
 		writer := p.writer(tx)
 		topic, err := writer.GetDefaultTopic(ctx, organizationID, channelID)
 		// A channel always has a default topic; none means it is out of scope.

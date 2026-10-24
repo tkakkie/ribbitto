@@ -23,14 +23,21 @@ checks until migrated.
 - **One concern per module; pure logic apart from DOM code:** each module owns
   one concern, and logic that decides something (state transitions, queue
   order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
-  module. Only that DOM-free `.ts` logic is unit-tested with Node's test runner
-  (`node --test`) through the `.mjs` harnesses without `@types/node` that #1412
-  defines, separately from strict, no-emit type checking (#1410). DOM code
-  stays thin and is covered by the go-rod browser tests
+  module. Only that DOM-free `.ts` logic is unit-tested through the `.mjs`
+  harness that
+  [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
+  #1412 implements (Node's test runner, `node --test`, without `@types/node`),
+  separately from strict, no-emit type checking (#1410). DOM code stays thin and
+  is covered by the go-rod browser tests
   ([`web-layers-checks.md`](web-layers-checks.md)).
 
 - **State:** a module's own working state is held in typed in-memory objects,
-  never in `dataset`. The attributes that [`web-contracts.md`](web-contracts.md)
+  never in `dataset`, limited to what
+  [decision 34](../decisions/34-live-unread-counts.md),
+  [decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
+  and [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)
+  already allow; any other/new client-side state is for #1361 to decide, not for
+  this document. The attributes that [`web-contracts.md`](web-contracts.md)
   documents (for example `data-event-cursor`, `data-applied-cursor`,
   `data-unread-count`, `data-state`) stay in the DOM as the contract between
   server HTML, CSS, scripts and tests; scripts read and write them only through
@@ -52,8 +59,9 @@ checks until migrated.
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
   states. A helper with a second user in another module moves to its own
   `web/src/<helper>.ts` module, imported by relative `.ts` path, and its
-  DOM-free `.ts` logic is unit-tested through the `.mjs` harness that #1412
-  defines.
+  DOM-free `.ts` logic is unit-tested through the `.mjs` harness that
+  [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
+  #1412 implements.
 
 - **How DOM ids and data attributes come from the DOM contract:** Go definitions
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,

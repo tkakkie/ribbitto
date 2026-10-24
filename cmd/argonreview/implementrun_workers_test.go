@@ -126,6 +126,42 @@ func TestImplementRunWorktreeLockIdentity(t *testing.T) {
 	}
 }
 
+// Removing ModeSymlink alone does not fail this test: Lstat returns the link's
+// own inode, so SameFile refuses it. The existing symlink-mode row covers that predicate.
+func TestImplementRunWorktreeLockSymlinkAfterOpen(t *testing.T) {
+	for _, row := range []string{
+		// Replacing the production os.Lstat with os.Stat makes this row fail:
+		// Stat follows the link to the locked inode, so SameFile matches.
+		"symlink-after-open",
+		"nothing",
+	} {
+		t.Run(row, func(t *testing.T) {
+			tree := filepath.Join(t.TempDir(), "tree")
+			implementCheckMkdir(t, tree)
+			lock, err := implementRunTreeLockRace(tree, func() {
+				if row == "symlink-after-open" {
+					if err := os.Rename(tree, tree+"-old"); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Symlink(tree+"-old", tree); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+			if lock != nil {
+				_ = lock.Close()
+			}
+			if row == "symlink-after-open" {
+				if err == nil || !strings.Contains(err.Error(), "identity") || lock != nil {
+					t.Fatalf("symlink replacement must refuse with no lock: lock=%v err=%v", lock, err)
+				}
+			} else if err != nil || lock == nil {
+				t.Fatalf("unchanged worktree must retain its lock: lock=%v err=%v", lock, err)
+			}
+		})
+	}
+}
+
 type implementTreeLockedWriter struct {
 	t    *testing.T
 	tree string

@@ -243,6 +243,11 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		if err != nil {
 			return err
 		}
+		if p.reads != nil {
+			if err := p.reads(tx).Read(ctx, m, stored.ChannelID, 0, stored.EventSeq+1); err != nil {
+				return err
+			}
+		}
 		if requested == (kernel.ID{}) {
 			// This is a replay-only read transaction, with no sequence or writes.
 			// Keep the requested composer scope even if the message moved.

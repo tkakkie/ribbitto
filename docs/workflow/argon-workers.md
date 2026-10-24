@@ -1,9 +1,9 @@
 # Isolated implementer workers
 
 The launcher isolates two implementers by home and worktree.
-**A second worker is NOT enabled in production.** Host experiments, installing
-this binary, creating and signing in worker 2, trusting its builtin list, and
-go-live each need the maintainer's separate approval. The existing
+**Two workers run in production since 2026-10-24.** A third worker, each
+new agy version's trust per worker, and launcher changes need the maintainer's
+approval. See [operation](argon-workers-operation.md). The existing
 [boundary](argon-implementer.md#the-boundary),
 [run sequence](argon-implement-run.md) and
 [recovery procedure](argon-implement-run-recovery.md#manual-recovery) still apply.
@@ -65,8 +65,8 @@ the run's regular-file path rule.
 The run passes every peer to its initial at-rest, pre-, post- and final
 at-rest checks in process. Peers do not change the guard or trusted-build
 contract. Wrappers must supply them on standalone checks too. Without peers,
-validation adds no checks or output; only the new worktree lock changes
-existing Go behavior, protecting independent homes too.
+validation adds no checks or output; the worktree lock protects independent
+homes too.
 
 After taking the home lock, the runner opens the worktree read-only with
 O_DIRECTORY, O_NOFOLLOW and O_CLOEXEC and takes an exclusive, nonblocking
@@ -84,8 +84,8 @@ worktree. Cross-worker recovery below is host policy, NOT launcher-enforced.
 
 ## Host wrapper contract
 
-Before a separately approved switch, prepare and review each worker's run
-and check wrappers. Hard-code HOME and PEERS; accept no caller-supplied home,
+Each worker has run and check wrappers; review changes before a switch.
+Hard-code HOME and PEERS; accept no caller-supplied home,
 peer list or worker identity. Use these exact peer sets:
 
 | Wrapper | HOME | PEERS |
@@ -117,15 +117,14 @@ each home's implementer directory: settings.json, trusted agent argon-implemente
 and trusted builtin.agy-<v>.txt for the selected agy version. Wrappers check
 this; Go independently checks each home's trusted copies and baseline,
 without reading worker 1's copies. Hooks, guard worktree files and sign-in
-state are home-specific. Worker 2 sign-in and builtin trust need separate
+state are home-specific. Each worker's sign-in and builtin trust need separate
 maintainer decisions even with equal bytes.
 
 Require a direct child of `<repo-root>/wt/`; pass its absolute path.
 In a fresh run directory, record worker identity and give Go an empty child
 log directory. Keep prompts and saved Git files outside all
 peer homes and writable trees. Never infer peers from existing directories
-or allow environment overrides to drop the review home. This PR neither
-installs nor modifies host wrappers.
+or allow environment overrides to drop the review home.
 
 ## N workers
 
@@ -150,7 +149,7 @@ grows with N: one worker's sweep can reclaim another's dead leftovers
 (option S1) at N>2. Quota and Docker capacity remain unknowns deciding
 whether N>2 is useful (design note E1/E2); experiments require the
 maintainer's explicit start. Going beyond two workers needs separate
-maintainer approval, as enabling the second worker does.
+maintainer approval.
 
 ## Operation and rollback
 
@@ -176,14 +175,14 @@ To disable worker 2, remove the execute bit from its run.zsh wrapper. This
 does not stop an active session. Stop and recover active or abnormal runs
 before further changes; do not remove a lock or marker to permit a start.
 
-If the new launcher binary must also be removed, restore worker 1's complete
+To roll back the launcher, restore worker 1's complete
 *.c00020d backup set of hooks.json, run.zsh and checks.zsh, including the
-installed off hooks in the home configuration. Preserve and verify that
-set before an approved switch; this document does not assert that the set
-has already been created. Restore the pinned binary/source selection with
+installed off hooks in the home configuration. The set is saved; see
+[operation](argon-workers-operation.md#rollback) for hashes. Preserve and
+verify it before a switch. Restore the pinned binary/source selection with
 those wrappers. Then run the old checks.zsh idle check and one real run,
 under the maintainer's approval, before considering rollback complete.
-The [earlier rollback record](argon-implement-switch.md#recovery-and-rollback)
-describes the preceding switch's different backup set; do not mix sets.
-With no peers supplied, the Go peer checks preserve today's behavior;
+The [switch record](argon-implement-switch.md#recovery-and-rollback) also
+records the older backup set; do not mix sets.
+With no peers supplied, Go omits peer checks;
 removing peers is not a substitute for restoring a consistent trusted set.

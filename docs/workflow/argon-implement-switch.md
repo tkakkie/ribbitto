@@ -22,10 +22,11 @@ always uses `off`, the state at rest) and set `LANG=en_US.UTF-8`. The mode is `o
 off, write `off` to `verify-mode`; the Go commands accept `--verify off|on`.
 See [verify operation](argon-verify-operation.md) for the run sequence.
 
-The wrappers check the SHA-256 of the pinned `guard/argonreview-c00020d`
+The wrappers check the SHA-256 of the pinned `guard/argonreview-7f607ca`
 before the run; `run.zsh` also checks it afterwards. They pass the frozen
-clone `argon-trusted/src-c00020d` as `RIBBITTO_ARGON_SOURCE` and, in on mode,
-as `--trusted-source`.
+clone `argon-trusted/src-7f607ca` as `RIBBITTO_ARGON_SOURCE` and, in on mode,
+as `--trusted-source`. Worker 2 and the 2026-10-24 launcher update are in
+[worker operation](argon-workers-operation.md).
 
 ## Recovery and rollback
 
@@ -34,13 +35,20 @@ A started run that does not count leaves `guard/implement-run.recovery-needed`
 The next run is refused until the ordered
 [Manual recovery](argon-implement-run-recovery.md#manual-recovery) is done.
 
-The rollback set is kept in the worker home: `hooks.97d19a2.json`,
-`checks.zsh.97d19a2` and `run.zsh.97d19a2`. Their SHA-256 hashes were
-recorded before the switch. To roll back, restore them as `hooks.json`,
-`checks.zsh` and `run.zsh`, respectively, and copy `hooks.json` to
-`.gemini/config/hooks.json`; `guard/argonreview-97d19a2` stays in place for the old
-hook. Then run the old `checks.zsh <worktree> <saved .git file> idle`. This rollback was drilled with a real run on
-2026-10-22. The set supersedes `run.zsh.verify-off` and `checks.zsh.verify-off`.
+The current rollback set is kept in worker 1's home: `hooks.c00020d.json`,
+`checks.zsh.c00020d` and `run.zsh.c00020d`, with
+`guard/argonreview-c00020d` still in place. See
+[worker rollback](argon-workers-operation.md#rollback) for the recorded hashes.
+To roll back, restore the set as `hooks.json`, `checks.zsh` and `run.zsh`,
+respectively, and copy `hooks.json` to `.gemini/config/hooks.json`. Then run
+the old `checks.zsh <worktree> <saved .git file> idle` and one real run under
+the maintainer's approval. The 2026-10-24 set was NOT drilled with a real run.
+
+The older set, `hooks.97d19a2.json`, `checks.zsh.97d19a2` and
+`run.zsh.97d19a2`, had its SHA-256 hashes recorded before the 2026-10-22
+switch, with `guard/argonreview-97d19a2` kept for its hook. That rollback was
+drilled with a real run on 2026-10-22 and superseded `run.zsh.verify-off` and
+`checks.zsh.verify-off`. Do not mix backup sets.
 
 No Python is in the run path. `guard/implementer-guard.py` and
 `hooks.python.json` are reference only.

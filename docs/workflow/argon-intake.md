@@ -82,13 +82,12 @@ reviewer on a few seeded issue specs.
 
 Claude prepares the next issue's worktree and prompt while a run executes;
 reviews run in parallel ([#1533](https://github.com/tkakkie/ribbitto/issues/1533)).
-A second worker is investigated, designed and verified in parallel with #1561
-in its own process issue [#1577](https://github.com/tkakkie/ribbitto/issues/1577):
-separate `HOME`, worktree and lock per worker; guard, verify, preflight and
-fail-closed stay unchanged. The first goal is two parallel implementer workers;
-three or four may be considered later if needed. Production use of a second
-worker needs the maintainer's separate approval. Until then, implementer runs
-stay one at a time: one worker home, one lock. Detailed design belongs to #1577; see [argon-workers.md](argon-workers.md).
+Two Argon implementer workers run in production under
+[#1577](https://github.com/tkakkie/ribbitto/issues/1577): separate `HOME`,
+worktree and lock per worker; guard, verify, preflight and fail-closed stay
+unchanged. Up to two implementer runs may execute at once; a third worker
+needs the maintainer's approval. See the [design](argon-workers.md) and
+[operation](argon-workers-operation.md).
 
 ## Records
 

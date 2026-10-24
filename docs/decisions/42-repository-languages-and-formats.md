@@ -50,8 +50,10 @@ Directory entries below are direct-only unless stated otherwise:
   with first line `go test fuzz v1`. Neither directory is excluded from checking;
   there is no general testdata, JSON or JSONL allowance.
 - `cmd/argonreview/verifyimage/Dockerfile`: kind "verify image recipe", one
-  file, direct. It may define only the image the trusted `verify` runner
-  that #1696 adds will use, with only the tools the approved checks need:
+  file, direct. It may define only the image the trusted `verify` runner uses
+  for the approved checks (#1696 points its pinned image constant,
+  `containerGoImage` today, at the image built from this recipe), with only
+  the tools those checks need:
   the generators (templ, sqlc, Tailwind; #1696) and PostgreSQL 18 (#1697).
   Adding a browser (Chromium) or any other package set to the recipe, or a
   second recipe, requires a new amendment of this decision approved by the
@@ -63,8 +65,7 @@ Directory entries below are direct-only unless stated otherwise:
   are built from the committed `tools/go.mod` and `tools/go.sum`; apt packages
   use exact versions, from a third-party repository only with its signing-key
   fingerprint written in the recipe; no secrets, no `ADD`, no `VOLUME`; the
-  runner's image-ID constant that #1696 adds, not the recipe, is what the
-  runner will trust.
+  runner's pinned image constant, not the recipe, is what the runner trusts.
   The path-and-kind table row lands with the file in #1696's recipe pull
   request; until then, `tools/languagecheck` keeps refusing the path.
   A Go test in `cmd/argonreview` (#1696) and tier A review check the recipe;

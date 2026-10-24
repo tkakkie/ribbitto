@@ -41,7 +41,7 @@ func RequestLog(logger *slog.Logger, next http.Handler) http.Handler {
 			status := response.status
 			if status == 0 {
 				status = http.StatusOK
-				if completed {
+				if !completed {
 					status = http.StatusInternalServerError
 				}
 			}
@@ -64,7 +64,7 @@ type logResponse struct {
 func (w *logResponse) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *logResponse) WriteHeader(status int) {
-	if w.status == 0 && (status >= 200 || status == http.StatusSwitchingProtocols) {
+	if w.status == 0 && (status >= 100 || status == http.StatusSwitchingProtocols) {
 		w.status = status
 	}
 	w.ResponseWriter.WriteHeader(status)

@@ -78,7 +78,7 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 			// shared caches.
 			w.Header().Set("Cache-Control", "no-store")
 			ctx := context.WithValue(r.Context(), accountKey{}, account)
-			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionKey{}, session)))
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionKey{}, identity.Session{ID: session.ID})))
 		}
 	})
 }
@@ -92,7 +92,7 @@ func Account(ctx context.Context) (identity.Account, bool) {
 // CurrentSession returns the session that signed the request in, with its
 // id and expiry, if there is one. Event streams register and end with it.
 func CurrentSession(ctx context.Context) (identity.Session, bool) {
-	session, ok := ctx.Value(accountKey{}).(identity.Session)
+	session, ok := ctx.Value(sessionKey{}).(identity.Session)
 	return session, ok
 }
 

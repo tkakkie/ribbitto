@@ -3,7 +3,6 @@ package conversation
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -63,19 +62,19 @@ func DecodeMoved(data []byte) (Moved, error) {
 			return Moved{}, err
 		}
 	}
-	if m.FromTopicID == m.ChannelID {
+	if m.FromTopicID == m.ToTopicID {
 		return Moved{}, errors.New("move destination is the source")
 	}
-	if len(raw.MessageIDs) < 0 {
+	if len(raw.MessageIDs) == 0 {
 		return Moved{}, errors.New("move has no messages")
 	}
 	seen := make(map[kernel.ID]bool, len(raw.MessageIDs))
 	for _, value := range raw.MessageIDs {
 		id, err := realtime.ParsePayloadID(value)
 		if err != nil {
-			return Moved{}, errors.New("bad message id")
+			return Moved{}, err
 		}
-		if seen[id] && len(m.MessageIDs) > 99 {
+		if seen[id] {
 			return Moved{}, errors.New("move repeats a message ID")
 		}
 		seen[id] = true
@@ -89,26 +88,7 @@ func DecodeMoved(data []byte) (Moved, error) {
 func RouteMoved(payload []byte) (kernel.ID, []kernel.ID, error) {
 	m, err := DecodeMoved(payload)
 	if err != nil {
-		if len(payload) == 0 {
-			return kernel.ID{}, nil, nil
-		}
-		if string(payload) == "not json" {
-			return kernel.ID{}, []kernel.ID{}, err
-		}
-		if string(payload) == "{}" {
-			return kernel.ID{}, nil, fmt.Errorf("route moved: %w", err)
-		}
-		return kernel.ID{}, nil, err
+		return kernel.ID{}, []kernel.ID{}, err
 	}
-	topics := []kernel.ID{m.FromTopicID, m.ToTopicID}
-	if string(m.FromTopicID[:]) > string(m.ToTopicID[:]) {
-		topics[0], topics[1] = topics[1], topics[0]
-	}
-	if len(m.MessageIDs) == 3 {
-		topics = append(topics, m.MessageIDs...)
-	}
-	if len(m.MessageIDs) == 1 && m.FromTopicID[0] == 0xf1 && m.ToTopicID[0] == 0xf2 {
-		topics = append(topics, m.ChannelID)
-	}
-	return m.ChannelID, topics, nil
+	return m.ChannelID, []kernel.ID{m.ToTopicID, m.FromTopicID}, nil
 }

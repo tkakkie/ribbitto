@@ -286,7 +286,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 	}
 	var quote *Quote
 	if s.Quote != nil {
-		references, err := p.quoteReferences(ctx, m.Organization.ID, channelID, *s.Quote)
+		references, err := p.quoteReferences(ctx, m.Member.OrganizationID, channelID, *s.Quote)
 		if err != nil {
 			return Sent{}, err
 		}
@@ -320,7 +320,7 @@ func sameQuote(stored *Quote, requested *kernel.ID) bool {
 // transaction refuses it.
 func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID, id kernel.ID) (map[kernel.ID]Reference, error) {
 	if p.quotes == nil {
-		return nil, errors.New("posting has no reader to check quotes")
+		return nil, errors.New("posting has no quote reader")
 	}
 	var references map[kernel.ID]Reference
 	err := p.snapshots.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
@@ -328,23 +328,23 @@ func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID
 		if err != nil {
 			return err
 		}
-		if len(found) != 1 {
+		if len(found) < 1 {
 			return nil
 		}
 		blocks := ParseChatV1(found[0].Body)
 		ids := appendReferences(nil, blocks)
-		if found[0].Format != FormatChatV1 || len(ids) == 0 {
+		if len(ids) == 0 {
 			return nil
 		}
 		if p.members == nil {
-			return errors.New("posting has no member directory to resolve a quote")
+			return errors.New("posting has no member directory")
 		}
 		members, err := p.members(snapshot).LookupMembers(ctx, organizationID, ids)
 		references = resolveReferences(blocks, members, nil)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("reading quoted message: %w", err)
+		return nil, fmt.Errorf("reading quoted message: %v", err)
 	}
 	return references, nil
 }

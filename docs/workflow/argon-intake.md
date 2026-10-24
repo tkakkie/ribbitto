@@ -1,19 +1,19 @@
 # Argon intake and scope
 
 Assignment, steps, calibration and throughput follow the maintainer's decisions
-(maintainer, 2026-10-23,
+(maintainer: 2026-10-23,
 [#1561](https://github.com/tkakkie/ribbitto/issues/1561),
 [first set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6351468411),
 [second set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6352203895),
-[third set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6354263122)).
+[third set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6354263122);
+[step 2 approval, 2026-10-24](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798)).
 
 ## Default assignment
 
 An issue eligible under [Which issues](argon-implementer.md#which-issues)
 names *Implementer* `Argon` unless the issue records why not.
-This default applies only within maintainer-approved steps; today only step 1
-is approved. Until its step is approved, a step-2 or step-3 issue names Argon
-only when the maintainer says so.
+This default applies only within maintainer-approved steps; today steps 1 and 2
+are approved. A step-3 issue names Argon only when the maintainer says so.
 Claude's [issue review](reviewing.md#issue-review) and the maintainer check
 this default. The [trusted issue-review prompt](../../.github/prompts/issue-review.md)
 is unchanged; changing reviewer prompts is a separate maintainer decision.
@@ -24,15 +24,20 @@ Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 1. **Approved:** tests, documents, small validators, normal-risk
    [tier C](adversarial-review.md#which-review-runs) ordinary feature
    implementation (ordinary feature work outside tiers A and B) and tier C small
-   bug fixes (a bug fix that is tier B is step 2, not approved), to ease weekly
+   bug fixes (a bug fix that is tier B is step 2), to ease weekly
    Claude/Codex token limits. Every step-1 item also meets the existing
    [eligibility](argon-implementer.md#which-issues), including that it can be
    verified without running its code locally: no `make dev` or browser check
    unless the maintainer runs it, so a tier C feature that needs one is eligible
    only when the maintainer himself performs that verification.
-2. **Unapproved:** small behaviour fixes in tier B code where the issue supplies
-   the failing test.
+2. **Approved** (maintainer, 2026-10-24,
+   [#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798)):
+   small behaviour fixes in tier B code where the issue supplies the failing test.
 3. **Unapproved:** larger tier B changes.
+
+Step 2 was approved before the step-1 ten-run summary and per-run quality and
+rework evaluation were posted on #1561; both remain owed there as a record,
+not a gate for the approved step.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
 stay out of Argon in every step. Production code changes to organisation
@@ -55,16 +60,22 @@ to advance on its own.
 
 ## Calibration
 
-Before step 2, run the second calibration round once in tier B areas, with
-harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/1514):
+Before step 2, the second calibration round ran once in tier B areas, with
+harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/1514),
+as recorded on #1561:
 
-- bytes versus characters;
-- a missing `organization_id` scope together with the test that should have
-  caught it;
-- a wrong comparison in validation.
+- a cut counting bytes instead of code points;
+- a missing channel guard (an `organization_id` omission could not be seeded
+  because `tools/scopecheck` rejects SQL without the predicate, and Go callers
+  take the organisation from the membership);
+- a wrong range bound in validation (one past the end);
+- a find-or-create race;
+- an error type that breaks `errors.Is`;
+- a control: a pure refactor.
 
-Record the results on [#1561](https://github.com/tkakkie/ribbitto/issues/1561)
-before any step-2 issue is offered. This round also includes Argon as issue
+The results were recorded on
+[#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380849083)
+before any step-2 issue was offered. This round also included Argon as issue
 reviewer on a few seeded issue specs.
 
 ## Throughput

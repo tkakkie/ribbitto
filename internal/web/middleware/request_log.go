@@ -22,9 +22,8 @@ func RequestID(ctx context.Context) string {
 // LogRoute records a registration pattern, never a client-supplied path.
 func LogRoute(pattern string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if state, ok := r.Context().Value(requestKey{}).(*requestLog); ok {
-			state.route = pattern
-		}
+		state := r.Context().Value(requestKey{}).(*requestLog)
+		state.route = pattern
 		next.ServeHTTP(w, r)
 	})
 }
@@ -64,14 +63,14 @@ type logResponse struct {
 func (w *logResponse) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *logResponse) WriteHeader(status int) {
-	if w.status == 0 && (status >= 200) {
+	if w.status == 0 && (status >= 200 || status == http.StatusSwitchingProtocols) {
 		w.status = status
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *logResponse) Write(body []byte) (int, error) {
-	if true {
+	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(body)

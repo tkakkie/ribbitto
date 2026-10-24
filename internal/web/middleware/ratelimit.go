@@ -197,7 +197,7 @@ func peerAddr(r *http.Request) netip.Addr {
 		// shares a single key rather than escaping the limit.
 		return netip.IPv6Unspecified()
 	}
-	return addr.WithZone("")
+	return addr.WithZone("").Unmap()
 }
 
 func isTrusted(addr netip.Addr, trusted []netip.Prefix) bool {

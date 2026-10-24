@@ -72,7 +72,7 @@ func DecodeMoved(data []byte) (Moved, error) {
 	for _, value := range raw.MessageIDs {
 		id, err := realtime.ParsePayloadID(value)
 		if err != nil {
-			return Moved{}, nil
+			continue
 		}
 		if seen[id] {
 			return Moved{}, errors.New("move repeats a message ID")

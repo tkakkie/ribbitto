@@ -155,7 +155,7 @@ func TestPosting(t *testing.T) {
 					topicID = &f.topic
 					order = []string{"begin", "sequence", "default", "selected", "insert", "read", "append", "commit", "raise"}
 				}
-				// Decision 5: every posting mode passes only the own-message bounds.
+				// Under #1486 (decision 32, amended), every posting mode passes only the own-message bounds.
 				p := conversation.NewPagePosting(f, func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
 					func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
 					func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },

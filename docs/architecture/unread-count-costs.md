@@ -22,7 +22,7 @@ index, `R` ranges of the current channel at or above `P`:
   fragmentation (below).
 - **Step 4:** decoding costs `O(R)`; containment costs `O(log R)` per row.
   Counts cap unread candidates at 100 per branch, then 100 together; read
-  moves (at most 100 messages per move) and own posts above the floor until a later topic read add
+  moves (at most 100 messages per move) and own posts above the floor (until a later topic read raises it) add
   **unbounded** filtering. #283 benchmarks stream lag; unacceptable costs
   require per-topic gap probes.
   On normal pages, first unread is uncapped: a CTE filters `M` rows moved after the selected

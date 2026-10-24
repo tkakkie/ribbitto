@@ -267,7 +267,7 @@ func TestReadSidebarPostingHTTP(t *testing.T) {
 				f.badges(t, tab, 2, 3, 5)
 			}
 			path, form := f.feed, url.Values{"body": {"own post"}, "cursor": {"6"}}
-			// Decision 5: posting reads only own; A=2, B=3 remain unread.
+			// Under #1486 (decision 32, amended), posting reads only own; A=2, B=3 remain unread.
 			a, b, channel := 2, 3, 5
 			if kind != "feed" {
 				path = f.topicA

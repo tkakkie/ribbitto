@@ -28,7 +28,7 @@ type readOracleKind struct {
 }
 
 // Scope selects the page for reads and cursor compatibility for posts.
-// Decision 5: every post adds only the own message, whatever its page.
+// Under #1486 (decision 32, amended), every post adds only the own message, whatever its page.
 func readOracleKinds() []readOracleKind {
 	return []readOracleKind{
 		{"feed", "read", "feed", false},
@@ -211,7 +211,7 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 		feedRequire(t, err)
 	}
 	if kind.action == "post" && !slices.Equal(before.floors, readOracleLoad(t, h.pool, scope).floors) {
-		t.Error("posting changed topic floors (decision 5)")
+		t.Error("posting changed topic floors contrary to #1486 (decision 32, amended)")
 	}
 	readOracleModel(kind, before.messages, h.model[step.member][scope.ChannelID], topic, step.cursor, own)
 }
@@ -243,7 +243,7 @@ func (h readOracleFixture) check(t *testing.T) []string {
 	return violations
 }
 
-func TestPostingOracle(t *testing.T) {
+func TestReadOracle(t *testing.T) {
 	const seed int64 = 15641486
 	t.Logf("read oracle seed=%d", seed)
 	for history := range 3 {
@@ -271,8 +271,9 @@ func TestPostingOracle(t *testing.T) {
 				}
 			}
 			// Guarantee the production mutation witnesses before randomized history:
-			// join-boundary preservation, islands, stale topic posts across an
-			// intervening post and move, then topic reads on both sides of the move.
+			// join-boundary preservation, islands, a topic post with the current cursor
+			// (661) after another member's post, then a topic post with an older cursor
+			// (662) after a move, and topic reads on both sides of the move.
 			// B's feed cursor 665 must cover M's newest post, still unread for B.
 			// A later cursorless post is separated from its channel predecessor by
 			// only another channel's message. F's feed-first and P's post-first writes

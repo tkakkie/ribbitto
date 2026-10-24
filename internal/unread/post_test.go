@@ -24,7 +24,7 @@ func (p postState) Merge(_ context.Context, s Scope, j int64, r conversation.Seq
 func TestPostReads(t *testing.T) {
 	failure := errors.New("failed step")
 	scope := Scope{OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}}
-	// Decision 5: posting has no page-scope or floor input; every call is one union.
+	// Under #1486 (decision 32, amended), posting has no page-scope or floor input; every call is one union.
 	for _, failure := range []error{nil, failure} {
 		t.Run(fmt.Sprint(failure), func(t *testing.T) {
 			calls := 0

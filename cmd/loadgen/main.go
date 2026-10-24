@@ -515,7 +515,9 @@ func stream(ctx context.Context, client *http.Client, endpoint, token, cursor st
 	}
 }
 
-// sendPost posts body with the page's cursor, which posting reads up to (#723).
+// sendPost posts body with the page's cursor for compatibility with old pages.
+// Posting reads only the author's own message (#1486 S1b), so it does less work:
+// posting costs measured in load runs before and after this change are not comparable.
 func sendPost(ctx context.Context, client *http.Client, endpoint, token, body, pageCursor string, c *counts, model *reconnectModel) bool {
 	form := url.Values{"body": {body}, "cursor": {pageCursor}}.Encode()
 	attempts := 1

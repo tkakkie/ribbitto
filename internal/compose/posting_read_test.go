@@ -41,7 +41,7 @@ func TestPostingRead(t *testing.T) {
 			feedRequire(t, err)
 			var topic *kernel.ID
 			cursor := int64(3)
-			// Decision 5: only own 7 is read; the page scope and floors stay unchanged.
+			// Under #1486 (decision 32, amended), only own 7 is read; the page scope and floors stay unchanged.
 			want := []conversation.SequenceRange{{Lo: 0, Hi: 2}, {Lo: 7, Hi: 8}}
 			if strings.HasPrefix(mode, "topic ") {
 				topic = &a.ID
@@ -118,7 +118,7 @@ func TestPostingRead(t *testing.T) {
 				var floors int
 				feedRequire(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM topic_read_floor WHERE organization_id=$1 AND member_id=$2", s.OrganizationID, s.MemberID).Scan(&floors))
 				if floors != 0 {
-					t.Fatalf("posting wrote %d topic floors; want none (decision 5)", floors)
+					t.Fatalf("posting wrote %d topic floors; want none under #1486 (decision 32, amended)", floors)
 				}
 				if topic != nil {
 					counts := trace.Counts()

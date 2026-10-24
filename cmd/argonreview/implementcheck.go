@@ -31,7 +31,7 @@ import (
 // names survive spaces/newlines and all paths, targets and errors are quoted.
 // Home names are the union of the two existing sets plus mcp_config.json outside
 // its owned location; nested .gemini is refused. MCP must exist and be regular.
-// Roots must be real directories and cannot nest. Flags cannot repeat and paths
+// Roots must be real directories and cannot nest. Only --peer-home repeats; paths
 // must be absolute and clean; calling HOME must be absolute and nonempty.
 // Version exit/status/shape and builtin list syntax,
 // duplicates and unknown file types fail closed. Agent entries include dotfiles
@@ -97,6 +97,8 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	}
 	flags := flag.NewFlagSet("implement-check", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	var peers implementPeerHomes
+	flags.Var(&peers, "peer-home", "peer home")
 	home, worktree, saved, hash, agy := &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}
 	verify, source := &implementOnceFlag{}, &implementOnceFlag{}
 	for _, f := range []struct {
@@ -140,6 +142,9 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	if deps.accountHome == "" || !filepath.IsAbs(deps.accountHome) {
 		return usage("HOME must be non-empty and absolute")
 	}
+	if err := peers.validate(home.value, deps.lstat); err != nil {
+		return usage(err.Error())
+	}
 	c := &implementChecker{deps: deps, out: stdout, verify: verify.value == "on", source: source.value}
 	for _, path := range []string{home.value, worktree.value} {
 		if err := implementRealDirectory(path, deps.lstat); err != nil {
@@ -155,6 +160,17 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 				c.problem("home %q and worktree %q contain each other", home.value, worktree.value)
 				break
 			}
+		}
+	}
+	if c.problems == 0 {
+		if err := peers.separate(home.value, worktree.value, []string{home.value, worktree.value, saved.value, agy.value}, deps.lstat); err != nil {
+			c.problem("peer homes: %q", err)
+		}
+	}
+	// Preserve standalone checks' historical behavior when no peers are given.
+	if c.problems == 0 && len(peers) > 0 {
+		if err := implementRunTarget(agy.value, false); err != nil {
+			c.problem("agy: %q", err)
 		}
 	}
 	if c.problems == 0 {

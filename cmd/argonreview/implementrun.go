@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 )
 
-const implementRunUsage = "implement-run --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>]"
+const implementRunUsage = "implement-run --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>] [--peer-home <abs>]..."
 
 // Operations are injected at the same boundary as implement-check. The step
 // hook only injects failures in tests; production always performs each step.
@@ -49,6 +49,7 @@ func implementRunDefaults() implementRunDeps {
 }
 
 type implementRun struct {
+	peers                                             implementPeerHomes
 	home, tree, saved, prompt, logs, hash, agy, model string
 	verify, source                                    string
 	offSettings, offHooks, offMCP                     []byte
@@ -88,6 +89,12 @@ func implementRunCommand(args []string, stdout, stderr io.Writer, deps implement
 		return 1
 	}
 	defer func() { _ = lock.Close() }()
+	treeLock, err := implementRunTreeLock(r.tree)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
+		return 1
+	}
+	defer func() { _ = treeLock.Close() }()
 	if err := r.checkRecovery(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "implement-run: %q\n", err)
 		return 1
@@ -102,6 +109,8 @@ func implementRunCommand(args []string, stdout, stderr io.Writer, deps implement
 func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) (*implementRun, error) {
 	flags := flag.NewFlagSet("implement-run", flag.ContinueOnError)
 	flags.SetOutput(out)
+	var peers implementPeerHomes
+	flags.Var(&peers, "peer-home", "peer home")
 	names := []string{"home", "worktree", "git-file", "prompt-file", "log-dir", "shared-settings-sha256", "agy", "model", "timeout", "verify", "trusted-source"}
 	values := make([]implementOnceFlag, len(names))
 	for i, name := range names {
@@ -140,7 +149,10 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 	if err != nil || limit <= 0 || strings.TrimSpace(values[7].value) == "" {
 		return nil, errors.New("timeout must be positive and model nonempty")
 	}
-	return &implementRun{home: values[0].value, tree: values[1].value, saved: values[2].value,
+	if err := peers.validate(values[0].value, os.Lstat); err != nil {
+		return nil, err
+	}
+	return &implementRun{peers: peers, home: values[0].value, tree: values[1].value, saved: values[2].value,
 		prompt: values[3].value, logs: values[4].value, hash: strings.ToLower(values[5].value),
 		agy: values[6].value, model: values[7].value, limit: limit, deps: deps, verify: values[9].value, source: values[10].value}, nil
 }
@@ -164,6 +176,9 @@ func (r *implementRun) validate() error {
 			return fmt.Errorf("directory %q: %w", path, err)
 		}
 	}
+	if err := r.peers.separate(r.home, r.tree, []string{r.home, r.tree, filepath.Dir(r.logs), r.saved, r.prompt, r.agy}, os.Lstat); err != nil {
+		return err
+	}
 	if err := r.separateHome(); err != nil {
 		return err
 	}
@@ -185,6 +200,9 @@ func (r *implementRun) validate() error {
 	}
 	if info, err := os.Lstat(r.logs); err == nil {
 		if err := implementRealDirectory(r.logs, os.Lstat); err != nil {
+			return err
+		}
+		if err := r.peers.separate(r.home, r.tree, []string{r.logs}, os.Lstat); err != nil {
 			return err
 		}
 		for _, child := range []string{r.tree, r.home} {

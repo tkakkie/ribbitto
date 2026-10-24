@@ -143,7 +143,7 @@ why and what changes, never by quietly breaking an old one. Roughly in this orde
 2. **Two tracks in parallel.** The composer track (M7) never blocks the basics.
    - *Basics:* private channels → direct messages → email (Mailer →
      password reset → email verification) → invitations (#128).
-   - *Composer (M7):* reliable sending (no duplicate posts, the text kept when
+   - *Composer (M7, in review):* reliable sending (no duplicate posts, the text kept when
      sending fails, the sending state and the post shown before the
      server answers) → an input that grows and a send-key setting →
      mentions (#117, #1310–#1313) → links to one message → quoting, including a

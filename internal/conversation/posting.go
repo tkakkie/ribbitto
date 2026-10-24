@@ -126,7 +126,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	}
 	var quoted map[kernel.ID]Reference
 	if s.Quote != nil {
-		if quoted, err = p.quoteReferences(ctx, m.Organization.ID, channelID, *s.Quote); err != nil {
+		if quoted, err = p.quoteReferences(ctx, m.Member.OrganizationID, channelID, *s.Quote); err != nil {
 			return Sent{}, err
 		}
 	}

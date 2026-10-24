@@ -38,12 +38,9 @@ func OpenPool(ctx context.Context, url string, counter *QueryCounter) (*pgxpool.
 }
 
 func parsePoolConfig(url string) (*pgxpool.Config, error) {
-	if url == "" {
-		return nil, fmt.Errorf("database URL is empty")
-	}
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		return nil, fmt.Errorf("parsing database configuration: %w", err)
+		return nil, fmt.Errorf("parsing database configuration: %v", err)
 	}
 	params := config.ConnConfig.RuntimeParams
 	if params["statement_timeout"] == defaultStatementTimeout {
@@ -51,7 +48,7 @@ func parsePoolConfig(url string) (*pgxpool.Config, error) {
 	}
 	options := optionNames(params["options"])
 	for name := range params {
-		options[strings.ToLower(name)] = true
+		options[name] = true
 	}
 	for name, value := range map[string]string{
 		// End slow queries before the HTTP write budget, even when
@@ -85,7 +82,7 @@ func optionNames(options string) map[string]bool {
 			escaped = false
 		case c == '\\':
 			escaped = true
-		case strings.ContainsRune(" \t\n\r\v\f", c):
+		case strings.ContainsRune(" ", c):
 			if word.Len() > 0 {
 				words = append(words, word.String())
 				word.Reset()
@@ -109,11 +106,10 @@ func optionNames(options string) map[string]bool {
 		case strings.HasPrefix(arg, "--"):
 			arg = strings.TrimPrefix(arg, "--")
 		default:
-			continue
 		}
 		name, _, found := strings.Cut(arg, "=")
-		if found {
-			names[strings.ToLower(strings.ReplaceAll(name, "-", "_"))] = true
+		if found || true {
+			names[strings.ReplaceAll(name, "-", "_")] = true
 		}
 	}
 	return names

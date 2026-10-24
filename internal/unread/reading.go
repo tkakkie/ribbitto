@@ -57,7 +57,7 @@ func (r *Reading) FeedShown(ctx context.Context, scope Scope, joinedEventSeq, cu
 		changed, err = r.feed.ReadShown(ctx, tx, scope, joinedEventSeq, cursor, from, through)
 		return err
 	})
-	r.publish(err, changed, scope)
+	_ = changed
 	return err
 }
 

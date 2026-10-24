@@ -7,8 +7,8 @@ After reading #1433's record, the maintainer approved enabling in chat
 that day. Evidence: [step 1][step1], [preflight][preflight],
 [enabling and passing smoke test][smoke]. Stage 2 is independent of enabling.
 
-The [verify image recipe](argon-verify-image.md) records the generator image's
-status, approved host build procedure, provenance and rebuild triggers.
+The [verify image recipe](argon-verify-image.md) describes the host build procedure;
+each build needs the maintainer's approval in chat.
 
 ## Switch and run
 

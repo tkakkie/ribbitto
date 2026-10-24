@@ -55,12 +55,13 @@ COPY paths are relative to this context, not the repository or the recipe's
 original directory. Run:
 
 ```sh
-docker build --no-cache -f <context>/Dockerfile <context>
+docker build --no-cache -t argonreview-verify-image:<commit> -f <context>/Dockerfile <context>
 ```
 
 Record provenance on #1696: the full commit, SHA-256 of all three context
-files, build log tail, image ID from `docker image inspect <image>`, image
-size, `go version`, `templ version`, `sqlc version`, and the Tailwind banner.
+files, build log tail, image ID and size from
+`docker image inspect argonreview-verify-image:<commit>`, `go version`,
+`templ version`, `sqlc version`, and the Tailwind banner.
 Also record SHA-256 of the three installed binaries:
 `/usr/local/bin/tailwindcss`, `/usr/local/bin/templ` and
 `/usr/local/bin/sqlc`. This record identifies the actual built image;

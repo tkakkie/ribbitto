@@ -57,20 +57,40 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 				problems = append(problems, "b: apt commands are forbidden")
 			}
 			urls := regexp.MustCompile(`https?://[^\s"';]+`).FindAllString(body, -1)
-			architecture := body
 			for _, url := range urls {
-				architecture = strings.ReplaceAll(architecture, url, "")
 				downloadCount++
 				if url != "https://github.com/tailwindlabs/tailwindcss/releases/download/"+tailwindVersion+"/tailwindcss-linux-arm64" {
 					problems = append(problems, "d: Tailwind URL must use the pinned version, host and arm64 asset")
 				}
 			}
 			if len(urls) > 0 {
-				if !regexp.MustCompile(`\bsha256sum\s+-c\b`).MatchString(body) || !regexp.MustCompile(`(^|[^[:alnum:]_])[0-9a-f]{64}([^[:alnum:]_]|$)`).MatchString(body) {
-					problems = append(problems, "e: Tailwind RUN needs sha256sum -c and a lowercase 64-hex literal")
+				checksum := regexp.MustCompile(`\becho\s+(?:"[0-9a-f]{64}\s+/usr/local/bin/tailwindcss"|'[0-9a-f]{64}\s+/usr/local/bin/tailwindcss')\s*\|\s*sha256sum\s+-c(?:\s|$)`).MatchString(body)
+				output := regexp.MustCompile(`\bcurl\b[^;|&]*\s-o\s+/usr/local/bin/tailwindcss(?:\s|$)`).MatchString(body)
+				if !checksum || !output {
+					problems = append(problems, "e: Tailwind RUN needs a literal SHA-256 pipeline checking the download's exact output path")
 				}
-				if (!strings.Contains(architecture, "dpkg --print-architecture") && !strings.Contains(architecture, "uname -m")) || !strings.Contains(architecture, "arm64") {
-					problems = append(problems, "g: Tailwind RUN needs an arm64 architecture check")
+				arch := regexp.MustCompile(`(?:\btest\s+|\[\s+)"\$\((dpkg --print-architecture|uname -m)\)"\s+=\s+(?:"([a-z0-9]+)"|([a-z0-9]+))`).FindStringSubmatch(body)
+				fatal := false
+				if len(arch) > 0 {
+					value := arch[2] + arch[3]
+					accepted := arch[1] == "dpkg --print-architecture" && value == "arm64" || arch[1] == "uname -m" && value == "aarch64"
+					if !accepted {
+						problems = append(problems, "g: architecture must pair dpkg with arm64 or uname with aarch64")
+					}
+					start := strings.Index(body, arch[0])
+					// Keep the guard directly after set: shell control flow can swallow errexit.
+					prefix := regexp.MustCompile(`^(?:--\S+\s+)*set\s+(?:-[a-z]+\s+)*-[a-z]*e[a-z]*(?:\s+-[a-z]+)*\s*(;|&&)\s*$`).MatchString(body[:start])
+					ending := `^\s*(;|&&\s*curl\b)`
+					if strings.HasPrefix(arch[0], "[") {
+						ending = `^\s+\]\s*(;|&&\s*curl\b)`
+					}
+					terminated := regexp.MustCompile(ending).MatchString(body[start+len(arch[0]):])
+					download := regexp.MustCompile(`\bcurl\b|https?://`).FindStringIndex(body)
+					noFallback := !strings.Contains(body, "||")
+					fatal = prefix && terminated && noFallback && start < download[0]
+				}
+				if !fatal {
+					problems = append(problems, "g: Tailwind RUN needs set -e and a standalone architecture guard before the download")
 				}
 			}
 		default:
@@ -92,13 +112,18 @@ func TestVerifyImageRecipe(t *testing.T) {
 	copyLine := "COPY tools/go.mod tools/go.sum /build/tools/\n"
 	arch := `test "$(dpkg --print-architecture)" = arm64; `
 	url := "https://github.com/tailwindlabs/tailwindcss/releases/download/v1.2.3/tailwindcss-linux-arm64"
-	valid := base + copyLine + "RUN " + arch + "curl " + url + `; echo "` + hash + `  /usr/local/bin/tailwindcss" | sha256sum -c -` + "\n"
+	valid := base + copyLine + "RUN set -eu; " + arch + "curl -o /usr/local/bin/tailwindcss " + url + `; echo "` + hash + `  /usr/local/bin/tailwindcss" | sha256sum -c -` + "\n"
 	change := func(old, replacement string) string { return strings.Replace(valid, old, replacement, 1) }
 	for _, tt := range []struct{ name, recipe, want string }{
 		{"valid", valid, ""},
 		{"case-continuation-comments", "# apt-get VOLUME\n" + change("RUN ", "run \\\n# ignored inside continuation\n"), ""},
 		{"reverse-copy", change("tools/go.mod tools/go.sum", "tools/go.sum tools/go.mod"), ""},
-		{"uname", change("dpkg --print-architecture", "uname -m"), ""},
+		{"uname", change(arch, `test "$(uname -m)" = aarch64; `), ""},
+		{"bracket-guard", change(arch, `[ "$(dpkg --print-architecture)" = "arm64" ]; `), ""},
+		{"guard-and", change(arch, strings.ReplaceAll(arch, ";", "&&")), ""},
+		{"set-e", change("set -eu", "set -e"), ""},
+		{"set-ue", change("set -eu", "set -ue"), ""},
+		{"set-and", change("set -eu;", "set -eu &&"), ""},
 		{"stages", change(base, base+strings.TrimSpace(base)+" AS builder\n"), ""},
 		{"a/no-from", change(base, ""), "a:"},
 		{"a/no-digest", change("golang@"+digest, "golang"), "a:"},
@@ -139,11 +164,26 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"e/short", change(hash, "bbbb"), "e:"},
 		{"e/uppercase", change(hash, strings.ToUpper(hash)), "e:"},
 		{"e/other-run", change(" | sha256sum -c -", "\nRUN sha256sum -c -"), "e:"},
+		{"e/other-path", change(hash+"  /usr/local/bin/tailwindcss", hash+"  /usr/local/bin/other"), "e:"},
+		{"e/path-suffix", change(hash+"  /usr/local/bin/tailwindcss", hash+"  /usr/local/bin/tailwindcss.bak"), "e:"},
+		{"e/output-path", change("-o /usr/local/bin/tailwindcss", "-o /usr/local/bin/other"), "e:"},
+		{"e/separate-pipeline", change(" | sha256sum -c -", "; sha256sum -c -"), "e:"},
 		{"f/syntax", "# syntax=docker/dockerfile:1\n" + valid, "f:"},
 		{"f/escape", "# escape=`\n" + valid, "f:"},
 		{"f/check", "# ordinary comment\n# check=skip=all\n" + valid, "f:"},
 		{"g/no-check", change(arch, "") + "# " + arch + "\n", "g:"},
 		{"g/wrong-arch", change(arch, strings.ReplaceAll(arch, "arm64", "amd64")), "g:"},
+		{"g/uname-arm64", change("dpkg --print-architecture", "uname -m"), "g:"},
+		{"g/dpkg-aarch64", change(arch, strings.ReplaceAll(arch, "arm64", "aarch64")), "g:"},
+		{"g/other-run", change(arch, "") + "RUN set -eu; " + arch + "\n", "g:"},
+		{"g/after-download", strings.TrimSuffix(change(arch, ""), "\n") + "; " + arch + "\n", "g:"},
+		{"g/fallback", change(arch, strings.ReplaceAll(arch, ";", " || true;")), "g:"},
+		{"g/fallback-colon", change(arch, strings.ReplaceAll(arch, ";", " || :;")), "g:"},
+		{"g/and-fallback", change(arch, strings.ReplaceAll(arch, ";", " && true || true;")), "g:"},
+		{"g/and-swallow", change(arch, strings.ReplaceAll(arch, ";", " && true;")), "g:"},
+		{"g/no-errexit", change("set -eu; ", ""), "g:"},
+		{"g/pipeline", change(arch, strings.ReplaceAll(arch, ";", " | cat;")), "g:"},
+		{"g/condition", change(arch, "if "+arch+"then :; fi; "), "g:"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			problems := checkVerifyImageRecipe(tt.recipe, digest, "v1.2.3")

@@ -46,7 +46,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 		case "COPY":
 			args := strings.Fields(body)
 			if len(args) != 3 || strings.HasPrefix(args[2], "--") ||
-				!((args[0] == "tools/go.mod" && args[1] == "tools/go.sum") || (args[1] == "tools/go.mod" && args[0] == "tools/go.sum")) {
+				(args[0] != "tools/go.mod" || args[1] != "tools/go.sum") && (args[1] != "tools/go.mod" || args[0] != "tools/go.sum") {
 				problems = append(problems, "c: COPY needs only tools/go.mod, tools/go.sum and one destination, without flags")
 			}
 		case "RUN":
@@ -69,7 +69,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 				if !regexp.MustCompile(`\bsha256sum\s+-c\b`).MatchString(body) || !regexp.MustCompile(`(^|[^[:alnum:]_])[0-9a-f]{64}([^[:alnum:]_]|$)`).MatchString(body) {
 					problems = append(problems, "e: Tailwind RUN needs sha256sum -c and a lowercase 64-hex literal")
 				}
-				if !(strings.Contains(architecture, "dpkg --print-architecture") || strings.Contains(architecture, "uname -m")) || !strings.Contains(architecture, "arm64") {
+				if (!strings.Contains(architecture, "dpkg --print-architecture") && !strings.Contains(architecture, "uname -m")) || !strings.Contains(architecture, "arm64") {
 					problems = append(problems, "g: Tailwind RUN needs an arm64 architecture check")
 				}
 			}

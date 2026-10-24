@@ -13,9 +13,9 @@ import (
 
 const deleteRangeNeighbours = `-- name: DeleteRangeNeighbours :many
 DELETE FROM read_range
-WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3
-  AND $4::bigint <= lo AND lo <= $5::bigint
-  AND $6::bigint <= hi
+WHERE channel_id = $1 AND member_id = $2
+  AND $3::bigint <= lo AND lo <= $4::bigint
+  AND $5::bigint <= hi
 RETURNING lo, hi
 `
 
@@ -35,7 +35,6 @@ type DeleteRangeNeighboursRow struct {
 
 func (q *Queries) DeleteRangeNeighbours(ctx context.Context, arg DeleteRangeNeighboursParams) ([]DeleteRangeNeighboursRow, error) {
 	rows, err := q.db.Query(ctx, deleteRangeNeighbours,
-		arg.OrganizationID,
 		arg.ChannelID,
 		arg.MemberID,
 		arg.LowerLo,

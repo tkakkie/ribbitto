@@ -18,6 +18,7 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/unread"
+	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
 type failingPostAppend struct{ conversation.EventAppender }
@@ -151,6 +152,37 @@ func TestPostingRead(t *testing.T) {
 }
 
 func TestReadBoundsScope(t *testing.T) {
+	for _, predicate := range []string{"organization", "channel", "member"} {
+		t.Run("feed/"+predicate, func(t *testing.T) {
+			h := newReadOracle(t)
+			s := h.scope(readOracleStep{})
+			other := s
+			switch predicate {
+			case "organization":
+				// Isolate this predicate despite globally unique IDs and composite FKs.
+				_, err := h.pool.Exec(t.Context(), "ALTER TABLE channel_read DROP CONSTRAINT channel_read_organization_id_channel_id_fkey, DROP CONSTRAINT channel_read_organization_id_member_id_fkey")
+				feedRequire(t, err)
+				other.OrganizationID = h.other
+			case "channel":
+				other.ChannelID = h.channels[1]
+			case "member":
+				other.MemberID = h.members[1].Member.ID
+			}
+			_, err := h.pool.Exec(t.Context(), "INSERT INTO channel_read (organization_id,channel_id,member_id) VALUES ($1,$2,$3)", other.OrganizationID, other.ChannelID, other.MemberID)
+			feedRequire(t, err)
+			// Bounds 3 and 6 name the other organisation/channel, not this feed.
+			// [3,8) must not consume the touching foreign range. Each witness
+			// differs in only one key, so the other predicates cannot hide a leak.
+			_, err = h.pool.Exec(t.Context(), "INSERT INTO read_range (organization_id,channel_id,member_id,lo,hi) VALUES ($1,$2,$3,8,9)", other.OrganizationID, other.ChannelID, other.MemberID)
+			feedRequire(t, err)
+			before := readOracleRows(t, h.pool, nil, false, s)
+			feedRequire(t, unreadpg.NewReading(h.pool, compose.NewFeedWriter(), nil, nil).FeedShown(t.Context(), s, 2, 660, 3, 6))
+			for _, v := range readOracleCheckRows(before, readOracleRows(t, h.pool, nil, false, s), "feed outside scope") {
+				t.Error(v)
+			}
+			feedRanges(t, h.pool, s, []conversation.SequenceRange{{Lo: 0, Hi: 8}})
+		})
+	}
 	h := newReadOracle(t)
 	scope := h.scope(readOracleStep{})
 	// Globally unique channel/member IDs prevent an organisation-only adversary

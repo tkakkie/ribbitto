@@ -21,6 +21,20 @@ func MessageSequencesIn(tx platform.Tx) *MessageSequences {
 // MessageSequences queries channel message bounds and existence in a caller-owned transaction.
 type MessageSequences struct{ queries *sqlcgen.Queries }
 
+// LastMessageBefore returns the last sequence strictly below cursor, or zero.
+func (m MessageSequences) LastMessageBefore(ctx context.Context, organizationID, channelID kernel.ID, cursor int64) (int64, error) {
+	seq, err := m.queries.LastChannelMessageBefore(ctx, sqlcgen.LastChannelMessageBeforeParams{
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), EventSeq: cursor,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("finding previous channel message: %w", err)
+	}
+	return seq, nil
+}
+
 // FirstMessageAfter returns the first sequence strictly above cursor, or zero.
 func (m MessageSequences) FirstMessageAfter(ctx context.Context, organizationID, channelID kernel.ID, cursor int64) (int64, error) {
 	seq, err := m.queries.FirstChannelMessageAfter(ctx, sqlcgen.FirstChannelMessageAfterParams{

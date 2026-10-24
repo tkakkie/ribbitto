@@ -24,8 +24,10 @@ type RangeWriter interface {
 // RangeWriterIn binds range writes to the caller's transaction.
 type RangeWriterIn func(platform.Tx) RangeWriter
 
-// ChannelMessages supplies conversation's next message sequence; zero means none.
+// ChannelMessages supplies conversation's message neighbours; zero means none.
 type ChannelMessages interface {
+	// LastMessageBefore returns the last sequence strictly below cursor, or zero.
+	LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error)
 	// FirstMessageAfter returns the first sequence strictly above cursor, or zero.
 	FirstMessageAfter(context.Context, kernel.ID, kernel.ID, int64) (int64, error)
 	// HasMessages probes parallel half-open bounds in one scoped statement.
@@ -91,6 +93,53 @@ func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, join
 	changed, err := f.messages(tx).HasMessages(ctx, scope.OrganizationID, scope.ChannelID, los, his)
 	if err != nil {
 		return false, fmt.Errorf("checking newly read feed messages: %w", err)
+	}
+	return changed, nil
+}
+
+// ReadShown unions only the channel messages in [from, through], bounded by
+// cursor, under #1486 (decision 32, amended). The caller supplies resolved scope
+// and the persisted join sequence, and must roll back tx on error.
+func (f *FeedWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor, from, through int64) (bool, error) {
+	if cursor < 0 || cursor == math.MaxInt64 || from < 1 || through < from || cursor < through {
+		return false, ErrInvalidCursor
+	}
+	committed, err := f.cursor(tx).EventSeq(ctx, scope.OrganizationID)
+	if err != nil {
+		return false, fmt.Errorf("reading shown feed cursor limit: %w", err)
+	}
+	if cursor > committed {
+		return false, ErrInvalidCursor
+	}
+	previous, err := f.messages(tx).LastMessageBefore(ctx, scope.OrganizationID, scope.ChannelID, from)
+	if err != nil {
+		return false, fmt.Errorf("finding previous shown feed message: %w", err)
+	}
+	lo := int64(0)
+	if previous != 0 {
+		lo = previous + 1
+	}
+	hi, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, through)
+	if err != nil {
+		return false, fmt.Errorf("finding next shown feed message: %w", err)
+	}
+	if hi == 0 {
+		hi = through + 1
+	}
+	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, conversation.SequenceRange{Lo: lo, Hi: hi})
+	if err != nil {
+		return false, fmt.Errorf("reading shown feed: %w", err)
+	}
+	if len(covered) == 0 {
+		return false, nil
+	}
+	los, his := make([]int64, len(covered)), make([]int64, len(covered))
+	for i, r := range covered {
+		los[i], his[i] = r.Lo, r.Hi
+	}
+	changed, err := f.messages(tx).HasMessages(ctx, scope.OrganizationID, scope.ChannelID, los, his)
+	if err != nil {
+		return false, fmt.Errorf("checking newly read shown feed messages: %w", err)
 	}
 	return changed, nil
 }

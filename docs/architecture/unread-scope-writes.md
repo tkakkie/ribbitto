@@ -14,6 +14,15 @@ A newly read message
   plus the batched existence probe, and stays `O(1)` in normal use.
   Besides containment, the probe is bounded by the covered set's lowest and highest
   sequence, so it scans the channel's index from the first interval.
+- **Feed run, cursor `S`, run `[F, T]` (dormant, #1486):** `ReadShown`
+  validates `0 ≤ S < MaxInt64`, `S ≤` org's committed cursor and
+  `1 ≤ F ≤ T ≤ S` before any write. Conversation's transaction-bound channel
+  neighbours give `lo = prev(F) + 1` (or 0) and `hi = next(T)` (or `T + 1`).
+  `MergeCovered([lo, hi))` retains the join prefix and channel lock; the same
+  bounded existence probe checks only newly covered intervals. Bounds need not
+  name messages: exactly messages in `[F, T]` become read, preserving the gap
+  invariant. Reading uses the existing commit/publication rule; no HTTP caller
+  exists. Cost is the whole-feed path plus one predecessor statement.
 - **Branch notice (current):** conversation's organisation- and channel-scoped
   predecessor query returns `p` (or 0). An injected `unreadpg.WriterIn` adapter
   calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after

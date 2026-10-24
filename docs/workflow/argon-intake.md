@@ -11,9 +11,8 @@ Assignment, steps, calibration and throughput follow the maintainer's decisions
 
 An issue eligible under [Which issues](argon-implementer.md#which-issues)
 names *Implementer* `Argon` unless the issue records why not.
-This default applies only within maintainer-approved steps; today only step 1
-is approved. Until its step is approved, a step-2 or step-3 issue names Argon
-only when the maintainer says so.
+This default applies only within maintainer-approved steps; today steps 1 and 2
+are approved. A step-3 issue names Argon only when the maintainer says so.
 Claude's [issue review](reviewing.md#issue-review) and the maintainer check
 this default. The [trusted issue-review prompt](../../.github/prompts/issue-review.md)
 is unchanged; changing reviewer prompts is a separate maintainer decision.
@@ -24,14 +23,15 @@ Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 1. **Approved:** tests, documents, small validators, normal-risk
    [tier C](adversarial-review.md#which-review-runs) ordinary feature
    implementation (ordinary feature work outside tiers A and B) and tier C small
-   bug fixes (a bug fix that is tier B is step 2, not approved), to ease weekly
+   bug fixes (a bug fix that is tier B is step 2), to ease weekly
    Claude/Codex token limits. Every step-1 item also meets the existing
    [eligibility](argon-implementer.md#which-issues), including that it can be
    verified without running its code locally: no `make dev` or browser check
    unless the maintainer runs it, so a tier C feature that needs one is eligible
    only when the maintainer himself performs that verification.
-2. **Unapproved:** small behaviour fixes in tier B code where the issue supplies
-   the failing test.
+2. **Approved** (maintainer, 2026-10-24,
+   [#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798)):
+   small behaviour fixes in tier B code where the issue supplies the failing test.
 3. **Unapproved:** larger tier B changes.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
@@ -55,7 +55,7 @@ to advance on its own.
 
 ## Calibration
 
-Before step 2, run the second calibration round once in tier B areas, with
+Before step 2, the second calibration round ran once in tier B areas, with
 harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/1514):
 
 - bytes versus characters;
@@ -63,8 +63,9 @@ harder seeded defects than [#1514](https://github.com/tkakkie/ribbitto/issues/15
   caught it;
 - a wrong comparison in validation.
 
-Record the results on [#1561](https://github.com/tkakkie/ribbitto/issues/1561)
-before any step-2 issue is offered. This round also includes Argon as issue
+The results were recorded on
+[#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380849083)
+before any step-2 issue was offered. This round also included Argon as issue
 reviewer on a few seeded issue specs.
 
 ## Throughput

@@ -53,18 +53,26 @@ Counts have zero headroom: elements bound DOM growth, forms/submits and
 htmx-selected nodes bound initialization work, and hx carriers independently
 ratchet request markup. Bytes have 5% headroom (rounded up) for class names,
 text and translations; byte size is a less stable proxy than node counts.
+The guard checks each fixed, per-message and first-render count budget equals
+the value measured in that run (#1536): above measured fails the headroom
+check; below measured fails the existing at-or-under check. Each byte budget
+must lie between measured and `ceil(measured * 1.05)`, inclusive. A mutation
+table raises each of the 15 count limits by one and proves rejection, including
+zero slopes; predicate tests isolate headroom and at-or-under failures.
 The browser mirror counts body itself plus its selected descendants, rather
 than every hx carrier. Template contents live in a separate browser fragment
 and are excluded from htmx selection; Go parsed markup counts still include them. The handler fixture includes older-history navigation
 and its own sidebar, so its fixed markup differs from the structure fixture.
 
 **Lowering:** a change reducing a count lowers its budget in the same PR.
-This ratchet is checked by review.
+The new measured value and budget then agree, so CI accepts both reductions
+together; leaving the old count budget fails CI.
 
 **Raising:** requires an issue stating the reason and the counted or measured
 effect, and the maintainer's written approval on that issue. The constant's
 comment points to that issue. The source check fails without an issue
-reference; review verifies the reason and approval. A feature needing more
+reference; CI rejects a raised count budget unless the measured value rises
+in step. Review verifies the reason and approval. A feature needing more
 per-message markup states its count in its issue first.
 
 ## Mirror maintenance

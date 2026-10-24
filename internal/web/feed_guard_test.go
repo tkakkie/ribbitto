@@ -51,9 +51,9 @@ func feedLimits() []feedLimit {
 
 // The endpoints define the line; the middle sample independently detects
 // nonlinear growth. Counts are exact; byte residuals allow digit/name variation.
-func checkFeedStructure(samples [3][6]int) []string {
+func checkFeedStructure(samples [3][6]int, limits []feedLimit) []string {
 	var violations []string
-	for i, limit := range feedLimits() {
+	for i, limit := range limits {
 		slope := float64(samples[2][i]-samples[0][i]) / 150
 		fixed := float64(samples[0][i]) - 50*slope
 		residual := math.Abs(float64(3*samples[1][i]-2*samples[0][i]-samples[2][i])) / 3
@@ -67,7 +67,9 @@ func checkFeedStructure(samples [3][6]int) []string {
 		}{
 			{"fixed", fixed, limit.fixed}, {"per message", slope, limit.slope}, {"linearity", residual, tolerance},
 		} {
-			if check.actual > check.budget {
+			if check.name != "linearity" {
+				violations = append(violations, checkFeedValue(limit.metric, check.name, check.actual, check.budget, i == 5)...)
+			} else if check.actual > check.budget {
 				violations = append(violations, fmt.Sprintf("%s %s: actual %.3f exceeds budget %.3f", limit.metric, check.name, check.actual, check.budget))
 			}
 		}
@@ -110,13 +112,13 @@ func TestFeedGuardStructure(t *testing.T) {
 		slope := float64(samples[2][i]-samples[0][i]) / 150
 		t.Logf("%s: fixed=%.3f per message=%.3f", limit.metric, float64(samples[0][i])-50*slope, slope)
 	}
-	for _, violation := range checkFeedStructure(samples) {
+	for _, violation := range checkFeedStructure(samples, feedLimits()) {
 		t.Error(violation)
 	}
 }
 
 func TestFeedGuardCatchesButtonPerMessage(t *testing.T) {
-	violations := strings.Join(checkFeedStructure(feedSamples(t, true)), "\n")
+	violations := strings.Join(checkFeedStructure(feedSamples(t, true), feedLimits()), "\n")
 	t.Log(violations)
 	for _, metric := range []string{"elements per message", "[type=submit] per message", "htmx-selected per message"} {
 		if !strings.Contains(violations, metric) {
@@ -146,7 +148,7 @@ func TestFeedGuardChecker(t *testing.T) {
 				}
 			}
 		}
-		if got := strings.Join(checkFeedStructure(sample), "\n"); !strings.Contains(got, "elements "+kind) {
+		if got := strings.Join(checkFeedStructure(sample, feedLimits()), "\n"); !strings.Contains(got, "elements "+kind) {
 			t.Errorf("%s regression missed: %s", kind, got)
 		}
 	}

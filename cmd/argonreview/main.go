@@ -14,7 +14,7 @@
 // copilot-check checks Copilot follow-up changes at the pull request head (#1270);
 // probe runs the same pipeline on a local throwaway repository with a
 // trusted prompt and prints what agy did (#1071);
-// container-check <worktree> <build|vet|test|generated> <package-pattern> copies Git's
+// container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> copies Git's
 // tracked and non-ignored files without protected names or symlinks, then
 // runs a fixed Go or generated-files check in a resource-limited, no-network container.
 // It needs the trusted build, the local Docker socket and a provisioned
@@ -160,7 +160,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
 	return 2
 }
 

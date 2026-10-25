@@ -66,7 +66,9 @@ amendment approved by the maintainer.
 
 ## Runner pin and prelude
 
-`containerVerifyImage` pins #1697's manifest-list digest (build `argonreview-verify-image:7957ae8`):
+`containerVerifyImage` pins the image ID that `docker image inspect` reports, recorded on #1697
+(build `argonreview-verify-image:7957ae8`). With a containerd image store that ID is the
+manifest-list digest, but the pin is the `.Id` value whichever store is used:
 `sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80`.
 Runs use `--pull=never`; both sweep inspections require that same ID.
 The recipe test separately checks the base pin. Before Docker starts, the

@@ -2,7 +2,7 @@
 
 ## Status
 
-`test-db` (#1697 PR B1) is merged but **not in force until #1700**.
+`test-db` (#1697) is merged but **not in force until #1700**.
 Production still runs `argonreview-7f607ca` and the old image.
 The real container path (Docker, PostgreSQL in the image and the script)
 is untested by Codex, which has no Docker. #1700 must validate that path
@@ -54,13 +54,16 @@ All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
 2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
 mounts. Whether `./...` fits with a database is **not established**.
 A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`.
+PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
+standard error and count toward the shared 4 MiB output cap. #1700 must
+measure this on `./...`; exceeding the cap gives `NOT VERIFIED`, never `verified`.
 Browser tests, cgo-dependent packages and race checks remain CI-only.
 
-In this pull request every skip still gives `NOT VERIFIED`, including all
-five measurement skips. The trusted measurement-skip allowlist and its scan
-follow in the next pull request of #1697. Until then, `cmd/ribbitto`,
-`internal/realtime`, `internal/unread/internal/postgres` and conversationpg
-report `NOT VERIFIED` when their measurement tests skip.
+Every skip gives `NOT VERIFIED`, including the five measurement tests that
+skip without their gate variables; `cmd/ribbitto`, `internal/realtime`,
+`internal/unread/internal/postgres` and `conversationpg` therefore report
+`NOT VERIFIED` when those tests skip. A trusted allowlist for those five
+skips is planned in #1697 and is not part of this check.
 
 `test` and `test-db` use the same verdict reader: failure anywhere gives
 `FAILED`; any skip gives `NOT VERIFIED` with names. Successful reports

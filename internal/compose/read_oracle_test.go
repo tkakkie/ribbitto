@@ -313,6 +313,10 @@ func TestReadOracle(t *testing.T) {
 				{
 					kind: kind("post from topic"), member: 0, channel: 0, topic: 1, cursor: 662,
 				},
+				// Read B's post without reading moved-in 8 below floor 660,
+				// then ensure the next run preserves that floor exception.
+				{kind: kind("shown topic"), member: 0, topic: 1, cursor: 662, from: 661, through: 661},
+				{kind: kind("shown topic"), member: 0, topic: 1, cursor: 665, from: 665, through: 665},
 				{
 					kind: kind("topic"), member: 0, channel: 0, topic: 1, cursor: 662,
 				},

@@ -20,21 +20,30 @@ const (
 	buttonSecondaryIcon
 )
 
+// submitValue gives a submitter its optional form entry.
+type submitValue struct {
+	name, value string
+}
+
 // submitButton is the one place a form's submit button gets its look; label
 // is a message ID. Navigation is a link (<a href>), never this component.
-templ submitButton(kind buttonKind, label string) {
-	@submitButtonFor(kind, label, "") {
+templ submitButton(kind buttonKind, label string, value ...submitValue) {
+	@submitButtonFor(kind, label, "", value...) {
 		{ children... }
 	}
 }
 
 // submitButtonFor submits the form with the given ID from outside it, or
 // its own form when form is empty.
-templ submitButtonFor(kind buttonKind, label, form string) {
+templ submitButtonFor(kind buttonKind, label, form string, value ...submitValue) {
 	switch kind {
 		case buttonSecondary, buttonWelcomeSecondary, buttonSecondaryIcon:
 			<button
 				type="submit"
+				if len(value) != 0 {
+					name={ value[0].name }
+					value={ value[0].value }
+				}
 				if form != "" {
 					form={ form }
 				}
@@ -46,6 +55,10 @@ templ submitButtonFor(kind buttonKind, label, form string) {
 		default:
 			<button
 				type="submit"
+				if len(value) != 0 {
+					name={ value[0].name }
+					value={ value[0].value }
+				}
 				if form != "" {
 					form={ form }
 				}

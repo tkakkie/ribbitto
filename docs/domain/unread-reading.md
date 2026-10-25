@@ -8,8 +8,11 @@ Branch-notice reads, visible-page reading POSTs and posting writes are current.
 Only a POST advances read state; a GET never changes it
 ([routes](../architecture/routes.md)). Each reading POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown while
-visible. `S` bounds the scope, not a list of rendered messages: messages of the scope outside the loaded
-window, older history included, are read with it.
+visible. The body names one run with `cursor=S&from=F&through=T`, or the whole scope
+with `cursor=S&scope=all` (*Mark all as read*). A run reads only messages
+with `F ≤ event_seq ≤ T ≤ S`; a topic run excludes moves after `S` and leaves
+messages moved in below the run unread, unlike a whole-scope read (#775).
+The whole-scope forms read older history too:
 
 - **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
 - **Topic view:** every message of that topic with `event_seq ≤ S` becomes
@@ -41,7 +44,7 @@ later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed
 it, stays unread: it is no longer there to mark. A message already read
 stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
-offer a *Mark as read* form that sends the same POST with the page's cursor.
+offer a *Mark all as read* form that sends `cursor` and `scope=all`.
 Its button shows only when the page's snapshot found something unread in its
 scope (the [divider's](unread.md#the-unread-divider) first unread is non-zero) and,
 like the divider, keeps that answer for the visit: live messages are read
@@ -56,7 +59,22 @@ not on the panel page's load and not for live arrivals, re-evaluated
 whenever the width changes with the panel open. The stream is still applied
 behind it: new messages, counts and typing appear, but nothing shown then
 counts as read. When the panel closes (a page load) or stops covering (the
-window widens to 1200 px), automatic reading resumes under the rules above. *Mark as read* is deliberate and never paused: below 1200 px
+window widens to 1200 px), automatic reading resumes under the rules above. *Mark all as read* is deliberate and never paused: below 1200 px
 the overview offers it, submitting the same form. One click reads up to the
 newest shown sequence, and a refused (429) click retries with that cursor
 while the panel stays modal; it reads nothing that arrived after the click.
+
+Cursor-only POSTs keep today's whole-scope meaning through `Reading.Feed` or
+`Topic`, with no counter or log line here. Today's script still sends them;
+run sending and the injected counter/reporter belong to S3a. S5 refuses them
+no earlier than 7 and no later than 30 days after S3a deploys. That clock is
+not proof old tabs are gone: ordinary tabs can reconnect across deploys,
+and the old script does not reload after a non-429 failure. S3a/S5 must decide
+recovery and a reporter with start and daily-zero lines (amendment E).
+
+Before S3a merges, S1c-3 can be reverted alone, in reverse dependency order;
+new buttons against the old server have their `scope` ignored and still read
+the whole scope. After S3a merges, S1c is permanent until S5: an older handler
+would turn every run into a whole-scope read, irreversibly growing read state.
+Revert S3a first; never revert or downgrade S1c alone. The fail-closed `bound`
+key is a decision for S3a, requiring no change here.

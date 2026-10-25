@@ -80,15 +80,25 @@ Sustained overload has no success guarantee.
 **HTTP caller (current):** `POST /organizations/{slug}/channels/{channelID}/read`
 (and `/topics/{topicID}/read`) takes membership from URL authorization,
 resolves the channel and topic through conversation, and calls `unread.Reading`
-with `joined_event_seq` and form `cursor`. Reading owns the transaction through
+with `joined_event_seq` and body `cursor`: `from` with `through` calls
+`FeedShown`/`TopicShown`; `scope=all` or cursor-only calls `Feed`/`Topic`.
+Cursor-only is the bounded transition described in [reading](../domain/unread-reading.md).
+Values remain body-only; repeated recognized keys across query and body fail.
+Base-10 int64 parsing accepts leading zeros and either sign, but no spaces,
+hex, empty values or overflow; unread validates the numeric bounds. Reading owns the transaction through
 an injected runner; `unreadpg` binds the runner to the pool and the writers
 to that transaction.
-Cross-origin protection covers both routes. Invalid cursors and `before` or `around`
+Cross-origin protection covers both routes and all forms. Missing cursor,
+repeated keys, malformed integers, half runs, scope other than all, scope with
+run bounds, invalid cursors and `before` or `around`
 parameters are 400 without writes; invisible channels/topics and non-members
 get 404. Errors roll back the transaction. htmx receives 204; plain forms
 redirect to the same feed or topic. Latest pages carry their snapshot cursor;
 visibility triggers the first automatic POST and subsequent DOM applications
 advance it while visible. Hidden applications wait until visibility returns.
+htmx 2.0.7 carries a focused submitter's `scope=all` on automatic requests
+(source inference, not browser-verified here); it is equivalent today. S3a must
+rewrite `scope` on every request before sending runs (amendment E).
 htmx sends one reading POST at a time; newer applied cursors coalesce without
 queuing old requests. A 429 retries until success or hide, form removal or
 navigation, with one retry timer per page. Exponential backoff uses jitter and

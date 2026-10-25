@@ -48,7 +48,8 @@ branch-notice reads are current.
   in that topic up to and including it is read, except messages moved in by
   a move with a higher sequence (`message.moved_event_seq`). It only tells
   counting where to start; whether a message is read is always the set's
-  answer.
+  answer. A run raises it at most to the run's end, never to or past an
+  unread topic message below the run, including one moved in after the floor.
 
 The reading scopes and posting are in [unread reading](unread-reading.md).
 

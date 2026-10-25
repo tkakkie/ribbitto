@@ -127,19 +127,19 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 					t.Helper()
 					body := w.Body.String()
 					form, buttons := readControl(t, w.Body)
-					if _, hidden := attrOK(form, "hidden"); !hidden || len(buttons) != 0 || strings.Contains(body, "Mark as read") {
+					if _, hidden := attrOK(form, "hidden"); !hidden || len(buttons) != 0 || strings.Contains(body, "Mark all as read") {
 						t.Fatalf("control shown with nothing unread: hidden=%t buttons=%d", hidden, len(buttons))
 					}
 				}
 				// The overview submits the same #read-form from outside it, once
-				// and only when the header offers Mark as read (#972).
+				// and only when the header offers Mark all as read (#972).
 				doc, err := html.Parse(get("/overview").Body)
 				if err != nil {
 					t.Fatal(err)
 				}
 				sheet := 0
 				for n := range doc.Descendants() {
-					if attr(n, "form") == "read-form" && strings.TrimSpace(text(n)) == "Mark as read" {
+					if attr(n, "form") == "read-form" && strings.TrimSpace(text(n)) == "Mark all as read" {
 						sheet++
 					}
 				}
@@ -152,7 +152,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 					return
 				}
 				form, buttons := readControl(t, w.Body)
-				if _, hidden := attrOK(form, "hidden"); hidden || len(buttons) != 1 || attr(buttons[0], "type") != "submit" || strings.TrimSpace(text(buttons[0])) != "Mark as read" {
+				if _, hidden := attrOK(form, "hidden"); hidden || len(buttons) != 1 || attr(buttons[0], "type") != "submit" || strings.TrimSpace(text(buttons[0])) != "Mark all as read" {
 					t.Fatalf("no plain control with something unread: hidden=%t buttons=%d", hidden, len(buttons))
 				}
 				// Without JavaScript the button submits the plain form, which
@@ -166,6 +166,47 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 				}
 				assertHidden(get(""))
 			})
+		}
+	}
+}
+
+// The Japanese label is pinned like the English one, on the header control and
+// on the overview's copy of it, so a reverted or half-updated translation fails.
+func TestReadControlJapaneseLabel(t *testing.T) {
+	for _, topic := range []bool{false, true} {
+		visit := &readControlVisit{fakeMessages: populatedMessages(), feed: 7, topic: 8}
+		h, _ := newLimitedHandler(t, asAlice, func(s *Services) { s.Messages, s.Reading = visit, visit })
+		path := view.ChannelURL("acme", kernel.ID{1})
+		if topic {
+			path = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{5})
+		}
+		for _, tc := range []struct {
+			panel   string
+			buttons int
+		}{{"", 1}, {"/overview", 2}} {
+			r := httptest.NewRequest("GET", path+tc.panel, nil)
+			r.Header.Set("Accept-Language", "ja")
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			doc, err := html.Parse(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var labels []string
+			for n := range doc.Descendants() {
+				if n.Type == html.ElementNode && n.Data == "button" && (attr(n, "form") == "read-form" || n.Parent != nil && attr(n.Parent, "id") == "read-form") {
+					labels = append(labels, strings.TrimSpace(text(n)))
+				}
+			}
+			if w.Code != 200 || len(labels) != tc.buttons {
+				t.Fatalf("topic=%t %q: status %d, labels %q", topic, tc.panel, w.Code, labels)
+			}
+			for _, label := range labels {
+				if label != "すべて既読にする" {
+					t.Fatalf("topic=%t %q: ja label %q", topic, tc.panel, label)
+				}
+			}
 		}
 	}
 }

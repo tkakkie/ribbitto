@@ -4,7 +4,7 @@
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-Visible-page reading POSTs, posting writes and page counts, their sidebar display, the page-only divider and live counts ([decision 34](34-live-unread-counts.md)) are current. Amended by #1486: posting reads only the author's own message. Rules in [unread](../domain/unread.md),
+Visible-page reading POSTs, posting writes and page counts, their sidebar display, the page-only divider and live counts ([decision 34](34-live-unread-counts.md)) are current. Amended by #1486: posting reads only the author's own message; a reading POST names one run of messages or asks for the whole scope; a run read raises a topic floor only past no unread message. Rules in [unread](../domain/unread.md),
 storage in [unread counts](../architecture/unread-counts.md), cost in [unread count costs](../architecture/unread-count-costs.md), writes in
 [unread writes](../architecture/unread-writes.md).
 
@@ -14,18 +14,27 @@ storage in [unread counts](../architecture/unread-counts.md), cost in [unread co
   is in the set. Writes add and merge ranges under a per-member, per-channel
   lock, so the set only grows. Every gap between two ranges holds an
   unread message of the channel.
-- **Two reading scopes.** The feed reads every message of the channel up to
-  the cursor the page has applied (a bound on the scope, not a list of
-  rendered messages); a topic view reads only that
-  topic's messages, except any moved in after that cursor. Only POSTs
+- **Two reading scopes.** The feed reads messages of the channel; a topic view
+  reads only that topic's messages, except any moved in after the page's cursor.
+  A reading POST carries the cursor the page has applied and either one **run**,
+  given by its lowest and highest `event_seq` and bounded by that cursor, or an
+  explicit **whole-scope** read (*Mark all as read*, the only read without
+  JavaScript), which reads every message of the scope up to the cursor, older
+  history included. A run read reads only the scope's messages in the run.
+  A POST with only the cursor keeps its whole-scope meaning for a stated
+  transition and is then refused; pages send it until they report runs. Only POSTs
   advance read state: the first is bounded by the page's snapshot, later
   ones by the cursor the page has applied and shown while visible. A sequence the stream
   has only received, applied while hidden until it becomes visible, or the one
   in a post's own response, never advances
-  that cursor. Without JavaScript, a *Mark as read* form sends
+  that cursor. Without JavaScript, a *Mark all as read* form sends
   the same POST. Posting reads only the author's own message, in the posting
   transaction, and raises no topic floor; a member's own posts are never unread for them. Branching currently adds its author's
   notice to the read set in the branching transaction through an injected writer.
+- **Topic floors.** A topic floor only tells counting where to start. A run
+  read raises it at most to the run's end and never to or past an unread message
+  of the topic below the run, including one moved in after the floor; a
+  whole-scope read raises it to the cursor; posting never raises it.
 - **Counts.** A channel's count is all its unread messages, the sum over all
   its topics; a topic's is those in that topic. Each list (the sidebar's
   channels, the current channel's topics) takes two statements in the
@@ -56,7 +65,13 @@ switch to probing gaps before implementation if the cost is unacceptable
 (maintainer's directions, 2026-10-09: read ranges first; fixed statements
 per list).
 
+#1486: a read covered everything up to the cursor, also messages the member
+never saw. A run lets a page read only what it showed, while *Mark all as read*
+keeps the explicit whole-scope read; no new table is needed.
+
 **Considered:**
+- *The loaded window as the bound* (option C): rejected, also as an interim,
+  because it still reads loaded messages that were never on screen.
 - *A per-channel position plus per-topic positions* (a message is read if
   it is at or below either): a read message moved into a topic with a lower
   position becomes unread, and an unread one moved into a topic read further

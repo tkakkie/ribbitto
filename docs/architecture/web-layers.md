@@ -122,8 +122,8 @@ htmx does only requests/swaps; the server and templ own HTML.
   `#typing-status` outside the composer, replacing only localized polite status
   content (`hx-swap="innerHTML"`). Empty reconnect frames clear stale content;
   typing changes neither focus nor durable cursors.
-- Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
-  *Mark as read* submit button only if something was unread (else the form is
+- Latest feeds/topics render `#read-form` with the snapshot `cursor`, a
+  *Mark all as read* submit button only if something was unread (else the form is
   `hidden`), and `hx-post` to the conversation URL plus `/read` (`POST /organizations/{slug}/channels/{channelID}[/topics/{topicID}]/read`). `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
   send automatic and manual POSTs without swapping history or overlapping reads;
   automatic ones pause while a panel is modal ([panels](../ui-components.md#side-panels)).

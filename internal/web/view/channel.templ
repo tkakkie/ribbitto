@@ -655,7 +655,7 @@ templ readForm(page ChannelPage) {
 	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-wide:hidden">
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		if page.FirstUnread > 0 {
-			@submitButton(buttonSecondaryIcon, "reading.mark") {
+			@submitButton(buttonSecondaryIcon, "reading.mark", submitValue{"scope", "all"}) {
 				@Icon("checkmark-regular", 20)
 			}
 		}

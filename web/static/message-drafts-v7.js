@@ -223,7 +223,7 @@
       else if (event.key === null || event.key.startsWith(prefix)) markers();
     });
     const expire = () => {
-      if (!sessionExpired()) setTimeout(expire, Math.min(deadline - performance.now(), 2 ** 31 - 1));
+      if (performance.now() < deadline) setTimeout(expire, Math.min(deadline - performance.now(), 2 ** 31 - 1)); else sessionExpired();
     };
     expire();
   } catch {

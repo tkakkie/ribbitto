@@ -27,6 +27,10 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
 	if !admitted {
 		w.Header().Set("Retry-After", "1")
+		_ = r.ParseForm()
+		wc, _ := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64)
+		wid, _ := channelID(r)
+		_ = p.reading.Feed(r.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: wid, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, wc)
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}

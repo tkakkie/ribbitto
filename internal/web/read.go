@@ -88,10 +88,7 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 		return
 	}
 	var err error
-	cursor, err = strconv.ParseInt(form.Get("cursor"), 10, 64)
-	if err != nil {
-		return
-	}
+	cursor, _ = strconv.ParseInt(form.Get("cursor"), 10, 64)
 	shown = form.Has("from")
 	if shown {
 		from, err = strconv.ParseInt(form.Get("from"), 10, 64)

@@ -113,7 +113,7 @@ esac
 func sweepContainerFixture(t *testing.T, s *containerSweep, dir string) sweepContainer {
 	t.Helper()
 	c := sweepContainer{ID: sweepTestID, Name: "/" + sweepTestName, Created: s.now().Add(-time.Hour)}
-	c.Config.Image = containerGoImage
+	c.Config.Image = containerVerifyImage
 	c.Config.Labels = map[string]string{containerOwnerLabel: containerOwnerValue}
 	write(t, filepath.Join(dir, "candidates"), c.ID+"\n")
 	write(t, filepath.Join(dir, "all"), c.ID+"\n")
@@ -210,7 +210,7 @@ func TestSweepContainerReclaim(t *testing.T) {
 }
 
 func TestSweepContainerRevalidation(t *testing.T) {
-	for _, change := range []string{"vanish", "label", "image", "name", "live", "id"} {
+	for _, change := range []string{"vanish", "label", "image", "old image", "name", "live", "id"} {
 		t.Run(change, func(t *testing.T) {
 			s, _, dir := sweepFixture(t)
 			c := sweepContainerFixture(t, s, dir)
@@ -221,6 +221,8 @@ func TestSweepContainerRevalidation(t *testing.T) {
 				c.Config.Labels = nil
 			case "image":
 				c.Config.Image = "other"
+			case "old image":
+				c.Config.Image = containerBaseImage
 			case "name":
 				c.Name = "/foreign"
 			case "live":
@@ -234,7 +236,7 @@ func TestSweepContainerRevalidation(t *testing.T) {
 			}
 			write(t, filepath.Join(dir, sweepTestID+".next"), string(data))
 			err = s.run()
-			if (err != nil) != (change == "id" || change == "image") {
+			if (err != nil) != (change == "id" || change == "image" || change == "old image") {
 				t.Fatalf("result: %v", err)
 			}
 			assertNoSweepRM(t, dir)
@@ -242,7 +244,7 @@ func TestSweepContainerRevalidation(t *testing.T) {
 	}
 }
 func TestSweepContainerScope(t *testing.T) {
-	for _, change := range []string{"no label", "wrong label", "image", "unlabelled image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
+	for _, change := range []string{"no label", "wrong label", "image", "old image", "unlabelled image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
 		t.Run(change, func(t *testing.T) {
 			s, out, dir := sweepFixture(t)
 			c := sweepContainerFixture(t, s, dir)
@@ -253,6 +255,8 @@ func TestSweepContainerScope(t *testing.T) {
 				c.Config.Labels[containerOwnerLabel] = "other"
 			case "image":
 				c.Config.Image = "other"
+			case "old image":
+				c.Config.Image = containerBaseImage
 			case "unlabelled image":
 				c.Config.Image = "other"
 				c.Config.Labels = nil
@@ -269,7 +273,7 @@ func TestSweepContainerScope(t *testing.T) {
 			}
 			saveSweepContainer(t, dir, c, ".json")
 			err := s.run()
-			if change == "image" {
+			if change == "image" || change == "old image" {
 				if err == nil || out.String() != "unreclaimed container "+c.ID+"\n" {
 					t.Fatalf("image mismatch: %v %q", err, out)
 				}

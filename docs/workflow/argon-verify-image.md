@@ -2,19 +2,20 @@
 
 ## Purpose and status
 
-The recipe is merged as #1696's pull request A, but the image is **not in
-use until #1700**. Today's runner still uses the stock pinned Go image in
-`containerGoImage`. The file is `cmd/argonreview/verifyimage/Dockerfile`,
+The recipe, regeneration prelude and image pin (#1696) are merged but
+**not in force until #1700**.
+Production workers still run the pinned launcher `argonreview-7f607ca`
+and the old image; merging changes nothing in production.
+The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
-Later work (#1696 PR B, #1700) points the runner at the built image.
 The [verification boundary](argon-verify.md#verification-container) remains
 the trusted runner's flags and pinned image, not this recipe or its test.
 
 ## Recipe rules
 
-- Every base uses a SHA-256 digest equal to the Go-image digest in
-  `containerGoImage`; no parser directives, including `# syntax=`.
+- Every base uses the SHA-256 digest in `containerBaseImage`;
+  no parser directives, including `# syntax=`.
 - Tailwind's exact version matches `tailwindVersion` in
   `tools/download/main.go`. Its Linux arm64 binary is verified with a
   literal SHA-256 and `sha256sum -c` in the same RUN as the download.
@@ -34,6 +35,32 @@ check. Tier A review also checks the tool builds and cache removal.
 Only generators are included now. PostgreSQL 18 may be added later under
 #1697; a browser, another package set or a second recipe needs a decision 42
 amendment approved by the maintainer.
+
+## Runner pin and prelude
+
+`containerVerifyImage` pins the image ID recorded on #1696:
+`sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1`.
+Runs use `--pull=never`; both sweep inspections require that same ID.
+The recipe test separately checks the base pin. Before Docker starts, the
+copied root manifest must name Go 1.27.3, and `tools/go.mod` must require
+templ v0.3.1070 and sqlc v1.31.1 exactly once each. Missing, duplicate or
+different tool requirements refuse the run: the verify image needs a rebuild.
+Quoted syntax or unsupported parentheses (including malformed blocks) also refuse.
+
+Build, vet and test use one fixed `sh` prelude with `set -eu`. It copies
+`/work/.` (including dotfiles) to `/tmp/work` on tmpfs, then runs the installed
+templ, sqlc and Tailwind generators from that repository root, using
+`sqlc.yaml` and the Makefile's CSS arguments. Generator stdout goes to stderr;
+test stdout remains test2json only. Any generator failure exits nonzero and
+reports `FAILED`. The script ends with `exec go "$@"`; the check, fixed flags
+and package pattern are separate positional arguments. `/work` stays read-only.
+The container is single-run with a fresh tmpfs, so a fixed directory suffices.
+Existing 1 GiB tmpfs limits stay; real Docker capacity validation is for #1700.
+
+Reports say sources were regenerated; CI still checks whether committed
+generated files are current. No `generated` check yet (#1696).
+Race, cgo and database/browser limits remain. sqlc configuration can invoke
+process plugins inside the container, as tests can already execute code there.
 
 ## Host build procedure
 
@@ -70,6 +97,9 @@ the recipe alone does not establish its image ID.
 ## Rebuilds
 
 Rebuild for a Tailwind, templ, sqlc or base-image change, or a Debian security
-fix the maintainer wants. Each rebuild produces a new image ID and the same
-provenance record. A changed recipe goes through a new tier A pull request;
+fix the maintainer wants. Each rebuild changes the image ID, needs the same
+provenance record and a new tier A pull request updating the runner pin;
 the host build still needs the maintainer's chat approval.
+A templ or sqlc version bump in `tools/go.mod` refuses every verify run until
+`containerTemplVersion`/`containerSQLCVersion` and the image pin change together
+in the same pull request.

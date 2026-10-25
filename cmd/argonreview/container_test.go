@@ -27,6 +27,7 @@ func containerFixture(t *testing.T) string {
 	dir := resolved(t, t.TempDir())
 	gitT(t, dir, "init", "--quiet", "--template=")
 	write(t, filepath.Join(dir, "go.mod"), "module example.invalid/check\n\ngo 1.27.3\n")
+	write(t, filepath.Join(dir, "tools/go.mod"), "require github.com/a-h/templ v0.3.1070\nrequire github.com/sqlc-dev/sqlc v1.31.1\n")
 	write(t, filepath.Join(dir, "check.go"), "package check\n")
 	return dir
 }
@@ -101,7 +102,15 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 				"--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
-				"golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261", "go", check,
+				"sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1", "sh", "-c", `set -eu
+mkdir /tmp/work
+cp -R /work/. /tmp/work
+cd /tmp/work
+/usr/local/bin/templ generate >&2
+/usr/local/bin/sqlc generate >&2
+/usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify >&2
+exec go "$@"
+`, "sh", check,
 			}
 			if check == "build" {
 				want = append(want, "-o", "/dev/null")
@@ -118,6 +127,118 @@ func TestContainerArgumentsGolden(t *testing.T) {
 			}
 			if containerTimeout != 10*time.Minute || containerCleanupTimeout != 20*time.Second || containerOutputLimit != 4<<20 || containerFileLimit != 20000 || containerCopyLimit != 128<<20 {
 				t.Fatal("trusted limits changed")
+			}
+		})
+	}
+}
+
+func TestContainerPrelude(t *testing.T) {
+	if !strings.HasPrefix(containerPrelude, "set -eu\n") || !strings.HasSuffix(containerPrelude, "exec go \"$@\"\n") {
+		t.Fatal("prelude must fail on generator errors and exec positional Go arguments")
+	}
+	generators := 0
+	for line := range strings.SplitSeq(containerPrelude, "\n") {
+		if strings.HasPrefix(line, "/usr/local/bin/") {
+			generators++
+			if !strings.HasSuffix(line, " >&2") {
+				t.Fatalf("generator stdout contaminates test2json: %q", line)
+			}
+		}
+	}
+	if generators != 3 {
+		t.Fatalf("got %d generators", generators)
+	}
+	for _, check := range []string{"build", "vet", "test"} {
+		for _, pattern := range []string{"./...", "./internal/foo/..."} {
+			args := containerArguments("copy", "name", check, pattern)
+			if strings.Contains(containerPrelude, pattern) || args[len(args)-1] != pattern || args[len(args)-2] == pattern {
+				t.Fatal("package pattern must be a separate positional argument")
+			}
+		}
+	}
+}
+
+func TestContainerToolVersions(t *testing.T) {
+	const templ = "github.com/a-h/templ v0.3.1070"
+	const sqlc = "github.com/sqlc-dev/sqlc v1.31.1"
+	const equal = "require " + templ + "\nrequire " + sqlc + "\n"
+	repositoryTools, err := os.ReadFile("../../tools/go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, data string
+		valid      bool
+	}{
+		{"equal", equal, true},
+		{"block", "require (\n" + templ + "\n" + sqlc + "\n)\n", true},
+		{"indirect", "// require " + templ + "\nrequire ( // tools\n" + templ + " // indirect\n" + sqlc + " // indirect\n)\n", true},
+		{"single indirect", strings.ReplaceAll(equal, "\n", " // indirect\n"), true},
+		{"unterminated require", "require (\n" + templ + "\n" + sqlc + "\n", false},
+		{"replace templ", equal + "replace github.com/a-h/templ => ../templ\n", false},
+		{"replace sqlc", equal + "replace " + sqlc + " => ../sqlc\n", false},
+		{"block replace", equal + "replace (\n" + templ + " => ../templ\n)\n", false},
+		{"unrelated replace", "replace example.com/other => ../other\n" + equal, true},
+		{"unrelated block replace", "replace (\nexample.com/other v1.0.0 => ../other\n)\n" + equal, true},
+		{"other blocks", equal + "tool (\ngithub.com/a-h/templ\n)\nexclude (\n" + sqlc + "\n)\n", true},
+		{"repository tools", string(repositoryTools), true},
+		{"tab indented block", "require (\n\t" + templ + "\n\t" + sqlc + "\n)\n", true},
+		{"commented header", "require ( // tools \"(`\n\t" + templ + "\n\t" + sqlc + "\n)\n", true},
+		{"unrelated tool", equal + "tool github.com/a-h/templ/cmd/templ\n", true},
+		{"unrelated exclude", equal + "exclude " + templ + "\n", true},
+		{"unknown block", equal + "unknown (\n\t" + templ + "\n)\n", true},
+		{"empty args", equal + "require\nreplace\n", true},
+		{"require no space", equal + "require(\n" + templ + "\n)\n", false},
+		{"replace no space", equal + "replace(\ngithub.com/a-h/templ => ../templ\n)\n", false},
+		{"one line replace", equal + "replace ( github.com/a-h/templ => ../templ )\n", false},
+		{"quoted replace", equal + "replace \"github.com/a-h/templ\" => ../templ\n", false},
+		{"backtick replace", equal + "replace `github.com/a-h/templ` => ../templ\n", false},
+		{"quoted require", equal + "require \"github.com/a-h/templ\" v0.3.1071\n", false},
+		{"backtick require", equal + "require `github.com/a-h/templ` v0.3.1071\n", false},
+		{"unterminated replace", equal + "replace (\nexample.com/other => ../other\n", false},
+		{"unterminated tool", equal + "tool (\ngithub.com/a-h/templ/cmd/templ\n", false},
+		{"replace header in block", equal + "require (\nreplace (\n)\n", false},
+		{"require header in block", equal + "replace (\nrequire (\n)\n", false},
+		{"nested header", equal + "tool (\nexclude (\n)\n", false},
+		{"close without block", equal + ")\n", false},
+		{"directive close in block", equal + "tool (\nrequire )\n)\n", false},
+		{"header extra space", equal + "tool  (\n)\n", false},
+		{"header tab", equal + "tool\t(\n)\n", false},
+		{"parenthesis in directive", equal + "tool( (\n)\n", false},
+		{"templ older", strings.ReplaceAll(equal, "v0.3.1070", "v0.3.1069"), false},
+		{"templ newer", strings.ReplaceAll(equal, "v0.3.1070", "v0.3.1071"), false},
+		{"sqlc older", strings.ReplaceAll(equal, "v1.31.1", "v1.31.0"), false},
+		{"sqlc newer", strings.ReplaceAll(equal, "v1.31.1", "v1.31.2"), false},
+		{"missing templ", "require " + sqlc + "\n// require " + templ, false},
+		{"missing sqlc", "require " + templ, false},
+		{"missing both", "", false},
+		{"duplicate", equal + "require " + templ, false},
+		{"block duplicate", equal + "require (\n" + sqlc + "\n)\n", false},
+		{"conflicting", equal + "require github.com/sqlc-dev/sqlc v1.31.2", false},
+		{"malformed", equal + "require github.com/a-h/templ", false},
+		{"missing file", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tree := containerFixture(t)
+			write(t, filepath.Join(tree, "tools/go.mod"), tc.data)
+			if tc.name == "missing file" {
+				if err := os.Remove(filepath.Join(tree, "tools/go.mod")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runs := 0
+			runner := fakeContainerRunner{func(_ context.Context, args, _ []string, _, _ io.Writer) (int, error) {
+				if !tc.valid {
+					t.Fatal("Docker ran after version refusal")
+				}
+				if args[0] == "run" {
+					runs++
+				}
+				return 0, nil
+			}}
+			_, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir())
+			if (err == nil) != tc.valid || tc.valid && runs != 1 || err != nil && !strings.Contains(err.Error(), "the verify image needs a rebuild") {
+				t.Fatalf("version check: runs %d, error %v", runs, err)
 			}
 		})
 	}
@@ -338,11 +459,13 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 		{"test", containerEvents("p", "TestOne", "pass"), "verified", 0},
 		{"test", containerEvents("p", "TestDB", "skip"), "NOT VERIFIED: 1 skipped\np/TestDB", 0},
 		{"test", containerEvents("p", "TestOne", "pass"), "FAILED", 137},
+		{"build", "", "FAILED", 1}, {"vet", "", "FAILED", 1}, {"test", "", "FAILED", 1}, // Generator failure: no Go output.
 	} {
 		t.Run(fmt.Sprintf("%s/%s/%d", tc.check, tc.verdict, tc.status), func(t *testing.T) {
 			tree := containerFixture(t)
-			runner := fakeContainerRunner{func(_ context.Context, args, _ []string, stdout, _ io.Writer) (int, error) {
+			runner := fakeContainerRunner{func(_ context.Context, args, _ []string, stdout, stderr io.Writer) (int, error) {
 				if args[0] == "run" {
+					_, _ = io.WriteString(stderr, "generator diagnostic")
 					_, _ = io.WriteString(stdout, tc.output)
 					return tc.status, nil
 				}
@@ -351,6 +474,10 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner, t.TempDir())
 			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
 				t.Fatalf("report %q, err %v", report, err)
+			}
+			if !strings.Contains(report, "Ran on regenerated sources (templ, sqlc, Tailwind); whether the committed generated files are current is checked by CI.") ||
+				!strings.Contains(report, "--- stdout\n"+tc.output+"\n--- stderr\ngenerator diagnostic") {
+				t.Fatalf("scope or stream separation: %q", report)
 			}
 		})
 	}
@@ -380,5 +507,8 @@ func TestContainerSourceCleanupFailure(t *testing.T) {
 	report, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "removing source copy") || !strings.HasPrefix(report, "FAILED: source cleanup failed\n") {
 		t.Fatalf("source cleanup failure: report %q, error %v", report, err)
+	}
+	if !strings.Contains(report, "build check result could not be confirmed.") || strings.Contains(report, "Ran on regenerated sources") {
+		t.Fatalf("cleanup must identify the check without claiming regeneration: %q", report)
 	}
 }

@@ -249,7 +249,7 @@ func (s *containerSweep) containers() {
 		if !c.owned() {
 			continue
 		}
-		if c.Config.Image != containerGoImage {
+		if c.Config.Image != containerVerifyImage {
 			s.unreclaimed("container", id)
 			continue
 		}
@@ -279,7 +279,7 @@ func (s *containerSweep) containers() {
 		if !again.owned() {
 			continue
 		}
-		if again.Config.Image != containerGoImage {
+		if again.Config.Image != containerVerifyImage {
 			s.unreclaimed("container", id)
 			continue
 		}

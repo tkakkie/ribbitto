@@ -56,7 +56,7 @@ func TestContainerCopySelection(t *testing.T) {
 		}
 		return nil
 	})
-	want := []string{".gitignore", "check.go", "go.mod", "monitor", "tracked", "untracked"}
+	want := []string{".gitignore", "check.go", "go.mod", "monitor", "tools/go.mod", "tracked", "untracked"}
 	if err != nil || !reflect.DeepEqual(names, want) {
 		t.Fatalf("copied %v, %v; want %v", names, err, want)
 	}

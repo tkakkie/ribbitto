@@ -20,10 +20,12 @@ import (
 )
 
 const (
-	// containerGoImage is official golang:1.27.3. Change this digest and
-	// containerGoVersion together so the copy cannot request another toolchain.
-	containerGoImage        = "golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261"
+	// The recipe pins the base; runs and sweeps pin the built image recorded on #1696.
+	containerBaseImage      = "golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261"
+	containerVerifyImage    = "sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1"
 	containerGoVersion      = "1.27.3"
+	containerTemplVersion   = "v0.3.1070"
+	containerSQLCVersion    = "v1.31.1"
 	containerTimeout        = 10 * time.Minute
 	containerCleanupTimeout = 20 * time.Second
 	containerMemory         = "2g"
@@ -41,8 +43,29 @@ const (
 	containerOwnerLabel  = "argonreview.owner"
 	containerOwnerValue  = "verify"
 	containerNamePattern = `^argonreview-check-[0-9a-f]{32}$`
-	containerScope       = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 )
+
+// A single-run container has a fresh /tmp. Copy dotfiles too, keeping /work read-only.
+// Generator stdout must not contaminate the test2json stream.
+const containerPrelude = `set -eu
+mkdir /tmp/work
+cp -R /work/. /tmp/work
+cd /tmp/work
+/usr/local/bin/templ generate >&2
+/usr/local/bin/sqlc generate >&2
+/usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify >&2
+exec go "$@"
+`
+
+func containerCheckScope(check string) string {
+	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
+	switch check {
+	case "build", "vet", "test":
+		return limits + " Ran on regenerated sources (templ, sqlc, Tailwind); whether the committed generated files are current is checked by CI."
+	default:
+		return limits
+	}
+}
 
 // Only local patterns are admitted; ... is allowed only as the final segment.
 var containerPattern = regexp.MustCompile(`^(\.|\./\.\.\.|\./[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]*)*(/\.\.\.)?)$`)
@@ -62,7 +85,7 @@ func validateContainerCheck(tree, check, pattern string) error {
 
 // Docker receives neither the caller's context/configuration nor credentials.
 // Only the conventional local socket is used; alternate daemons need a code
-// change. The public digest is preloaded; --pull=never keeps this path offline.
+// change. The pinned image is preloaded; --pull=never keeps this path offline.
 func dockerEnvironment() []string {
 	return []string{"PATH=" + containerPath, "HOME=/nonexistent", "DOCKER_CONFIG=/nonexistent", "DOCKER_HOST=unix:///var/run/docker.sock"}
 }
@@ -81,7 +104,7 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 		"--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
-		containerGoImage, "go", check}
+		containerVerifyImage, "sh", "-c", containerPrelude, "sh", check}
 	if check == "build" {
 		args = append(args, "-o", "/dev/null")
 	}
@@ -201,7 +224,7 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	}
 	defer func() {
 		if removeErr := os.RemoveAll(dir); removeErr != nil {
-			report = "FAILED: source cleanup failed\n" + containerScope + "\n"
+			report = fmt.Sprintf("FAILED: source cleanup failed\n%s check result could not be confirmed. %s\n", check, containerCheckScope(""))
 			err = errors.Join(err, fmt.Errorf("removing source copy: %w", removeErr))
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -223,6 +246,13 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 		return "", fmt.Errorf("reading copied go.mod: %w", err)
 	}
 	if err := checkContainerGoVersion(data); err != nil {
+		return "", err
+	}
+	data, err = os.ReadFile(filepath.Join(copyDir, "tools", "go.mod"))
+	if err != nil {
+		return "", fmt.Errorf("the verify image needs a rebuild: reading copied tools/go.mod: %w", err)
+	}
+	if err := checkContainerToolVersions(data); err != nil {
 		return "", err
 	}
 	if err := ctx.Err(); err != nil {
@@ -268,7 +298,67 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	if output.over {
 		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
 	}
-	return fmt.Sprintf("%s\n%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, containerScope, output.stdout.Bytes(), output.stderr.Bytes()), err
+	return fmt.Sprintf("%s\n%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, containerCheckScope(check), output.stdout.Bytes(), output.stderr.Bytes()), err
+}
+
+func checkContainerToolVersions(data []byte) error {
+	versions := map[string]string{"github.com/a-h/templ": containerTemplVersion, "github.com/sqlc-dev/sqlc": containerSQLCVersion}
+	seen := map[string]bool{}
+	open := ""
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line, _, _ = strings.Cut(line, "//")
+		line = strings.TrimSpace(line)
+		// Refuse syntax this deliberately small parser cannot interpret safely.
+		if strings.ContainsAny(line, "\"`") {
+			return errors.New("the verify image needs a rebuild: copied tools/go.mod has quoted syntax")
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if strings.ContainsAny(line, "()") {
+			switch {
+			case line == ")" && open != "":
+				open = ""
+				continue
+			case len(fields) == 2 && fields[1] == "(" && !strings.ContainsAny(fields[0], "()") && line == fields[0]+" (":
+				if open != "" {
+					return errors.New("the verify image needs a rebuild: copied tools/go.mod has a nested block")
+				}
+				open = fields[0]
+				continue
+			default:
+				return errors.New("the verify image needs a rebuild: copied tools/go.mod has unsupported parentheses")
+			}
+		}
+		directive, args := open, fields
+		if open == "" {
+			directive, args = fields[0], fields[1:]
+		}
+		if len(args) == 0 {
+			continue
+		}
+		switch directive {
+		case "replace":
+			if _, ok := versions[args[0]]; ok {
+				return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must not replace %s", args[0])
+			}
+		case "require":
+			if version, ok := versions[args[0]]; ok {
+				if seen[args[0]] || len(args) != 2 || args[1] != version {
+					return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must require exactly %s %s once", args[0], version)
+				}
+				seen[args[0]] = true
+			}
+		}
+	}
+	if open != "" {
+		return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod has an unterminated %s block", open)
+	}
+	if len(seen) != len(versions) {
+		return errors.New("the verify image needs a rebuild: copied tools/go.mod must require templ and sqlc")
+	}
+	return nil
 }
 
 func checkContainerGoVersion(data []byte) error {

@@ -193,9 +193,9 @@ func TestVerifyImageRecipe(t *testing.T) {
 		})
 	}
 	t.Run("real-file", func(t *testing.T) {
-		_, digest, _ := strings.Cut(containerGoImage, "@")
+		_, digest, _ := strings.Cut(containerBaseImage, "@")
 		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(digest) {
-			t.Fatal("containerGoImage has no full digest")
+			t.Fatal("containerBaseImage has no full digest")
 		}
 		download, err := os.ReadFile("../../tools/download/main.go")
 		if err != nil {

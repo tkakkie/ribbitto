@@ -3,7 +3,8 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-Generated files stay CI-only; verify generation needs a `process` issue.
+[Generator checks](argon-verify-image.md) are merged, not in
+force until #1700; `argonreview-7f607ca` and the old image still run.
 
 [Leftover sweep](argon-verify-sweep.md).
 
@@ -89,19 +90,17 @@ It uses an isolated, throwaway source copy, never the original:
   parent `.git`.
 - Use a read-only container root, dropped capabilities, no new privileges,
   an unprivileged user, tmpfs for `/tmp` and container `HOME`. Pin the
-  image by digest with the exact Go toolchain in the copy's `go.mod`;
-  refuse a mismatch. Modules are offline with a read-only module cache:
+  built image ID and exact Go, templ and sqlc versions; refuse mismatches.
+  Modules are offline with a read-only module cache:
   `GOPROXY=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly CGO_ENABLED=0`.
 - Time, memory (with equal swap limit), processes, CPU and output limits
   are constants in trusted code; no argument or environment changes them.
   Timeout, signal or abnormal exit removes container and copy; capped
   output is never verified.
 
-Checks are exactly `go build <pkg>`, `go vet <pkg>` or `go test -count=1
--json <pkg>` for named packages matching the code's strict allowlist
-pattern: no flags, spaces or `..` segment in the package argument, and no
-other flags. Output states no race detector or cgo runs there;
-cgo-dependent packages stay CI-only.
+After regeneration: `go build -o /dev/null <pkg>`, `go vet <pkg>` or
+`go test -count=1 -json <pkg>`. Packages admit no flags, spaces or `..` segments.
+Reports retain race, cgo and database/browser limits; CI checks generated files.
 
 ## Results
 

@@ -78,7 +78,7 @@ func containerCheckScope(check string) string {
 	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 	switch check {
 	case "test-db":
-		return "Race detector was not run. Cgo-dependent packages and browser tests are CI-only. Ran on regenerated sources with PostgreSQL 18; the generated check covers committed generated files. Measurement skips stay NOT VERIFIED until the allowlist lands in the next pull request of #1697. test-db is merged but not in force until #1700. Whether ./... fits the unchanged container limits is unestablished."
+		return "Race detector was not run. Cgo-dependent packages and browser tests are CI-only. Ran on regenerated sources with PostgreSQL 18 and the trusted measurement-skip allowlist; the generated check covers committed generated files. test-db is merged but not in force until #1700. Whether ./... fits the unchanged container limits is unestablished."
 	case "generated":
 		return "Checks templ, sqlc and Tailwind output against committed files, plus templ fmt and gofmt, in a copy. Report only: no write-back; nothing written to the worktree. tbls docs/schema, docs/dependencies.md, the API manifest, golangci-lint, docscheck, languagecheck, race detector, database and browser tests stay CI-only."
 	case "build", "vet", "test":
@@ -346,8 +346,11 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		return "", err
 	}
 	verdict := commandVerdict(code, err, output.over)
-	if check == "test" || check == "test-db" {
+	if check == "test" {
 		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)
+	}
+	if check == "test-db" {
+		verdict = testVerdictWithAllowlist(code, err, output.stdout.Bytes(), output.over, measurementSkips())
 	}
 	if check == "generated" {
 		verdict, stat, stdout := generatedVerdict(code, err, output.stdout.String(), output.over)

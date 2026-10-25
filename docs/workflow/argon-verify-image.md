@@ -46,8 +46,8 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   Exactly one fingerprint line is required: any other key fails the build.
 - Decision 42 says apt packages use exact versions. This recipe pins only
   the three packages it names; dependencies such as `postgresql-client-18`
-  and `libpq5` float. This reading of decision 42 awaits the maintainer's
-  confirmation. Rebuilds do not guarantee the same bytes; the host record's
+  and `libpq5` float. The maintainer confirmed this reading of decision 42 on 2026-10-26
+  (#1697). Rebuilds do not guarantee the same bytes; the host record's
   image ID identifies the build. If `postgresql-common` or `postgresql-18`
   leaves its repository, the build fails loudly until a pull request updates
   the pin. The `ca-certificates` pin matches the base image's installed version

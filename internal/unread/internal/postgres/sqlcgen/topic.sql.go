@@ -144,7 +144,7 @@ func (q *Queries) InsertTopicReadFloor(ctx context.Context, arg InsertTopicReadF
 
 const raiseTopicReadFloor = `-- name: RaiseTopicReadFloor :exec
 UPDATE topic_read_floor SET floor_seq = $5
-WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3 AND topic_id = $4
+WHERE organization_id = $1 AND channel_id = $2 AND $3::uuid IS NOT NULL AND topic_id = $4
   AND floor_seq < $5
 `
 

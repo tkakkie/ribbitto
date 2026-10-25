@@ -78,7 +78,7 @@
     const draftPlace = (match, entry) => valid(entry) && entry.text.trim() ? match.slice(3) : null;
     const marked = (places, channel, topic, open) => !open && places.has(topic === "feed" ? channel : channel + ":" + topic);
     const sessionExpired = () => {
-      if (!expired && (performance.now() >= deadline || Date.now() >= expires)) {
+      if (!expired && (performance.now() >= deadline || Date.now() > expires)) {
         // Latch before stop refreshes markers: clock rollback must not resume saving.
         expired = true;
         stop();

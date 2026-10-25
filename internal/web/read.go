@@ -76,7 +76,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 // readForm preserves body-only values; query keys cannot override the page's form.
 // Numeric bounds belong to unread, shared by every caller.
 func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) {
-	for _, key := range []string{"cursor", "from", "through", "scope"} {
+	for _, key := range []string{"from", "through", "scope"} {
 		if len(r.Form[key]) > 1 {
 			return
 		}

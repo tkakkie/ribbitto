@@ -8,7 +8,7 @@ import (
 
 func TestVerifyArguments(t *testing.T) {
 	for _, raw := range []string{
-		`{"check":"test","package":"./..."}`, `{"check":"build","package":"."}`,
+		`{"check":"generated","package":"./..."}`, `{"check":"test","package":"./..."}`, `{"check":"build","package":"."}`,
 		`{"check":"vet","package":"./cmd/argonreview"}`, `{"check":"test","package":"./internal/web/..."}`,
 		`{"check":"te\u0073t","pack\u0061ge":"./..."}`,
 		`{"check":"test","package":"./` + strings.Repeat("a", 198) + `"}`,
@@ -18,7 +18,7 @@ func TestVerifyArguments(t *testing.T) {
 		}
 	}
 	for _, raw := range []string{
-		`null`, `[]`, `"object"`, `{}`, `{"check":"test"}`, `{"package":"."}`,
+		`{"check":"generated","package":"./internal/web"}`, `{"check":"generated","package":"."}`, `{"check":"generated","package":"-x"}`, `null`, `[]`, `"object"`, `{}`, `{"check":"test"}`, `{"package":"."}`,
 		`{"check":null,"package":"."}`, `{"check":1,"package":"."}`, `{"check":true,"package":"."}`,
 		`{"check":[],"package":"."}`, `{"check":{},"package":"."}`,
 		`{"check":"test","package":null}`, `{"check":"test","package":1}`, `{"check":"test","package":true}`,
@@ -84,16 +84,16 @@ func TestVerifySchema(t *testing.T) {
 		t.Fatal("required arguments changed")
 	}
 	checks := got.Properties[verifyCheckProperty]
-	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test" {
+	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test,generated" {
 		t.Fatalf("checks: %+v", checks)
 	}
 	for _, check := range checks.Enum {
-		if err := validateContainerCheck("tree", check, "."); err != nil {
+		if err := validateContainerCheck("tree", check, "./..."); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, check := range []string{"bench", "shell", "-x", ""} {
-		if validateContainerCheck("tree", check, ".") == nil {
+		if validateContainerCheck("tree", check, "./...") == nil {
 			t.Fatal("runner accepts an unlisted check")
 		}
 	}

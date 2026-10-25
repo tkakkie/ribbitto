@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-The recipe, regeneration prelude and image pin (#1696) are merged but
+The recipe, build/vet/test regeneration and `generated` check (#1696) are merged but
 **not in force until #1700**.
 Production workers still run the pinned launcher `argonreview-7f607ca`
 and the old image; merging changes nothing in production.
@@ -57,8 +57,8 @@ and package pattern are separate positional arguments. `/work` stays read-only.
 The container is single-run with a fresh tmpfs, so a fixed directory suffices.
 Existing 1 GiB tmpfs limits stay; real Docker capacity validation is for #1700.
 
-Reports say sources were regenerated; CI still checks whether committed
-generated files are current. No `generated` check yet (#1696).
+Reports say sources were regenerated; the `generated` check covers whether
+committed generated files are current. CI remains the check.
 Race, cgo and database/browser limits remain. sqlc configuration can invoke
 process plugins inside the container, as tests can already execute code there.
 
@@ -103,3 +103,53 @@ the host build still needs the maintainer's chat approval.
 A templ or sqlc version bump in `tools/go.mod` refuses every verify run until
 `containerTemplVersion`/`containerSQLCVersion` and the image pin change together
 in the same pull request.
+
+## Generated check
+
+`generated` requires package exactly `./...`; other patterns are refused
+before Docker. It has a separate fixed script with no caller arguments.
+Shared copy and generator command constants preserve build/vet/test's prelude.
+After copying and the three generators, it runs `templ fmt -fail .`, captures
+`gofmt -l .`, then compares `diff -ru /work /tmp/work`. Generator and formatter
+diagnostics go to stderr; stdout carries gofmt names or the diff.
+All writes stay in the container copy: report only, no write-back, nothing
+written to the worktree.
+
+| Status | Result |
+|---|---|
+| 0, empty stdout, no runner error/cap | `verified` |
+| 21 | `FAILED: generation failed` |
+| 22 (templ), 23 (gofmt names) | `FAILED: formatting` |
+| 25 | `FAILED: generated files differ` |
+| 24 (gofmt error), 26 (diff error), other | `FAILED`, with status |
+
+A timeout or runner error fails; the output cap overrides with
+`NOT VERIFIED: output limit exceeded (output cut off)`. Status 0 with stdout
+also fails. A missing or unparseable diff at status 25 never verifies.
+
+Trusted Go code validates complete GNU unified hunks and computes the stat:
+path and added/removed counts, new/only-in-worktree entries, or binary entries.
+It lists at most 100 paths (each path text at most 200 bytes), then the count
+and line totals over all paths, with an omitted-path count. Malformed streams
+lose the whole stat and report that the diff was not understood.
+The stat precedes scope, stdout and stderr, so the MCP 48 KiB tail cap keeps
+it. The diff excerpt has a 16 KiB budget plus a cut notice; lines over 400
+bytes are cut at rune boundaries with a visible marker. Gofmt lists at most
+50 names, each at most 200 bytes, then the omitted count.
+
+CI runs `make generate` and `make css` in a full checkout and refuses any
+`git status --porcelain` output, including untracked new files. The container
+compares only the selected source copy: Git metadata, protected names and
+ignored untracked files are absent. A newly generated file appears as
+`Only in /tmp/work`; a new directory is one entry, since recursive diff does
+not descend into directories present on only one side. The image pins
+Tailwind; the runner does not detect Tailwind version drift in the copy.
+
+Formatting runs in this check; CI runs `tools/formatcheck` in `check-static`.
+That tool enumerates files except root `bin/`, compares templ stdout without
+rewriting, and also checks internal package `doc.go` presence. Recursive
+formatter traversal here can differ (including hidden directories), and does
+not check package documentation. tbls schema docs, dependency docs, the API
+manifest, golangci-lint, docscheck, languagecheck, race detector, database and
+browser tests remain CI-only. The real Docker/dash/generator path still needs
+#1700 preflight before these merged checks enter force.

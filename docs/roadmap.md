@@ -5,7 +5,7 @@ in the pinned **Status** issue (#1); tasks are issues grouped by GitHub
 milestone.
 
 Update this file when a milestone finishes or the plan changes, not for
-day-to-day progress. What the steps aim at is in the [vision](vision.md).
+day-to-day progress. The steps' aims are in the [vision](vision.md).
 
 ## MVP
 
@@ -143,13 +143,13 @@ why and what changes, never by quietly breaking an old one. Roughly in this orde
 2. **Two tracks in parallel.** The composer track (M7) never blocks the basics.
    - *Basics:* private channels → direct messages → email (Mailer →
      password reset → email verification) → invitations (#128).
-   - *Composer (M7, in review):* reliable sending (no duplicate posts, the text kept when
+   - *Composer:* M7 is done (review #1163): reliable sending (no duplicate posts, the text kept when
      sending fails, the sending state and the post shown before the
      server answers) → an input that grows and a send-key setting →
      mentions (#117, #1310–#1313) → links to one message → quoting, including a
      selection → device drafts (#1162; #88 cross-device).
-   - *[M9](roadmap-m9.md) (after M7):* starts with its foundation (phases 1–5)
-     after M7 and runs alongside *Basics*; neither M9 as a whole nor its UX
+   - *[M9](roadmap-m9.md) (alongside Basics):* follows M7, starting with its
+     foundation (phases 1–5); neither M9 as a whole nor its UX
      blocks *Basics* ([position](roadmap-m9.md#position-in-the-roadmap)).
 3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
    (#880; rules agreed, implementation after M6), reply chains

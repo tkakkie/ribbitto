@@ -45,6 +45,9 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	}
 	cursor, from, through, shown, valid := readForm(r)
 	if !valid {
+		if c, perr := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64); perr == nil {
+			_ = p.reading.Feed(r.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: id, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, c)
+		}
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}

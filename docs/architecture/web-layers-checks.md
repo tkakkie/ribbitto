@@ -21,16 +21,14 @@ are not swap selectors. The sibling typing form is checked for its POST
 route, action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
 
-The data attributes in the [DOM contract][c] are asserted on the elements that
-own them, where they are produced (#351): `TestMessagePagingHandler` on full
-pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
+Tests assert [DOM contract][c] attributes on their owning elements (#351):
+`TestMessagePagingHandler` on full pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
 pages (`data-topic`), `TestMessageRendererSharesRenders` on the `message`
 and `messages-moved` stream payloads, and `TestPagesCarryOwnSession` on the
 session marker of both organisation pages.
 
-`TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
-and `LiveMessageItem` alone in both languages and applies the fragment
-markup rules.
+`TestComponentsMarkup` applies fragment markup rules to `SignOutButton`,
+`MemberName`, `MessageItem` and `LiveMessageItem` alone in both languages.
 `TestPagesMarkup` also checks the composer fragments returned by handlers.
 
 `TestPagesMarkup` checks plain fallbacks (`fallback_test.go`): matching URL/method,
@@ -53,10 +51,9 @@ decision); a script owns no application state beyond decisions 34 and 37;
 composer request URLs come from server-rendered attributes; components make
 no authorisation decisions.
 
-**Current exceptions:** review the no-application-state
-rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
-for one script's sidebar badge numbers and bounded recovery state. It never
-creates elements or makes requests. Review composer code with
+**Current exceptions:** [decision 34](../decisions/34-live-unread-counts.md)
+allows one script's sidebar badge numbers and bounded recovery state, never
+creating elements or making requests. Review composer code with
 [decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)'s allowances: pending own posts, the idempotency key and
 session-bound drafts, with their bounds and owner checks.
 
@@ -73,8 +70,11 @@ keep newer/same-millisecond entries unread; later sessions/members remove earlie
 ones; malformed values/expired own sessions removed. `TestDraftComposerPlace`:
 latest/history attributes.
 `TestBrowser/drafts-save`: debounce, edit times, lifecycle/IME, tombstones, bounds,
-cap ties, trim/scope, overlap recovery, expiry,
-errors/swaps. Markers order reads.
+cap ties, trim/scope, overlap recovery, expiry, errors/swaps. Markers order reads.
+`expiry-clock/{save,edit,restore,timer,markers}`: device-only expiry removes both
+own places, preserves foreign sessions/members, text and sending dispatch;
+`normal`, `monotonic`, `boundary`: saving/restore/markers, monotonic-only expiry,
+expiry-1/exact expiry. Scripted timers.
 Restore: navigation, IME/pagehide, 422, ended sessions, no input/typing/focus,
 own-key guards, future edits/deletions. Held sends: outcomes, edits, queues, busy drops,
 forced 409 swaps; rotated-key Retry/Remove after Edit/resend, success/failure;
@@ -84,8 +84,8 @@ queued success, tombstones, backspacing, newer text.
 
 ### Shared browser tests
 
-`TestBrowser` scenarios are registered in `registerBrowserScenarios` in
-`internal/web/message_stream_browser_test.go`.
+`registerBrowserScenarios` in `internal/web/message_stream_browser_test.go`
+registers `TestBrowser` scenarios.
 `RIBBITTO_BROWSER_SHARD=k/n` runs one local shard; if shell-exported,
 `make check` silently runs a subset.
 Stream cases run the embedded `message-stream-v14.js`, vendored htmx and SSE extension
@@ -132,10 +132,9 @@ direct `web/static/*.js` file, regardless of its name or version; it does
 not descend into subdirectories such as `vendor/`. Names must end in
 `-vN.js`, where N is one or more decimal digits.
 
-The check matches source patterns on each line after masking `//` and
-`/* ... */` comments and single-, double- and backtick-quoted contents
-(including escapes). Quote delimiters remain visible for string timers.
-It rejects:
+The check masks `//` and `/* ... */` comments and single/double/backtick-quoted
+contents (including escapes), then matches patterns per line. Quote delimiters
+stay visible for string timers. It rejects:
 
 - `innerHTML`/`outerHTML` assignments, including compound assignments such
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
@@ -151,20 +150,18 @@ It rejects:
   or decrements on `window`/`globalThis`. No particular file structure is
   required; multiple IIFEs and scoped event handlers pass.
 
-This is a bounded pattern check, not a JavaScript parser. It does not
-resolve aliases, computed properties, expressions split across lines or
-template interpolations. Regular-expression literals are not recognized;
-their contents can be mistaken for code, comments or delimiters. Delimiter
-depth is not scope analysis: block-level `var`, implicit globals and other
-indirect writes can escape it, while some named function expressions can
-look like declarations. Reviewers check these cases, all HTML writes and
-globals by hand. Stored values need the review described above.
+This bounded pattern check is no JavaScript parser: it cannot resolve aliases,
+computed properties, multiline expressions or template interpolations. It may
+mistake regular-expression literals for code, comments or delimiters. Delimiter
+depth cannot determine scope: block-level `var`, implicit globals and indirect
+writes may escape; named function expressions may look like declarations.
+Reviewers check these cases, all HTML writes and globals by hand, and review
+stored values as above.
 
 ## Audit, 2026-10-01 (M3)
 
-Every HTML handler in `internal/web`, every templ component and every
-application script in `web/static` was read against these rules, first on
-2026-09-30 and again after M3 (#163).
+Every `internal/web` HTML handler, templ component and `web/static` application
+script was read against these rules on 2026-09-30 and after M3 (#163).
 
 | Where | Finding | Fixed by |
 |---|---|---|

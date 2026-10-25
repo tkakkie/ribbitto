@@ -58,11 +58,11 @@
       try { return valid(JSON.parse(value)); } catch { return false; }
     });
     // The deadline counts from this document's time origin, which precedes
-    // the render, so it never comes after the session's expiry; the device
-    // clock cannot move performance.now(). setTimeout's delay is capped at
-    // 2^31 - 1 ms, under a session's 30 days, so long waits are chained.
+    // the render. Some platforms pause it during sleep, so also use the device
+    // clock; an ahead clock may end saving early (decision 37 (d), #1798).
+    // setTimeout caps delays at 2^31 - 1 ms, so long waits are chained.
     const deadline = expires - rendered;
-    let stopped = false, timer, dirty = false, composing = false, at = 0, text = "";
+    let stopped = false, expired = false, timer, dirty = false, composing = false, at = 0, text = "";
     let lastWrite, source, sending, savedKey = null;
     const stop = () => { stopped = true; dirty = false; clearTimeout(timer); markers(); };
     const read = (key) => {
@@ -77,10 +77,25 @@
     const own = (match) => match?.[1] === member && match[2] === session;
     const draftPlace = (match, entry) => valid(entry) && entry.text.trim() ? match.slice(3) : null;
     const marked = (places, channel, topic, open) => !open && places.has(topic === "feed" ? channel : channel + ":" + topic);
+    const sessionExpired = () => {
+      if (!expired && (performance.now() >= deadline || Date.now() >= expires)) {
+        // Latch before stop refreshes markers: clock rollback must not resume saving.
+        expired = true;
+        stop();
+        try {
+          for (const key of Object.keys(storage)) {
+            if (draft.exec(key)?.[2] === session) storage.removeItem(key);
+          }
+        } catch {
+          // Storage became unavailable; a later page's cleanup removes these.
+        }
+      }
+      return expired;
+    };
     const markers = (root = document.getElementById("sidebar-channels")) => {
       if (!root) return;
       const places = new Set();
-      if (!stopped && performance.now() < deadline) {
+      if (!sessionExpired() && !stopped) {
         try {
           for (const k of Object.keys(storage)) {
             const match = draft.exec(k);
@@ -116,8 +131,7 @@
     };
     const save = (atSend = false) => {
       clearTimeout(timer);
-      if (performance.now() >= deadline) stop();
-      if (stopped || (composing && atSend !== true) || !dirty) return;
+      if (sessionExpired() || stopped || (composing && atSend !== true) || !dirty) return;
       dirty = false;
       try {
         // Best effort: another tab may write between this read and setItem,
@@ -133,8 +147,7 @@
       }
     };
     const edited = () => {
-      if (stopped) return;
-      if (performance.now() >= deadline) { stop(); return; }
+      if (sessionExpired() || stopped) return;
       // Snapshot the input, not a later save or a send's textarea cleanup.
       source = null;
       savedKey = null;
@@ -148,7 +161,7 @@
     if (body && form?.hasAttribute("hx-post") && draft.test(key)) {
       // Another tab may have written since the sweep; check this read too.
       const entry = read(key);
-      if (performance.now() < deadline) {
+      if (!sessionExpired()) {
         if (body.value) { at = typeof entry?.at === "number" ? entry.at : 0; edited(); save(); }
         else if (valid(entry)) {
           at = entry.at;
@@ -210,19 +223,7 @@
       else if (event.key === null || event.key.startsWith(prefix)) markers();
     });
     const expire = () => {
-      const left = deadline - performance.now();
-      if (left > 0) {
-        setTimeout(expire, Math.min(left, 2 ** 31 - 1));
-        return;
-      }
-      stop();
-      try {
-        for (const key of Object.keys(storage)) {
-          if (draft.exec(key)?.[2] === session) storage.removeItem(key);
-        }
-      } catch {
-        // Storage became unavailable; a later page's cleanup removes these.
-      }
+      if (!sessionExpired()) setTimeout(expire, Math.min(deadline - performance.now(), 2 ** 31 - 1));
     };
     expire();
   } catch {

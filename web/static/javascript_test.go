@@ -3,6 +3,7 @@ package static_test
 import (
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,9 +19,18 @@ func TestApplicationJavaScript(t *testing.T) {
 	if len(names) == 0 {
 		t.Fatal("no application JavaScript found")
 	}
+	typescript, err := filepath.Glob("../src/*.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range typescript {
+		if !strings.HasSuffix(name, ".d.ts") {
+			names = append(names, name)
+		}
+	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
-			source, err := fs.ReadFile(files, name)
+			source, err := os.ReadFile(name)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -40,7 +50,7 @@ type javascriptFinding struct {
 // Keep its bounds and examples in sync with the web-layers documentation.
 func checkJavaScript(name, source string) []javascriptFinding {
 	var findings []javascriptFinding
-	if !regexp.MustCompile(`^.+-v[0-9]+\.js$`).MatchString(name) {
+	if !strings.HasSuffix(name, ".ts") && !regexp.MustCompile(`^.+-v[0-9]+\.js$`).MatchString(name) {
 		findings = append(findings, javascriptFinding{1, "versioned filename"})
 	}
 	assignment := `(?:=(?:[^=]|$)|(?:\+|-|\*\*?|/|%|<<|>>|>>>|&|\||\^|&&|\|\||\?\?)=)`
@@ -199,6 +209,9 @@ func TestJavaScriptPatterns(t *testing.T) {
 			got := checkJavaScript("example-v1.js", "/* heading\n */\n"+tt.source)
 			if len(got) != 1 || got[0] != (javascriptFinding{3, tt.rule}) {
 				t.Fatalf("got %v, want line 3: %s", got, tt.rule)
+			}
+			if got := checkJavaScript("../src/example.ts", "/* heading\n */\n"+tt.source); len(got) != 1 || got[0] != (javascriptFinding{3, tt.rule}) {
+				t.Fatalf("TypeScript: got %v, want line 3: %s", got, tt.rule)
 			}
 			// Every prohibited pattern is harmless when mentioned as text.
 			for _, text := range []string{

@@ -2,6 +2,7 @@
 /bin/
 /ribbitto
 /dist/
+/web/static/dist/
 /node_modules/
 
 # Local configuration and secrets

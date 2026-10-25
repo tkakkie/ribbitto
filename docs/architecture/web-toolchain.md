@@ -31,27 +31,27 @@ decision 42 and the table; .mjs remains deferred to #1412.
 
 ## Build, manifest and embedding — #1411
 
-**Naming — confirmed:** esbuild `[name]-[hash].js` per bundle. Hashes/manifest
-are decided. Minify. A Go registry declares page entries; templ uses logical
-names. Load converted bundles without their old script; unchanged scripts keep
-their tags and `-vN` names.
+`make bundles` runs `tools/webbuild` through esbuild's Go API, pinned only in
+the tools module. Each named `web/src/<name>.ts` entry becomes a minified
+classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
+dynamic imports. The explicit ES2017 syntax target is conservative for the
+latest-two supported browsers and iOS generations, agreeing with
+[browser target rule 4](browser-targets.md#design-rules); it adds no Web API
+polyfills and does not constitute browser verification.
 
-The manifest records logical entries, bundle/map filenames and commit SHA.
-Embed bundles and runtime manifest, never maps. Reject missing/unknown entries,
-missing bundles, unexpected output and paths outside the output tree; prove
-referenced bundles are embedded and named by the pinned builder. Missing
-generation must fail compilation through
-an explicit dist embed or required generated manifest, even if other static
-files exist. CI generates into clean output and packages that exact result;
-dist is not committed.
+The builder validates esbuild's metafile and produced files, writes
+`manifest.json` last, then replaces the whole ignored `web/static/dist`
+directory. Logical entries record bundle filenames and SHA-256 content hashes;
+commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
+locally to a UTC timestamp. Production output has no maps or source-map links.
 
-Make, CI, Docker and release entry points must document/run Go generation
-before compilation. Prove generation/embedding work without Node in PATH;
-update build instructions, including fresh-clone generation.
-
-**Development serving — confirmed:** rebuild edits; serve matching disk
-bundles/manifest with `no-store`, without rebuilding the binary. Use per-bundle
-hashes, no whole-graph prefix.
+The first entry is `web/src/message-time.ts`. Its legacy versioned script
+remains unchanged and loaded. Output is neither embedded nor served: #1820
+adds the registry, templ selection, embedding, serving, browser verification
+and generation before compilation in Make, CI, Docker and releases, including
+fresh-clone instructions and failure on missing generation. #1821 adds rebuilds,
+disk serving with `no-store` and development maps. #1819 adds private production
+maps and their separate index; map names never belong in the runtime manifest.
 
 ## Versions and installation — #1410, #1415
 

@@ -176,10 +176,28 @@ func TestReadPost(t *testing.T) {
 		} {
 			t.Run(base+"/"+tc.name, func(t *testing.T) {
 				form, _ := url.ParseQuery(tc.form)
-				if w := request("POST", base+"/read"+tc.suffix, token, "", form, false); w.Code != 400 {
-					t.Fatalf("status=%d", w.Code)
+				// The fixed body keeps internal error text (the wrapped
+				// ErrInvalidCursor reason, the offending value) off the wire.
+				if w := request("POST", base+"/read"+tc.suffix, token, "", form, false); w.Code != 400 || w.Body.String() != "Bad Request\n" {
+					t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
 				}
 			})
+		}
+		// Specification 5.2: an unresolvable place answers 404 before the form
+		// is judged, so a refused form must not reveal that the place exists.
+		for _, place := range []struct{ name, path string }{
+			{"unseen channel", view.ChannelURL("read", foreign.Channel.ID)},
+			{"other channel topic", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID)},
+			{"unknown topic", view.ConversationURL("read", f.Channel.ID, &kernel.ID{})},
+		} {
+			for _, bad := range []string{"cursor=x", "cursor=5&from=2", "cursor=5&through=2", "cursor=5&from=x&through=3", "cursor=5&scope=x", "from=2&through=3"} {
+				t.Run(base+"/404 before 400/"+place.name+"/"+bad, func(t *testing.T) {
+					form, _ := url.ParseQuery(bad)
+					if w := request("POST", place.path+"/read", token, "", form, false); w.Code != 404 {
+						t.Fatalf("status=%d want 404", w.Code)
+					}
+				})
+			}
 		}
 		for _, form := range []string{"cursor=5&from=2&through=3", "cursor=5&scope=all"} {
 			values, _ := url.ParseQuery(form)

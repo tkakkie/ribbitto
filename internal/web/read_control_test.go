@@ -169,3 +169,44 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 		}
 	}
 }
+
+// The Japanese label is pinned like the English one, on the header control and
+// on the overview's copy of it, so a reverted or half-updated translation fails.
+func TestReadControlJapaneseLabel(t *testing.T) {
+	for _, topic := range []bool{false, true} {
+		visit := &readControlVisit{fakeMessages: populatedMessages(), feed: 7, topic: 8}
+		h, _ := newLimitedHandler(t, asAlice, func(s *Services) { s.Messages, s.Reading = visit, visit })
+		path := view.ChannelURL("acme", kernel.ID{1})
+		if topic {
+			path = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{5})
+		}
+		for _, tc := range []struct {
+			panel   string
+			buttons int
+		}{{"", 1}, {"/overview", 2}} {
+			r := httptest.NewRequest("GET", path+tc.panel, nil)
+			r.Header.Set("Accept-Language", "ja")
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			doc, err := html.Parse(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var labels []string
+			for n := range doc.Descendants() {
+				if n.Type == html.ElementNode && n.Data == "button" && (attr(n, "form") == "read-form" || n.Parent != nil && attr(n.Parent, "id") == "read-form") {
+					labels = append(labels, strings.TrimSpace(text(n)))
+				}
+			}
+			if w.Code != 200 || len(labels) != tc.buttons {
+				t.Fatalf("topic=%t %q: status %d, labels %q", topic, tc.panel, w.Code, labels)
+			}
+			for _, label := range labels {
+				if label != "すべて既読にする" {
+					t.Fatalf("topic=%t %q: ja label %q", topic, tc.panel, label)
+				}
+			}
+		}
+	}
+}

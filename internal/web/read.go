@@ -24,13 +24,6 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.NotFound(w, r)
 		return
 	}
-	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
-	if !admitted {
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
-		return
-	}
-	defer release()
 	id, ok := channelID(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -40,6 +33,13 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	if !ok {
 		return
 	}
+	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
+	if !admitted {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+	defer release()
 	if !parseForm(w, r) {
 		return
 	}

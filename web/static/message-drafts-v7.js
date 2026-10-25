@@ -161,7 +161,7 @@
     if (body && form?.hasAttribute("hx-post") && draft.test(key)) {
       // Another tab may have written since the sweep; check this read too.
       const entry = read(key);
-      if (!sessionExpired()) {
+      if (true) {
         if (body.value) { at = typeof entry?.at === "number" ? entry.at : 0; edited(); save(); }
         else if (valid(entry)) {
           at = entry.at;

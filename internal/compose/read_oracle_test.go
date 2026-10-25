@@ -44,6 +44,8 @@ func readOracleKinds() []readOracleKind {
 		{"refused topic post", "post", "topic", true},
 		{"shown feed", "shown", "feed", false},
 		{"refused shown feed", "shown", "feed", true},
+		{"shown topic", "shown", "topic", false},
+		{"refused shown topic", "shown", "topic", true},
 	}
 }
 
@@ -136,7 +138,7 @@ func readOracleModel(kind readOracleKind, before []readOracleMessage, set map[in
 		return
 	}
 	for _, message := range before {
-		if kind.action == "shown" && from <= message.seq && message.seq <= through {
+		if kind.action == "shown" && from <= message.seq && message.seq <= through && (kind.scope == "feed" || (message.topic == topic && message.moved <= cursor)) {
 			set[message.seq] = true
 		}
 		if kind.action == "read" && message.seq <= cursor && (kind.scope == "feed" || (kind.scope == "topic" && message.topic == topic && message.moved <= cursor)) {
@@ -157,7 +159,12 @@ func (h readOracleFixture) apply(t *testing.T, step readOracleStep, kind readOra
 	var err error
 	switch kind.action {
 	case "shown":
-		err = unreadpg.NewReading(h.pool, compose.NewFeedWriter(), nil, nil).FeedShown(t.Context(), scope, member.Member.JoinedEventSeq, step.cursor, step.from, step.through)
+		reading := unreadpg.NewReading(h.pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil)
+		if kind.scope == "feed" {
+			err = reading.FeedShown(t.Context(), scope, member.Member.JoinedEventSeq, step.cursor, step.from, step.through)
+		} else {
+			err = reading.TopicShown(t.Context(), unread.TopicScope{Scope: scope, TopicID: topic}, member.Member.JoinedEventSeq, step.cursor, step.from, step.through)
+		}
 	case "read":
 		reading := unreadpg.NewReading(h.pool, compose.NewFeedWriter(), compose.NewTopicWriter(), nil)
 		if kind.scope == "feed" {
@@ -340,6 +347,12 @@ func TestReadOracle(t *testing.T) {
 				readOracleStep{kind: kind("feed"), member: 2, channel: 0, topic: 0, cursor: 0},
 				readOracleStep{kind: kind("post without cursor"), member: 3, channel: 1, topic: 0},
 			)
+			// The existing move of 8 into topic 1 is after cursor 662, before 668.
+			steps = append(steps,
+				readOracleStep{kind: kind("shown topic"), member: 2, topic: 1, cursor: 662, from: 7, through: 10},
+				readOracleStep{kind: kind("shown topic"), member: 2, topic: 1, cursor: 668, from: 7, through: 10},
+			)
+			topicRuns := 0
 			isolated := readOracleRows(t, h.pool, &h.other, true)
 			for index := range 150 {
 				var committed int64
@@ -357,14 +370,20 @@ func TestReadOracle(t *testing.T) {
 						step.cursor = []int64{committed + 1, -1, math.MaxInt64}[rng.Intn(3)]
 					}
 				}
-				if kinds[step.kind].action == "shown" {
-					// Every valid random run has T < S and F above the oldest
-					// message (2 or 6), exceeding the required half without new checks.
+				if kinds[step.kind].action == "shown" && step.from == 0 {
+					// Three of four topic draws keep T < S and F above the oldest;
+					// the fourth draws both T = S and lo = 0 (F below every message).
 					if !kinds[step.kind].refused {
 						step.cursor = 9 + rng.Int63n(committed-8)
 					}
 					step.through = 8 + rng.Int63n(max(1, step.cursor-8))
 					step.from = 7 + rng.Int63n(step.through-6)
+					if kinds[step.kind].scope == "topic" && !kinds[step.kind].refused {
+						topicRuns++
+						if topicRuns%4 == 0 {
+							step.from, step.through = 1, step.cursor
+						}
+					}
 				}
 				if !t.Run(fmt.Sprintf("step%03d/%s", index, kinds[step.kind].name), func(t *testing.T) {
 					t.Logf("seed=%d history=%d step=%d action=%+v", seed, history, index, step)

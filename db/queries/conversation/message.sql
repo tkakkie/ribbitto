@@ -66,9 +66,29 @@ WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(
   AND (m.event_seq > sqlc.arg(floor)::bigint
        OR (m.event_seq <= sqlc.arg(floor)::bigint AND m.moved_event_seq > sqlc.arg(floor)::bigint))
   AND m.event_seq <= sqlc.arg(cursor)::bigint
+  AND sqlc.arg(run_from)::bigint <= m.event_seq AND m.event_seq <= sqlc.arg(run_through)::bigint
   AND (m.moved_event_seq IS NULL OR m.moved_event_seq <= sqlc.arg(cursor)::bigint)
   AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
 ORDER BY m.event_seq;
+
+-- name: TopicRunFloor :one
+-- least ignores NULLs, so no blocker returns run_end.
+SELECT least(sqlc.arg(run_end)::bigint,
+  (SELECT m.event_seq FROM message m
+   WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id)
+     AND m.topic_id = sqlc.arg(topic_id)
+     AND m.event_seq > sqlc.arg(prefix_before)::bigint AND m.event_seq > sqlc.arg(floor)::bigint
+     AND m.event_seq < sqlc.arg(run_from)::bigint
+     AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+   ORDER BY m.event_seq LIMIT 1),
+  (SELECT m.moved_event_seq FROM message m
+   WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id)
+     AND m.topic_id = sqlc.arg(topic_id)
+     AND m.event_seq > sqlc.arg(prefix_before)::bigint
+     AND m.event_seq <= sqlc.arg(floor)::bigint AND m.moved_event_seq > sqlc.arg(floor)::bigint
+     AND m.event_seq < sqlc.arg(run_from)::bigint
+     AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+   ORDER BY m.moved_event_seq LIMIT 1))::bigint AS blocking;
 
 -- name: ChannelHasMessages :one
 SELECT EXISTS (SELECT 1 FROM message

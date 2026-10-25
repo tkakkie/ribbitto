@@ -117,6 +117,7 @@ func TestFeedReadShownNotMessageAligned(t *testing.T) {
 }
 
 func TestShownReadStatements(t *testing.T) {
+	t.Run("topic", testTopicShownStatements)
 	for _, tc := range []struct {
 		name                         string
 		joined, first, cursor, floor int64

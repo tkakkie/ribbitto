@@ -152,6 +152,7 @@ func TestPostingRead(t *testing.T) {
 }
 
 func TestReadBoundsScope(t *testing.T) {
+	testTopicReadBoundsScope(t)
 	for _, predicate := range []string{"organization", "channel", "member"} {
 		t.Run("feed/"+predicate, func(t *testing.T) {
 			h := newReadOracle(t)

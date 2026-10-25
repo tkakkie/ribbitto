@@ -416,6 +416,53 @@ func (q *Queries) LocateMessage(ctx context.Context, arg LocateMessageParams) (L
 	return i, err
 }
 
+const topicRunFloor = `-- name: TopicRunFloor :one
+SELECT least($1::bigint,
+  (SELECT m.event_seq FROM message m
+   WHERE m.organization_id = $2 AND m.channel_id = $3
+     AND m.topic_id = $4
+     AND m.event_seq > $5::bigint AND m.event_seq > $6::bigint
+     AND m.event_seq < $7::bigint
+     AND NOT ($8::int8multirange @> m.event_seq)
+   ORDER BY m.event_seq LIMIT 1),
+  (SELECT m.moved_event_seq FROM message m
+   WHERE m.organization_id = $2 AND m.channel_id = $3
+     AND m.topic_id = $4
+     AND m.event_seq > $5::bigint
+     AND m.event_seq <= $6::bigint AND m.moved_event_seq > $6::bigint
+     AND m.event_seq < $7::bigint
+     AND NOT ($8::int8multirange @> m.event_seq)
+   ORDER BY m.moved_event_seq LIMIT 1))::bigint AS blocking
+`
+
+type TopicRunFloorParams struct {
+	RunEnd         int64
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
+	PrefixBefore   int64
+	Floor          int64
+	RunFrom        int64
+	ReadSet        pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+}
+
+// least ignores NULLs, so no blocker returns run_end.
+func (q *Queries) TopicRunFloor(ctx context.Context, arg TopicRunFloorParams) (int64, error) {
+	row := q.db.QueryRow(ctx, topicRunFloor,
+		arg.RunEnd,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.TopicID,
+		arg.PrefixBefore,
+		arg.Floor,
+		arg.RunFrom,
+		arg.ReadSet,
+	)
+	var blocking int64
+	err := row.Scan(&blocking)
+	return blocking, err
+}
+
 const topicUnreadRangeBounds = `-- name: TopicUnreadRangeBounds :many
 SELECT coalesce((SELECT p.event_seq + 1 FROM message p
         WHERE p.organization_id = $1 AND p.channel_id = $2
@@ -430,8 +477,9 @@ WHERE m.organization_id = $1 AND m.channel_id = $2
   AND (m.event_seq > $5::bigint
        OR (m.event_seq <= $5::bigint AND m.moved_event_seq > $5::bigint))
   AND m.event_seq <= $6::bigint
+  AND $7::bigint <= m.event_seq AND m.event_seq <= $8::bigint
   AND (m.moved_event_seq IS NULL OR m.moved_event_seq <= $6::bigint)
-  AND NOT ($7::int8multirange @> m.event_seq)
+  AND NOT ($9::int8multirange @> m.event_seq)
 ORDER BY m.event_seq
 `
 
@@ -442,6 +490,8 @@ type TopicUnreadRangeBoundsParams struct {
 	PrefixBefore   int64
 	Floor          int64
 	Cursor         int64
+	RunFrom        int64
+	RunThrough     int64
 	ReadSet        pgtype.Multirange[pgtype.Range[pgtype.Int8]]
 }
 
@@ -458,6 +508,8 @@ func (q *Queries) TopicUnreadRangeBounds(ctx context.Context, arg TopicUnreadRan
 		arg.PrefixBefore,
 		arg.Floor,
 		arg.Cursor,
+		arg.RunFrom,
+		arg.RunThrough,
 		arg.ReadSet,
 	)
 	if err != nil {

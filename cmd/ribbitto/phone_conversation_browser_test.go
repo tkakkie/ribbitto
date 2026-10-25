@@ -95,7 +95,7 @@ func TestPhoneConversationBrowser(t *testing.T) {
 					}
 				}
 				for selector, name := range controls {
-					// Below desk Mark as read is in the overview sheet (#972).
+					// Below desk Mark all as read is in the overview sheet (#972).
 					if !phone && selector == "header > a" || phone && selector == "#read-form button" {
 						continue
 					}

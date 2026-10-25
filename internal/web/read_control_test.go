@@ -132,7 +132,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 					}
 				}
 				// The overview submits the same #read-form from outside it, once
-				// and only when the header offers Mark as read (#972).
+				// and only when the header offers Mark all as read (#972).
 				doc, err := html.Parse(get("/overview").Body)
 				if err != nil {
 					t.Fatal(err)

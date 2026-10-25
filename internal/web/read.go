@@ -51,7 +51,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	var err error
 	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: id, MemberID: m.Member.ID}
 	if p.topicID != nil && shown {
-		err = p.reading.TopicShown(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor, from, through)
+		err = p.reading.TopicShown(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor, through, from)
 	} else if shown {
 		err = p.reading.FeedShown(r.Context(), scope, m.Member.JoinedEventSeq, cursor, from, through)
 	} else if p.topicID != nil {

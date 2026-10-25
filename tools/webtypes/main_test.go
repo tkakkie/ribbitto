@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,6 +42,153 @@ func TestInstallEnvironment(t *testing.T) {
 	}
 }
 
+func fakeNodeRoot(t *testing.T) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	for _, name := range []string{".node-version", "package.json"} {
+		data, err := os.ReadFile(filepath.Join("../..", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pin, err := os.ReadFile(filepath.Join(root, ".node-version"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'v" + strings.TrimSpace(string(pin)) + "\\n'; else printf 'CHECKER RAN\\n'; fi\n"
+	if err := os.WriteFile(filepath.Join(root, "node"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", root)
+	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pkg struct{ DevDependencies struct{ TypeScript string } }
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		t.Fatal(err)
+	}
+	return root, pkg.DevDependencies.TypeScript
+}
+
+func checkOutput(t *testing.T, root string) (string, error) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = stdout }()
+	err = run("check", root)
+	_ = w.Close()
+	out, readErr := io.ReadAll(r)
+	_ = r.Close()
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	return string(out), err
+}
+
+func TestMissingChecker(t *testing.T) {
+	root, pin := fakeNodeRoot(t)
+	for _, required := range []string{"", "1"} {
+		t.Run("required="+required, func(t *testing.T) {
+			t.Setenv("RIBBITTO_REQUIRE_NODE", required)
+			if required == "" {
+				if err := os.Unsetenv("RIBBITTO_REQUIRE_NODE"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, err := checkOutput(t, root)
+			if required == "1" {
+				if err == nil || !strings.Contains(err.Error(), pin) {
+					t.Fatalf("expected missing checker failure with pin %s, got %v: %s", pin, err, out)
+				}
+			} else if err != nil || !strings.Contains(out, "NOT VERIFIED") || !strings.Contains(out, pin) {
+				t.Fatalf("expected NOT VERIFIED with pin %s, got %v: %s", pin, err, out)
+			}
+		})
+	}
+}
+
+func TestCheckerVersion(t *testing.T) {
+	for _, tc := range []struct{ name, manifest, version string }{
+		{"match", "", ""},
+		{"mismatch", `{"version":"0.0.0"}`, "0.0.0"},
+		{"unreadable", `{"version":`, "unreadable"},
+		{"empty", `{}`, "unreadable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, pin := fakeNodeRoot(t)
+			manifest := tc.manifest
+			if tc.name == "match" {
+				manifest = `{"version":"` + pin + `"}`
+			}
+			dir := filepath.Join(root, "node_modules/typescript")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(manifest), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, required := range []string{"", "1"} {
+				t.Setenv("RIBBITTO_REQUIRE_NODE", required)
+				out, err := checkOutput(t, root)
+				if tc.name == "match" {
+					if err != nil || out != "CHECKER RAN\n" {
+						t.Fatalf("matching checker: %v: %s", err, out)
+					}
+					continue
+				}
+				message := out
+				if required == "1" {
+					if err == nil {
+						t.Fatalf("expected version failure, got success: %s", out)
+					}
+					message = err.Error()
+				} else if err != nil || !strings.Contains(out, "NOT VERIFIED") {
+					t.Fatalf("expected NOT VERIFIED, got %v: %s", err, out)
+				}
+				if !strings.Contains(message, pin) || !strings.Contains(message, tc.version) || strings.Contains(out, "CHECKER RAN") {
+					t.Fatalf("expected installed %s and pinned %s without checker execution: %v: %s", tc.version, pin, err, out)
+				}
+			}
+		})
+	}
+}
+
+func allowedLockName(name string) bool {
+	index := strings.LastIndex(name, "node_modules/")
+	if index < 0 {
+		return false
+	}
+	name = name[index+len("node_modules/"):]
+	return name == "typescript" || strings.HasPrefix(name, "@typescript/")
+}
+
+func TestLockfilePackageNames(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want bool
+	}{
+		{"node_modules/typescript", true},
+		{"node_modules/@typescript/typescript-linux-x64", true},
+		{"node_modules/@typescript/outer/node_modules/typescript", true},
+		{"node_modules/@typescript/outer/node_modules/unrelated", false},
+		{"node_modules/@typescript/outer/node_modules/@other/package", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := allowedLockName(tc.name); got != tc.want {
+				t.Fatalf("allowedLockName(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLockfile(t *testing.T) {
 	data, err := os.ReadFile("../../package-lock.json")
 	if err != nil {
@@ -67,7 +215,7 @@ func TestLockfile(t *testing.T) {
 		if name == "" {
 			continue // The root is not a downloaded package.
 		}
-		if (name != "node_modules/typescript" && !strings.HasPrefix(name, "node_modules/@typescript/")) || !strings.HasPrefix(pkg.Resolved, "https://registry.npmjs.org/") || pkg.Integrity == "" || pkg.HasInstallScript {
+		if !allowedLockName(name) || !strings.HasPrefix(pkg.Resolved, "https://registry.npmjs.org/") || pkg.Integrity == "" || pkg.HasInstallScript {
 			t.Errorf("unsafe lock entry %s", name)
 		}
 	}

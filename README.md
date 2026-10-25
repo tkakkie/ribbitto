@@ -113,8 +113,8 @@ so local notes and tools do not change the output.
 green draft CI must pass before review instead
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
 It runs `check-static`, `check-test`, `check-tools`, then `check-web`. CI runs
-`check-static` and `check-tools` in `checks`, each named `testshard` shard
-in a parallel `test` matrix job and `rest` in `test-rest`
+`check-static` and `check-tools` in `checks`, each `testshard` shard
+in a parallel `test` matrix job, `rest` in `test-rest`,
 and TypeScript in `web-types` (`.github/workflows/ci.yml`).
 [`testshard -run`](tools/testshard/main.go) owns test packages, selectors and flags.
 `make check` checks formatting and internal `doc.go` files via

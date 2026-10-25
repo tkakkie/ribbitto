@@ -55,7 +55,7 @@ hashes, no whole-graph prefix.
 
 ## Versions and installation — #1410, #1415
 
-**Node pin mechanics:** one root `.node-version` containing `26.8.1`. CI setup, local
+**Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI setup, local
 development and sandbox setup read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
 bundled npm, not a separately upgraded global npm. CI provisions the release
@@ -158,6 +158,7 @@ setup supplies Node; no downloader or network expansion. #1415 also documents
 sandbox-local install/cache writes and handoff. No AI runs transferred
 `node_modules`, npm scripts or Node tests on the host after
 handoff; CI remains the check.
+The wrapper's `node --version` probe in `make check` is not routine Node use.
 
 **One-time Codex exception (#1410 only, maintainer 2026-10-25):** trusted host
 Node 26.8.1 may run inside the normal implementation profile, without a Node

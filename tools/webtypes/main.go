@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,12 +23,21 @@ func main() {
 }
 
 func environment(root string) []string {
+	// Preserve sandbox proxy settings; clearing every npm_config_* would lose them.
 	var env []string
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		key = strings.ReplaceAll(strings.ToLower(key), "-", "_")
+		key = strings.ReplaceAll(strings.ToLower(key), "-", "_") // npm accepts both spellings and cases.
 		switch key {
-		case "node_options", "npm_config_omit", "npm_config_os", "npm_config_cpu", "npm_config_libc", "npm_config_ignore_scripts", "npm_config_cache":
+		case "node_options": // Prevent injected Node code or runtime flags.
+			continue
+		case "npm_config_omit": // Keep the checker and native optional package installed.
+			continue
+		case "npm_config_os", "npm_config_cpu", "npm_config_libc": // Select packages for the actual host.
+			continue
+		case "npm_config_ignore_scripts": // Prevent inherited lifecycle-script policy.
+			continue
+		case "npm_config_cache": // Keep cache writes inside this worktree.
 			continue
 		}
 		env = append(env, entry)
@@ -56,6 +66,31 @@ func ready(root string) error {
 	return nil
 }
 
+func checkerReady(root string) error {
+	var pinned struct {
+		DevDependencies struct{ TypeScript string }
+	}
+	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		return fmt.Errorf("reading checker pin: %w", err)
+	}
+	if err := json.Unmarshal(data, &pinned); err != nil {
+		return fmt.Errorf("reading checker pin: %w", err)
+	}
+	var installed struct{ Version string }
+	data, err = os.ReadFile(filepath.Join(root, "node_modules/typescript/package.json"))
+	if err == nil {
+		err = json.Unmarshal(data, &installed)
+	}
+	if err != nil || installed.Version == "" {
+		return fmt.Errorf("TypeScript installed version unreadable; pinned version %q", pinned.DevDependencies.TypeScript)
+	}
+	if installed.Version != pinned.DevDependencies.TypeScript {
+		return fmt.Errorf("TypeScript installed version %q does not match pinned version %q", installed.Version, pinned.DevDependencies.TypeScript)
+	}
+	return nil
+}
+
 func run(mode, root string) error {
 	root, err := filepath.Abs(root)
 	if err != nil {
@@ -63,7 +98,7 @@ func run(mode, root string) error {
 	}
 	err = ready(root)
 	if err == nil && mode == "check" {
-		_, err = os.Stat(filepath.Join(root, "node_modules/typescript/package.json"))
+		err = checkerReady(root)
 	}
 	if err != nil {
 		if mode == "check" && os.Getenv("RIBBITTO_REQUIRE_NODE") != "1" {
@@ -88,6 +123,7 @@ func run(mode, root string) error {
 				return fmt.Errorf("writing empty npm config: %w", err)
 			}
 		}
+		// CLI policy overrides env/.npmrc; lockfile integrity also covers registry overrides.
 		cmd = command(root, "npm", "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
 	} else {
 		cmd = command(root, "node", "node_modules/typescript/bin/tsc", "--project", "tsconfig.json")

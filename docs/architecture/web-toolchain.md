@@ -34,10 +34,10 @@ decision 42 and the table; .mjs remains deferred to #1412.
 **Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
-dynamic imports. The ES2017 syntax target is conservative for the
-latest-two supported browsers and iOS generations, agreeing with
-[browser target rule 4](browser-targets.md#design-rules); it adds no Web API
-polyfills and does not constitute browser verification.
+dynamic imports. ES2017 is the current syntax target, conservative for the
+latest-two supported browsers and iOS generations; the build target pending in
+[browser target rule 4](browser-targets.md#design-rules) may revise it.
+It adds no Web API polyfills and does not constitute browser verification.
 
 The builder validates esbuild's metafile and output, writes
 `manifest.json` last, then replaces the whole ignored `dist` directory

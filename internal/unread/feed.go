@@ -101,7 +101,7 @@ func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, join
 // cursor, under #1486 (decision 32, amended). The caller supplies resolved scope
 // and the persisted join sequence, and must roll back tx on error.
 func (f *FeedWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor, from, through int64) (bool, error) {
-	if cursor < 0 || cursor == math.MaxInt64 || from < 1 || through < from || cursor < through {
+	if cursor < 0 || cursor == math.MaxInt64 || from < 1 || through < from {
 		return false, ErrInvalidCursor
 	}
 	committed, err := f.cursor(tx).EventSeq(ctx, scope.OrganizationID)

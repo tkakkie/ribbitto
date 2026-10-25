@@ -350,7 +350,7 @@ other = "オンライン"
 other = "オフライン"
 
 ["reading.mark"]
-other = "すべて既読にする"
+other = "既読にする"
 
 ["reading.unread_count"]
 other = "未読ribbit {count} 件"

@@ -5,7 +5,7 @@ Node/npm to type checking, unit tests and dependency management in development,
 CI and implementer sandboxes. Neither asset builds nor run time use Node.
 Argon gains no Node/npm commands; its `verify` and permissions are unchanged.
 Generated-asset packages stay CI-only / `NOT VERIFIED` in
-[Argon verify](argon-verify.md#results); container generation or any checklist
+[Argon verify](argon-verify.md#results); container asset generation or any checklist
 change needs its own `process` issue.
 
 ## Routine use and trusted setup
@@ -48,14 +48,12 @@ force; CI remains the check. Measurement builds follow the existing
 
 ## Recorded probe — 2026-10-26
 
-The orchestrator ran this **once**, outside the repository in a scratch
-checkout from a clean `git archive` of `origin/main` at
-`39963c2c2744e2348540dbdadbdbaf7f544a6378`, after #1410 merged (#1818).
-It used Codex's implementation `perms` array, model `gpt-6-astra`. The local
+The orchestrator ran this **once** in a scratch checkout of `origin/main`
+`39963c2` outside the repository.
+It used Codex's implementation `perms` profile, model `gpt-6-astra`. The local
 date was 2026-10-26; the shell's UTC date was 2026-10-25. This records supplied
-evidence, not a rerun by the documentation implementer. It follows #1410's
-2026-10-25 probe. Commands/output are recorded on
-[#1415](https://github.com/tkakkie/ribbitto/issues/1415).
+evidence, not a rerun by the documentation implementer. Commands/output are
+recorded on [#1415](https://github.com/tkakkie/ribbitto/issues/1415#issuecomment-6404855420).
 
 The probe used the four checkout-local Go caches from the
 [implementation brief](running-other-ai.md#implementation-brief).
@@ -70,22 +68,20 @@ compared without publishing their contents.
 
 | Step / commands | Recorded result |
 |---|---|
-| `cat .node-version`; `command -v node`; `command -v npm`; `node --version`; `npm --version` | Pin `26.8.1`; both executables under `/opt/homebrew`, from trusted host Homebrew setup. Node `v26.8.1` equals `v` + pin; npm `11.19.0`. |
+| `cat .node-version`; `command -v node npm`; `node --version`; `npm --version` | Pin `26.8.1`; both executables under `/opt/homebrew`. Node `v26.8.1` equals `v` + pin; npm `11.19.0`. |
 | Before: list home and default cache `~/.npm`, count entries, size and files newer than `.node-version`; check `bin/.cache` | Home: 50 entries. Cache entries: `_cacache`, `_logs`, `_npx`, `_update-notifier-last-checked`; 1094 files/directories, 136312 KiB, 0 files newer than the pin. Checkout `bin/.cache` absent. |
 | `make web-install` | Exit 0: “added 2 packages, and audited 3 packages”; “found 0 vulnerabilities”. Wrapper used `npm ci --ignore-scripts`. |
 | After: compare home listing and repeat default-cache counts/size/newer-file check; inspect checkout install/cache and lockfile | Home diff empty. Default cache unchanged: 1094 entries, 136312 KiB, 0 newer files. Checkout `node_modules`: 31360 KiB, only `@typescript/typescript-darwin-arm64` native package installed, `tsc` binaries present. Checkout `bin/.cache/npm`: 10380 KiB. Lockfile: 0 `hasInstallScript` lines; 3 lines each for `@typescript/typescript-linux-x64` and `@typescript/typescript-darwin-arm64`. |
 | `RIBBITTO_REQUIRE_NODE=1 make check-web` | Exit 0. |
-| Node absent: `PATH` held only a `go` symlink directory then `/usr/bin:/bin`; `command -v node`; `RIBBITTO_REQUIRE_NODE=1 make check-web`; `make check-web` | No Node found. Required check: `Node 26.8.1 unavailable: exec: "node": executable file not found in $PATH`, make exit 2. Optional check: `NOT VERIFIED: client TypeScript: Node 26.8.1 unavailable: ...`, exit 0. |
-| Wrong version: fake `node` first on `PATH`, printing `v26.0.0`; `make web-install` | `Node version "v26.0.0" does not match 26.8.1`, make exit 2. No npm ran; `node_modules` directory metadata identical before/after. |
+| Node absent: `PATH` set to a scratch directory then `/usr/bin:/bin`; `command -v node`; `RIBBITTO_REQUIRE_NODE=1 make check-web`; `make check-web` | No Node found. Required check: `Node 26.8.1 unavailable: exec: "node": executable file not found in $PATH`, make exit 2. Optional check: `NOT VERIFIED: client TypeScript: Node 26.8.1 unavailable: ...`, exit 0. |
+| Wrong version: scratch directory first on `PATH`; `make web-install` | `Node version "v26.0.0" does not match 26.8.1`, make exit 2. The wrapper rejected the version before npm (its `ready()` check precedes npm in `tools/webtypes/main.go`); `node_modules` directory metadata identical before/after. |
 | Control: `touch` a file in `~` and one above the probe directory; write inside workspace | Both outside writes refused: `Operation not permitted`, exit 1; workspace write succeeded. |
 | `curl https://example.com`; `curl https://registry.npmjs.org/typescript` | First refused by tool layer: “domain is not on the allowlist for the current sandbox mode”; no curl exit status or HTTP code. Registry returned 200. |
-| Host-side cross-check by orchestrator | Home listing and `~/.npm` unchanged again; no control file created; lockfile and `package.json` unchanged. |
 | `rm -rf node_modules`; scratch cleanup | Install removed; scratch directory deleted afterwards. |
 
-Go downloaded its own toolchain `go1.27.3` via the allowed Go proxy into the
-checkout's `GOMODCACHE`; this was not a Node download. npm warned that env
-config `http-proxy` was unknown and advertised npm `12.2.1`; nothing updated.
-The wrapper's install invocation was:
+Go reported downloading its toolchain `go1.27.3` (darwin/arm64). npm warned
+that env config `http-proxy` was unknown and advertised npm `12.2.1`.
+In `tools/webtypes/main.go`, the wrapper's install invocation is:
 
 ```sh
 npm ci --ignore-scripts --include=optional --include=dev \
@@ -93,22 +89,20 @@ npm ci --ignore-scripts --include=optional --include=dev \
   --userconfig=<empty checkout-local file> --globalconfig=<empty checkout-local file>
 ```
 
-The successful check invokes `node node_modules/typescript/bin/tsc --project
+The wrapper's check invokes `node node_modules/typescript/bin/tsc --project
 tsconfig.json`; the wrapper first uses `node --version`. These command forms
 explain the record, including indirect Node/npm execution through Go.
 
 ## Limits of the evidence
 
 This is a recorded host-profile probe, not a Go test: CI cannot reproduce the
-maintainer's sandbox. It confirms the wrapper's behavior there only. #1410's
-own tests already cover fake-version rejection, lockfile content and inherited
-`npm_config_omit`; the absence/wrong-version steps add no new wrapper test.
+maintainer's sandbox. It records the wrapper's behavior in that run only.
 
-Not verified: the `linux-x64` package or GitHub Actions (CI proves those),
+Not verified: the `linux-x64` package or GitHub Actions,
 lifecycle scripts (every install uses `--ignore-scripts`, and the lockfile has
-no `hasInstallScript` entry), or future Node/npm versions. The host's Node
-provenance is not rechecked each run; the wrapper checks its version each run
-and rejects a mismatch. The wrong-version non-mutation check compared directory
-metadata only, not file contents. Default-cache counts, sizes and timestamps
-plus the home-listing diff are the recorded observations, not a file-content
-comparison of the home or proof about future installs.
+no `hasInstallScript` entry), or future Node/npm versions. The transcript
+establishes no host Node provenance beyond its path under `/opt/homebrew`.
+The wrong-version check compared `ls -ld` directory metadata only, not file
+contents. Default-cache entry counts, sizes and newer-file counts plus the
+home-listing diff are the recorded observations, not a file-content comparison
+of the home or proof about future installs.

@@ -47,8 +47,8 @@ maintainer decision.
 on its chosen `127.0.0.1` port, with disposable data and credentials.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. In PR, record host measurement SHAs, conditions (toolchain, image
-digest, restrictions), exact commands and results. Redact credentials.
+10. In PR, record that it was a host measurement, SHAs, conditions (toolchain,
+image digest, restrictions), exact commands and results. Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
@@ -57,10 +57,10 @@ warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Host measurements need no Node. Once #1411/#1820 supply it, Go-only asset
-generation precedes compilation in the same isolated build (same trusted
-checkouts/flags, no Node on `PATH`), outside [Argon verify](argon-verify.md#results).
-Until then, commands below cannot build SHAs needing it.
+Host measurements need no Node. Once #1411/#1820 supply Go-only asset
+generation, it precedes compilation in the same isolated build (same trusted
+checkouts/flags, no Node on `PATH`), outside Argon verify.
+Until then, commands below cannot build such SHAs.
 
 Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference
 ([current value](measurement-go-image.md#measurement-go-image)).
@@ -82,7 +82,7 @@ session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
   test -z "$tree_status"
 ```
 
-Cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
+On success, cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
 Mount only read-only source and empty output:
 
 ```sh
@@ -98,7 +98,7 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
 ```
 
 Apple silicon only, never Rosetta. In-tree: only this Go build and prior Go
-asset generation. Before staging log SHA and `shasum -a 256`;
+asset generation. Before staging record SHA and `shasum -a 256`;
 `-buildvcs=false` avoids container git ownership mismatches.
 
 If unusable, record why. Maintainer: stage read-only source in

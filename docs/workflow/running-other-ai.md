@@ -102,7 +102,7 @@ Claude follows the [local checks](../../AGENTS.md#commands) and
 
 ## Running Codex
 
-Maintainer setup, not Codex limits (codex-cli 0.153; #48).
+Maintainer setup, not general Codex limits (codex-cli 0.153; evidence: #48).
 
 ### Codex permissions
 
@@ -143,7 +143,7 @@ start (#359).
 
 Brief: issue and review comments, size class, starting files/packages,
 and the [Codex implementer entry](README.md#implementer-codex).
-Starting points only; read the change's dependencies.
+Starting points; read the change's dependencies.
 
 `small`: expected adversarial tier C and either documentation only or an
 expected diff under about 100 lines → `medium`. Otherwise `normal`: current
@@ -152,8 +152,7 @@ default, no effort flag. Tier A/B is always `normal`, including gate documents u
 
 The brief also includes:
 
-- [Codex Node use](codex-node.md): routine only once #1410 and #1415 have
-  landed; #1410's one-time exception has ended.
+- [Codex Node use](codex-node.md): routine only after #1410/#1415 merge; #1410's one-time exception has ended.
 - **Go caches.** Only the worktree is writable, so use
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`

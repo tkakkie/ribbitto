@@ -21,7 +21,7 @@ index below for everything else.
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
 | [`unread.md`](unread.md) | unread rules: read ranges, counts and the divider (storage, counts in the page snapshot and the sidebar, live counts on posts and moves, and the divider current, #291; recounts after a read advance wired in production (#711), M4) |
-| [`unread-reading.md`](unread-reading.md) | reading scopes, visible-page reading POSTs, posting, Mark as read and the modal-panel pause |
+| [`unread-reading.md`](unread-reading.md) | reading scopes, visible-page reading POSTs, posting, Mark all as read and the modal-panel pause |
 | [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; visible-page reading POSTs, posting and counts in the page snapshot and the sidebar, and live counts on posts and moves current; recounts after a read advance wired in production (#711), M4 |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
@@ -43,6 +43,7 @@ index below for everything else.
 | **handle** | A member's organisation-scoped name for people to tell members apart, shown as `Display name @handle`. |
 | **section** *(planned)* | A group of channels in the sidebar; only its label is reserved so far. |
 | **channel** | A named conversation inside an organisation. |
+| **Mark all as read** | Explicitly reads the whole feed or topic through the page cursor, including older history. |
 | **read state** | A member's read ranges in a channel: which of its messages they have read ([`unread.md`](unread.md)). |
 | **message** | A post in a channel, written by a member. |
 | **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |

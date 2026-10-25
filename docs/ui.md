@@ -108,7 +108,7 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   icon controls for Members and Overview (#971).
   The composer sits above the bottom safe area, with 16 px input text.
   Members and the overview open as bottom sheets over the dimmed
-  conversation, with **Mark as read** in the overview sheet (#972). Welcome pages show a short
+  conversation, with **Mark all as read** in the overview sheet (#972). Welcome pages show a short
   brand strip (logo, name, tagline) above the form, without the
   illustrations. Their text fields and buttons are at least 48 px tall,
   with 16 px field text; the sign-in heading and first field fit on the

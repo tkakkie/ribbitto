@@ -127,7 +127,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 					t.Helper()
 					body := w.Body.String()
 					form, buttons := readControl(t, w.Body)
-					if _, hidden := attrOK(form, "hidden"); !hidden || len(buttons) != 0 || strings.Contains(body, "Mark as read") {
+					if _, hidden := attrOK(form, "hidden"); !hidden || len(buttons) != 0 || strings.Contains(body, "Mark all as read") {
 						t.Fatalf("control shown with nothing unread: hidden=%t buttons=%d", hidden, len(buttons))
 					}
 				}
@@ -139,7 +139,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 				}
 				sheet := 0
 				for n := range doc.Descendants() {
-					if attr(n, "form") == "read-form" && strings.TrimSpace(text(n)) == "Mark as read" {
+					if attr(n, "form") == "read-form" && strings.TrimSpace(text(n)) == "Mark all as read" {
 						sheet++
 					}
 				}
@@ -152,7 +152,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 					return
 				}
 				form, buttons := readControl(t, w.Body)
-				if _, hidden := attrOK(form, "hidden"); hidden || len(buttons) != 1 || attr(buttons[0], "type") != "submit" || strings.TrimSpace(text(buttons[0])) != "Mark as read" {
+				if _, hidden := attrOK(form, "hidden"); hidden || len(buttons) != 1 || attr(buttons[0], "type") != "submit" || strings.TrimSpace(text(buttons[0])) != "Mark all as read" {
 					t.Fatalf("no plain control with something unread: hidden=%t buttons=%d", hidden, len(buttons))
 				}
 				// Without JavaScript the button submits the plain form, which

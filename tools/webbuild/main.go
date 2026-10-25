@@ -13,6 +13,8 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
+var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
 type bundle struct {
 	File   string `json:"file"`
 	SHA256 string `json:"sha256"`
@@ -51,7 +53,7 @@ func build(root, commit, runID string, names []string) error {
 	entries := make(map[string]string)
 	var inputs []string
 	for _, name := range names {
-		if !regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`).MatchString(name) {
+		if !entryNamePattern.MatchString(name) {
 			return fmt.Errorf("invalid entry name %q", name)
 		}
 		input := filepath.Join("web/src", name+".ts")
@@ -71,6 +73,8 @@ func build(root, commit, runID string, names []string) error {
 		MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
 		Sourcemap: api.SourceMapNone, LegalComments: api.LegalCommentsNone,
 		Metafile: true, Write: false,
+		// Non-literal imports are absent from the metafile; expose their debug diagnostic for validation.
+		LogOverride: map[string]api.LogLevel{"unsupported-dynamic-import": api.LogLevelWarning},
 	})
 	if len(result.Errors) != 0 {
 		return fmt.Errorf("building bundles: %s", result.Errors[0].Text)
@@ -106,6 +110,11 @@ func build(root, commit, runID string, names []string) error {
 }
 
 func validate(root, dist, stage string, entries map[string]string, result api.BuildResult) (map[string]bundle, error) {
+	for _, warning := range result.Warnings {
+		if warning.ID == "unsupported-dynamic-import" {
+			return nil, fmt.Errorf("dynamic imports are not supported: %s", warning.Text)
+		}
+	}
 	var meta struct {
 		Inputs  map[string]struct{ Imports []struct{ Kind string } }
 		Outputs map[string]struct{ EntryPoint string }

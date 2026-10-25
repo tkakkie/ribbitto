@@ -31,27 +31,28 @@ decision 42 and the table; .mjs remains deferred to #1412.
 
 ## Build, manifest and embedding — #1411
 
-`make bundles` runs `tools/webbuild` through esbuild's Go API, pinned only in
+**Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
-dynamic imports. The explicit ES2017 syntax target is conservative for the
+dynamic imports. The ES2017 syntax target is conservative for the
 latest-two supported browsers and iOS generations, agreeing with
 [browser target rule 4](browser-targets.md#design-rules); it adds no Web API
 polyfills and does not constitute browser verification.
 
-The builder validates esbuild's metafile and produced files, writes
+The builder validates esbuild's metafile and output, writes
 `manifest.json` last, then replaces the whole ignored `dist` directory
 under `web/static`. Logical entries record bundle filenames and SHA-256 content hashes;
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-The first entry is `web/src/message-time.ts`. Its legacy versioned script
+First entry: `web/src/message-time.ts`. Its legacy versioned script
 remains unchanged and loaded. Output is neither embedded nor served: #1820
 adds the registry, templ selection, embedding, serving, browser verification
 and generation before compilation in Make, CI, Docker and releases, including
 fresh-clone instructions and failure on missing generation. #1821 adds rebuilds,
-disk serving with `no-store` and development maps. #1819 adds private production
-maps and their separate index; map names never belong in the runtime manifest.
+disk serving with `no-store` and development maps, whose file names it records
+in the manifest. #1819 adds private production maps and their separate index;
+production map names never belong in the runtime manifest.
 
 ## Versions and installation — #1410, #1415
 

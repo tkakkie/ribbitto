@@ -72,6 +72,24 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildClassicIIFE(t *testing.T) {
+	root := fixture(t, []byte(`const value = 1; console.log(value);`))
+	if err := build(root, "commit", "run", []string{"message-time"}); err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(root, "web/static/dist/*.js"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("expected one classic bundle: %v, %v", files, err)
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, []byte("(()=>{")) || bytes.Contains(data, []byte("export")) || bytes.Contains(data, []byte("import")) {
+		t.Fatalf("expected classic IIFE without module statements, got %s", data)
+	}
+}
+
 func TestValidation(t *testing.T) {
 	for _, tc := range []struct{ name, entry, output, file, foreign, want string }{
 		{"missing output", "", "", "", "", "entry without output"},
@@ -132,6 +150,12 @@ func TestRejectedEntries(t *testing.T) {
 	if err := build(root, "commit", "run", []string{"message-time"}); err == nil || !strings.Contains(err.Error(), "dynamic imports") {
 		t.Fatalf("expected dynamic import rejection: %v", err)
 	}
+	t.Run("non-literal dynamic import", func(t *testing.T) {
+		root := fixture(t, []byte(`declare const x: string; import(x);`))
+		if err := build(root, "commit", "run", []string{"message-time"}); err == nil || !strings.Contains(err.Error(), "dynamic imports are not supported") {
+			t.Fatalf("expected non-literal dynamic import rejection: %v", err)
+		}
+	})
 }
 
 func TestNoNode(t *testing.T) {

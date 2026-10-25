@@ -1137,7 +1137,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    const anchor=document.createElement('a'); anchor.href=location.pathname+'/topics/03000000-0000-0000-0000-000000000000';
    anchor.append(marker); document.querySelector('#sidebar-channels').append(anchor);
    window.refreshExpiry=()=>dispatchEvent(new StorageEvent('storage',{key:scope()})); refreshExpiry();
-   window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; addEventListener('error',()=>expiryErrors++);
+   window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; // Only the drafts script counts: other scripts may fail on the removed sidebar.
+   addEventListener('error',e=>{if(String(e.filename).includes('/message-drafts-')) expiryErrors++;});
    const set=Storage.prototype.setItem, remove=Storage.prototype.removeItem;
    // Other scripts may touch unrelated keys while the page loads.
    Storage.prototype.setItem=function(k,v){if(String(k).startsWith('ribbitto.draft.v1:')) draftWrites++; return set.call(this,k,v);};
@@ -1147,7 +1148,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    check(draftWrites===0,'expiry wrote '+draftWrites); check(draftRemovals.length===2,'expiry removals '+JSON.stringify(draftRemovals)); check(pendingDrafts()===0,'expiry left debounce');
    check(document.querySelector('#message-body').value===want && marker.hidden,'expiry changed textarea or left marker');
    // Neither clock rolling back nor another timer/event may restart or repeat cleanup.
-   const errors=expiryErrors; // Other scripts may already have failed on the removed sidebar.
+   const errors=expiryErrors;
    editNow=expires-1000; elapsed=0; edit(want,editNow); releaseDrafts(); flush(); if(typeof expireDrafts==='function') expireDrafts(); refreshExpiry();
    const sends=sendEvents.length, b=document.querySelector('#message-body');
    b.dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:b.value,inPlace:true}}));

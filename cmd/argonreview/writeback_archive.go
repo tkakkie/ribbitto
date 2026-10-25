@@ -88,7 +88,9 @@ func validateWritebackHeader(h *tar.Header) error {
 		return writebackNameError(h.Name, "non-empty link name")
 	}
 	// Reader.next intersects all headers' formats, including invisible GNU L/K
-	// metadata. Part B's producer must use tar --format=ustar (or pax).
+	// metadata. Part B's producer must use tar --format=ustar: no PAX records
+	// other than path/size may be emitted, so ustar is the supported format;
+	// FormatPAX stays accepted because the reader reports it for path/size-only PAX.
 	if h.Format != tar.FormatUSTAR && h.Format != tar.FormatPAX {
 		return writebackNameError(h.Name, "archive format must be USTAR or PAX")
 	}

@@ -130,7 +130,7 @@ func TestWritebackArchive(t *testing.T) {
 		{"raw_NUL", raw("a\x00b", tar.TypeReg), "after NUL", 0},
 		{"raw_link_NUL", writebackRawArchive(writebackRawHeader("a", 0, tar.TypeReg, "\x00b", ""), nil), "after NUL", 0},
 		{"raw_prefix_NUL", writebackRawArchive(writebackRawHeader("a", 0, tar.TypeReg, "", "\x00b"), nil), "after NUL", 0},
-		{"invalid_UTF8", raw("a\xff", tar.TypeReg), "", -1},
+		{"invalid_UTF8", raw("a\xff", tar.TypeReg), "archive format must be USTAR or PAX", 0},
 		{"symlink", raw("a", tar.TypeSymlink), "regular file", 0},
 		{"hard_link", raw("a", tar.TypeLink), "regular file", 0},
 		{"directory", raw("a", tar.TypeDir), "regular file", 0},
@@ -169,6 +169,8 @@ func TestWritebackArchive(t *testing.T) {
 		{"second_archive", append(bytes.Clone(one), one...), "non-zero trailing", 0},
 		{"PAX_xattr", writebackTestArchive(t, []writebackEntry{entry("a", 0)}, tar.FormatPAX, map[string]string{"SCHILY.xattr.user.test": "x"}), "PAX record", 0},
 		{"PAX_path_only", writebackPAXArchive("path", "other", []byte("data")), "", 1},
+		{"PAX_path_invalid_UTF8", writebackPAXArchive("path", "a\xff", nil), "not valid UTF-8", 0},
+		{"PAX_path_backslash", writebackPAXArchive("path", "a\\b", nil), "backslash in name", 0},
 		{"PAX_size_only", writebackPAXArchive("size", "4", []byte("data")), "", 1},
 		{"PAX_size_override", writebackPAXOverride(), "", 1},
 		{"PAX_dangling", danglingPAX, "PAX header without an entry", 0},
@@ -176,7 +178,7 @@ func TestWritebackArchive(t *testing.T) {
 		{"PAX_header_link", paxLink, "PAX header link name", 0},
 		{"PAX_mtime", writebackPAXArchive("mtime", "1", nil), "PAX record", 0},
 		{"PAX_linkpath", writebackPAXArchive("linkpath", "x", nil), "link name", 0},
-		{"PAX_NUL", writebackPAXArchive("path", "a\x00b", nil), "", -1},
+		{"PAX_NUL", writebackPAXArchive("path", "a\x00b", nil), "archive/tar: invalid tar header", 0},
 		{"missing_generator_header_is_parser_only", archive(entry("a", 0)), "", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

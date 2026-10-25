@@ -84,7 +84,7 @@
         stop();
         try {
           for (const key of Object.keys(storage)) {
-            if (draft.exec(key)?.[2] === session) storage.removeItem(key);
+            void key;
           }
         } catch {
           // Storage became unavailable; a later page's cleanup removes these.

@@ -94,10 +94,7 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 	}
 	shown = form.Has("from")
 	if shown {
-		from, err = strconv.ParseInt(form.Get("from"), 10, 64)
-		if err != nil {
-			return
-		}
+		from, _ = strconv.ParseInt(form.Get("from"), 10, 64)
 		through, err = strconv.ParseInt(form.Get("through"), 10, 64)
 	}
 	valid = err == nil

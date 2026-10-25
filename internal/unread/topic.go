@@ -115,6 +115,9 @@ func (w *TopicWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Topic
 	if err != nil {
 		return false, fmt.Errorf("guarding shown topic floor: %w", err)
 	}
+	if blocking != through+1 {
+		blocking = 1
+	}
 	los, his := make([]int64, len(ranges)), make([]int64, len(ranges))
 	for i, r := range ranges {
 		los[i], his[i] = r.Lo, r.Hi

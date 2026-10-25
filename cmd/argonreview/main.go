@@ -20,6 +20,9 @@
 // It needs the trusted build, the local Docker socket and a provisioned
 // /var/cache/argonreview/go-mod cache; skips never verify tests (#1429).
 // Race, cgo-dependent, database and browser checks remain CI-only;
+// container-generate <worktree> writes validated generated output after confirmed
+// stop and post-run checks, never through MCP or the guard (#1699). Write-back
+// is not in force until #1700 stage B; generated during a run stays report-only.
 // guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
 // (#1130), and never checks the build, because Antigravity calls it for every
 // tool.
@@ -69,6 +72,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "container-sweep" {
 		return containerSweepCommand(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "container-generate" {
+		return containerGenerateCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-check" {
 		return containerCheckCommand(args[1:], stdout, stderr)
@@ -154,7 +160,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated> <package-pattern> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
 	return 2
 }
 

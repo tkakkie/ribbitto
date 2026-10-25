@@ -185,15 +185,3 @@ not check package documentation. tbls schema docs, dependency docs, the API
 manifest, golangci-lint, docscheck, languagecheck, race detector, database and
 browser tests remain CI-only. The real Docker/dash/generator path still needs
 #1700 preflight before these merged checks enter force.
-
-## Future generated-file write-back helpers
-
-`cmd/argonreview/writeback_archive.go` and `cmd/argonreview/writeback_paths.go`
-provide a pure archive parser and repository-derived path allowlist for a
-future generated-file write-back. They write nothing and have no production
-callers. Part B's producer must use `tar --format=ustar`, the supported format:
-no PAX records other than path/size may be emitted. The parser also accepts
-`tar.FormatPAX` because the reader reports it for path/size-only PAX headers.
-The write-back command and writer come in a
-later pull request (#1699, part B). Nothing is written to the worktree and
-this write-back is not in force.

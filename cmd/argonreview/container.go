@@ -138,6 +138,9 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 	if check == "test-db" {
 		return append(args, containerTestDBScript, "sh", pattern)
 	}
+	if check == "writeback" {
+		return append(args, containerGenerateScript)
+	}
 	args = append(args, containerPrelude, "sh", check)
 	if check == "build" {
 		args = append(args, "-o", "/dev/null")
@@ -238,6 +241,18 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
+	var result containerExecution
+	return runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
+}
+
+type containerExecution struct {
+	output containerOutput
+	code   int
+}
+
+// Both commands share source copying, flags, limits and confirmed cleanup.
+// Callers validate their own interface before reaching this private executor.
+func runContainerExecution(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, result *containerExecution) (report string, err error) {
 	ctx, cancel := context.WithTimeout(parent, containerTimeout)
 	defer cancel()
 	tree, err = filepath.Abs(tree)
@@ -297,8 +312,10 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 		return "", fmt.Errorf("naming container: %w", err)
 	}
 	name := fmt.Sprintf("argonreview-check-%x", suffix)
-	output := &containerOutput{cancel: cancel}
+	output := &result.output
+	output.cancel = cancel
 	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
+	result.code = code
 	return finishContainerRun(ctx, runner, name, check, code, runErr, output)
 }
 
@@ -325,6 +342,9 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		}
 	}
 	err = errors.Join(err, ctx.Err())
+	if check == "writeback" {
+		return "", err
+	}
 	verdict := commandVerdict(code, err, output.over)
 	if check == "test" || check == "test-db" {
 		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)

@@ -54,6 +54,23 @@ Arbitrary shell and `run_command` remain refused. Browser tests stay CI-only;
 [test-db](argon-verify-testdb.md) is merged but **not in force until #1700**. `verified` never replaces CI, review or handoff
 checks. The Start gate and review independence stay.
 
+## Write-back at handoff
+
+Generated-file write-back is **not in force until #1700's second stage (B)**.
+Once enabled, Claude runs the trusted host command
+`argonreview container-generate <worktree>` only after the supervisor confirms
+no run process remains and all post-run checks pass, before reading the diff.
+Never run it during an Argon run or through MCP; `generated` during a run stays
+report-only. Use the same trusted source/build gate as `container-check`.
+The [write-back rules and report](argon-verify-writeback.md)
+cover refusals, allowed paths, hashes and partial replacement.
+
+Add the full report and exit status to the handoff record. A refusal or partial
+replacement stops handoff for investigation; already replaced files stay
+replaced. Retrying skips identical files. Review stale outputs explicitly:
+nothing is deleted. This host step runs isolated generators only inside the
+container and does not relax the rule against running unverified code on the host.
+
 ## Switch off and problems
 
 Write `off` to `verify-mode`; the wrappers pass `--verify off` to the Go

@@ -16,6 +16,7 @@ import (
 // as arguments; the list stays NUL-separated through tar, with no word splitting.
 // GNU ustar refuses unrepresentable names instead of silently omitting them.
 // Keep all logs off stdout, including failures after a partial archive.
+// Handoff and write rules: docs/workflow/argon-verify-writeback.md.
 const containerGenerateLocations = "old=/work new=/tmp/work names=/tmp/writeback-names\n"
 
 const containerGenerateSelect = containerGenerateLocations + `cd "$new"

@@ -3,7 +3,7 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[Generator checks](argon-verify-image.md) await #1700. Write-back is not in
+[Generator checks](argon-verify-image.md) await #1700. [Write-back](argon-verify-writeback.md) is not in
 force until its second stage; `argonreview-7f607ca` and the old image still run.
 
 [Leftover sweep](argon-verify-sweep.md).

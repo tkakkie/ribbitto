@@ -62,7 +62,7 @@ Once enabled, Claude runs the trusted host command
 no run process remains and all post-run checks pass, before reading the diff.
 Never run it during an Argon run or through MCP; `generated` during a run stays
 report-only. Use the same trusted source/build gate as `container-check`.
-The [write-back rules and report](argon-verify-image.md#generated-file-write-back)
+The [write-back rules and report](argon-verify-writeback.md)
 cover refusals, allowed paths, hashes and partial replacement.
 
 Add the full report and exit status to the handoff record. A refusal or partial

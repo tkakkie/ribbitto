@@ -6,6 +6,8 @@ The recipe, build/vet/test regeneration and `generated` check (#1696) are merged
 **not in force until #1700**.
 Production workers still run the pinned launcher `argonreview-7f607ca`
 and the old image; merging changes nothing in production.
+The recipe now includes PostgreSQL 18 (#1697 PR A). The `test-db` check
+is not merged until #1697 PR B and is not in force until #1700.
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
@@ -27,13 +29,35 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   directory, module cache and build cache in that RUN.
 - Only FROM, RUN and COPY are allowed. No ADD, VOLUME, ENTRYPOINT, CMD,
   USER, EXPOSE, HEALTHCHECK, ONBUILD, ARG, ENV or SHELL; no RUN flags
-  (including secret mounts), apt, added user, browser or PostgreSQL today.
+  (including secret mounts), plain `apt` or browser.
+- Debian packages are `postgresql-common=278` and
+  `ca-certificates=20250419+deb13u1`; PGDG supplies
+  `postgresql-18=18.6-1.pgdg13+2`. Use `apt-get update` and
+  `apt-get install -y --no-install-recommends` only, then remove apt lists.
+  Set `create_main_cluster = false` before installing PostgreSQL to avoid
+  creating an unused cluster. `useradd` creates `check`, uid 1000, with
+  home `/home/check`: `initdb` needs an entry for its uid in the user database.
+- Before adding PGDG with the bare command
+  `/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y`, check
+  fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8` against Debian's
+  dearmored `/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg`,
+  the keyring named by the generated source's `Signed-By`. The check is
+  in an earlier RUN with errexit and no `||`, before any PGDG package.
+  It requires exactly one fingerprint line: another primary key or subkey
+  fingerprint fails the build loudly.
+- Only the three named apt packages are pinned. Dependencies such as
+  `postgresql-client-18` and `libpq5` float; this is accepted. Rebuilds do
+  not guarantee the same bytes; the host record's image ID identifies the build.
+  If a pin leaves either Debian or PGDG, the build fails loudly and a pull
+  request updates it, including when Debian replaces `postgresql-common`
+  or `ca-certificates`.
 
 `TestVerifyImageRecipe` checks the base, instruction and COPY restrictions,
 download version and same-RUN checksum, parser directives and architecture
-check. Tier A review also checks the tool builds and cache removal.
-Only generators are included now. PostgreSQL 18 may be added later under
-#1697; a browser, another package set or a second recipe needs a decision 42
+check, bare apt-get commands, allowed pinned packages and install flags,
+PGDG setup's exact command and the earlier fingerprint check.
+Tier A review also checks the tool builds, cluster setting, user and cache removal.
+A browser, another package set or a second recipe needs a decision 42
 amendment approved by the maintainer.
 
 ## Runner pin and prelude
@@ -88,7 +112,9 @@ docker build --no-cache -t argonreview-verify-image:<commit> -f <context>/Docker
 Record provenance on #1696: the full commit, SHA-256 of all three context
 files, build log tail, image ID and size from
 `docker image inspect argonreview-verify-image:<commit>`, `go version`,
-`templ version`, `sqlc version`, and the Tailwind banner.
+`templ version`, `sqlc version`, and the Tailwind banner. For #1697 also
+record `postgres --version` (using `/usr/lib/postgresql/18/bin/postgres`)
+and the installed package list with versions (`dpkg-query -W`).
 Also record SHA-256 of the three installed binaries:
 `/usr/local/bin/tailwindcss`, `/usr/local/bin/templ` and
 `/usr/local/bin/sqlc`. This record identifies the actual built image;
@@ -97,7 +123,8 @@ the recipe alone does not establish its image ID.
 ## Rebuilds
 
 Rebuild for a Tailwind, templ, sqlc or base-image change, or a Debian security
-fix the maintainer wants. Each rebuild changes the image ID, needs the same
+fix the maintainer wants. The PostgreSQL recipe addition also needs a host
+rebuild and new pin pull request. Each rebuild changes the image ID, needs the same
 provenance record and a new tier A pull request updating the runner pin;
 the host build still needs the maintainer's chat approval.
 A templ or sqlc version bump in `tools/go.mod` refuses every verify run until

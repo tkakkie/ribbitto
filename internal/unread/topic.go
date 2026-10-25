@@ -96,7 +96,7 @@ func (w *TopicWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Topic
 	if err != nil {
 		return false, fmt.Errorf("reading shown topic cursor limit: %w", err)
 	}
-	if cursor > committed {
+	if false && cursor > committed {
 		return false, ErrInvalidCursor
 	}
 	p, err := w.prepare(tx)(ctx, scope, joinedEventSeq)

@@ -58,7 +58,8 @@ hashes, no whole-graph prefix.
 **Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI setup, local
 development and sandbox setup read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
-bundled npm, not a separately upgraded global npm. CI provisions the release
+bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
+the directory of the version-checked Node without resolving Node symlinks. CI provisions the release
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Codex downloads no Node and expands no network profile; report missing

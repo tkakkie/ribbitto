@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -72,6 +73,80 @@ func fakeNodeRoot(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return root, pkg.DevDependencies.TypeScript
+}
+
+func TestInstallCommand(t *testing.T) {
+	root, _ := fakeNodeRoot(t)
+	// A symlinked Node must still select npm from its PATH directory.
+	target := filepath.Join(t.TempDir(), "node")
+	if err := os.Rename(filepath.Join(root, "node"), target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "node")); err != nil {
+		t.Fatal(err)
+	}
+	decoy := t.TempDir()
+	for path, script := range map[string]string{
+		filepath.Join(decoy, "npm"): "#!/bin/sh\nprintf decoy > decoy-ran\nexit 99\n",
+		filepath.Join(root, "npm"): `#!/bin/sh
+printf '%s\n' "$@" > npm-args
+printf '%s\n' "$npm_config_cache" > npm-cache
+: > npm-configs
+for arg in "$@"; do
+    case "$arg" in
+        --userconfig=*|--globalconfig=*)
+            config=${arg#*=}
+            if [ -f "$config" ] && [ ! -s "$config" ]; then
+                printf '%s=empty\n' "${arg%%=*}" >> npm-configs
+            fi
+            ;;
+    esac
+done
+`,
+	} {
+		if err := os.WriteFile(path, []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", decoy+string(os.PathListSeparator)+root)
+	t.Setenv("npm_config_cache", "untrusted")
+	if err := run("install", root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "decoy-ran")); !os.IsNotExist(err) {
+		t.Fatalf("decoy npm ran or marker unreadable: %v", err)
+	}
+	read := func(name string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	args := strings.Split(strings.TrimSuffix(read("npm-args"), "\n"), "\n")
+	want := []string{"ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/"}
+	if len(args) != len(want)+2 || !slices.Equal(args[:len(want)], want) {
+		t.Fatalf("npm arguments = %q, want %q followed by two config overrides", args, want)
+	}
+	user := strings.TrimPrefix(args[5], "--userconfig=")
+	global := strings.TrimPrefix(args[6], "--globalconfig=")
+	if args[5] == user || args[6] == global || user == global || filepath.Dir(user) != filepath.Dir(global) || filepath.Dir(filepath.Dir(user)) != filepath.Join(root, "bin") {
+		t.Fatalf("expected separate sandbox config files, got %q", args[5:])
+	}
+	if got := read("npm-configs"); got != "--userconfig=empty\n--globalconfig=empty\n" {
+		t.Fatalf("npm configs at execution = %q", got)
+	}
+	if got := read("npm-cache"); got != filepath.Join(root, "bin/.cache/npm")+"\n" {
+		t.Fatalf("npm cache = %q", got)
+	}
+}
+
+func TestMissingNPM(t *testing.T) {
+	root, _ := fakeNodeRoot(t)
+	if err := run("install", root); err == nil || !strings.Contains(err.Error(), "locating bundled npm beside Node") || !strings.Contains(err.Error(), filepath.Join(root, "npm")) {
+		t.Fatalf("expected missing bundled npm error, got %v", err)
+	}
 }
 
 func checkOutput(t *testing.T, root string) (string, error) {
@@ -162,12 +237,15 @@ func TestCheckerVersion(t *testing.T) {
 }
 
 func allowedLockName(name string) bool {
-	index := strings.LastIndex(name, "node_modules/")
-	if index < 0 {
+	if !strings.HasPrefix(name, "node_modules/") {
 		return false
 	}
-	name = name[index+len("node_modules/"):]
-	return name == "typescript" || strings.HasPrefix(name, "@typescript/")
+	for _, pkg := range strings.Split(strings.TrimPrefix(name, "node_modules/"), "/node_modules/") {
+		if pkg != "typescript" && !strings.HasPrefix(pkg, "@typescript/") {
+			return false
+		}
+	}
+	return true
 }
 
 func TestLockfilePackageNames(t *testing.T) {
@@ -180,6 +258,9 @@ func TestLockfilePackageNames(t *testing.T) {
 		{"node_modules/@typescript/outer/node_modules/typescript", true},
 		{"node_modules/@typescript/outer/node_modules/unrelated", false},
 		{"node_modules/@typescript/outer/node_modules/@other/package", false},
+		{"node_modules/evil/node_modules/typescript", false},
+		{"node_modules/evil/node_modules/@typescript/typescript-linux-x64", false},
+		{"node_modules/evil", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := allowedLockName(tc.name); got != tc.want {

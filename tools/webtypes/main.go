@@ -109,6 +109,15 @@ func run(mode, root string) error {
 	}
 	var cmd *exec.Cmd
 	if mode == "install" {
+		nodePath, err := exec.LookPath("node")
+		if err != nil {
+			return fmt.Errorf("locating version-checked Node: %w", err)
+		}
+		// Keep the bin directory: resolving Node symlinks can leave bundled npm behind.
+		npmPath, err := exec.LookPath(filepath.Join(filepath.Dir(nodePath), "npm"))
+		if err != nil {
+			return fmt.Errorf("locating bundled npm beside Node %q: %w", nodePath, err)
+		}
 		if err := os.MkdirAll(filepath.Join(root, "bin"), 0700); err != nil {
 			return fmt.Errorf("creating tooling directory: %w", err)
 		}
@@ -124,7 +133,7 @@ func run(mode, root string) error {
 			}
 		}
 		// CLI policy overrides env/.npmrc; lockfile integrity also covers registry overrides.
-		cmd = command(root, "npm", "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
+		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
 	} else {
 		cmd = command(root, "node", "node_modules/typescript/bin/tsc", "--project", "tsconfig.json")
 	}

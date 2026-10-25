@@ -109,6 +109,7 @@ func (w *TopicWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Topic
 	if err != nil {
 		return false, fmt.Errorf("finding shown topic read candidates: %w", err)
 	}
+	blocking = through + 1
 	// Only unread messages below from can block a raise through the run's end;
 	// moves after cursor remain exceptions because their move sequence exceeds it.
 	blocking, err := messages.RunFloor(ctx, scope.OrganizationID, scope.ChannelID, scope.TopicID, from, through+1, prefix, floor, read)

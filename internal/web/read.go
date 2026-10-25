@@ -83,8 +83,8 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 	}
 	form := r.PostForm
 	if r.Form.Has("before") || r.Form.Has("around") || !form.Has("cursor") ||
-		form.Has("from") != form.Has("through") ||
-		form.Has("scope") && (form.Get("scope") != "all" || form.Has("from") || form.Has("through")) {
+		r.Form.Has("from") != r.Form.Has("through") ||
+		form.Has("scope") && (form.Get("scope") != "all" || r.Form.Has("from") || r.Form.Has("through")) {
 		return
 	}
 	var err error
@@ -92,13 +92,13 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 	if err != nil {
 		return
 	}
-	shown = form.Has("from")
+	shown = r.Form.Has("from")
 	if shown {
-		from, err = strconv.ParseInt(form.Get("from"), 10, 64)
+		from, err = strconv.ParseInt(r.Form.Get("from"), 10, 64)
 		if err != nil {
 			return
 		}
-		through, err = strconv.ParseInt(form.Get("through"), 10, 64)
+		through, err = strconv.ParseInt(r.Form.Get("through"), 10, 64)
 	}
 	valid = err == nil
 	return

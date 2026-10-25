@@ -477,7 +477,7 @@ WHERE m.organization_id = $1 AND m.channel_id = $2
   AND (m.event_seq > $5::bigint
        OR (m.event_seq <= $5::bigint AND m.moved_event_seq > $5::bigint))
   AND m.event_seq <= $6::bigint
-  AND $7::bigint <= m.event_seq AND m.event_seq <= $8::bigint
+  AND $7::bigint IS NOT NULL AND m.event_seq <= $8::bigint
   AND (m.moved_event_seq IS NULL OR m.moved_event_seq <= $6::bigint)
   AND NOT ($9::int8multirange @> m.event_seq)
 ORDER BY m.event_seq

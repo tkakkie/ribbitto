@@ -304,49 +304,56 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 func checkContainerToolVersions(data []byte) error {
 	versions := map[string]string{"github.com/a-h/templ": containerTemplVersion, "github.com/sqlc-dev/sqlc": containerSQLCVersion}
 	seen := map[string]bool{}
-	inRequire := false
-	inReplace := false
+	open := ""
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line, _, _ = strings.Cut(line, "//")
+		line = strings.TrimSpace(line)
+		// Refuse syntax this deliberately small parser cannot interpret safely.
+		if strings.ContainsAny(line, "\"`") {
+			return errors.New("the verify image needs a rebuild: copied tools/go.mod has quoted syntax")
+		}
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
 			continue
 		}
-		replacing := inReplace
-		if fields[0] == "require" || fields[0] == "replace" {
-			replacing = fields[0] == "replace"
-			fields = fields[1:]
-			if len(fields) == 1 && fields[0] == "(" {
-				inReplace = replacing
-				inRequire = !replacing
+		if strings.ContainsAny(line, "()") {
+			switch {
+			case line == ")" && open != "":
+				open = ""
 				continue
+			case len(fields) == 2 && fields[1] == "(" && !strings.ContainsAny(fields[0], "()") && line == fields[0]+" (":
+				if open != "" {
+					return errors.New("the verify image needs a rebuild: copied tools/go.mod has a nested block")
+				}
+				open = fields[0]
+				continue
+			default:
+				return errors.New("the verify image needs a rebuild: copied tools/go.mod has unsupported parentheses")
 			}
-		} else if !inRequire && !inReplace {
+		}
+		directive, args := open, fields
+		if open == "" {
+			directive, args = fields[0], fields[1:]
+		}
+		if len(args) == 0 {
 			continue
 		}
-		if len(fields) == 1 && fields[0] == ")" {
-			inRequire = false
-			inReplace = false
-			continue
-		}
-		if len(fields) == 0 {
-			continue
-		}
-		if replacing {
-			if _, ok := versions[fields[0]]; ok {
-				return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must not replace %s", fields[0])
+		switch directive {
+		case "replace":
+			if _, ok := versions[args[0]]; ok {
+				return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must not replace %s", args[0])
 			}
-			continue
-		}
-		if version, ok := versions[fields[0]]; ok {
-			if seen[fields[0]] || len(fields) != 2 || fields[1] != version {
-				return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must require exactly %s %s once", fields[0], version)
+		case "require":
+			if version, ok := versions[args[0]]; ok {
+				if seen[args[0]] || len(args) != 2 || args[1] != version {
+					return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must require exactly %s %s once", args[0], version)
+				}
+				seen[args[0]] = true
 			}
-			seen[fields[0]] = true
 		}
 	}
-	if inRequire {
-		return errors.New("the verify image needs a rebuild: copied tools/go.mod has an unterminated require block")
+	if open != "" {
+		return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod has an unterminated %s block", open)
 	}
 	if len(seen) != len(versions) {
 		return errors.New("the verify image needs a rebuild: copied tools/go.mod must require templ and sqlc")

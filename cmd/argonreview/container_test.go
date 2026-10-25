@@ -162,6 +162,10 @@ func TestContainerToolVersions(t *testing.T) {
 	const templ = "github.com/a-h/templ v0.3.1070"
 	const sqlc = "github.com/sqlc-dev/sqlc v1.31.1"
 	const equal = "require " + templ + "\nrequire " + sqlc + "\n"
+	repositoryTools, err := os.ReadFile("../../tools/go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, data string
 		valid      bool
@@ -177,6 +181,30 @@ func TestContainerToolVersions(t *testing.T) {
 		{"unrelated replace", "replace example.com/other => ../other\n" + equal, true},
 		{"unrelated block replace", "replace (\nexample.com/other v1.0.0 => ../other\n)\n" + equal, true},
 		{"other blocks", equal + "tool (\ngithub.com/a-h/templ\n)\nexclude (\n" + sqlc + "\n)\n", true},
+		{"repository tools", string(repositoryTools), true},
+		{"tab indented block", "require (\n\t" + templ + "\n\t" + sqlc + "\n)\n", true},
+		{"commented header", "require ( // tools \"(`\n\t" + templ + "\n\t" + sqlc + "\n)\n", true},
+		{"unrelated tool", equal + "tool github.com/a-h/templ/cmd/templ\n", true},
+		{"unrelated exclude", equal + "exclude " + templ + "\n", true},
+		{"unknown block", equal + "unknown (\n\t" + templ + "\n)\n", true},
+		{"empty args", equal + "require\nreplace\n", true},
+		{"require no space", equal + "require(\n" + templ + "\n)\n", false},
+		{"replace no space", equal + "replace(\ngithub.com/a-h/templ => ../templ\n)\n", false},
+		{"one line replace", equal + "replace ( github.com/a-h/templ => ../templ )\n", false},
+		{"quoted replace", equal + "replace \"github.com/a-h/templ\" => ../templ\n", false},
+		{"backtick replace", equal + "replace `github.com/a-h/templ` => ../templ\n", false},
+		{"quoted require", equal + "require \"github.com/a-h/templ\" v0.3.1071\n", false},
+		{"backtick require", equal + "require `github.com/a-h/templ` v0.3.1071\n", false},
+		{"unterminated replace", equal + "replace (\nexample.com/other => ../other\n", false},
+		{"unterminated tool", equal + "tool (\ngithub.com/a-h/templ/cmd/templ\n", false},
+		{"replace header in block", equal + "require (\nreplace (\n)\n", false},
+		{"require header in block", equal + "replace (\nrequire (\n)\n", false},
+		{"nested header", equal + "tool (\nexclude (\n)\n", false},
+		{"close without block", equal + ")\n", false},
+		{"directive close in block", equal + "tool (\nrequire )\n)\n", false},
+		{"header extra space", equal + "tool  (\n)\n", false},
+		{"header tab", equal + "tool\t(\n)\n", false},
+		{"parenthesis in directive", equal + "tool( (\n)\n", false},
 		{"templ older", strings.ReplaceAll(equal, "v0.3.1070", "v0.3.1069"), false},
 		{"templ newer", strings.ReplaceAll(equal, "v0.3.1070", "v0.3.1071"), false},
 		{"sqlc older", strings.ReplaceAll(equal, "v1.31.1", "v1.31.0"), false},

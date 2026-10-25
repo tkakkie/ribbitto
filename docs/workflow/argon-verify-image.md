@@ -45,6 +45,7 @@ The recipe test separately checks the base pin. Before Docker starts, the
 copied root manifest must name Go 1.27.3, and `tools/go.mod` must require
 templ v0.3.1070 and sqlc v1.31.1 exactly once each. Missing, duplicate or
 different tool requirements refuse the run: the verify image needs a rebuild.
+Quoted syntax or unsupported parentheses (including malformed blocks) also refuse.
 
 Build, vet and test use one fixed `sh` prelude with `set -eu`. It copies
 `/work/.` (including dotfiles) to `/tmp/work` on tmpfs, then runs the installed

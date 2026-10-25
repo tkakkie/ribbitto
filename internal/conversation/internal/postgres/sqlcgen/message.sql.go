@@ -419,14 +419,14 @@ func (q *Queries) LocateMessage(ctx context.Context, arg LocateMessageParams) (L
 const topicRunFloor = `-- name: TopicRunFloor :one
 SELECT least($1::bigint,
   (SELECT m.event_seq FROM message m
-   WHERE m.organization_id = $2 AND m.channel_id = $3
+   WHERE $2::uuid IS NOT NULL AND m.channel_id = $3
      AND m.topic_id = $4
      AND m.event_seq > $5::bigint AND m.event_seq > $6::bigint
      AND m.event_seq < $7::bigint
      AND NOT ($8::int8multirange @> m.event_seq)
    ORDER BY m.event_seq LIMIT 1),
   (SELECT m.moved_event_seq FROM message m
-   WHERE m.organization_id = $2 AND m.channel_id = $3
+   WHERE $2::uuid IS NOT NULL AND m.channel_id = $3
      AND m.topic_id = $4
      AND m.event_seq > $5::bigint
      AND m.event_seq <= $6::bigint AND m.moved_event_seq > $6::bigint

@@ -53,7 +53,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	if p.topicID != nil && shown {
 		err = p.reading.TopicShown(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor, from, through)
 	} else if shown {
-		err = p.reading.FeedShown(r.Context(), scope, m.Member.JoinedEventSeq, cursor, from, through)
+		err = p.reading.FeedShown(r.Context(), scope, m.Member.JoinedEventSeq, cursor, through, from)
 	} else if p.topicID != nil {
 		err = p.reading.Topic(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor)
 	} else {

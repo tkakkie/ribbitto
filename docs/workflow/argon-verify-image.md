@@ -58,9 +58,12 @@ the trusted runner's flags and pinned image, not this recipe or its test.
 
 `TestVerifyImageRecipe` checks the base, instruction and COPY restrictions,
 download version and same-RUN checksum, parser directives and architecture
-check, bare apt-get commands, allowed pinned packages and install flags,
-PGDG setup's exact command, the earlier fingerprint check and verification
-immediately after the cluster-setting edit.
+check, bare apt-get commands, allowed pinned packages and required `-y` and
+`--no-install-recommends` flags, PGDG setup's exact command and the approved
+fingerprint above (also required in this page). A key change needs the test
+constant, this page and a review. The `postgresql-common` RUN must start with
+errexit, never disable it, and include the exact cluster-setting sed edit
+immediately followed by its exact-line grep check.
 Tier A review also checks the tool builds, cluster setting, user and cache removal.
 A browser, another package set or a second recipe needs a decision 42
 amendment approved by the maintainer.

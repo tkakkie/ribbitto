@@ -61,7 +61,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	}
 	switch {
 	case errors.Is(err, unread.ErrInvalidCursor):
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(w, "Bad Request", http.StatusUnprocessableEntity)
 	case errors.Is(err, org.ErrNotFound):
 		http.NotFound(w, r)
 	case err != nil:

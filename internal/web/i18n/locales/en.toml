@@ -350,7 +350,7 @@ other = "Online"
 other = "Offline"
 
 ["reading.mark"]
-other = "Mark all as read"
+other = "Mark as read"
 
 ["reading.unread_count"]
 other = "Unread ribbits: {count}"

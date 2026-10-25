@@ -124,8 +124,22 @@ func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(st
 	if reason != "" {
 		return reason
 	}
+	if reason := implementWorktreeSymlinks(root, walk, lstat); reason != "" {
+		return reason
+	}
+	for _, path := range paths {
+		if reason := implementGuardPath(root, path, lstat); reason != "" {
+			return reason
+		}
+	}
+	return ""
+}
+
+// Scan the whole tree, including ordinary .git directories, exactly as the guard
+// does. The post-run writer shares this refusal without changing tool permissions.
+func implementWorktreeSymlinks(root string, walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error)) string {
 	errSymlink := errors.New("the worktree holds a symlink")
-	err = walk(root, func(path string, _ fs.DirEntry, walkErr error) error {
+	err := walk(root, func(path string, _ fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return fmt.Errorf("walking worktree: %w", walkErr)
 		}
@@ -143,11 +157,6 @@ func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(st
 			return errSymlink.Error()
 		}
 		return fmt.Errorf("guard error: scanning worktree: %w", err).Error()
-	}
-	for _, path := range paths {
-		if reason := implementGuardPath(root, path, lstat); reason != "" {
-			return reason
-		}
 	}
 	return ""
 }

@@ -63,7 +63,7 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 ### Drafts
 
 Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v6.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
+`message-drafts-v7.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
 restore (#1162), never history. Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.
@@ -96,9 +96,12 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   leave older text; eviction may remove a concurrent update. No repair;
   textarea unchanged. Only next input saves again.
   Foreign values unread, keys unwritten.
-- **Stopping:** sign-out notices and deadline cancel pending saves,
-  stop writes until reload; every save checks the deadline. Storage errors
-  leave typing/sending usable.
+- **Stopping:** sign-out notices or either expiry clock cancel pending saves
+  and stop writes until reload. Save, edit, restore, timer and marker updates
+  share one expiry check. Expiry removes that session's keys, preserving input
+  text and sending. Storage errors leave typing/sending usable.
+  A device clock set too far ahead may end saving early and delete saved drafts
+  (accepted trade-off, #1798); a clock set behind cannot extend the monotonic deadline.
 - **Notice:** `ribbitto.signed-out.v1` holds only the horizon;
   every write fires `storage` in other tabs.
 - **Millisecond rule:** cleanup removes malformed `ribbitto.draft.v1:` keys
@@ -116,9 +119,11 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   with another member, removed; foreign session, removed if earlier by the
   millisecond rule, else unread; own values, removed if invalid JSON, fields
   missing/mistyped, member/session/expiry mismatched, over 4,000 code points,
-  or `at` at least 7 days old or over a day ahead. At the deadline (expiry
-  minus render time; `performance.now()` from document time origin),
-  remove own session's keys unread.
+  or `at` at least 7 days old or over a day ahead. Expiry: the monotonic deadline
+  (expiry minus render time; `performance.now()` from document time origin) or
+  `Date.now() >= expires`, covering sleep that pauses the monotonic clock.
+  Either removes own session's keys unread; the existing chained timer uses
+  the monotonic deadline, without polling.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
   where supported (Chromium); the sign-in page covers the rest.
 

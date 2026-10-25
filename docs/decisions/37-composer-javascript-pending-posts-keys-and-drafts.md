@@ -1,7 +1,7 @@
 # 37. Composer JavaScript: pending posts, idempotency keys and drafts on the device
 
-**Decided** (#1151, approved by the maintainer on 2026-10-16). Each use names
-the issue that implements it. Use (a) is now implemented on the feed and topic views, including #1174’s queue. It is the second
+**Decided** (#1151, maintainer approval 2026-10-16). Each use names its
+implementing issue. Use (a) covers feed/topic views and #1174’s queue: the second
 narrow exception to
 [decision 19](19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
 beside [decision 34](34-live-unread-counts.md). The rules apply to any
@@ -70,44 +70,42 @@ Mention suggestions (#1310, #1312) come as server-rendered fragments over `hx-ge
 
 ## (d) Drafts on this device (#1178, #1181, #1162, #1177)
 
-One drafts script may keep unsent composer text in `localStorage`: it must
-survive reloads and closed tabs, and `sessionStorage` does not. **Bound:** text
-up to the message limit (4,000 code points) and at most 50 entries per member
-and session, evicting the least recently edited; across tabs the cap and
-eviction are best effort (#1186). An entry is removed 7 days
-after its last edit. A storage error drops only the stored copy, never the
-text on the page. Order: #1178 → #1181 → #1162 → #1177.
+One drafts script may keep unsent composer text in `localStorage` to survive
+reloads and closed tabs; `sessionStorage` does not. **Bound:** text
+up to 4,000 code points (the message limit), 50 entries per member/session;
+evict least recently edited. Across tabs, cap/eviction are best effort (#1186).
+Remove entries 7 days after last edit. Storage errors drop only stored copies,
+never page text. Order: #1178 → #1181 → #1162 → #1177.
 
 - **Each entry is bound to its session.** Organisation pages render on
   `#organization-stream` the member UUID (`data-member`), the session marker
   `data-session`, the session's expiry and the render time (#1181). The marker
   is the session's id, a UUIDv7 that PostgreSQL generates, so it is
-  time-ordered. It is not a credential (sessions are found only by token
-  hash); the page never carries the token or its hash. Key:
+  time-ordered, not a credential (sessions are found only by token hash);
+  pages never carry tokens or hashes. Key:
   `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, where the place
   is the literal `feed` or the topic's canonical UUID; value: JSON
   `{member, session, expires, text, at, key}` (#1178 fixes the format). No owner
-  record is shared between sessions.
-- **Restore checks the owner** (#1162). A page reads only its own member and
-  session keys and restores an entry only if its stored member, session and
-  expiry equal its own and the expiry has not passed. However tabs interleave
-  (storage has no transactions), an earlier session's text is never shown
-  under a later session or another member.
+  record spans sessions.
+- **Restore checks the owner** (#1162). Read only own member/session keys;
+  restore only if stored member, session and expiry match and expiry has not
+  passed. Despite interleaving tabs (storage has no transactions), never show
+  an earlier session's text under a later session or another member.
 - **Cleanup compares milliseconds.** Every cleanup has a horizon: on an
   organisation page its own session marker (#1181); on the sign-in page a
   `uuidv7()` read from PostgreSQL in the request (`identity.SessionHorizon`,
   #1178), the same clock as session ids, never the web server's. Cleanup
-  compares the 48-bit millisecond prefix and removes only entries **strictly
-  older** than the horizon, plus malformed ones; other sessions'
-  same-millisecond entries stay until their expiry or a later cleanup. So a
-  cleanup never removes a newer session's entry or a valid own one, and reads
-  only its own session's values (#1181). The sign-in page renders a horizon
+  compares the 48-bit millisecond prefix: remove only entries **strictly older**
+  than the horizon, plus malformed ones; other sessions' same-millisecond entries
+  stay until expiry or later cleanup. Never remove newer sessions' entries or
+  valid own ones; read only own session values (#1181). The sign-in page renders a horizon
   and cleans up only for signed-out requests: `GET /signin` and the error renders of `POST /signin` without a
   signed-in account. If reading the horizon fails, that render does no cleanup.
 - **Writes:** a page writes only its own session's keys, and only before its
   session's deadline (expiry minus render time, measured with
-  `performance.now()` so the device clock cannot move it). At the deadline an
-  open page stops writing and removes its own keys.
+  `performance.now()`). The session also ends when the device clock reaches
+  its expiry, covering sleep that pauses the monotonic clock (#1798).
+  Either clock stops writing and removes that session's keys.
 - **Sign-out** (#1178): a successful `POST /signout` answers 303 to `/signin`
   with `Clear-Site-Data: "storage"` where the browser supports it; a failure
   answers 500 with neither. The sign-in page then cleans up. The sign-out
@@ -119,12 +117,16 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
 - **Cleanup is guaranteed** at sign-out in this browser (the header and the
   sign-in page); at the next load of a later organisation page or of a
   signed-out sign-in page with a horizon; and in an open page at its
-  session's deadline. Signed-out organisation requests get a plain 404, so
+  session's monotonic deadline, or, when only the device clock has passed the
+  expiry, at its next save, edit, marker update, restore or timer event.
+  Signed-out organisation requests get a plain 404, so
   after an expiry cleanup waits for one of those pages.
-- **Limits:** with no ribbitto page open nothing runs: leftover entries stay
-  on disk until one loads in that browser (on a shared computer, sign out). If the database clock steps backwards between a render
-  and a later sign-in, a newer session's marker can sort before an older
-  horizon.
+- **Limits:** without an open ribbitto page, entries stay on disk until one
+  loads in that browser (sign out on shared computers). A device clock too far ahead may
+  end saving early and delete that session's drafts (accepted, #1798).
+  A clock set behind cannot extend saving: the monotonic deadline still applies.
+  If the database clock steps backwards between render and sign-in, a newer
+  session's marker can sort before an older horizon.
 - **Cost:** signing in again drops the earlier session's drafts; rare, since sessions last 30 days and drafts 7.
 - **Sidebar** (#1177): the script may only show or hide a server-rendered,
   hidden draft marker, reapplying it after each sidebar swap.
@@ -157,18 +159,16 @@ server-rendered `sse-connect` URL
 ([decision 30](30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md#amendment-transport-progress-1103));
 it is not composer code.
 
-**Why:** the M7 composer needs a post to feel sent at once, a retry that never
-posts twice and text that survives a reload, without the client owning
-messages. [The vision](../vision.md) asks a
-client-side change that alters decision 19 to come with measurements: #1149's
+**Why:** M7 needs immediate feedback, safe retries and drafts across reloads
+without client-owned messages. [The vision](../vision.md) requires
+measurements for client-side changes to decision 19: #1149's
 [own-post baseline](https://github.com/tkakkie/ribbitto/issues/1149#issuecomment-6199142777)
-is 30.9 ms median send → visible on the desktop feed and 75.5 ms on the phone
-feed (45.5 and 124.5 ms in topic views). #1156 reports against it, to the text
-being visible.
+is median send → visible: desktop/phone feeds 30.9/75.5 ms, topic views
+45.5/124.5 ms. #1156 reports against it, to visible text.
 
 **Considered:** `fetch` in one composer script (direct control of queueing and
-retries, but a second request path beside htmx's `hx-sync`, error handling and
-422 swaps; no measurement shows htmx is the bottleneck); one owner record per
+retries, but duplicates htmx's `hx-sync`, error handling and
+422 swaps; no measured htmx bottleneck); one owner record per
 member (a stale tab's write could be restored under a new session); a
 separate public time-ordered marker (the id is not a credential); the
 send-key preference in browser storage (it must follow the member); and, for

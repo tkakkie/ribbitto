@@ -1122,6 +1122,85 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			run(t, b, `check(!Object.keys(localStorage).some(k => k.includes('`+session+`')) && document.querySelector('#message-body').value === '', 'later load restored stale entry');`)
 		})
 	}
+	// Fresh foreign sessions survive the load sweep, so only expiry can disturb
+	// these controls. A second own place catches cleanup limited to the open key.
+	const seedExpiry = `const page=document.querySelector('#organization-stream').dataset;
+   window.expires=+page.sessionExpires; editNow=expires-1000; localStorage.clear();
+   const otherSession='019a1b2c-3d51-7000-8000-000000000000', otherMember='09000000-0000-0000-0000-000000000000';
+   const e={member:page.member,session:page.session,expires,text:'seed',at:editNow,key:null};
+   window.ownKeys=[scope(),scope().replace(/feed$/, '03000000-0000-0000-0000-000000000000')];
+   window.foreignKeys=[scope().replace(page.session,otherSession),scope().replace(page.session,otherSession).replace(page.member,otherMember)];
+   ownKeys.forEach(k=>localStorage.setItem(k,JSON.stringify(e)));
+   foreignKeys.forEach((k,i)=>localStorage.setItem(k,JSON.stringify({...e,session:otherSession,member:i ? otherMember : page.member})));
+   window.foreignBefore=foreignKeys.map(k=>localStorage.getItem(k));
+   window.marker=document.createElement('span'); marker.dataset.draftMarker=''; marker.hidden=true;
+   const anchor=document.createElement('a'); anchor.href=location.pathname+'/topics/03000000-0000-0000-0000-000000000000';
+   anchor.append(marker); document.querySelector('#sidebar-channels').append(anchor);
+   window.refreshExpiry=()=>dispatchEvent(new StorageEvent('storage',{key:scope()})); refreshExpiry();
+   window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; // Only the drafts script counts: other scripts may fail on the removed sidebar.
+   addEventListener('error',e=>{if(String(e.filename).includes('/message-drafts-')) expiryErrors++;});
+   const set=Storage.prototype.setItem, remove=Storage.prototype.removeItem;
+   // Other scripts may touch unrelated keys while the page loads.
+   Storage.prototype.setItem=function(k,v){if(String(k).startsWith('ribbitto.draft.v1:')) draftWrites++; return set.call(this,k,v);};
+   Storage.prototype.removeItem=function(k){if(String(k).startsWith('ribbitto.draft.v1:')) draftRemovals.push(k); return remove.call(this,k);};`
+	const checkExpiry = `check(ownKeys.every(k=>localStorage.getItem(k)===null),'own places survived expiry');
+   check(foreignKeys.every((k,i)=>localStorage.getItem(k)===foreignBefore[i]),'foreign session/member changed');
+   check(draftWrites===0,'expiry wrote '+draftWrites); check(draftRemovals.length===2,'expiry removals '+JSON.stringify(draftRemovals)); check(pendingDrafts()===0,'expiry left debounce');
+   check(document.querySelector('#message-body').value===want && marker.hidden,'expiry changed textarea or left marker');
+   // Neither clock rolling back nor another timer/event may restart or repeat cleanup.
+   const errors=expiryErrors;
+   editNow=expires-1000; elapsed=0; edit(want,editNow); releaseDrafts(); flush(); if(typeof expireDrafts==='function') expireDrafts(); refreshExpiry();
+   const sends=sendEvents.length, b=document.querySelector('#message-body');
+   b.dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:b.value,inPlace:true}}));
+   check(sendEvents.length===sends+1,'sending dispatch lost '+sendEvents.length+'/'+sends); check(expiryErrors===errors,'sending dispatch raised errors'); check(b.value===want,'sending changed text');
+   check(draftWrites===0 && draftRemovals.length===2 && ownKeys.every(k=>localStorage.getItem(k)===null),'stopped page resumed');
+   check(foreignKeys.every((k,i)=>localStorage.getItem(k)===foreignBefore[i]),'later cleanup changed foreign drafts');`
+	t.Run("expiry-clock/normal", func(t *testing.T) {
+		p := openClean(t, false, "")
+		run(t, p, seedExpiry)
+		run(t, p, `check(!marker.hidden,'normal marker missing'); edit('edited',editNow+1);
+   tickDrafts(299); check(entry().text==='seed' && draftWrites===0 && pendingDrafts()===1,'early normal save');
+   tickDrafts(1); check(entry().text==='edited' && draftWrites===1 && pendingDrafts()===0,'normal debounce did not save');
+   expireDrafts(); refreshExpiry(); check(!marker.hidden && draftRemovals.length===0,'normal expiry removed keys or hid marker');
+   check(ownKeys.every(k=>localStorage.getItem(k)!==null) && foreignKeys.every((k,i)=>localStorage.getItem(k)===foreignBefore[i]),'normal keys changed');`)
+		before := eval(t, p, "read normal drafts", `()=>snapshot()`).Value.Str()
+		copy := open(t, false, `document.addEventListener('readystatechange',()=>{if(document.readyState==='interactive') editNow=+document.querySelector('#organization-stream').dataset.sessionExpires-999;});`)
+		restored(t, copy, "edited")
+		eval(t, copy, "restore preserves normal drafts", `before=>check(snapshot()===before,'restore removed or changed keys')`, before)
+	})
+	for _, path := range []string{"save", "edit", "restore", "timer", "markers", "monotonic", "boundary"} {
+		t.Run("expiry-clock/"+path, func(t *testing.T) {
+			var p *rod.Page
+			want := "kept"
+			if path == "restore" {
+				// Isolate restore from the initial marker check; the timer runs
+				// later, so a missed restore guard would visibly restore seed text.
+				p = open(t, false, `document.addEventListener('readystatechange',()=>{
+    if(document.readyState!=='interactive') return;
+    `+seedExpiry+` document.querySelector('#sidebar-channels').remove(); editNow=expires+1; });`)
+				want = ""
+			} else {
+				p = openClean(t, false, "")
+				run(t, p, seedExpiry)
+				run(t, p, `check(!marker.hidden,'normal marker missing'); edit('kept',editNow+1); check(pendingDrafts()===1,'normal edit did not queue');`)
+				eval(t, p, "drive isolated expiry path", `path=>{
+    check(elapsed===0,'monotonic clock already advanced');
+    if(path==='boundary') {
+     edit('kept',expires-1); releaseDrafts(); check(entry().text==='kept' && draftWrites===1 && draftRemovals.length===0,'expires-1 stopped saving'); draftWrites=0;
+    }
+    editNow=path==='boundary' ? expires : expires+1;
+    if(path==='monotonic') {editNow=expires-1; elapsed=31*86400000;}
+    switch(path) {
+     case 'save': tickDrafts(299); check(draftWrites===0 && pendingDrafts()===1,'debounce not exercised'); tickDrafts(1); break;
+     case 'edit': case 'boundary': edit('kept',editNow); break;
+     case 'timer': case 'monotonic': expireDrafts(); break;
+     case 'markers': refreshExpiry(); break;
+    }
+   }`, path)
+			}
+			run(t, p, `const want=`+fmt.Sprintf("%q", want)+`; `+checkExpiry)
+		})
+	}
 	t.Run("expiry", func(t *testing.T) {
 		p := openClean(t, false, "")
 		run(t, p, `localStorage.clear(); edit('saved', editNow); flush(); edit('pending', editNow + 1); elapsed = 31*86400000; expireDrafts();

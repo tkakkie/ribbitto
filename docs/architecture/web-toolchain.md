@@ -1,4 +1,4 @@
-# Web toolchain (planned)
+# Web toolchain
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
 including the checker and `.mjs` harnesses. Mechanics marked **confirmed** were confirmed by the maintainer on 2026-10-21 ([record][cf]). #1410–#1415 build the foundation;
@@ -17,17 +17,17 @@ Go-driven esbuild build, not blanket authorization.
 table changes in [`tools/languagecheck`](../../tools/languagecheck/rules.go),
 referencing that approval. Acceptance criteria for #1410 and #1411/#1412/#1413
 must require each location's table change in the PR introducing its first file.
-Specify kinds and exact locations: web/src/*.ts, the chosen .mjs harness
-location, root package.json/package-lock.json, .node-version if adopted, and
-the Go builder under tools/ (already covered by the Go rule). The language
+Approved in #1410: web/src/*.ts (including declarations), root tsconfig.json,
+package.json/package-lock.json and .node-version. Later PRs add the .mjs harness
+location and the Go builder under tools/ (already covered by the Go rule). The language
 check fails #1410 or any PR adding unlisted files without the required table entries. Any exact-path exception must follow decision 42's
 rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
 The check does not scan Makefile recipes or workflow steps for node/npm command
 words; decision 42 leaves commands to review. #1410 must record/review the
 runtime commands it uses against the limited approval; commands alone need no
-path-and-kind entry. This PR adds no .ts, .mjs, package.json, package-lock.json
-or table entry and edits neither decision 42 nor the table.
+path-and-kind entry. #1410 adds the TypeScript/configuration files and updates
+decision 42 and the table; .mjs remains deferred to #1412.
 
 ## Build, manifest and embedding — #1411
 
@@ -55,11 +55,11 @@ hashes, no whole-graph prefix.
 
 ## Versions and installation — #1410, #1415
 
-**Node pin mechanics — confirmed:** #1410
-introduces one root `.node-version` containing `26.8.1`. CI setup, local
+**Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI setup, local
 development and sandbox setup read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
-bundled npm, not a separately upgraded global npm. CI provisions the release
+bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
+the directory of the version-checked Node without resolving Node symlinks. CI provisions the release
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Codex downloads no Node and expands no network profile; report missing
@@ -67,7 +67,7 @@ or mismatched runtimes. #1415 documents/verifies setup and sandbox-local writes;
 it does not supply the toolchain or language-table changes. Argon's command
 prohibition and verify boundary remain unchanged.
 
-The root `package.json` will pin `typescript` exactly to `7.0.2`, with a
+The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
 pinned Node; keep install/cache writes inside the implementer's sandbox. No
@@ -75,8 +75,19 @@ npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
 or platform package or enabling lifecycle scripts. The portable package selects
 the executable; no manual platform pins. Classic `6.0.3` replaces it only for a
-recorded migration/checker/editor incompatibility. #1410 checks diagnostics and
-editor/language-service use on supported platforms; the spike tested no editors.
+recorded migration/checker/editor incompatibility. #1410 checks CLI diagnostics
+on macOS arm64 and Linux x64; editor/language-service evidence is deferred to
+#1815 by the maintainer (2026-10-26). The spike tested no editors.
+
+Run `make web-install` explicitly, then `make check-web`; checks never install.
+`make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
+or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
+that fail. CI's separate `web-types` job installs and checks with that flag,
+then runs `go -C tools test -count=1 ./webtypes -run '^TestRealTypeScript$'`
+(the ill-typed TempDir input must produce TS2322). Hermetic wrong-Node and
+lockfile tests run in `check-tools` in `checks`, without Node. The strict,
+no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
+outside it. `globals.d.ts` supplies the first input and the htmx global.
 
 **Pin updates — confirmed:** ordinary
 dependency PRs: change the exact checker pin and lockfile together; for a Node
@@ -148,6 +159,16 @@ setup supplies Node; no downloader or network expansion. #1415 also documents
 sandbox-local install/cache writes and handoff. No AI runs transferred
 `node_modules`, npm scripts or Node tests on the host after
 handoff; CI remains the check.
+The wrapper's `node --version` probe in `make check` is not routine Node use.
+
+**One-time Codex exception (#1410 only, maintainer 2026-10-25):** trusted host
+Node 26.8.1 may run inside the normal implementation profile, without a Node
+download or network expansion. `npm install` is used only for lockfile creation
+or regeneration; `npm ci` verifies the lock. Both require `--ignore-scripts`,
+solely to generate/verify the first lock here, with cache in `bin/.cache/npm`.
+Delete `node_modules` before handoff; afterwards no AI runs it, npm scripts or
+Node tests on the host. CI is the check. This exception ends when #1410's last
+PR merges; routine use still waits for #1415 too.
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)

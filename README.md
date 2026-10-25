@@ -101,7 +101,8 @@ request. Reload on edits; CSS needs no server restart.
 `cmd/dev` stops watchers and server on Ctrl-C, SIGTERM or watcher exit.
 
 `make css` and `make lint` use [`tools/download`](tools/download/main.go)
-for SHA-256 checked tools (macOS ARM64 and Linux x64). No npm is needed.
+for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
+for type checking and dependency management; see [setup](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
 Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
@@ -111,10 +112,10 @@ so local notes and tools do not change the output.
 `make check` must pass before a pull request; for another AI's code,
 green draft CI must pass before review instead
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test`, then `check-tools`. CI runs
-`check-static` and `check-tools` in `checks`, each named `testshard` shard
-in a parallel `test` matrix job and `rest` in `test-rest`
-(`.github/workflows/ci.yml`).
+It runs `check-static`, `check-test`, `check-tools`, then `check-web`. CI runs
+`check-static` and `check-tools` in `checks`, each `testshard` shard
+in a parallel `test` matrix job, `rest` in `test-rest`,
+and TypeScript in `web-types` (`.github/workflows/ci.yml`).
 [`testshard -run`](tools/testshard/main.go) owns test packages, selectors and flags.
 `make check` checks formatting and internal `doc.go` files via
 [`tools/formatcheck`](tools/formatcheck/main.go), vets, lints,
@@ -178,10 +179,10 @@ reloads the page
 
 ## Documentation
 
-- [Vision](docs/vision.md) — what ribbitto aims to be, and how changes are checked against it
-- [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
+- [Vision](docs/vision.md) — aims and acceptance criteria
+- [Architecture](docs/architecture/README.md) — packages, imports and data flow
 - [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
-- [UI](docs/ui.md) — design direction, tokens, layout; [colours and contrast](docs/ui-colours.md), [UI code](docs/ui-code.md), [components](docs/ui-components.md), [markup and accessibility](docs/accessibility.md)
+- [UI](docs/ui.md) — design, tokens; [colours and contrast](docs/ui-colours.md), [UI code](docs/ui-code.md), [components](docs/ui-components.md), [markup and accessibility](docs/accessibility.md)
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md) · [Database tests](docs/database-tests.md)
@@ -189,9 +190,7 @@ reloads the page
 
 ## Contributing
 
-The project is maintained by one person and developed with AI coding tools;
-see [`AGENTS.md`](AGENTS.md) for the conventions that apply to every change
-and [`docs/workflow/`](docs/workflow/README.md) for how work flows.
+See [`AGENTS.md`](AGENTS.md) for conventions and [`docs/workflow/`](docs/workflow/README.md) for how work flows.
 Issues and pull requests are welcome, in English.
 
 ## Licence

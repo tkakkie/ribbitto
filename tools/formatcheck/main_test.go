@@ -66,6 +66,7 @@ func TestRun(t *testing.T) {
 		{"templ parse error", map[string]string{"p.templ": "not a template"}, templMessage + "./p.templ"},
 		{"empty templ", map[string]string{"p.templ": ""}, templMessage + "./p.templ"},
 		{"bin skipped", map[string]string{"bin/p.go": badGo, "bin/p.templ": badTempl, "bin/cache/p.templ": "invalid"}, ""},
+		{"node_modules skipped", map[string]string{"node_modules/p.go": badGo, "node_modules/p.templ": badTempl}, ""},
 		{"nested bin checked", map[string]string{"other/bin/p.go": badGo}, goMessage + "./other/bin/p.go"},
 		{"missing doc", map[string]string{"internal/p/p.go": goodGo}, docMessage + "internal/p"},
 		{"generated needs doc", map[string]string{"internal/p/p.go": "// Code generated. DO NOT EDIT.\n" + goodGo}, docMessage + "internal/p"},

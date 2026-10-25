@@ -328,13 +328,13 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 // needs the width.
 templ channelFrame(page ChannelPage) {
 	<div
-		id="organization-stream"
-		data-member={ idValue(page.MemberID) }
+		id={ OrganizationStreamID }
+		{ MemberAttribute }={ idValue(page.MemberID) }
 		data-session={ idValue(page.Session) }
 		data-session-expires={ fmt.Sprint(page.SessionExpires.UnixMilli()) }
 		data-rendered-at={ fmt.Sprint(page.Rendered.UnixMilli()) }
 		if page.Topic != nil {
-			data-sidebar-topic={ idValue(page.Topic.ID) }
+			{ SidebarTopicAttribute }={ idValue(page.Topic.ID) }
 		}
 		if page.EventCursor != nil {
 			data-event-cursor={ fmt.Sprint(*page.EventCursor) }
@@ -344,9 +344,9 @@ templ channelFrame(page ChannelPage) {
 		class={ "flex h-conversation-viewport gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
 		if page.EventCursor != nil {
-			<form id="sidebar-resync" hidden method="post" action={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-post={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-trigger="sidebar-resync" hx-sync="this:drop" hx-swap="none"></form>
+			<form id={ SidebarResyncID } hidden method="post" action={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-post={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-trigger={ SidebarResyncEvent } hx-sync="this:drop" hx-swap="none"></form>
 		}
-		<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
+		<div id={ StreamSinkID } hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 		@appBar(page)
 		// Either element is the scrolling pane that sidebar-scroll-v2.js finds.
 		if page.List {
@@ -674,8 +674,8 @@ templ SidebarLists(page ChannelPage) {
 // ChannelList is shared by pages and member-dependent recounts.
 templ ChannelList(page ChannelPage, oob bool) {
 	<ul
-		id="sidebar-channels"
-		data-snapshot-seq={ fmt.Sprint(page.SnapshotSeq) }
+		id={ SidebarChannelsID }
+		{ SnapshotSeqAttribute }={ fmt.Sprint(page.SnapshotSeq) }
 		class="flex flex-col gap-1"
 		if oob {
 			hx-swap-oob="true"
@@ -710,7 +710,7 @@ func currentChannelListed(page ChannelPage) bool {
 // TopicList preserves the snapshot's bounded list, including its order.
 templ TopicList(page ChannelPage) {
 	<ul
-		id="sidebar-topics"
+		id={ SidebarTopicsID }
 		aria-label={ i18n.T(ctx, "topic.list") }
 		class="mb-1 ml-6 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2"
 	>
@@ -723,7 +723,7 @@ templ TopicList(page ChannelPage) {
 // TopicHeadingCount keeps a target even while the selection is listed or at zero.
 templ TopicHeadingCount(page ChannelPage, oob bool) {
 	<span
-		id="topic-heading-count"
+		id={ TopicHeadingCountID }
 		class="ml-2 max-desk:ml-0"
 		if oob {
 			hx-swap-oob="true"
@@ -737,12 +737,12 @@ templ TopicHeadingCount(page ChannelPage, oob bool) {
 
 // ChannelDOMID identifies a replaceable sidebar channel entry.
 func ChannelDOMID(id kernel.ID) string {
-	return fmt.Sprintf("channel-%x", id)
+	return fmt.Sprintf(ChannelDOMPrefix+"%x", id)
 }
 
 // TopicDOMID identifies a replaceable sidebar topic entry.
 func TopicDOMID(id kernel.ID) string {
-	return fmt.Sprintf("topic-%x", id)
+	return fmt.Sprintf(TopicDOMPrefix+"%x", id)
 }
 
 func selectedTopicListed(page ChannelPage) bool {
@@ -765,7 +765,7 @@ func unreadText(count int64) string {
 templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 	<li id={ ChannelDOMID(channel.ID) }>
 		<a
-			id={ "link-" + ChannelDOMID(channel.ID) }
+			id={ fmt.Sprintf(LinkChannelDOMPrefix+"%x", channel.ID) }
 			href={ templ.SafeURL(ChannelURL(slug, channel.ID)) }
 			if selected {
 				aria-current="page"
@@ -788,7 +788,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, count int64) {
 	<li id={ TopicDOMID(topic.ID) }>
 		<a
-			id={ "link-" + TopicDOMID(topic.ID) }
+			id={ fmt.Sprintf(LinkTopicDOMPrefix+"%x", topic.ID) }
 			href={ templ.SafeURL(ConversationURL(slug, channelID, &topic.ID)) }
 			if selected {
 				aria-current="page"
@@ -815,7 +815,7 @@ templ selectionPill() {
 }
 
 templ unreadBadge(count int64) {
-	<span data-unread-count={ fmt.Sprint(count) } hidden?={ count == 0 } class="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand">
+	<span { UnreadCountAttribute }={ fmt.Sprint(count) } hidden?={ count == 0 } class="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand">
 		<span aria-hidden="true">{ unreadText(count) }</span>
 		<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
 	</span>

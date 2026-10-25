@@ -12,11 +12,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 || (os.Args[1] != "install" && os.Args[1] != "check") {
-		fmt.Fprintln(os.Stderr, "usage: webtypes install|check <repository root>")
+	if len(os.Args) < 3 || (os.Args[1] != "files" && (len(os.Args) != 3 || (os.Args[1] != "install" && os.Args[1] != "check"))) || (os.Args[1] == "files" && len(os.Args) < 4) {
+		fmt.Fprintln(os.Stderr, "usage: webtypes install|check <repository root> | files <repository root> <input.ts>...")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2]); err != nil {
+	if err := run(os.Args[1], os.Args[2], os.Args[3:]...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -91,13 +91,13 @@ func checkerReady(root string) error {
 	return nil
 }
 
-func run(mode, root string) error {
+func run(mode, root string, files ...string) error {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolving root: %w", err)
 	}
 	err = ready(root)
-	if err == nil && mode == "check" {
+	if err == nil && mode != "install" {
 		err = checkerReady(root)
 	}
 	if err != nil {
@@ -134,6 +134,10 @@ func run(mode, root string) error {
 		}
 		// CLI policy overrides env/.npmrc; lockfile integrity also covers registry overrides.
 		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
+	} else if mode == "files" {
+		// Temporary contract consumers use the same pins and process policy as the project check.
+		args := append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig", "--strict", "--noEmit", "--erasableSyntaxOnly", "--allowImportingTsExtensions"}, files...)
+		cmd = command(root, "node", args...)
 	} else {
 		cmd = command(root, "node", "node_modules/typescript/bin/tsc", "--project", "tsconfig.json")
 	}

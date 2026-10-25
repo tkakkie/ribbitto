@@ -124,7 +124,7 @@ jobs:
         env:
           npm_config_omit: optional
       - run: make check-web
-      - run: go -C tools test -count=1 -v ./webtypes -run '^TestRealTypeScript$'
+      - run: go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'
 
   vuln:
     runs-on: ubuntu-latest

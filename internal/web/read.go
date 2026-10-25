@@ -77,7 +77,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 // Numeric bounds belong to unread, shared by every caller.
 func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) {
 	for _, key := range []string{"cursor", "from", "through", "scope"} {
-		if len(r.Form[key]) > 1 {
+		if len(r.PostForm[key]) > 1 {
 			return
 		}
 	}

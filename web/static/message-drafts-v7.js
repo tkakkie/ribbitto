@@ -147,7 +147,7 @@
       }
     };
     const edited = () => {
-      if (sessionExpired() || stopped) return;
+      if (stopped) return;
       // Snapshot the input, not a later save or a send's textarea cleanup.
       source = null;
       savedKey = null;

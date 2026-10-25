@@ -38,7 +38,7 @@ A newly read message
   Cost: `O(R)` for the read set and the candidate rows; 87–88 ms for 9,999
   messages over 10,000 ranges in the benchmark.
 - **Topic run, cursor `S`, run `[F, T]` (dormant, #1486):** `TopicWriter.ReadShown`
-  validates the feed-run bounds before preparation. The same transaction-bound
+  validates the topic-run bounds before preparation. The same transaction-bound
   candidate query adds `F ≤ event_seq ≤ T`, retaining `moved_event_seq ≤ S`.
   Under the channel lock, `TopicRunFloor` probes the prepared read set for the
   earliest unread message below `F`: its sequence above the floor, or its move

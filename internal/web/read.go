@@ -55,9 +55,13 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	} else if shown {
 		err = p.reading.FeedShown(r.Context(), scope, m.Member.JoinedEventSeq, cursor, from, through)
 	} else if p.topicID != nil {
-		err = p.reading.Topic(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor)
+		if r.PostForm.Has("scope") {
+			err = p.reading.Topic(r.Context(), unread.TopicScope{Scope: scope, TopicID: *p.topicID}, m.Member.JoinedEventSeq, cursor)
+		}
 	} else {
-		err = p.reading.Feed(r.Context(), scope, m.Member.JoinedEventSeq, cursor)
+		if r.PostForm.Has("scope") {
+			err = p.reading.Feed(r.Context(), scope, m.Member.JoinedEventSeq, cursor)
+		}
 	}
 	switch {
 	case errors.Is(err, unread.ErrInvalidCursor):

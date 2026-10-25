@@ -95,8 +95,8 @@ never page text. Order: #1178 → #1181 → #1162 → #1177.
   organisation page its own session marker (#1181); on the sign-in page a
   `uuidv7()` read from PostgreSQL in the request (`identity.SessionHorizon`,
   #1178), the same clock as session ids, never the web server's. Cleanup
-  compares the 48-bit millisecond prefix: remove malformed entries and those
-  **strictly older** than the horizon; other sessions' same-millisecond entries
+  compares the 48-bit millisecond prefix: remove only entries **strictly older**
+  than the horizon, plus malformed ones; other sessions' same-millisecond entries
   stay until expiry or later cleanup. Never remove newer sessions' entries or
   valid own ones; read only own session values (#1181). The sign-in page renders a horizon
   and cleans up only for signed-out requests: `GET /signin` and the error renders of `POST /signin` without a
@@ -117,7 +117,9 @@ never page text. Order: #1178 → #1181 → #1162 → #1177.
 - **Cleanup is guaranteed** at sign-out in this browser (the header and the
   sign-in page); at the next load of a later organisation page or of a
   signed-out sign-in page with a horizon; and in an open page at its
-  session's deadline. Signed-out organisation requests get a plain 404, so
+  session's monotonic deadline, or, when only the device clock has passed the
+  expiry, at its next save, edit, marker update, restore or timer event.
+  Signed-out organisation requests get a plain 404, so
   after an expiry cleanup waits for one of those pages.
 - **Limits:** without an open ribbitto page, entries stay on disk until one
   loads in that browser (sign out on shared computers). A device clock too far ahead may
@@ -157,18 +159,16 @@ server-rendered `sse-connect` URL
 ([decision 30](30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md#amendment-transport-progress-1103));
 it is not composer code.
 
-**Why:** the M7 composer needs a post to feel sent at once, a retry that never
-posts twice and text that survives a reload, without the client owning
-messages. [The vision](../vision.md) asks a
-client-side change that alters decision 19 to come with measurements: #1149's
+**Why:** M7 needs immediate feedback, safe retries and drafts across reloads
+without client-owned messages. [The vision](../vision.md) requires
+measurements for client-side changes to decision 19: #1149's
 [own-post baseline](https://github.com/tkakkie/ribbitto/issues/1149#issuecomment-6199142777)
-is 30.9 ms median send → visible on the desktop feed and 75.5 ms on the phone
-feed (45.5 and 124.5 ms in topic views). #1156 reports against it, to the text
-being visible.
+is median send → visible: desktop/phone feeds 30.9/75.5 ms, topic views
+45.5/124.5 ms. #1156 reports against it, to visible text.
 
 **Considered:** `fetch` in one composer script (direct control of queueing and
-retries, but a second request path beside htmx's `hx-sync`, error handling and
-422 swaps; no measurement shows htmx is the bottleneck); one owner record per
+retries, but duplicates htmx's `hx-sync`, error handling and
+422 swaps; no measured htmx bottleneck); one owner record per
 member (a stale tab's write could be restored under a new session); a
 separate public time-ordered marker (the id is not a credential); the
 send-key preference in browser storage (it must follow the member); and, for

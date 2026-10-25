@@ -1147,8 +1147,9 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    check(draftWrites===0,'expiry wrote '+draftWrites); check(draftRemovals.length===2,'expiry removals '+JSON.stringify(draftRemovals)); check(pendingDrafts()===0,'expiry left debounce');
    check(document.querySelector('#message-body').value===want && marker.hidden,'expiry changed textarea or left marker');
    // Neither clock rolling back nor another timer/event may restart or repeat cleanup.
+   const errors=expiryErrors; // Other scripts may already have failed on the removed sidebar.
    editNow=expires-1000; elapsed=0; edit(want,editNow); releaseDrafts(); flush(); if(typeof expireDrafts==='function') expireDrafts(); refreshExpiry();
-   const sends=sendEvents.length, errors=expiryErrors, b=document.querySelector('#message-body'); // Other scripts may already have failed on the removed sidebar.
+   const sends=sendEvents.length, b=document.querySelector('#message-body');
    b.dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:b.value,inPlace:true}}));
    check(sendEvents.length===sends+1,'sending dispatch lost '+sendEvents.length+'/'+sends); check(expiryErrors===errors,'sending dispatch raised errors'); check(b.value===want,'sending changed text');
    check(draftWrites===0 && draftRemovals.length===2 && ownKeys.every(k=>localStorage.getItem(k)===null),'stopped page resumed');

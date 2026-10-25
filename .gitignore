@@ -2,6 +2,7 @@
 /bin/
 /ribbitto
 /dist/
+/node_modules/
 
 # Local configuration and secrets
 .env

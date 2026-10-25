@@ -28,6 +28,11 @@ func rules() []rule {
 		{"db/queries/*/*.sql", "SQL queries"},
 		{"internal/web/view/*.templ", "templ"},
 		{"internal/lintfixture/*.templ", "templ lint fixture"},
+		// #1410: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261
+		{".node-version", "Node version"},
+		{"package.json", "npm manifest"}, {"package-lock.json", "npm lockfile"},
+		{"tsconfig.json", "TypeScript configuration"},
+		{"web/src/*.ts", "TypeScript source and declarations"},
 		{"web/styles/*.css", "CSS source"},
 		{"web/static/css/*.css", "CSS output"},
 		// The pattern follows web/static/javascript_test.go; the kind also checks its regexp.

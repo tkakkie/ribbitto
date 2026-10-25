@@ -17,7 +17,7 @@ GO_TEST_FLAGS ?= -p 2
 # package runs.
 GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -49,19 +49,28 @@ bin/dev: $(wildcard cmd/dev/*.go) go.mod go.sum
 $(TAILWIND):
 	go -C tools run ./download tailwind ..
 
-# tools/formatcheck excludes caches under bin/: they contain third-party
-# sources and invalid fixtures. Comparing formatter output keeps files untouched.
+# tools/formatcheck skips root bin/ and node_modules/: third-party sources
+# and invalid fixtures. Comparing formatter output keeps files untouched.
 # The tools tests run with -count=1: scopecheck and
 # tablecheck read db/queries, db/migrations and module_imports_test.go from
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
 #
-# check runs its three parts in order; CI runs them in parallel jobs (#992),
+# check runs Go checks then TypeScript; CI splits these across jobs (#992),
 # check-test once per tools/testshard shard, so the two cannot drift.
 check:
 	$(MAKE) check-static
 	$(MAKE) check-test
 	$(MAKE) check-tools
+	$(MAKE) check-web
+
+web-install:
+	go -C tools run ./webtypes install ..
+
+# Never installs; NOT VERIFIED unless pinned Node/checker exist, or fails with
+# RIBBITTO_REQUIRE_NODE=1. CI web-types installs explicitly before checking.
+check-web:
+	go -C tools run ./webtypes check ..
 
 check-static: $(TEMPL)
 	go -C tools run ./formatcheck -templ ../$(TEMPL) ..
@@ -93,6 +102,7 @@ check-tools: $(TEMPL)
 # not run Go or templ formatting, the doc.go check, go vet, sourcecheck or
 # the tests (make check does), nor the schema docs or make vuln (CI does).
 prepush: $(TEMPL) $(TAILWIND)
+	$(MAKE) check-web
 	go -C tools run ./languagecheck ..
 	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..

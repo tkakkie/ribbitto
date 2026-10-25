@@ -103,6 +103,29 @@ jobs:
             printf "::notice file=docs/dependencies.md::Added package-import edge: %s\n", $0
           }'
 
+  web-types:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RIBBITTO_REQUIRE_NODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0 (2025-10-14)
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: make web-install
+        env:
+          npm_config_omit: optional
+      - run: make check-web
+      - run: go -C tools test -count=1 ./webtypes -run '^TestRealTypeScript$'
+
   vuln:
     runs-on: ubuntu-latest
     steps:
@@ -203,7 +226,7 @@ jobs:
   # skipped job satisfies a required check, so this one always runs and
   # passes only when every job it needs succeeded.
   ci:
-    needs: [checks, test, test-rest, vuln]
+    needs: [checks, test, test-rest, vuln, web-types]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -212,4 +235,4 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          printf '%s\n' "$NEEDS" | jq -e 'length == 4 and all(.[]; .result == "success")' > /dev/null
+          printf '%s\n' "$NEEDS" | jq -e 'length == 5 and all(.[]; .result == "success")' > /dev/null

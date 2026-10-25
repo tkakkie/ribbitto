@@ -157,5 +157,5 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 The command first checks Go formatting with PATH's `gofmt -l`, then compares
 each template with the pinned `./bin/templ`'s formatter stdout (parse errors
-fail too). Neither check rewrites files. Both skip root `bin/` but include
+fail too). Neither check rewrites files. Both skip root `bin/` and `node_modules/` but include
 `_test.go` and `testdata/` files; the exemptions above apply only to `doc.go`.

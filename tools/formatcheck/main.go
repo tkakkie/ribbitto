@@ -54,7 +54,7 @@ func run(root, templ string) error {
 		if err != nil {
 			return err
 		}
-		if rel == "bin" && entry.IsDir() {
+		if (rel == "bin" || rel == "node_modules") && entry.IsDir() {
 			return filepath.SkipDir
 		}
 		if !entry.Type().IsRegular() {

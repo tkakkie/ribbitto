@@ -9,7 +9,8 @@ dependency or format stops for the maintainer's explicit approval in its issue. 
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)
 checks file kinds by location; this list is its human-readable description.
 The table itself changes only through an issue approved by the maintainer.
-[Decision 35](35-tooling-in-go.md) stays unchanged.
+[Decision 43](43-typescript-with-a-go-driven-build.md) amends decision 35
+for limited Node use.
 
 ## Language list
 
@@ -17,6 +18,10 @@ Derived from all 976 tracked files of the 2026-10-19 baseline, without
 exceptions, with later exact-path additions approved through #1437 and #1695.
 Directory entries below are direct-only unless stated otherwise:
 
+- TypeScript directly in `web/src/` (including `.d.ts`); root `.node-version`,
+  `package.json`, `package-lock.json` and `tsconfig.json`, approved through
+  [#1356](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
+  and introduced by #1410. No `.mjs` allowance yet (#1412).
 - Go throughout the repository, except fenced vendor and testdata directories.
 - SQL migrations directly in `db/migrations/`, queries one module directory
   below `db/queries/`; templ in `internal/web/view/` and `internal/lintfixture/`.
@@ -72,12 +77,11 @@ Directory entries below are direct-only unless stated otherwise:
   neither the Go test nor the review is a security boundary. The boundary
   is the container flags and the image ID that are pinned in trusted code.
 
-TypeScript, Node, Rust/WASM and any other language or runtime are **not
-approved by this rule**; each becomes allowed only when its own accepted
-decision adds it to the language list and path-and-kind table. TypeScript,
-Node and the Go-driven esbuild build are the subject of #1356 and a separate
-decision pull request still in review; a decision accepted through #1356
-would add them. UI-library islands still need
+Decision 43 approves TypeScript and pinned Node for checking, tests and
+dependency management, and the Go-driven esbuild build. Each location's
+path-and-kind row lands with its first file. Rust/WASM and other unlisted
+languages or runtimes still require their own accepted decision.
+UI-library islands still need
 [decision 40](40-plain-javascript-by-default-library-islands-by-measured-exception.md)'s
 individual approval and measurement conditions; this gate grants no such
 approval.

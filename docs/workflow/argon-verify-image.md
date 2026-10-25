@@ -35,17 +35,16 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   `postgresql-18=18.6-1.pgdg13+2`. Use `apt-get update` and
   `apt-get install -y --no-install-recommends` only, then remove apt lists.
   Set and verify `create_main_cluster = false` before installing PostgreSQL
-  to avoid creating an unused cluster. `useradd` creates `check`, uid 1000, with
-  home `/home/check`: `initdb` needs an entry for its uid in the user database.
+  (no unused cluster). `useradd` creates `check`, uid 1000, home `/home/check`:
+  `initdb` needs a user entry for its uid.
 - Before adding PGDG with the bare command
   `/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y`, check
   fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8` against Debian's
   dearmored `/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg`,
-  the keyring named by the generated source's `Signed-By`. The check is
-  the last statement of an earlier RUN that starts with errexit, never disables
-  it and has no `||`, before any PGDG package.
-  It requires exactly one fingerprint line: another primary key or subkey
-  fingerprint fails the build loudly.
+  the keyring named by the generated source's `Signed-By`. The check is the
+  last statement of an earlier RUN that starts with errexit, never disables it
+  and has no `||`.
+  Exactly one fingerprint line is required: any other key fails the build.
 - Decision 42 says apt packages use exact versions. This recipe pins only
   the three packages it names; dependencies such as `postgresql-client-18`
   and `libpq5` float. This reading of decision 42 awaits the maintainer's
@@ -57,14 +56,12 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   refused downgrade.
 
 `TestVerifyImageRecipe` checks the base, instruction and COPY restrictions,
-download version and same-RUN checksum, parser directives and architecture
-check, bare apt-get commands, allowed pinned packages and required `-y` and
-`--no-install-recommends` flags, PGDG setup's exact command and the approved
-fingerprint above (also required in this page). A key change needs the test
-constant, this page and a review. The `postgresql-common` RUN must start with
-errexit, never disable it, and include the exact cluster-setting sed edit
-immediately followed by its exact-line grep check.
-Tier A review also checks the tool builds, cluster setting, user and cache removal.
+download version and same-RUN checksum, parser directives, architecture
+check, bare apt-get commands, pinned allowed packages with `-y` and
+`--no-install-recommends`, the PGDG setup command, the approved fingerprint
+(also required in this page; a key change needs the test constant, this page
+and a review) and the cluster edit with its grep in an errexit RUN.
+Tier A review also checks tool builds, user and cache removal.
 A browser, another package set or a second recipe needs a decision 42
 amendment approved by the maintainer.
 

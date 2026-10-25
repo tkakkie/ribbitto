@@ -34,28 +34,33 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   `ca-certificates=20250419+deb13u1`; PGDG supplies
   `postgresql-18=18.6-1.pgdg13+2`. Use `apt-get update` and
   `apt-get install -y --no-install-recommends` only, then remove apt lists.
-  Set `create_main_cluster = false` before installing PostgreSQL to avoid
-  creating an unused cluster. `useradd` creates `check`, uid 1000, with
+  Set and verify `create_main_cluster = false` before installing PostgreSQL
+  to avoid creating an unused cluster. `useradd` creates `check`, uid 1000, with
   home `/home/check`: `initdb` needs an entry for its uid in the user database.
 - Before adding PGDG with the bare command
   `/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y`, check
   fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8` against Debian's
   dearmored `/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg`,
   the keyring named by the generated source's `Signed-By`. The check is
-  in an earlier RUN with errexit and no `||`, before any PGDG package.
+  the last statement of an earlier RUN that starts with errexit, never disables
+  it and has no `||`, before any PGDG package.
   It requires exactly one fingerprint line: another primary key or subkey
   fingerprint fails the build loudly.
-- Only the three named apt packages are pinned. Dependencies such as
-  `postgresql-client-18` and `libpq5` float; this is accepted. Rebuilds do
-  not guarantee the same bytes; the host record's image ID identifies the build.
-  If a pin leaves either Debian or PGDG, the build fails loudly and a pull
-  request updates it, including when Debian replaces `postgresql-common`
-  or `ca-certificates`.
+- Decision 42 says apt packages use exact versions. This recipe pins only
+  the three packages it names; dependencies such as `postgresql-client-18`
+  and `libpq5` float. This reading of decision 42 awaits the maintainer's
+  confirmation. Rebuilds do not guarantee the same bytes; the host record's
+  image ID identifies the build. If `postgresql-common` or `postgresql-18`
+  leaves its repository, the build fails loudly until a pull request updates
+  the pin. The `ca-certificates` pin matches the base image's installed version
+  and is a no-op at this digest; only a base-image bump makes it fail as a
+  refused downgrade.
 
 `TestVerifyImageRecipe` checks the base, instruction and COPY restrictions,
 download version and same-RUN checksum, parser directives and architecture
 check, bare apt-get commands, allowed pinned packages and install flags,
-PGDG setup's exact command and the earlier fingerprint check.
+PGDG setup's exact command, the earlier fingerprint check and verification
+immediately after the cluster-setting edit.
 Tier A review also checks the tool builds, cluster setting, user and cache removal.
 A browser, another package set or a second recipe needs a decision 42
 amendment approved by the maintainer.
@@ -114,7 +119,8 @@ files, build log tail, image ID and size from
 `docker image inspect argonreview-verify-image:<commit>`, `go version`,
 `templ version`, `sqlc version`, and the Tailwind banner. For #1697 also
 record `postgres --version` (using `/usr/lib/postgresql/18/bin/postgres`)
-and the installed package list with versions (`dpkg-query -W`).
+and the installed package list with versions (`dpkg-query -W`), confirming
+`postgresql-common` is still 278 after the PGDG install.
 Also record SHA-256 of the three installed binaries:
 `/usr/local/bin/tailwindcss`, `/usr/local/bin/templ` and
 `/usr/local/bin/sqlc`. This record identifies the actual built image;

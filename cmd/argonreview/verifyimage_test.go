@@ -92,10 +92,16 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 			}
 			// A check in this RUN cannot authorize this RUN's PGDG actions.
 			uncheckedPGDG = uncheckedPGDG || pgdgAction && !keyChecked
-			fingerprint := regexp.MustCompile(`(?:^|;|&&)\s*fingerprint="\$\(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt\.postgresql\.org\.gpg \| grep '\^fpr:' \| cut -d: -f10\)";\s*test "\$fingerprint" = "[0-9A-F]{40}"\s*(?:;|&&|$)`).MatchString(body)
+			fingerprint := regexp.MustCompile(`(?:^|;|&&)\s*fingerprint="\$\(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt\.postgresql\.org\.gpg \| grep '\^fpr:' \| cut -d: -f10\)";\s*test "\$fingerprint" = "[0-9A-F]{40}"\s*;?\s*$`).MatchString(body)
 			errexit := regexp.MustCompile(`^set\s+(?:-[a-z]+\s+)*-[a-z]*e[a-z]*(?:\s+-[a-z]+)*\s*(;|&&)`).MatchString(body)
-			if fingerprint && errexit && !strings.Contains(body, "||") {
+			disabledErrexit := regexp.MustCompile(`\bset\s+[^;|&]*(?:\+[a-z]*e[a-z]*\b|\+o\s+errexit\b)`).MatchString(body)
+			if fingerprint && errexit && !disabledErrexit && !strings.Contains(body, "||") {
 				keyChecked = true
+			}
+			clusterEdit := `sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf;`
+			clusterCheck := `grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf;`
+			if strings.Contains(body, clusterEdit) && !regexp.MustCompile(regexp.QuoteMeta(clusterEdit)+`\s+`+regexp.QuoteMeta(clusterCheck)).MatchString(body) {
+				problems = append(problems, "k: cluster-setting edit needs an immediate exact-line check")
 			}
 			urls := regexp.MustCompile(`https?://[^\s"';]+`).FindAllString(body, -1)
 			for _, url := range urls {
@@ -159,9 +165,11 @@ func TestVerifyImageRecipe(t *testing.T) {
 	tools := base + copyLine + "RUN set -eu; " + arch + "curl -o /usr/local/bin/tailwindcss " + url + `; echo "` + hash + `  /usr/local/bin/tailwindcss" | sha256sum -c -` + "\n"
 	fingerprint := strings.Repeat("AB", 20)
 	keyCheck := `fingerprint="$(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg | grep '^fpr:' | cut -d: -f10)"; test "$fingerprint" = "` + fingerprint + `";`
+	clusterCheck := `grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf; `
 	debian := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; apt-get update; " +
 		"apt-get install -y --no-install-recommends postgresql-common=278 ca-certificates=20250419+deb13u1; " +
-		`sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf; ` + keyCheck + "\n"
+		`sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf; ` + clusterCheck +
+		"rm -rf /var/lib/apt/lists/*; " + keyCheck + "\n"
 	pgdgScript := "/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh"
 	pgdg := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; " + pgdgScript + " -y; apt-get update; " +
 		"apt-get install -y --no-install-recommends postgresql-18=18.6-1.pgdg13+2; " +
@@ -269,6 +277,10 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"i/fallback", change(keyCheck, strings.TrimSuffix(keyCheck, ";")+" || true;"), "i:"},
 		{"i/other-fallback", change(keyCheck, keyCheck+" true || true;"), "i:"},
 		{"i/no-errexit", change(debian, strings.Replace(debian, "set -eu; ", "", 1)), "i:"},
+		{"i/and-continue", change(keyCheck, strings.TrimSuffix(keyCheck, ";")+" && :; true"), "i:"},
+		{"i/last-not-check", change(keyCheck, keyCheck+" true"), "i:"},
+		{"i/set-plus-e", change(debian, strings.Replace(debian, "set -eu;", "set -eu; set +e;", 1)), "i:"},
+		{"i/set-plus-o-errexit", change(debian, strings.Replace(debian, "set -eu;", "set -eu; set +o errexit;", 1)), "i:"},
 		{"i/install-only", tools + "RUN apt-get install --no-install-recommends postgresql-18=18.6-1.pgdg13+2\n", "i:"},
 		{"i/script-only", tools + "RUN " + pgdgScript + " -y\n", "i:"},
 		{"j/no-y", change(pgdgScript+" -y", pgdgScript), "j:"},
@@ -277,6 +289,8 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"j/piped", change(pgdgScript+" -y;", pgdgScript+" -y | cat;"), "j:"},
 		{"j/piped-input", change(pgdgScript, "true | "+pgdgScript), "j:"},
 		{"j/bash", change(pgdgScript, "bash "+pgdgScript), "j:"},
+		{"k/no-cluster-check", change(clusterCheck, ""), "k:"},
+		{"k/cluster-check-other-run", change(clusterCheck, "") + "RUN " + clusterCheck + "\n", "k:"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			problems := checkVerifyImageRecipe(tt.recipe, digest, "v1.2.3")

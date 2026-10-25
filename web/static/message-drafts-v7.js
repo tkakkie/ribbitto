@@ -131,7 +131,7 @@
     };
     const save = (atSend = false) => {
       clearTimeout(timer);
-      if (sessionExpired() || stopped || (composing && atSend !== true) || !dirty) return;
+      if (stopped || (composing && atSend !== true) || !dirty) return;
       dirty = false;
       try {
         // Best effort: another tab may write between this read and setItem,

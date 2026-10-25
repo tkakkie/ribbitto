@@ -71,6 +71,7 @@ func TestContainerDispatchAndTrust(t *testing.T) {
 		code int
 	}{
 		{[]string{"container-check", "/tree", "build", "./..."}, 1},
+		{[]string{"container-check", "/tree", "generated", "./..."}, 1},
 		{[]string{"container-check", "/tree", "vet", "."}, 1},
 		{[]string{"container-check", "/tree", "test", "./internal/foo/..."}, 1},
 		{[]string{"container-check"}, 2}, {[]string{"container-check", "/tree", "test"}, 2},
@@ -475,7 +476,7 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
 				t.Fatalf("report %q, err %v", report, err)
 			}
-			if !strings.Contains(report, "Ran on regenerated sources (templ, sqlc, Tailwind); whether the committed generated files are current is checked by CI.") ||
+			if !strings.Contains(report, "Ran on regenerated sources (templ, sqlc, Tailwind); the generated check covers whether the committed generated files are current.") ||
 				!strings.Contains(report, "--- stdout\n"+tc.output+"\n--- stderr\ngenerator diagnostic") {
 				t.Fatalf("scope or stream separation: %q", report)
 			}

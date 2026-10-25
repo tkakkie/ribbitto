@@ -98,9 +98,9 @@ It uses an isolated, throwaway source copy, never the original:
   Timeout, signal or abnormal exit removes container and copy; capped
   output is never verified.
 
-After regeneration: `go build -o /dev/null <pkg>`, `go vet <pkg>` or
-`go test -count=1 -json <pkg>`. Packages admit no flags, spaces or `..` segments.
-Reports retain race, cgo and database/browser limits; CI checks generated files.
+After generation: `go build -o /dev/null <pkg>`, `go vet <pkg>` or
+`go test -count=1 -json <pkg>`. Packages admit no flags, spaces or `..`.
+The `generated` check compares output and formatting in a copy; no write-back.
 
 ## Results
 

@@ -150,10 +150,11 @@ sandbox-local install/cache writes and handoff. No AI runs transferred
 handoff; CI remains the check.
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
-under its existing gates. The [regeneration prelude and image pin](../workflow/argon-verify-image.md)
+under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
 (#1696) are merged but not in force until #1700: production still pins launcher
 `argonreview-7f607ca` and the old image. The prelude regenerates templ, sqlc and Tailwind
-before Go build/vet/test; TypeScript checking stays outside verify.
+before Go build/vet/test; `generated` checks output and formatting in a copy.
+TypeScript checking stays outside verify.
 #1415 cannot widen verify or those permissions.
 
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

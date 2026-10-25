@@ -47,21 +47,40 @@ const (
 
 // A single-run container has a fresh /tmp. Copy dotfiles too, keeping /work read-only.
 // Generator stdout must not contaminate the test2json stream.
-const containerPrelude = `set -eu
+const (
+	containerCopyScript = `set -eu
 mkdir /tmp/work
 cp -R /work/. /tmp/work
 cd /tmp/work
-/usr/local/bin/templ generate >&2
-/usr/local/bin/sqlc generate >&2
-/usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify >&2
-exec go "$@"
 `
+	containerTemplCommand = "/usr/local/bin/templ generate"
+	containerSQLCCommand  = "/usr/local/bin/sqlc generate"
+	containerCSSCommand   = "/usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify"
+	containerPrelude      = containerCopyScript + containerTemplCommand + " >&2\n" + containerSQLCCommand + " >&2\n" + containerCSSCommand + " >&2\n" + `exec go "$@"
+`
+	containerGeneratedScript = containerCopyScript + containerTemplCommand + " >&2 || exit 21\n" + containerSQLCCommand + " >&2 || exit 21\n" + containerCSSCommand + " >&2 || exit 21\n" + `templ fmt -fail . >&2 || exit 22
+names=$(gofmt -l .) || exit 24
+if [ -n "$names" ]; then
+ printf '%s\n' "$names"
+ exit 23
+fi
+status=0
+diff -ru /work /tmp/work || status=$?
+case "$status" in
+ 0) exit 0 ;;
+ 1) exit 25 ;;
+ *) exit 26 ;;
+esac
+`
+)
 
 func containerCheckScope(check string) string {
 	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 	switch check {
+	case "generated":
+		return "Checks templ, sqlc and Tailwind output against committed files, plus templ fmt and gofmt, in a copy. Report only: no write-back; nothing written to the worktree. tbls docs/schema, docs/dependencies.md, the API manifest, golangci-lint, docscheck, languagecheck, race detector, database and browser tests stay CI-only."
 	case "build", "vet", "test":
-		return limits + " Ran on regenerated sources (templ, sqlc, Tailwind); whether the committed generated files are current is checked by CI."
+		return limits + " Ran on regenerated sources (templ, sqlc, Tailwind); the generated check covers whether the committed generated files are current."
 	default:
 		return limits
 	}
@@ -74,8 +93,11 @@ func validateContainerCheck(tree, check, pattern string) error {
 	if tree == "" || strings.ContainsRune(tree, 0) {
 		return errors.New("a worktree path is required")
 	}
-	if check != "build" && check != "vet" && check != "test" {
-		return errors.New("check must be build, vet or test")
+	if check != "build" && check != "vet" && check != "test" && check != "generated" {
+		return errors.New("check must be build, vet, test or generated")
+	}
+	if check == "generated" && pattern != "./..." {
+		return errors.New("generated requires package exactly ./...")
 	}
 	if !containerPattern.MatchString(pattern) {
 		return errors.New("package pattern is outside the local path allowlist")
@@ -104,7 +126,11 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 		"--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
-		containerVerifyImage, "sh", "-c", containerPrelude, "sh", check}
+		containerVerifyImage, "sh", "-c"}
+	if check == "generated" {
+		return append(args, containerGeneratedScript)
+	}
+	args = append(args, containerPrelude, "sh", check)
 	if check == "build" {
 		args = append(args, "-o", "/dev/null")
 	}
@@ -168,7 +194,7 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 
 func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 3 || validateContainerCheck(args[0], args[1], args[2]) != nil {
-		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test> <package-pattern>")
+		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated> <package-pattern>")
 		return 2
 	}
 	info, ok := debug.ReadBuildInfo()
@@ -294,6 +320,10 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	verdict := commandVerdict(code, err, output.over)
 	if check == "test" {
 		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)
+	}
+	if check == "generated" {
+		verdict, stat, stdout := generatedVerdict(code, err, output.stdout.String(), output.over)
+		return fmt.Sprintf("%s\n%s%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, stat, containerCheckScope(check), stdout, output.stderr.Bytes()), err
 	}
 	if output.over {
 		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"

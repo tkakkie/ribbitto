@@ -36,6 +36,10 @@ func implementVerifyArgumentsCases() []struct {
 		name, raw string
 		allow     bool
 	}{
+		{"generated", `{"check":"generated","package":"./..."}`, true},
+		{"generated package", `{"check":"generated","package":"./internal/web"}`, false},
+		{"generated dot", `{"check":"generated","package":"."}`, false},
+		{"generated flag", `{"check":"generated","package":"-x"}`, false},
 		{"null", `null`, false}, {"array", `[]`, false}, {"number", `1`, false},
 		{"bool", `true`, false}, {"JSON string", `"{\"check\":\"test\",\"package\":\"./...\"}"`, false},
 		{"empty", `{}`, false}, {"missing check", `{"package":"./..."}`, false},

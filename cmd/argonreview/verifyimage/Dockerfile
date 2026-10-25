@@ -15,3 +15,24 @@ RUN set -eu; \
     GOFLAGS=-mod=readonly CGO_ENABLED=1 go build -o /usr/local/bin/templ github.com/a-h/templ/cmd/templ; \
     GOFLAGS=-mod=readonly CGO_ENABLED=1 go build -o /usr/local/bin/sqlc github.com/sqlc-dev/sqlc/cmd/sqlc; \
     rm -rf /build /go/pkg/mod /root/.cache
+
+# postgresql-common and postgresql-18 pins fail if removed; dependencies float.
+# ca-certificates matches the base; a newer base makes it a refused downgrade.
+# Keep the signing-key check last, before any PGDG package can be installed.
+RUN set -eu; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-common=278 ca-certificates=20250419+deb13u1; \
+    sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf; \
+    grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf; \
+    rm -rf /var/lib/apt/lists/*; \
+    fingerprint="$(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg | grep '^fpr:' | cut -d: -f10)"; test "$fingerprint" = "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8";
+
+# initdb requires a passwd entry for the runner's uid 1000.
+RUN set -eu; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-18=18.6-1.pgdg13+2; \
+    rm -rf /var/lib/apt/lists/*; \
+    useradd -u 1000 -m -d /home/check -s /bin/bash check

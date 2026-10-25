@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+// A key change needs this constant, docs/workflow/argon-verify-image.md and a review.
+const approvedPGDGFingerprint = "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8"
+
 func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string {
 	var problems, lines []string
 	pending := ""
@@ -34,6 +37,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 		problems = append(problems, "unfinished continuation")
 	}
 	fromCount, fromOK, downloadCount := 0, true, 0
+	keyChecked, uncheckedPGDG := false, false
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		instruction := strings.ToUpper(fields[0])
@@ -53,8 +57,60 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 			if strings.HasPrefix(body, "--") {
 				problems = append(problems, "b: RUN flags are forbidden")
 			}
-			if regexp.MustCompile(`\bapt-get\b|\bapt\s`).MatchString(body) {
-				problems = append(problems, "b: apt commands are forbidden")
+			if regexp.MustCompile(`\bapt\s`).MatchString(body) {
+				problems = append(problems, "b: plain apt is forbidden")
+			}
+			pgdgAction := strings.Contains(body, "apt.postgresql.org.sh")
+			installsPostgresqlCommon := false
+			for _, at := range regexp.MustCompile(`[^\s;|&]*\bapt-get\b[^\s;|&]*`).FindAllStringIndex(body, -1) {
+				args := strings.Fields(regexp.MustCompile(`[;|&]`).Split(body[at[0]:], 2)[0])
+				bare := regexp.MustCompile(`(?:^|;|&&)\s*$`).MatchString(body[:at[0]])
+				if !bare || args[0] != "apt-get" || len(args) < 2 ||
+					(args[1] != "install" && (args[1] != "update" || len(args) != 2)) {
+					problems = append(problems, "b: only bare apt-get update or install is allowed")
+					continue
+				}
+				if args[1] == "install" {
+					if !strings.Contains(" "+strings.Join(args[2:], " ")+" ", " -y ") {
+						problems = append(problems, "h: install needs -y")
+					}
+					if !strings.Contains(" "+strings.Join(args[2:], " ")+" ", " --no-install-recommends ") {
+						problems = append(problems, "h: install needs --no-install-recommends")
+					}
+					for _, arg := range args[2:] {
+						if arg == "-y" || arg == "--no-install-recommends" {
+							continue
+						}
+						name, version, pinned := strings.Cut(arg, "=")
+						installsPostgresqlCommon = installsPostgresqlCommon || name == "postgresql-common"
+						pgdgAction = pgdgAction || name == "postgresql-18"
+						allowed := name == "postgresql-common" || name == "ca-certificates" || name == "postgresql-18"
+						if !allowed || !pinned || !regexp.MustCompile(`^[A-Za-z0-9.+~:-]+$`).MatchString(version) {
+							problems = append(problems, "h: forbidden install flag or unapproved/unpinned package: "+arg)
+						}
+					}
+				}
+			}
+			for _, at := range regexp.MustCompile(`[^\s;|&]*apt\.postgresql\.org\.sh[^\s;|&]*`).FindAllStringIndex(body, -1) {
+				if body[at[0]:at[1]] != "/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh" ||
+					!regexp.MustCompile(`(?:^|;|&&)\s*$`).MatchString(body[:at[0]]) ||
+					!regexp.MustCompile(`^\s+-y\s*(?:;|&&|$)`).MatchString(body[at[1]:]) {
+					problems = append(problems, "j: PGDG setup must be the bare full-path command with only -y")
+				}
+			}
+			// A check in this RUN cannot authorize this RUN's PGDG actions.
+			uncheckedPGDG = uncheckedPGDG || pgdgAction && !keyChecked
+			fingerprint := regexp.MustCompile(`(?:^|;|&&)\s*fingerprint="\$\(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt\.postgresql\.org\.gpg \| grep '\^fpr:' \| cut -d: -f10\)";\s*test "\$fingerprint" = "` + approvedPGDGFingerprint + `"\s*;?\s*$`).MatchString(body)
+			errexit := regexp.MustCompile(`^set\s+(?:-[a-z]+\s+)*-[a-z]*e[a-z]*(?:\s+-[a-z]+)*\s*(;|&&)`).MatchString(body)
+			disabledErrexit := regexp.MustCompile(`\bset\s+[^;|&]*(?:\+[a-z]*e[a-z]*\b|\+o\s+errexit\b)`).MatchString(body)
+			if fingerprint && errexit && !disabledErrexit && !strings.Contains(body, "||") {
+				keyChecked = true
+			}
+			clusterEdit := `sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf;`
+			clusterCheck := `grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf;`
+			if installsPostgresqlCommon && (!errexit || disabledErrexit ||
+				!regexp.MustCompile(regexp.QuoteMeta(clusterEdit)+`\s+`+regexp.QuoteMeta(clusterCheck)).MatchString(body)) {
+				problems = append(problems, "k: postgresql-common RUN needs errexit and the cluster edit immediately followed by its exact-line check")
 			}
 			urls := regexp.MustCompile(`https?://[^\s"';]+`).FindAllString(body, -1)
 			for _, url := range urls {
@@ -103,6 +159,9 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 	if downloadCount == 0 {
 		problems = append(problems, "d: missing Tailwind download URL")
 	}
+	if uncheckedPGDG {
+		problems = append(problems, "i: PGDG actions need a valid fingerprint check in an earlier RUN")
+	}
 	return problems
 }
 
@@ -112,10 +171,33 @@ func TestVerifyImageRecipe(t *testing.T) {
 	copyLine := "COPY tools/go.mod tools/go.sum /build/tools/\n"
 	arch := `test "$(dpkg --print-architecture)" = arm64; `
 	url := "https://github.com/tailwindlabs/tailwindcss/releases/download/v1.2.3/tailwindcss-linux-arm64"
-	valid := base + copyLine + "RUN set -eu; " + arch + "curl -o /usr/local/bin/tailwindcss " + url + `; echo "` + hash + `  /usr/local/bin/tailwindcss" | sha256sum -c -` + "\n"
+	tools := base + copyLine + "RUN set -eu; " + arch + "curl -o /usr/local/bin/tailwindcss " + url + `; echo "` + hash + `  /usr/local/bin/tailwindcss" | sha256sum -c -` + "\n"
+	fingerprint := approvedPGDGFingerprint
+	keyCheck := `fingerprint="$(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg | grep '^fpr:' | cut -d: -f10)"; test "$fingerprint" = "` + fingerprint + `";`
+	clusterEdit := `sed -i 's/^#create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf; `
+	clusterCheck := `grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf; `
+	debian := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; apt-get update; " +
+		"apt-get install -y --no-install-recommends postgresql-common=278 ca-certificates=20250419+deb13u1; " +
+		clusterEdit + clusterCheck +
+		"rm -rf /var/lib/apt/lists/*; " + keyCheck + "\n"
+	// Separate RUNs let errexit fixtures exercise i and k independently.
+	clusterRun := strings.Replace(debian, keyCheck, "", 1)
+	keyRun := "RUN set -eu; " + keyCheck + "\n"
+	pgdgScript := "/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh"
+	pgdg := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; " + pgdgScript + " -y; apt-get update; " +
+		"apt-get install -y --no-install-recommends postgresql-18=18.6-1.pgdg13+2; " +
+		"rm -rf /var/lib/apt/lists/*; useradd -u 1000 -m -d /home/check -s /bin/bash check\n"
+	valid := tools + debian + pgdg
 	change := func(old, replacement string) string { return strings.Replace(valid, old, replacement, 1) }
 	for _, tt := range []struct{ name, recipe, want string }{
 		{"valid", valid, ""},
+		{"generators-only", tools, ""},
+		{"apt-get-update", valid + "RUN apt-get update\n", ""},
+		{"second-install", valid + "RUN apt-get install -y --no-install-recommends ca-certificates=20250419+deb13u1\n", ""},
+		{"apt-get-and", change("; apt-get update;", "&& apt-get update &&"), ""},
+		{"pgdg-bare", tools + debian + "RUN " + pgdgScript + " -y\n", ""},
+		{"pgdg-and", change(pgdgScript+" -y;", pgdgScript+" -y &&"), ""},
+		{"fingerprint-set-e", change(debian, strings.Replace(debian, "set -eu;", "set -e;", 1)), ""},
 		{"case-continuation-comments", "# apt-get VOLUME\n" + change("RUN ", "run \\\n# ignored inside continuation\n"), ""},
 		{"reverse-copy", change("tools/go.mod tools/go.sum", "tools/go.sum tools/go.mod"), ""},
 		{"uname", change(arch, `test "$(uname -m)" = aarch64; `), ""},
@@ -146,7 +228,11 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"b/SHELL", valid + "SHELL x\n", "b:"},
 		{"b/ENV", valid + "ENV x=y\n", "b:"},
 		{"b/flag", change("RUN ", "RUN --mount=type=secret "), "b:"},
-		{"b/apt-get", valid + "RUN apt-get update\n", "b:"},
+		{"b/apt-get-upgrade", valid + "RUN apt-get upgrade\n", "b:"},
+		{"b/apt-get-update-args", valid + "RUN apt-get update -y\n", "b:"},
+		{"b/apt-get-no-command", valid + "RUN apt-get\n", "b:"},
+		{"b/apt-get-wrapped", valid + "RUN command apt-get update\n", "b:"},
+		{"b/apt-get-piped", valid + "RUN true | apt-get update\n", "b:"},
 		{"b/apt-path", valid + "RUN /usr/bin/apt-get update\n", "b:"},
 		{"b/apt", valid + "RUN set -eu; apt update\n", "b:"},
 		{"c/extra", change(copyLine, "COPY tools/go.mod tools/go.sum extra /build/\n"), "c:"},
@@ -184,6 +270,48 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"g/no-errexit", change("set -eu; ", ""), "g:"},
 		{"g/pipeline", change(arch, strings.ReplaceAll(arch, ";", " | cat;")), "g:"},
 		{"g/condition", change(arch, "if "+arch+"then :; fi; "), "g:"},
+		{"h/no-y", change("install -y", "install"), "h:"},
+		{"h/no-recommends-flag", change("--no-install-recommends ", ""), "h:"},
+		{"h/extra-flag", change("install -y", "install -y -o"), "h:"},
+		{"h/unauthenticated", change("install -y", "install -y --allow-unauthenticated"), "h:"},
+		{"h/downgrades", change("install -y", "install -y --allow-downgrades"), "h:"},
+		{"h/target-release", change("install -y", "install -y -t"), "h:"},
+		{"h/unpinned", change("postgresql-common=278", "postgresql-common"), "h:"},
+		{"h/unknown-pinned", change("postgresql-common=278", "procps=278"), "h:"},
+		{"h/unknown-unpinned", change("postgresql-common=278", "procps"), "h:"},
+		{"h/empty-version", change("postgresql-common=278", "postgresql-common="), "h:"},
+		{"h/invalid-version", change("postgresql-common=278", "postgresql-common=278*"), "h:"},
+		{"i/no-check-run", change(debian, ""), "i:"},
+		{"i/check-removed", change(keyCheck, ""), "i:"},
+		{"i/same-run", change(debian+pgdg, strings.TrimSuffix(debian, "\n")+" "+strings.TrimPrefix(pgdg, "RUN set -eu; ")), "i:"},
+		{"i/after-pgdg", change(debian+pgdg, pgdg+debian), "i:"},
+		{"i/other-key", change(fingerprint, strings.Repeat("AB", 20)), "i:"},
+		{"i/lowercase", change(fingerprint, strings.ToLower(fingerprint)), "i:"},
+		{"i/short", change(fingerprint, fingerprint[:39]), "i:"},
+		{"i/asc", change("apt.postgresql.org.gpg", "apt.postgresql.org.asc"), "i:"},
+		{"i/fallback", change(keyCheck, strings.TrimSuffix(keyCheck, ";")+" || true;"), "i:"},
+		{"i/other-fallback", change(keyCheck, keyCheck+" true || true;"), "i:"},
+		{"i/no-errexit", change(debian, clusterRun+strings.Replace(keyRun, "set -eu; ", "", 1)), "i:"},
+		{"i/and-continue", change(keyCheck, strings.TrimSuffix(keyCheck, ";")+" && :; true"), "i:"},
+		{"i/last-not-check", change(keyCheck, keyCheck+" true"), "i:"},
+		{"i/set-plus-e", change(debian, clusterRun+strings.Replace(keyRun, "set -eu;", "set -eu; set +e;", 1)), "i:"},
+		{"i/set-plus-o-errexit", change(debian, clusterRun+strings.Replace(keyRun, "set -eu;", "set -eu; set +o errexit;", 1)), "i:"},
+		{"i/install-only", tools + "RUN apt-get install -y --no-install-recommends postgresql-18=18.6-1.pgdg13+2\n", "i:"},
+		{"i/script-only", tools + "RUN " + pgdgScript + " -y\n", "i:"},
+		{"j/no-y", change(pgdgScript+" -y", pgdgScript), "j:"},
+		{"j/extra-arg", change(pgdgScript+" -y", pgdgScript+" -y -i"), "j:"},
+		{"j/other-path", change(pgdgScript, "/tmp/apt.postgresql.org.sh"), "j:"},
+		{"j/piped", change(pgdgScript+" -y;", pgdgScript+" -y | cat;"), "j:"},
+		{"j/piped-input", change(pgdgScript, "true | "+pgdgScript), "j:"},
+		{"j/bash", change(pgdgScript, "bash "+pgdgScript), "j:"},
+		{"k/sed-missing", change(clusterEdit, ""), "k:"},
+		{"k/sed-reworded", change(clusterEdit, strings.Replace(clusterEdit, "sed -i", "sed --in-place", 1)), "k:"},
+		{"k/grep-missing", change(clusterCheck, ""), "k:"},
+		{"k/grep-before-sed", change(clusterEdit+clusterCheck, clusterCheck+clusterEdit), "k:"},
+		{"k/no-errexit-run", change(debian, strings.Replace(clusterRun, "set -eu; ", "", 1)+keyRun), "k:"},
+		{"k/set-plus-e", change(debian, strings.Replace(clusterRun, "set -eu;", "set -eu; set +e;", 1)+keyRun), "k:"},
+		{"k/no-cluster-check", change(clusterCheck, ""), "k:"},
+		{"k/cluster-check-other-run", change(clusterCheck, "") + "RUN " + clusterCheck + "\n", "k:"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			problems := checkVerifyImageRecipe(tt.recipe, digest, "v1.2.3")
@@ -208,6 +336,16 @@ func TestVerifyImageRecipe(t *testing.T) {
 		recipe, err := os.ReadFile("verifyimage/Dockerfile")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if strings.Count(string(recipe), approvedPGDGFingerprint) != 1 {
+			t.Fatal("real recipe must contain the approved PGDG fingerprint exactly once")
+		}
+		docs, err := os.ReadFile("../../docs/workflow/argon-verify-image.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(docs), approvedPGDGFingerprint) {
+			t.Fatal("workflow docs must contain the approved PGDG fingerprint")
 		}
 		if problems := checkVerifyImageRecipe(string(recipe), digest, string(version[1])); len(problems) != 0 {
 			t.Fatal("real recipe:", problems)

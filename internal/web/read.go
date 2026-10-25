@@ -100,6 +100,9 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 		}
 		through, err = strconv.ParseInt(form.Get("through"), 10, 64)
 	}
+	if !shown && !form.Has("scope") {
+		return
+	}
 	valid = err == nil
 	return
 }

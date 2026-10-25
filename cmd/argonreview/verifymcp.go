@@ -555,7 +555,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					rpcError(req.id, -32602, "invalid tools/list params")
 					continue
 				}
-				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test or generated in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
+				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated or test-db in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
 			case "tools/call":
 				if !initialized {
 					rpcError(req.id, -32600, "initialize required")

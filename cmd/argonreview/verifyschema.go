@@ -17,7 +17,7 @@ const (
 
 // Keep the wire schema and argument parser together so the guard can reuse
 // exactly this boundary rather than translating it into another validator.
-func verifyCheckNames() []string { return []string{"build", "vet", "test", "generated"} }
+func verifyCheckNames() []string { return []string{"build", "vet", "test", "generated", "test-db"} }
 
 type verifyArguments struct{ check, pattern string }
 

@@ -88,9 +88,9 @@ func TestContainerDispatchAndTrust(t *testing.T) {
 }
 
 func TestContainerArgumentsGolden(t *testing.T) {
-	for _, check := range []string{"build", "vet", "test"} {
+	for _, check := range []string{"build", "vet", "test", "generated", "test-db"} {
 		t.Run(check, func(t *testing.T) {
-			for _, name := range []string{"GH_TOKEN", "RIBBITTO_DATABASE_URL", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "GOPATH", "GOMODCACHE", "GOENV", "HOME", "PATH"} {
+			for _, name := range []string{"GH_TOKEN", "RIBBITTO_TEST_DATABASE_URL", "RIBBITTO_REQUIRE_DB", "RIBBITTO_REQUIRE_BROWSER", "CI", "RIBBITTO_READ_COST", "RIBBITTO_DATABASE_URL", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "GOPATH", "GOMODCACHE", "GOENV", "HOME", "PATH"} {
 				t.Setenv(name, "dummy-excluded")
 			}
 			want := []string{
@@ -102,8 +102,20 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				"--mount", "type=bind,src=/tmp/copy/tree,dst=/work,readonly", "-w", "/work",
 				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
-				"--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
-				"sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1", "sh", "-c", `set -eu
+			}
+			if check == "test-db" {
+				want = append(want, "-e", "RIBBITTO_TEST_DATABASE_URL=postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable", "-e", "RIBBITTO_REQUIRE_DB=1")
+			}
+			want = append(want, "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
+				"sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80", "sh", "-c")
+			var command []string
+			switch check {
+			case "generated":
+				command = []string{containerGeneratedScript}
+			case "test-db":
+				command = []string{testDBScriptGolden, "sh", "./..."}
+			default:
+				command = []string{`set -eu
 mkdir /tmp/work
 cp -R /work/. /tmp/work
 cd /tmp/work
@@ -112,14 +124,16 @@ cd /tmp/work
 /usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify >&2
 exec go "$@"
 `, "sh", check,
+				}
+				if check == "build" {
+					command = append(command, "-o", "/dev/null")
+				}
+				if check == "test" {
+					command = append(command, "-count=1", "-json")
+				}
+				command = append(command, "./...")
 			}
-			if check == "build" {
-				want = append(want, "-o", "/dev/null")
-			}
-			if check == "test" {
-				want = append(want, "-count=1", "-json")
-			}
-			want = append(want, "./...")
+			want = append(want, command...)
 			if got := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./..."); !reflect.DeepEqual(got, want) {
 				t.Fatalf("args:\n%q\nwant:\n%q", got, want)
 			}

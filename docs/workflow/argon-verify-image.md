@@ -6,8 +6,7 @@ The recipe, build/vet/test regeneration and `generated` check (#1696) are merged
 **not in force until #1700**.
 Production workers still run the pinned launcher `argonreview-7f607ca`
 and the old image; merging changes nothing in production.
-The recipe now includes PostgreSQL 18 (#1697 PR A). The `test-db` check
-is not merged until #1697 PR B and is not in force until #1700.
+The recipe now includes PostgreSQL 18 (#1697 PR A). [test-db](argon-verify-testdb.md) is merged but **not in force until #1700**.
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
@@ -67,8 +66,8 @@ amendment approved by the maintainer.
 
 ## Runner pin and prelude
 
-`containerVerifyImage` pins the image ID recorded on #1696:
-`sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1`.
+`containerVerifyImage` pins #1697's manifest-list digest (build `argonreview-verify-image:7957ae8`):
+`sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80`.
 Runs use `--pull=never`; both sweep inspections require that same ID.
 The recipe test separately checks the base pin. Before Docker starts, the
 copied root manifest must name Go 1.27.3, and `tools/go.mod` must require
@@ -114,7 +113,7 @@ original directory. Run:
 docker build --no-cache -t argonreview-verify-image:<commit> -f <context>/Dockerfile <context>
 ```
 
-Record provenance on #1696: the full commit, SHA-256 of all three context
+Record provenance on #1697: the full commit, SHA-256 of all three context
 files, build log tail, image ID and size from
 `docker image inspect argonreview-verify-image:<commit>`, `go version`,
 `templ version`, `sqlc version`, and the Tailwind banner. For #1697 also

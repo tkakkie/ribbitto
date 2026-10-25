@@ -56,7 +56,7 @@ esac
 				t.Fatal("Docker reached")
 				return 0, nil
 			}}
-			if _, err := runContainerCheck(context.Background(), "tree", "generated", pattern, runner, t.TempDir()); err == nil || !strings.Contains(err.Error(), "exactly ./...") {
+			if _, err := runContainerCheck(context.Background(), "tree", "generated", pattern, runner, t.TempDir()); err == nil || !strings.Contains(err.Error(), "whole-tree package (./...)") {
 				t.Fatalf("refusal: %v", err)
 			}
 		})

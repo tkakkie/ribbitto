@@ -1139,11 +1139,12 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    window.refreshExpiry=()=>dispatchEvent(new StorageEvent('storage',{key:scope()})); refreshExpiry();
    window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; addEventListener('error',()=>expiryErrors++);
    const set=Storage.prototype.setItem, remove=Storage.prototype.removeItem;
-   Storage.prototype.setItem=function(k,v){draftWrites++; return set.call(this,k,v);};
-   Storage.prototype.removeItem=function(k){draftRemovals.push(k); return remove.call(this,k);};`
+   // Other scripts may touch unrelated keys while the page loads.
+   Storage.prototype.setItem=function(k,v){if(String(k).startsWith('ribbitto.draft.v1:')) draftWrites++; return set.call(this,k,v);};
+   Storage.prototype.removeItem=function(k){if(String(k).startsWith('ribbitto.draft.v1:')) draftRemovals.push(k); return remove.call(this,k);};`
 	const checkExpiry = `check(ownKeys.every(k=>localStorage.getItem(k)===null),'own places survived expiry');
    check(foreignKeys.every((k,i)=>localStorage.getItem(k)===foreignBefore[i]),'foreign session/member changed');
-   check(draftWrites===0 && draftRemovals.length===2 && pendingDrafts()===0,'expiry wrote, repeated cleanup or left debounce');
+   check(draftWrites===0,'expiry wrote '+draftWrites); check(draftRemovals.length===2,'expiry removals '+JSON.stringify(draftRemovals)); check(pendingDrafts()===0,'expiry left debounce');
    check(document.querySelector('#message-body').value===want && marker.hidden,'expiry changed textarea or left marker');
    // Neither clock rolling back nor another timer/event may restart or repeat cleanup.
    editNow=expires-1000; elapsed=0; edit(want,editNow); releaseDrafts(); flush(); if(typeof expireDrafts==='function') expireDrafts(); refreshExpiry();

@@ -472,7 +472,7 @@ SELECT coalesce((SELECT p.event_seq + 1 FROM message p
           AND n.event_seq > m.event_seq ORDER BY n.event_seq LIMIT 1), m.event_seq + 1)::bigint AS hi
 FROM message m
 WHERE m.organization_id = $1 AND m.channel_id = $2
-  AND m.topic_id = $3
+  AND $3::uuid IS NOT NULL
   AND m.event_seq > $4::bigint
   AND (m.event_seq > $5::bigint
        OR (m.event_seq <= $5::bigint AND m.moved_event_seq > $5::bigint))

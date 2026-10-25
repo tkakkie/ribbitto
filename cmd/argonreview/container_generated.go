@@ -168,7 +168,7 @@ func generatedDiffStat(data string) (string, bool) {
 			if dir == "/tmp/work" || strings.HasPrefix(dir, "/tmp/work/") {
 				kind, root = " (new in the copy)", "/tmp/work"
 			}
-			if !ok || !(dir == root || strings.HasPrefix(dir, root+"/")) || !generatedRelative(name) || strings.Contains(name, "/") {
+			if !ok || (dir != root && !strings.HasPrefix(dir, root+"/")) || !generatedRelative(name) || strings.Contains(name, "/") {
 				return "", false
 			}
 			rel := strings.TrimPrefix(dir, root)

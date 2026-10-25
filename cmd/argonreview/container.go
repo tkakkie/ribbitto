@@ -97,7 +97,7 @@ func validateContainerCheck(tree, check, pattern string) error {
 		return errors.New("check must be build, vet, test or generated")
 	}
 	if check == "generated" && pattern != "./..." {
-		return errors.New("generated requires package exactly ./...")
+		return errors.New("generated requires the whole-tree package (./...)")
 	}
 	if !containerPattern.MatchString(pattern) {
 		return errors.New("package pattern is outside the local path allowlist")

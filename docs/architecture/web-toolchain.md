@@ -40,8 +40,8 @@ latest-two supported browsers and iOS generations, agreeing with
 polyfills and does not constitute browser verification.
 
 The builder validates esbuild's metafile and produced files, writes
-`manifest.json` last, then replaces the whole ignored `web/static/dist`
-directory. Logical entries record bundle filenames and SHA-256 content hashes;
+`manifest.json` last, then replaces the whole ignored `dist` directory
+under `web/static`. Logical entries record bundle filenames and SHA-256 content hashes;
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 

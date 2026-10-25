@@ -3,8 +3,8 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[B1 checks](argon-verify-image.md) are merged but not in force until #1700;
-production pins `argonreview-7f607ca` and the old image.
+[Generator checks](argon-verify-image.md) are merged, not in
+force until #1700; `argonreview-7f607ca` and the old image still run.
 
 [Leftover sweep](argon-verify-sweep.md).
 

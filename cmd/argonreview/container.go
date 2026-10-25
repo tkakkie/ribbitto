@@ -305,26 +305,37 @@ func checkContainerToolVersions(data []byte) error {
 	versions := map[string]string{"github.com/a-h/templ": containerTemplVersion, "github.com/sqlc-dev/sqlc": containerSQLCVersion}
 	seen := map[string]bool{}
 	inRequire := false
+	inReplace := false
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line, _, _ = strings.Cut(line, "//")
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
 			continue
 		}
-		if fields[0] == "require" {
+		replacing := inReplace
+		if fields[0] == "require" || fields[0] == "replace" {
+			replacing = fields[0] == "replace"
 			fields = fields[1:]
 			if len(fields) == 1 && fields[0] == "(" {
-				inRequire = true
+				inReplace = replacing
+				inRequire = !replacing
 				continue
 			}
-		} else if !inRequire {
+		} else if !inRequire && !inReplace {
 			continue
 		}
 		if len(fields) == 1 && fields[0] == ")" {
 			inRequire = false
+			inReplace = false
 			continue
 		}
 		if len(fields) == 0 {
+			continue
+		}
+		if replacing {
+			if _, ok := versions[fields[0]]; ok {
+				return fmt.Errorf("the verify image needs a rebuild: copied tools/go.mod must not replace %s", fields[0])
+			}
 			continue
 		}
 		if version, ok := versions[fields[0]]; ok {
@@ -333,6 +344,9 @@ func checkContainerToolVersions(data []byte) error {
 			}
 			seen[fields[0]] = true
 		}
+	}
+	if inRequire {
+		return errors.New("the verify image needs a rebuild: copied tools/go.mod has an unterminated require block")
 	}
 	if len(seen) != len(versions) {
 		return errors.New("the verify image needs a rebuild: copied tools/go.mod must require templ and sqlc")

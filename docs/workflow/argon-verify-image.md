@@ -2,7 +2,8 @@
 
 ## Purpose and status
 
-The recipe and B1 checks are merged but **not in force until #1700**.
+The recipe, regeneration prelude and image pin (#1696) are merged but
+**not in force until #1700**.
 Production workers still run the pinned launcher `argonreview-7f607ca`
 and the old image; merging changes nothing in production.
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
@@ -56,7 +57,7 @@ The container is single-run with a fresh tmpfs, so a fixed directory suffices.
 Existing 1 GiB tmpfs limits stay; real Docker capacity validation is for #1700.
 
 Reports say sources were regenerated; CI still checks whether committed
-generated files are current. B1 adds no `generated` check (B2 follows).
+generated files are current. No `generated` check yet (#1696).
 Race, cgo and database/browser limits remain. sqlc configuration can invoke
 process plugins inside the container, as tests can already execute code there.
 
@@ -98,3 +99,6 @@ Rebuild for a Tailwind, templ, sqlc or base-image change, or a Debian security
 fix the maintainer wants. Each rebuild changes the image ID, needs the same
 provenance record and a new tier A pull request updating the runner pin;
 the host build still needs the maintainer's chat approval.
+A templ or sqlc version bump in `tools/go.mod` refuses every verify run until
+`containerTemplVersion`/`containerSQLCVersion` and the image pin change together
+in the same pull request.

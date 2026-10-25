@@ -3,7 +3,8 @@
 The separate [implementer run command](argon-implement-run.md) documents
 its feature-off session cleanup and staged adoption.
 
-B1 checks are merged but **not in force until #1700**. Production still pins
+The regeneration prelude and image pin (#1696) are merged but **not in force
+until #1700**. Production still pins
 launcher `argonreview-7f607ca` and the old image; see [image](argon-verify-image.md).
 
 The trusted launcher provides `argonreview container-sweep [--dry-run]`.

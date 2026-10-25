@@ -151,6 +151,14 @@ func TestGeneratedVerdicts(t *testing.T) {
 func TestGeneratedDiffStat(t *testing.T) {
 	modified := generatedFixture("a.go", "@@ -1,2 +1,2 @@\n same\n-old\n+new\n")
 	binary := "Binary files /work/a and /tmp/work/a differ\n"
+	// GNU diff quotes these names in both the command and file headers.
+	const quoted = `diff -ru "/work/sp ace" "/tmp/work/sp ace"
+--- "/work/sp ace"	2026-10-25 11:45:54.009625005 +0000
++++ "/tmp/work/sp ace"	2026-10-25 11:45:54.009625005 +0000
+@@ -1 +1 @@
+-a
++b
+`
 	for _, tc := range []struct{ name, data, want string }{
 		{"modified", modified, "a.go +1 -1\n1 paths, +1 -1\n"},
 		{"only copy", "Only in /tmp/work: new.go\n", "new.go (new in the copy)\n1 paths, +0 -0\n"},
@@ -158,7 +166,14 @@ func TestGeneratedDiffStat(t *testing.T) {
 		{"new directory", "Only in /tmp/work: newdir\n", "newdir (new in the copy)\n1 paths, +0 -0\n"},
 		{"binary", binary, "a (binary)\n1 paths, +0 -0\n"},
 		{"binary header", "diff -ru /work/a /tmp/work/a\n" + binary, "a (binary)\n1 paths, +0 -0\n"},
-		{"spaces", generatedFixture("sub dir/a b.go", "@@ -1 +1 @@\n-a\n+b\n"), "sub dir/a b.go +1 -1\n1 paths, +1 -1\n"},
+		{"space quoted", quoted, "sp ace +1 -1\n1 paths, +1 -1\n"},
+		{"double quote quoted", strings.ReplaceAll(quoted, "sp ace", `qu\"ote`), "qu\"ote +1 -1\n1 paths, +1 -1\n"},
+		{"tab quoted", strings.ReplaceAll(quoted, "sp ace", `tab\tx`), "tab\tx +1 -1\n1 paths, +1 -1\n"},
+		{"backslash quoted", strings.ReplaceAll(quoted, "sp ace", `back\\slash`), "back\\slash +1 -1\n1 paths, +1 -1\n"},
+		{"non-ASCII unquoted", generatedFixture("uni€", "@@ -1 +1 @@\n-a\n+b\n"), "uni€ +1 -1\n1 paths, +1 -1\n"},
+		{"octal escape", strings.ReplaceAll(quoted, "sp ace", `oct\001l`), "oct\x01l +1 -1\n1 paths, +1 -1\n"},
+		{"only copy space unquoted", "Only in /tmp/work: only sp\n", "only sp (new in the copy)\n1 paths, +0 -0\n"},
+		{"binary space unquoted", "Binary files /work/b bin and /tmp/work/b bin differ\n", "b bin (binary)\n1 paths, +0 -0\n"},
 		{"header-like content", generatedFixture("a", "@@ -1 +1 @@\n--- old\n+++ new\n"), "a +1 -1\n1 paths, +1 -1\n"},
 		{"no newline markers", generatedFixture("a", "@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n"), "a +1 -1\n1 paths, +1 -1\n"},
 		{"multiple hunks", generatedFixture("a", "@@ -1 +1 @@\n-a\n+b\n@@ -8,0 +9,2 @@\n+c\n+d\n"), "a +3 -1\n1 paths, +3 -1\n"},
@@ -175,6 +190,21 @@ func TestGeneratedDiffStat(t *testing.T) {
 		{"invalid hunk", generatedFixture("a", "@@ invalid @@\n-a\n+b\n"), ""},
 		{"missing newline", strings.TrimSuffix(modified, "\n"), ""},
 		{"foreign root", strings.Replace(modified, "/work/", "/foreign/", 1), ""},
+		{"quoted unterminated", modified + strings.Replace(quoted, `"/work/sp ace"`, `"/work/sp ace`, 1), ""},
+		{"quoted bad escape", strings.ReplaceAll(quoted, "sp ace", `bad\q`), ""},
+		{"quoted mismatch", strings.Replace(quoted, `"/tmp/work/sp ace"`, `"/tmp/work/other"`, 1), ""},
+		{"quoted trailing junk", strings.Replace(quoted, `"/tmp/work/sp ace"`, `"/tmp/work/sp ace"junk`, 1), ""},
+		{"quoted foreign root", strings.Replace(quoted, "/work/", "/foreign/", 1), ""},
+		{"quoted traversal", strings.ReplaceAll(quoted, "sp ace", "../other"), ""},
+		{"quoted absolute", strings.ReplaceAll(quoted, "sp ace", "/other"), ""},
+		{"quoted unclean", strings.ReplaceAll(quoted, "sp ace", "sub/../other"), ""},
+		{"quoted NUL", strings.ReplaceAll(quoted, "sp ace", `bad\000`), ""},
+		{"quoted CR", strings.ReplaceAll(quoted, "sp ace", `bad\r`), ""},
+		{"quoted LF", strings.ReplaceAll(quoted, "sp ace", `bad\n`), ""},
+		{"quoted file header unterminated", strings.Replace(quoted, `--- "/work/sp ace"`, `--- "/work/sp ace`, 1), ""},
+		{"quoted file header bad escape", strings.Replace(quoted, `+++ "/tmp/work/sp ace"`, `+++ "/tmp/work/bad\q"`, 1), ""},
+		{"quoted file header trailing junk", strings.Replace(quoted, `--- "/work/sp ace"`, `--- "/work/sp ace"junk`, 1), ""},
+		{"quoted file header mismatch", strings.Replace(quoted, `+++ "/tmp/work/sp ace"`, `+++ "/tmp/work/other"`, 1), ""},
 		{"foreign file header", strings.Replace(modified, "--- /work/", "--- /other/", 1), ""},
 		{"foreign only", "Only in /foreign: a\n", ""},
 		{"traversal", "Only in /tmp/work/../other: a\n", ""},
@@ -185,6 +215,12 @@ func TestGeneratedDiffStat(t *testing.T) {
 			got, ok := generatedDiffStat(tc.data)
 			if got != tc.want || ok != (tc.want != "") {
 				t.Fatalf("stat %q, ok %v; want %q", got, ok, tc.want)
+			}
+			if tc.want == "" {
+				verdict, stat, _ := generatedVerdict(25, nil, tc.data, false)
+				if verdict != "FAILED: generated files differ" || stat != "Diff stat: diff was not understood\n" {
+					t.Fatalf("malformed diff verdict %q, stat %q", verdict, stat)
+				}
 			}
 			if tc.name == "large css" {
 				_, stat, out := generatedVerdict(25, nil, tc.data, false)

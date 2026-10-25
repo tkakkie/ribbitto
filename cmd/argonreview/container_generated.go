@@ -86,7 +86,31 @@ func cutGeneratedDiff(s string) string {
 }
 
 func generatedRelative(s string) bool {
-	return s != "" && s != "." && !path.IsAbs(s) && path.Clean(s) == s && s != ".." && !strings.HasPrefix(s, "../") && !strings.ContainsAny(s, "\x00\r\n\t\\\"")
+	return s != "" && s != "." && !path.IsAbs(s) && path.Clean(s) == s && s != ".." && !strings.HasPrefix(s, "../") && !strings.ContainsAny(s, "\x00\r\n")
+}
+
+func generatedName(s string) (string, bool) {
+	if strings.HasPrefix(s, `"`) {
+		name, err := strconv.Unquote(s)
+		return name, err == nil
+	}
+	return s, true
+}
+
+func generatedDiffPair(line string) (string, bool) {
+	body, ok := strings.CutPrefix(line, "diff -ru ")
+	if !ok || !strings.HasPrefix(body, `"`) {
+		return generatedPair(line, "diff -ru ", " /tmp/work/", "")
+	}
+	token, err := strconv.QuotedPrefix(body)
+	if err != nil {
+		return "", false
+	}
+	old, validOld := generatedName(token)
+	rest, separated := strings.CutPrefix(body[len(token):], " ")
+	next, validNext := generatedName(rest)
+	rel, rooted := strings.CutPrefix(old, "/work/")
+	return rel, validOld && separated && validNext && rooted && generatedRelative(rel) && next == "/tmp/work/"+rel
 }
 
 // Exact reconstruction permits spaces without guessing where a filename ends.
@@ -184,7 +208,7 @@ func generatedDiffStat(data string) (string, bool) {
 			i++
 			continue
 		}
-		rel, header := generatedPair(line, "diff -ru ", " /tmp/work/", "")
+		rel, header := generatedDiffPair(line)
 		if header {
 			i++
 			if i == len(lines) {
@@ -206,7 +230,8 @@ func generatedDiffStat(data string) (string, bool) {
 		}
 		for _, spec := range []struct{ prefix, root string }{{"--- ", "/work/"}, {"+++ ", "/tmp/work/"}} {
 			file, stamp, ok := strings.Cut(strings.TrimPrefix(lines[i], spec.prefix), "\t")
-			if !strings.HasPrefix(lines[i], spec.prefix) || !ok || stamp == "" || file != spec.root+rel {
+			file, valid := generatedName(file)
+			if !strings.HasPrefix(lines[i], spec.prefix) || !ok || !valid || stamp == "" || file != spec.root+rel {
 				return "", false
 			}
 			i++

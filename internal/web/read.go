@@ -36,16 +36,16 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.NotFound(w, r)
 		return
 	}
-	p.topicID, ok = p.resolvePlace(w, r, m, id, r.PathValue("topicID"))
-	if !ok {
-		return
-	}
 	if !parseForm(w, r) {
 		return
 	}
 	cursor, from, through, shown, valid := readForm(r)
 	if !valid {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	p.topicID, ok = p.resolvePlace(w, r, m, id, r.PathValue("topicID"))
+	if !ok {
 		return
 	}
 	var err error

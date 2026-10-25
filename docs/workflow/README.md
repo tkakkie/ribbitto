@@ -20,6 +20,7 @@ Start with your role: [Codex implementer](#implementer-codex),
 | [Running Argon](running-argon.md), [agent](argon-review-agent.md) | Reviews |
 | [Running the other AI](running-other-ai.md#running-the-other-ai) | Headless runs, setup, handoff |
 | [Argon implementer](argon-implementer.md#argon-as-implementer) | Eligibility, [intake](argon-intake.md), boundary, preflight, records |
+| [Codex Node](codex-node.md) | Setup |
 | [Argon verify](argon-verify.md) | In-force permissions, container, results |
 | [Verify operation](argon-verify-operation.md) | Switch, checks |
 | [Sweep](argon-verify-sweep.md) | Leftovers |
@@ -146,7 +147,7 @@ idea (maintainer, one line) or finding (AI)
 - Put milestone issues in their GitHub milestone.
 - No implementation starts on an issue without `ready`.
 
-The lifecycle of a pull request is in [`pull-requests.md`](pull-requests.md).
+[Pull requests](pull-requests.md).
 
 ## Keeping state
 

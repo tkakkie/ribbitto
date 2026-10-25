@@ -29,8 +29,11 @@ covers measurement approval and caps.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.
 - `make lint` — runs golangci-lint.
-- Tooling is Go, with one-line `Makefile` recipes
-  ([decision 35](docs/decisions/35-tooling-in-go.md)).
+- Tooling and orchestration are Go, with one-line `Makefile` recipes
+  ([decision 35](docs/decisions/35-tooling-in-go.md)); the limited Node
+  exception follows [decision 43](docs/decisions/43-typescript-with-a-go-driven-build.md).
+- `make web-install` — installs the locked checker; `make check-web` checks
+  TypeScript (also in `make check`). Follow [Codex Node setup](docs/workflow/codex-node.md).
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any edge change.
 - `make check` also checks documents: links and `#anchors`, repository

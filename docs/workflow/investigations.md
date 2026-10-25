@@ -1,16 +1,16 @@
 # Investigations and the performance target
 
-- New measurement or verification stages, prototypes and measurement
-infrastructure need explicit maintainer approval before work starts.
-- Investigation and optimisation issues state a pull-request or time cap
-before work starts. Stop and report at the cap, even without a conclusion.
-- The target is 5,000 concurrent connections per process, with message arrival
-not much worse than without unread counts. Check 2 vCPU / 4 GB in a separate
-issue once available; development-machine runs decide until then.
+- New measurement/verification stages, prototypes and measurement
+infrastructure need explicit maintainer preapproval.
+- Investigation/optimisation issues state a PR/time cap before work;
+stop and report at cap, even inconclusive.
+- Target: 5,000 concurrent connections/process; message arrival not much
+worse than without unread counts. Check 2 vCPU / 4 GB in its own issue
+when available; development-machine runs decide until then.
 
 ## Host measurements
 
-An approved performance measurement is the only standing exception to the
+Approved performance measurements are the only standing exception to the
 [handoff rule](running-other-ai.md#handoff-of-another-ais-code) (maintainer, 2026-10-18, #1308).
 After handoff, builds, tests and `make dev` stay in CI or sandboxes.
 All conditions apply:
@@ -47,16 +47,20 @@ maintainer decision.
 on its chosen `127.0.0.1` port, with disposable data and credentials.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. Record SHAs, conditions (toolchain, image digest, restrictions), exact
-commands, results and that this was a host measurement in the PR.
-Redact credentials.
+10. In PR, record host measurement SHAs, conditions (toolchain, image
+digest, restrictions), exact commands and results. Redact credentials.
 
-**Reproducibility (#1149).** Alternate base/head in one session with the
-same host, Chrome, profile, dataset, build/run route, toolchain, flags, user
-and restrictions; only code differs. Start at 1-minute load below 4; exclude
-warm-up posts. Another session's absolute values never decide results alone.
+**Reproducibility (#1149).** Alternate base/head in one session: same
+host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
+restrictions; only code differs. Start at 1-min load below 4; exclude
+warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
+
+Host measurements need no Node. Once #1411/#1820 supply it, Go-only asset
+generation precedes compilation in the same isolated build (same trusted
+checkouts/flags, no Node on `PATH`), outside [Argon verify](argon-verify.md#results).
+Until then, commands below cannot build SHAs needing it.
 
 Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference
 ([current value](measurement-go-image.md#measurement-go-image)).
@@ -78,8 +82,8 @@ session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
   test -z "$tree_status"
 ```
 
-On success, cross-compile in a throwaway container. Check modules against
-this SHA's `go.sum`. Mount only read-only source and empty output:
+Cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
+Mount only read-only source and empty output:
 
 ```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
@@ -93,14 +97,14 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   go build -mod=readonly -trimpath -buildvcs=false -o /out/ribbitto ./cmd/ribbitto
 ```
 
-Apple silicon only, never Rosetta. In-tree: only this Go build. Before staging
-record SHA and `shasum -a 256`;
-`-buildvcs=false` avoids container git ownership differences.
+Apple silicon only, never Rosetta. In-tree: only this Go build and prior Go
+asset generation. Before staging log SHA and `shasum -a 256`;
+`-buildvcs=false` avoids container git ownership mismatches.
 
-If unusable, record why. Maintainer: stage source read-only in
-`build`, empty of old output/caches; no symlink may escape.
-User writes only output/caches. With `src` staged, recheck `HEAD`/clean status
-via `pinned`; require `test -z "$(find "$src" -type l)"`.
+If unusable, record why. Maintainer: stage read-only source in
+`build`, no old output/caches or escaping symlinks. User writes only
+output/caches. Recheck staged `src` `HEAD`/clean status via `pinned`;
+require `test -z "$(find "$src" -type l)"`.
 `go`: absolute trusted Go path, container version/flags:
 
 ```sh
@@ -117,27 +121,27 @@ cd /private/var/ribbitto-measure/build/src &&
 
 ### One-time setup and run
 
-Setup is maintainer-only:
+Maintainer-only setup:
 
-- Create `_ribbitto_measure`, a non-admin user with no login, credentials,
-privileged groups or access to Docker, developer homes or shared data.
+- Create non-admin `_ribbitto_measure`: no login, credentials, privileged
+groups or access to Docker, developer homes or shared data.
 - Create administrator-owned `/private/var/ribbitto-measure`: read-only
-`server` binary slot, user-writable `data`, separate fallback `build`
-unreadable by the server profile. Use real paths, no symlinks.
-- Install the profile below, administrator-owned and not writable by the
-measurement user, at `/private/var/ribbitto-measure/server.sb`. Reserve
-server port 18080 and database port 55434 for these alone.
+`server` slot, user-writable `data`, separate fallback `build` unreadable
+by the server profile. Real paths, no symlinks.
+- Install the administrator-owned profile below at
+`/private/var/ribbitto-measure/server.sb`, not writable by measurement
+user. Reserve ports 18080 (server) and 55434 (database) exclusively.
 Change ports in profile and commands together; never allow all loopback.
-- Validate this macOS version as the dedicated user with the trusted base,
-in order. Watch denials with
+- Validate this macOS version in order as dedicated user with
+trusted base. Watch denials:
 `log stream --style compact --predicate 'sender == "Sandbox"'`:
   1. No database; use run user/environment:
 `sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
 Expect logged usage error, exit 1: profile, dyld and Go start.
-  2. With throwaway DB, make a database-backed request to `127.0.0.1:18080`.
+  2. With throwaway DB, send a DB-backed request to `127.0.0.1:18080`.
 Possible gaps: self-signals (`(allow signal (target self))`),
-parent-directory metadata reads, pgx current-user lookup. Prefer explicit
-`user=` and `sslmode=disable` in `db_url` over allowing `mach-lookup`.
+parent-directory metadata reads, pgx current-user lookup. Prefer `db_url`
+with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
   3. Test copy: add only execution/runtime reads for `/bin/cat` and
 `/usr/bin/nc`; same user/environment and other file/network rules.
 Confirm denial: outside reads (including operator's `~`), connections to
@@ -146,8 +150,8 @@ Record results/profiles in PR. A denial stops; widening needs review and
 maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
-imports. SBPL requires `localhost`, not numeric hosts; it matches only
-loopback. Commands still use `127.0.0.1`:
+imports. SBPL needs `localhost` (loopback only), not numeric hosts;
+commands still use `127.0.0.1`:
 
 ```scheme
 (version 1)

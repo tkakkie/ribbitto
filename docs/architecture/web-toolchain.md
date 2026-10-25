@@ -63,8 +63,8 @@ the directory of the version-checked Node without resolving Node symlinks. CI pr
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Codex downloads no Node and expands no network profile; report missing
-or mismatched runtimes. #1415 documents/verifies setup and sandbox-local writes;
-it does not supply the toolchain or language-table changes. Argon's command
+or mismatched runtimes. [Codex Node setup and probe](../workflow/codex-node.md)
+record trusted provisioning and sandbox-local writes. Argon's command
 prohibition and verify boundary remain unchanged.
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
@@ -151,24 +151,11 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
 
-For Codex, no routine Node use until both #1410 (toolchain/setup) and #1415
-(documenting and verifying trusted Node provisioning for AI sandboxes) land.
-Only then may its sandbox use pinned Node for checking, tests, dependency
-management and `npm ci --ignore-scripts` from a reviewed lockfile. Trusted
-setup supplies Node; no downloader or network expansion. #1415 also documents
-sandbox-local install/cache writes and handoff. No AI runs transferred
-`node_modules`, npm scripts or Node tests on the host after
-handoff; CI remains the check.
+Routine Codex Node use starts at #1415's merge, after #1410, under the
+[setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
+exception ended with its last PR; it is not routine authorization.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
-
-**One-time Codex exception (#1410 only, maintainer 2026-10-25):** trusted host
-Node 26.8.1 may run inside the normal implementation profile, without a Node
-download or network expansion. `npm install` is used only for lockfile creation
-or regeneration; `npm ci` verifies the lock. Both require `--ignore-scripts`,
-solely to generate/verify the first lock here, with cache in `bin/.cache/npm`.
-Delete `node_modules` before handoff; afterwards no AI runs it, npm scripts or
-Node tests on the host. CI is the check. This exception ends when #1410's last
-PR merges; routine use still waits for #1415 too.
+Handoff follows the [standing prohibition](../workflow/running-other-ai.md#handoff-of-another-ais-code).
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)

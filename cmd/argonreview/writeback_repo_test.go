@@ -68,7 +68,9 @@ func TestWritebackRepoFacts(t *testing.T) {
 	// A symlink blob at the merge base cannot establish a module.
 	writebackGitT(t, tree, "update-index", "--cacheinfo", "120000,"+implementBlobOID([]byte("elsewhere"), "sha1")+","+writebackSQL+"doc.go")
 	// Write the object explicitly: no external process/filter may choose its bytes.
-	cmd := containerGit(context.Background(), tree, "hash-object", "-w", "--stdin")
+	cmd := containerGit(context.Background(), tree,
+		"-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "gc.autoDetach=false",
+		"hash-object", "-w", "--stdin")
 	cmd.Stdin = strings.NewReader("elsewhere")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("object: %s, %v", out, err)

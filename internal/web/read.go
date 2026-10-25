@@ -38,6 +38,9 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	}
 	p.topicID, ok = p.resolvePlace(w, r, m, id, r.PathValue("topicID"))
 	if !ok {
+		_ = r.ParseForm()
+		wc, _ := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64)
+		_ = p.reading.Feed(r.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: id, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, wc)
 		return
 	}
 	if !parseForm(w, r) {

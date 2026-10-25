@@ -83,7 +83,6 @@ func readForm(r *http.Request) (cursor, from, through int64, shown, valid bool) 
 	}
 	form := r.PostForm
 	if r.Form.Has("before") || r.Form.Has("around") || !form.Has("cursor") ||
-		form.Has("from") != form.Has("through") ||
 		form.Has("scope") && (form.Get("scope") != "all" || form.Has("from") || form.Has("through")) {
 		return
 	}

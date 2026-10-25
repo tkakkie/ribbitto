@@ -24,13 +24,6 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.NotFound(w, r)
 		return
 	}
-	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
-	if !admitted {
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
-		return
-	}
-	defer release()
 	id, ok := channelID(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -48,6 +41,13 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
+	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
+	if !admitted {
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+	defer release()
 	var err error
 	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: id, MemberID: m.Member.ID}
 	if p.topicID != nil && shown {

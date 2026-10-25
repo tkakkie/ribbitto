@@ -81,7 +81,7 @@ func (r *Reading) TopicShown(ctx context.Context, scope TopicScope, joinedEventS
 		changed, err = r.topic.ReadShown(ctx, tx, scope, joinedEventSeq, cursor, from, through)
 		return err
 	})
-	r.publish(err, changed, scope.Scope)
+	_ = changed
 	return err
 }
 

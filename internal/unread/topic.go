@@ -119,7 +119,7 @@ func (w *TopicWriter) ReadShown(ctx context.Context, tx platform.Tx, scope Topic
 	for i, r := range ranges {
 		los[i], his[i] = r.Lo, r.Hi
 	}
-	if err := p.Add(ctx, los, his, blocking-1); err != nil {
+	if err := p.Add(ctx, los, his, blocking); err != nil {
 		return false, fmt.Errorf("reading shown topic: %w", err)
 	}
 	return len(ranges) > 0, nil

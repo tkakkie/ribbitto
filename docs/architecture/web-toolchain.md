@@ -31,27 +31,28 @@ decision 42 and the table; .mjs remains deferred to #1412.
 
 ## Build, manifest and embedding — #1411
 
-**Naming — confirmed:** esbuild `[name]-[hash].js` per bundle. Hashes/manifest
-are decided. Minify. A Go registry declares page entries; templ uses logical
-names. Load converted bundles without their old script; unchanged scripts keep
-their tags and `-vN` names.
+**Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
+the tools module. Each named `web/src/<name>.ts` entry becomes a minified
+classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
+dynamic imports. ES2017 is the syntax target approved by the maintainer on
+2026-10-26 and recorded in [browser target rule 4](browser-targets.md#design-rules).
+It adds no Web API polyfills and does not constitute browser verification.
+Browser verification of the served bundle belongs to #1820.
 
-The manifest records logical entries, bundle/map filenames and commit SHA.
-Embed bundles and runtime manifest, never maps. Reject missing/unknown entries,
-missing bundles, unexpected output and paths outside the output tree; prove
-referenced bundles are embedded and named by the pinned builder. Missing
-generation must fail compilation through
-an explicit dist embed or required generated manifest, even if other static
-files exist. CI generates into clean output and packages that exact result;
-dist is not committed.
+The builder validates esbuild's metafile and output, writes
+`manifest.json` last, then replaces the whole ignored `dist` directory
+under `web/static`. Logical entries record bundle filenames and SHA-256 content hashes;
+commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
+locally to a UTC timestamp. Production output has no maps or source-map links.
 
-Make, CI, Docker and release entry points must document/run Go generation
-before compilation. Prove generation/embedding work without Node in PATH;
-update build instructions, including fresh-clone generation.
-
-**Development serving — confirmed:** rebuild edits; serve matching disk
-bundles/manifest with `no-store`, without rebuilding the binary. Use per-bundle
-hashes, no whole-graph prefix.
+First entry: `web/src/message-time.ts`. Its legacy versioned script
+remains unchanged and loaded. Output is neither embedded nor served: #1820
+adds the registry, templ selection, embedding, serving, browser verification
+and generation before compilation in Make, CI, Docker and releases, including
+fresh-clone instructions and failure on missing generation. #1821 adds rebuilds,
+disk serving with `no-store` and development maps, whose file names it records
+in the manifest. #1819 adds private production maps and their separate index;
+production map names never belong in the runtime manifest.
 
 ## Versions and installation — #1410, #1415
 
@@ -63,14 +64,15 @@ the directory of the version-checked Node without resolving Node symlinks. CI pr
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Codex downloads no Node and expands no network profile; report missing
-or mismatched runtimes. #1415 documents/verifies setup and sandbox-local writes;
-it does not supply the toolchain or language-table changes. Argon's command
+or mismatched runtimes. [Codex Node setup and probe](../workflow/codex-node.md)
+record trusted provisioning and sandbox-local writes. Argon's command
 prohibition and verify boundary remain unchanged.
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
-pinned Node; keep install/cache writes inside the implementer's sandbox. No
+pinned Node; keep install/cache writes inside the implementer's sandbox,
+with the npm cache in `bin/.cache/npm`. No
 npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
 or platform package or enabling lifecycle scripts. The portable package selects
@@ -83,16 +85,20 @@ Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
 that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs `go -C tools test -count=1 ./webtypes -run '^TestRealTypeScript$'`
-(the ill-typed TempDir input must produce TS2322). Hermetic wrong-Node and
+then runs both real tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'`
+(the ill-typed TempDir input must produce TS2322; the second test also checks
+that the generated sidebar contract's valid consumers compile and its
+ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
 no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
 outside it. `globals.d.ts` supplies the first input and the htmx global.
 
-**Pin updates — confirmed:** ordinary
-dependency PRs: change the exact checker pin and lockfile together; for a Node
-update also change `.node-version` and regenerate the lockfile with that
-release's bundled npm. CI must prove installation, type checking and, once
+**Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
+checker pin and lockfile together; for a Node update also change `.node-version`.
+When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
+Node release's bundled npm: `npm install --ignore-scripts` is used only for
+lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
+CI must prove installation, type checking and, once
 #1412 lands, unit tests with the changed pins.
 
 **Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
@@ -114,13 +120,13 @@ type checking.
 Go definitions used by templ own ids, attribute names, custom event names and
 payload fields/types. A Go generator under `tools/`, reached by `go generate`,
 produces constants/types and typed accessors; a Go freshness check fails on
-drift. Generated selectors/id helpers also cover dynamic id suffixes. Runtime
-validation/type narrowing remain necessary: types cannot validate
-server attributes or htmx event detail.
+drift. Generated selectors/id helpers also cover dynamic id suffixes. #1823 adds
+the composer contract. Runtime validation/type narrowing remain in the modules:
+types cannot validate server attributes or htmx event detail.
 
 Migrated modules use those accessors for contract hooks and events. No raw
 contract selectors, `dataset` keys, attribute names or custom event strings
-outside the adapter. A Go check with negative fixtures rejects those literal
+outside the adapter. A Go check with negative fixtures (#1822) rejects those literal
 bypasses in authored sources; exporting constants alone would let stale
 literals type-check. Review covers indirect/computed bypasses the check cannot
 prove. Unconverted scripts retain their current contract until their
@@ -151,30 +157,18 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
 
-For Codex, no routine Node use until both #1410 (toolchain/setup) and #1415
-(documenting and verifying trusted Node provisioning for AI sandboxes) land.
-Only then may its sandbox use pinned Node for checking, tests, dependency
-management and `npm ci --ignore-scripts` from a reviewed lockfile. Trusted
-setup supplies Node; no downloader or network expansion. #1415 also documents
-sandbox-local install/cache writes and handoff. No AI runs transferred
-`node_modules`, npm scripts or Node tests on the host after
-handoff; CI remains the check.
+Routine Codex Node use starts at #1415's merge, after #1410, under the
+[setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
+exception ended with its last PR; it is not routine authorization.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
-
-**One-time Codex exception (#1410 only, maintainer 2026-10-25):** trusted host
-Node 26.8.1 may run inside the normal implementation profile, without a Node
-download or network expansion. `npm install` is used only for lockfile creation
-or regeneration; `npm ci` verifies the lock. Both require `--ignore-scripts`,
-solely to generate/verify the first lock here, with cache in `bin/.cache/npm`.
-Delete `node_modules` before handoff; afterwards no AI runs it, npm scripts or
-Node tests on the host. CI is the check. This exception ends when #1410's last
-PR merges; routine use still waits for #1415 too.
+Handoff follows the [standing prohibition](../workflow/running-other-ai.md#handoff-of-another-ais-code).
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
 (#1696) are merged but not in force until #1700: production still pins launcher
-`argonreview-7f607ca` and the old image. The prelude regenerates templ, sqlc and Tailwind
-before Go build/vet/test; `generated` checks output and formatting in a copy.
+`argonreview-7f607ca` and the old image. Once #1700 lands, the prelude will regenerate
+templ, sqlc and Tailwind before Go build/vet/test; `generated` will check output
+and formatting in a copy.
 TypeScript checking stays outside verify.
 #1415 cannot widen verify or those permissions.
 

@@ -17,9 +17,13 @@ GO_TEST_FLAGS ?= -p 2
 # package runs.
 GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
+
+bundles:
+	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
 
 generate: $(TEMPL)
+	go generate ./internal/web/view
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
 
@@ -87,6 +91,7 @@ check-tools: $(TEMPL)
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
+	go -C tools run ./domcontract -check ..
 	go -C tools run ./deps --check ..
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...

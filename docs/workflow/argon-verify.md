@@ -169,8 +169,7 @@ an unlisted MCP tool and an extra argument are refused; settings, hooks and
 MCP file match the expected files; the account's shared settings hash is
 unchanged; nothing unexpected changed. If any smoke check fails, switch off
 immediately, restore and check the old configuration, and investigate before
-another attempt. The passing smoke test is [recorded][smoke]; the Start
-gate refers to [#1433]'s [preflight record][preflight].
+another attempt. [Passing smoke test][smoke]; Start gate: [#1433]'s [preflight record][preflight].
 
 ## Control code in Go
 

@@ -326,3 +326,125 @@ func TestRealTypeScript(t *testing.T) {
 		t.Fatalf("expected TS2322, got %v: %s", err, out)
 	}
 }
+
+func TestFilesReadiness(t *testing.T) {
+	for _, state := range []string{"wrong-node", "missing-checker", "mismatched-checker"} {
+		t.Run(state, func(t *testing.T) {
+			root, pin := fakeNodeRoot(t)
+			t.Setenv("RIBBITTO_REQUIRE_NODE", "")
+			if err := os.Unsetenv("RIBBITTO_REQUIRE_NODE"); err != nil {
+				t.Fatal(err)
+			}
+			want := "TypeScript installed version unreadable"
+			switch state {
+			case "wrong-node":
+				installFakeChecker(t, root, pin)
+				if err := os.WriteFile(filepath.Join(root, "node"), []byte("#!/bin/sh\nprintf 'v0.0.0\\n'\n"), 0700); err != nil {
+					t.Fatal(err)
+				}
+				want = `Node version "v0.0.0" does not match`
+			case "mismatched-checker":
+				installFakeChecker(t, root, "0.0.0")
+				want = `TypeScript installed version "0.0.0" does not match pinned version "` + pin + `"`
+			}
+			if err := run("files", root, "input.ts"); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("files must fail with %q even without opt-in: %v", want, err)
+			}
+		})
+	}
+}
+
+func installFakeChecker(t *testing.T, root, version string) {
+	t.Helper()
+	dir := filepath.Join(root, "node_modules/typescript")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"version":"`+version+`"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFilesArguments(t *testing.T) {
+	root, pin := fakeNodeRoot(t)
+	installFakeChecker(t, root, pin)
+	data, err := os.ReadFile(filepath.Join(root, "node"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Shell builtins only: PATH contains just our fake, never a real Node.
+	script := strings.Replace(string(data), "printf 'CHECKER RAN\\n'", `printf '%s\n' "$@" > node-args`, 1)
+	if err := os.WriteFile(filepath.Join(root, "node"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{filepath.Join(root, "one input.ts"), filepath.Join(root, "two.ts")}
+	if err := run("files", root, files...); err != nil {
+		t.Fatal(err)
+	}
+	args, err := os.ReadFile(filepath.Join(root, "node-args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig"}, fileFlags()...), files...)
+	if got := strings.Split(strings.TrimSuffix(string(args), "\n"), "\n"); !slices.Equal(got, want) {
+		t.Fatalf("node argv = %q, want %q", got, want)
+	}
+}
+
+func TestFilesFlagsMatchConfig(t *testing.T) {
+	data, err := os.ReadFile("../../tsconfig.json") // This repository's config is strict JSON.
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct{ CompilerOptions map[string]any }
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for name, value := range config.CompilerOptions {
+		flag := "--" + name
+		switch value := value.(type) {
+		case bool:
+			if value {
+				want = append(want, flag)
+			} else {
+				want = append(want, flag, "false")
+			}
+		case string:
+			want = append(want, flag, value)
+		case []any:
+			var values []string
+			for _, item := range value {
+				text, ok := item.(string)
+				if !ok {
+					t.Fatalf("unsupported %s item %v", name, item)
+				}
+				values = append(values, text)
+			}
+			want = append(want, flag, strings.Join(values, ","))
+		default:
+			t.Fatalf("unsupported compiler option %s=%v", name, value)
+		}
+	}
+	// Compare option/value groups, independent of map and command-line ordering.
+	options := func(args []string) []string {
+		var result []string
+		for i := 0; i < len(args); i++ {
+			option := args[i]
+			if !strings.HasPrefix(option, "--") {
+				t.Fatalf("expected flag, got %q", option)
+			}
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				i++
+				option += "=" + args[i]
+			}
+			result = append(result, option)
+		}
+		slices.Sort(result)
+		return result
+	}
+	got, expected := options(fileFlags()), options(want)
+	if !slices.Equal(got, expected) {
+		t.Fatalf("files flags = %q, tsconfig compilerOptions = %q", got, expected)
+	}
+}

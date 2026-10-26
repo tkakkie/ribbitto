@@ -67,13 +67,13 @@ checks until migrated.
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,
   custom event names and payload fields/types; a Go generator under `tools/`,
   reached by `go generate`, writes the committed generated file
-  `web/src/<contracts.gen.ts>` that the [toolchain page](web-toolchain.md)
-  names, with constants, types, runtime decoders and typed accessors (#1413). A
+  `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
+  names, with constants, types and typed accessors (#1413; composer #1823). A
   module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and
-  type narrowing stay in the adapter because static types cannot validate server
+  type narrowing stay in the modules because static types cannot validate server
   attributes or htmx event detail, and a Go check with negative fixtures rejects
-  literal bypasses in authored sources (#1413, #1414).
+  literal bypasses in authored sources (#1822, #1414).
 
 ## Composer queue example: before and after
 

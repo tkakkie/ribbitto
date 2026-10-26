@@ -4,6 +4,8 @@
 
 The recipe, build/vet/test regeneration and `generated` check (#1696) are merged but
 **not in force until #1700**.
+The [result summary](argon-verify-testdb.md#result-summary) is also merged but
+not in force until a new launcher build is enabled (#1700).
 Production workers still run the pinned launcher `argonreview-7f607ca`
 and the old image; merging changes nothing in production.
 The recipe now includes PostgreSQL 18 (#1697 PR A). [test-db](argon-verify-testdb.md) is merged but **not in force until #1700**.
@@ -166,8 +168,9 @@ path and added/removed counts, new/only-in-worktree entries, or binary entries.
 It lists at most 100 paths (each path text at most 200 bytes), then the count
 and line totals over all paths, with an omitted-path count. Malformed streams
 lose the whole stat and report that the diff was not understood.
-The stat precedes scope, stdout and stderr, so the MCP 48 KiB tail cap keeps
-it. The diff excerpt has a 16 KiB budget plus a cut notice; lines over 400
+The host stat precedes scope, stdout and stderr; its diff excerpt has a
+16 KiB budget plus a cut notice. MCP returns a summary capped at 7,000 bytes,
+with generated totals before paths. Host diff lines over 400
 bytes are cut at rune boundaries with a visible marker. Gofmt lists at most
 50 names, each at most 200 bytes, then the omitted count.
 

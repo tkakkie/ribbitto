@@ -23,7 +23,7 @@ import (
 
 const (
 	verifyLineLimit     = 64 << 10
-	verifyResultLimit   = 48 << 10
+	verifyResultLimit   = 7000
 	verifyCallLimit     = containerTimeout + 2*containerCleanupTimeout + time.Minute
 	verifyShutdownGrace = 2*containerCleanupTimeout + 5*time.Second
 	verifyMCPPath       = "/usr/bin:/bin"
@@ -40,7 +40,7 @@ type containerVerifier struct {
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	return runContainerCheck(ctx, v.worktree, check, pattern, v.runner, v.copyParent)
+	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent)
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -196,6 +196,7 @@ func verifyResult(report string, runErr error, timedOut, cancelled bool) (string
 	cancelled = !timedOut && (cancelled || errors.Is(runErr, context.Canceled))
 	first, _, _ := strings.Cut(report, "\n")
 	recognized := first == "FAILED" || strings.HasPrefix(first, "FAILED:") || first == "NOT VERIFIED" || strings.HasPrefix(first, "NOT VERIFIED:")
+	initialBytes := len(report)
 	bad := true
 	switch {
 	case recognized:
@@ -211,7 +212,10 @@ func verifyResult(report string, runErr error, timedOut, cancelled bool) (string
 		report = "NOT VERIFIED: the check could not run\n" + report
 	}
 	if runErr != nil {
-		report += "\n" + runErr.Error()
+		// The prefix and diagnostic share the summary core's fixed reserve.
+		prefixBytes := len(report) - initialBytes
+		detail := strings.ToValidUTF8(runErr.Error(), "�")
+		report += "\n" + cutGeneratedText(detail, summaryReserve-prefixBytes-1)
 	}
 	report = strings.ToValidUTF8(report, "�")
 	if len(report) > verifyResultLimit {

@@ -233,6 +233,8 @@ func TestGeneratedDiffStat(t *testing.T) {
 }
 
 func TestGeneratedReportCaps(t *testing.T) {
+	// This bound belongs to the host report; MCP has a separate summary budget.
+	const containerReportLimit = 48 << 10
 	var diff strings.Builder
 	for i := 0; i < 120; i++ {
 		diff.WriteString(generatedFixture(fmt.Sprintf("%03d%s", i, strings.Repeat("é", 150)), "@@ -1 +1 @@\n-a\n+b\n"))
@@ -246,12 +248,19 @@ func TestGeneratedReportCaps(t *testing.T) {
 	}
 	verdict, stat, out := generatedVerdict(25, nil, diff.String(), false)
 	report := verdict + "\n" + stat + containerCheckScope("generated") + "\n--- stdout\n" + out + "\n--- stderr\n"
-	if len(report) >= verifyResultLimit || len(out) > generatedDiffLimit+30 || !strings.Contains(out, "[diff cut off]") {
+	if len(report) >= containerReportLimit || len(out) > generatedDiffLimit+30 || !strings.Contains(out, "[diff cut off]") {
 		t.Fatalf("report too large: %d, diff %d", len(report), len(out))
 	}
-	result, bad := verifyResult(report+strings.Repeat("stderr", verifyResultLimit), nil, false, false)
-	if !bad || !strings.Contains(result, stat) || !strings.Contains(result, out) {
-		t.Fatal("MCP truncation lost stat or bounded diff")
+	// Preserve the former 48 KiB prefix-retention assertion on the host text.
+	result := (report + strings.Repeat("stderr", containerReportLimit))[:containerReportLimit]
+	if !strings.Contains(result, stat) || !strings.Contains(result, out) {
+		t.Fatal("host report prefix lost stat or bounded diff")
+	}
+	v := containerVerifier{containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir()}
+	summary, err := v.verify(context.Background(), "generated", "./...")
+	result, bad := verifyResult(summary, err, false, false)
+	if !bad || len(result) > 7000 || !strings.Contains(result, "Generated: 120 paths, +120 -120") {
+		t.Fatal("MCP summary lost totals or exceeded budget")
 	}
 	names := strings.Repeat(strings.Repeat("é", 150)+".go\n", 60)
 	_, _, out = generatedVerdict(23, nil, names, false)

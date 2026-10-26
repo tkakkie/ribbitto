@@ -3,8 +3,10 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[Generator checks](argon-verify-image.md) await #1700. [Write-back](argon-verify-writeback.md) is not in
-force until its second stage; `argonreview-7f607ca` and the old image still run.
+[Generator checks](argon-verify-image.md) and the merged [summary](argon-verify-testdb.md#result-summary)
+are not in force until #1700 enables a new launcher build.
+Production pins `argonreview-7f607ca` and the old image.
+[Write-back](argon-verify-writeback.md) awaits stage B.
 
 [Leftover sweep](argon-verify-sweep.md).
 
@@ -55,8 +57,7 @@ in #1430/#1432 code.
 
 Outside `agy`'s sandbox, the MCP server is trusted computing base code with
 minimal credentials, Docker and host rights, and no arbitrary-command
-interface. `argonreview verify-mcp` offers one tool and only
-calls `argonreview container-check`.
+interface. MCP returns the summary; `container-check` prints the full report.
 
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
 with a trusted binary and fixed source and worktree arguments. Neither agy's
@@ -118,10 +119,8 @@ exit status; tests use per-test JSON, never package `ok` alone:
 - Browser tests stay CI-only. [test-db](argon-verify-testdb.md) is merged but
   **not in force until #1700**. Omitted files still fail or skip.
 
-`verified` is Argon's own check; it never replaces green CI, review or
-[handoff checks](running-other-ai.md#handoff-of-another-ais-code). CI stays
-the check. Mutation evidence stays on scratch pull requests, excluded from
-the container by #1429.
+`verified` never replaces CI, review or [handoff](running-other-ai.md#handoff-of-another-ais-code).
+Scratch pull requests retain mutation evidence, excluded by #1429.
 
 ## Extended preflight
 

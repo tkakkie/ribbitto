@@ -399,7 +399,7 @@ func TestVerifyResult(t *testing.T) {
 		})
 	}
 	text, bad := verifyResult("verified\n"+strings.Repeat("日", verifyResultLimit), nil, false, false)
-	if bad || len(text) > verifyResultLimit || !utf8.ValidString(text) || !strings.HasPrefix(text, "verified\n") || !strings.Contains(text, "truncated") {
+	if bad || len(text) > 7000 || !utf8.ValidString(text) || !strings.HasPrefix(text, "verified\n") || !strings.Contains(text, "truncated") {
 		t.Fatalf("cap: %d %v", len(text), bad)
 	}
 }

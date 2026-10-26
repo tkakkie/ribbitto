@@ -11,8 +11,7 @@ import (
 const (
 	// summaryVerifiedLimit keeps non-error results comfortably inline.
 	summaryVerifiedLimit = 2048
-	// summaryErrorLimit is PR 2's target wrapper limit, independent of its
-	// still-unmodified 48 KiB limit in this unwired PR.
+	// summaryErrorLimit is the MCP wrapper's hard limit.
 	summaryErrorLimit = 7000
 	// summaryReserve leaves room for the wrapper's prefix and capped diagnostic.
 	summaryReserve = 512
@@ -189,7 +188,7 @@ func summaryRunnerFailure(first string) bool {
 	}
 }
 
-// buildContainerSummary is intentionally unwired. Section order is metadata,
+// buildContainerSummary uses the final decided verdict. Section order is metadata,
 // counts/allowed skips, skipped or failing names, test excerpts, compiler,
 // panic/timeout, package failures, generated totals/paths/gofmt/diff, stderr,
 // then omission accounting. No section can override the decided first line.
@@ -218,7 +217,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 	w := summaryWriter{limit: limit}
 	// Decided verdicts have fixed bounded first lines in the caller. Preserving
 	// arbitrary oversized lines and a finite budget is impossible; the pure API
-	// therefore requires the same verdict-function contract as the future wiring.
+	// therefore requires the same verdict-function contract as the runner.
 	w.text.WriteString(first + "\n")
 	trustedFits := true
 	trusted := func(line string) {

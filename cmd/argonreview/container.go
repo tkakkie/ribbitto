@@ -245,9 +245,19 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	return runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 }
 
+func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (string, error) {
+	if err := validateContainerCheck(tree, check, pattern); err != nil {
+		return "", err
+	}
+	var result containerExecution
+	_, err := runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
+	return result.summary, err
+}
+
 type containerExecution struct {
-	output containerOutput
-	code   int
+	output  containerOutput
+	code    int
+	summary string
 }
 
 // Both commands share source copying, flags, limits and confirmed cleanup.
@@ -271,17 +281,14 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	if lockErr == nil {
 		defer func() { _ = lock.Close() }()
 	}
+	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check)}
 	defer func() {
 		if removeErr := os.RemoveAll(dir); removeErr != nil {
+			in.scope = containerCheckScope("")
 			report = fmt.Sprintf("FAILED: source cleanup failed\n%s check result could not be confirmed. %s\n", check, containerCheckScope(""))
 			err = errors.Join(err, fmt.Errorf("removing source copy: %w", removeErr))
 		}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			err = errors.Join(err, fmt.Errorf("container check interrupted: %w", ctxErr))
-			if strings.HasPrefix(report, "verified\n") {
-				report = "FAILED" + strings.TrimPrefix(report, "verified")
-			}
-		}
+		report, err = result.finishReport(ctx, report, err, in)
 	}()
 	if lockErr != nil {
 		return "", fmt.Errorf("locking source copy: %w", lockErr)
@@ -316,13 +323,36 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	output.cancel = cancel
 	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	result.code = code
-	return finishContainerRun(ctx, runner, name, check, code, runErr, output)
+	return finishContainerRun(ctx, runner, name, check, code, runErr, output, &in)
+}
+
+// finishReport runs after source removal, so late interruption and cleanup
+// failures govern both presentations of the same captured execution.
+func (result *containerExecution) finishReport(ctx context.Context, report string, err error, in summaryInput) (string, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		err = errors.Join(err, fmt.Errorf("container check interrupted: %w", ctxErr))
+		if strings.HasPrefix(report, "verified\n") {
+			report = "FAILED" + strings.TrimPrefix(report, "verified")
+		}
+	}
+	if in.check != "writeback" && report != "" {
+		// Cleanup can change the first line, but test counts/allowed skips
+		// still come from the original verdict, never the raw report.
+		first, _, _ := strings.Cut(report, "\n")
+		original, _, _ := strings.Cut(in.verdict, "\n")
+		if first != original {
+			in.verdict = first
+		}
+		in.facts = parseSummaryFacts(in.check, result.output.stdout.Bytes(), result.output.stderr.Bytes(), result.output.over)
+		result.summary = buildContainerSummary(in)
+	}
+	return report, err
 }
 
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, output *containerOutput) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, output *containerOutput, in *summaryInput) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
@@ -354,11 +384,22 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	}
 	if check == "generated" {
 		verdict, stat, stdout := generatedVerdict(code, err, output.stdout.String(), output.over)
+		in.verdict = verdict
+		if !output.over && err == nil {
+			switch code {
+			case generatedDiffer:
+				in.stat, in.hasStat = parseGeneratedStat(output.stdout.String())
+				in.diff = output.stdout.String()
+			case generatedGofmtNames:
+				in.gofmtNames = strings.Split(strings.TrimSuffix(output.stdout.String(), "\n"), "\n")
+			}
+		}
 		return fmt.Sprintf("%s\n%s%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, stat, containerCheckScope(check), stdout, output.stderr.Bytes()), err
 	}
 	if output.over {
 		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
 	}
+	in.verdict = verdict
 	return fmt.Sprintf("%s\n%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, containerCheckScope(check), output.stdout.Bytes(), output.stderr.Bytes()), err
 }
 

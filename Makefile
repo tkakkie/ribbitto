@@ -17,7 +17,7 @@ GO_TEST_FLAGS ?= -p 2
 # package runs.
 GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
 
 bundles:
 	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
@@ -60,13 +60,14 @@ $(TAILWIND):
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
 #
-# check runs Go checks then TypeScript; CI splits these across jobs (#992),
+# check runs Go checks then TypeScript and client unit tests; CI splits these across jobs (#992),
 # check-test once per tools/testshard shard, so the two cannot drift.
 check:
 	$(MAKE) check-static
 	$(MAKE) check-test
 	$(MAKE) check-tools
 	$(MAKE) check-web
+	$(MAKE) test-web
 
 web-install:
 	go -C tools run ./webtypes install ..
@@ -75,6 +76,9 @@ web-install:
 # RIBBITTO_REQUIRE_NODE=1. CI web-types installs explicitly before checking.
 check-web:
 	go -C tools run ./webtypes check ..
+
+test-web:
+	go -C tools run ./webtypes test ..
 
 check-static: bundles $(TEMPL)
 	go -C tools run ./formatcheck -templ ../$(TEMPL) ..

@@ -17,14 +17,13 @@ Go-driven esbuild build, not blanket authorization.
 #1410 approved web/src/*.ts (including declarations), root tsconfig.json,
 package.json/package-lock.json and .node-version, updating decision 42 and
 [`tools/languagecheck`](../../tools/languagecheck/rules.go) against that approval.
-Later PRs introducing file kinds/locations update both path-and-kind tables in
-the introducing PR: .mjs harnesses belong to #1412; Go builders under tools/
-are already covered. Unlisted files fail the check; exact-path exceptions need
+Later PRs add rows to both path-and-kind tables for a new file kind or
+location: direct web/test/*.test.mjs harnesses are #1412's; Go builders under
+tools/ are covered. Unlisted files fail; exact-path exceptions follow
 decision 42's rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
-Makefile/workflow node/npm commands need review under decision 42, not
-path-and-kind entries; the check does not scan them. #1410 records its commands
-against the limited approval; .mjs remains deferred to #1412.
+Decision 42 reviews Makefile/workflow node/npm commands; the check does not scan
+them and they need no path-and-kind entries. #1412 adds the narrow .mjs row.
 
 ## Build, manifest and embedding — #1411
 
@@ -53,13 +52,13 @@ Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
 `go vet`, `go run` or tools loading the tree. Make's build/check/run targets and
 CI schema verification, testshard and CodeQL generate first. Explicit embed
 patterns require generation; ignored `dist` is never committed. CI proves
-generation, embedding and build without Node on `PATH`. Any future application
-Dockerfile or release workflow must generate before compiling and package that
+generation, embedding and build without Node on `PATH`. A future Dockerfile
+or release workflow must generate before compiling and package that
 output (none exists; Argon's verify image is separate). Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
 #1821 adds development rebuilds, disk serving and maps; #1819 adds private
-production maps, never named in the runtime manifest. ES modules, shared chunks,
+production maps, absent from the runtime manifest. ES modules, shared chunks,
 lazy loading and `modulepreload` need target-browser verification before adoption.
 
 ## Versions and installation — #1410, #1415
@@ -93,7 +92,7 @@ Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
 that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs both real tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'`
+then runs the real checker/runner tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript|NodeTests)$'`
 (the ill-typed TempDir input must produce TS2322; the second test also checks
 that the generated sidebar contract's valid consumers compile and its
 ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
@@ -106,8 +105,7 @@ checker pin and lockfile together; for a Node update also change `.node-version`
 When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
 Node release's bundled npm: `npm install --ignore-scripts` is used only for
 lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
-CI must prove installation, type checking and, once
-#1412 lands, unit tests with the changed pins.
+CI must prove installation, type checking and unit tests with the changed pins.
 
 **Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
 cooldown; updates still need review and exact pins.
@@ -117,9 +115,10 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. Point 5 decides `.mjs` harnesses without `@types/node`; #1412
-runs them against DOM-free `.ts` logic with `node --test`, separately from
-type checking.
+path aliases. Direct `web/test/*.test.mjs` harnesses use `node:test` and
+`node:assert` without `@types/node` and import DOM-free `.ts` logic by relative
+`.ts` path. `make test-web` runs them with `node --test`, separately from type
+checking and not type-checked itself ([checks](web-toolchain-checks.md)).
 
 ## Generated contract and state — #1413, #1416, #1417
 

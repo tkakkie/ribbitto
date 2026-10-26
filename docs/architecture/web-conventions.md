@@ -24,9 +24,9 @@ checks until migrated.
   one concern, and logic that decides something (state transitions, queue
   order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
   module. Only that DOM-free `.ts` logic is unit-tested through the `.mjs`
-  harness that
+  harnesses directly in `web/test/<name>.test.mjs` that
   [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
-  #1412 implements (Node's test runner, `node --test`, without `@types/node`),
+  `make test-web` runs (Node's test runner, `node --test`, without `@types/node`),
   separately from strict, no-emit type checking (#1410). DOM code stays thin and
   is covered by the go-rod browser tests
   ([`web-layers-checks.md`](web-layers-checks.md)).
@@ -59,9 +59,9 @@ checks until migrated.
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
   states. A helper with a second user in another module moves to its own
   `web/src/<helper>.ts` module, imported by relative `.ts` path, and its
-  DOM-free `.ts` logic is unit-tested through the `.mjs` harness that
+  DOM-free `.ts` logic is unit-tested through direct `web/test/*.test.mjs` harnesses that
   [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
-  #1412 implements.
+  `make test-web` runs.
 
 - **How DOM ids and data attributes come from the DOM contract:** Go definitions
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,

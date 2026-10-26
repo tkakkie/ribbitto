@@ -100,7 +100,7 @@ request. Reload on edits; CSS needs no server restart.
 
 `make css` and `make lint` use [`tools/download`](tools/download/main.go)
 for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
-for type checking and dependency management; see [setup](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
+for type checking, unit tests and dependency management; see [setup](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
 Generated Go, CSS and vendor scripts are committed. Run `make bundles`
 before `go build`; it needs no Node, templ or Tailwind. CSS class detection
 uses only `.templ` files so notes and tools do not change the output.
@@ -110,7 +110,7 @@ uses only `.templ` files so notes and tools do not change the output.
 `make check` must pass before a pull request; for another AI's code,
 green draft CI must pass before review instead
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
-It runs `check-static`, `check-test`, `check-tools`, then `check-web`. CI runs
+It runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
 `check-static` and `check-tools` in `checks`, each `testshard` shard
 in a parallel `test` matrix job, `rest` in `test-rest`,
 and TypeScript in `web-types` (`.github/workflows/ci.yml`).

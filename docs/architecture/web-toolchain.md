@@ -84,8 +84,10 @@ Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
 that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs `go -C tools test -count=1 ./webtypes -run '^TestRealTypeScript$'`
-(the ill-typed TempDir input must produce TS2322). Hermetic wrong-Node and
+then runs both real tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'`
+(the ill-typed TempDir input must produce TS2322; the second test also checks
+that the generated sidebar contract's valid consumers compile and its
+ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
 no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
 outside it. `globals.d.ts` supplies the first input and the htmx global.
@@ -117,13 +119,13 @@ type checking.
 Go definitions used by templ own ids, attribute names, custom event names and
 payload fields/types. A Go generator under `tools/`, reached by `go generate`,
 produces constants/types and typed accessors; a Go freshness check fails on
-drift. Generated selectors/id helpers also cover dynamic id suffixes. Runtime
-validation/type narrowing remain necessary: types cannot validate
-server attributes or htmx event detail.
+drift. Generated selectors/id helpers also cover dynamic id suffixes. #1823 adds
+the composer contract. Runtime validation/type narrowing remain in the modules:
+types cannot validate server attributes or htmx event detail.
 
 Migrated modules use those accessors for contract hooks and events. No raw
 contract selectors, `dataset` keys, attribute names or custom event strings
-outside the adapter. A Go check with negative fixtures rejects those literal
+outside the adapter. A Go check with negative fixtures (#1822) rejects those literal
 bypasses in authored sources; exporting constants alone would let stale
 literals type-check. Review covers indirect/computed bypasses the check cannot
 prove. Unconverted scripts retain their current contract until their

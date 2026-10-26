@@ -119,3 +119,24 @@ Such a skip fails closed: it stays `NOT VERIFIED` because it is not in the allow
 
 This is a convenience for honest code, **not a security control**: code
 Argon writes can fabricate any events, as it can today. CI stays the check.
+
+## Unwired summary core
+
+PR 1 of #1846 adds a pure summary builder in
+`cmd/argonreview/container_summary.go`, with a separate bounded facts parse
+and sanitiser. It is **unwired and not in force**: merging it changes no
+MCP output or host report bytes. Production still pins `argonreview-7f607ca`.
+
+Its format is verdict first, check/package/scope, test-only package and leaf
+counts plus allowed skips, skipped or failing names, test excerpts,
+compiler/panic/timeout/package diagnostics, generated totals/paths/gofmt/diff,
+stderr, then omission counts. Names cap at 30; excerpts at 8 lines of 200
+bytes; diff at 16 lines. The byte budget binds before these caps: success
+at most 2,048 bytes, errors at most 7,000 minus a 512-byte wrapper reserve.
+Generated totals precede paths and survive their cap. Every container line
+is sanitised and indented with `  | `; only trusted report lines start at
+column zero. A success with inconsistent facts downgrades the summary to
+`NOT VERIFIED: summary inconsistent with verdict`; other verdicts stay.
+Verified build/vet stderr is omitted. PR 2 will wire this core and update
+the MCP limit; it remains 48 KiB here. CI and #1700's stage A re-run remain
+required before enabling.

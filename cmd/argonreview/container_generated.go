@@ -163,25 +163,56 @@ func generatedHunk(line string) (int, int, bool) {
 	return a, b, validA && validB && (a > 0 || b > 0)
 }
 
-// Parse complete hunks before interpreting another header: source lines may
-// themselves start with --- or +++. Any unknown or incomplete stream loses
-// the entire stat, never just the offending path.
+// generatedStat keeps original path identities so the MCP summary need not parse
+// the host's already capped presentation. Totals include unlisted paths.
+type generatedStat struct {
+	entries               []generatedStatEntry
+	paths, added, removed int
+}
+
+// generatedStatEntry preserves kind and line totals before host formatting.
+type generatedStatEntry struct {
+	path, kind     string
+	added, removed int
+}
+
+// generatedDiffStat preserves the host report contract while exposing the facts
+// separately for the unwired summary core.
 func generatedDiffStat(data string) (string, bool) {
-	if data == "" || !strings.HasSuffix(data, "\n") {
+	stat, ok := parseGeneratedStat(data)
+	if !ok {
 		return "", false
 	}
-	lines := strings.Split(strings.TrimSuffix(data, "\n"), "\n")
 	var listed []string
-	paths, added, removed := 0, 0, 0
+	for _, entry := range stat.entries {
+		kind := entry.kind
+		if kind == "" {
+			kind = fmt.Sprintf(" +%d -%d", entry.added, entry.removed)
+		}
+		listed = append(listed, cutGeneratedText(entry.path, 200)+kind)
+	}
+	listed = append(listed, fmt.Sprintf("%d paths, +%d -%d", stat.paths, stat.added, stat.removed))
+	if stat.paths > generatedPathLimit {
+		listed = append(listed, fmt.Sprintf("... %d more paths not listed", stat.paths-generatedPathLimit))
+	}
+	return strings.Join(listed, "\n") + "\n", true
+}
+
+// parseGeneratedStat parses complete hunks before another header: source lines
+// may themselves start with --- or +++. Unknown or incomplete input loses the
+// entire stat. Retention has the same 100-path cap as the host report.
+func parseGeneratedStat(data string) (generatedStat, bool) {
+	if data == "" || !strings.HasSuffix(data, "\n") {
+		return generatedStat{}, false
+	}
+	lines := strings.Split(strings.TrimSuffix(data, "\n"), "\n")
+	var stat generatedStat
 	record := func(rel, kind string, a, r int) {
-		paths++
-		added += a
-		removed += r
-		if len(listed) < generatedPathLimit {
-			if kind == "" {
-				kind = fmt.Sprintf(" +%d -%d", a, r)
-			}
-			listed = append(listed, cutGeneratedText(rel, 200)+kind)
+		stat.paths++
+		stat.added += a
+		stat.removed += r
+		if len(stat.entries) < generatedPathLimit {
+			stat.entries = append(stat.entries, generatedStatEntry{rel, kind, a, r})
 		}
 	}
 	for i := 0; i < len(lines); {
@@ -193,7 +224,7 @@ func generatedDiffStat(data string) (string, bool) {
 				kind, root = " (new in the copy)", "/tmp/work"
 			}
 			if !ok || (dir != root && !strings.HasPrefix(dir, root+"/")) || !generatedRelative(name) || strings.Contains(name, "/") {
-				return "", false
+				return generatedStat{}, false
 			}
 			rel := strings.TrimPrefix(dir, root)
 			rel = strings.TrimPrefix(rel, "/")
@@ -202,7 +233,7 @@ func generatedDiffStat(data string) (string, bool) {
 			}
 			rel += name
 			if !generatedRelative(rel) {
-				return "", false
+				return generatedStat{}, false
 			}
 			record(rel, kind, 0, 0)
 			i++
@@ -212,27 +243,27 @@ func generatedDiffStat(data string) (string, bool) {
 		if header {
 			i++
 			if i == len(lines) {
-				return "", false
+				return generatedStat{}, false
 			}
 			line = lines[i]
 		}
 		binary, ok := generatedPair(line, "Binary files ", " and /tmp/work/", " differ")
 		if ok {
 			if header && rel != binary {
-				return "", false
+				return generatedStat{}, false
 			}
 			record(binary, " (binary)", 0, 0)
 			i++
 			continue
 		}
 		if !header || i+2 >= len(lines) {
-			return "", false
+			return generatedStat{}, false
 		}
 		for _, spec := range []struct{ prefix, root string }{{"--- ", "/work/"}, {"+++ ", "/tmp/work/"}} {
 			file, stamp, ok := strings.Cut(strings.TrimPrefix(lines[i], spec.prefix), "\t")
 			file, valid := generatedName(file)
 			if !strings.HasPrefix(lines[i], spec.prefix) || !ok || !valid || stamp == "" || file != spec.root+rel {
-				return "", false
+				return generatedStat{}, false
 			}
 			i++
 		}
@@ -240,13 +271,13 @@ func generatedDiffStat(data string) (string, bool) {
 		for i < len(lines) && strings.HasPrefix(lines[i], "@@ ") {
 			old, next, ok := generatedHunk(lines[i])
 			if !ok {
-				return "", false
+				return generatedStat{}, false
 			}
 			i++
 			hunks++
 			for old > 0 || next > 0 {
 				if i == len(lines) || len(lines[i]) == 0 {
-					return "", false
+					return generatedStat{}, false
 				}
 				switch lines[i][0] {
 				case ' ':
@@ -259,10 +290,10 @@ func generatedDiffStat(data string) (string, bool) {
 					next--
 					a++
 				default:
-					return "", false
+					return generatedStat{}, false
 				}
 				if old < 0 || next < 0 {
-					return "", false
+					return generatedStat{}, false
 				}
 				i++
 				if i < len(lines) && lines[i] == `\ No newline at end of file` {
@@ -271,13 +302,9 @@ func generatedDiffStat(data string) (string, bool) {
 			}
 		}
 		if hunks == 0 {
-			return "", false
+			return generatedStat{}, false
 		}
 		record(rel, "", a, r)
 	}
-	listed = append(listed, fmt.Sprintf("%d paths, +%d -%d", paths, added, removed))
-	if paths > generatedPathLimit {
-		listed = append(listed, fmt.Sprintf("... %d more paths not listed", paths-generatedPathLimit))
-	}
-	return strings.Join(listed, "\n") + "\n", true
+	return stat, true
 }

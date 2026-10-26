@@ -1,9 +1,10 @@
-// Command webtypes installs the locked checker or checks client TypeScript.
+// Command webtypes installs the locked checker or checks/tests client TypeScript.
 // Installation is explicit; ordinary checks never fetch dependencies.
 package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,12 +13,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 || (os.Args[1] != "files" && (len(os.Args) != 3 || (os.Args[1] != "install" && os.Args[1] != "check"))) || (os.Args[1] == "files" && len(os.Args) < 4) {
-		fmt.Fprintln(os.Stderr, "usage: webtypes install|check <repository root> | files <repository root> <input.ts>...")
+	if len(os.Args) < 3 || (os.Args[1] != "files" && (len(os.Args) != 3 || (os.Args[1] != "install" && os.Args[1] != "check" && os.Args[1] != "test"))) || (os.Args[1] == "files" && len(os.Args) < 4) {
+		fmt.Fprintln(os.Stderr, "usage: webtypes install|check|test <repository root> | files <repository root> <input.ts>...")
 		os.Exit(2)
 	}
 	if err := run(os.Args[1], os.Args[2], os.Args[3:]...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.ExitCode())
+		}
 		os.Exit(1)
 	}
 }
@@ -97,12 +102,12 @@ func run(mode, root string, files ...string) error {
 		return fmt.Errorf("resolving root: %w", err)
 	}
 	err = ready(root)
-	if err == nil && mode != "install" {
+	if err == nil && (mode == "check" || mode == "files") {
 		err = checkerReady(root)
 	}
 	if err != nil {
-		if mode == "check" && os.Getenv("RIBBITTO_REQUIRE_NODE") != "1" {
-			fmt.Printf("NOT VERIFIED: client TypeScript: %v\n", err)
+		if (mode == "check" || mode == "test") && os.Getenv("RIBBITTO_REQUIRE_NODE") != "1" {
+			fmt.Printf("NOT VERIFIED: client TypeScript %s: %v\n", mode, err)
 			return nil
 		}
 		return err
@@ -134,6 +139,26 @@ func run(mode, root string, files ...string) error {
 		}
 		// CLI policy overrides env/.npmrc; lockfile integrity also covers registry overrides.
 		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
+	} else if mode == "test" {
+		matches, err := filepath.Glob(filepath.Join(root, "web/test/*.test.mjs"))
+		if err != nil {
+			return fmt.Errorf("listing client unit-test harnesses: %w", err)
+		}
+		var files []string
+		for _, name := range matches {
+			info, err := os.Stat(name)
+			if err != nil {
+				return fmt.Errorf("inspecting client unit-test harness: %w", err)
+			}
+			// Node would recursively discover tests inside a matching directory.
+			if info.Mode().IsRegular() {
+				files = append(files, name)
+			}
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("no client unit-test harnesses found")
+		}
+		cmd = command(root, "node", append([]string{"--test"}, files...)...)
 	} else if mode == "files" {
 		// Temporary contract consumers use the same pins and process policy as the project check.
 		args := append(append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig"}, fileFlags()...), files...)

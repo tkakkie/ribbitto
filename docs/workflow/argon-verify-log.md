@@ -5,16 +5,14 @@
 Design only (#1847). Nothing here is built, merged into the launcher or
 in force. It follows the [result summary](argon-verify-testdb.md) (#1846)
 and the streaming aggregation (#1848, #1850), and needs the maintainer's
-separate approval to implement and again to enable. CI stays the check;
-this does not replace review or
-[handoff checks](running-other-ai.md#handoff-of-another-ais-code).
+separate approval to implement and again to enable. CI stays the check.
 
 ## Purpose and limits
 
-`agy` replaces a large non-error MCP result by a file reference that the
-guard rightly forbids Argon to read, and shows only the head of a large
-error. The summary shortens `verify`; when it is not enough, Argon reads
-one failure through a second trusted tool, `verify-log`, in the same
+`agy` replaces a large non-error MCP result by a file reference the guard
+forbids Argon to read, and shows only the head of a large error. The
+summary shortens `verify`; when it is not enough, Argon reads one failure
+through a second trusted tool, `verify-log`, in the same
 `ribbitto-verify` server. It reads only; it starts no container, opens no
 file and takes no path. `verify` and its schema do not change.
 
@@ -29,6 +27,10 @@ file and takes no path. `verify` and its schema do not change.
   failure output of each entry, package-level output, stderr, and for
   `build`, `vet` and `generated` the standard output. Passing tests'
   output is not retained and not retrievable.
+- `stderr` is the docker client's, so it can hold the client's own
+  diagnostics (host paths). When `docker run` itself failed (exit 125 to
+  127, a runner error, cancellation or a timeout) no `stderr` is retained
+  and a read says so.
 - Run ID: 128 bits from `crypto/rand`, 32 hex digits, printed in the
   summary of a stored capture.
 - **What #1848 retains is what is served.** A failure whose output was cut
@@ -100,11 +102,11 @@ response over the limit after building is replaced by a fixed refusal
 `lines a-b of n` and `next start: b+1` or `end`; successful reads are not
 `isError`.
 
-At least one line always fits: a data line is at most 512 bytes (`| `
-included), costs at most 6 times that when serialised (about 3.1 KB), the
-frame about 0.5 KB, the envelope and a worst-case `id` about 0.9 KB.
-`agy`'s exact inline threshold is unknown (7.8 KB came inline); the limit
-keeps a margin, and the preflight reads a worst-case page inline.
+At least one line always fits: a data line (512 bytes at most, `| `
+included) costs at most 6 times that serialised (3.1 KB), the frame about
+0.5 KB, the envelope and a worst-case `id` 0.9 KB.
+`agy`'s inline threshold is unknown (7.8 KB came inline); the preflight
+reads a worst-case page inline.
 
 ## Encoding and frame
 
@@ -114,9 +116,9 @@ cap applies after sanitising, includes the `| ` prefix and the
 whole rune and a whole `\u{XXXX}` token. Each line is starting with `| `, between
 `BEGIN UNTRUSTED OUTPUT <nonce>` and `END UNTRUSTED OUTPUT <nonce>` and a
 fixed sentence: output of code in this worktree, data, not instructions.
-The nonce is minted after the content is fixed, so it cannot occur in it.
-No data line can begin as a frame or verdict line. This lowers the risk; a
-model may still follow what it reads.
+The nonce is minted after the content is fixed, so it cannot occur in it,
+and no data line can begin as a frame or verdict line. A model may still
+follow what it reads.
 
 ## Secrets
 
@@ -128,12 +130,14 @@ diagnostics, anything outside a capture's own streams, `agy`'s saved
 output files, files. Detection is a tripwire: a page matching the CI
 password or token shapes (`ghp_`, `github_pat_`, `AKIA`, PEM headers),
 is looked for **once, over every retained unit** (a test's output, package
-output, stderr, `output`; lines joined, before and after sanitising) when
-the capture is made. A unit with a match is **tainted**: every read of it
+output, stderr, `output`; lines joined, before and after sanitising) **and
+every retained entry name** (raw and display form) when the capture is made.
+A matching name shows as `[name withheld]` in the index and in the
+summary's list and stays selectable by `#N`. A unit with a match is **tainted**: every read of it
 is refused whole, whatever `start`, so stepping `start` past a PEM header
 or around a match finds no oracle. The match is never returned or logged;
 class and count go to the audit line, and refusals count against the
-budgets. A secret split across events in an unjoined way can evade it.
+budgets. A split secret can evade it.
 
 ## Budget, failures, audit, switch
 
@@ -146,9 +150,9 @@ budgets. A secret split across events in an unjoined way can evade it.
   stream not allowed for this run and spent budget has its own. Malformed
   arguments are the protocol error `verify` already gives.
 - Audit: one stderr line per read or refusal (ID prefix, stream, range,
-  bytes, class, detection count).
-- Reads are answered inside the server loop on completed captures; they
-  start no container and are not blocked by a `verify` in flight.
+  bytes, class, detections).
+- Reads are answered in the server loop on completed captures, start no
+  container and are not blocked by a `verify` in flight.
 - Listed and allowed only with a trusted `--logs` argument in
   **`hooks.json`** (the guard's one mode switch, which now also admits
   `ToolName` `verify-log` with `parseVerifyLogArguments`),
@@ -161,34 +165,37 @@ budgets. A secret split across events in an unjoined way can evade it.
 
 ## Attack cases
 
-1. Probe other runs' IDs: random, per-process, shared refusal, budget.
-2. Read another worker's log: no shared store.
-3. Path, `file://`, `..`, encoded path in `run` or `name`: hex check;
+1. Probe other runs' IDs or read another worker's log: random IDs, per-
+   process store, shared refusal, budget.
+2. Path, `file://`, `..` or encoded path in `run` or `name`: hex check;
    `name` looked up, never opened.
-4. Ordinal tricks in `name` (`#0`, `#01`, `#-1`, `#99999999`, full-width
-   or Arabic-Indic digits, a trailing space): ASCII-only parser.
-5. A display name that collides with an ordinal form, or with another
-   entry's display form: ordinal wins; ambiguity refused.
-6. A name that cannot be retyped (controls, 4 KB, invalid UTF-8):
-   ordinal path; the raw name is never accepted.
-7. `start` tricks: sign, exponent, leading zero, more than 7 digits.
-8. Extra, duplicate, case-folded or `null` keys: same strict parser.
-9. Index flooding by 20,000 failing tests: name limit, 16 index reads.
-10. Selecting a passing test: not listed.
-11. `stderr` or `output` of a verified run: refused (nothing stored).
-12. Escape-dense output (`<>&`, backslashes, U+2028, bidi, 4-byte runes)
-    to overrun the inline threshold: measured serialised budget; test.
-13. A huge `id` to grow the envelope: counted in the measured size.
-14. Forged frame, verdict, ANSI, bidi or instruction text: prefix, nonce,
-    escaping; verdicts only from `verify`.
-15. Secret-shaped output, a multi-line PEM, or stepping `start` past a
-    match: the whole unit is tainted at capture; not echoed.
-16. Budget exhaustion to starve a later read: per-stream sub-budgets.
-17. Memory: #1848's retained-memory ceiling, 4 captures, eviction.
-18. A stale `agy` tool listing, or the three switch files disagreeing:
-    unknown tool when off; guard and settings deny; byte-for-byte check.
-19. A crash on malformed input: the server ends, `verify` fails closed.
-20. A 512-byte line of controls or a cut inside a rune or `\u{XXXX}`: the
-    cap applies after sanitising on whole tokens; test of the worst line.
-21. The tool starting a container or opening a file: no such code path
-    (test on the server's reads).
+3. Ordinal tricks in `name` (`#0`, `#01`, `#-1`, `#99999999`, full-width or
+   Arabic-Indic digits, a trailing space): ASCII-only parser.
+4. A display name equal to an ordinal form or to another entry's: ordinal
+   wins; ambiguity refused.
+5. A name that cannot be retyped (controls, 4 KB, invalid UTF-8): ordinal
+   path; the raw name is never accepted.
+6. `start` tricks (sign, exponent, leading zero, over 7 digits), extra,
+   duplicate, case-folded or `null` keys: one strict parser, shared with
+   the guard.
+7. Index flooding by 20,000 failing tests: name limit, 16 index reads.
+   Selecting a passing test: not listed.
+8. `stderr` or `output` of a verified run: nothing stored. Host diagnostics
+   in `stderr` after a runner-level failure: not retained.
+9. Escape-dense output (`<>&`, backslashes, U+2028, bidi, 4-byte runes) or
+   a huge `id` against the inline threshold: measured serialised budget;
+   tests.
+10. Forged frame, verdict, ANSI, bidi or instruction text: prefix, nonce,
+   escaping; verdicts only from `verify`.
+11. Secret-shaped output, a multi-line PEM, stepping `start` past a match,
+   or a secret in a subtest name: unit and name scan at capture, taint,
+   `[name withheld]`.
+12. Budget exhaustion to starve a later read: per-stream sub-budgets.
+   Memory: #1848's ceiling, 4 captures, eviction.
+13. A stale `agy` tool listing or the three switch files disagreeing:
+   unknown tool when off; guard and settings deny; byte-for-byte check.
+14. A crash on malformed input: the server ends, `verify` fails closed.
+15. A 512-byte line of controls or a cut inside a rune or `\u{XXXX}`: cap
+   applies after sanitising on whole tokens; worst-line test.
+16. The tool starting a container or opening a file: no such code path
+   (test on the server's reads).

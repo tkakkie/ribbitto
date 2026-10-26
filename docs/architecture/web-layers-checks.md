@@ -127,14 +127,13 @@ replacement and bounded insertion without sorting.
 
 ### JavaScript pattern check
 
-`TestApplicationJavaScript` in `web/static/javascript_test.go` checks every
-direct `web/static/*.js` file, regardless of its name or version; it does
-not descend into subdirectories such as `vendor/`. Names must end in
-`-vN.js`, where N is one or more decimal digits.
+`TestApplicationJavaScript` in `web/static/javascript_test.go` checks direct
+`web/static/*.js` and `web/src/*.ts` (including `.d.ts`), never subdirectories.
+Both run; absent JavaScript fails until #1831. JavaScript names require
+`-vN.js` (decimal N); TypeScript names do not.
 
-The check masks `//` and `/* ... */` comments and single/double/backtick-quoted
-contents (including escapes), then matches patterns per line. Quote delimiters
-stay visible for string timers. It rejects:
+Comments and quoted contents (with escapes) are masked before per-line checks;
+quote delimiters remain for string timers. It rejects:
 
 - `innerHTML`/`outerHTML` assignments, including compound assignments such
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
@@ -143,14 +142,15 @@ stay visible for string timers. It rejects:
 - `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `pins-sync-v2.js`; `localStorage` outside `message-drafts-vN.js`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. They restate
-  the existing CSP without `'unsafe-eval'` ([`csp.md`](csp.md)).
-- `var`/`let`/`const` and named `function` declarations at zero brace and
-  parenthesis depth (a keyword after `.`, such as `options.var`, is a
-  property name and passes), plus direct dot-property assignments and increments
-  or decrements on `window`/`globalThis`. No particular file structure is
-  required; multiple IIFEs and scoped event handlers pass.
+  CSP without `'unsafe-eval'` ([`csp.md`](csp.md)).
+- JavaScript declarations at zero brace/parenthesis depth (`var`/`let`/`const`,
+  named `function`; properties like `options.var` pass). TypeScript permits
+  module declarations. Both reject dot-property writes and
+  increments/decrements on `window`/`globalThis`; TypeScript also rejects casts
+  of either global. IIFEs and scoped handlers pass. TypeScript has no
+  `localStorage` allowance (#1418 adds the drafts entry).
 
-This bounded pattern check is no JavaScript parser: it cannot resolve aliases,
+This pattern check is no parser or security boundary: it cannot resolve aliases,
 computed properties, multiline expressions or template interpolations. It may
 mistake regular-expression literals for code, comments or delimiters. Delimiter
 depth cannot determine scope: block-level `var`, implicit globals and indirect

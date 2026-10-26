@@ -30,7 +30,9 @@ and uses empty user/global npm configs. It keeps the cache in `bin/.cache/npm`
 and install writes in the checkout. No npm scripts. `make check-web` checks
 without installing; missing/mismatched Node or checker reports `NOT VERIFIED`
 unless `RIBBITTO_REQUIRE_NODE=1` makes it fail. `make check` includes that check.
-Unit-test commands belong to #1412; none is introduced here.
+`make test-web` runs the client unit tests with the same Node pin, needs no
+install and follows the same `NOT VERIFIED` rule; `make check` includes it
+([details](../architecture/web-toolchain-checks.md#checks-and-measurement--1412-1414-1426)).
 
 After a reviewed pin-update PR merges, the maintainer updates the trusted host
 installation outside the sandbox to the new `.node-version`, including its

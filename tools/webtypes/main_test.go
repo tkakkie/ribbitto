@@ -151,6 +151,11 @@ func TestMissingNPM(t *testing.T) {
 
 func checkOutput(t *testing.T, root string) (string, error) {
 	t.Helper()
+	return runOutput(t, "check", root)
+}
+
+func runOutput(t *testing.T, mode, root string) (string, error) {
+	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +163,7 @@ func checkOutput(t *testing.T, root string) (string, error) {
 	stdout := os.Stdout
 	os.Stdout = w
 	defer func() { os.Stdout = stdout }()
-	err = run("check", root)
+	err = run(mode, root)
 	_ = w.Close()
 	out, readErr := io.ReadAll(r)
 	_ = r.Close()

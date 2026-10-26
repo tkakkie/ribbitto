@@ -62,11 +62,19 @@ func (w *summaryWriter) put(line string) bool {
 	return true
 }
 
+// section keeps a header with its first item when the remaining budget is tight.
+func (w *summaryWriter) section(header, first string) bool {
+	if w.text.Len()+len(header)+len(first)+2 > w.limit-summaryFooterReserve {
+		return false
+	}
+	return w.put(header)
+}
+
 // names reports omissions from both the list cap and exhausted budget.
 func (w *summaryWriter) names(header string, names []string, total int) {
 	shown := 0
 	w.limit -= summaryMoreReserve
-	if len(names) > 0 && w.put(header) {
+	if len(names) > 0 && w.section(header, summaryIndent+summaryText(names[0])) {
 		for _, name := range names[:min(len(names), summaryNameLimit)] {
 			text := summaryText(name)
 			if !w.put(summaryIndent + text) {
@@ -88,17 +96,27 @@ func (w *summaryWriter) names(header string, names []string, total int) {
 
 // lines charges discarded retained lines and parser-cap omissions together.
 func (w *summaryWriter) lines(header string, lines summaryLines) {
+	if len(lines.lines) > 0 && w.section(header, summaryIndent+summaryText(lines.lines[0])) {
+		w.writeLines(lines)
+		return
+	}
+	w.linesOmitted += lines.total
+}
+
+// writeLines charges shortening only after a retained line reaches the report.
+func (w *summaryWriter) writeLines(lines summaryLines) {
 	shown := 0
-	if len(lines.lines) > 0 && w.put(header) {
-		for _, line := range lines.lines {
-			if !w.put(summaryIndent + summaryText(line)) {
-				break
-			}
-			shown++
+	for i, line := range lines.lines {
+		text := summaryText(line)
+		if !w.put(summaryIndent + text) {
+			break
 		}
+		if text != line || i < len(lines.shortened) && lines.shortened[i] {
+			w.shortened++
+		}
+		shown++
 	}
 	w.linesOmitted += lines.total - shown
-	w.shortened += lines.shortened
 }
 
 // summaryAllowedSkips uses trusted identities for every verdict, even though
@@ -243,7 +261,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 	if verified {
 		if !trustedFits {
 			in.verdict = summaryInconsistent
-			return buildContainerSummary(in)
+			return buildContainerSummaryWithLimits(in, verifiedLimit, errorLimit)
 		}
 		return w.finish(0)
 	}
@@ -289,15 +307,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			w.put(header)
 			w.put(summaryIndent + summaryText(failure.name))
 			w.excerpts++
-			shown := 0
-			for _, line := range failure.output.lines {
-				if !w.put(summaryIndent + line) {
-					break
-				}
-				shown++
-			}
-			w.linesOmitted += failure.output.total - shown
-			w.shortened += failure.output.shortened
+			w.writeLines(failure.output)
 		}
 	}
 	// A panic or timeout can leave running tests without results. These bounded

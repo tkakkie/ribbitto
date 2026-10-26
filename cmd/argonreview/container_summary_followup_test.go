@@ -87,6 +87,15 @@ func TestSummaryVerifiedTrustedBudget(t *testing.T) {
 			}
 		})
 	}
+	t.Run("downgrade keeps error limit", func(t *testing.T) {
+		got := buildContainerSummaryWithLimits(in, summaryFooterReserve, summaryFooterReserve)
+		if !strings.HasPrefix(got, summaryInconsistent+"\n") || len(got) > summaryFooterReserve {
+			t.Fatalf("downgrade lost the tiny error limit: %d bytes: %s", len(got), got)
+		}
+		if strings.Contains(got, "Check:") || strings.Contains(got, "Scope:") || strings.Contains(got, "Details unavailable:") {
+			t.Fatalf("downgrade used production space for optional lines: %s", got)
+		}
+	})
 }
 
 // TestSummaryFirstLine retains the decided line even if no budgeted line fits.

@@ -32,6 +32,42 @@ func TestSummarySanitising(t *testing.T) {
 	}
 }
 
+func TestSummaryESCFollowedByRune(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"doubled ESC", "\x1b\x1b[31mred", "red"},
+		{"C1 CSI", "\x1b\u009b31mred", "red"},
+		{"C1 OSC", "\x1b\u009d0;title\a", ""},
+		{"multibyte", "\x1b€", "€"},
+		{"trailing ESC", "\x1b", ""},
+		{"ASCII CSI", "\x1b[31mred", "red"},
+		{"ASCII OSC", "\x1b]0;title\ared", "red"},
+		{"ASCII DCS", "\x1bPtitle\x1b\\red", "red"},
+		{"ASCII PM", "\x1b^title\x1b\\red", "red"},
+		{"ASCII APC", "\x1b_title\x1b\\red", "red"},
+		{"ASCII lower bound", "\x1b red", "red"},
+		{"ASCII upper bound", "\x1b~red", "red"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := summaryText(tc.input)
+			if got != tc.want || strings.ContainsAny(got, "\x1b\ufffd") || !utf8.ValidString(got) {
+				t.Fatalf("sanitised %q, want %q without ESC or replacement runes", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSummarySourceRuneBoundary(t *testing.T) {
+	var lines summaryLines
+	lines.fragment(strings.Repeat("\u200b", 1366), 1)
+	if !utf8.ValidString(lines.partial) || len(lines.partial) != 4095 || !lines.partialCut {
+		t.Fatalf("raw prefix cut inside a rune: bytes=%d, cut=%v", len(lines.partial), lines.partialCut)
+	}
+	lines.end(1)
+	if lines.total != 1 || len(lines.lines) != 1 || lines.lines[0] != "" || len(lines.shortened) != 1 || !lines.shortened[0] {
+		t.Fatalf("invisible source produced text or lost shortening: %+v", lines)
+	}
+}
+
 // TestSummaryForgedLines proves each source line remains data, including names,
 // stderr and output that repeats the report's own marker or headers.
 func TestSummaryForgedLines(t *testing.T) {
@@ -74,7 +110,7 @@ func TestSummaryFragments(t *testing.T) {
 		t.Fatal("pending line exceeded retention cap")
 	}
 	lines.end(8)
-	if lines.total != 1 || len(lines.lines) != 1 || len(lines.lines[0]) != 200 || lines.shortened != 1 {
+	if lines.total != 1 || len(lines.lines) != 1 || len(lines.lines[0]) != 200 || len(lines.shortened) != 1 || !lines.shortened[0] {
 		t.Fatalf("fragment accounting %+v", lines)
 	}
 }

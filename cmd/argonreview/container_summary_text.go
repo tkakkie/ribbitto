@@ -29,6 +29,9 @@ func summaryText(s string) string {
 				if i == len(s) {
 					break
 				}
+				if s[i] < 0x20 || s[i] > 0x7e {
+					continue
+				}
 				mode = rune(s[i])
 				i++
 			}
@@ -69,10 +72,11 @@ func summaryText(s string) string {
 
 // summaryLines counts discarded lines too, so retention and report budgets can
 // share an honest omission count without retaining an entire output stream.
+// Shortening flags parallel retained lines, since omitted text is not displayed.
 type summaryLines struct {
 	lines                     []string
 	total                     int
-	shortened                 int
+	shortened                 []bool
 	partial                   string
 	partialActive, partialCut bool
 }
@@ -92,7 +96,11 @@ func (l *summaryLines) fragment(s string, limit int) {
 		l.partialActive = true
 		if len(l.lines) < limit {
 			room := summarySourceLineLimit - len(l.partial)
-			l.partial += chunk[:min(len(chunk), room)]
+			end := min(len(chunk), room)
+			for end > 0 && end < len(chunk) && !utf8.RuneStart(chunk[end]) {
+				end--
+			}
+			l.partial += chunk[:end]
 			l.partialCut = l.partialCut || len(chunk) > room
 		}
 		if !newline {
@@ -112,9 +120,7 @@ func (l *summaryLines) end(limit int) {
 	l.total++
 	if len(l.lines) < limit {
 		text := summaryText(l.partial)
-		if l.partialCut || text != l.partial {
-			l.shortened++
-		}
+		l.shortened = append(l.shortened, l.partialCut || text != l.partial)
 		l.lines = append(l.lines, text)
 	}
 	l.partial, l.partialActive, l.partialCut = "", false, false

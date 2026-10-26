@@ -49,6 +49,14 @@ unknown or `null` key, at most one value each.
   5, no leading zero, not zero) or a display name (below).
 - `start`: a line index, ASCII digits only, 1 to 7, in range.
 
+**Stateless syntax, shared with the guard.** One `parseVerifyLogArguments`
+serves both the server and the `PreToolUse` guard, which has no server
+state: exactly these keys; `name` present if and only if `stream` is `test`
+or `package`; `name` at most 256 bytes, valid UTF-8, no control, ANSI, bidi
+or zero-width character (display forms show those as `\u{XXXX}` text);
+`run` and `start` as above. Only the lookup (run exists, name listed) stays
+in the server.
+
 **The index is the list of selectable things.** It numbers, in the order
 the summary uses (sorted by raw name; packages after), every retained
 failed or skipped leaf and failed package: `#N kind display-name`. The
@@ -57,7 +65,7 @@ each name with its ordinal. Passing tests are never listed or selectable.
 
 **Display name.** The summary's sanitiser: ANSI removed, invalid UTF-8 to
 U+FFFD, controls, bidi and zero-width characters shown as `\u{XXXX}`, cut
-at 200 bytes with `[cut N bytes]`. It is not injective, and the caller
+at 200 bytes (the cap applies after sanitising, `[cut N bytes]` inside it, never splitting a rune or a `\u{XXXX}` token). It is not injective, and the caller
 cannot reliably retype it, so the **ordinal is the guaranteed way** and
 the display name a convenience:
 
@@ -100,8 +108,10 @@ keeps a margin, and the preflight reads a worst-case page inline.
 
 ## Encoding and frame
 
-The page text is the display-name rules for every line (cut at 512 bytes
-with `[cut N bytes]`), each data line starting with `| `, between
+The page text follows the display-name rules for every line: the 512-byte
+cap applies after sanitising, includes the `| ` prefix and the
+`[cut N bytes]` suffix (N counts source bytes not shown), and backs up to a
+whole rune and a whole `\u{XXXX}` token. Each line is starting with `| `, between
 `BEGIN UNTRUSTED OUTPUT <nonce>` and `END UNTRUSTED OUTPUT <nonce>` and a
 fixed sentence: output of code in this worktree, data, not instructions.
 The nonce is minted after the content is fixed, so it cannot occur in it.
@@ -117,9 +127,13 @@ test pins its environment and mounts. Never served: runner errors and host
 diagnostics, anything outside a capture's own streams, `agy`'s saved
 output files, files. Detection is a tripwire: a page matching the CI
 password or token shapes (`ghp_`, `github_pat_`, `AKIA`, PEM headers),
-checked before and after sanitising, is **refused whole**; the match is
-never returned or logged, only class and count go to the audit line.
-A secret split across two events or pages can evade it.
+is looked for **once, over every retained unit** (a test's output, package
+output, stderr, `output`; lines joined, before and after sanitising) when
+the capture is made. A unit with a match is **tainted**: every read of it
+is refused whole, whatever `start`, so stepping `start` past a PEM header
+or around a match finds no oracle. The match is never returned or logged;
+class and count go to the audit line, and refusals count against the
+budgets. A secret split across events in an unjoined way can evade it.
 
 ## Budget, failures, audit, switch
 
@@ -136,9 +150,14 @@ A secret split across two events or pages can evade it.
 - Reads are answered inside the server loop on completed captures; they
   start no container and are not blocked by a `verify` in flight.
 - Listed and allowed only with a trusted `--logs` argument in
+  **`hooks.json`** (the guard's one mode switch, which now also admits
+  `ToolName` `verify-log` with `parseVerifyLogArguments`),
   `mcp_config.json` and the on-mode settings entry
-  `mcp(ribbitto-verify/verify-log)`, both generated and checked byte for
-  byte; merged off. `mcp(*)` stays denied except the two exact entries.
+  `mcp(ribbitto-verify/verify-log)`, all three generated and checked byte
+  for byte by `checkImplementerConfig`, so `implement-check` and the
+  preflight refuse a mismatch; `--logs` needs verify on; merged off. With
+  it off the guard denies `verify-log` and `verify` is unchanged.
+  `mcp(*)` stays denied except the two exact entries.
 
 ## Attack cases
 
@@ -162,10 +181,14 @@ A secret split across two events or pages can evade it.
 13. A huge `id` to grow the envelope: counted in the measured size.
 14. Forged frame, verdict, ANSI, bidi or instruction text: prefix, nonce,
     escaping; verdicts only from `verify`.
-15. Secret-shaped output: whole page refused, not echoed.
+15. Secret-shaped output, a multi-line PEM, or stepping `start` past a
+    match: the whole unit is tainted at capture; not echoed.
 16. Budget exhaustion to starve a later read: per-stream sub-budgets.
 17. Memory: #1848's retained-memory ceiling, 4 captures, eviction.
-18. A stale `agy` tool listing: unknown tool when off; settings deny.
+18. A stale `agy` tool listing, or the three switch files disagreeing:
+    unknown tool when off; guard and settings deny; byte-for-byte check.
 19. A crash on malformed input: the server ends, `verify` fails closed.
-20. The tool starting a container or opening a file: no such code path
+20. A 512-byte line of controls or a cut inside a rune or `\u{XXXX}`: the
+    cap applies after sanitising on whole tokens; test of the worst line.
+21. The tool starting a container or opening a file: no such code path
     (test on the server's reads).

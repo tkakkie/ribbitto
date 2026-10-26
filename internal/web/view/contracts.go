@@ -205,6 +205,7 @@ const (
 	//dom:attribute
 	FromTopicAttribute = "data-from-topic"
 	// MessageSendingEvent carries message-sending notifications.
+	// The markup id and script event deliberately share this name; literal checks must allow both.
 	//dom:event MessageSendingDetail
 	MessageSendingEvent = "message-sending"
 	// MessageSentEvent carries message-sent notifications.
@@ -225,16 +226,18 @@ const (
 )
 
 // MessageSendingDetail binds a draft snapshot to its sending identity.
+// Key is null when the page has no idempotency key.
 type MessageSendingDetail struct {
-	Key     string `json:"key"`
-	Body    string `json:"body"`
-	InPlace bool   `json:"inPlace"`
+	Key     *string `json:"key"`
+	Body    string  `json:"body"`
+	InPlace bool    `json:"inPlace"`
 }
 
 // MessageSentDetail correlates a draft with its confirmed message DOM id.
+// Key is null when the page has no idempotency key.
 type MessageSentDetail struct {
-	Key     string `json:"key"`
-	Message string `json:"message"`
+	Key     *string `json:"key"`
+	Message string  `json:"message"`
 }
 
 // MessagePendingActionDetail distinguishes restoration from deliberate removal.

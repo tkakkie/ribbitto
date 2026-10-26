@@ -228,6 +228,7 @@ func payloadType(file *ast.File, name string) (string, error) {
 						var choices []string
 						seenChoices := make(map[string]bool)
 						for _, choice := range strings.Split(values, ",") {
+							choice = strings.TrimSpace(choice)
 							if choice == "" || seenChoices[choice] {
 								return "", fmt.Errorf("empty or duplicate dom choice in %s", name)
 							}

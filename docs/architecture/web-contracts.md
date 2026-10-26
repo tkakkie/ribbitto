@@ -90,8 +90,12 @@ The lists above remain the human-readable contract.
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
-(`key`). All fields are strings except boolean `inPlace` and nullable
-`restoredKey`. `pending-send` and `typing-input` trigger htmx forms with no payload.
+(`key`). All fields are strings except boolean `inPlace`, nullable `restoredKey`
+and nullable `key` in `message-sending` and `message-sent`. A send without an
+idempotency key carries null; the typed composer (#1824) turns the script's
+`undefined` into null. The same `message-sending` string is an id (composer
+markup) and an event name (script) by design; #1822's literal check must tolerate it.
+`pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
 `data-state` and `data-draft-key` are script-written hooks, not server state.
 Coverage already includes the composer before its typed entry conversion (#1824);

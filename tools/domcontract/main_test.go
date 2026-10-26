@@ -191,8 +191,8 @@ func TestComposerContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`export type MessageSendingDetail = { "key": string; "body": string; "inPlace": boolean; }`,
-		`export type MessageSentDetail = { "key": string; "message": string; }`,
+		`export type MessageSendingDetail = { "key": string | null; "body": string; "inPlace": boolean; }`,
+		`export type MessageSentDetail = { "key": string | null; "message": string; }`,
 		`export type MessagePendingActionDetail = { "key": string; "restoredKey": string | null; "kind": "edit" | "remove"; }`,
 		`export type MessageDraftRestoredDetail = { "key": string; }`,
 		`export const messagePendingEditHelpPrefixID = (suffix: string): string => MessagePendingEditHelpPrefix + suffix;`,
@@ -215,9 +215,19 @@ func TestComposerContract(t *testing.T) {
 }
 
 func TestPayloadChoicesAndNull(t *testing.T) {
+	for _, choices := range []string{"edit, remove", " edit,remove", "edit ,remove"} {
+		t.Run(choices, func(t *testing.T) {
+			input := strings.ReplaceAll(synthetic, "Key string `json:\"key,omitempty\"`", "Key string `dom:\""+choices+"\"`")
+			output, err := generate([]byte(input))
+			if err != nil || !strings.Contains(output, `"Key": "edit" | "remove";`) {
+				t.Fatalf("trimmed choices: %v: %s", err, output)
+			}
+		})
+	}
 	for _, field := range []string{
 		"Key *bool", "Key **string", "Key *Missing",
 		"Key string `dom:\"\"`", "Key string `dom:\"edit,edit\"`",
+		"Key string `dom:\"edit, \"`", "Key string `dom:\"edit, edit\"`",
 		"Key bool `dom:\"edit,remove\"`", "Key *string `dom:\"edit,remove\"`",
 	} {
 		input := strings.ReplaceAll(synthetic, "Key string `json:\"key,omitempty\"`", field)
@@ -278,9 +288,11 @@ c.messagePendingEditHelpPrefixID("send-key");
 c.PendingSendEvent; c.TypingInputEvent;
 c.readAttribute(document.body,c.DraftKeyAttribute); c.writeAttribute(document.body,c.StateAttribute,"failed");
 c.dispatchMessageSendingEvent(document,{key:"k",body:"text",inPlace:true});
-c.listenMessageSendingEvent(document,d => { const key: string = d.key; const body: string = d.body; const inPlace: boolean = d.inPlace; });
+c.dispatchMessageSendingEvent(document,{key:null,body:"text",inPlace:true});
+c.listenMessageSendingEvent(document,d => { const key: string | null = d.key; const body: string = d.body; const inPlace: boolean = d.inPlace; });
 c.dispatchMessageSentEvent(document,{key:"k",message:"message-id"});
-c.listenMessageSentEvent(document,d => { const key: string = d.key; const message: string = d.message; });
+c.dispatchMessageSentEvent(document,{key:null,message:"message-id"});
+c.listenMessageSentEvent(document,d => { const key: string | null = d.key; const message: string = d.message; });
 c.dispatchMessagePendingActionEvent(document,{key:"k",restoredKey:null,kind:"remove"});
 c.dispatchMessagePendingActionEvent(document,{key:"k",restoredKey:"restored",kind:"edit"});
 c.listenMessagePendingActionEvent(document,d => { const key: string = d.key; const restored: string | null = d.restoredKey; const kind: "edit" | "remove" = d.kind; });
@@ -288,6 +300,9 @@ c.dispatchMessageDraftRestoredEvent(document,{key:"k"});
 c.listenMessageDraftRestoredEvent(document,d => { const key: string = d.key; });`, []struct{ source, code string }{
 			{`c.dispatchMessageSendingEvent(document,{key:"k",body:"text",inPlace:"wrong"});`, "TS2322"},
 			{`c.dispatchMessageSentEvent(document,{key:"k",message:1});`, "TS2322"},
+			{`c.listenMessageSendingEvent(document,d => { const key: string = d.key; });`, "TS2322"},
+			{`c.listenMessageSentEvent(document,d => { const key: string = d.key; });`, "TS2322"},
+			{`c.dispatchMessageSendingEvent(document,{key:undefined,body:"t",inPlace:true});`, "TS2322"},
 			{`c.dispatchMessagePendingActionEvent(document,{key:"k",restoredKey:1,kind:"edit"});`, "TS2322"},
 			{`c.dispatchMessagePendingActionEvent(document,{key:"k",restoredKey:null,kind:"retry"});`, "TS2322"},
 			{`c.dispatchMessageDraftRestoredEvent(document,{key:1});`, "TS2322"},

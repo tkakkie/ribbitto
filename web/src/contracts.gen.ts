@@ -170,7 +170,7 @@ export const AppliedCursorAttribute = "data-applied-cursor";
 export const TopicAttribute = "data-topic";
 export const FromTopicAttribute = "data-from-topic";
 export const MessageSendingEvent = "message-sending";
-export type MessageSendingDetail = { "key": string; "body": string; "inPlace": boolean; };
+export type MessageSendingDetail = { "key": string | null; "body": string; "inPlace": boolean; };
 export function dispatchMessageSendingEvent(target: EventTarget, detail: MessageSendingDetail): boolean {
   return target.dispatchEvent(new CustomEvent(MessageSendingEvent, { detail }));
 }
@@ -181,7 +181,7 @@ export function listenMessageSendingEvent(target: EventTarget, listener: (detail
 }
 
 export const MessageSentEvent = "message-sent";
-export type MessageSentDetail = { "key": string; "message": string; };
+export type MessageSentDetail = { "key": string | null; "message": string; };
 export function dispatchMessageSentEvent(target: EventTarget, detail: MessageSentDetail): boolean {
   return target.dispatchEvent(new CustomEvent(MessageSentEvent, { detail }));
 }

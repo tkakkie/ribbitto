@@ -267,13 +267,14 @@ func TestSummaryVerifiedSize(t *testing.T) {
 					in.scope = longest
 				}
 			}
+			in.pattern = strings.Repeat("x", 200)
 			got := buildContainerSummary(in)
 			assertSummary(t, in, got)
 			worstCase := got
 			if !strings.Contains(got, allowlistLine+"\n") {
 				worstCase += allowlistLine + "\n"
 			}
-			if !strings.HasPrefix(got, "verified\n") || len(worstCase) > 2048 || !strings.Contains(got, "Scope: "+longest+"\n") || strings.Contains(got, "stderr must") {
+			if !strings.HasPrefix(got, "verified\n") || len(worstCase) > 2048 || !strings.Contains(got, "Check: "+check+" "+in.pattern+"\n") || !strings.Contains(got, "Scope: "+longest+"\n") || strings.Contains(got, "stderr must") {
 				t.Fatal(got)
 			}
 			if check == "test-db" && (!strings.Contains(got, "\n"+allowlistLine+"\n") || !strings.Contains(got, fmt.Sprintf("%d skipped", len(measurementSkips())))) {

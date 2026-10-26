@@ -114,12 +114,21 @@ func summaryEvent(line []byte) (containerTestEvent, error) {
 // parseSummaryFacts tolerates nonzero exits and keeps scanning after bad events.
 // It has no exit status and cannot decide a verdict. Map work is linear in the
 // input and its bounded identities; no output is repeatedly concatenated.
+// Input must be bounded by the caller: this API takes whole byte slices and
+// converts them to strings (the current runner caps combined output at 4 MiB).
 func parseSummaryFacts(check string, stdout, stderr []byte, cut bool) summaryFacts {
 	f := summaryFacts{cut: cut}
 	f.stderr.add(string(stderr), summaryExcerptLimit)
-	f.stdout.add(string(stdout), summaryExcerptLimit)
 	if check != "test" && check != "test-db" {
-		f.notice(string(stdout))
+		if check == "build" || check == "vet" {
+			output := string(stdout)
+			f.stdout.add(output, summaryExcerptLimit)
+			f.notice(output)
+		} else {
+			for line := range bytes.SplitSeq(stdout, []byte("\n")) {
+				f.notice(string(line))
+			}
+		}
 		f.notice(string(stderr))
 		return f
 	}

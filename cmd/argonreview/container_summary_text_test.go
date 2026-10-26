@@ -19,6 +19,7 @@ func TestSummarySanitising(t *testing.T) {
 		{"unterminated OSC", "a\x1b]forged", "a"},
 		{"DCS", "a\x1bPpayload\x1b\\b", "ab"},
 		{"invisible", "a\u200b\u200c\u200d\u200e\u200f\u2028\u2029\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\ufeffb", "ab"},
+		{"Arabic and invisible operators", "a\u061c\u2060\u2061\u2062\u2063\u2064b", "ab"},
 		{"invalid UTF8", "a\xffb", "a�b"},
 		{"rune boundary", strings.Repeat("€", 100), strings.Repeat("€", 66)},
 	} {

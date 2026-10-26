@@ -101,9 +101,26 @@ func (w *summaryWriter) lines(header string, lines summaryLines) {
 	w.shortened += lines.shortened
 }
 
-// summaryAgrees compares evidence, never decides success. Only trusted
-// allowlist identities are returned for a verified report, even though the
-// verdict's allowed-skip line originated with container-provided test names.
+// summaryAllowedSkips uses trusted identities for every verdict, even though
+// the observed names originated in container-provided events.
+func summaryAllowedSkips(f summaryFacts) []string {
+	var allowed []string
+	for _, entry := range measurementSkips() {
+		name := entry.pkg + "/" + entry.test
+		for _, observed := range f.allowed {
+			if observed == name {
+				allowed = append(allowed, name)
+				break
+			}
+		}
+	}
+	// Facts are sorted; the allowlist's declaration order is not a contract.
+	sort.Strings(allowed)
+	return allowed
+}
+
+// summaryAgrees compares evidence, never decides success. The allowed-skip
+// line must agree with trusted identities rather than repeat verdict text.
 func summaryAgrees(in summaryInput) (string, bool) {
 	f := in.facts
 	if f.cut || f.err != nil {
@@ -123,16 +140,7 @@ func summaryAgrees(in summaryInput) (string, bool) {
 	}
 	var allowed []string
 	if in.check == "test-db" {
-		for _, entry := range measurementSkips() {
-			name := entry.pkg + "/" + entry.test
-			for _, observed := range f.allowed {
-				if observed == name {
-					allowed = append(allowed, name)
-				}
-			}
-		}
-		// Facts are sorted; the allowlist's declaration order is not a contract.
-		sort.Strings(allowed)
+		allowed = summaryAllowedSkips(f)
 	} else if len(f.allowed) != 0 {
 		return "", false
 	}
@@ -149,11 +157,31 @@ func summaryAgrees(in summaryInput) (string, bool) {
 	return line, true
 }
 
+// summaryRunnerFailure identifies fixed wrapper/cleanup verdicts whose stream
+// cannot explain the runner's outcome. Keep this vocabulary in step with
+// verifyResult and runContainerExecution without interpreting arbitrary errors.
+func summaryRunnerFailure(first string) bool {
+	switch first {
+	case "NOT VERIFIED: time limit exceeded", "NOT VERIFIED: cancelled",
+		"FAILED: the check returned an error", "NOT VERIFIED: the check could not run",
+		"FAILED: source cleanup failed":
+		return true
+	default:
+		return false
+	}
+}
+
 // buildContainerSummary is intentionally unwired. Section order is metadata,
 // counts/allowed skips, skipped or failing names, test excerpts, compiler,
 // panic/timeout, package failures, generated totals/paths/gofmt/diff, stderr,
 // then omission accounting. No section can override the decided first line.
 func buildContainerSummary(in summaryInput) string {
+	return buildContainerSummaryWithLimits(in, summaryVerifiedLimit, summaryErrorBudget)
+}
+
+// buildContainerSummaryWithLimits permits budget regression tests without
+// changing the production cap or the trusted allowlist.
+func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit int) string {
 	first, _, _ := strings.Cut(in.verdict, "\n")
 	verified := first == "verified"
 	allowed := ""
@@ -165,16 +193,22 @@ func buildContainerSummary(in summaryInput) string {
 			verified = false
 		}
 	}
-	limit := summaryErrorBudget
+	limit := errorLimit
 	if verified {
-		limit = summaryVerifiedLimit
+		limit = verifiedLimit
 	}
 	w := summaryWriter{limit: limit}
 	// Decided verdicts have fixed bounded first lines in the caller. Preserving
 	// arbitrary oversized lines and a finite budget is impossible; the pure API
 	// therefore requires the same verdict-function contract as the future wiring.
-	w.put(first)
-	w.put("Check: " + summaryText(in.check) + " " + summaryText(in.pattern))
+	w.text.WriteString(first + "\n")
+	trustedFits := true
+	trusted := func(line string) {
+		if !w.put(line) {
+			trustedFits = false
+		}
+	}
+	trusted("Check: " + summaryText(in.check) + " " + summaryText(in.pattern))
 	scope := in.scope
 	// Scope is trusted source text, capped separately from container diagnostics.
 	if len(scope) > summaryScopeLimit {
@@ -184,19 +218,33 @@ func buildContainerSummary(in summaryInput) string {
 		}
 		scope = scope[:end]
 	}
-	w.put("Scope: " + scope)
+	trusted("Scope: " + scope)
+	if summaryRunnerFailure(first) {
+		w.put("Details unavailable: the check did not complete.")
+		return w.finish(0)
+	}
 	f := in.facts
 	isTest := in.check == "test" || in.check == "test-db"
 	cut := f.cut || strings.Contains(first, "output limit exceeded")
 	minimal := first == summaryInconsistent || f.err != nil || cut
-	if isTest && !minimal {
-		w.put(fmt.Sprintf("Packages: %d passed, %d failed, %d skipped", f.packages.passed, f.packages.failed, f.packages.skipped))
-		w.put(fmt.Sprintf("Leaf tests: %d passed, %d failed, %d skipped", f.leaves.passed, f.leaves.failed, f.leaves.skipped))
+	hasResults := f.packages.passed+f.packages.failed+f.packages.skipped > 0
+	if isTest && !minimal && hasResults {
+		trusted(fmt.Sprintf("Packages: %d passed, %d failed, %d skipped", f.packages.passed, f.packages.failed, f.packages.skipped))
+		trusted(fmt.Sprintf("Leaf tests: %d passed, %d failed, %d skipped", f.leaves.passed, f.leaves.failed, f.leaves.skipped))
+	}
+	if !verified && !minimal && in.check == "test-db" {
+		if names := summaryAllowedSkips(f); len(names) > 0 {
+			allowed = "allowed measurement skips: " + strings.Join(names, ", ")
+		}
 	}
 	if allowed != "" {
-		w.put(allowed)
+		trusted(allowed)
 	}
 	if verified {
+		if !trustedFits {
+			in.verdict = summaryInconsistent
+			return buildContainerSummary(in)
+		}
 		return w.finish(0)
 	}
 	if minimal {
@@ -204,7 +252,6 @@ func buildContainerSummary(in summaryInput) string {
 		for _, failure := range f.failures {
 			w.linesOmitted += failure.output.total
 		}
-		w.linesOmitted += f.compiler.total + f.packageFailures.total
 	}
 	if cut {
 		w.put("Counts unavailable: output limit exceeded; the stream was cut.")
@@ -214,7 +261,7 @@ func buildContainerSummary(in summaryInput) string {
 			w.put(fmt.Sprintf("Stream not understood after event %d.", f.afterEvent))
 		}
 	}
-	if !minimal && strings.HasPrefix(first, "NOT VERIFIED:") {
+	if strings.HasPrefix(first, "NOT VERIFIED:") {
 		_, rest, _ := strings.Cut(in.verdict, "\n")
 		if strings.HasSuffix(first, " skipped") && rest != "" {
 			names := strings.Split(rest, "\n")
@@ -252,6 +299,10 @@ func buildContainerSummary(in summaryInput) string {
 			w.linesOmitted += failure.output.total - shown
 			w.shortened += failure.output.shortened
 		}
+	}
+	// A panic or timeout can leave running tests without results. These bounded
+	// diagnostics remain useful even when counts and per-test facts are refused.
+	if failed && !cut {
 		w.lines("Compiler output:", f.compiler)
 		if f.panicLine != "" {
 			w.lines("Panic:", summaryLines{lines: []string{f.panicLine}, total: 1})
@@ -260,6 +311,8 @@ func buildContainerSummary(in summaryInput) string {
 			w.lines("Timeout:", summaryLines{lines: []string{f.timeoutLine}, total: 1})
 		}
 		w.lines("Package failures:", f.packageFailures)
+	} else if minimal {
+		w.linesOmitted += f.compiler.total + f.packageFailures.total
 	}
 	if failed && in.check == "generated" && !cut {
 		if in.hasStat {

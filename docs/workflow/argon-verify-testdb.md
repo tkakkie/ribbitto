@@ -137,6 +137,8 @@ Generated totals precede paths and survive their cap. Every container line
 is sanitised and indented with `  | `; only trusted report lines start at
 column zero. A success with inconsistent facts downgrades the summary to
 `NOT VERIFIED: summary inconsistent with verdict`; other verdicts stay.
-Verified build/vet stderr is omitted. PR 2 will wire this core and update
+Verified build/vet stderr is omitted. Runner timeout, cancellation,
+execution-error and source-cleanup verdicts show fixed details and trusted
+metadata only. PR 2 will wire this core and update
 the MCP limit; it remains 48 KiB here. CI and #1700's stage A re-run remain
 required before enabling.

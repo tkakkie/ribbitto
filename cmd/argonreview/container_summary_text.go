@@ -56,7 +56,7 @@ func summaryText(s string) string {
 			}
 			continue
 		}
-		if r < 0x20 || r >= 0x7f && r <= 0x9f || r >= 0x200b && r <= 0x200f || r >= 0x2028 && r <= 0x202e || r >= 0x2066 && r <= 0x2069 || r == 0xfeff {
+		if r < 0x20 || r >= 0x7f && r <= 0x9f || r == 0x061c || r >= 0x200b && r <= 0x200f || r >= 0x2028 && r <= 0x202e || r >= 0x2060 && r <= 0x2064 || r >= 0x2066 && r <= 0x2069 || r == 0xfeff {
 			continue
 		}
 		if out.Len()+utf8.RuneLen(r) > summaryLineLimit {

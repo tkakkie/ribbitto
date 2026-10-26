@@ -5,7 +5,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 - **DOM ids are a contract.** Templates define ids used by `hx-target`,
   `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `composer-quote-description`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-status`, `stream-stopped`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `quote-form`, `composer-quote`, `quote-text`, `composer-quote-description`, `message-composer`, `message-composer-state`, `message-help`, `message-send-alert`, `message-sending`, `message-status`, `stream-stopped`,
   `message-pending`, `message-pending-template`, `message-pending-body`, `message-pending-edit-help` (template; clones append their send UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `mention-picker`, `mention-search`, `mention-status`, `mention-listbox` and `mention-option-<hex>` for mention candidates,
@@ -91,10 +91,20 @@ The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
 (`key`). All fields are strings except boolean `inPlace`, nullable `restoredKey`
-and nullable `key` in `message-sending` and `message-sent`. A send without an
-idempotency key carries null; the typed composer (#1824) turns the script's
-`undefined` into null. The same `message-sending` string is an id (composer
+and nullable `key` in `message-sending` and `message-sent`. On plain and history
+pages without an idempotency key, `message-sent` already carries null
+(`FormData.get`), but the unchanged `message-composer-v21.js` in-place
+`message-sending` carries undefined (`elements.idempotency_key?.value`). The
+contract says null; #1824 may normalize undefined to null because no consumer
+distinguishes them: `message-drafts-v7.js` returns on a falsy key,
+`message-composer-v21.js` does not listen to `message-sending`, and
+`internal/web/drafts_save_test.go` compares only string keys. `message-sent`
+must keep null because both scripts compare its key with `!==`.
+The same `message-sending` string is an id (composer
 markup) and an event name (script) by design; #1822's literal check must tolerate it.
+Generated dispatch helpers create events with `bubbles: true`, as legacy script
+dispatches do, because document-level listeners depend on it; `composed` is not
+set (no script sets it and the page uses no shadow DOM).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
 `data-state` and `data-draft-key` are script-written hooks, not server state.

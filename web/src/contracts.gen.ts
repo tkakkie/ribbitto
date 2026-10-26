@@ -51,7 +51,7 @@ export const UnreadCountAttribute = "data-unread-count";
 export const SidebarResyncEvent = "sidebar-resync";
 export type SidebarResyncDetail = Record<string, never>;
 export function dispatchSidebarResyncEvent(target: EventTarget, detail: SidebarResyncDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(SidebarResyncEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(SidebarResyncEvent, { bubbles: true, detail }));
 }
 export function listenSidebarResyncEvent(target: EventTarget, listener: (detail: SidebarResyncDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<SidebarResyncDetail>).detail);
@@ -172,7 +172,7 @@ export const FromTopicAttribute = "data-from-topic";
 export const MessageSendingEvent = "message-sending";
 export type MessageSendingDetail = { "key": string | null; "body": string; "inPlace": boolean; };
 export function dispatchMessageSendingEvent(target: EventTarget, detail: MessageSendingDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(MessageSendingEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(MessageSendingEvent, { bubbles: true, detail }));
 }
 export function listenMessageSendingEvent(target: EventTarget, listener: (detail: MessageSendingDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<MessageSendingDetail>).detail);
@@ -183,7 +183,7 @@ export function listenMessageSendingEvent(target: EventTarget, listener: (detail
 export const MessageSentEvent = "message-sent";
 export type MessageSentDetail = { "key": string | null; "message": string; };
 export function dispatchMessageSentEvent(target: EventTarget, detail: MessageSentDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(MessageSentEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(MessageSentEvent, { bubbles: true, detail }));
 }
 export function listenMessageSentEvent(target: EventTarget, listener: (detail: MessageSentDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<MessageSentDetail>).detail);
@@ -194,7 +194,7 @@ export function listenMessageSentEvent(target: EventTarget, listener: (detail: M
 export const MessagePendingActionEvent = "message-pending-action";
 export type MessagePendingActionDetail = { "key": string; "restoredKey": string | null; "kind": "edit" | "remove"; };
 export function dispatchMessagePendingActionEvent(target: EventTarget, detail: MessagePendingActionDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(MessagePendingActionEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(MessagePendingActionEvent, { bubbles: true, detail }));
 }
 export function listenMessagePendingActionEvent(target: EventTarget, listener: (detail: MessagePendingActionDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingActionDetail>).detail);
@@ -205,7 +205,7 @@ export function listenMessagePendingActionEvent(target: EventTarget, listener: (
 export const MessageDraftRestoredEvent = "message-draft-restored";
 export type MessageDraftRestoredDetail = { "key": string; };
 export function dispatchMessageDraftRestoredEvent(target: EventTarget, detail: MessageDraftRestoredDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(MessageDraftRestoredEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(MessageDraftRestoredEvent, { bubbles: true, detail }));
 }
 export function listenMessageDraftRestoredEvent(target: EventTarget, listener: (detail: MessageDraftRestoredDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<MessageDraftRestoredDetail>).detail);
@@ -216,7 +216,7 @@ export function listenMessageDraftRestoredEvent(target: EventTarget, listener: (
 export const PendingSendEvent = "pending-send";
 export type PendingSendDetail = Record<string, never>;
 export function dispatchPendingSendEvent(target: EventTarget, detail: PendingSendDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(PendingSendEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(PendingSendEvent, { bubbles: true, detail }));
 }
 export function listenPendingSendEvent(target: EventTarget, listener: (detail: PendingSendDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<PendingSendDetail>).detail);
@@ -227,7 +227,7 @@ export function listenPendingSendEvent(target: EventTarget, listener: (detail: P
 export const TypingInputEvent = "typing-input";
 export type TypingInputDetail = Record<string, never>;
 export function dispatchTypingInputEvent(target: EventTarget, detail: TypingInputDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(TypingInputEvent, { detail }));
+  return target.dispatchEvent(new CustomEvent(TypingInputEvent, { bubbles: true, detail }));
 }
 export function listenTypingInputEvent(target: EventTarget, listener: (detail: TypingInputDetail) => void): () => void {
   const handle = (event: Event): void => listener((event as CustomEvent<TypingInputDetail>).detail);

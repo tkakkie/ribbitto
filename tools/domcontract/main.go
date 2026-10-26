@@ -144,7 +144,7 @@ func generate(source []byte) (string, error) {
 						return "", err
 					}
 					fmt.Fprintf(&out, "export type %s = %s;\n", parts[1], payload)
-					fmt.Fprintf(&out, "export function dispatch%s(target: EventTarget, detail: %s): boolean {\n  return target.dispatchEvent(new CustomEvent(%s, { detail }));\n}\n", name, parts[1], name)
+					fmt.Fprintf(&out, "export function dispatch%s(target: EventTarget, detail: %s): boolean {\n  return target.dispatchEvent(new CustomEvent(%s, { bubbles: true, detail }));\n}\n", name, parts[1], name)
 					fmt.Fprintf(&out, "export function listen%s(target: EventTarget, listener: (detail: %s) => void): () => void {\n  const handle = (event: Event): void => listener((event as CustomEvent<%s>).detail);\n  target.addEventListener(%s, handle);\n  return () => target.removeEventListener(%s, handle);\n}\n\n", name, parts[1], parts[1], name, name)
 				default:
 					return "", fmt.Errorf("unknown DOM kind %q", parts[0])

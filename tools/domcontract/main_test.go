@@ -87,6 +87,40 @@ func TestFreshness(t *testing.T) {
 	}
 }
 
+func TestEventHelpersBubble(t *testing.T) {
+	real, err := os.ReadFile("../../internal/web/view/contracts.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, source string }{
+		{"synthetic", synthetic},
+		{"real", string(real)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output, err := generate([]byte(tc.source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantCount := strings.Count(tc.source, "//dom:event")
+			if got := strings.Count(output, "dispatchEvent(new CustomEvent("); got != wantCount {
+				t.Errorf("got %d event dispatches, want %d directives", got, wantCount)
+			}
+			var name string
+			for _, line := range strings.Split(output, "\n") {
+				if rest, ok := strings.CutPrefix(line, "export function dispatch"); ok {
+					name, _, _ = strings.Cut(rest, "(")
+				}
+				if strings.Contains(line, "dispatchEvent(new CustomEvent(") {
+					want := "return target.dispatchEvent(new CustomEvent(" + name + ", { bubbles: true, detail }));"
+					if name == "" || strings.TrimSpace(line) != want {
+						t.Errorf("dispatch%s: got %q, want %q", name, strings.TrimSpace(line), want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestInvalidDefinitions(t *testing.T) {
 	for _, input := range []string{
 		"package", strings.ReplaceAll(synthetic, "HTMLFormElement", "wrong"),

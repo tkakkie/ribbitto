@@ -21,7 +21,12 @@ Directory entries below are direct-only unless stated otherwise:
 - TypeScript directly in `web/src/` (including `.d.ts`); root `.node-version`,
   `package.json`, `package-lock.json` and `tsconfig.json`, approved through
   [#1356](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
-  and introduced by #1410. No `.mjs` allowance yet (#1412).
+  and introduced by #1410.
+- Client unit-test harnesses named `<name>.test.mjs` directly in `web/test/`,
+  introduced by #1412 under that same
+  [approval](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
+  and the maintainer's 2026-10-21
+  [confirmation](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388).
 - Go throughout the repository, except fenced vendor and testdata directories.
 - SQL migrations directly in `db/migrations/`, queries one module directory
   below `db/queries/`; templ in `internal/web/view/` and `internal/lintfixture/`.

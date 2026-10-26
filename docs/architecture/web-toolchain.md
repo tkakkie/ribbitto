@@ -18,8 +18,8 @@ table changes in [`tools/languagecheck`](../../tools/languagecheck/rules.go),
 referencing that approval. Acceptance criteria for #1410 and #1411/#1412/#1413
 must require each location's table change in the PR introducing its first file.
 Approved in #1410: web/src/*.ts (including declarations), root tsconfig.json,
-package.json/package-lock.json and .node-version. Later PRs add the .mjs harness
-location and the Go builder under tools/ (already covered by the Go rule). The language
+package.json/package-lock.json and .node-version. The client unit-test harnesses are direct web/test/*.test.mjs files (#1412);
+#1411 adds the Go builder under tools/ (covered by the Go rule). The language
 check fails #1410 or any PR adding unlisted files without the required table entries. Any exact-path exception must follow decision 42's
 rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
@@ -27,7 +27,7 @@ The check does not scan Makefile recipes or workflow steps for node/npm command
 words; decision 42 leaves commands to review. #1410 must record/review the
 runtime commands it uses against the limited approval; commands alone need no
 path-and-kind entry. #1410 adds the TypeScript/configuration files and updates
-decision 42 and the table; .mjs remains deferred to #1412.
+decision 42 and the table; #1412 adds the narrow .mjs harness row.
 
 ## Build, manifest and embedding — #1411
 
@@ -84,7 +84,7 @@ Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
 that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs both real tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'`
+then runs the real checker/runner tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript|NodeTests)$'`
 (the ill-typed TempDir input must produce TS2322; the second test also checks
 that the generated sidebar contract's valid consumers compile and its
 ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
@@ -97,8 +97,7 @@ checker pin and lockfile together; for a Node update also change `.node-version`
 When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
 Node release's bundled npm: `npm install --ignore-scripts` is used only for
 lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
-CI must prove installation, type checking and, once
-#1412 lands, unit tests with the changed pins.
+CI must prove installation, type checking and unit tests with the changed pins.
 
 **Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
 cooldown; updates still need review and exact pins.
@@ -108,9 +107,14 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. Point 5 decides `.mjs` harnesses without `@types/node`; #1412
-runs them against DOM-free `.ts` logic with `node --test`, separately from
-type checking.
+path aliases. Direct `web/test/*.test.mjs` harnesses use `node:test` and `node:assert`
+without `@types/node`, importing DOM-free `.ts` logic by relative `.ts` path.
+`make test-web` uses the Go wrapper's test mode (`node --test`), separately from
+type checking, also in `make check` and CI's `web-types` job after the type
+check (even on type-check failure, unless cancelled). No install is needed;
+missing/mismatched Node skips with `NOT VERIFIED` unless
+`RIBBITTO_REQUIRE_NODE=1`. Harnesses are not tsconfig inputs or type-checked.
+See [checks](web-toolchain-checks.md) for discovery and pattern-check rules.
 
 ## Generated contract and state — #1413, #1416, #1417
 

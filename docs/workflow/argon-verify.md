@@ -114,7 +114,7 @@ exit status; tests use per-test JSON, never package `ok` alone:
 - Zero passing tests, no test files, missing results, malformed or truncated
   output, non-zero exit, out-of-memory kill or abnormal exit are never
   `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
-  with the skipped count and names.
+  with the skipped count and names, except `test-db`'s [measurement skips](argon-verify-testdb.md#limits-and-skips).
 - Browser tests stay CI-only. [test-db](argon-verify-testdb.md) is merged but
   **not in force until #1700**. Omitted files still fail or skip.
 

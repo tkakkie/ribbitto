@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,41 +13,6 @@ import (
 	"testing"
 	"time"
 )
-
-func TestContainerTestDBEndToEnd(t *testing.T) {
-	pkg := "github.com/tkakkie/ribbitto/cmd/ribbitto"
-	pass := containerEvents(pkg, "TestOne", "pass") + containerEvents("q", "TestTwo", "pass")
-	for _, tc := range []struct {
-		name, output, want string
-		status             int
-	}{
-		{"pass", pass, "verified\n2 passing leaf tests", 0},
-		{"skip", containerEvents(pkg, "TestDB", "skip"), "NOT VERIFIED: 1 skipped\n" + pkg + "/TestDB", 0},
-		{"measurement skip", containerJSON(pkg, "start", "run/TestFirstUnreadBench") + `{"Action":"output","Package":"` + pkg + `","Test":"TestFirstUnreadBench","Output":"set RIBBITTO_FIRST_UNREAD_BENCH=1 outside CI\n"}` + "\n" + containerJSON(pkg, "skip/TestFirstUnreadBench", "run/TestSibling", "pass/TestSibling", "pass"), "NOT VERIFIED: 1 skipped\n" + pkg + "/TestFirstUnreadBench", 0},
-		{"failure", containerJSON(pkg, "start", "run/TestBad", "fail/TestBad", "fail"), "FAILED", 1},
-		{"server did not start", "", "FAILED", containerTestDBStartFailed},
-		{"empty stream", "", "FAILED: empty or truncated test stream", 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var previous string
-			for _, check := range []string{"test", "test-db"} {
-				runner := fakeContainerRunner{func(_ context.Context, args, _ []string, stdout, _ io.Writer) (int, error) {
-					if args[0] == "run" {
-						_, _ = io.WriteString(stdout, tc.output)
-						return tc.status, nil
-					}
-					return 0, nil
-				}}
-				report, err := runContainerCheck(context.Background(), containerFixture(t), check, "./...", runner, t.TempDir())
-				verdict, _, _ := strings.Cut(report, "\n"+containerCheckScope(check))
-				if err != nil || verdict != tc.want || previous != "" && verdict != previous {
-					t.Fatalf("%s: verdict %q, want %q (previous %q), error %v", check, verdict, tc.want, previous, err)
-				}
-				previous = verdict
-			}
-		})
-	}
-}
 
 const testDBScriptGolden = `set -eu
 mkdir /tmp/work

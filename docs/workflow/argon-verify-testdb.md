@@ -59,15 +59,44 @@ standard error and count toward the shared 4 MiB output cap. #1700 must
 measure this on `./...`; exceeding the cap gives `NOT VERIFIED`, never `verified`.
 Browser tests, cgo-dependent packages and race checks remain CI-only.
 
-Every skip gives `NOT VERIFIED`, including the five measurement tests that
-skip without their gate variables; `cmd/ribbitto`, `internal/realtime`,
-`internal/unread/internal/postgres` and `conversationpg` therefore report
-`NOT VERIFIED` when those tests skip. A trusted allowlist for those five
-skips is planned in #1697 and is not part of this check.
+Only this check accepts the following measurement skips. Package names in
+the table are relative to the module `github.com/tkakkie/ribbitto`.
 
-`test` and `test-db` use the same verdict reader: failure anywhere gives
-`FAILED`; any skip gives `NOT VERIFIED` with names. Successful reports
-start with exactly `verified`, then `N passing leaf tests`. The summary
-precedes captured output. An empty stream gives `FAILED`, even on exit 0.
+| Package | Top-level test | Exact message |
+|---|---|---|
+| cmd/ribbitto | TestFirstUnreadBench | set RIBBITTO_FIRST_UNREAD_BENCH=1 outside CI |
+| cmd/ribbitto | TestReadAdvanceCost | set RIBBITTO_READ_COST=1 |
+| internal/conversation/conversationpg | TestUnreadBench | set RIBBITTO_UNREAD_BENCH=1 outside CI |
+| internal/realtime | TestStreamCost | set RIBBITTO_STREAM_COST=1 to measure the stream's cost |
+| internal/unread/internal/postgres | TestReadMergeCost | set RIBBITTO_READ_COST=1 |
 
-CI stays the check; code can fabricate test events, as it can today.
+The constant allowlist keys all three fields. The test must finish skipped,
+be top-level (no slash), have no subtests, and contain the message in its
+own output events, possibly inside a file/line diagnostic. Its package must
+also have a passing leaf test. Accepted skips never count as passes.
+Any other skip, package result `skip`, or package that skips everything
+gives `NOT VERIFIED` with names. Failure anywhere wins over skips and gives
+`FAILED`; all events and final results are still checked. Ordinary `test`
+continues to reject every skip.
+
+Successful reports start with exactly `verified`, then the passing leaf
+count, then (if present) `allowed measurement skips: <package>/<Test>, ...`
+in sorted order. The summary precedes captured output.
+
+The AST scan in `cmd/argonreview/container_allowlist_scan_test.go` runs in
+`make check`. It walks every repository test file, excluding caches and
+vendor directories, and finds `.Skip`, `.Skipf` and `.SkipNow` calls whose
+literal messages name a measurement gate of the form `RIBBITTO_<NAME>=1`.
+It handles literal concatenation and attributes closures to their enclosing
+top-level function; fixture strings are not calls. Database variables and
+`RIBBITTO_REQUIRE_BROWSER`, `RIBBITTO_BROWSER_SHARD`,
+`RIBBITTO_BROWSER_COUNT_FILE` are excluded explicitly.
+The site set must equal the trusted allowlist in both directions: new
+gated sites require a tier A allowlist review; stale or renamed entries fail.
+Gated measurement skips must use a constant message via `t.Skip` or a verb-free
+`t.Skipf` with no further arguments; the scan rejects any `%` in a gated `Skipf`.
+The scan cannot see a gate passed through a helper that calls `t.Skip(reason)`.
+Such a skip fails closed: it stays `NOT VERIFIED` because it is not in the allowlist.
+
+This is a convenience for honest code, **not a security control**: code
+Argon writes can fabricate any events, as it can today. CI stays the check.

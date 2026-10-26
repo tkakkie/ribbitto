@@ -93,6 +93,10 @@ top-level function; fixture strings are not calls. Database variables and
 `RIBBITTO_BROWSER_COUNT_FILE` are excluded explicitly.
 The site set must equal the trusted allowlist in both directions: new
 gated sites require a tier A allowlist review; stale or renamed entries fail.
+Gated measurement skips must use a constant message via `t.Skip` or a verb-free
+`t.Skipf` with no further arguments; the scan rejects any `%` in a gated `Skipf`.
+The scan cannot see a gate passed through a helper that calls `t.Skip(reason)`.
+Such a skip fails closed: it stays `NOT VERIFIED` because it is not in the allowlist.
 
 This is a convenience for honest code, **not a security control**: code
 Argon writes can fabricate any events, as it can today. CI stays the check.

@@ -52,7 +52,6 @@ func TestMeasurementSkipRefusals(t *testing.T) {
 		{"only test", measurementStream(e, e.message, false), "NOT VERIFIED", 0},
 		{"pass in another package only", measurementStream(e, e.message, false) + containerEvents("example/q", "TestPass", "pass"), "NOT VERIFIED", 0},
 		{"has subtests", containerJSON(e.pkg, "start", "run/"+e.test, "run/"+e.test+"/child", "pass/"+e.test+"/child") + testOutput(e.pkg, e.test, e.message) + containerJSON(e.pkg, "skip/"+e.test) + pass + containerJSON(e.pkg, "pass"), "NOT VERIFIED", 0},
-		{"browser skip", measurementStream(measurementSkip{"github.com/tkakkie/ribbitto/cmd/ribbitto", "TestBrowser", ""}, "browser unavailable without RIBBITTO_REQUIRE_BROWSER", true), "NOT VERIFIED", 0},
 		{"package skip", containerJSON(e.pkg, "start", "skip"), "NOT VERIFIED: 1 skipped\nexample/p (package)", 0},
 		{"package skip after allowed test", strings.TrimSuffix(measurementStream(e, e.message, true), containerJSON(e.pkg, "pass")) + containerJSON(e.pkg, "skip"), "NOT VERIFIED: 1 skipped\nexample/p (package)", 0},
 		{"failure same package", strings.TrimSuffix(measurementStream(e, e.message, true), containerJSON(e.pkg, "pass")) + containerJSON(e.pkg, "run/TestBad", "fail/TestBad", "fail"), "FAILED", 0},
@@ -76,6 +75,13 @@ func TestMeasurementSkipRefusals(t *testing.T) {
 	}
 }
 
+func TestMeasurementSkipBrowserRefusal(t *testing.T) {
+	e := measurementSkip{"github.com/tkakkie/ribbitto/cmd/ribbitto", "TestBrowser", "browser unavailable without RIBBITTO_REQUIRE_BROWSER"}
+	if got := testVerdictWithAllowlist(0, nil, []byte(measurementStream(e, e.message, true)), false, measurementSkips()); !strings.HasPrefix(got, "NOT VERIFIED: 1 skipped\n"+e.pkg+"/"+e.test) {
+		t.Fatalf("browser skip accepted: %q", got)
+	}
+}
+
 func TestMeasurementSkipsSorted(t *testing.T) {
 	a, b := measurementSkip{"p", "TestA", "a"}, measurementSkip{"p", "TestB", "b"}
 	data := containerJSON("p", "start", "run/TestB") + testOutput("p", "TestB", "b") + containerJSON("p", "skip/TestB", "run/TestA") + testOutput("p", "TestA", "a") + containerJSON("p", "skip/TestA", "run/TestParent", "run/TestParent/child", "pass/TestParent/child", "pass/TestParent", "pass")
@@ -88,12 +94,14 @@ func TestMeasurementSkipsSorted(t *testing.T) {
 func TestContainerTestDBEndToEnd(t *testing.T) {
 	e := measurementSkips()[0]
 	data := measurementStream(e, e.message, true)
+	ordinary := measurementSkip{e.pkg, "TestDB", "no database"}
 	for _, tc := range []struct {
 		check, output, want string
 		status              int
 	}{
 		{"test-db", data, "verified\n1 passing leaf tests\nallowed measurement skips: " + e.pkg + "/" + e.test + "\n", 0},
 		{"test", data, "NOT VERIFIED: 1 skipped\n" + e.pkg + "/" + e.test + "\n", 0},
+		{"test-db", measurementStream(ordinary, ordinary.message, true), "NOT VERIFIED: 1 skipped\n" + ordinary.pkg + "/TestDB\n", 0},
 		{"test-db", data, "FAILED\n", 1},
 		{"test-db", "", "FAILED\n", containerTestDBStartFailed},
 	} {

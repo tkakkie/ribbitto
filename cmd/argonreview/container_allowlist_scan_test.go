@@ -36,6 +36,9 @@ func skipLiteral(expr ast.Expr) string {
 	return ""
 }
 
+// scanMeasurementSkips cannot discover gates passed through helpers such as
+// t.Skip(reason). Such skips fail closed: they stay NOT VERIFIED because they
+// are not in the allowlist.
 func scanMeasurementSkips(pkg, filename string, source any) ([]measurementSkip, error) {
 	f, err := parser.ParseFile(token.NewFileSet(), filename, source, 0)
 	if err != nil {
@@ -43,6 +46,7 @@ func scanMeasurementSkips(pkg, filename string, source any) ([]measurementSkip, 
 	}
 	gate := regexp.MustCompile(`RIBBITTO_[A-Z0-9_]+=1`)
 	var found []measurementSkip
+	var scanErr error
 	for _, declaration := range f.Decls {
 		fn, ok := declaration.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
@@ -66,12 +70,19 @@ func scanMeasurementSkips(pkg, filename string, source any) ([]measurementSkip, 
 			}
 			for _, match := range gate.FindAllString(message, -1) {
 				if !strings.Contains(" "+skipScanExcludedVariables+" ", " "+strings.TrimSuffix(match, "=1")+" ") {
+					if selector.Sel.Name == "Skipf" && (strings.Contains(message, "%") || len(call.Args) > 1) {
+						scanErr = fmt.Errorf("scanning %s/%s: gated measurement skips must use a constant message via t.Skip or a verb-free t.Skipf", pkg, fn.Name.Name)
+						return false
+					}
 					found = append(found, measurementSkip{pkg, fn.Name.Name, message})
 					break
 				}
 			}
 			return true
 		})
+		if scanErr != nil {
+			return nil, scanErr
+		}
 	}
 	return found, nil
 }
@@ -109,7 +120,9 @@ func TestMeasurementSkipScanFixtures(t *testing.T) {
 		allowed               []measurementSkip
 	}{
 		{"matching", `func TestCost(t *testing.T) { t.Skip("set " + "RIBBITTO_COST=1") }`, "", []measurementSkip{entry}},
-		{"new gate", `func TestNew(t *testing.T) { t.Skipf("set RIBBITTO_NEW=1 %s", "now") }`, "new gated skip example/p/TestNew", nil},
+		{"new gate", `func TestNew(t *testing.T) { t.Skip("set RIBBITTO_NEW=1") }`, "new gated skip example/p/TestNew", nil},
+		{"rejected formatted Skipf", `func TestCost(t *testing.T) { t.Skipf("set RIBBITTO_COST=1 %s", "now") }`, "gated measurement skips must use a constant message via t.Skip or a verb-free t.Skipf", nil},
+		{"verb-free Skipf", `func TestCost(t *testing.T) { t.Skipf("set RIBBITTO_COST=1") }`, "", []measurementSkip{entry}},
 		{"renamed", `func TestRenamed(t *testing.T) { t.Skip("set RIBBITTO_COST=1") }`, "stale allowlist entry example/p/TestCost", []measurementSkip{entry}},
 		{"stale", `func TestCost(t *testing.T) {}`, "stale allowlist entry example/p/TestCost", []measurementSkip{entry}},
 		{"ordinary", `func TestDB(t *testing.T) { t.Skip("no database") }`, "", nil},
@@ -117,13 +130,13 @@ func TestMeasurementSkipScanFixtures(t *testing.T) {
 		{"SkipNow", `func TestNow(t *testing.T) { t.SkipNow(); t.SkipNow("set RIBBITTO_NEW=1") }`, "new gated skip example/p/TestNow", nil},
 		{"subtest", `func TestCost(t *testing.T) { t.Run("child", func(t *testing.T) { t.Skip("set RIBBITTO_COST=1") }) }`, "", []measurementSkip{entry}},
 		{"fixture string", "var fixture = `t.Skip(\"set RIBBITTO_NEW=1\")`", "", nil},
+		{"helper skip not seen", `func helper(t *testing.T, why string) { t.Skip(why) }; func TestCost(t *testing.T) { helper(t, "set RIBBITTO_X=1") }`, "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			found, err := scanMeasurementSkips("example/p", "fixture_test.go", "package p\n"+tc.source)
-			if err != nil {
-				t.Fatal(err)
+			if err == nil {
+				err = compareMeasurementSkips(found, tc.allowed)
 			}
-			err = compareMeasurementSkips(found, tc.allowed)
 			if tc.problem == "" && err != nil || tc.problem != "" && (err == nil || !strings.Contains(err.Error(), tc.problem)) {
 				t.Fatalf("comparison: %v; want %q", err, tc.problem)
 			}
@@ -160,6 +173,9 @@ func TestMeasurementSkipScanRepository(t *testing.T) {
 		if err != nil {
 			return fmt.Errorf("locating skip package: %w", err)
 		}
+		// Keep walking the separate tools module: its root-derived import path
+		// would be wrong, so a gated skip there fails closed as a new site and
+		// forces an allowlist review. There are none today.
 		pkg := module
 		if rel != "." {
 			pkg += "/" + filepath.ToSlash(rel)

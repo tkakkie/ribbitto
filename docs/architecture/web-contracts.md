@@ -77,5 +77,16 @@ or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
 selectors `nameSelector`, and dynamic ids `nameID`.
 Modules still validate attribute values and external event payloads at runtime.
 The lists above remain the human-readable contract.
-Coverage expands with conversions; #1823 adds the composer and #1822 rejects
-stray literals. Unconverted scripts keep their existing strings.
+Coverage expands with conversions; #1823 adds the composer.
+
+`tools/contractliterals`, run by `make check-tools`, rejects literal ids,
+attribute names, dataset keys, selectors and custom events in authored
+TypeScript under `web/src/`; only `web/src/contracts.gen.ts` is exempt.
+It also checks literal ids, attribute names and contract hooks in `hx-target`,
+`hx-select`, `hx-select-oob`, `hx-sync` and `hx-trigger` in view templates.
+Dynamic id literals match the prefix itself or a complete 32-lowercase-hex
+suffix, avoiding unrelated ids such as `channel-create`.
+This is a text check, not a security boundary: computed/indirect uses such as
+`getElementById(prefix + key)`, aliasing and names built at runtime remain
+for review. Unconverted scripts in `web/static/` keep their existing strings
+and are not scanned. Removing or weakening this check needs its own review.

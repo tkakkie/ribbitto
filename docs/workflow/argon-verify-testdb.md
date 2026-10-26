@@ -24,7 +24,9 @@ The POSIX sh script uses `set -eu` and:
 2. Runs `/usr/lib/postgresql/18/bin/initdb` with
    `-D /home/check/pgdata -U postgres -E UTF8 --locale=C.UTF-8 --auth=trust --no-sync`.
    It uses the libc `C.UTF-8` locale that the image has, not the
-   [builtin provider](../database-locales.md);
+   [builtin provider](../database-locales.md): that page keeps the libc
+   default for development, CI and headless-review setups so that they
+   exercise libc deployments, and recommends builtin only for new clusters.
    CI's `postgres:18` uses `en_US.UTF-8`, so a collation-sensitive difference
    from CI is possible and CI stays the check. The data lives
    on the existing home tmpfs; initdb creates its directory with mode 0700.
@@ -62,10 +64,10 @@ PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
 standard error and count toward the shared 4 MiB output cap.
 The cap counts the container's standard output and standard error together
 (`containerOutputLimit`, `cmd/argonreview/container.go`), so a report that
-would exceed it gives `NOT VERIFIED` (output cut off), never `verified`.
+would exceed it gives `NOT VERIFIED` (output cut off).
 Browser tests, cgo-dependent packages and race checks remain CI-only.
 
-Phase 1 observed on the unchanged repository: `test ./internal/web` produced
+#1700 stage A phase 1 observed on the unchanged repository: `test ./internal/web` produced
 3,844,400 bytes (below the cap of 4,194,304, with no container standard error);
 `test-db ./internal/web` (database tests run too, plus the generators' and
 PostgreSQL's logs on standard error) gave `NOT VERIFIED: output limit exceeded`

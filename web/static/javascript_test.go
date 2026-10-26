@@ -234,9 +234,9 @@ func TestJavaScriptPatterns(t *testing.T) {
 				t.Fatalf("got %v, want line 3: %s", got, tt.rule)
 			}
 			if tt.rule != "top-level declaration" {
-				got := checkJavaScript("example.ts", "const value: number = 1;\n"+tt.source)
-				if len(got) != 1 || got[0] != (javascriptFinding{2, tt.rule}) {
-					t.Fatalf("TypeScript got %v, want line 2: %s", got, tt.rule)
+				got := checkJavaScript("example.ts", "/* heading\n */\nconst value: number = 1;\n"+tt.source)
+				if len(got) != 1 || got[0] != (javascriptFinding{4, tt.rule}) {
+					t.Fatalf("TypeScript got %v, want line 4: %s", got, tt.rule)
 				}
 			}
 			// Every prohibited pattern is harmless when mentioned as text.

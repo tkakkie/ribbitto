@@ -9,8 +9,12 @@ this module yet; this prose becomes pointers when adoption lands.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. `expire` handles hold expiry; `pagehide` and `sent` clear holds.
 Before `admit`, the adapter calls `changeText` and applies any returned fresh key
-to the composer, including when admission returns busy or ordinary. Items expose
-readonly views; `restoration` returns a readonly snapshot.
+to the composer, including when admission returns busy or ordinary.
+That released key belongs to the composer; a queued item instead takes the restored
+key, else an unexpired Remove hold for the same place and raw text, else a fresh
+`newKey()`. As in the legacy composer, enqueue rotates the composer's own key,
+discarding any released key. Items expose readonly views; `restoration` returns a
+readonly snapshot.
 
 ## Pending own posts
 

@@ -66,8 +66,10 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     pagehide() { holds.clear(); },
     expire,
     admit(text: string, place: string, ordinaryBusy = false, quoted = false): PendingItem | "busy" | "capacity" | "ordinary" {
-      // The adapter must first call changeText and apply its fresh key to the
-      // composer, including before busy/ordinary results (legacy submit order).
+      // The adapter first calls changeText and applies any returned key to the composer;
+      // ordinary/busy results use that composer key, not a queued item's key.
+      // An item takes the restored key, else an unexpired Remove hold for the same place/raw text, else newKey().
+      // As in the legacy composer, enqueue rotates the composer key, discarding any released key.
       changeText(text);
       if (items.length >= 10) return "capacity";
       if (ordinaryBusy) return "busy";

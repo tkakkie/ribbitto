@@ -135,14 +135,16 @@ Names cap at 30; excerpts at 8 lines of 200 bytes; diff at 16 lines. The byte
 budget binds first: a verified, non-error result is at most 2,048 bytes;
 an error result is at most 7,000 bytes, including a 512-byte reserve for the
 wrapper's prefix and capped error text. Its hard cut remains a backstop.
-Generated totals precede paths and survive their cap.
+Generated totals precede paths and survive their cap. An unparsed generated
+diff gets a trusted diagnostic; its excerpt is omitted and counted.
 
 Every container line is sanitised and indented with `  | `; only trusted
 report lines start at column zero. The decided first line stays, except a
 success with a facts-parse error or disagreement with the leaf count or
 allowed-skip line downgrades the MCP summary to
 `NOT VERIFIED: summary inconsistent with verdict`. The host report is not
-downgraded. The summary drops verified build/vet stderr. Runner timeout,
-cancellation, execution-error and source-cleanup verdicts show fixed details
-and trusted metadata only. Cleanup failures and late context errors apply
+downgraded. The summary drops verified build/vet stderr. Docker/runner errors,
+timeouts, interruptions (including after a non-verified report) and cleanup
+failures show fixed details and trusted metadata only. Output-limit results
+keep their cut-stream diagnostic. Cleanup failures and late context errors apply
 to both outputs; nothing incompletely verified becomes verified.

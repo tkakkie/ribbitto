@@ -343,6 +343,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		if first != original {
 			in.verdict = first
 		}
+		in.runnerFailed = in.runnerFailed || err != nil
 		in.facts = parseSummaryFacts(in.check, result.output.stdout.Bytes(), result.output.stderr.Bytes(), result.output.over)
 		result.summary = buildContainerSummary(in)
 	}
@@ -375,6 +376,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	if check == "writeback" {
 		return "", err
 	}
+	in.runnerFailed = runErr != nil || err != nil || code == 125
 	verdict := commandVerdict(code, err, output.over)
 	if check == "test" {
 		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)

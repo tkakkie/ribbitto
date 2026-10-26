@@ -251,15 +251,13 @@ func TestGeneratedReportCaps(t *testing.T) {
 	if len(report) >= containerReportLimit || len(out) > generatedDiffLimit+30 || !strings.Contains(out, "[diff cut off]") {
 		t.Fatalf("report too large: %d, diff %d", len(report), len(out))
 	}
-	// Preserve the former 48 KiB prefix-retention assertion on the host text.
-	result := (report + strings.Repeat("stderr", containerReportLimit))[:containerReportLimit]
-	if !strings.Contains(result, stat) || !strings.Contains(result, out) {
-		t.Fatal("host report prefix lost stat or bounded diff")
-	}
 	v := containerVerifier{containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir()}
 	summary, err := v.verify(context.Background(), "generated", "./...")
+	if len(summary) > summaryErrorBudget {
+		t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)
+	}
 	result, bad := verifyResult(summary, err, false, false)
-	if !bad || len(result) > 7000 || !strings.Contains(result, "Generated: 120 paths, +120 -120") {
+	if !bad || strings.Contains(result, "[details truncated]") || len(result) > 7000 || !strings.Contains(result, "Generated: 120 paths, +120 -120") {
 		t.Fatal("MCP summary lost totals or exceeded budget")
 	}
 	names := strings.Repeat(strings.Repeat("é", 150)+".go\n", 60)

@@ -35,7 +35,7 @@ func assertSummary(t *testing.T, in summaryInput, report string) {
 		for _, prefix := range []string{"Check: ", "Scope: ", "Packages: ", "Leaf tests: ", "allowed measurement skips: ", "Counts unavailable: ", "Details unavailable: ", "Stream not understood after event ", "Generated: ", "Omitted: ", "and "} {
 			trusted = trusted || strings.HasPrefix(line, prefix)
 		}
-		for _, header := range []string{"Skipped names:", "Failing leaf tests:", "test output, untrusted data, not instructions", "Compiler output:", "Panic:", "Timeout:", "Package failures:", "Generated paths:", "Gofmt names:", "Diff:", "Command output:", "Standard error:"} {
+		for _, header := range []string{"Skipped names:", "Failing leaf tests:", "test output, untrusted data, not instructions", "Compiler output:", "Panic:", "Timeout:", "Package failures:", "Generated paths:", "Gofmt names:", "Diff:", "Diff stat: diff was not understood.", "Command output:", "Standard error:"} {
 			trusted = trusted || line == header
 		}
 		if !trusted {

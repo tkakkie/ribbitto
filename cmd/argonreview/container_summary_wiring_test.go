@@ -116,8 +116,15 @@ func TestContainerSummaryDifferential(t *testing.T) {
 				if gotFirst != wantFirst {
 					t.Fatalf("summary verdict %q, host %q", gotFirst, first)
 				}
+				limit := summaryErrorBudget
+				if wantFirst == "verified" {
+					limit = summaryVerifiedLimit
+				}
+				if len(summary) > limit {
+					t.Fatalf("summary size = %d, want <= %d", len(summary), limit)
+				}
 				text, bad := verifyResult(summary, err, false, false)
-				if bad != (wantFirst != "verified") || !strings.HasPrefix(text, wantFirst+"\n") || len(text) > 7000 {
+				if strings.Contains(text, "[details truncated]") || bad != (wantFirst != "verified") || !strings.HasPrefix(text, wantFirst+"\n") || len(text) > 7000 {
 					t.Fatalf("MCP verdict/cap: %q, bad=%v", text, bad)
 				}
 				if wantFirst == "verified" && (len(text) > 2048 || strings.Contains(text, "generator noise")) {
@@ -166,8 +173,11 @@ func TestContainerSummaryLargeStream(t *testing.T) {
 		t.Run(check, func(t *testing.T) {
 			v := containerVerifier{containerFixture(t), summaryRunner(stream.String(), "", 1), t.TempDir()}
 			summary, err := v.verify(context.Background(), check, ".")
+			if len(summary) > summaryErrorBudget {
+				t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)
+			}
 			text, bad := verifyResult(summary, err, false, false)
-			if !bad || len(text) > 7000 || strings.Contains(text, "passing noise") || strings.Contains(text, `"Action"`) {
+			if !bad || strings.Contains(text, "[details truncated]") || len(text) > 7000 || strings.Contains(text, "passing noise") || strings.Contains(text, `"Action"`) {
 				t.Fatalf("raw stream escaped: %d bytes, bad=%v", len(text), bad)
 			}
 			for i := 0; i < 3; i++ {
@@ -177,8 +187,11 @@ func TestContainerSummaryLargeStream(t *testing.T) {
 			}
 			v.runner = summaryRunner(passing, "", 0)
 			summary, err = v.verify(context.Background(), check, ".")
+			if len(summary) > summaryVerifiedLimit {
+				t.Fatalf("summary size = %d, want <= %d", len(summary), summaryVerifiedLimit)
+			}
 			text, bad = verifyResult(summary, err, false, false)
-			if bad || len(text) > 2048 || !strings.HasPrefix(text, "verified\n") || strings.Contains(text, "passing noise") {
+			if bad || strings.Contains(text, "[details truncated]") || len(text) > 2048 || !strings.HasPrefix(text, "verified\n") || strings.Contains(text, "passing noise") {
 				t.Fatal("large verified stream did not produce a small non-error summary")
 			}
 		})
@@ -202,9 +215,10 @@ func TestContainerSummaryLateContext(t *testing.T) {
 }
 
 func TestContainerSummarySourceCleanup(t *testing.T) {
-	runner := fakeContainerRunner{func(_ context.Context, args, _ []string, _, diagnostic io.Writer) (int, error) {
+	runner := fakeContainerRunner{func(_ context.Context, args, _ []string, out, diagnostic io.Writer) (int, error) {
 		if args[0] == "run" {
-			_, _ = io.WriteString(diagnostic, "unconfirmed output")
+			_, _ = io.WriteString(out, summaryUnconfirmedStream())
+			_, _ = io.WriteString(diagnostic, "unconfirmed output /host/private/worktree")
 			for _, arg := range args {
 				if strings.HasSuffix(arg, ",dst=/work,readonly") {
 					dir := strings.TrimSuffix(strings.TrimPrefix(arg, "type=bind,src="), ",dst=/work,readonly")
@@ -225,6 +239,7 @@ func TestContainerSummarySourceCleanup(t *testing.T) {
 	if err == nil || !strings.HasPrefix(report, "FAILED: source cleanup failed\n") || !strings.HasPrefix(execution.summary, "FAILED: source cleanup failed\n") || !strings.Contains(execution.summary, "Details unavailable: the check did not complete.") || strings.Contains(execution.summary, "unconfirmed output") || strings.Contains(execution.summary, "Ran on regenerated sources") {
 		t.Fatalf("cleanup: report %q, summary %q, error %v", report, execution.summary, err)
 	}
+	assertIncompleteSummary(t, report, execution.summary, err)
 }
 
 func TestVerifySummaryReserve(t *testing.T) {
@@ -233,6 +248,9 @@ func TestVerifySummaryReserve(t *testing.T) {
 	}
 	in := summaryFixture("build", "FAILED", strings.Repeat(strings.Repeat("x", 200)+"\n", 8), strings.Repeat(strings.Repeat("y", 200)+"\n", 8))
 	summary := buildContainerSummary(in)
+	if len(summary) > summaryErrorBudget {
+		t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)
+	}
 	wrapped, bad := verifyResult(summary, errors.New(strings.Repeat("日\xff", 10000)), false, false)
 	if !bad || len(wrapped) > 7000 || !strings.HasPrefix(wrapped, summary) || strings.Contains(wrapped, "[details truncated]") {
 		t.Fatal("hard cut changed a built summary")
@@ -243,6 +261,9 @@ func TestVerifySummaryReserve(t *testing.T) {
 				// Pad a built summary to its maximum budget to prove the reserve,
 				// independent of how much the current section mix happens to use.
 				built := strings.Replace(summary, "FAILED", verdict, 1)
+				if len(built) > summaryErrorBudget {
+					t.Fatalf("summary size = %d, want <= %d", len(built), summaryErrorBudget)
+				}
 				built += strings.Repeat(" ", summaryErrorBudget-len(built))
 				baseline, _ := verifyResult(built, errors.New("short"), mode == "timeout", mode == "cancelled")
 				text, bad := verifyResult(built, errors.New(strings.Repeat("日\xff", 10000)), mode == "timeout", mode == "cancelled")

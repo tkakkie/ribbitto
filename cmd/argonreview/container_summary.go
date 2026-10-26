@@ -39,6 +39,7 @@ type summaryInput struct {
 	facts                          summaryFacts
 	stat                           generatedStat
 	hasStat                        bool
+	runnerFailed                   bool
 	gofmtNames                     []string
 	diff                           string
 }
@@ -236,7 +237,9 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		scope = scope[:end]
 	}
 	trusted("Scope: " + scope)
-	if summaryRunnerFailure(first) {
+	// Hitting the output cap cancels execution too, but keeps its own cut-stream
+	// diagnostic rather than turning into an unexplained runner failure.
+	if in.runnerFailed && !strings.Contains(first, "output limit exceeded") || summaryRunnerFailure(first) {
 		w.put("Details unavailable: the check did not complete.")
 		return w.finish(0)
 	}
@@ -341,7 +344,13 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		w.names("Gofmt names:", in.gofmtNames, len(in.gofmtNames))
 		var diff summaryLines
 		diff.add(in.diff, summaryDiffLines)
-		w.lines("Diff:", diff)
+		if first == "FAILED: generated files differ" && !in.hasStat {
+			// An unparsed diff cannot substantiate an excerpt or generated totals.
+			w.put("Diff stat: diff was not understood.")
+			w.linesOmitted += diff.total
+		} else {
+			w.lines("Diff:", diff)
+		}
 	}
 	if failed {
 		if in.check == "build" || in.check == "vet" {

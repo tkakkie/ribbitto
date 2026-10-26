@@ -6,7 +6,7 @@ const (
 	// Sized for max_connections=100 (#636); pinned against Makefile in tests.
 	containerTestDBParallel    = "-p 2"
 	containerTestDBStartFailed = 27
-	containerTestDBScript      = containerCopyScript + containerTemplCommand + " >&2\n" + containerSQLCCommand + " >&2\n" + containerCSSCommand + " >&2\n" + `/usr/lib/postgresql/18/bin/initdb -D /home/check/pgdata -U postgres --auth=trust --no-sync >&2
+	containerTestDBScript      = containerCopyScript + containerTemplCommand + " >&2\n" + containerSQLCCommand + " >&2\n" + containerCSSCommand + " >&2\n" + `/usr/lib/postgresql/18/bin/initdb -D /home/check/pgdata -U postgres -E UTF8 --locale=C.UTF-8 --auth=trust --no-sync >&2
 /usr/lib/postgresql/18/bin/postgres -D /home/check/pgdata -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=100 >&2 &
 pgpid=$!
 stop_postgres() {

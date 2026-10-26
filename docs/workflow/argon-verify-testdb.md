@@ -22,7 +22,11 @@ The POSIX sh script uses `set -eu` and:
 1. Copies `/work/.` to `/tmp/work`, including dotfiles, and runs the shared
    templ, sqlc and Tailwind commands there. Generator logs go to stderr.
 2. Runs `/usr/lib/postgresql/18/bin/initdb` with
-   `-D /home/check/pgdata -U postgres --auth=trust --no-sync`. The data lives
+   `-D /home/check/pgdata -U postgres -E UTF8 --locale=C.UTF-8 --auth=trust --no-sync`.
+   It uses the libc `C.UTF-8` locale that the image has, not the
+   [builtin provider](../database-locales.md);
+   CI's `postgres:18` uses `en_US.UTF-8`, so a collation-sensitive difference
+   from CI is possible and CI stays the check. The data lives
    on the existing home tmpfs; initdb creates its directory with mode 0700.
 3. Starts `/usr/lib/postgresql/18/bin/postgres` in the background with that
    data directory and exactly these settings: `listen_addresses=127.0.0.1`,
@@ -52,12 +56,25 @@ are never set by the runner.
 
 All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
 2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
-mounts. Whether `./...` fits with a database is **not established**.
+mounts.
 A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`.
 PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
-standard error and count toward the shared 4 MiB output cap. #1700 must
-measure this on `./...`; exceeding the cap gives `NOT VERIFIED`, never `verified`.
+standard error and count toward the shared 4 MiB output cap.
+The cap counts the container's standard output and standard error together
+(`containerOutputLimit`, `cmd/argonreview/container.go`), so a report that
+would exceed it gives `NOT VERIFIED` (output cut off), never `verified`.
 Browser tests, cgo-dependent packages and race checks remain CI-only.
+
+Phase 1 observed on the unchanged repository: `test ./internal/web` produced
+3,844,400 bytes (below the cap of 4,194,304, with no container standard error);
+`test-db ./internal/web` (database tests run too, plus the generators' and
+PostgreSQL's logs on standard error) gave `NOT VERIFIED: output limit exceeded`
+once, in a run with the encoding patched around the bug, and `test-db './...'`
+the same; how that total splits between test output, generator logs and
+PostgreSQL logs was not measured.
+A package whose directory has no test files counts as a skip, so a `./...`
+or `./dir/...` pattern that includes such a package is `NOT VERIFIED`
+(give one package per call).
 
 Only this check accepts the following measurement skips. Package names in
 the table are relative to the module `github.com/tkakkie/ribbitto`.

@@ -21,7 +21,7 @@ cd /tmp/work
 /usr/local/bin/templ generate >&2
 /usr/local/bin/sqlc generate >&2
 /usr/local/bin/tailwindcss -i web/styles/app.css -o web/static/css/app.css --minify >&2
-/usr/lib/postgresql/18/bin/initdb -D /home/check/pgdata -U postgres --auth=trust --no-sync >&2
+/usr/lib/postgresql/18/bin/initdb -D /home/check/pgdata -U postgres -E UTF8 --locale=C.UTF-8 --auth=trust --no-sync >&2
 /usr/lib/postgresql/18/bin/postgres -D /home/check/pgdata -c listen_addresses=127.0.0.1 -c unix_socket_directories=/tmp -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=100 >&2 &
 pgpid=$!
 stop_postgres() {
@@ -79,6 +79,21 @@ func TestContainerTestDBScript(t *testing.T) {
 			t.Fatalf("database script leaked into %s", check)
 		}
 	}
+}
+
+func TestContainerTestDBInitDBLocale(t *testing.T) {
+	for _, line := range strings.Split(containerTestDBScript, "\n") {
+		if !strings.Contains(line, "/usr/lib/postgresql/18/bin/initdb") {
+			continue
+		}
+		for _, option := range []string{"-E UTF8", "--locale=C.UTF-8"} {
+			if !strings.Contains(line, " "+option+" ") {
+				t.Errorf("initdb invocation missing %q", option)
+			}
+		}
+		return
+	}
+	t.Fatal("initdb invocation not found")
 }
 
 func TestContainerTestDBScriptShell(t *testing.T) {

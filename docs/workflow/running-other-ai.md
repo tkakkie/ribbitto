@@ -94,7 +94,8 @@ difference between the AIs, enough safety for practice, little to operate.
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
 - Argon's [container verify](argon-verify.md#status): in force. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
 
-Handoff builds need no Node: Go asset generation precedes compilation.
+Handoff builds need no Node. Once #1411/#1820 land, Go asset generation must
+precede compilation in the isolated [build routes](investigations.md#build-routes).
 
 A branch with only Claude's own code on top of `main` is not a handoff:
 Claude follows the [local checks](../../AGENTS.md#commands) and
@@ -190,18 +191,17 @@ The brief also includes:
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`, which never contains a connection string with
   credentials, a password, a token or a key: a command that needs one shows
-  a placeholder such as `<local test database>` (#358). It also stays
-  inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
+  a placeholder such as `<local test database>` (#358). It stays inside
+  the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
   no other AI CLIs (claude, agy), no browser or Computer Use: reviews are the
   orchestrator's, and browser checks follow the
   [handoff][h]. It never re-signs, patches or
-  replaces a tool binary to make it run, and reports the failure instead. It
-  puts scratch files outside the worktree when the runner allows it; this
-  profile does not, so Codex may create them in the worktree but deletes
-  them before running checks such as `go test ./...` and before handing off.
-  Git-ignored places such as `bin/` are no exception: builds and tests still
-  pick files up there. The orchestrator likewise reports a tool that will not
-  run instead of modifying it.
+  replaces a tool binary to make it run, and reports the failure instead.
+  Scratch files go outside the worktree if allowed; this profile forbids it,
+  so Codex deletes scratch files before checks such as `go test ./...`
+  and before handoff. Git-ignored paths such as `bin/` are no exception:
+  builds and tests use them. The orchestrator also reports a tool that
+  will not run, never modifying it.
 
 ### Handoff checks
 

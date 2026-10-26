@@ -70,7 +70,8 @@ prohibition and verify boundary remain unchanged.
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
-pinned Node; keep install/cache writes inside the implementer's sandbox. No
+pinned Node; keep install/cache writes inside the implementer's sandbox,
+with the npm cache in `bin/.cache/npm`. No
 npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
 or platform package or enabling lifecycle scripts. The portable package selects
@@ -89,10 +90,12 @@ lockfile tests run in `check-tools` in `checks`, without Node. The strict,
 no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
 outside it. `globals.d.ts` supplies the first input and the htmx global.
 
-**Pin updates — confirmed:** ordinary
-dependency PRs: change the exact checker pin and lockfile together; for a Node
-update also change `.node-version` and regenerate the lockfile with that
-release's bundled npm. CI must prove installation, type checking and, once
+**Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
+checker pin and lockfile together; for a Node update also change `.node-version`.
+When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
+Node release's bundled npm: `npm install --ignore-scripts` is used only for
+lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
+CI must prove installation, type checking and, once
 #1412 lands, unit tests with the changed pins.
 
 **Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
@@ -160,8 +163,9 @@ Handoff follows the [standing prohibition](../workflow/running-other-ai.md#hando
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
 (#1696) are merged but not in force until #1700: production still pins launcher
-`argonreview-7f607ca` and the old image. The prelude regenerates templ, sqlc and Tailwind
-before Go build/vet/test; `generated` checks output and formatting in a copy.
+`argonreview-7f607ca` and the old image. Once #1700 lands, the prelude will regenerate
+templ, sqlc and Tailwind before Go build/vet/test; `generated` will check output
+and formatting in a copy.
 TypeScript checking stays outside verify.
 #1415 cannot widen verify or those permissions.
 

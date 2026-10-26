@@ -68,7 +68,7 @@ compared without publishing their contents.
 
 | Step / commands | Recorded result |
 |---|---|
-| `cat .node-version`; `command -v node npm`; `node --version`; `npm --version` | Pin `26.8.1`; both executables under `/opt/homebrew`. Node `v26.8.1` equals `v` + pin; npm `11.19.0`. |
+| `cat .node-version`; `command -v node npm`; `node --version`; `npm --version` | Pin `26.8.1`; both executables from the trusted host installation. Node `v26.8.1` equals `v` + pin; npm `11.19.0`. |
 | Before: list home and default cache `~/.npm`, count entries, size and files newer than `.node-version`; check `bin/.cache` | Home: 50 entries. Cache entries: `_cacache`, `_logs`, `_npx`, `_update-notifier-last-checked`; 1094 files/directories, 136312 KiB, 0 files newer than the pin. Checkout `bin/.cache` absent. |
 | `make web-install` | Exit 0: “added 2 packages, and audited 3 packages”; “found 0 vulnerabilities”. Wrapper used `npm ci --ignore-scripts`. |
 | After: compare home listing and repeat default-cache counts/size/newer-file check; inspect checkout install/cache and lockfile | Home diff empty. Default cache unchanged: 1094 entries, 136312 KiB, 0 newer files. Checkout `node_modules`: 31360 KiB, only `@typescript/typescript-darwin-arm64` native package installed, `tsc` binaries present. Checkout `bin/.cache/npm`: 10380 KiB. Lockfile: 0 `hasInstallScript` lines; 3 lines each for `@typescript/typescript-linux-x64` and `@typescript/typescript-darwin-arm64`. |
@@ -101,7 +101,7 @@ maintainer's sandbox. It records the wrapper's behavior in that run only.
 Not verified: the `linux-x64` package or GitHub Actions,
 lifecycle scripts (every install uses `--ignore-scripts`, and the lockfile has
 no `hasInstallScript` entry), or future Node/npm versions. The transcript
-establishes no host Node provenance beyond its path under `/opt/homebrew`.
+establishes no host Node provenance beyond its location on the trusted host `PATH`.
 The wrong-version check compared `ls -ld` directory metadata only, not file
 contents. Default-cache entry counts, sizes and newer-file counts plus the
 home-listing diff are the recorded observations, not a file-content comparison

@@ -57,12 +57,12 @@ warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Host measurements need no Node. Once #1411/#1820 supply Go-only asset
-generation, it precedes compilation in the same isolated build (same trusted
-checkouts/flags, no Node on `PATH`), outside Argon verify.
-Until then, commands below cannot build such SHAs.
+Host measurements need no Node. Once #1411/#1820 land, Go asset generation
+must precede compilation in a writable copy of the verified checkout, in the
+same isolated build (same trusted checkouts/flags, no Node on `PATH`), outside
+Argon verify. These commands cannot yet build SHAs needing generation.
 
-Approved operator: trusted git/Go; `image`: trusted Docker Go image digest reference
+Approved operator: trusted git/Go; `image`: trusted Docker Go image digest
 ([current value](measurement-go-image.md#measurement-go-image)).
 Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
 head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
@@ -97,8 +97,8 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   go build -mod=readonly -trimpath -buildvcs=false -o /out/ribbitto ./cmd/ribbitto
 ```
 
-Apple silicon only, never Rosetta. In-tree: only this Go build and prior Go
-asset generation. Before staging record SHA and `shasum -a 256`;
+Apple silicon only, never Rosetta. In-tree: only this Go build.
+Before staging record SHA and `shasum -a 256`;
 `-buildvcs=false` avoids container git ownership mismatches.
 
 If unusable, record why. Maintainer: stage read-only source in

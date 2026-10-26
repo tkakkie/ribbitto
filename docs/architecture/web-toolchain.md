@@ -108,14 +108,10 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. Direct `web/test/*.test.mjs` harnesses use `node:test` and `node:assert`
-without `@types/node`, importing DOM-free `.ts` logic by relative `.ts` path.
-`make test-web` uses the Go wrapper's test mode (`node --test`), separately from
-type checking, also in `make check` and CI's `web-types` job after the type
-check (even on type-check failure, unless cancelled). No install is needed;
-missing/mismatched Node skips with `NOT VERIFIED` unless
-`RIBBITTO_REQUIRE_NODE=1`. Harnesses are not tsconfig inputs or type-checked.
-See [checks](web-toolchain-checks.md) for discovery and pattern-check rules.
+path aliases. Direct `web/test/*.test.mjs` harnesses use `node:test` and
+`node:assert` without `@types/node` and import DOM-free `.ts` logic by relative
+`.ts` path. `make test-web` runs them with `node --test`, separately from type
+checking and not type-checked itself ([checks](web-toolchain-checks.md)).
 
 ## Generated contract and state — #1413, #1416, #1417
 

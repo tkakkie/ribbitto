@@ -100,50 +100,26 @@ in `dataset` alongside raw DOM selectors:
   };
 ```
 
-**After (illustrative sketch until #1416 and #1417 land; not committed code).**
-DOM-free queue logic (`web/src/<composer-queue>.ts`) holds typed state in memory
-with immutable `draftKey` separate from `requestKey`; the thin DOM adapter
-(`web/src/<composer>.ts`) renders `data-state` as an output from the typed queue
-state via the generated accessor (#1413, #1417) and notifies the stream reset
-guard on state transitions. The sketch leaves out message selection and the
-400/404/413/422/429 alert handling that lines 518–535 of
-`web/static/message-composer-v21.js` also do:
+**Queue specification now; DOM adoption planned (#1824, #1825, #1417).**
+[`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) holds typed state
+with immutable `draftKey` separate from `requestKey`;
+[`web/test/composer-queue.test.mjs`](../../web/test/composer-queue.test.mjs)
+specifies transitions and ordering. The module is not served or used by the
+legacy script yet. Its injected clock and key generator keep tests DOM-free:
 
 ```ts
-// Illustration (#1416/#1417): pure logic in web/src/<composer-queue>.ts, no DOM.
-export type PendingState = "queued" | "sending" | "failed" | "confirmed";
-export interface PendingItem {
-  readonly draftKey: string;
-  requestKey: string;
-  state: PendingState;
-  unconfirmed: boolean;
-}
-export function nextToDispatch(items: readonly PendingItem[], busy: boolean): PendingItem | undefined {
-  if (busy || items.some((i) => i.state === "failed" && i.unconfirmed)) return undefined;
-  return items.find((i) => i.state === "queued");
-}
-export function settlePending(item: PendingItem, status: number, newKey: () => string): void {
-  if (status === 200) {
-    item.state = "confirmed";
-    item.unconfirmed = false;
-    return;
-  }
-  item.state = "failed";
-  if (status === 409) {
-    item.unconfirmed = false;
-    item.requestKey = newKey();
-  } else if (![400, 404, 413, 422, 429].includes(status)) {
-    item.unconfirmed = true;
-  }
-}
+import { createComposerQueue, holdsReload } from "./composer-queue.ts";
 
-// Illustration (#1416/#1417): thin DOM adapter in web/src/<composer>.ts.
-import { setIdempotencyKey, setPendingState } from "./contracts.gen.ts";
-
-function onPendingResponse(item: PendingItem, form: HTMLFormElement, status: number, notifyResetGuard: () => void): void {
-  settlePending(item, status, () => crypto.randomUUID());
-  setIdempotencyKey(form, item.requestKey);
-  setPendingState(form, item.state); // data-state rendered from typed state (#1417)
-  notifyResetGuard(); // notifies stream reset guard even without DOM mutation (#1416/#1417)
-}
+const queue = createComposerQueue(now, newKey, () => {
+  // Called synchronously after mutation, including removal of the last item.
+  notifyResetGuard(holdsReload(queue.items));
+});
+const item = queue.dispatch(ordinaryRequestInFlight);
+if (item) sendPending(item);
 ```
+
+The adapter above is illustrative. #1825 adopts the module and writes
+`data-state`, `data-unconfirmed` and item `data-posted-message` as projections;
+`draftKey` stays in memory. The stream guard still reads the DOM until #1417
+switches its item predicate to `holdsReload` and the synchronous notification.
+The composer's request and alert clauses stay with the guard.

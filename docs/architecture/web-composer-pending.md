@@ -1,6 +1,13 @@
 # Web composer pending posts
 
 Pending-post rules for the [web composer](web-composer.md#composer).
+[`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) and its
+[table-driven tests](../../web/test/composer-queue.test.mjs) specify transitions,
+refusals, ordering and identity. Until adoption (#1825), changes to the legacy
+queue rules update both files in the same pull request. No browser entry imports
+this module yet; this prose becomes pointers when adoption lands.
+The adapter supplies `now`, `newKey` and a place identity covering channel and
+feed/topic. `expire` handles hold expiry; `pagehide` and `sent` clear holds.
 
 ## Pending own posts
 
@@ -52,11 +59,21 @@ until sent/emptied; its unconfirmed mark stays in composer
 `data-unconfirmed-key` for either path. A pending resend transfers
 it to its form and clears the composer's mark; emptying restored
 text clears it and takes a fresh UUID.
-Editing a known refusal clears stale composer marks.
+Editing a known refusal clears stale composer marks. Unlike Edit, device-draft
+restoration ties its key to the exact restored text: any edit releases it.
 Unused keys post normally; used keys return the stored message for a body
 matching the [retry rule](posting.md), otherwise that pending 409.
 Pending sends bypass prefix removal, ordinary send alerts/failure
 classification and 409 cleanup.
+
+The module's `holdsReload(items)` is true exactly for queued, sending or failed
+items, regardless of uncertainty; confirmed items do not hold reload. Its
+`changed` callback runs synchronously after queue mutations, including last-item
+Remove, Edit and delivery, so listeners see the completed transition.
+#1825 keeps form `data-state`/`data-unconfirmed` and item `data-posted-message`
+as projections; `draftKey` stays in memory. The stream guard keeps reading the
+DOM until #1417 adopts the predicate/notification. Ordinary-request and alert
+clauses remain with the guard; existing browser tests stay unchanged.
 
 ## Remove hold
 

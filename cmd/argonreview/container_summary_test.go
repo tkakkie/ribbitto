@@ -17,7 +17,7 @@ func assertSummary(t *testing.T, in summaryInput, report string) {
 	t.Helper()
 	first, _, _ := strings.Cut(in.verdict, "\n")
 	got, _, _ := strings.Cut(report, "\n")
-	if got != first && !(first == "verified" && got == summaryInconsistent) {
+	if got != first && (first != "verified" || got != summaryInconsistent) {
 		t.Fatalf("first line %q; decided %q", got, first)
 	}
 	limit := 6488

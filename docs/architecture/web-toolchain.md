@@ -83,8 +83,10 @@ Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
 that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs `go -C tools test -count=1 ./webtypes -run '^TestRealTypeScript$'`
-(the ill-typed TempDir input must produce TS2322). Hermetic wrong-Node and
+then runs both real tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript)$'`
+(the ill-typed TempDir input must produce TS2322; the second test also checks
+that the generated sidebar contract's valid consumers compile and its
+ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
 no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
 outside it. `globals.d.ts` supplies the first input and the htmx global.

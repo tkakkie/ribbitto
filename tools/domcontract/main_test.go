@@ -133,10 +133,51 @@ func TestDirectiveAttachment(t *testing.T) {
 }
 
 func TestElementNames(t *testing.T) {
-	for name, want := range map[string]string{"OrganizationStreamID": "OrganizationStream", "ChannelDOMPrefix": "ChannelEntry", "TopicDOMPrefix": "TopicEntry", "LinkChannelDOMPrefix": "ChannelLink", "LinkTopicDOMPrefix": "TopicLink", "Form": "Form"} {
-		if got := elementName(name); got != want {
-			t.Errorf("%s: %s, want %s", name, got, want)
+	for _, tc := range []struct {
+		name, want string
+		wantErr    bool
+	}{
+		{"OrganizationStreamID", "OrganizationStream", false},
+		{"ChannelDOMPrefix", "ChannelEntry", false},
+		{"TopicDOMPrefix", "TopicEntry", false},
+		{"LinkChannelDOMPrefix", "ChannelLink", false},
+		{"LinkTopicDOMPrefix", "TopicLink", false},
+		{"Form", "Form", false},
+		{"ID", "", true},
+		{"DOMPrefix", "Entry", false},
+		{"LinkDOMPrefix", "Link", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := elementName(tc.name)
+			if got != tc.want || (err != nil) != tc.wantErr {
+				t.Errorf("elementName(%q) = (%q, %v), want (%q, error=%t)", tc.name, got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestGenerateEmptyElementName(t *testing.T) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("generate panicked instead of returning an error: %v", recovered)
 		}
+	}()
+	_, err := generate([]byte("package view\n//dom:id HTMLDivElement\nconst ID = \"id\""))
+	if err == nil || !strings.Contains(err.Error(), "ID") || !strings.Contains(err.Error(), "empty element name") {
+		t.Fatalf("expected empty element name error naming ID, got %v", err)
+	}
+}
+
+func TestDuplicateElementNames(t *testing.T) {
+	_, err := generate([]byte(`package view
+const (
+ //dom:suffix HTMLLIElement
+ ChannelDOMPrefix = "channel-"
+ //dom:id HTMLLIElement
+ ChannelEntryID = "channel-entry"
+)`))
+	if err == nil || !strings.Contains(err.Error(), "ChannelDOMPrefix") || !strings.Contains(err.Error(), "ChannelEntryID") {
+		t.Fatalf("expected duplicate helper error naming ChannelDOMPrefix and ChannelEntryID, got %v", err)
 	}
 }
 

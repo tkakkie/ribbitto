@@ -75,6 +75,7 @@ helpers and typed element, attribute and event accessors; `make check-tools`
 rejects drift. Element helpers drop trailing `ID`; `DOMPrefix` becomes `Entry`,
 or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
 selectors `nameSelector`, and dynamic ids `nameID`.
-Modules still validate attribute values and external event payloads at runtime. The lists above remain the human-readable contract.
+Modules still validate attribute values and external event payloads at runtime.
+The lists above remain the human-readable contract.
 Coverage expands with conversions; #1823 adds the composer and #1822 rejects
 stray literals. Unconverted scripts keep their existing strings.

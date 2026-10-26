@@ -19,7 +19,7 @@ const (
 	generatedPathLimit        = 100
 )
 
-// Keep the summary ahead of output so MCP's tail truncation preserves it.
+// Keep the host stat ahead of the bounded diff excerpt.
 func generatedVerdict(code int, err error, stdout string, over bool) (verdict, stat, output string) {
 	output = cutGeneratedDiff(stdout)
 	switch {
@@ -177,7 +177,7 @@ type generatedStatEntry struct {
 }
 
 // generatedDiffStat preserves the host report contract while exposing the facts
-// separately for the unwired summary core.
+// separately for the MCP summary.
 func generatedDiffStat(data string) (string, bool) {
 	stat, ok := parseGeneratedStat(data)
 	if !ok {

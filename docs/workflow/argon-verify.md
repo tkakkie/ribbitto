@@ -3,8 +3,10 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[Generator checks](argon-verify-image.md) await #1700. [Write-back](argon-verify-writeback.md) is not in
-force until its second stage; `argonreview-7f607ca` and the old image still run.
+[Generator checks](argon-verify-image.md) and the merged [summary](argon-verify-testdb.md#result-summary)
+are not in force until #1700 enables a new launcher build.
+Production pins `argonreview-7f607ca` and the old image.
+[Write-back](argon-verify-writeback.md) awaits stage B.
 
 [Leftover sweep](argon-verify-sweep.md).
 
@@ -55,16 +57,14 @@ in #1430/#1432 code.
 
 Outside `agy`'s sandbox, the MCP server is trusted computing base code with
 minimal credentials, Docker and host rights, and no arbitrary-command
-interface. `argonreview verify-mcp` offers one tool and only
-calls `argonreview container-check`.
+interface. `argonreview verify-mcp` offers one tool and only runs `container-check`.
 
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
 with a trusted binary and fixed source and worktree arguments. Neither agy's
-environment nor a tool argument supplies these. The server serves only if
-its build matches the trusted revision, checked against that source.
+environment nor a tool argument supplies these. It serves only if its build matches the trusted revision in that source.
 Pre- and post-run checks include the MCP file and server.
 
-The server allows only `PATH` in its environment. Docker connection settings
+The server environment allows only `PATH`. Docker connection settings
 are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
 `FAILED` and `NOT VERIFIED` results set `isError`.
 
@@ -119,9 +119,8 @@ exit status; tests use per-test JSON, never package `ok` alone:
   **not in force until #1700**. Omitted files still fail or skip.
 
 `verified` is Argon's own check; it never replaces green CI, review or
-[handoff checks](running-other-ai.md#handoff-of-another-ais-code). CI stays
-the check. Mutation evidence stays on scratch pull requests, excluded from
-the container by #1429.
+[handoff](running-other-ai.md#handoff-of-another-ais-code).
+Scratch pull requests retain mutation evidence, excluded from the container by #1429.
 
 ## Extended preflight
 
@@ -149,8 +148,7 @@ path on the host in a throwaway repository with the dedicated worker home:
   skipped test names, never `verified`.
 
 Only during preflight, the managed temporary configuration uses #1432's
-feature-on settings, guard mode and MCP file. After success or failure,
-restore and check feature-off settings, hooks and MCP file byte for byte,
+feature-on settings, guard mode and MCP file. Always restore and check feature-off settings, hooks and MCP file byte for byte,
 the agent directory and `brain/` as before, no remaining session state or
 session process. Record restoration.
 
@@ -167,9 +165,8 @@ switch normal operation on and record a minimal smoke test:
 `verify` succeeds on a correct package; `run_command` and shell execution,
 an unlisted MCP tool and an extra argument are refused; settings, hooks and
 MCP file match the expected files; the account's shared settings hash is
-unchanged; nothing unexpected changed. If any smoke check fails, switch off
-immediately, restore and check the old configuration, and investigate before
-another attempt. [Passing smoke test][smoke]; Start gate: [#1433]'s [preflight record][preflight].
+unchanged; nothing unexpected changed. If any smoke check fails, switch off immediately,
+restore and check the old configuration, and investigate before retrying. [Passing smoke test][smoke]; Start gate: [#1433]'s [preflight record][preflight].
 
 ## Control code in Go
 

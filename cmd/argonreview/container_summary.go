@@ -11,8 +11,7 @@ import (
 const (
 	// summaryVerifiedLimit keeps non-error results comfortably inline.
 	summaryVerifiedLimit = 2048
-	// summaryErrorLimit is PR 2's target wrapper limit, independent of its
-	// still-unmodified 48 KiB limit in this unwired PR.
+	// summaryErrorLimit is the MCP wrapper's hard limit.
 	summaryErrorLimit = 7000
 	// summaryReserve leaves room for the wrapper's prefix and capped diagnostic.
 	summaryReserve = 512
@@ -40,6 +39,7 @@ type summaryInput struct {
 	facts                          summaryFacts
 	stat                           generatedStat
 	hasStat                        bool
+	runnerFailed                   bool
 	gofmtNames                     []string
 	diff                           string
 }
@@ -189,7 +189,7 @@ func summaryRunnerFailure(first string) bool {
 	}
 }
 
-// buildContainerSummary is intentionally unwired. Section order is metadata,
+// buildContainerSummary uses the final decided verdict. Section order is metadata,
 // counts/allowed skips, skipped or failing names, test excerpts, compiler,
 // panic/timeout, package failures, generated totals/paths/gofmt/diff, stderr,
 // then omission accounting. No section can override the decided first line.
@@ -218,7 +218,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 	w := summaryWriter{limit: limit}
 	// Decided verdicts have fixed bounded first lines in the caller. Preserving
 	// arbitrary oversized lines and a finite budget is impossible; the pure API
-	// therefore requires the same verdict-function contract as the future wiring.
+	// therefore requires the same verdict-function contract as the runner.
 	w.text.WriteString(first + "\n")
 	trustedFits := true
 	trusted := func(line string) {
@@ -237,7 +237,9 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		scope = scope[:end]
 	}
 	trusted("Scope: " + scope)
-	if summaryRunnerFailure(first) {
+	// Hitting the output cap cancels execution too, but keeps its own cut-stream
+	// diagnostic rather than turning into an unexplained runner failure.
+	if in.runnerFailed && !strings.Contains(first, "output limit exceeded") || summaryRunnerFailure(first) {
 		w.put("Details unavailable: the check did not complete.")
 		return w.finish(0)
 	}
@@ -342,7 +344,13 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		w.names("Gofmt names:", in.gofmtNames, len(in.gofmtNames))
 		var diff summaryLines
 		diff.add(in.diff, summaryDiffLines)
-		w.lines("Diff:", diff)
+		if first == "FAILED: generated files differ" && !in.hasStat {
+			// An unparsed diff cannot substantiate an excerpt or generated totals.
+			w.put("Diff stat: diff was not understood.")
+			w.linesOmitted += diff.total
+		} else {
+			w.lines("Diff:", diff)
+		}
 	}
 	if failed {
 		if in.check == "build" || in.check == "vet" {

@@ -98,9 +98,9 @@ gives `NOT VERIFIED` with names. Failure anywhere wins over skips and gives
 `FAILED`; all events and final results are still checked. Ordinary `test`
 continues to reject every skip.
 
-Successful reports start with exactly `verified`, then the passing leaf
+Successful host reports start with exactly `verified`, then the passing leaf
 count, then (if present) `allowed measurement skips: <package>/<Test>, ...`
-in sorted order. The summary precedes captured output.
+in sorted order. The host report then includes captured output.
 
 The AST scan in `cmd/argonreview/container_allowlist_scan_test.go` runs in
 `make check`. It walks every repository test file, excluding caches and
@@ -120,25 +120,31 @@ Such a skip fails closed: it stays `NOT VERIFIED` because it is not in the allow
 This is a convenience for honest code, **not a security control**: code
 Argon writes can fabricate any events, as it can today. CI stays the check.
 
-## Unwired summary core
+## Result summary
 
-PR 1 of #1846 adds a pure summary builder in
-`cmd/argonreview/container_summary.go`, with a separate bounded facts parse
-and sanitiser. It is **unwired and not in force**: merging it changes no
-MCP output or host report bytes. Production still pins `argonreview-7f607ca`.
+The summary wiring (#1846) is merged but **not in force until a new launcher
+build is enabled (#1700)**. Production still pins `argonreview-7f607ca` and
+the old image; CI and #1700's stage A re-run remain required before enabling.
 
-Its format is verdict first, check/package/scope, test-only package and leaf
-counts plus allowed skips, skipped or failing names, test excerpts,
-compiler/panic/timeout/package diagnostics, generated totals/paths/gofmt/diff,
-stderr, then omission counts. Names cap at 30; excerpts at 8 lines of 200
-bytes; diff at 16 lines. The byte budget binds before these caps: success
-at most 2,048 bytes, errors at most 7,000 minus a 512-byte wrapper reserve.
-Generated totals precede paths and survive their cap. Every container line
-is sanitised and indented with `  | `; only trusted report lines start at
-column zero. A success with inconsistent facts downgrades the summary to
-`NOT VERIFIED: summary inconsistent with verdict`; other verdicts stay.
-Verified build/vet stderr is omitted. Runner timeout, cancellation,
-execution-error and source-cleanup verdicts show fixed details and trusted
-metadata only. PR 2 will wire this core and update
-the MCP limit; it remains 48 KiB here. CI and #1700's stage A re-run remain
-required before enabling.
+MCP returns a summary from the same captured execution as the unchanged full
+host report printed by `container-check`. Its format is verdict first, then
+check/package/scope, test-only package and leaf counts plus allowed skips,
+skipped or failing names, test excerpts, compiler/panic/timeout/package
+diagnostics, generated totals/paths/gofmt/diff, stderr, and omission counts.
+Names cap at 30; excerpts at 8 lines of 200 bytes; diff at 16 lines. The byte
+budget binds first: a verified, non-error result is at most 2,048 bytes;
+an error result is at most 7,000 bytes, including a 512-byte reserve for the
+wrapper's prefix and capped error text. Its hard cut remains a backstop.
+Generated totals precede paths and survive their cap. An unparsed generated
+diff gets a trusted diagnostic; its excerpt is omitted and counted.
+
+Every container line is sanitised and indented with `  | `; only trusted
+report lines start at column zero. The decided first line stays, except a
+success with a facts-parse error or disagreement with the leaf count or
+allowed-skip line downgrades the MCP summary to
+`NOT VERIFIED: summary inconsistent with verdict`. The host report is not
+downgraded. The summary drops verified build/vet stderr. Docker/runner errors,
+timeouts, interruptions (including after a non-verified report) and cleanup
+failures show fixed details and trusted metadata only. Output-limit results
+keep their cut-stream diagnostic. Cleanup failures and late context errors apply
+to both outputs; nothing incompletely verified becomes verified.

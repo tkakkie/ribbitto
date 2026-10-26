@@ -42,7 +42,8 @@ Directory entries below are direct-only unless stated otherwise:
 - Go module manifests and checksums at the root, `tools/` and `tools/tbls/`;
   the named root licence, Makefile, git configuration and environment example;
   plain text API summaries directly in `docs/api/`, the two document exception
-  files and the scope check's named allowlist.
+  files, the scope check's named allowlist and `web/legacy-scripts.txt`
+  (legacy script list, approved by the maintainer's `ready` on #1414).
 - Vendor files only by their existing exact names: browser scripts, icon SVG,
   licences and README in `web/static/vendor/`. Guard Go test data only by these
   exact paths under the maintainer's decision recorded on #1437:

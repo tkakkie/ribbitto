@@ -2,7 +2,7 @@
 
 ## Headless reviews
 
-Headless CLIs can wait forever for input. **Always close stdin and set a
+Headless CLIs may await input forever. **Always close stdin and set a
 time limit.** macOS has no `timeout`, so use Perl's `alarm`:
 
 ```sh
@@ -41,8 +41,8 @@ Claude reviews Codex's work directly, or with
 Post: `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
-On an Argon pull request, the pull request example above does not
-apply: Codex runs in a clean worktree of `origin/main`, never at the pull
+For an Argon pull request, that example does not apply: Codex runs in a clean
+worktree of `origin/main`, never at the pull
 request's head, and gets the diff on stdin
 ([who does what](argon-implementer.md#who-does-what); for a follow-up
 check also [more context][r]):
@@ -94,6 +94,9 @@ difference between the AIs, enough safety for practice, little to operate.
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
 - Argon's [container verify](argon-verify.md#status): in force. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
 
+Handoff builds need no Node. Once #1411/#1820 land, Go asset generation must
+precede compilation in the isolated [build routes](investigations.md#build-routes).
+
 A branch with only Claude's own code on top of `main` is not a handoff:
 Claude follows the [local checks](../../AGENTS.md#commands) and
 [follow-up push checks](reviewing.md#follow-up-pushes).
@@ -139,9 +142,9 @@ start (#359).
 
 ### Implementation brief
 
-The orchestrator's brief includes the issue and review comments, size class,
-starting files or packages, and the [Codex implementer entry](README.md#implementer-codex).
-These are starting points; read any dependencies the change needs.
+Brief: issue and review comments, size class, starting files/packages,
+and the [Codex implementer entry](README.md#implementer-codex).
+Starting points; read the change's dependencies.
 
 `small`: expected adversarial tier C and either documentation only or an
 expected diff under about 100 lines → `medium`. Otherwise `normal`: current
@@ -150,7 +153,7 @@ default, no effort flag. Tier A/B is always `normal`, including gate documents u
 
 The brief also includes:
 
-- Node only after #1410 and #1415: [decision 43](../decisions/43-typescript-with-a-go-driven-build.md).
+- [Codex Node use](codex-node.md): routine only after #1410/#1415 merge; #1410's one-time exception has ended.
 - **Go caches.** Only the worktree is writable, so use
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
@@ -188,22 +191,21 @@ The brief also includes:
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`, which never contains a connection string with
   credentials, a password, a token or a key: a command that needs one shows
-  a placeholder such as `<local test database>` (#358). It also stays
-  inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
+  a placeholder such as `<local test database>` (#358). It stays inside
+  the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
   no other AI CLIs (claude, agy), no browser or Computer Use: reviews are the
   orchestrator's, and browser checks follow the
   [handoff][h]. It never re-signs, patches or
-  replaces a tool binary to make it run, and reports the failure instead. It
-  puts scratch files outside the worktree when the runner allows it; this
-  profile does not, so Codex may create them in the worktree but deletes
-  them before running checks such as `go test ./...` and before handing off.
-  Git-ignored places such as `bin/` are no exception: builds and tests still
-  pick files up there. The orchestrator likewise reports a tool that will not
-  run instead of modifying it.
+  replaces a tool binary to make it run, and reports the failure instead.
+  Scratch files go outside the worktree if allowed; this profile forbids it,
+  so Codex deletes scratch files before checks such as `go test ./...`
+  and before handoff. Git-ignored paths such as `bin/` are no exception:
+  builds and tests use them. The orchestrator also reports a tool that
+  will not run, never modifying it.
 
 ### Handoff checks
 
-The orchestrator then, running nothing from the tree
+The orchestrator, running nothing from the tree
 ([handoff][h]):
 
 1. reviews the diff;

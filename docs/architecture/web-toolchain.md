@@ -63,14 +63,15 @@ the directory of the version-checked Node without resolving Node symlinks. CI pr
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Codex downloads no Node and expands no network profile; report missing
-or mismatched runtimes. #1415 documents/verifies setup and sandbox-local writes;
-it does not supply the toolchain or language-table changes. Argon's command
+or mismatched runtimes. [Codex Node setup and probe](../workflow/codex-node.md)
+record trusted provisioning and sandbox-local writes. Argon's command
 prohibition and verify boundary remain unchanged.
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
-pinned Node; keep install/cache writes inside the implementer's sandbox. No
+pinned Node; keep install/cache writes inside the implementer's sandbox,
+with the npm cache in `bin/.cache/npm`. No
 npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
 or platform package or enabling lifecycle scripts. The portable package selects
@@ -89,10 +90,12 @@ lockfile tests run in `check-tools` in `checks`, without Node. The strict,
 no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
 outside it. `globals.d.ts` supplies the first input and the htmx global.
 
-**Pin updates — confirmed:** ordinary
-dependency PRs: change the exact checker pin and lockfile together; for a Node
-update also change `.node-version` and regenerate the lockfile with that
-release's bundled npm. CI must prove installation, type checking and, once
+**Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
+checker pin and lockfile together; for a Node update also change `.node-version`.
+When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
+Node release's bundled npm: `npm install --ignore-scripts` is used only for
+lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
+CI must prove installation, type checking and, once
 #1412 lands, unit tests with the changed pins.
 
 **Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
@@ -151,30 +154,18 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
 
-For Codex, no routine Node use until both #1410 (toolchain/setup) and #1415
-(documenting and verifying trusted Node provisioning for AI sandboxes) land.
-Only then may its sandbox use pinned Node for checking, tests, dependency
-management and `npm ci --ignore-scripts` from a reviewed lockfile. Trusted
-setup supplies Node; no downloader or network expansion. #1415 also documents
-sandbox-local install/cache writes and handoff. No AI runs transferred
-`node_modules`, npm scripts or Node tests on the host after
-handoff; CI remains the check.
+Routine Codex Node use starts at #1415's merge, after #1410, under the
+[setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
+exception ended with its last PR; it is not routine authorization.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
-
-**One-time Codex exception (#1410 only, maintainer 2026-10-25):** trusted host
-Node 26.8.1 may run inside the normal implementation profile, without a Node
-download or network expansion. `npm install` is used only for lockfile creation
-or regeneration; `npm ci` verifies the lock. Both require `--ignore-scripts`,
-solely to generate/verify the first lock here, with cache in `bin/.cache/npm`.
-Delete `node_modules` before handoff; afterwards no AI runs it, npm scripts or
-Node tests on the host. CI is the check. This exception ends when #1410's last
-PR merges; routine use still waits for #1415 too.
+Handoff follows the [standing prohibition](../workflow/running-other-ai.md#handoff-of-another-ais-code).
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
 (#1696) are merged but not in force until #1700: production still pins launcher
-`argonreview-7f607ca` and the old image. The prelude regenerates templ, sqlc and Tailwind
-before Go build/vet/test; `generated` checks output and formatting in a copy.
+`argonreview-7f607ca` and the old image. Once #1700 lands, the prelude will regenerate
+templ, sqlc and Tailwind before Go build/vet/test; `generated` will check output
+and formatting in a copy.
 TypeScript checking stays outside verify.
 #1415 cannot widen verify or those permissions.
 

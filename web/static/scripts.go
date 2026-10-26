@@ -86,6 +86,9 @@ func WithScripts(ctx context.Context, scripts *Scripts) context.Context {
 func ScriptURL(ctx context.Context, name string) (string, error) {
 	scripts, ok := ctx.Value(scriptsKey{}).(*Scripts)
 	if !ok {
+		// Rebuild and validate per render only for direct component renders and
+		// tests. Production must not rely on this fallback: pageRenderer.render
+		// supplies the startup-validated registry.
 		var err error
 		scripts, err = NewScripts(FS())
 		if err != nil {

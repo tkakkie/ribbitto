@@ -83,6 +83,53 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+func TestStaticBundleRegistry(t *testing.T) {
+	bundleURL, err := static.ScriptURL(t.Context(), "message-time")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for _, name := range []string{"css/app.css", "dist/manifest.json", strings.TrimPrefix(bundleURL, "/static/")} {
+		data, err := fs.ReadFile(static.FS(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A real stale bundle isolates registry rejection from the filesystem's 404.
+	if err := os.WriteFile(filepath.Join(dir, "dist", "old-ABCDEFGH.js"), []byte("console.log('stale');"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newTestHandler(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		path string
+		code int
+	}{
+		{bundleURL, http.StatusOK},
+		{"/static/dist/old-ABCDEFGH.js", http.StatusNotFound},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tt.path, nil))
+			if w.Code != tt.code {
+				t.Errorf("status = %d, want %d", w.Code, tt.code)
+			}
+			if tt.code == http.StatusNotFound && w.Header().Get("Cache-Control") != "" {
+				t.Errorf("unregistered bundle is cacheable: %q", w.Header().Get("Cache-Control"))
+			}
+		})
+	}
+}
+
 type fakePinger func(context.Context) error
 
 func (p fakePinger) Ping(ctx context.Context) error { return p(ctx) }

@@ -17,13 +17,14 @@ Go-driven esbuild build, not blanket authorization.
 #1410 approved web/src/*.ts (including declarations), root tsconfig.json,
 package.json/package-lock.json and .node-version, updating decision 42 and
 [`tools/languagecheck`](../../tools/languagecheck/rules.go) against that approval.
-Later PRs add rows to both path-and-kind tables for a new file kind or
-location: direct web/test/*.test.mjs harnesses are #1412's; Go builders under
-tools/ are covered. Unlisted files fail; exact-path exceptions follow
-decision 42's rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
+Later PRs add rows to both path-and-kind tables in the PR introducing the
+first file of a new kind or location: direct web/test/*.test.mjs harnesses are
+#1412's; Go builders under tools/ are covered. Unlisted files fail; exact-path
+exceptions follow decision 42's rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
-Decision 42 reviews Makefile/workflow node/npm commands; the check does not scan
-them and they need no path-and-kind entries. #1412 adds the narrow .mjs row.
+Review checks Makefile/workflow node/npm commands against that limited approval
+(decision 42 leaves commands to review); the check does not scan them and they
+need no path-and-kind entries. #1412 adds the narrow .mjs row.
 
 ## Build, manifest and embedding — #1411
 
@@ -41,20 +42,20 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-`web/src/message-time.ts` is served through `static.NewScripts`, which validates
-manifest entries and bundle hashes at startup. Context supplies templ's logical
-name lookup; direct renders use the embedded registry without mutable globals.
-Missing/unknown entries or bundles fail startup; undeclared renders fail.
-The deferred classic bundle keeps its nonce; arrival stays synchronous.
+`static.NewScripts` validates the manifest and bundle hashes at startup for
+`web/src/message-time.ts`. templ uses context; direct renders use the embedded
+registry without mutable globals. Missing/unknown entries or bundles fail startup;
+undeclared renders fail.
+Classic bundle: deferred, with nonce; arrival stays synchronous.
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
 
 Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
-`go vet`, `go run` or tools loading the tree. Make's build/check/run targets and
-CI schema verification, testshard and CodeQL generate first. Explicit embed
-patterns require generation; ignored `dist` is never committed. CI proves
-generation, embedding and build without Node on `PATH`. A future Dockerfile
-or release workflow must generate before compiling and package that
-output (none exists; Argon's verify image is separate). Host builds use the
+`go vet`, `go run` or tools loading the tree. Make build/check/run, CI schema
+verification, testshard and CodeQL generate first. Embed patterns require
+generation; ignored `dist` is never committed. CI checks generation/embedding/build
+without Node on `PATH`. Future Docker/release workflows must generate before
+compiling and package that output (none exists; Argon's verify image is separate).
+Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
 #1821 adds development rebuilds, disk serving and maps; #1819 adds private

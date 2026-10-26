@@ -59,7 +59,183 @@ export function listenSidebarResyncEvent(target: EventTarget, listener: (detail:
   return () => target.removeEventListener(SidebarResyncEvent, handle);
 }
 
+export const MessageBodyID = "message-body";
+export const messageBodySelector = (): string => "#" + MessageBodyID;
+export const getMessageBody = (root: ParentNode = document): HTMLTextAreaElement | null => root.querySelector<HTMLTextAreaElement>(messageBodySelector());
 
-export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute;
+export const MessageComposerID = "message-composer";
+export const messageComposerSelector = (): string => "#" + MessageComposerID;
+export const getMessageComposer = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(messageComposerSelector());
+
+export const MessageComposerStateID = "message-composer-state";
+export const messageComposerStateSelector = (): string => "#" + MessageComposerStateID;
+export const getMessageComposerState = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(messageComposerStateSelector());
+
+export const MessageHelpID = "message-help";
+export const messageHelpSelector = (): string => "#" + MessageHelpID;
+export const getMessageHelp = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(messageHelpSelector());
+
+export const MessageSendAlertID = "message-send-alert";
+export const messageSendAlertSelector = (): string => "#" + MessageSendAlertID;
+export const getMessageSendAlert = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(messageSendAlertSelector());
+
+export const MessageSendingID = "message-sending";
+export const messageSendingSelector = (): string => "#" + MessageSendingID;
+export const getMessageSending = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(messageSendingSelector());
+
+export const MessageStatusID = "message-status";
+export const messageStatusSelector = (): string => "#" + MessageStatusID;
+export const getMessageStatus = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(messageStatusSelector());
+
+export const MessagePendingID = "message-pending";
+export const messagePendingSelector = (): string => "#" + MessagePendingID;
+export const getMessagePending = (root: ParentNode = document): HTMLOListElement | null => root.querySelector<HTMLOListElement>(messagePendingSelector());
+
+export const MessagePendingTemplateID = "message-pending-template";
+export const messagePendingTemplateSelector = (): string => "#" + MessagePendingTemplateID;
+export const getMessagePendingTemplate = (root: ParentNode = document): HTMLTemplateElement | null => root.querySelector<HTMLTemplateElement>(messagePendingTemplateSelector());
+
+export const MessagePendingBodyID = "message-pending-body";
+export const messagePendingBodySelector = (): string => "#" + MessagePendingBodyID;
+export const getMessagePendingBody = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(messagePendingBodySelector());
+
+export const MessagePendingEditHelpID = "message-pending-edit-help";
+export const messagePendingEditHelpSelector = (): string => "#" + MessagePendingEditHelpID;
+export const getMessagePendingEditHelp = (root: ParentNode = document): HTMLSpanElement | null => root.querySelector<HTMLSpanElement>(messagePendingEditHelpSelector());
+
+export const QuoteFormID = "quote-form";
+export const quoteFormSelector = (): string => "#" + QuoteFormID;
+export const getQuoteForm = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(quoteFormSelector());
+
+export const ComposerQuoteID = "composer-quote";
+export const composerQuoteSelector = (): string => "#" + ComposerQuoteID;
+export const getComposerQuote = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(composerQuoteSelector());
+
+export const QuoteTextID = "quote-text";
+export const quoteTextSelector = (): string => "#" + QuoteTextID;
+export const getQuoteText = (root: ParentNode = document): HTMLTextAreaElement | null => root.querySelector<HTMLTextAreaElement>(quoteTextSelector());
+
+export const TypingFormID = "typing-form";
+export const typingFormSelector = (): string => "#" + TypingFormID;
+export const getTypingForm = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(typingFormSelector());
+
+export const TypingStatusID = "typing-status";
+export const typingStatusSelector = (): string => "#" + TypingStatusID;
+export const getTypingStatus = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(typingStatusSelector());
+
+export const MessageListID = "message-list";
+export const messageListSelector = (): string => "#" + MessageListID;
+export const getMessageList = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(messageListSelector());
+
+export const MessageItemsID = "message-items";
+export const messageItemsSelector = (): string => "#" + MessageItemsID;
+export const getMessageItems = (root: ParentNode = document): HTMLOListElement | null => root.querySelector<HTMLOListElement>(messageItemsSelector());
+
+export const MessageEmptyID = "message-empty";
+export const messageEmptySelector = (): string => "#" + MessageEmptyID;
+export const getMessageEmpty = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(messageEmptySelector());
+
+export const MessagePendingEditHelpPrefix = "message-pending-edit-help-";
+export const messagePendingEditHelpPrefixID = (suffix: string): string => MessagePendingEditHelpPrefix + suffix;
+export const messagePendingEditHelpPrefixSelector = (suffix: string): string => "#" + messagePendingEditHelpPrefixID(suffix);
+export const getMessagePendingEditHelpPrefix = (suffix: string, root: ParentNode = document): HTMLSpanElement | null => root.querySelector<HTMLSpanElement>(messagePendingEditHelpPrefixSelector(suffix));
+
+export const PostedMessageAttribute = "data-posted-message";
+export const PostedTopicAttribute = "data-posted-topic";
+export const PostedSeqAttribute = "data-posted-seq";
+export const SendKeyAttribute = "data-send-key";
+export const SentBodyAttribute = "data-sent-body";
+export const InvalidAttribute = "data-invalid";
+export const UnconfirmedKeyAttribute = "data-unconfirmed-key";
+export const PendingBodyAttribute = "data-pending-body";
+export const PendingFormAttribute = "data-pending-form";
+export const PendingActionsAttribute = "data-pending-actions";
+export const PendingEditAttribute = "data-pending-edit";
+export const PendingEditHelpAttribute = "data-pending-edit-help";
+export const PendingRemoveAttribute = "data-pending-remove";
+export const PendingSendingAttribute = "data-pending-sending";
+export const StateAttribute = "data-state";
+export const DraftKeyAttribute = "data-draft-key";
+export const UnconfirmedAttribute = "data-unconfirmed";
+export const NotSentAttribute = "data-not-sent";
+export const StillUnconfirmedAttribute = "data-still-unconfirmed";
+export const RecoveredAttribute = "data-recovered";
+export const RepeatAttribute = "data-repeat";
+export const BusyAttribute = "data-busy";
+export const CapacityAttribute = "data-capacity";
+export const DraftChannelAttribute = "data-draft-channel";
+export const DraftTopicAttribute = "data-draft-topic";
+export const EventCursorAttribute = "data-event-cursor";
+export const AppliedCursorAttribute = "data-applied-cursor";
+export const TopicAttribute = "data-topic";
+export const FromTopicAttribute = "data-from-topic";
+export const MessageSendingEvent = "message-sending";
+export type MessageSendingDetail = { "key": string; "body": string; "inPlace": boolean; };
+export function dispatchMessageSendingEvent(target: EventTarget, detail: MessageSendingDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessageSendingEvent, { detail }));
+}
+export function listenMessageSendingEvent(target: EventTarget, listener: (detail: MessageSendingDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessageSendingDetail>).detail);
+  target.addEventListener(MessageSendingEvent, handle);
+  return () => target.removeEventListener(MessageSendingEvent, handle);
+}
+
+export const MessageSentEvent = "message-sent";
+export type MessageSentDetail = { "key": string; "message": string; };
+export function dispatchMessageSentEvent(target: EventTarget, detail: MessageSentDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessageSentEvent, { detail }));
+}
+export function listenMessageSentEvent(target: EventTarget, listener: (detail: MessageSentDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessageSentDetail>).detail);
+  target.addEventListener(MessageSentEvent, handle);
+  return () => target.removeEventListener(MessageSentEvent, handle);
+}
+
+export const MessagePendingActionEvent = "message-pending-action";
+export type MessagePendingActionDetail = { "key": string; "restoredKey": string | null; "kind": "edit" | "remove"; };
+export function dispatchMessagePendingActionEvent(target: EventTarget, detail: MessagePendingActionDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessagePendingActionEvent, { detail }));
+}
+export function listenMessagePendingActionEvent(target: EventTarget, listener: (detail: MessagePendingActionDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingActionDetail>).detail);
+  target.addEventListener(MessagePendingActionEvent, handle);
+  return () => target.removeEventListener(MessagePendingActionEvent, handle);
+}
+
+export const MessageDraftRestoredEvent = "message-draft-restored";
+export type MessageDraftRestoredDetail = { "key": string; };
+export function dispatchMessageDraftRestoredEvent(target: EventTarget, detail: MessageDraftRestoredDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessageDraftRestoredEvent, { detail }));
+}
+export function listenMessageDraftRestoredEvent(target: EventTarget, listener: (detail: MessageDraftRestoredDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessageDraftRestoredDetail>).detail);
+  target.addEventListener(MessageDraftRestoredEvent, handle);
+  return () => target.removeEventListener(MessageDraftRestoredEvent, handle);
+}
+
+export const PendingSendEvent = "pending-send";
+export type PendingSendDetail = Record<string, never>;
+export function dispatchPendingSendEvent(target: EventTarget, detail: PendingSendDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(PendingSendEvent, { detail }));
+}
+export function listenPendingSendEvent(target: EventTarget, listener: (detail: PendingSendDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<PendingSendDetail>).detail);
+  target.addEventListener(PendingSendEvent, handle);
+  return () => target.removeEventListener(PendingSendEvent, handle);
+}
+
+export const TypingInputEvent = "typing-input";
+export type TypingInputDetail = Record<string, never>;
+export function dispatchTypingInputEvent(target: EventTarget, detail: TypingInputDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(TypingInputEvent, { detail }));
+}
+export function listenTypingInputEvent(target: EventTarget, listener: (detail: TypingInputDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<TypingInputDetail>).detail);
+  target.addEventListener(TypingInputEvent, handle);
+  return () => target.removeEventListener(TypingInputEvent, handle);
+}
+
+
+export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

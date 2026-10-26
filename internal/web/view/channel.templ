@@ -237,7 +237,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						{ i18n.T(ctx, "stream.stopped") }
 						<a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "stream.reload") }</a>
 					</p>
-					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
+					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
 						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
@@ -251,9 +251,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</div>
 						<ol
-							id="message-items"
+							id={ MessageItemsID }
 							if page.Topic != nil {
-								data-topic={ idValue(page.Topic.ID) }
+								{ TopicAttribute }={ idValue(page.Topic.ID) }
 							}
 							if page.EventCursor != nil && latest(page) {
 								sse-swap="message,messages-moved"
@@ -267,10 +267,10 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</ol>
 						if latest(page) {
-							<ol id="message-pending" class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
+							<ol id={ MessagePendingID } class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
 							@pendingMessage(page)
 						}
-						<div id="message-empty" class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+						<div id={ MessageEmptyID } class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
 						if !latest(page) {
 							// Only an older page reached by its own URL shows this: a
 							// message's link, or "Load older" without JavaScript.
@@ -282,7 +282,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							</p>
 						}
 					</div>
-					<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
+					<div id={ MessageStatusID } role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)
 					// While a message is checked the move form covers this area, which
 					// keeps its space so the message list neither shrinks nor scrolls.
@@ -290,7 +290,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					// and the fixed list still neither shrinks nor scrolls.
 					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "") }>
 						if latest(page) && page.EventCursor != nil {
-							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
+							<div id={ TypingStatusID } sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}
 						@messageComposer(page)
 					</div>
@@ -337,7 +337,7 @@ templ channelFrame(page ChannelPage) {
 			{ SidebarTopicAttribute }={ idValue(page.Topic.ID) }
 		}
 		if page.EventCursor != nil {
-			data-event-cursor={ fmt.Sprint(*page.EventCursor) }
+			{ EventCursorAttribute }={ fmt.Sprint(*page.EventCursor) }
 			hx-ext="sse"
 			sse-connect={ streamURL(page) }
 		}
@@ -415,7 +415,7 @@ templ historyLink(url string, older bool) {
 		href={ templ.SafeURL(url) }
 		if older {
 			hx-get={ url }
-			hx-target="#message-items"
+			hx-target={ "#" + MessageItemsID }
 			hx-swap="afterbegin"
 			hx-select="#message-items > li"
 			hx-select-oob="#load-older"
@@ -453,28 +453,28 @@ templ MessageComposer(page ChannelPage) {
 // Layout mirrors messageItem to preserve its shared stream markup;
 // testPendingComposerBrowser guards their geometry within 1 px.
 templ pendingMessage(page ChannelPage) {
-	<template id="message-pending-template">
+	<template id={ MessagePendingTemplateID }>
 		<li class="relative flex scroll-mt-6 flex-col gap-1 pl-12 max-desk:wrap-anywhere">
 			<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body min-h-9 max-desk:min-h-11 max-desk:items-center">
 				<div class="contents max-desk:flex max-desk:min-w-0 max-desk:flex-col">
 					<span class="min-w-0 break-words">@MemberName(page.DisplayName, page.Handle)</span>
-					<span data-pending-sending class="text-caption text-muted desk:min-w-timestamp">{ i18n.T(ctx, "message.sending") }</span>
+					<span { PendingSendingAttribute } class="text-caption text-muted desk:min-w-timestamp">{ i18n.T(ctx, "message.sending") }</span>
 				</div>
 			</div>
 			// Keep the empty failure status exposed without adding a flex gap.
 			<div>
-				<p data-pending-body id="message-pending-body" dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
-				<form data-pending-form hx-trigger="pending-send" method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target="#message-composer-state" hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt={ `find button[type="submit"]:not([form])` } hx-request={ `{"timeout":30000}` }>
+				<p { PendingBodyAttribute } id={ MessagePendingBodyID } dir="auto" class="whitespace-pre-wrap break-words text-body"></p>
+				<form { PendingFormAttribute } hx-trigger={ PendingSendEvent } method="post" action={ conversationURL(page) } hx-post={ conversationURL(page) } hx-target={ "#" + MessageComposerStateID } hx-swap="outerHTML" hx-sync="this:drop" hx-disabled-elt={ `find button[type="submit"]:not([form])` } hx-request={ `{"timeout":30000}` }>
 					<input type="hidden" name="body"/>
 					<input type="hidden" name="idempotency_key"/>
 					<input type="hidden" name="composer"/>
 					<input type="hidden" name="cursor"/>
 					<p role="status" class="text-caption text-danger"></p>
-					<div data-pending-actions hidden>
-						<button type="submit" aria-describedby="message-pending-body" class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
-						<button type="button" data-pending-edit aria-describedby="message-pending-body" class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.edit") }</button>
-						<span data-pending-edit-help id="message-pending-edit-help" hidden class="text-caption text-muted">{ i18n.T(ctx, "message.edit.unavailable") }</span>
-						<button type="button" data-pending-remove aria-describedby="message-pending-body" class="min-h-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
+					<div { PendingActionsAttribute } hidden>
+						<button type="submit" aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
+						<button type="button" { PendingEditAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.edit") }</button>
+						<span { PendingEditHelpAttribute } id={ MessagePendingEditHelpID } hidden class="text-caption text-muted">{ i18n.T(ctx, "message.edit.unavailable") }</span>
+						<button type="button" { PendingRemoveAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
 					</div>
 				</form>
 			</div>
@@ -487,7 +487,7 @@ templ pendingMessage(page ChannelPage) {
 // is replaced, and the button alone is disabled while a post is in flight.
 templ messageComposer(page ChannelPage) {
 	@mentionPicker(page)
-	<form id="quote-form" hidden method="get" action={ conversationURL(page) + "#message-composer" } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/quote" } hx-target="#composer-quote" hx-swap="outerHTML" hx-sync="#message-composer:drop">
+	<form id={ QuoteFormID } hidden method="get" action={ conversationURL(page) + "#" + MessageComposerID } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/quote" } hx-target={ "#" + ComposerQuoteID } hx-swap="outerHTML" hx-sync={ "#" + MessageComposerID + ":drop" }>
 		// Separate form ownership keeps this out of the chip textarea's POST.
 		<input type="hidden" name="quote_text" disabled/>
 		if page.Before > 0 {
@@ -501,16 +501,16 @@ templ messageComposer(page ChannelPage) {
 		}
 	</form>
 	<form
-		id="message-composer"
+		id={ MessageComposerID }
 		method="post"
 		action={ conversationURL(page) }
 		if latest(page) {
-			data-draft-channel={ idValue(page.Current.ID) }
+			{ DraftChannelAttribute }={ idValue(page.Current.ID) }
 			if page.Topic != nil {
-				data-draft-topic={ idValue(page.Topic.ID) }
+				{ DraftTopicAttribute }={ idValue(page.Topic.ID) }
 			}
 			hx-post={ conversationURL(page) }
-			hx-target="#message-composer-state"
+			hx-target={ "#" + MessageComposerStateID }
 			hx-swap="outerHTML"
 			hx-disabled-elt={ `find button[type="submit"]:not([form])` }
 			hx-sync="this:drop"
@@ -520,17 +520,17 @@ templ messageComposer(page ChannelPage) {
 		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3"
 	>
 		@ComposerQuote(page, false)
-		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
+		<label for={ MessageBodyID } class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
 		<textarea
-			id="message-body"
+			id={ MessageBodyID }
 			name="body"
 			rows="3"
 			dir="auto"
 			aria-autocomplete="list"
 			aria-controls="mention-listbox"
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
-			aria-describedby="message-help composer-quote-description"
+			aria-describedby={ MessageHelpID + " composer-quote-description" }
 			aria-description={ i18n.T(ctx, "mention.help") }
 			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry"
 		>{ "\n" + page.Body }</textarea>
@@ -543,19 +543,19 @@ templ messageComposer(page ChannelPage) {
 				// inserts one of these texts with textContent (#1179).
 				if latest(page) {
 					<p
-						id="message-send-alert"
+						id={ MessageSendAlertID }
 						role="alert"
-						data-unconfirmed={ i18n.T(ctx, "message.send_alert.unconfirmed") }
-						data-not-sent={ i18n.T(ctx, "message.send_alert.not_sent") }
-						data-still-unconfirmed={ i18n.T(ctx, "message.send_alert.still_unconfirmed") }
-						data-recovered={ i18n.T(ctx, "message.send_alert.recovered") }
-						data-repeat={ i18n.T(ctx, "message.error.repeat") }
-						data-busy={ i18n.T(ctx, "message.busy") }
-						data-capacity={ i18n.T(ctx, "message.capacity") }
+						{ UnconfirmedAttribute }={ i18n.T(ctx, "message.send_alert.unconfirmed") }
+						{ NotSentAttribute }={ i18n.T(ctx, "message.send_alert.not_sent") }
+						{ StillUnconfirmedAttribute }={ i18n.T(ctx, "message.send_alert.still_unconfirmed") }
+						{ RecoveredAttribute }={ i18n.T(ctx, "message.send_alert.recovered") }
+						{ RepeatAttribute }={ i18n.T(ctx, "message.error.repeat") }
+						{ BusyAttribute }={ i18n.T(ctx, "message.busy") }
+						{ CapacityAttribute }={ i18n.T(ctx, "message.capacity") }
 						class="text-caption text-danger sending:invisible"
 					></p>
 				}
-				<p id="message-sending" role="status" class="absolute inset-0 text-caption text-muted"><span class="hidden sending:inline">{ i18n.T(ctx, "message.sending") }</span></p>
+				<p id={ MessageSendingID } role="status" class="absolute inset-0 text-caption text-muted"><span class="hidden sending:inline">{ i18n.T(ctx, "message.sending") }</span></p>
 			</div>
 			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand enabled:hover:bg-brand-hover transition-feedback motion-safe:active:scale-96 disabled:opacity-50">
 				@Icon("send-regular", 20)
@@ -569,18 +569,18 @@ templ messageComposer(page ChannelPage) {
 // error the script copies to the textarea's aria-invalid.
 templ composerState(page ChannelPage) {
 	<div
-		id="message-composer-state"
-		data-send-key={ sendKeyValue(page) }
+		id={ MessageComposerStateID }
+		{ SendKeyAttribute }={ sendKeyValue(page) }
 		if page.PostedMessageID != nil {
-			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
-			data-posted-topic={ idValue(page.PostedTopicID) }
-			data-posted-seq={ fmt.Sprint(page.PostedEventSeq) }
+			{ PostedMessageAttribute }={ MessageDOMID(*page.PostedMessageID) }
+			{ PostedTopicAttribute }={ idValue(page.PostedTopicID) }
+			{ PostedSeqAttribute }={ fmt.Sprint(page.PostedEventSeq) }
 		}
 		if page.SentBody != "" {
-			data-sent-body={ page.SentBody }
+			{ SentBodyAttribute }={ page.SentBody }
 		}
 		if fieldError(page) != "" {
-			data-invalid
+			{ InvalidAttribute }
 		}
 		class="sending:invisible"
 	>
@@ -594,11 +594,11 @@ templ composerState(page ChannelPage) {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}
 		if fieldError(page) != "" {
-			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
+			<p id={ MessageHelpID } role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
 		} else if page.SendKey == "modifier_enter" {
-			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help_modifier") }</p>
+			<p id={ MessageHelpID } class="text-caption text-muted">{ i18n.T(ctx, "message.help_modifier") }</p>
 		} else {
-			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
+			<p id={ MessageHelpID } class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
 	</div>
 }
@@ -618,7 +618,7 @@ func fieldError(page ChannelPage) string {
 templ typingForm(page ChannelPage, oob bool) {
 	{{ _ = ctx }}
 	<form
-		id="typing-form"
+		id={ TypingFormID }
 		hidden
 		method="post"
 		action={ typingURL(page) }
@@ -627,7 +627,7 @@ templ typingForm(page ChannelPage, oob bool) {
 		}
 		if page.Composer != nil {
 			hx-post={ typingURL(page) }
-			hx-trigger="typing-input throttle:2s queue:none"
+			hx-trigger={ TypingInputEvent + " throttle:2s queue:none" }
 			hx-sync="this:drop"
 			hx-swap="none"
 		}

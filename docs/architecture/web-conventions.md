@@ -68,7 +68,9 @@ checks until migrated.
   custom event names and payload fields/types; a Go generator under `tools/`,
   reached by `go generate`, writes the committed generated file
   `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
-  names, with constants, types and typed accessors (#1413; composer #1823). A
+  names, with constants, types and typed accessors (sidebar #1413 and composer #1823, including typed payloads, nullable
+  restoration keys and htmx triggers). The legacy composer stays unchanged until
+  its typed entry conversion (#1824). A
   module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and
   type narrowing stay in the modules because static types cannot validate server

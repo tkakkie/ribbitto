@@ -304,6 +304,7 @@ func TestVerifyMCPInitializationAndMethods(t *testing.T) {
 		var list struct {
 			Tools []struct {
 				Name        string
+				Description string
 				InputSchema json.RawMessage
 			}
 		}
@@ -311,7 +312,7 @@ func TestVerifyMCPInitializationAndMethods(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantSchema, _ := json.Marshal(verifyInputSchema())
-		if len(list.Tools) != 1 || list.Tools[0].Name != "verify" || !bytes.Equal(list.Tools[0].InputSchema, wantSchema) {
+		if len(list.Tools) != 1 || list.Tools[0].Name != "verify" || list.Tools[0].Description != "Run build, vet, test, generated or test-db in the verification container." || !bytes.Equal(list.Tools[0].InputSchema, wantSchema) {
 			t.Fatalf("tools: %s", rs[2].Result)
 		}
 	}

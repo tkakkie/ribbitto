@@ -417,7 +417,7 @@ templ historyLink(url string, older bool) {
 			hx-get={ url }
 			hx-target={ "#" + MessageItemsID }
 			hx-swap="afterbegin"
-			hx-select="#message-items > li"
+			hx-select={ "#" + MessageItemsID + " > li" }
 			hx-select-oob="#load-older"
 		}
 		class="inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96"

@@ -75,8 +75,8 @@ own doc/line comment, never a const group. Payloads support string, bool, number
 and nullable string (`*string`). A string field's `dom:"edit,remove"` tag restricts
 it to those literal choices. Fields use the `json:"name"` tag before any comma, otherwise the Go
 name; empty names and `-` also fall back. Duplicate resulting names fail.
-Tags preserve camelCase script payloads: exported Go fields cannot be camelCase,
-and unexported fields on unused payload structs trip the `unused` lint.
+Tags preserve camelCase: exported Go fields cannot be camelCase; unexported
+payload fields on unused structs trip the `unused` lint.
 Use the constant in templ, then run `go generate ./internal/web/view`
 (also part of `make generate`).
 
@@ -87,27 +87,35 @@ or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
 selectors `nameSelector`, and dynamic ids `nameID`.
 Modules still validate attribute values and external event payloads at runtime.
 The lists above remain the human-readable contract.
+
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
-(`key`). All fields are strings except boolean `inPlace`, nullable `restoredKey`
-and nullable `key` in `message-sending` and `message-sent`. On plain and history
-pages without an idempotency key, `message-sent` already carries null
-(`FormData.get`), but the unchanged `message-composer-v21.js` in-place
-`message-sending` carries undefined (`elements.idempotency_key?.value`). The
-contract says null; #1824 may normalize undefined to null because no consumer
-distinguishes them: `message-drafts-v7.js` returns on a falsy key,
-`message-composer-v21.js` does not listen to `message-sending`, and
-`internal/web/drafts_save_test.go` compares only string keys. `message-sent`
-must keep null because both scripts compare its key with `!==`.
-The same `message-sending` string is an id (composer
-markup) and an event name (script) by design; #1822's literal check must tolerate it.
-Generated dispatch helpers create events with `bubbles: true`, as legacy script
-dispatches do, because document-level listeners depend on it; `composed` is not
-set (no script sets it and the page uses no shadow DOM).
+(`key`). Fields are strings except boolean `inPlace` and nullable `restoredKey`
+and sending/sent `key`. Without an idempotency key on plain/history pages,
+`message-sent` carries null (`FormData.get`); legacy `message-composer-v21.js`
+in-place `message-sending` carries undefined (`elements.idempotency_key?.value`).
+The contract says null; #1824 may normalize undefined because consumers treat
+both alike: `message-drafts-v7.js` returns on a falsy key, the composer does not
+listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
+string keys. `message-sent` must keep null: both scripts compare its key with `!==`.
+`message-sending` is both an id (composer markup) and an event name by design;
+the literal check accepts contract constants in either role.
+Generated dispatches use `bubbles: true`, like legacy scripts, for document
+listeners; `composed` stays unset (no script sets it; no shadow DOM).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
 `data-state` and `data-draft-key` are script-written hooks, not server state.
-Coverage already includes the composer before its typed entry conversion (#1824);
-#1822 rejects stray literals in authored sources. Unconverted scripts keep their
-existing strings.
+Sidebar and composer hooks are covered, ahead of composer conversion (#1824).
+
+`tools/contractliterals`, run by `make check-tools`, rejects literal ids,
+attribute names, dataset keys, selectors and custom events in authored
+TypeScript under `web/src/`; only `web/src/contracts.gen.ts` is exempt.
+It also checks literal ids, attribute names and contract hooks in `hx-target`,
+`hx-select`, `hx-select-oob`, `hx-sync` and `hx-trigger` in view templates.
+Dynamic id literals match the prefix itself or a complete 32-lowercase-hex
+suffix, avoiding unrelated ids such as `channel-create`.
+This is a text check, not a security boundary: computed/indirect uses such as
+`getElementById(prefix + key)`, aliasing and names built at runtime remain
+for review. Unconverted scripts in `web/static/` keep their existing strings
+and are not scanned. Removing or weakening this check needs its own review.

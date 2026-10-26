@@ -68,14 +68,19 @@ checks until migrated.
   custom event names and payload fields/types; a Go generator under `tools/`,
   reached by `go generate`, writes the committed generated file
   `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
-  names, with constants, types and typed accessors (sidebar #1413 and composer #1823, including typed payloads, nullable
-  restoration keys and htmx triggers). The legacy composer stays unchanged until
+  names, with constants, types and typed accessors (sidebar #1413 and composer
+  #1823, including typed payloads, nullable keys and htmx triggers). The legacy composer stays unchanged until
   its typed entry conversion (#1824). A
   module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and
   type narrowing stay in the modules because static types cannot validate server
-  attributes or htmx event detail, and a Go check with negative fixtures rejects
-  literal bypasses in authored sources (#1822, #1414).
+  attributes or htmx event detail. `tools/contractliterals` in `make check-tools`
+  rejects literal bypasses in authored TypeScript and view templates; only the
+  generated file is exempt. It matches whole names/tokens and the current
+  dynamic id families' 32-hex suffixes, not arbitrary substrings. This text
+  check is not a security boundary; computed/indirect bypasses (concatenation,
+  aliasing, runtime names) remain for review. Legacy `web/static/` scripts
+  are outside its scope. Removing or weakening it needs its own review (#1414).
 
 ## Composer queue example: before and after
 

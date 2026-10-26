@@ -5,7 +5,7 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // ComposerQuote stays inside the form while post responses renew its state.
 templ ComposerQuote(page ChannelPage, oob bool) {
 	<div
-		id="composer-quote"
+		id={ ComposerQuoteID }
 		hidden?={ page.Quote == nil }
 		if oob {
 			hx-swap-oob="outerHTML"
@@ -16,9 +16,9 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 				<div id="composer-quote-description" class="min-w-0 flex-1">
 					<p class="truncate text-caption">@MemberName(page.Quote.DisplayName, page.Quote.Handle)</p>
 					if page.QuoteText != nil {
-						<label for="quote-text" class="text-caption">{ i18n.T(ctx, "message.quote_text") }</label>
+						<label for={ QuoteTextID } class="text-caption">{ i18n.T(ctx, "message.quote_text") }</label>
 						<textarea
-							id="quote-text"
+							id={ QuoteTextID }
 							autofocus?={ !page.QuoteInvalid && page.BodyError == "" }
 							name="quote_text"
 							dir="auto"
@@ -37,9 +37,9 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 					}
 				</div>
 				<input type="hidden" name="quote" value={ idValue(page.Quote.ID) }/>
-				<button type="submit" form="quote-form" class="min-h-11 shrink-0 px-2 text-muted hover:text-fg">{ i18n.T(ctx, "message.quote_remove") }</button>
+				<button type="submit" form={ QuoteFormID } class="min-h-11 shrink-0 px-2 text-muted hover:text-fg">{ i18n.T(ctx, "message.quote_remove") }</button>
 				if page.QuoteText == nil {
-					<button type="submit" form="quote-form" name="part" value={ idValue(page.Quote.ID) } class="min-h-11 px-2 text-caption">{ i18n.T(ctx, "message.quote_part") }</button>
+					<button type="submit" form={ QuoteFormID } name="part" value={ idValue(page.Quote.ID) } class="min-h-11 px-2 text-caption">{ i18n.T(ctx, "message.quote_part") }</button>
 				}
 			</div>
 		} else {

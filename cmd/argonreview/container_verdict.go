@@ -23,8 +23,9 @@ type containerTestEvent struct {
 }
 
 type containerTestPackage struct {
-	final string
-	tests map[string]string
+	final  string
+	tests  map[string]string
+	output map[string]string
 }
 
 // testVerdict is a pure reading of test2json, independent of build/vet. Every
@@ -32,6 +33,10 @@ type containerTestPackage struct {
 // inflate the leaf pass count, and a failed package cannot hide behind a child
 // pass (build failures and panics may have no failed test event at all).
 func testVerdict(code int, runErr error, data []byte, truncated bool) string {
+	return testVerdictWithAllowlist(code, runErr, data, truncated, nil)
+}
+
+func testVerdictWithAllowlist(code int, runErr error, data []byte, truncated bool, allowlist []measurementSkip) string {
 	if code != 0 || runErr != nil {
 		return "FAILED"
 	}
@@ -65,7 +70,7 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 			if p != nil || e.Test != "" {
 				return "FAILED: duplicate or invalid package start"
 			}
-			packages[e.Package] = &containerTestPackage{tests: map[string]string{}}
+			packages[e.Package] = &containerTestPackage{tests: map[string]string{}, output: map[string]string{}}
 			continue
 		}
 		if p == nil || p.final != "" {
@@ -85,6 +90,9 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 				return "FAILED: event outside a running test"
 			}
 		case "output":
+			if e.Test != "" {
+				p.output[e.Test] += e.Output
+			}
 			if strings.Contains(e.Output, "[no test files]") {
 				noTests = true
 			}
@@ -111,7 +119,7 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 		return "FAILED"
 	}
 	passing := 0
-	var skipped []string
+	var skipped, allowed []string
 	for name, p := range packages {
 		if len(p.tests) == 0 {
 			noTests = true
@@ -133,6 +141,12 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 				parents[parent] = true
 			}
 		}
+		packagePassing := 0
+		for test, state := range p.tests {
+			if !parents[test] && state == "pass" {
+				packagePassing++
+			}
+		}
 		for test, state := range p.tests {
 			if state == "" {
 				return "FAILED: missing test result"
@@ -141,7 +155,11 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 			// incomplete descendant above makes the whole stream fail closed.
 			leaf := !parents[test]
 			if state == "skip" {
-				skipped = append(skipped, name+"/"+test)
+				if allowedMeasurementSkip(allowlist, name, test, p.output[test], parents[test], packagePassing) {
+					allowed = append(allowed, name+"/"+test)
+				} else {
+					skipped = append(skipped, name+"/"+test)
+				}
 			}
 			if leaf && state == "pass" {
 				passing++
@@ -155,5 +173,10 @@ func testVerdict(code int, runErr error, data []byte, truncated bool) string {
 	if noTests || passing == 0 {
 		return "NOT VERIFIED: a targeted package has no tests, or no leaf test passed"
 	}
-	return fmt.Sprintf("verified\n%d passing leaf tests", passing)
+	report := fmt.Sprintf("verified\n%d passing leaf tests", passing)
+	if len(allowed) != 0 {
+		sort.Strings(allowed)
+		report += "\nallowed measurement skips: " + strings.Join(allowed, ", ")
+	}
+	return report
 }

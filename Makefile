@@ -96,6 +96,7 @@ check-tools: bundles $(TEMPL)
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./domcontract -check ..
+	go -C tools run ./contractliterals ..
 	go -C tools run ./deps --check ..
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...

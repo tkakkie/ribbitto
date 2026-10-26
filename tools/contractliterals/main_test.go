@@ -36,7 +36,11 @@ func TestLiteralForms(t *testing.T) {
 	forms := []string{
 		`document.getElementById("message-body")`, `document.getElementById('channel-0123456789abcdef0123456789abcdef')`,
 		"document.getElementById(`message-body`,)",
+		`document.getElementById("channel-" + key)`,
 		`document.querySelector("#message-body > li")`, `el.closest('#channel-0123456789abcdef0123456789abcdef')`,
+		"el.querySelector(`[data-unread-count=\"${n}\"]`)",
+		"el.querySelector(`#channel-${id}`)",
+		"el.querySelector(`li[data-x=\"${{ id }.id}-${n}\"] #message-body`)",
 		`el.matches("[data-unread-count]")`, `el.matches('[data-unread-count="1"]')`,
 		`el.dataset.unreadCount`, `el.dataset["unreadCount"]`, `dataset['unreadCount']`,
 		`new Event("sidebar-resync")`, `new CustomEvent('sidebar-resync', {})`,
@@ -46,7 +50,7 @@ func TestLiteralForms(t *testing.T) {
 	for _, method := range []string{"getAttribute", "setAttribute", "hasAttribute", "removeAttribute", "toggleAttribute"} {
 		forms = append(forms, `el.`+method+`("data-unread-count", "1")`)
 	}
-	templates := []string{`<div id="message-body"/>`, `<li id="channel-0123456789abcdef0123456789abcdef"/>`, `<div data-unread-count={ count }/>`, `<div data-unread-count/>`, `<div data-unread-count hidden/>`, `<div { "data-unread-count" }={ count }/>`, `<div id={ "message-body" }/>`}
+	templates := []string{`<div id="message-body"/>`, `<li id="channel-0123456789abcdef0123456789abcdef"/>`, `<div data-unread-count={ count }/>`, `<div data-unread-count?={ b }/>`, `<div data-unread-count/>`, `<div data-unread-count hidden/>`, `<div { "data-unread-count" }={ count }/>`, `<div id={ "message-body" }/>`}
 	for _, attr := range []string{"hx-target", "hx-select", "hx-select-oob", "hx-sync", "hx-trigger"} {
 		value := "#message-body:replace"
 		if attr == "hx-trigger" {
@@ -88,8 +92,11 @@ i18n("label.message-body"); el.classList.add("message-body");
 // el.getElementById("message-body");
 /* el.dataset.unreadCount; */
 // Computed hooks are intentionally not proved by this text check.
-document.getElementById("channel-" + key); const event = "sidebar-" + "resync";
-`)
+const prefix = "chan" + "nel-"; document.getElementById(prefix + key); const event = "sidebar-" + "resync";
+document.getElementById("message-body" + key);
+`+"el.querySelector(`.message-body-${x} [data-unread-count-extra=\"${n}\"]`);\n"+
+		"document.getElementById(`channel-${id}`);\n"+
+		"el.querySelector(`[data-x=\"${{ hook: '#message-body' }.hook}\"]`);\n")
 	write(t, root, "internal/web/view/example.templ", `<div id={ BodyID } { Count }={ count } hx-target={ "#" + BodyID } hx-trigger={ Changed }/>
 <div id="message-body-x" class="message-body" data-unread-count-extra="1" hx-trigger="sidebar-resync-extra"/>
 <p>data-unread-count is a contract attribute.</p>

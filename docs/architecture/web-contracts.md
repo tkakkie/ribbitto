@@ -87,6 +87,6 @@ It also checks literal ids, attribute names and contract hooks in `hx-target`,
 Dynamic id literals match the prefix itself or a complete 32-lowercase-hex
 suffix, avoiding unrelated ids such as `channel-create`.
 This is a text check, not a security boundary: computed/indirect uses such as
-`getElementById("channel-" + key)`, aliasing and names built at runtime remain
+`getElementById(prefix + key)`, aliasing and names built at runtime remain
 for review. Unconverted scripts in `web/static/` keep their existing strings
 and are not scanned. Removing or weakening this check needs its own review.

@@ -3,6 +3,10 @@
 // Dynamic ids recognize prefixes and the current families' 32-lowercase-hex
 // suffixes. This text check is not a security boundary: aliasing, concatenation
 // and names computed at runtime cannot be proved and remain for review.
+// A templ-text apostrophe or TypeScript regex apostrophe can open a quoted token
+// across lines and hide later hooks. Optional dataset access (el.dataset?.unreadCount),
+// new window.CustomEvent("...") and nested template literals inside ${} are not
+// understood; these lexical gaps also need review.
 package main
 
 import (
@@ -130,6 +134,11 @@ func findings(source string, template bool, definitions []domcontract.Definition
 		if quoted {
 			value = word[1 : len(word)-1]
 		}
+		interpolated := strings.HasPrefix(word, "`") && strings.Contains(word, "${")
+		selectorValue := value
+		if interpolated {
+			selectorValue = staticTemplateText(word[1 : len(word)-1])
+		}
 		for _, definition := range definitions {
 			kind, name := definition.Parts[0], definition.Value
 			id := func(value string) bool {
@@ -138,7 +147,7 @@ func findings(source string, template bool, definitions []domcontract.Definition
 				return (kind == "id" || kind == "suffix") && value == name || kind == "suffix" && strings.HasPrefix(value, name) && hexSuffix.MatchString(strings.TrimPrefix(value, name))
 			}
 			selector := false
-			for _, hook := range hooks.FindAllStringSubmatch(value, -1) {
+			for _, hook := range hooks.FindAllStringSubmatch(selectorValue, -1) {
 				selector = selector || strings.HasPrefix(hook[0], "#") && id(hook[0][1:]) || kind == "attribute" && hook[1] == name
 			}
 			bad := false
@@ -159,11 +168,11 @@ func findings(source string, template bool, definitions []domcontract.Definition
 					bad = selector || kind == "event" && eventToken(value, name)
 				}
 			} else {
-				bad = quoted && selector
+				bad = (quoted || interpolated) && selector
 				if quoted && at(-1) == "(" {
 					switch at(-2) {
 					case "getElementById":
-						bad = bad || (at(1) == ")" || at(1) == ",") && id(value)
+						bad = bad || (kind == "suffix" || at(1) == ")" || at(1) == ",") && id(value)
 					case "getAttribute", "setAttribute", "hasAttribute", "removeAttribute", "toggleAttribute":
 						bad = bad || kind == "attribute" && value == name
 					case "addEventListener", "removeEventListener":
@@ -186,6 +195,26 @@ func findings(source string, template bool, definitions []domcontract.Definition
 		}
 	}
 	return found
+}
+
+func staticTemplateText(value string) string {
+	var text strings.Builder
+	depth := 0
+	for i := 0; i < len(value); i++ {
+		if depth == 0 && strings.HasPrefix(value[i:], "${") {
+			depth = 1
+			// Keep static fragments apart so interpolation cannot create a hook.
+			text.WriteByte(' ')
+			i++
+		} else if depth == 0 {
+			text.WriteByte(value[i])
+		} else if value[i] == '{' {
+			depth++
+		} else if value[i] == '}' {
+			depth--
+		}
+	}
+	return text.String()
 }
 
 func oneOf(word, choices string) bool {

@@ -8,6 +8,9 @@ queue rules update both files in the same pull request. No browser entry imports
 this module yet; this prose becomes pointers when adoption lands.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. `expire` handles hold expiry; `pagehide` and `sent` clear holds.
+Before `admit`, the adapter calls `changeText` and applies any returned fresh key
+to the composer, including when admission returns busy or ordinary. Items expose
+readonly views; `restoration` returns a readonly snapshot.
 
 ## Pending own posts
 

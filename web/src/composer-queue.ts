@@ -1,11 +1,18 @@
 /** Pending identity survives request-key rotation and delivery races. */
 export interface PendingItem {
   readonly draftKey: string;
-  requestKey: string;
-  state: "queued" | "sending" | "failed" | "confirmed";
-  unconfirmed: boolean;
+  readonly requestKey: string;
+  readonly state: "queued" | "sending" | "failed" | "confirmed";
+  readonly unconfirmed: boolean;
   readonly text: string;
-  postedMessage: string | null;
+  readonly postedMessage: string | null;
+}
+type MutablePendingItem = { -readonly [Key in keyof PendingItem]: PendingItem[Key] };
+/** A restoration snapshot cannot change the queue's identity or uncertainty. */
+export interface Restoration {
+  readonly key: string;
+  readonly text: string | null;
+  readonly unconfirmed: boolean;
 }
 /** A response's routing is consumed once, rather than retained on the item. */
 export interface PostedMessage { id: string; topic: string; seq: bigint }
@@ -23,9 +30,10 @@ export function holdsReload(items: readonly PendingItem[]): boolean {
 
 /** Creates page-local transitions; changed runs synchronously after each mutation. */
 export function createComposerQueue(now: () => number, newKey: () => string, changed: () => void) {
-  const items: PendingItem[] = [];
+  const items: MutablePendingItem[] = [];
   // A removed form's request still blocks dispatch until its completion.
-  const requests = new Set<PendingItem>();
+  const requests = new Set<MutablePendingItem>();
+  const refusedStatuses = [400, 404, 413, 422, 429];
   const removedKeyRetention = 5 * 60 * 1000;
   const holds = new Map<string, { key: string; at: number }>();
   let restored: { key: string; text: string | null; unconfirmed: boolean } | null = null;
@@ -43,7 +51,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   };
   return {
     get items(): readonly PendingItem[] { return items; },
-    get restoration(): Readonly<typeof restored> { return restored; },
+    get restoration(): Restoration | null { return restored ? { ...restored } : null; },
     changeText,
     restore(key: string, text: string) { restored = { key, text, unconfirmed: true }; },
     sent(key: string) {
@@ -52,12 +60,14 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     },
     ordinarySettled(status: number) {
       if (restored && (status === 200 || status === 409)) return release();
-      if (restored && ![400, 404, 413, 422, 429].includes(status)) restored.unconfirmed = true;
+      if (restored && !refusedStatuses.includes(status)) restored.unconfirmed = true;
       return undefined;
     },
     pagehide() { holds.clear(); },
     expire,
     admit(text: string, place: string, ordinaryBusy = false, quoted = false): PendingItem | "busy" | "capacity" | "ordinary" {
+      // The adapter must first call changeText and apply its fresh key to the
+      // composer, including before busy/ordinary results (legacy submit order).
       changeText(text);
       if (items.length >= 10) return "capacity";
       if (ordinaryBusy) return "busy";
@@ -68,7 +78,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       const hold = holds.get(id);
       holds.delete(id);
       const key = restored?.key || hold?.key || newKey();
-      const item: PendingItem = { draftKey: key, requestKey: key, state: "queued", text,
+      const item: MutablePendingItem = { draftKey: key, requestKey: key, state: "queued", text,
         unconfirmed: hold?.key === key || Boolean(restored?.key === key && restored.unconfirmed), postedMessage: null };
       restored = null;
       items.push(item);
@@ -81,10 +91,11 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       if (item) { item.state = "sending"; requests.add(item); changed(); }
       return item;
     },
-    settle(item: PendingItem, status: number, posted?: PostedMessage, view: Delivery = { ids: [] }) {
-      if (item.state !== "sending" || !requests.has(item)) return undefined;
+    settle(pending: PendingItem, status: number, posted?: PostedMessage, view: Delivery = { ids: [] }) {
+      const item = [...requests].find(item => item === pending);
+      if (!item || item.state !== "sending") return undefined;
       requests.delete(item);
-      let notice = "";
+      let notice: "" | "repeat" | "notSent" | "stillUnconfirmed" | "unconfirmed" = "";
       if (status === 200) {
         item.state = "confirmed";
         item.unconfirmed = false;
@@ -97,15 +108,16 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
           item.unconfirmed = false;
           item.requestKey = newKey();
           notice = "repeat";
-        } else if ([400, 404, 413, 422, 429].includes(status)) {
+        } else if (refusedStatuses.includes(status)) {
           notice = item.unconfirmed ? "stillUnconfirmed" : "notSent";
         } else { item.unconfirmed = true; notice = "unconfirmed"; }
       }
       changed();
       return notice;
     },
-    retry(item: PendingItem): boolean {
-      if (!items.includes(item) || item.state !== "failed") return false;
+    retry(pending: PendingItem): boolean {
+      const item = items.find(item => item === pending);
+      if (!item || item.state !== "failed") return false;
       if (!item.unconfirmed) { erase(item); items.push(item); }
       item.state = "queued";
       changed();

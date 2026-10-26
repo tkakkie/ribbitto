@@ -251,3 +251,51 @@ test('notifications expose Retry and preserve a hold while another item remains'
   q.dispatch(); q.settle(b, 200, posted);
   assert.deepEqual(seen.at(-1), [false, ['confirmed']]);
 });
+
+test('Remove after 409 rotation reports original draftKey and holds rotated requestKey', () => {
+  const { q } = fixture();
+  const text = ' raw\r\ntext ', place = 'feed';
+  const item = q.admit(text, place), draftKey = item.draftKey;
+  assert.equal(q.dispatch(), item);
+  assert.equal(q.settle(item, 409), 'repeat');
+  const requestKey = item.requestKey;
+  assert.notEqual(requestKey, draftKey);
+  assert.equal(q.retry(item), true);
+  assert.equal(q.dispatch(), item);
+  assert.equal(q.settle(item, 500), 'unconfirmed');
+  assert.equal(q.remove(item, place), draftKey);
+  const resend = q.admit(text, place);
+  assert.equal(resend.requestKey, requestKey);
+  assert.equal(resend.unconfirmed, true);
+});
+
+for (const busy of [false, true]) test(`adapter applies released restoration key before admission, busy=${busy}`, () => {
+  const { q } = fixture();
+  q.restore('saved', 'body');
+  const fresh = q.changeText('');
+  assert.equal(fresh, 'key-1');
+  assert.equal(q.admit('', 'feed', busy), busy ? 'busy' : 'ordinary');
+  assert.equal(q.restoration, null);
+});
+
+test('restoration snapshots isolate callers and retain their original uncertainty', () => {
+  const { q } = fixture(), item = failed(q, 400);
+  q.edit(item, '', false);
+  const before = q.restoration, changed = q.restoration;
+  changed.key = 'other';
+  changed.text = 'other';
+  changed.unconfirmed = true;
+  assert.deepEqual(q.restoration, { key: item.requestKey, text: null, unconfirmed: false });
+  q.ordinarySettled(500);
+  assert.equal(before.unconfirmed, false);
+  assert.equal(q.restoration.unconfirmed, true);
+});
+
+for (const status of [404, 413]) {
+  for (const uncertain of [false, true]) test(`ordinary refused ${status} preserves uncertainty=${uncertain}`, () => {
+    const { q } = fixture(), item = failed(q, uncertain ? 500 : 400);
+    q.edit(item, '', false);
+    assert.equal(q.ordinarySettled(status), undefined);
+    assert.deepEqual(q.restoration, { key: item.requestKey, text: null, unconfirmed: uncertain });
+  });
+}

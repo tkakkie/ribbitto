@@ -11,7 +11,7 @@ when available; development-machine runs decide until then.
 ## Host measurements
 
 Approved performance measurements are the only standing exception to the
-[handoff rule](running-other-ai.md#handoff-of-another-ais-code).
+[handoff rule](running-other-ai.md#handoff-of-another-ais-code) (maintainer, #1308).
 After handoff, builds, tests and `make dev` stay in CI or sandboxes.
 All conditions apply:
 

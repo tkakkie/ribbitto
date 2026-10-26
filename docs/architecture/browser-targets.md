@@ -27,8 +27,16 @@ maintainer on 2026-10-20 (#1406).
    [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
    ([`web-layers.md`](web-layers.md#progressive-enhancement)), and no core
    fallback may depend on JavaScript alone.
-4. **Build target agreement.** The build target chosen by #1356 (pending;
-   not decided here) must agree with this document.
+4. **Build target.** The initial classic IIFE bundles built by `tools/webbuild`
+   (#1411) use ES2017 as the syntax target, approved by the maintainer on
+   2026-10-26 because its syntax is conservative for the latest-two target
+   browsers and iOS generations listed above.
+   This is a syntax floor only: browser verification stays in the status table
+   below and the browser check of the served bundle delivered by #1820, with #1426
+   defining the verification levels.
+   It provides no Web API polyfills; rule 2 still applies API by API.
+   A later target change needs a recorded reason and must keep this document
+   and [`web-toolchain.md`](web-toolchain.md) in agreement.
 5. ***Supported* is not *tested*.** This document records, per browser,
    what is verified and what is not; a target browser that has not been
    verified is recorded as unverified, never as passing.

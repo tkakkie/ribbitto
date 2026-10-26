@@ -2,6 +2,9 @@
 /bin/
 /ribbitto
 /dist/
+/web/static/dist/
+# Builder staging directory left by a killed run.
+/web/static/.dist-*/
 /node_modules/
 
 # Local configuration and secrets

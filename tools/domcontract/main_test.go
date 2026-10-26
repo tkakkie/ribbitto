@@ -19,7 +19,7 @@ const (
  //dom:event ChangedDetail
  Changed = "changed"
 )
-type ChangedDetail struct { Text string; Count int64; Ready bool; Ratio float64 }
+type ChangedDetail struct { Key string ` + "`json:\"key,omitempty\"`" + `; Text string; Count int64; Ready bool; Ratio float64 }
 `
 
 func write(t *testing.T, path, text string) {
@@ -102,6 +102,44 @@ func TestInvalidDefinitions(t *testing.T) {
 	}
 }
 
+func TestPayloadNames(t *testing.T) {
+	output, err := generate([]byte(synthetic))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output, `"key": string;`) || strings.Contains(output, `"Key":`) || !strings.Contains(output, `"Text": string;`) {
+		t.Fatalf("tagged and untagged names: %s", output)
+	}
+	for _, tag := range []string{"", "-", ",omitempty"} {
+		output, err := generate([]byte(strings.ReplaceAll(synthetic, "key,omitempty", tag)))
+		if err != nil || !strings.Contains(output, `"Key": string;`) {
+			t.Fatalf("fallback %q: %v: %s", tag, err, output)
+		}
+	}
+	duplicate := strings.ReplaceAll(synthetic, "Text string", "key string")
+	if _, err := generate([]byte(duplicate)); err == nil || !strings.Contains(err.Error(), `duplicate TypeScript payload field "key"`) {
+		t.Fatalf("duplicate payload names: %v", err)
+	}
+}
+
+func TestDirectiveAttachment(t *testing.T) {
+	if _, err := generate([]byte("package view\n//dom:id HTMLDivElement\nconst ( Undirected = \"undirected\" )")); err == nil || !strings.Contains(err.Error(), "DOM directive on const group") {
+		t.Fatalf("group directive must fail clearly: %v", err)
+	}
+	output, err := generate([]byte("package view\nconst (\nUndirected = \"undirected\"\nDirected = \"directed\" //dom:id HTMLDivElement\n)\n//dom:id HTMLFormElement\nconst Standalone = \"standalone\""))
+	if err != nil || strings.Contains(output, "Undirected") || !strings.Contains(output, "getDirected") || !strings.Contains(output, "getStandalone") {
+		t.Fatalf("constant comments: %v: %s", err, output)
+	}
+}
+
+func TestElementNames(t *testing.T) {
+	for name, want := range map[string]string{"OrganizationStreamID": "OrganizationStream", "ChannelDOMPrefix": "ChannelEntry", "TopicDOMPrefix": "TopicEntry", "LinkChannelDOMPrefix": "ChannelLink", "LinkTopicDOMPrefix": "TopicLink", "Form": "Form"} {
+		if got := elementName(name); got != want {
+			t.Errorf("%s: %s, want %s", name, got, want)
+		}
+	}
+}
+
 func TestRealContractTypeScript(t *testing.T) {
 	// Like webtypes.TestRealTypeScript, only the explicit CI job may start Node.
 	if os.Getenv("RIBBITTO_REQUIRE_NODE") != "1" {
@@ -118,26 +156,33 @@ func TestRealContractTypeScript(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, source, good string
-		bad                []string
+		bad                []struct{ source, code string }
 	}{
 		{"synthetic", synthetic, `const form: HTMLFormElement | null = c.getForm();
 const item: HTMLLIElement | null = c.getItem("abc");
-c.Form; c.FormSelector(); c.Item; c.ItemID("abc"); c.ItemSelector("abc");
+c.Form; c.formSelector(); c.Item; c.itemID("abc"); c.itemSelector("abc");
 c.readAttribute(document.body,c.Value); c.writeAttribute(document.body,c.Value,"1");
-c.dispatchChanged(document,{Text:"ok",Count:1,Ready:true,Ratio:0.5});
-c.listenChanged(document,detail => { const text: string = detail.Text; const count: number = detail.Count; const ready: boolean = detail.Ready; });`, []string{
-			`c.getUnknown();`, `c.dispatchChanged(document,{Text:"ok",Count:"wrong",Ready:true,Ratio:1});`,
-			`const wrong: HTMLInputElement | null = c.getForm();`, `c.readAttribute(document.body,"data-vaule");`,
+c.dispatchChanged(document,{key:"draft",Text:"ok",Count:1,Ready:true,Ratio:0.5});
+c.listenChanged(document,detail => { const key: string = detail.key; const text: string = detail.Text; const count: number = detail.Count; const ready: boolean = detail.Ready; });`, []struct{ source, code string }{
+			{`c.getUnknown();`, "TS2339"},
+			{`c.dispatchChanged(document,{key:"draft",Text:"ok",Count:"wrong",Ready:true,Ratio:1});`, "TS2322"},
+			{`const wrong: HTMLInputElement | null = c.getForm();`, "TS2322"},
+			{`c.readAttribute(document.body,"data-vaule");`, "TS2345"},
+			// Case-only misspellings may include a suggestion (TS2561) instead of TS2353.
+			{`c.dispatchChanged(document,{Key:"draft",Text:"ok",Count:1,Ready:true,Ratio:1});`, "TS2353|TS2561"},
 		}},
-		{"sidebar", string(sidebar), `const form: HTMLFormElement | null = c.getSidebarResyncID();
-const list: HTMLUListElement | null = c.getSidebarChannelsID();
-c.OrganizationStreamID; c.OrganizationStreamIDSelector(); c.StreamSinkID; c.SidebarTopicsID; c.TopicHeadingCountID;
-c.ChannelDOMPrefixID("abc"); c.TopicDOMPrefixSelector("abc"); c.getLinkChannelDOMPrefix("abc"); c.getLinkTopicDOMPrefix("abc");
+		{"sidebar", string(sidebar), `const form: HTMLFormElement | null = c.getSidebarResync();
+const list: HTMLUListElement | null = c.getSidebarChannels();
+c.OrganizationStreamID; c.organizationStreamSelector(); c.StreamSinkID; c.SidebarTopicsID; c.TopicHeadingCountID;
+c.channelEntryID("abc"); c.topicEntrySelector("abc"); c.getChannelLink("abc"); c.getTopicLink("abc");
 c.readAttribute(document.body,c.MemberAttribute); c.writeAttribute(document.body,c.UnreadCountAttribute,"1");
 c.SidebarTopicAttribute; c.SnapshotSeqAttribute; c.SidebarResyncEvent;
-c.dispatchSidebarResyncEvent(document,{}); c.listenSidebarResyncEvent(document,detail => { const payload: c.SidebarResyncDetail = detail; });`, []string{
-			`c.getUnknown();`, `c.dispatchSidebarResyncEvent(document,{unexpected:"wrong"});`,
-			`const wrong: HTMLInputElement | null = c.getSidebarResyncID();`, `c.readAttribute(document.body,"data-memebr");`,
+c.dispatchSidebarResyncEvent(document,{}); c.listenSidebarResyncEvent(document,detail => { const payload: c.SidebarResyncDetail = detail; });`, []struct{ source, code string }{
+			{`c.getUnknown();`, "TS2339"},
+			// Record<string, never> has an index signature: an extra value violates never.
+			{`c.dispatchSidebarResyncEvent(document,{unexpected:"wrong"});`, "TS2322"},
+			{`const wrong: HTMLInputElement | null = c.getSidebarResync();`, "TS2322"},
+			{`c.readAttribute(document.body,"data-memebr");`, "TS2345"},
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -147,16 +192,26 @@ c.dispatchSidebarResyncEvent(document,{}); c.listenSidebarResyncEvent(document,d
 				t.Fatal(err)
 			}
 			write(t, filepath.Join(dir, "contracts.gen.ts"), output)
-			for i, consumer := range append([]string{tc.good}, tc.bad...) {
+			for i, consumer := range append([]struct{ source, code string }{{source: tc.good}}, tc.bad...) {
 				file := filepath.Join(dir, "consumer.ts")
-				write(t, file, "import * as c from './contracts.gen.ts';\n"+consumer+"\n")
+				write(t, file, "import * as c from './contracts.gen.ts';\n"+consumer.source+"\n")
 				cmd := exec.Command("go", "run", "../webtypes", "files", root, file)
 				out, err := cmd.CombinedOutput()
 				if i == 0 && err != nil {
 					t.Fatalf("valid consumer: %v: %s", err, out)
 				}
-				if i > 0 && (err == nil || !strings.Contains(string(out), "error TS")) {
-					t.Fatalf("negative consumer %d: %v: %s", i, err, out)
+				if i > 0 {
+					matched := ""
+					for _, code := range strings.Split(consumer.code, "|") {
+						if strings.Contains(string(out), "error "+code+":") {
+							matched = code
+							break
+						}
+					}
+					if err == nil || matched == "" {
+						t.Fatalf("negative consumer %d expected %s for %s: %v: %s", i, consumer.code, consumer.source, err, out)
+					}
+					t.Logf("negative consumer %d matched %s: %s", i, matched, out)
 				}
 			}
 		})

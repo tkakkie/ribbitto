@@ -67,7 +67,7 @@ checks until migrated.
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,
   custom event names and payload fields/types; a Go generator under `tools/`,
   reached by `go generate`, writes the committed generated file
-  `web/src/<contracts.gen.ts>` that the [toolchain page](web-toolchain.md)
+  `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
   names, with constants, types and typed accessors (#1413; composer #1823). A
   module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and

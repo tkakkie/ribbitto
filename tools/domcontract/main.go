@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -63,16 +64,26 @@ func generate(source []byte) (string, error) {
 		if !ok || group.Tok != token.CONST {
 			continue
 		}
+		if group.Lparen.IsValid() && group.Doc != nil {
+			for _, comment := range group.Doc.List {
+				if strings.HasPrefix(comment.Text, "//dom:") {
+					return "", fmt.Errorf("DOM directive on const group: attach it to one constant")
+				}
+			}
+		}
 		for _, spec := range group.Specs {
 			value := spec.(*ast.ValueSpec)
 			doc := value.Doc
-			if doc == nil {
-				doc = group.Doc
+			if !group.Lparen.IsValid() {
+				doc = group.Doc // A standalone const's own doc lives on its declaration.
 			}
-			if doc == nil {
-				continue
+			var comments []*ast.Comment
+			for _, attached := range []*ast.CommentGroup{doc, value.Comment} {
+				if attached != nil {
+					comments = append(comments, attached.List...)
+				}
 			}
-			for _, comment := range doc.List {
+			for _, comment := range comments {
 				directive, ok := strings.CutPrefix(comment.Text, "//dom:")
 				if !ok {
 					continue
@@ -96,19 +107,21 @@ func generate(source []byte) (string, error) {
 					if len(parts) != 2 || !strings.HasPrefix(parts[1], "HTML") || !strings.HasSuffix(parts[1], "Element") {
 						return "", fmt.Errorf("%s needs a DOM element type", name)
 					}
+					base := elementName(name)
+					lower := strings.ToLower(base[:1]) + base[1:]
 					args, id := "", name
 					if parts[0] == "suffix" {
 						args = "suffix: string"
-						fmt.Fprintf(&out, "export const %sID = (%s): string => %s + suffix;\n", name, args, name)
-						id = name + "ID(suffix)"
+						fmt.Fprintf(&out, "export const %sID = (%s): string => %s + suffix;\n", lower, args, name)
+						id = lower + "ID(suffix)"
 					}
-					fmt.Fprintf(&out, "export const %sSelector = (%s): string => \"#\" + %s;\n", name, args, id)
+					fmt.Fprintf(&out, "export const %sSelector = (%s): string => \"#\" + %s;\n", lower, args, id)
 					call := ""
 					if args != "" {
 						args += ", "
 						call = "suffix"
 					}
-					fmt.Fprintf(&out, "export const get%s = (%sroot: ParentNode = document): %s | null => root.querySelector<%s>(%sSelector(%s));\n\n", name, args, parts[1], parts[1], name, call)
+					fmt.Fprintf(&out, "export const get%s = (%sroot: ParentNode = document): %s | null => root.querySelector<%s>(%sSelector(%s));\n\n", base, args, parts[1], parts[1], lower, call)
 				case "attribute":
 					if len(parts) != 1 || !strings.HasPrefix(text, "data-") {
 						return "", fmt.Errorf("invalid attribute %s", name)
@@ -138,6 +151,17 @@ func generate(source []byte) (string, error) {
 	return out.String(), nil
 }
 
+// elementName keeps Go's storage suffixes out of the script-facing helpers.
+func elementName(name string) string {
+	if base, ok := strings.CutSuffix(name, "DOMPrefix"); ok {
+		if link, ok := strings.CutPrefix(base, "Link"); ok {
+			return link + "Link"
+		}
+		return base + "Entry"
+	}
+	return strings.TrimSuffix(name, "ID")
+}
+
 func payloadType(file *ast.File, name string) (string, error) {
 	for _, decl := range file.Decls {
 		group, ok := decl.(*ast.GenDecl)
@@ -158,6 +182,7 @@ func payloadType(file *ast.File, name string) (string, error) {
 			}
 			var out strings.Builder
 			out.WriteString("{")
+			seen := make(map[string]bool)
 			for _, field := range fields.Fields.List {
 				kind, ok := field.Type.(*ast.Ident)
 				if !ok || len(field.Names) == 0 {
@@ -168,8 +193,24 @@ func payloadType(file *ast.File, name string) (string, error) {
 				if !ok {
 					return "", fmt.Errorf("unsupported payload type %s", kind.Name)
 				}
+				tagName := ""
+				if field.Tag != nil {
+					tag, err := strconv.Unquote(field.Tag.Value)
+					if err != nil {
+						return "", fmt.Errorf("reading payload tag in %s: %w", name, err)
+					}
+					tagName, _, _ = strings.Cut(reflect.StructTag(tag).Get("json"), ",")
+				}
 				for _, fieldName := range field.Names {
-					fmt.Fprintf(&out, " %s: %s;", fieldName.Name, ts)
+					tsName := fieldName.Name
+					if tagName != "" && tagName != "-" {
+						tsName = tagName
+					}
+					if seen[tsName] {
+						return "", fmt.Errorf("duplicate TypeScript payload field %q in %s", tsName, name)
+					}
+					seen[tsName] = true
+					fmt.Fprintf(&out, " %q: %s;", tsName, ts)
 				}
 			}
 			out.WriteString(" }")

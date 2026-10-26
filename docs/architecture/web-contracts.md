@@ -61,13 +61,20 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 `internal/web/view/contracts.go` owns the sidebar's ids, dynamic id prefixes,
 attribute names and custom events. Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:attribute`, or
-`//dom:event` and its Go payload struct name. Payload fields support string,
-bool and numeric scalars. Use the constant in templ, then run
-`go generate ./internal/web/view` (also part of `make generate`).
+`//dom:event` and its Go payload struct name. Directives belong to a constant's
+own doc/line comment, never a const group. Payloads stay scalar (string, bool,
+numbers). Fields use the `json:"name"` tag before any comma, otherwise the Go
+name; empty names and `-` also fall back. Duplicate resulting names fail.
+Tags preserve camelCase script payloads: exported Go fields cannot be camelCase,
+and unexported fields on unused payload structs trip the `unused` lint.
+Use the constant in templ, then run `go generate ./internal/web/view`
+(also part of `make generate`).
 
 The committed `web/src/contracts.gen.ts` supplies names, selectors, dynamic id
 helpers and typed element, attribute and event accessors; `make check-tools`
-rejects drift. Modules still validate attribute values and external event
-payloads at runtime. The lists above remain the human-readable contract.
+rejects drift. Element helpers drop trailing `ID`; `DOMPrefix` becomes `Entry`,
+or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
+selectors `nameSelector`, and dynamic ids `nameID`.
+Modules still validate attribute values and external event payloads at runtime. The lists above remain the human-readable contract.
 Coverage expands with conversions; #1823 adds the composer and #1822 rejects
 stray literals. Unconverted scripts keep their existing strings.

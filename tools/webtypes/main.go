@@ -136,7 +136,7 @@ func run(mode, root string, files ...string) error {
 		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
 	} else if mode == "files" {
 		// Temporary contract consumers use the same pins and process policy as the project check.
-		args := append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig", "--strict", "--noEmit", "--erasableSyntaxOnly", "--allowImportingTsExtensions"}, files...)
+		args := append(append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig"}, fileFlags()...), files...)
 		cmd = command(root, "node", args...)
 	} else {
 		cmd = command(root, "node", "node_modules/typescript/bin/tsc", "--project", "tsconfig.json")
@@ -146,4 +146,9 @@ func run(mode, root string, files ...string) error {
 		return fmt.Errorf("webtypes %s: %w", mode, err)
 	}
 	return nil
+}
+
+// fileFlags mirrors tsconfig.json for consumers outside the project's include.
+func fileFlags() []string {
+	return []string{"--strict", "--noEmit", "--erasableSyntaxOnly", "--allowImportingTsExtensions"}
 }

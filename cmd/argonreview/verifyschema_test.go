@@ -8,7 +8,7 @@ import (
 
 func TestVerifyArguments(t *testing.T) {
 	for _, raw := range []string{
-		`{"check":"generated","package":"./..."}`, `{"check":"test","package":"./..."}`, `{"check":"build","package":"."}`,
+		`{"check":"test-db","package":"./internal/org/orgpg"}`, `{"check":"generated","package":"./..."}`, `{"check":"test","package":"./..."}`, `{"check":"build","package":"."}`,
 		`{"check":"vet","package":"./cmd/argonreview"}`, `{"check":"test","package":"./internal/web/..."}`,
 		`{"check":"te\u0073t","pack\u0061ge":"./..."}`,
 		`{"check":"test","package":"./` + strings.Repeat("a", 198) + `"}`,
@@ -18,6 +18,9 @@ func TestVerifyArguments(t *testing.T) {
 		}
 	}
 	for _, raw := range []string{
+		`{"check":"test-db","package":"-x"}`, `{"check":"test-db","package":"/tmp/x"}`, `{"check":"test-db","package":".."}`,
+		`{"check":"test-db","package":"./...","extra":1}`, `{"check":"test-db","package":null}`,
+		`{"check":null,"package":"./internal/org/orgpg"}`,
 		`{"check":"generated","package":"./internal/web"}`, `{"check":"generated","package":"."}`, `{"check":"generated","package":"-x"}`, `null`, `[]`, `"object"`, `{}`, `{"check":"test"}`, `{"package":"."}`,
 		`{"check":null,"package":"."}`, `{"check":1,"package":"."}`, `{"check":true,"package":"."}`,
 		`{"check":[],"package":"."}`, `{"check":{},"package":"."}`,
@@ -84,7 +87,7 @@ func TestVerifySchema(t *testing.T) {
 		t.Fatal("required arguments changed")
 	}
 	checks := got.Properties[verifyCheckProperty]
-	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test,generated" {
+	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test,generated,test-db" {
 		t.Fatalf("checks: %+v", checks)
 	}
 	for _, check := range checks.Enum {

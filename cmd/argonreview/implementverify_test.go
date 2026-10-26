@@ -36,6 +36,13 @@ func implementVerifyArgumentsCases() []struct {
 		name, raw string
 		allow     bool
 	}{
+		{"test-db", `{"check":"test-db","package":"./internal/org/orgpg"}`, true},
+		{"test-db flag", `{"check":"test-db","package":"-x"}`, false},
+		{"test-db absolute", `{"check":"test-db","package":"/tmp/x"}`, false},
+		{"test-db parent", `{"check":"test-db","package":".."}`, false},
+		{"test-db extra", `{"check":"test-db","package":"./...","extra":1}`, false},
+		{"test-db null package", `{"check":"test-db","package":null}`, false},
+		{"test-db null check", `{"check":null,"package":"./internal/org/orgpg"}`, false},
 		{"generated", `{"check":"generated","package":"./..."}`, true},
 		{"generated package", `{"check":"generated","package":"./internal/web"}`, false},
 		{"generated dot", `{"check":"generated","package":"."}`, false},
@@ -51,7 +58,7 @@ func implementVerifyArgumentsCases() []struct {
 		{"case package key", `{"check":"test","Package":"./..."}`, false},
 		{"package at length limit", `{"check":"test","package":"./` + strings.Repeat("a", 198) + `"}`, true},
 	}
-	for _, check := range []string{"build", "vet", "test"} {
+	for _, check := range []string{"build", "vet", "test", "test-db"} {
 		for _, pattern := range []string{".", "./...", "./cmd/argonreview", "./cmd/...", "./a_b/c-d"} {
 			cases = append(cases, struct {
 				name, raw string
@@ -178,7 +185,7 @@ func implementVerifyRealInput(t *testing.T, line int, check string) string {
 
 func TestImplementVerifyRealInput(t *testing.T) {
 	_, dir := implementGuardFixture(t)
-	for _, check := range []string{"build", "vet", "test"} {
+	for _, check := range []string{"build", "vet", "test", "test-db"} {
 		t.Run(check, func(t *testing.T) {
 			input := implementVerifyRealInput(t, 1, check)
 			implementVerifyCheck(t, dir, input, true)

@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	// The recipe pins the base; runs and sweeps pin the built image recorded on #1696.
+	// The recipe pins the base; runs and sweeps pin the built image recorded on #1697.
 	containerBaseImage      = "golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261"
-	containerVerifyImage    = "sha256:acb981ac1cf26d383cfe4a4791d5ca5ecd4507e594992585230b0c7d7e4768d1"
+	containerVerifyImage    = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
 	containerGoVersion      = "1.27.3"
 	containerTemplVersion   = "v0.3.1070"
 	containerSQLCVersion    = "v1.31.1"
@@ -77,6 +77,8 @@ esac
 func containerCheckScope(check string) string {
 	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 	switch check {
+	case "test-db":
+		return "Race detector was not run. Cgo-dependent packages and browser tests are CI-only. Ran on regenerated sources with PostgreSQL 18; the generated check covers committed generated files. Measurement skips stay NOT VERIFIED until the allowlist lands in the next pull request of #1697. test-db is merged but not in force until #1700. Whether ./... fits the unchanged container limits is unestablished."
 	case "generated":
 		return "Checks templ, sqlc and Tailwind output against committed files, plus templ fmt and gofmt, in a copy. Report only: no write-back; nothing written to the worktree. tbls docs/schema, docs/dependencies.md, the API manifest, golangci-lint, docscheck, languagecheck, race detector, database and browser tests stay CI-only."
 	case "build", "vet", "test":
@@ -93,8 +95,8 @@ func validateContainerCheck(tree, check, pattern string) error {
 	if tree == "" || strings.ContainsRune(tree, 0) {
 		return errors.New("a worktree path is required")
 	}
-	if check != "build" && check != "vet" && check != "test" && check != "generated" {
-		return errors.New("check must be build, vet, test or generated")
+	if check != "build" && check != "vet" && check != "test" && check != "generated" && check != "test-db" {
+		return errors.New("check must be build, vet, test, generated or test-db")
 	}
 	if check == "generated" && pattern != "./..." {
 		return errors.New("generated requires the whole-tree package (./...)")
@@ -124,11 +126,17 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
 		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
 		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
-		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
-		"--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
-		containerVerifyImage, "sh", "-c"}
+		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go"}
+	if check == "test-db" {
+		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
+	}
+	args = append(args, "--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
+		containerVerifyImage, "sh", "-c")
 	if check == "generated" {
 		return append(args, containerGeneratedScript)
+	}
+	if check == "test-db" {
+		return append(args, containerTestDBScript, "sh", pattern)
 	}
 	if check == "writeback" {
 		return append(args, containerGenerateScript)
@@ -197,7 +205,7 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 
 func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 3 || validateContainerCheck(args[0], args[1], args[2]) != nil {
-		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated> <package-pattern>")
+		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern>")
 		return 2
 	}
 	info, ok := debug.ReadBuildInfo()
@@ -338,7 +346,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		return "", err
 	}
 	verdict := commandVerdict(code, err, output.over)
-	if check == "test" {
+	if check == "test" || check == "test-db" {
 		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)
 	}
 	if check == "generated" {

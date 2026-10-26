@@ -14,7 +14,7 @@ import (
 )
 
 func TestContainerGenerateBoundary(t *testing.T) {
-	if !reflect.DeepEqual(verifyCheckNames(), []string{"build", "vet", "test", "generated"}) {
+	if !reflect.DeepEqual(verifyCheckNames(), []string{"build", "vet", "test", "generated", "test-db"}) {
 		t.Fatal("verify names changed")
 	}
 	schema := verifyInputSchema()["properties"].(map[string]any)[verifyCheckProperty].(map[string]any)["enum"]

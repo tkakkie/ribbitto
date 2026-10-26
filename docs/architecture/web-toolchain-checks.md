@@ -35,8 +35,8 @@ required.
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
-exactly one file per stem. Exempt paths are the vendor category
-`web/static/vendor/` (three third-party scripts pinned by `vendor_test.go`)
+exactly one file per stem. Exempt paths are the three named vendor scripts
+in `web/static/vendor/` (pinned by `vendor_test.go`)
 and direct `web/test/*.test.mjs` harnesses. On conversion, delete the old
 script and its list line together; version bumps keep the stem. The list may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
@@ -44,7 +44,9 @@ base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule
 prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
 exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true` and no
-`exclude` or `files`. Regex checks reject comment `@ts-nocheck` in every tracked
+`exclude` or `files`; checked keys are case-sensitive. It rejects `extends`
+to prevent inherited `exclude` or `files` from narrowing the inputs.
+Regex checks reject comment `@ts-nocheck` in every tracked
 `.ts` (including generated files), inline script tags without `src` (any case)
 and templ script components in every tracked `.templ`. These checks are not
 parsers; computed imports and re-exports of untyped data remain for review.

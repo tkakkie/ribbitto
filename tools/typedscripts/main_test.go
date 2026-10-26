@@ -21,6 +21,16 @@ func TestRules(t *testing.T) {
 		{"stale", "web/static/example-v1.js", "", "", "0 script files"},
 		{"exclude", "tsconfig.json", config, strings.Replace(config, `"include"`, `"exclude":[],"include"`, 1), "exact typed include"},
 		{"files", "tsconfig.json", config, strings.Replace(config, `"include"`, `"files":[],"include"`, 1), "exact typed include"},
+		{"extends", "tsconfig.json", config, strings.Replace(config, `"include"`, `"extends":"./base.json","include"`, 1), "exact typed include"},
+		{"case shadow include", "tsconfig.json", config, strings.Replace(config, `"include":["web/src/**/*.ts"]`, `"include":["web/src/one.ts"],"Include":["web/src/**/*.ts"]`, 1), "exact typed include"},
+		{"case shadow exact include", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Include":["web/src/**/*.ts"],"include"`, 1), "exact typed include"},
+		{"case include", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Include"`, 1), "exact typed include"},
+		{"case exclude", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Exclude":[],"include"`, 1), "exact typed include"},
+		{"case files", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Files":[],"include"`, 1), "exact typed include"},
+		{"case strict", "tsconfig.json", config, strings.Replace(config, `"strict"`, `"Strict"`, 1), "exact typed include"},
+		{"case noEmit", "tsconfig.json", config, strings.Replace(config, `"noEmit"`, `"NoEmit"`, 1), "exact typed include"},
+		{"case shadow strict", "tsconfig.json", config, strings.Replace(config, `"strict"`, `"Strict":true,"strict"`, 1), "exact typed include"},
+		{"case shadow noEmit", "tsconfig.json", config, strings.Replace(config, `"noEmit"`, `"NoEmit":true,"noEmit"`, 1), "exact typed include"},
 		{"missing include", "tsconfig.json", config, strings.Replace(config, `,"include":["web/src/**/*.ts"]`, "", 1), "exact typed include"},
 		{"narrow include", "tsconfig.json", config, strings.Replace(config, "**/*.ts", "one.ts", 1), "exact typed include"},
 		{"wide include", "tsconfig.json", config, strings.Replace(config, "web/src/**/*.ts", "**/*.ts", 1), "exact typed include"},
@@ -55,7 +65,7 @@ func TestRules(t *testing.T) {
 }
 
 func TestScriptPaths(t *testing.T) {
-	for _, name := range []string{"web/static/new-v1.js", "elsewhere.js", "web/src/one.mjs", "elsewhere.cjs", "elsewhere.jsx", "web/test/nested/one.test.mjs", "web/test/one.mjs", "web/static/nested/example-v1.js", "web/static/example-v2.js"} {
+	for _, name := range []string{"web/static/new-v1.js", "elsewhere.js", "web/src/one.mjs", "elsewhere.cjs", "elsewhere.jsx", "web/test/nested/one.test.mjs", "web/test/one.mjs", "web/static/nested/example-v1.js", "web/static/example-v2.js", "web/static/vendor/x.js"} {
 		t.Run(name, func(t *testing.T) {
 			files := fixture()
 			if got := inspect(files); len(got) != 0 {
@@ -106,6 +116,19 @@ func write(t *testing.T, root, name, text string) {
 	}
 }
 
+func TestGitOutput(t *testing.T) {
+	t.Setenv("LC_ALL", "C")
+	root := t.TempDir()
+	if _, err := git(root, "rev-parse", "--git-dir"); err == nil || !strings.Contains(err.Error(), "not a git repository") {
+		t.Fatalf("git failure lost stderr: %v", err)
+	}
+	// A successful alias emits a warning without relying on local git settings.
+	out, err := git(root, "-c", `alias.typedscripts-probe=!printf 'tracked\0'; printf 'git warning\n' >&2`, "typedscripts-probe")
+	if err != nil || out != "tracked\x00" {
+		t.Fatalf("git stdout includes stderr: %q, %v", out, err)
+	}
+}
+
 func TestGitAndBase(t *testing.T) {
 	root := t.TempDir()
 	g := func(args ...string) string {
@@ -139,6 +162,23 @@ func TestGitAndBase(t *testing.T) {
 	}
 	g("update-ref", "refs/remotes/origin/main", "HEAD")
 	g("commit", "--allow-empty", "-qm", "after list")
+	t.Run("legacy growth twins", func(t *testing.T) {
+		write(t, root, listFile, "example\nextra\n")
+		write(t, root, "web/static/extra-v1.js", "")
+		g("add", "web/static/extra-v1.js")
+		for _, ci := range []bool{true, false} {
+			if err := run(root, ci, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "added legacy stem: extra") {
+				t.Errorf("growth twin (CI=%v): %v; want added legacy stem: extra", ci, err)
+			}
+		}
+		write(t, root, listFile, "example\n")
+		g("rm", "-qf", "--", "web/static/extra-v1.js")
+		for _, ci := range []bool{true, false} {
+			if err := run(root, ci, &bytes.Buffer{}); err != nil {
+				t.Errorf("restored twin (CI=%v): %v", ci, err)
+			}
+		}
+	})
 	if base, err := baseStems(root, true); err != nil || !slices.Equal(base, []string{"example"}) {
 		t.Fatalf("base list: %v, %v", base, err)
 	}

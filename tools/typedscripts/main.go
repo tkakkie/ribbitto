@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -32,9 +33,13 @@ func main() {
 func git(root string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, out)
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, exit.Stderr)
+		}
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 	return string(out), nil
 }
@@ -95,6 +100,12 @@ func additions(base, current []string) []string {
 
 var legacy = regexp.MustCompile(`^web/static/([^/]+)-v[0-9]+\.js$`)
 
+var vendorScripts = map[string]bool{
+	"web/static/vendor/htmx-2.0.7.min.js":          true,
+	"web/static/vendor/htmx-ext-sse-2.2.4.min.js":  true,
+	"web/static/vendor/idiomorph-ext-0.7.4.min.js": true,
+}
+
 func baseStems(root string, ci bool) ([]string, error) {
 	args := []string{"merge-base", "HEAD", "origin/main"}
 	if ci {
@@ -129,7 +140,7 @@ func inspect(files map[string]string) []string {
 		switch path.Ext(name) {
 		case ".js", ".mjs", ".cjs", ".jsx":
 			// Vendor is third-party code, pinned separately by vendor_test.go.
-			if strings.HasPrefix(name, "web/static/vendor/") {
+			if vendorScripts[name] {
 				continue
 			}
 			if match, _ := path.Match("web/test/*.test.mjs", name); match {
@@ -171,16 +182,38 @@ func inspect(files map[string]string) []string {
 			problems = append(problems, fmt.Sprintf("%s: %s has %d script files; want exactly one", listFile, stem, counts[stem]))
 		}
 	}
-	var config struct {
-		Include         []string
-		Exclude         json.RawMessage
-		Files           json.RawMessage
-		CompilerOptions struct{ Strict, NoEmit bool }
-	}
+	var config map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(files["tsconfig.json"]), &config); err != nil {
 		problems = append(problems, "tsconfig.json: "+err.Error())
-	} else if config.Exclude != nil || config.Files != nil || !slices.Equal(config.Include, []string{"web/src/**/*.ts"}) || !config.CompilerOptions.Strict || !config.CompilerOptions.NoEmit {
-		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; no exclude or files")
+	} else if !validConfig(config) {
+		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; no exclude, files or extends; keys are case-sensitive")
 	}
 	return problems
+}
+
+func validConfig(config map[string]json.RawMessage) bool {
+	var options map[string]json.RawMessage
+	var include []string
+	var strict, noEmit bool
+	if json.Unmarshal(config["compilerOptions"], &options) != nil ||
+		json.Unmarshal(config["include"], &include) != nil ||
+		json.Unmarshal(options["strict"], &strict) != nil ||
+		json.Unmarshal(options["noEmit"], &noEmit) != nil {
+		return false
+	}
+	return !hasCaseVariant(config, "include", "exclude", "files", "extends", "compilerOptions") &&
+		!hasCaseVariant(options, "strict", "noEmit") &&
+		config["exclude"] == nil && config["files"] == nil && config["extends"] == nil &&
+		slices.Equal(include, []string{"web/src/**/*.ts"}) && strict && noEmit
+}
+
+func hasCaseVariant(fields map[string]json.RawMessage, names ...string) bool {
+	for key := range fields {
+		for _, name := range names {
+			if key != name && strings.EqualFold(key, name) {
+				return true
+			}
+		}
+	}
+	return false
 }

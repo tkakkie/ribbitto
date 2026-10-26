@@ -1,22 +1,22 @@
 package static_test
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestApplicationJavaScript(t *testing.T) {
-	files := os.DirFS(".")
-	names, err := fs.Glob(files, "*.js")
+	files := os.DirFS("..")
+	names, err := applicationSources(files)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if len(names) == 0 {
-		t.Fatal("no application JavaScript found")
 	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
@@ -24,10 +24,39 @@ func TestApplicationJavaScript(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, finding := range checkJavaScript(name, string(source)) {
+			for _, finding := range checkJavaScript(strings.TrimPrefix(strings.TrimPrefix(name, "static/"), "src/"), string(source)) {
 				t.Errorf("%s:%d: %s (see docs/architecture/web-layers-checks.md#javascript-pattern-check)", name, finding.line, finding.rule)
 			}
 		})
+	}
+}
+
+func applicationSources(files fs.FS) ([]string, error) {
+	names, err := fs.Glob(files, "static/*.js")
+	if err != nil {
+		return nil, err
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("no application JavaScript found")
+	}
+	typed, err := fs.Glob(files, "src/*.ts")
+	return append(names, typed...), err
+}
+
+func TestApplicationSources(t *testing.T) {
+	files := fstest.MapFS{
+		"static/plain.js": {}, "static/example-v2.js": {}, "src/logic.ts": {}, "src/globals.d.ts": {},
+		"static/vendor/lib.js": {}, "src/nested/logic.ts": {},
+	}
+	got, err := applicationSources(files)
+	want := []string{"static/example-v2.js", "static/plain.js", "src/globals.d.ts", "src/logic.ts"}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("sources = %v, %v; want %v", got, err, want)
+	}
+	for _, files := range []fstest.MapFS{{}, {"src/logic.ts": {}}} {
+		if _, err := applicationSources(files); err == nil || err.Error() != "no application JavaScript found" {
+			t.Fatalf("expected no application JavaScript found, got %v", err)
+		}
 	}
 }
 
@@ -40,7 +69,8 @@ type javascriptFinding struct {
 // Keep its bounds and examples in sync with the web-layers documentation.
 func checkJavaScript(name, source string) []javascriptFinding {
 	var findings []javascriptFinding
-	if !regexp.MustCompile(`^.+-v[0-9]+\.js$`).MatchString(name) {
+	typed := strings.HasSuffix(name, ".ts")
+	if !typed && !regexp.MustCompile(`^.+-v[0-9]+\.js$`).MatchString(name) {
 		findings = append(findings, javascriptFinding{1, "versioned filename"})
 	}
 	assignment := `(?:=(?:[^=]|$)|(?:\+|-|\*\*?|/|%|<<|>>|>>>|&|\||\^|&&|\|\||\?\?)=)`
@@ -54,6 +84,9 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		{"IndexedDB", regexp.MustCompile(`\bindexedDB\b`)},
 		{"code evaluation", regexp.MustCompile("\\beval\\s*\\(|\\bnew\\s+Function\\b|\\b(?:setTimeout|setInterval)\\s*\\(\\s*[\"'`]")},
 		{"global write", regexp.MustCompile(`\b(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*\s*(?:` + assignment + `|\+\+|--)|(?:\+\+|--)\s*(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*`)},
+	}
+	if typed {
+		rules = append(rules, rule{"global cast", regexp.MustCompile(`\(\s*(?:window|globalThis)\s+as\b`)})
 	}
 	// Stage 1 pins delegate native submits to htmx using server-rendered URLs.
 	if name != "pins-sync-v2.js" {
@@ -90,7 +123,7 @@ func checkJavaScript(name, source string) []javascriptFinding {
 			case ")":
 				parentheses--
 			default:
-				if braces == 0 && parentheses == 0 {
+				if !typed && braces == 0 && parentheses == 0 {
 					findings = append(findings, javascriptFinding{i + 1, "top-level declaration"})
 				}
 			}
@@ -200,6 +233,12 @@ func TestJavaScriptPatterns(t *testing.T) {
 			if len(got) != 1 || got[0] != (javascriptFinding{3, tt.rule}) {
 				t.Fatalf("got %v, want line 3: %s", got, tt.rule)
 			}
+			if tt.rule != "top-level declaration" {
+				got := checkJavaScript("example.ts", "/* heading\n */\nconst value: number = 1;\n"+tt.source)
+				if len(got) != 1 || got[0] != (javascriptFinding{4, tt.rule}) {
+					t.Fatalf("TypeScript got %v, want line 4: %s", got, tt.rule)
+				}
+			}
 			// Every prohibited pattern is harmless when mentioned as text.
 			for _, text := range []string{
 				"// " + tt.source,
@@ -208,6 +247,9 @@ func TestJavaScriptPatterns(t *testing.T) {
 			} {
 				if got := checkJavaScript("example-v1.js", text); len(got) != 0 {
 					t.Errorf("text %q: %v", text, got)
+				}
+				if got := checkJavaScript("example.ts", text); len(got) != 0 {
+					t.Errorf("TypeScript text %q: %v", text, got)
 				}
 			}
 		})
@@ -270,6 +312,37 @@ func TestJavaScriptVersionedNames(t *testing.T) {
 		got := checkJavaScript(name, "")
 		if len(got) != 1 || got[0].rule != "versioned filename" {
 			t.Errorf("%s: got %v, want versioned filename finding", name, got)
+		}
+	}
+}
+
+func TestTypeScriptPatterns(t *testing.T) {
+	for _, source := range []string{
+		`export const value: number = 1; let next: number = value; export function read(): number { return next; }`,
+		`function identity<T>(value: T): T { return value; } const value = identity<number>(1);`,
+		`const value = { mode: "ready" as const } satisfies { mode: string };`,
+		`import type { Item } from "./item.ts"; const value: Item | undefined = undefined;`,
+		`interface Item { value: number } const value: Item = { value: 1 };`,
+		`declare const external: number; const value: number = external;`,
+		`type State = "fetch" | "innerHTML =" | "window.x++"; const value: State = "fetch";`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			if got := checkJavaScript("logic.ts", source); len(got) != 0 {
+				t.Fatalf("allowed TypeScript: %v", got)
+			}
+			if got := checkJavaScript("logic.ts", source+"\nwindow.x = value;"); len(got) != 1 || got[0] != (javascriptFinding{2, "global write"}) {
+				t.Fatalf("TypeScript global write: %v", got)
+			}
+		})
+	}
+	for _, source := range []string{`(window as Window).x = 1;`, `(globalThis as any).x++;`} {
+		if got := checkJavaScript("logic.ts", source); len(got) != 1 || got[0].rule != "global cast" {
+			t.Errorf("cast %s: %v", source, got)
+		}
+	}
+	for _, name := range []string{"logic.ts", "globals.d.ts", "message-drafts.ts", "message-drafts-v12.ts"} {
+		if got := checkJavaScript(name, `localStorage.setItem("draft", "text");`); len(got) != 1 || got[0].rule != "localStorage" {
+			t.Errorf("storage %s: %v", name, got)
 		}
 	}
 }

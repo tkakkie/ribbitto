@@ -65,7 +65,7 @@ and so is HTML or CSS that fails one of the four points.
 
 ## Scripts that stay
 
-- **`web/static/message-time-v2.js` (`Intl`):** formats `<time data-local-time>`
+- **`web/src/message-time.ts` (`Intl`):** formats `<time data-local-time>`
   in the page's `lang` (`document.documentElement.lang`) and the reader's time
   zone with `Intl.DateTimeFormat` on load and scoped `htmx:load`, while the
   server renders UTC text (point 1: CSS cannot do `Intl` formatting).

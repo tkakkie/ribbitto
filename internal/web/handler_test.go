@@ -30,6 +30,10 @@ import (
 )
 
 func TestHandler(t *testing.T) {
+	bundleURL, err := static.ScriptURL(t.Context(), "message-time")
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler, err := newTestHandler(t, "")
 	if err != nil {
 		t.Fatal(err)
@@ -42,6 +46,9 @@ func TestHandler(t *testing.T) {
 		{"/healthz", http.StatusOK},
 		{"/readyz", http.StatusServiceUnavailable},
 		{"/static/css/app.css", http.StatusOK},
+		{bundleURL, http.StatusOK},
+		{"/static/dist/manifest.json", http.StatusNotFound},
+		{"/static/dist/unknown-ABCDEFGH.js", http.StatusNotFound},
 		{"/static/vendor/htmx-2.0.7.min.js", http.StatusOK},
 		{"/static/quote-selection-v1.js", http.StatusOK},
 		{"/static/vendor/htmx-ext-sse-2.2.4.min.js", http.StatusOK},
@@ -56,6 +63,9 @@ func TestHandler(t *testing.T) {
 			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tt.path, nil))
 			if w.Code != tt.code {
 				t.Fatalf("status = %d, want %d", w.Code, tt.code)
+			}
+			if strings.HasPrefix(tt.path, "/static/") && tt.code != http.StatusOK && w.Header().Get("Cache-Control") != "" {
+				t.Errorf("missing/private static response is cacheable: %q", w.Header().Get("Cache-Control"))
 			}
 			if strings.HasPrefix(tt.path, "/static/") && tt.code == http.StatusOK {
 				if got := w.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -435,6 +445,7 @@ func TestCrossOriginProtection(t *testing.T) {
 
 func TestDevelopmentAssets(t *testing.T) {
 	dir := t.TempDir()
+	copyScriptAssets(t, dir)
 	if err := os.Mkdir(filepath.Join(dir, "css"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -644,6 +655,68 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 			handler.ServeHTTP(w, r)
 			if w.Code != tt.status || resolver.calls != tt.lookups {
 				t.Fatalf("status %d with %d lookups; want %d with %d", w.Code, resolver.calls, tt.status, tt.lookups)
+			}
+		})
+	}
+}
+
+// Disk fixtures need the same complete generation as a development checkout.
+func copyScriptAssets(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "dist"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	names, err := fs.Glob(static.FS(), "dist/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		data, err := fs.ReadFile(static.FS(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestHandlerRejectsIncompleteScripts(t *testing.T) {
+	for _, tc := range []struct{ name, manifest, want string }{
+		{"missing declaration", `{"entries":{}}`, "missing declared entry"},
+		{"missing bundle", `{"entries":{"message-time":{"file":"message-time-ABCDEFGH.js"}}}`, "reading script bundle"},
+		{"unknown entry", "", "unknown entry"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			copyScriptAssets(t, dir)
+			if err := os.Mkdir(filepath.Join(dir, "css"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "css/app.css"), nil, 0644); err != nil {
+				t.Fatal(err)
+			}
+			data := []byte(tc.manifest)
+			if tc.name == "unknown entry" {
+				original, err := fs.ReadFile(static.FS(), "dist/manifest.json")
+				if err != nil {
+					t.Fatal(err)
+				}
+				var manifest map[string]any
+				if err := json.Unmarshal(original, &manifest); err != nil {
+					t.Fatal(err)
+				}
+				manifest["entries"].(map[string]any)["unknown"] = map[string]any{}
+				data, err = json.Marshal(manifest)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, "dist/manifest.json"), data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := newTestHandler(t, dir); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("startup: want %s, got %v", tc.want, err)
 			}
 		})
 	}

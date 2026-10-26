@@ -1,9 +1,10 @@
 # Web toolchain
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
-including the checker and `.mjs` harnesses. Mechanics marked **confirmed** were confirmed by the maintainer on 2026-10-21 ([record][cf]). #1410–#1415 build the foundation;
-#1416–#1421 convert scripts; #1409 writes module conventions. Current delivery
-and checks apply until replaced.
+including the checker and `.mjs` harnesses. The maintainer confirmed mechanics
+marked **confirmed** on 2026-10-21
+([record][cf]). #1410–#1415 build the foundation; #1416–#1421 convert scripts;
+#1409 writes module conventions.
 
 ## Language approval — #1410–#1413
 
@@ -13,21 +14,17 @@ maintainer's [approval record](https://github.com/tkakkie/ribbitto/issues/1356#i
 covers TypeScript, Node only for type checking/tests/dependency management, and the
 Go-driven esbuild build, not blanket authorization.
 
-#1410 adds build/test files together with the language-list and path-and-kind
-table changes in [`tools/languagecheck`](../../tools/languagecheck/rules.go),
-referencing that approval. Acceptance criteria for #1410 and #1411/#1412/#1413
-must require each location's table change in the PR introducing its first file.
-Approved in #1410: web/src/*.ts (including declarations), root tsconfig.json,
-package.json/package-lock.json and .node-version. Later PRs add the .mjs harness
-location and the Go builder under tools/ (already covered by the Go rule). The language
-check fails #1410 or any PR adding unlisted files without the required table entries. Any exact-path exception must follow decision 42's
-rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
+#1410 approved web/src/*.ts (including declarations), root tsconfig.json,
+package.json/package-lock.json and .node-version, updating decision 42 and
+[`tools/languagecheck`](../../tools/languagecheck/rules.go) against that approval.
+Later PRs introducing file kinds/locations update both path-and-kind tables in
+the introducing PR: .mjs harnesses belong to #1412; Go builders under tools/
+are already covered. Unlisted files fail the check; exact-path exceptions need
+decision 42's rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
-The check does not scan Makefile recipes or workflow steps for node/npm command
-words; decision 42 leaves commands to review. #1410 must record/review the
-runtime commands it uses against the limited approval; commands alone need no
-path-and-kind entry. #1410 adds the TypeScript/configuration files and updates
-decision 42 and the table; .mjs remains deferred to #1412.
+Makefile/workflow node/npm commands need review under decision 42, not
+path-and-kind entries; the check does not scan them. #1410 records its commands
+against the limited approval; .mjs remains deferred to #1412.
 
 ## Build, manifest and embedding — #1411
 
@@ -45,14 +42,25 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-First entry: `web/src/message-time.ts`. Its legacy versioned script
-remains unchanged and loaded. Output is neither embedded nor served: #1820
-adds the registry, templ selection, embedding, serving, browser verification
-and generation before compilation in Make, CI, Docker and releases, including
-fresh-clone instructions and failure on missing generation. #1821 adds rebuilds,
-disk serving with `no-store` and development maps, whose file names it records
-in the manifest. #1819 adds private production maps and their separate index;
-production map names never belong in the runtime manifest.
+`web/src/message-time.ts` is served through `static.NewScripts`, which validates
+manifest entries and bundle hashes at startup. Context supplies templ's logical
+name lookup; direct renders use the embedded registry without mutable globals.
+Missing/unknown entries or bundles fail startup; undeclared renders fail.
+The deferred classic bundle keeps its nonce; arrival stays synchronous.
+Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
+
+Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
+`go vet`, `go run` or tools loading the tree. Make's build/check/run targets and
+CI schema verification, testshard and CodeQL generate first. Explicit embed
+patterns require generation; ignored `dist` is never committed. CI proves
+generation, embedding and build without Node on `PATH`. Any future application
+Dockerfile or release workflow must generate before compiling and package that
+output (none exists; Argon's verify image is separate). Host builds use the
+[writable-copy routes](../workflow/investigations.md#build-routes).
+
+#1821 adds development rebuilds, disk serving and maps; #1819 adds private
+production maps, never named in the runtime manifest. ES modules, shared chunks,
+lazy loading and `modulepreload` need target-browser verification before adoption.
 
 ## Versions and installation — #1410, #1415
 

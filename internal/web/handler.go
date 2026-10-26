@@ -91,7 +91,11 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if err != nil {
 		return nil, nil, err
 	}
-	pages := &pageRenderer{stylesheetURL: func() (string, error) { return stylesheetURL, nil }}
+	scripts, err := static.NewScripts(assets)
+	if err != nil {
+		return nil, nil, err
+	}
+	pages := &pageRenderer{scripts: scripts, stylesheetURL: func() (string, error) { return stylesheetURL, nil }}
 	if devAssets != "" {
 		pages.stylesheetURL = func() (string, error) { return stylesheetURLForAssets(assets) }
 	}
@@ -158,6 +162,10 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "dist/") && !scripts.IsBundle(r.URL.Path) {
+			http.NotFound(w, r)
+			return
+		}
 		// Only successful file responses are immutable; missing assets may appear later.
 		info, err := fs.Stat(assets, r.URL.Path)
 		if err != nil || info.IsDir() {
@@ -200,6 +208,7 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 // pageRenderer renders full pages; in development the stylesheet URL is
 // recomputed per request so rebuilt CSS shows up without a restart.
 type pageRenderer struct {
+	scripts       *static.Scripts
 	stylesheetURL func() (string, error)
 }
 
@@ -208,6 +217,9 @@ func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+	if p.scripts != nil {
+		r = r.WithContext(static.WithScripts(r.Context(), p.scripts))
 	}
 	templ.Handler(page(url), templ.WithStatus(status)).ServeHTTP(w, r)
 }

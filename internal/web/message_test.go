@@ -24,6 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"github.com/tkakkie/ribbitto/web/static"
 )
 
 type fakeMessages struct {
@@ -152,7 +153,11 @@ func TestMessageListHandler(t *testing.T) {
 				t.Fatal("latest message list must receive message events")
 			}
 			// An empty channel still loads it: messages swapped in later need it.
-			if script := `src="/static/message-time-v2.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
+			url, err := static.ScriptURL(t.Context(), "message-time")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if script := `src="` + url + `" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
 				t.Errorf("missing %q", script)
 			}
 			if len(tt.reader.entries) == 0 {

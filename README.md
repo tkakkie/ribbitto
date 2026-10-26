@@ -1,7 +1,6 @@
 # ribbitto
 
-A self-hostable team chat that is fast, where nothing gets buried, and
-with nothing to learn. There is a frog on the logo.
+A self-hostable team chat: fast, nothing gets buried, nothing to learn.
 
 > **Status: early development.** Accounts, channels, topics, real-time
 > messages, unread counts, presence and typing indicators work. The MVP is
@@ -10,8 +9,7 @@ with nothing to learn. There is a frog on the logo.
 
 ## What it will be
 
-What each principle means, and how changes are checked against it, is in
-the [vision](docs/vision.md).
+See the [vision](docs/vision.md) for principles and acceptance criteria.
 
 - **Fast:** quick to use in the browser and light on a small server, with
   both measured.
@@ -20,7 +18,7 @@ the [vision](docs/vision.md).
 - **Nothing to learn:** every channel has a default topic, so you talk
   first and branch a conversation into its own topic later.
 - Messages arrive in real time, with presence and typing indicators.
-- Server-rendered HTML with htmx: one Go binary, no JavaScript build step.
+- Server-rendered HTML with htmx: one Go binary, Go-built scripts.
 - English and Japanese UI.
 - Easy to self-host: a container image and a Compose file with PostgreSQL
   and Caddy.
@@ -40,6 +38,7 @@ set -a; . ./.env; set +a    # export configuration; the binary does not load .en
 make db-up                 # starts PostgreSQL and waits for health
 make migrate               # DIRECTION=up|down|status
 make seed ARGS='-messages 100' # optional development fixtures
+make bundles               # scripts before direct Go commands
 go run ./cmd/ribbitto       # http://localhost:8080
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
@@ -93,9 +92,8 @@ reverts one migration. See [database development](docs/database.md) for
 configuration and migration ownership, and [database tests](docs/database-tests.md)
 for integration tests.
 
-`make dev` builds CSS before starting the server. It runs the pinned templ
-and Tailwind watchers together, restarting Go when templates or Go source
-change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
+`make dev` builds CSS and scripts first. Its pinned templ and Tailwind
+watchers restart Go when templates or Go source change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
 without caching and recompute the stylesheet URL's content hash on each page
 request. Reload on edits; CSS needs no server restart.
 `cmd/dev` stops watchers and server on Ctrl-C, SIGTERM or watcher exit.
@@ -103,9 +101,9 @@ request. Reload on edits; CSS needs no server restart.
 `make css` and `make lint` use [`tools/download`](tools/download/main.go)
 for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
 for type checking and dependency management; see [setup](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
-Generated Go, CSS and vendored scripts are committed, so `go build` needs
-neither templ nor Tailwind. CSS class detection is limited to `.templ` files
-so local notes and tools do not change the output.
+Generated Go, CSS and vendor scripts are committed. Run `make bundles`
+before `go build`; it needs no Node, templ or Tailwind. CSS class detection
+uses only `.templ` files so notes and tools do not change the output.
 
 ### Checks
 

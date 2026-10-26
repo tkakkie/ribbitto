@@ -44,10 +44,10 @@ base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule
 prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
 exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true` and no
-`exclude` or `files`; checked keys are case-sensitive. It rejects `extends`
-to prevent inherited `exclude` or `files` from narrowing the inputs.
-Regex checks reject comment `@ts-nocheck` in every tracked
-`.ts` (including generated files), inline script tags without `src` (any case)
+`exclude`, `files` or `extends`; checked keys are case-sensitive. Strict-family
+overrides must be `true`. Only `.ts` under `web/src/` is type-checked; other
+TypeScript files fail. Raw-source checks reject `@ts-nocheck` in tracked
+`.ts`, `.tsx`, `.mts`, `.cts`, inline script tags without `src` (any case)
 and templ script components in every tracked `.templ`. These checks are not
 parsers; computed imports and re-exports of untyped data remain for review.
 

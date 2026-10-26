@@ -40,8 +40,11 @@ func TestRules(t *testing.T) {
 		{"noEmit missing", "tsconfig.json", config, strings.Replace(config, `,"noEmit":true`, "", 1), "exact typed include"},
 		{"line directive", "web/src/one.ts", "// checked\n", "// @ts-nocheck\n", "@ts-nocheck"},
 		{"generated block directive", "web/src/contracts.gen.ts", "/* checked\n */", "/* @ts-nocheck\n */", "@ts-nocheck"},
-		{"outside typed input", "other.ts", "// checked", "// @ts-nocheck", "@ts-nocheck"},
+		{"outside typed input", "web/src/nested/other.ts", "// checked", "// @ts-nocheck", "@ts-nocheck"},
+		{"regex literal directive", "web/src/one.ts", `const q = /"/g; // checked`, `const q = /"/g; // @ts-nocheck`, "@ts-nocheck"},
 		{"inline", "other.templ", `<script src="/app.js"></script>`, `<script nonce={ nonce }></script>`, "inline script"},
+		{"slash separator", "other.templ", `<script/src="/app.js"></script>`, `<script/nonce={ nonce }></script>`, "inline script"},
+		{"slash between attributes", "other.templ", `<script nonce={ nonce }/src="/app.js"></script>`, `<script nonce={ nonce }/title="app"></script>`, "inline script"},
 		{"mixed case inline", "other.templ", `<ScRiPt SRC="/app.js"></ScRiPt>`, `<ScRiPt></ScRiPt>`, "inline script"},
 		{"data src", "other.templ", `<script src="/app.js">`, `<script data-src="/app.js">`, "inline script"},
 		{"src in value", "other.templ", `<script src="/app.js">`, `<script title=" src='/app.js'">`, "inline script"},
@@ -59,6 +62,93 @@ func TestRules(t *testing.T) {
 			}
 			if got := inspect(files); len(got) != 1 || !strings.Contains(got[0], tc.want) {
 				t.Fatalf("negative twin: %v; want one %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStrictFamily(t *testing.T) {
+	for _, name := range []string{"noImplicitAny", "strictNullChecks", "strictFunctionTypes", "strictBindCallApply", "strictPropertyInitialization", "noImplicitThis", "useUnknownInCatchVariables", "alwaysStrict", "strictBuiltinIteratorReturn"} {
+		t.Run(name, func(t *testing.T) {
+			files := fixture()
+			files["tsconfig.json"] = strings.Replace(config, `"strict":true`, `"strict":true,"`+name+`":true`, 1)
+			if got := inspect(files); len(got) != 0 {
+				t.Fatalf("passing twin: %v", got)
+			}
+			files["tsconfig.json"] = strings.Replace(files["tsconfig.json"], `"`+name+`":true`, `"`+name+`":false`, 1)
+			if got := inspect(files); len(got) != 1 || !strings.Contains(got[0], "exact typed include") {
+				t.Fatalf("negative twin: %v; want one exact typed include", got)
+			}
+		})
+	}
+	for _, tc := range []struct{ name, good, bad string }{
+		{"case variant", config, strings.Replace(config, `"strict":true`, `"strict":true,"NoImplicitAny":true`, 1)},
+		{"non-boolean", strings.Replace(config, `"strict":true`, `"strict":true,"noImplicitAny":true`, 1), strings.Replace(config, `"strict":true`, `"strict":true,"noImplicitAny":"true"`, 1)},
+		{"null", strings.Replace(config, `"strict":true`, `"strict":true,"noImplicitAny":true`, 1), strings.Replace(config, `"strict":true`, `"strict":true,"noImplicitAny":null`, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			files := fixture()
+			files["tsconfig.json"] = tc.good
+			if got := inspect(files); len(got) != 0 {
+				t.Fatalf("passing twin: %v", got)
+			}
+			files["tsconfig.json"] = tc.bad
+			if got := inspect(files); len(got) != 1 || !strings.Contains(got[0], "exact typed include") {
+				t.Fatalf("negative twin: %v; want one exact typed include", got)
+			}
+		})
+	}
+}
+
+func TestTypeScriptDirectives(t *testing.T) {
+	for _, name := range []string{"web/src/one.tsx", "web/src/one.mts", "web/src/one.cts", "other/one.ts", "other/one.d.ts"} {
+		t.Run(name, func(t *testing.T) {
+			files := fixture()
+			files[name] = ""
+			if got := inspect(files); len(got) != 1 || got[0] != name+": not type-checked" {
+				t.Fatalf("path finding: %v", got)
+			}
+			files[name] = "// @ts-nocheck"
+			got := inspect(files)
+			if len(got) != 2 || !slices.Contains(got, name+": not type-checked") || !slices.Contains(got, name+": @ts-nocheck") {
+				t.Fatalf("path and directive findings: %v", got)
+			}
+		})
+	}
+}
+
+func TestTrackedTypeScriptPaths(t *testing.T) {
+	for _, tc := range []struct{ good, bad string }{
+		{"web/src/one.ts", "web/src/one.tsx"},
+		{"web/src/one.ts", "web/src/one.mts"},
+		{"web/src/one.ts", "web/src/one.cts"},
+		{"web/src/one.ts", "other/one.ts"},
+		{"web/src/one.d.ts", "other/one.d.ts"},
+		{"web/src/nested/one.ts", "other/nested/one.ts"},
+	} {
+		t.Run(tc.bad, func(t *testing.T) {
+			root := t.TempDir()
+			g := func(args ...string) {
+				t.Helper()
+				if _, err := git(root, args...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			g("init", "-q")
+			for name, text := range fixture() {
+				write(t, root, name, text)
+			}
+			g("add", ".")
+			write(t, root, tc.good, "")
+			write(t, root, tc.bad, "")
+			g("add", "--", tc.good)
+			if err := run(root, false, &bytes.Buffer{}); err != nil {
+				t.Fatalf("passing twin: %v", err)
+			}
+			g("rm", "--cached", "--", tc.good)
+			g("add", "--", tc.bad)
+			if err := run(root, false, &bytes.Buffer{}); err == nil || err.Error() != tc.bad+": not type-checked" {
+				t.Fatalf("negative twin: %v; want one not type-checked", err)
 			}
 		})
 	}
@@ -90,6 +180,10 @@ func TestScriptPaths(t *testing.T) {
 	files["web/test/example.test.mjs"] = ""
 	files["web/src/one.ts"] = `const text = "// @ts-nocheck";`
 	files["other.templ"] = `<script-widget></script-widget>`
+	if got := inspect(files); len(got) != 1 || !strings.Contains(got[0], "@ts-nocheck") {
+		t.Fatal(got)
+	}
+	files["web/src/one.ts"] = `const text = "// checked";`
 	if got := inspect(files); len(got) != 0 {
 		t.Fatal(got)
 	}

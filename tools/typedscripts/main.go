@@ -51,7 +51,7 @@ func run(root string, ci bool, out io.Writer) error {
 	}
 	files := map[string]string{}
 	for _, name := range append(strings.Split(strings.TrimSuffix(tracked, "\x00"), "\x00"), listFile, "tsconfig.json") {
-		if name == listFile || name == "tsconfig.json" || slices.Contains([]string{".ts", ".templ", ".js", ".mjs", ".cjs", ".jsx"}, path.Ext(name)) {
+		if name == listFile || name == "tsconfig.json" || slices.Contains([]string{".ts", ".tsx", ".mts", ".cts", ".templ", ".js", ".mjs", ".cjs", ".jsx"}, path.Ext(name)) {
 			data, err := os.ReadFile(filepath.Join(root, name))
 			if err != nil {
 				return fmt.Errorf("reading %s: %w", name, err)
@@ -152,18 +152,17 @@ func inspect(files map[string]string) []string {
 			} else {
 				counts[match[1]]++
 			}
-		case ".ts":
-			for _, token := range regexp.MustCompile("(?s)\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|`(?:\\\\.|[^`\\\\])*`|//[^\n]*|/\\*.*?\\*/").FindAllString(source, -1) {
-				if strings.HasPrefix(token, "//") || strings.HasPrefix(token, "/*") {
-					if strings.Contains(token, "@ts-nocheck") {
-						problems = append(problems, name+": @ts-nocheck comment")
-					}
-				}
+		case ".ts", ".tsx", ".mts", ".cts":
+			if path.Ext(name) != ".ts" || !strings.HasPrefix(name, "web/src/") {
+				problems = append(problems, name+": not type-checked")
+			}
+			if strings.Contains(source, "@ts-nocheck") {
+				problems = append(problems, name+": @ts-nocheck")
 			}
 		case ".templ":
-			for _, tag := range regexp.MustCompile(`(?is)<script(?:\s(?:[^>"']|"[^"]*"|'[^']*')*)?/?>`).FindAllString(source, -1) {
+			for _, tag := range regexp.MustCompile(`(?is)<script(?:[\s/](?:[^>"']|"[^"]*"|'[^']*')*)?/?>`).FindAllString(source, -1) {
 				hasSrc := false
-				for _, attr := range regexp.MustCompile(`\s+([^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+))?`).FindAllStringSubmatch(tag, -1) {
+				for _, attr := range regexp.MustCompile(`[\s/]+([^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+))?`).FindAllStringSubmatch(tag, -1) {
 					hasSrc = hasSrc || strings.EqualFold(attr[1], "src")
 				}
 				if !hasSrc {
@@ -186,7 +185,7 @@ func inspect(files map[string]string) []string {
 	if err := json.Unmarshal([]byte(files["tsconfig.json"]), &config); err != nil {
 		problems = append(problems, "tsconfig.json: "+err.Error())
 	} else if !validConfig(config) {
-		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; no exclude, files or extends; keys are case-sensitive")
+		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; strict-family overrides must be true; no exclude, files or extends; keys are case-sensitive")
 	}
 	return problems
 }
@@ -200,6 +199,18 @@ func validConfig(config map[string]json.RawMessage) bool {
 		json.Unmarshal(options["strict"], &strict) != nil ||
 		json.Unmarshal(options["noEmit"], &noEmit) != nil {
 		return false
+	}
+	strictFamily := []string{"noImplicitAny", "strictNullChecks", "strictFunctionTypes", "strictBindCallApply", "strictPropertyInitialization", "noImplicitThis", "useUnknownInCatchVariables", "alwaysStrict", "strictBuiltinIteratorReturn"}
+	if hasCaseVariant(options, strictFamily...) {
+		return false
+	}
+	for _, name := range strictFamily {
+		if value, ok := options[name]; ok {
+			var enabled bool
+			if json.Unmarshal(value, &enabled) != nil || !enabled {
+				return false
+			}
+		}
 	}
 	return !hasCaseVariant(config, "include", "exclude", "files", "extends", "compilerOptions") &&
 		!hasCaseVariant(options, "strict", "noEmit") &&

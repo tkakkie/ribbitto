@@ -22,10 +22,10 @@ always uses `off`, the state at rest) and set `LANG=en_US.UTF-8`. The mode is `o
 off, write `off` to `verify-mode`; the Go commands accept `--verify off|on`.
 See [verify operation](argon-verify-operation.md) for the run sequence.
 
-The wrappers check the SHA-256 of the pinned `guard/argonreview-7f607ca`
-before the run; `run.zsh` also checks it afterwards. They pass the frozen
-clone `argon-trusted/src-7f607ca` as `RIBBITTO_ARGON_SOURCE` and, in on mode,
-as `--trusted-source`. Worker 2 and the 2026-10-24 launcher update are in
+The wrappers check the SHA-256 of the pinned `guard/argonreview-2e3a6bf`
+(since 2026-10-27) before the run; `run.zsh` also checks it afterwards. They pass the frozen
+clone `argon-trusted/src-2e3a6bf` as `RIBBITTO_ARGON_SOURCE` and, in on mode,
+as `--trusted-source`. Worker 2 and the launcher updates are in
 [worker operation](argon-workers-operation.md).
 
 ## Recovery and rollback

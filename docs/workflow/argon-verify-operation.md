@@ -54,8 +54,7 @@ In `on` mode:
 On-mode MCP admits only the exact `verify` call through agreeing guard and
 settings layers. In [preflight][preflight], the guard refused every invalid
 call first; the settings and server layers were not probed separately.
-Arbitrary shell and `run_command` remain refused. Database and
-browser tests stay CI-only. `verified` never replaces CI, review or handoff
+Arbitrary shell and `run_command` remain refused. Browser tests stay CI-only. `verified` never replaces CI, review or handoff
 checks. The Start gate and review independence stay.
 
 ## Write-back at handoff

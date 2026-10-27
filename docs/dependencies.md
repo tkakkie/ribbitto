@@ -149,4 +149,5 @@ internal/web/middleware -> internal/kernel
 internal/web/view -> internal/kernel
 internal/web/view -> internal/typing
 internal/web/view -> internal/web/i18n
+internal/web/view -> web/static
 ```

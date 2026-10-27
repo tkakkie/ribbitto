@@ -11,7 +11,7 @@ when available; development-machine runs decide until then.
 ## Host measurements
 
 Approved performance measurements are the only standing exception to the
-[handoff rule](running-other-ai.md#handoff-of-another-ais-code) (maintainer, 2026-10-18, #1308).
+[handoff rule](running-other-ai.md#handoff-of-another-ais-code) (maintainer, #1308).
 After handoff, builds, tests and `make dev` stay in CI or sandboxes.
 All conditions apply:
 
@@ -22,12 +22,12 @@ checks results against the issue's *Done when*.
 2. Match the full build/run SHA to reviews and CI; a label is not enough.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
-that SHA (#1273, #1276).
+that SHA.
 3. The measurement is required by the issue's *Done when*, approved by
 `ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
 other tools use the trusted, fixed base SHA or a source approved in
-advance (e.g. an external harness). A head adding a migration is a stop
+advance. A head adding a migration is a stop
 for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
@@ -40,7 +40,7 @@ user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
 neither. Use only its binary/data/runtime paths and server/database
 loopback ports; shared databases and Chrome's DevTools stay denied. The
-maintainer creates the user (a system change) and installs/validates the
+maintainer creates the user and installs/validates the
 profile once. If restrictions fail, keep them; stop for a case-by-case
 maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
@@ -50,17 +50,17 @@ volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. In PR, record that it was a host measurement, SHAs, conditions (toolchain,
 image digest, restrictions), exact commands and results. Redact credentials.
 
-**Reproducibility (#1149).** Alternate base/head in one session: same
+**Reproducibility.** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
 restrictions; only code differs. Start at 1-min load below 4; exclude
 warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Host measurements need no Node. Once #1411/#1820 land, Go asset generation
-must precede compilation in a writable copy of the verified checkout, in the
-same isolated build (same trusted checkouts/flags, no Node on `PATH`), outside
-Argon verify. These commands cannot yet build SHAs needing generation.
+Both routes run Go webbuild in the same isolation/trusted environment,
+outside Argon verify. Keep verified `src` read-only; generate in a writable
+copy, natively (container linux/arm64, user darwin/arm64), then cross-compile.
+Record the diff listing in PR; only `web/static/dist` may differ.
 
 Approved operator: trusted git/Go; `image`: trusted Docker Go image digest
 ([current value](measurement-go-image.md#measurement-go-image)).
@@ -83,40 +83,50 @@ session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
 ```
 
 On success, cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
+After HEAD/clean verification, both routes use:
+
+```sh
+build_steps='
+! command -v node || exit 1
+cp -R "$1" gen; chmod -R u+w gen; cd gen
+"$4" -C tools run -mod=readonly -buildvcs=false ./webbuild .. "$3" measurement message-time
+d=$(diff -qr "$1" .) && exit 1
+test "$d" = "Only in ./web/static: dist"; printf "%s\n" "$d"
+GOOS=darwin GOARCH=arm64 "$4" build -mod=readonly -trimpath -buildvcs=false -o "$2/ribbitto" ./cmd/ribbitto
+'
+```
+
 Mount only read-only source and empty output:
 
 ```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --user "$(id -u):$(id -g)" --tmpfs /tmp:exec,mode=1777 \
   --mount "type=bind,src=$src,dst=/src,readonly" \
-  --mount "type=bind,src=$session/out,dst=/out" --workdir /src \
+  --mount "type=bind,src=$session/out,dst=/out" --workdir /tmp \
   --entrypoint /usr/bin/env "$image" -i PATH=/usr/local/go/bin:/usr/bin:/bin \
   HOME=/tmp GOENV=off GOTOOLCHAIN=local GOCACHE=/tmp/build GOMODCACHE=/tmp/mod \
   GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 \
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-  go build -mod=readonly -trimpath -buildvcs=false -o /out/ribbitto ./cmd/ribbitto
+  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  /bin/sh -eu -c "$build_steps" build /src /out "$sha" /usr/local/go/bin/go
 ```
 
-Apple silicon only, never Rosetta. In-tree: only this Go build.
-Before staging record SHA and `shasum -a 256`;
-`-buildvcs=false` avoids container git ownership mismatches.
+Apple silicon only, never Rosetta. In-tree: only the webbuild step above and this Go build.
+Before staging record SHA and `shasum -a 256`.
 
-If unusable, record why. Maintainer: stage read-only source in
-`build`, no old output/caches or escaping symlinks. User writes only
-output/caches. Recheck staged `src` `HEAD`/clean status via `pinned`;
+If unusable, record why. Maintainer: stage read-only `build/src`,
+no old output/caches or escaping symlinks. User writes only empty
+`work`/`out`/`cache` under `build`. Recheck staged `src` `HEAD`/clean status via `pinned`;
 require `test -z "$(find "$src" -type l)"`.
 `go`: absolute trusted Go path, container version/flags:
 
 ```sh
-cd /private/var/ribbitto-measure/build/src &&
+b=/private/var/ribbitto-measure/build && cd "$b/work" &&
   sudo -u _ribbitto_measure /usr/bin/env -i PATH=/usr/bin:/bin \
-  HOME=/private/var/ribbitto-measure/build/cache GOENV=off GOTOOLCHAIN=local \
-  GOCACHE=/private/var/ribbitto-measure/build/cache/go-build \
-  GOMODCACHE=/private/var/ribbitto-measure/build/cache/mod \
+  HOME="$b/cache" GOENV=off GOTOOLCHAIN=local \
+  GOCACHE="$b/cache/go-build" GOMODCACHE="$b/cache/mod" \
   GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 \
   CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-  "$go" build -mod=readonly -trimpath -buildvcs=false \
-  -o /private/var/ribbitto-measure/build/out/ribbitto ./cmd/ribbitto
+  /bin/sh -eu -c "$build_steps" build "$b/src" "$b/out" "$sha" "$go"
 ```
 
 ### One-time setup and run
@@ -139,8 +149,7 @@ trusted base. Watch denials:
 `sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
 Expect logged usage error, exit 1: profile, dyld and Go start.
   2. With throwaway DB, send a DB-backed request to `127.0.0.1:18080`.
-Possible gaps: self-signals (`(allow signal (target self))`),
-parent-directory metadata reads, pgx current-user lookup. Prefer `db_url`
+Prefer `db_url`
 with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
   3. Test copy: add only execution/runtime reads for `/bin/cat` and
 `/usr/bin/nc`; same user/environment and other file/network rules.
@@ -164,7 +173,6 @@ commands still use `127.0.0.1`:
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/usr/lib")
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"))
 (allow file-read* file-write* (subpath "/private/var/ribbitto-measure/data"))
-; dyld opens / as its lookup root.
 (allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom"))
 (allow network-bind (local tcp "localhost:18080"))
 (allow network-inbound (local tcp "localhost:18080"))
@@ -177,7 +185,7 @@ restore dataset with trusted base tools only. Start DB; `db_url`: disposable,
 sockets. Run in foreground.
 Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
-before the profile; `env -i` alone leaves files open.
+before the profile.
 Ctrl-C then stops only the waiting parent; stop the server by PID.
 
 ```sh

@@ -32,7 +32,7 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 	// Each held request of the time script sends its release.
 	requested := make(chan chan struct{})
 	held := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hold.Load() && strings.HasPrefix(r.URL.Path, "message-time-") {
+		if hold.Load() && strings.HasPrefix(r.URL.Path, "dist/message-time-") {
 			release := make(chan struct{})
 			select {
 			case requested <- release:

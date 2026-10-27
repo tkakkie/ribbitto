@@ -65,13 +65,14 @@ type Sessions struct {
 	store  SessionStore
 	now    func() time.Time
 	cancel SessionCanceller
+	built  time.Time
 }
 
 // NewSessions returns Sessions backed by store; now is time.Now outside
 // tests. A non-nil cancel also ends streams after deletion or replacement,
 // including when the store reports an error and the outcome is unknown.
 func NewSessions(store SessionStore, now func() time.Time, cancel SessionCanceller) *Sessions {
-	return &Sessions{store: store, now: now, cancel: cancel}
+	return &Sessions{store: store, now: now, cancel: cancel, built: now()}
 }
 
 // ended tells the canceller, if any, to stop a session's streams.
@@ -191,7 +192,7 @@ func (s *Sessions) DeleteOthers(ctx context.Context, accountID, currentID kernel
 // DeleteExpired removes sessions that have expired by now. Expired sessions
 // are already rejected by Resolve; this only keeps the table small.
 func (s *Sessions) DeleteExpired(ctx context.Context) error {
-	if err := s.store.DeleteExpiredSessions(ctx, s.now()); err != nil {
+	if err := s.store.DeleteExpiredSessions(ctx, s.built); err != nil {
 		return fmt.Errorf("cleaning up expired sessions: %w", err)
 	}
 	return nil

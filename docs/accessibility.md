@@ -112,7 +112,7 @@ after the list, over the composer's area, which turns invisible but keeps its
 space, so the list neither resizes nor scrolls. A plain failed submit, which
 checks nothing, keeps the form and its alert in the column above the composer;
 a browser without `:has()` shows both, as before. Below the
-[short height](ui-components.md#short-heights) the form follows the list in
+[short height](ui-panels-and-motion.md#short-heights) the form follows the list in
 the column instead, and the composer is hidden.
 
 The account menu or sheet (`#account-menu`) and the create popover
@@ -149,7 +149,7 @@ crosses the load in `sessionStorage`. Session-bound device drafts return after
 panel navigation without input, typing or focus changes.
 
 Below 1200 px the panel covers the conversation as a modal dialog, sharing
-the overlay/phone sheet model (#972, [side panels](ui-components.md#side-panels)).
+the overlay/phone sheet model (#972, [side panels](ui-panels-and-motion.md#side-panels)).
 The script sets `role="dialog"`, `aria-modal="true"` and makes the rest of the
 page inert (app bar, sidebar or list, conversation), blocking focus and pointers;
 focus left behind moves to the heading. Tab from the last stop, and Shift-Tab

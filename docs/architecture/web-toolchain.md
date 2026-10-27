@@ -165,9 +165,9 @@ Handoff follows the [standing prohibition](../workflow/running-other-ai.md#hando
 
 Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
-(#1696) are merged but not in force until #1700: production still pins launcher
-`argonreview-7f607ca` and the old image. Once #1700 lands, the prelude will regenerate
-templ, sqlc and Tailwind before Go build/vet/test; `generated` will check output
+(#1696) are in force since 2026-10-27 (#1700 stage A): production pins launcher
+`argonreview-2e3a6bf`. The prelude regenerates
+templ, sqlc and Tailwind before Go build/vet/test; `generated` checks output
 and formatting in a copy.
 TypeScript checking stays outside verify.
 #1415 cannot widen verify or those permissions.

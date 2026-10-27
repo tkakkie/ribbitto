@@ -10,11 +10,15 @@ recovery markers, builtin trust and hooks are unchanged.
 
 ## Launcher and homes
 
-The pinned launcher is `argonreview-7f607ca`, SHA-256
-`11800ec70f4d47e3c89cb57421b4b9d696a13da18c51de9c3261d6bf317cbe51`,
-built from the frozen read-only clone `argon-trusted/src-7f607ca`
-(origin/main 7f607ca). It contains the peer-home and worktree-lock checks
-(#1636). The wrappers pin the binary hash and trusted source.
+Since 2026-10-27 (#1700 stage A) the pinned launcher is `argonreview-2e3a6bf`, SHA-256
+`ba8dfbefd61790134f49d35564be9a5ca9df62494061e7083cce69b7920a8418`,
+built from the frozen read-only clone `argon-trusted/src-2e3a6bf`
+(origin/main 2e3a6bf). It keeps the peer-home and worktree-lock checks
+(#1636). The wrappers pin the binary hash and trusted source. Both workers
+switched in one window. The earlier pinned launcher `argonreview-7f607ca`
+(SHA-256 `11800ec70f4d47e3c89cb57421b4b9d696a13da18c51de9c3261d6bf317cbe51`,
+clone `src-7f607ca`) and the in-home `*.7f607ca` hook and wrapper set stay for
+rollback; the rollback was drilled once on 2026-10-27 (never run mixed launchers).
 
 Worker 2's home is `agy-worker-home-2`. Each worker's run and check wrappers
 hard-code HOME and PEERS: the other worker and the review home. Worker 2
@@ -68,7 +72,12 @@ agy updates apply to both workers; each worker's builtin trust is a separate
 maintainer decision, even when the lists match. Launcher changes also need
 the maintainer's approval.
 
-Host experiments E0 to E5 were not required and were not run. E1, the quota
+Stage A obligations ([#1700 record](https://github.com/tkakkie/ribbitto/issues/1700#issuecomment-6431742979)):
+every smoke test includes the refusal set and a symlink refusal; after an `agy`
+update, re-run the isolated hook-failure, settings-layer, duplicate-key and
+home-path checks (exceptions E1, E3, E4, R6) before enabling.
+
+The earlier host experiments E0 to E5 (not #1700's exceptions) were not required and were not run. E1, the quota
 experiment, was never started: two parallel runs were enough. The quota
 question stays open; a quota problem means going back to one worker.
 

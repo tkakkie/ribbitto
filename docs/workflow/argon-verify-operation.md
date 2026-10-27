@@ -6,6 +6,12 @@ since 2026-10-22 (#1436 Stage 2).
 After reading #1433's record, the maintainer approved enabling in chat
 that day. Evidence: [step 1][step1], [preflight][preflight],
 [enabling and passing smoke test][smoke]. Stage 2 is independent of enabling.
+On 2026-10-27 the maintainer approved [#1700](https://github.com/tkakkie/ribbitto/issues/1700)
+stage A: both workers run `argonreview-2e3a6bf` and its verify image
+(generator checks, `test-db`, summary). Its window passed the smoke tests, a
+rollback to `7f607ca` and a second switch; the record is on #1700. `agy` does
+not offer `run_command`, so that refusal was not seen in the agent: the guard's
+and the settings layer's own refusals cover it.
 
 The [verify image recipe](argon-verify-image.md) describes the host build procedure;
 each build needs the maintainer's approval in chat.
@@ -50,8 +56,7 @@ In `on` mode:
 On-mode MCP admits only the exact `verify` call through agreeing guard and
 settings layers. In [preflight][preflight], the guard refused every invalid
 call first; the settings and server layers were not probed separately.
-Arbitrary shell and `run_command` remain refused. Database and
-browser tests stay CI-only. `verified` never replaces CI, review or handoff
+Arbitrary shell and `run_command` remain refused. Browser tests stay CI-only. `verified` never replaces CI, review or handoff
 checks. The Start gate and review independence stay.
 
 ## Write-back at handoff

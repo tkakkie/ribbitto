@@ -248,9 +248,6 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 			// Keep the requested composer scope even if the message moved.
 			topic, lookupErr := p.writer(tx).GetDefaultTopic(ctx, m.Organization.ID, channelID)
 			if errors.Is(lookupErr, ErrTopicNotFound) {
-				return ErrChannelNotFound
-			}
-			if lookupErr != nil {
 				return lookupErr
 			}
 			if s.Topic != nil {
@@ -274,9 +271,6 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 	var quote *Quote
 	if s.Quote != nil {
 		references, err := p.quoteReferences(ctx, m.Organization.ID, channelID, *s.Quote)
-		if err != nil {
-			return Sent{}, err
-		}
 		if quote, err = quoteOf(original, references, s.UnknownMember, s.QuoteText); err != nil {
 			return Sent{}, err
 		}

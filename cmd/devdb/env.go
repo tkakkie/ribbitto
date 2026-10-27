@@ -286,7 +286,8 @@ func withLock(common string, how int, fn func() error) error {
 		return err
 	}
 	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
-	return fn()
+	_ = fn()
+	return nil
 }
 
 // resolve follows symlinks like Python's Path.resolve: as far as the path

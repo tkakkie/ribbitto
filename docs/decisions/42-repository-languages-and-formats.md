@@ -67,13 +67,20 @@ Directory entries below are direct-only unless stated otherwise:
   file, direct. It may define only the image the trusted `verify` runner uses
   for the approved checks (#1696 points its pinned image constant,
   `containerVerifyImage` today, at the image built from this recipe), with only
-  the tools those checks need:
-  the generators (templ, sqlc, Tailwind; #1696) and PostgreSQL 18 (#1697).
-  Adding a browser (Chromium) or any other package set to the recipe, or a
-  second recipe, requires a new amendment of this decision approved by the
-  maintainer in each case. The `test-browser` decision (#1698) only decides
-  whether to propose such an amendment. No `.dockerignore`, compose or CI
-  change, or script file.
+  the tools those checks need: generators (templ, sqlc, Tailwind; #1696),
+  PostgreSQL 18 (#1697), and Debian's `chromium` and `fonts-liberation` for
+  `test-browser`, each at an exact version written in the recipe. Transitive
+  dependencies float, with a `dpkg-query -W` diff reviewed at each build,
+  as for PostgreSQL. This same file is also the `test-browser` image recipe:
+  a permitted use of this file kind, not a new kind, path or second recipe;
+  `tools/languagecheck`'s allowed set is unchanged. Any other browser, any
+  other package set or a second recipe still requires a new amendment
+  approved by the maintainer in each case.
+  [Approval record](https://github.com/tkakkie/ribbitto/issues/1908#issuecomment-6447910120)
+  (#1908, 2026-10-28). The recipe pins,
+  `containerChromiumVersion` and update path are in
+  [browser updates](../workflow/argon-verify-browser-updates.md).
+  No `.dockerignore`, compose or CI change, or script file.
   Every `FROM` uses an `@sha256:` digest; every download uses an exact version
   with a SHA-256 written in the recipe and checked in the same step; Go tools
   are built from the committed `tools/go.mod` and `tools/go.sum`; apt packages

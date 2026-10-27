@@ -46,6 +46,11 @@ const (
 	containerTimeLimitVerdict = "NOT VERIFIED: time limit exceeded"
 )
 
+// The recipe pins Chromium; the browser check's scope text will name it. The
+// recipe test keeps the two equal. A separate declaration keeps the block above
+// free of realignment conflicts with later edits to containerVerifyImage.
+const containerChromiumVersion = "156.0.8078.47-1~deb13u1"
+
 // A single-run container has a fresh /tmp. Copy dotfiles too, keeping /work read-only.
 // Generator stdout must not contaminate the test2json stream.
 const (

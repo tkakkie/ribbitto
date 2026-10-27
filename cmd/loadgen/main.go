@@ -176,11 +176,11 @@ func readSnapshot(t transport, dst *snapshot) error {
 		return fmt.Errorf("reading metrics: %w", err)
 	}
 	defer func() { _ = r.Body.Close() }()
-	if r.StatusCode != http.StatusOK {
-		return fmt.Errorf("metrics HTTP status %d", r.StatusCode)
-	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst); err != nil {
 		return fmt.Errorf("decoding metrics: %w", err)
+	}
+	if r.StatusCode != http.StatusOK {
+		return fmt.Errorf("metrics HTTP status %d", r.StatusCode)
 	}
 	return nil
 }

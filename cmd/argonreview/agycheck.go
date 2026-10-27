@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 )
 
 // Observations are supplied facts, never inferred from a hook's exit status.
@@ -37,10 +38,15 @@ type agyCheckResult struct {
 	Rows                      []agyCheckResultRow
 }
 
+var (
+	agyCheckVersionPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)+$`)
+	agyCheckHashPattern    = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+)
+
 func agyCheckPinReason(before, after agyCheckPin) string {
 	for _, pin := range []agyCheckPin{before, after} {
-		if !regexp.MustCompile(`^[0-9]+(\.[0-9]+)+$`).MatchString(pin.Version) ||
-			!regexp.MustCompile(`^[0-9a-fA-F]{64}$`).MatchString(pin.ExecutableSHA256) {
+		if !agyCheckVersionPattern.MatchString(pin.Version) ||
+			!agyCheckHashPattern.MatchString(pin.ExecutableSHA256) {
 			return "empty or malformed version/executable SHA256 reading"
 		}
 	}
@@ -82,9 +88,6 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 		r.Observed = fmt.Sprintf("loaded=%t ran=%t covered=%t", o.Loaded, o.Ran, covered)
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
 	case "counts reconcile":
-		if minimum == 0 {
-			minimum = agyCheckDefaultCalls
-		}
 		s := o.Summary
 		r.Observed = fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d batches=%d",
 			s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.ParallelBatches)
@@ -104,7 +107,7 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 	if usageError != "" {
 		return r
 	}
-	if minimum < 0 {
+	if minimum <= 0 {
 		r.UsageError = "minimum calls must be positive"
 		return r
 	}
@@ -156,6 +159,15 @@ func agyCheckExitCode(r agyCheckResult) int {
 	return agyCheckSuccess
 }
 
+func agyCheckPrintable(value string) string {
+	return strings.Map(func(r rune) rune {
+		if !unicode.IsPrint(r) {
+			return '?'
+		}
+		return r
+	}, value)
+}
+
 func agyCheckRender(w io.Writer, r agyCheckResult) error {
 	var out strings.Builder
 	switch {
@@ -172,7 +184,7 @@ func agyCheckRender(w io.Writer, r agyCheckResult) error {
 				status = "differs"
 				differing++
 			}
-			fmt.Fprintf(&out, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Expected, row.Observed, status, row.Description)
+			fmt.Fprintf(&out, "%s\t%s\t%s\t%s\t%s\n", agyCheckPrintable(row.ID), row.Expected, agyCheckPrintable(row.Observed), status, row.Description)
 		}
 		fmt.Fprintf(&out, "Rows: %d; differing: %d\n", len(r.Rows), differing)
 		if agyCheckExitCode(r) == agyCheckSuccess {

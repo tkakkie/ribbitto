@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // Independent fixtures pin both the row set and the known outcomes.
@@ -55,7 +56,7 @@ func TestAgyCheckExpectedTable(t *testing.T) {
 func TestAgyCheckSilentExitZeroAllows(t *testing.T) {
 	for _, outcome := range []string{"allowed", "denied"} {
 		t.Run(outcome, func(t *testing.T) {
-			r := agyCheckClassify(agyCheckObservation{ID: "hook-silent", Outcome: outcome}, 0)
+			r := agyCheckClassify(agyCheckObservation{ID: "hook-silent", Outcome: outcome}, agyCheckDefaultCalls)
 			if r.Observed != outcome || r.OK != (outcome == "allowed") {
 				t.Fatalf("silent exit 0: %+v", r)
 			}
@@ -67,7 +68,7 @@ func TestAgyCheckClassification(t *testing.T) {
 	_, fixtures := agyCheckFixtures()
 	for _, o := range fixtures {
 		t.Run(o.ID, func(t *testing.T) {
-			if r := agyCheckClassify(o, 0); !r.OK {
+			if r := agyCheckClassify(o, agyCheckDefaultCalls); !r.OK {
 				t.Fatalf("fixture differs: %+v", r)
 			}
 			for _, outcome := range []string{"allowed", "denied", "answered", "not exercisable", "", "unknown"} {
@@ -76,14 +77,14 @@ func TestAgyCheckClassification(t *testing.T) {
 				}
 				changed := o
 				changed.Outcome = outcome
-				if r := agyCheckClassify(changed, 0); r.OK != (outcome == o.Outcome) {
+				if r := agyCheckClassify(changed, agyCheckDefaultCalls); r.OK != (outcome == o.Outcome) {
 					t.Fatalf("outcome %q: %+v", outcome, r)
 				}
 			}
 		})
 	}
-	if agyCheckClassify(agyCheckObservation{ID: "unknown"}, 0).OK ||
-		agyCheckClassifyRow(agyCheckRow{Expected: "unknown"}, agyCheckObservation{Outcome: "unknown"}, 0).OK {
+	if agyCheckClassify(agyCheckObservation{ID: "unknown"}, agyCheckDefaultCalls).OK ||
+		agyCheckClassifyRow(agyCheckRow{Expected: "unknown"}, agyCheckObservation{Outcome: "unknown"}, agyCheckDefaultCalls).OK {
 		t.Fatal("unknown row/expectation matched")
 	}
 }
@@ -93,12 +94,19 @@ func TestAgyCheckDiscoveryRefusedNames(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			row := agyCheckRow{Expected: "covered if loaded", Location: "nested/" + strings.ToUpper(name) + "/custom"}
 			for _, facts := range []struct{ loaded, ran, ok bool }{{true, true, name != "ordinary"}, {false, false, true}, {true, false, false}, {false, true, false}} {
-				r := agyCheckClassifyRow(row, agyCheckObservation{Loaded: facts.loaded, Ran: facts.ran}, 0)
+				r := agyCheckClassifyRow(row, agyCheckObservation{Loaded: facts.loaded, Ran: facts.ran}, agyCheckDefaultCalls)
 				if r.OK != facts.ok {
 					t.Fatalf("%+v: %+v", facts, r)
 				}
 			}
 		})
+	}
+}
+
+func TestAgyCheckDiscoveryEmptyLocation(t *testing.T) {
+	r := agyCheckClassifyRow(agyCheckRow{Expected: "covered if loaded"}, agyCheckObservation{Loaded: false, Ran: false}, agyCheckDefaultCalls)
+	if r.OK {
+		t.Fatalf("empty location matched: %+v", r)
 	}
 }
 
@@ -109,19 +117,20 @@ func TestAgyCheckReconciliation(t *testing.T) {
 		minimum int
 		ok      bool
 	}{
-		{"default", agyCheckSummary{30, 30, 15, 15, 15, 15, 2}, 0, true},
+		{"default", agyCheckSummary{30, 30, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, true},
 		{"odd", agyCheckSummary{31, 31, 16, 15, 15, 16, 2}, 31, true},
 		{"override", agyCheckSummary{40, 40, 20, 20, 20, 20, 2}, 40, true},
-		{"too few", agyCheckSummary{28, 28, 14, 14, 14, 14, 2}, 0, false},
+		{"too few", agyCheckSummary{28, 28, 14, 14, 14, 14, 2}, agyCheckDefaultCalls, false},
 		{"override too few", agyCheckSummary{30, 30, 15, 15, 15, 15, 2}, 40, false},
-		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1}, 0, false},
-		{"steps", agyCheckSummary{31, 30, 15, 15, 15, 15, 2}, 0, false},
-		{"hooks", agyCheckSummary{30, 31, 15, 15, 15, 15, 2}, 0, false},
-		{"errors", agyCheckSummary{30, 30, 15, 15, 14, 15, 2}, 0, false},
-		{"files", agyCheckSummary{30, 30, 15, 15, 15, 14, 2}, 0, false},
-		{"total", agyCheckSummary{30, 30, 14, 15, 15, 14, 2}, 0, false},
-		{"alternation", agyCheckSummary{30, 30, 17, 13, 13, 17, 2}, 0, false},
-		{"negative", agyCheckSummary{30, 30, -1, 31, 31, -1, 2}, 0, false},
+		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1}, agyCheckDefaultCalls, false},
+		{"steps", agyCheckSummary{31, 30, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, false},
+		{"hooks", agyCheckSummary{30, 31, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, false},
+		{"errors", agyCheckSummary{30, 30, 15, 15, 14, 15, 2}, agyCheckDefaultCalls, false},
+		{"files", agyCheckSummary{30, 30, 15, 15, 15, 14, 2}, agyCheckDefaultCalls, false},
+		{"total", agyCheckSummary{30, 30, 14, 15, 15, 14, 2}, agyCheckDefaultCalls, false},
+		{"alternation", agyCheckSummary{30, 30, 17, 13, 13, 17, 2}, agyCheckDefaultCalls, false},
+		{"negative", agyCheckSummary{30, 30, -1, 31, 31, -1, 2}, agyCheckDefaultCalls, false},
+		{"no allows", agyCheckSummary{1, 1, 0, 1, 1, 0, 2}, 1, false},
 		{"no denies", agyCheckSummary{1, 1, 1, 0, 0, 1, 2}, 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,7 +144,7 @@ func TestAgyCheckReconciliation(t *testing.T) {
 func agyCheckAssertInvalid(t *testing.T, before, after agyCheckPin) {
 	t.Helper()
 	_, fixtures := agyCheckFixtures()
-	r := agyCheckEvaluate(before, after, fixtures, 0, "")
+	r := agyCheckEvaluate(before, after, fixtures, agyCheckDefaultCalls, "")
 	var out strings.Builder
 	if err := agyCheckRender(&out, r); err != nil {
 		t.Fatal(err)
@@ -169,6 +178,22 @@ func TestAgyCheckHashPin(t *testing.T) {
 	}
 }
 
+func TestAgyCheckMalformedPins(t *testing.T) {
+	pin, _ := agyCheckFixtures()
+	for _, tc := range []struct{ name, version, hash string }{
+		{"empty version", "", pin.ExecutableSHA256},
+		{"bad version", "bad", pin.ExecutableSHA256},
+		{"empty hash", pin.Version, ""},
+		{"short hash", pin.Version, strings.Repeat("a", 63)},
+		{"nonhex hash", pin.Version, strings.Repeat("g", 64)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			malformed := agyCheckPin{tc.version, tc.hash}
+			agyCheckAssertInvalid(t, malformed, malformed)
+		})
+	}
+}
+
 func TestAgyCheckInvalidResult(t *testing.T) {
 	before, _ := agyCheckFixtures()
 	after := before
@@ -184,7 +209,10 @@ func TestAgyCheckMissingAndDuplicateRows(t *testing.T) {
 	}{{"missing", fixtures[1:]}, {"duplicate", append(append([]agyCheckObservation{}, fixtures...), fixtures[0])}, {"empty", nil},
 		{"unknown", append(append([]agyCheckObservation{}, fixtures...), agyCheckObservation{ID: "unknown"})}} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := agyCheckEvaluate(pin, pin, tc.rows, 0, "")
+			r := agyCheckEvaluate(pin, pin, tc.rows, agyCheckDefaultCalls, "")
+			if tc.name == "missing" && (len(r.Rows) == 0 || r.Rows[0].ID != fixtures[0].ID || r.Rows[0].Observed != "missing row" || r.Rows[0].OK) {
+				t.Fatalf("missing row not identified: %+v", r)
+			}
 			var out strings.Builder
 			if err := agyCheckRender(&out, r); err != nil || agyCheckExitCode(r) != 1 || strings.Contains(out.String(), agyCheckSuccessLine) || !strings.Contains(out.String(), "differs") {
 				t.Fatalf("incomplete run passed: %+v; %s; %v", r, out.String(), err)
@@ -201,7 +229,7 @@ func TestAgyCheckFinalLine(t *testing.T) {
 		if differs {
 			fixtures[0].Outcome = "allowed"
 		}
-		r := agyCheckEvaluate(pin, pin, fixtures, 0, "")
+		r := agyCheckEvaluate(pin, pin, fixtures, agyCheckDefaultCalls, "")
 		var out strings.Builder
 		if err := agyCheckRender(&out, r); err != nil {
 			t.Fatal(err)
@@ -212,16 +240,47 @@ func TestAgyCheckFinalLine(t *testing.T) {
 	}
 }
 
+func TestAgyCheckRenderControls(t *testing.T) {
+	for _, column := range []string{"ID", "Observed"} {
+		t.Run(column, func(t *testing.T) {
+			pin, fixtures := agyCheckFixtures()
+			const controls = "\t\n\x00\x1b\u0085"
+			if column == "ID" {
+				fixtures = append(fixtures, agyCheckObservation{ID: "unknown" + controls})
+			} else {
+				fixtures[0].Outcome = "denied" + controls
+			}
+			r := agyCheckEvaluate(pin, pin, fixtures, agyCheckDefaultCalls, "")
+			var out strings.Builder
+			if err := agyCheckRender(&out, r); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Count(out.String(), "\n") != len(r.Rows)+2 || strings.ContainsFunc(out.String(), func(r rune) bool { return r != '\n' && !unicode.IsPrint(r) }) || !strings.Contains(out.String(), "?????") || strings.Contains(out.String(), agyCheckSuccessLine) {
+				t.Fatalf("unsafe %s column: %q", column, out.String())
+			}
+		})
+	}
+}
+
+func TestAgyCheckZeroMinimum(t *testing.T) {
+	pin, fixtures := agyCheckFixtures()
+	r := agyCheckEvaluate(pin, pin, fixtures, 0, "")
+	var out strings.Builder
+	if err := agyCheckRender(&out, r); err != nil || r.UsageError != "minimum calls must be positive" || agyCheckExitCode(r) != 2 || !strings.HasPrefix(out.String(), "USAGE:") {
+		t.Fatalf("zero minimum: %+v; %q; %v", r, out.String(), err)
+	}
+}
+
 func TestAgyCheckUsageAndWriter(t *testing.T) {
 	pin, fixtures := agyCheckFixtures()
-	for _, r := range []agyCheckResult{agyCheckEvaluate(pin, pin, fixtures, 0, "bad input"), agyCheckEvaluate(pin, pin, fixtures, -1, "")} {
+	for _, r := range []agyCheckResult{agyCheckEvaluate(pin, pin, fixtures, agyCheckDefaultCalls, "bad input"), agyCheckEvaluate(pin, pin, fixtures, -1, "")} {
 		var out strings.Builder
 		if err := agyCheckRender(&out, r); err != nil || agyCheckExitCode(r) != 2 || !strings.HasPrefix(out.String(), "USAGE:") || strings.Contains(out.String(), agyCheckSuccessLine) {
 			t.Fatalf("usage: %+v; %v", r, err)
 		}
 	}
 	for _, failure := range []error{io.ErrClosedPipe, nil} {
-		if err := agyCheckRender(agyCheckBadWriter{failure}, agyCheckEvaluate(pin, pin, fixtures, 0, "")); err == nil || (failure != nil && !errors.Is(err, failure)) {
+		if err := agyCheckRender(agyCheckBadWriter{failure}, agyCheckEvaluate(pin, pin, fixtures, agyCheckDefaultCalls, "")); err == nil || (failure != nil && !errors.Is(err, failure)) {
 			t.Fatalf("writer error lost: %v", err)
 		}
 	}

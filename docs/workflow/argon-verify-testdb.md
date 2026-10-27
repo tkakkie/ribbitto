@@ -59,7 +59,8 @@ are never set by the runner.
 All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
 2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
 mounts.
-A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`.
+A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`; the 10-minute
+timeout reads `NOT VERIFIED: time limit exceeded` ([results](#timeout-and-cancel-results)).
 PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
 standard error and count toward the shared 4 MiB output cap.
 The cap counts the container's standard output and standard error together
@@ -163,8 +164,7 @@ an empty pre-container report gets its line from the MCP wrapper.
 | Run deadline while the container runs | `NOT VERIFIED: time limit exceeded` |
 | Deadline after a complete pass, including final processing | `NOT VERIFIED: time limit exceeded` |
 | Deadline together with the output cap | `NOT VERIFIED: output limit exceeded (output cut off)` |
-| Complete failure, skips or no tests; deadline during source removal | Existing failing or `NOT VERIFIED` verdict |
-| Deadline during stop/removal after a non-passing result | Existing `FAILED` |
+| Complete failure, skips or no tests; deadline during stop, removal or source removal | Own failing or `NOT VERIFIED` verdict |
 | Deadline before a container, or MCP call deadline | Wrapper timeout line; a call deadline reaching the runner uses the run deadline rule |
 | Cleanup timeout alone, runner error or status 125 | Existing `FAILED` |
 | Source cleanup failure | `FAILED: source cleanup failed` |
@@ -175,6 +175,6 @@ an empty pre-container report gets its line from the MCP wrapper.
 Only the run context decides a run deadline; a timeout error from independent
 cleanup does not. Unconfirmed container removal keeps `FAILED`, even with a
 run deadline. Parent deadlines reaching the run context follow the same rule.
-Injected MCP cancellation retains the recognized `FAILED` line. Timeout and
+Parent cancellation keeps `FAILED`. Timeout and
 cancel summaries keep #1846's fixed minimal body: “Details unavailable: the
 check did not complete.” Output caps keep “Counts unavailable” instead.

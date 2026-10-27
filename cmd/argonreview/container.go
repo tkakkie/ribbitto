@@ -330,9 +330,10 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	// Record completion before cleanup: a later deadline cannot undo a finished
 	// container, while an earlier interruption makes its result unknowable.
-	completed := runErr == nil && ctx.Err() == nil
+	interrupted := ctx.Err() != nil
+	completed := runErr == nil && !interrupted
 	result.code = code
-	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, output, &in)
+	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
@@ -362,7 +363,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed bool, output *containerOutput, in *summaryInput) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
 	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
@@ -391,11 +392,15 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	verdict, stat, stdout := containerVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {
-		withoutError, _, _ := containerVerdict(check, code, nil, output)
 		// One interruption rule governs host and MCP: an unfinished run or a
 		// completed pass loses verification; other completed verdicts stay pinned.
 		// Read the run context, since joined errors include independent cleanup.
-		if !completed || strings.HasPrefix(withoutError, "verified") {
+		if completed {
+			verdict, stat, stdout = containerVerdict(check, code, nil, output)
+		}
+		// A runner error returned with a healthy context keeps FAILED even if
+		// cleanup outlives the deadline; only interruption during run is unknown.
+		if interrupted || completed && strings.HasPrefix(verdict, "verified") {
 			verdict = containerTimeLimitVerdict
 		}
 	}

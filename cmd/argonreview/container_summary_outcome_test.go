@@ -229,6 +229,65 @@ func TestContainerContextNeverVerified(t *testing.T) {
 	}
 }
 
+func TestContainerRunnerErrorLateDeadline(t *testing.T) {
+	for _, stage := range []string{"stop", "rm"} {
+		for _, check := range verifyCheckNames() {
+			t.Run(stage+"/"+check, func(t *testing.T) {
+				t.Parallel()
+				row := deadlineRow{"row 8 runner error then late deadline", stage, "runner error", context.DeadlineExceeded}
+				characterizeDeadlineRow(t, check, row, true)
+			})
+		}
+	}
+}
+
+func TestContainerLateDeadlineGeneratedOutput(t *testing.T) {
+	for _, stage := range []string{"stop", "rm"} {
+		for _, tc := range []struct {
+			name, stdout, verdict, stat, output string
+			code                                int
+		}{
+			{"diff", generatedFixture("a.go", "@@ -1 +1 @@\n-a\n+b\n"), "FAILED: generated files differ", "a.go +1 -1\n1 paths, +1 -1\n", "", generatedDiffer},
+			{"gofmt", "a.go\nb.go\n", "FAILED: formatting", "", "a.go\nb.go", generatedGofmtNames},
+			{"status", "", "FAILED", "Generated check could not complete (status 24).\n", "\n", generatedGofmtFailed},
+		} {
+			t.Run(stage+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
+				tree, copies := containerFixture(t), t.TempDir()
+				var activeRun context.Context
+				base := summaryRunner(tc.stdout, "", tc.code)
+				runner := fakeContainerRunner{func(ctx context.Context, args, env []string, out, diagnostic io.Writer) (int, error) {
+					if args[0] == "run" {
+						activeRun = ctx
+						if ctx.Err() != nil {
+							t.Fatal("deadline expired before run")
+						}
+					}
+					if args[0] == stage {
+						<-activeRun.Done()
+					}
+					return base.run(ctx, args, env, out, diagnostic)
+				}}
+				execution := containerExecution{timeout: 2 * time.Second}
+				report, err := runContainerExecution(context.Background(), tree, "generated", "./...", runner, copies, &execution)
+				output := tc.output
+				if tc.name == "diff" {
+					output = tc.stdout + "\n"
+				}
+				want := tc.verdict + "\n" + tc.stat + containerCheckScope("generated") + "\n--- stdout\n" + output + "\n--- stderr\n\n"
+				if report != want || !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("late deadline generated report %q, want %q; error %v", report, want, err)
+				}
+				summary, mcpErr := (containerVerifier{tree, runner, copies, 2 * time.Second}).verify(context.Background(), "generated", "./...")
+				if summary != execution.summary || !errors.Is(mcpErr, context.DeadlineExceeded) {
+					t.Fatalf("late deadline host/MCP mismatch: %q, %v", summary, mcpErr)
+				}
+				assertIncompleteSummary(t, report, summary, mcpErr)
+			})
+		}
+	}
+}
+
 func TestContainerContextCommandExit(t *testing.T) {
 	for _, check := range verifyCheckNames() {
 		for _, stage := range []string{"run", "stop", "rm"} {

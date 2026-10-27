@@ -32,6 +32,7 @@ func TestContainerDeadlineRows(t *testing.T) {
 	for _, stage := range []string{"stop", "rm", "finishReport"} {
 		rows = append(rows,
 			deadlineRow{"row 4 deadline after failing result " + stage, stage, "fail", context.DeadlineExceeded},
+			deadlineRow{"row 4 deadline after malformed stream " + stage, stage, "malformed", context.DeadlineExceeded},
 			deadlineRow{"row 5 deadline after skipped result " + stage, stage, "skip", context.DeadlineExceeded},
 			deadlineRow{"row 5 deadline after no tests " + stage, stage, "no tests", context.DeadlineExceeded},
 			deadlineRow{"row 9 cancel after verified result " + stage, stage, "pass", context.Canceled},
@@ -42,7 +43,7 @@ func TestContainerDeadlineRows(t *testing.T) {
 		t.Run(row.name, func(t *testing.T) {
 			t.Parallel()
 			for _, check := range verifyCheckNames() {
-				if (row.outcome == "skip" || row.outcome == "no tests") && check != "test" && check != "test-db" {
+				if (row.outcome == "skip" || row.outcome == "no tests" || row.outcome == "malformed") && check != "test" && check != "test-db" {
 					continue
 				}
 				t.Run(check, func(t *testing.T) {
@@ -74,6 +75,8 @@ func deadlineFixture(check, outcome string) (stdout, verdict string, code int) {
 		stdout, verdict = containerEvents("p", "TestSkip", "skip"), "NOT VERIFIED: 1 skipped\np/TestSkip"
 	case "no tests":
 		stdout, verdict = containerJSON("p", "start", "pass"), "NOT VERIFIED: a targeted package has no tests, or no leaf test passed"
+	case "malformed":
+		stdout, verdict = "garbage\n", "FAILED: malformed test stream"
 	case "cap":
 		stdout = strings.Repeat("x", containerOutputLimit+1)
 	case "125":
@@ -87,6 +90,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	tree, copies := containerFixture(t), t.TempDir()
 	stdout, original, code := deadlineFixture(check, row.outcome)
 	const stderr = "runner diagnostic"
+	runnerFailure := errors.New("runner failed")
 	var execution containerExecution
 	timeout := containerTimeout
 	if len(injected) != 0 && injected[0] {
@@ -160,7 +164,11 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 				}
 				if row.outcome == "runner error" {
 					_, _ = base.run(runCtx, args, env, out, diagnostic)
-					return -1, errors.New("runner failed")
+					if row.stage != "run" {
+						// A passing stream/status cannot prove completion after a runner error.
+						return code, runnerFailure
+					}
+					return -1, runnerFailure
 				}
 				if row.stage == "run" && (errors.Is(row.interruption, context.DeadlineExceeded) || errors.Is(row.interruption, context.Canceled)) {
 					_, _ = base.run(runCtx, args, env, out, diagnostic)
@@ -215,9 +223,14 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	report, summary, err := run(false)
 	first := "FAILED"
 	verdict := first
-	if row.interruption == context.DeadlineExceeded && (row.stage == "run" || row.outcome == "pass" && row.stage != "before") {
+	if row.interruption == context.DeadlineExceeded && row.outcome != "runner error" && (row.stage == "run" || row.outcome == "pass" && row.stage != "before") {
 		// #1857: was FAILED (rows 1, 3 and row 11's parent-deadline path).
 		verdict = "NOT VERIFIED: time limit exceeded"
+	}
+	lateDeadline := row.interruption == context.DeadlineExceeded && (row.stage == "stop" || row.stage == "rm") && row.outcome != "runner error"
+	if lateDeadline && row.outcome != "pass" {
+		// #1857: was FAILED (rows 4/5 now keep their own completed verdict).
+		verdict = original
 	}
 	if row.stage == "finishReport" && row.outcome != "pass" {
 		verdict = original
@@ -229,7 +242,8 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 		verdict += "\n1 passing leaf tests"
 	}
 	first, _, _ = strings.Cut(verdict, "\n")
-	wantReport := deadlineHostReport(check, verdict, stdout, stderr, code, row.stage != "finishReport")
+	// #1857: was FAILED's error-bearing generated output, even after a completed pass.
+	wantReport := deadlineHostReport(check, verdict, stdout, stderr, code, row.stage != "finishReport" && !lateDeadline)
 	switch row.stage {
 	case "before":
 		wantReport = ""
@@ -254,6 +268,9 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	_, mcpSummary, mcpErr := run(true)
 	if summary != mcpSummary || (err == nil) != (mcpErr == nil) || wantErr != nil && !errors.Is(mcpErr, wantErr) {
 		t.Fatalf("host/MCP mismatch: summaries %q / %q, errors %v / %v", summary, mcpSummary, err, mcpErr)
+	}
+	if row.outcome == "runner error" && (!errors.Is(err, runnerFailure) || !errors.Is(mcpErr, runnerFailure)) {
+		t.Fatalf("runner error lost: host %v, MCP %v", err, mcpErr)
 	}
 	if row.stage == "before" {
 		first = "NOT VERIFIED: cancelled"

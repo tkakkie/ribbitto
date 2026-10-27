@@ -158,3 +158,53 @@ func TestBudgetInventoryReadOnly(t *testing.T) {
 		t.Fatal("refused commands issued")
 	}
 }
+
+func TestBudgetInspectComplete(t *testing.T) {
+	id := strings.Repeat("a", 64)
+	for _, row := range []struct {
+		name, fields string
+		valid        bool
+	}{
+		{"id-only", ``, false},
+		{"missing-name", `,"Config":{},"State":{"Status":"running"}`, false},
+		{"missing-config", `,"Name":"/foreign","State":{"Status":"running"}`, false},
+		{"null-config", `,"Name":"/foreign","Config":null,"State":{"Status":"running"}`, false},
+		{"missing-state", `,"Name":"/foreign","Config":{}`, false},
+		{"null-state", `,"Name":"/foreign","Config":{},"State":null`, false},
+		{"missing-status", `,"Name":"/foreign","Config":{},"State":{}`, false},
+		{"null-status", `,"Name":"/foreign","Config":{},"State":{"Status":null}`, false},
+		{"empty-status", `,"Name":"/foreign","Config":{},"State":{"Status":""}`, false},
+		{"without-labels", `,"Name":"/foreign","Config":{},"State":{"Status":"running"}`, true},
+		{"null-labels", `,"Name":"/foreign","Config":{"Labels":null},"State":{"Status":"running"}`, true},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			listings := 0
+			runner := &budgetRecordingRunner{t: t, respond: func(args []string, stdout, _ io.Writer) (int, error) {
+				if args[0] == "ps" {
+					listings++
+					_, _ = fmt.Fprintln(stdout, id)
+				} else {
+					_, _ = fmt.Fprintf(stdout, `{"Id":%q%s}`, id, row.fields)
+				}
+				return 0, nil
+			}}
+			inventory := budgetDockerInventory{runner: runner}
+			c, err := inventory.budgetInspect(context.Background(), id)
+			if row.valid {
+				if err != nil || c.ID != id || c.Name != "/foreign" || c.State != "running" || c.Labels != nil {
+					t.Fatalf("unlabeled inspection: %+v, %v", c, err)
+				}
+				return
+			}
+			if err == nil || err.Error() != "invalid container inspection" {
+				t.Fatalf("incomplete inspection accepted or wrong error: %+v, %v", c, err)
+			}
+			b, _, _ := budgetSlotsFixture(t)
+			b.inventory = inventory
+			budgetAssertCause(t, b, "unavailable: the container state could not be determined")
+			if listings != 2 {
+				t.Fatalf("incomplete inspection not confirmed by fresh listing: %d", listings)
+			}
+		})
+	}
+}

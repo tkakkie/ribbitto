@@ -36,7 +36,8 @@ type budgetSlots struct {
 	processes processTable
 	locks     budgetLocks
 	// M3 must apply M2's otherVerificationConsistent before trusting held slots.
-	// This seam receives non-verification containers unchanged; M1b classifies none.
+	// This nil-by-default seam receives all containers unchanged, in inventory
+	// order; M1b performs no classification through it.
 	budgetHook func([]budgetContainer) ([3]bool, budgetResult)
 }
 
@@ -64,14 +65,17 @@ func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
 	if err != nil || processErr != nil {
 		return held, budgetStateUnknown
 	}
-	var nonVerification []budgetContainer
-	var invalid, duplicate bool
+	var unknown, invalid, duplicate bool
 	pattern := regexp.MustCompile(containerNamePattern)
 	for _, c := range containers {
+		switch c.State {
+		case "created", "running", "paused", "restarting", "exited", "dead", "removing":
+		default:
+			unknown = true
+		}
 		_, ownerPresent := c.Labels[containerOwnerLabel]
 		nameMatches := strings.HasPrefix(c.Name, "/") && pattern.MatchString(strings.TrimPrefix(c.Name, "/"))
 		if !nameMatches && !ownerPresent {
-			nonVerification = append(nonVerification, c)
 			continue
 		}
 		// Even exited, dead and removing leftovers outlive their runner's flock.
@@ -88,6 +92,9 @@ func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
 		}
 	}
 	// Accumulate before choosing a cause so inventory ordering cannot change it.
+	if unknown {
+		return held, budgetStateUnknown
+	}
 	if invalid {
 		return held, budgetInvalidLabel
 	}
@@ -98,7 +105,7 @@ func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
 		return held, budgetOrphanPresent
 	}
 	if b.budgetHook != nil {
-		additional, result := b.budgetHook(nonVerification)
+		additional, result := b.budgetHook(containers)
 		if result != "" {
 			return held, result
 		}
@@ -147,6 +154,12 @@ func (b budgetSlots) budgetReserve(ctx context.Context, request budgetRequest) (
 			return budgetReservation{}, budgetCanceled
 		}
 		result := b.budgetAttempt(ctx, request)
+		if ctx.Err() != nil {
+			if result.reservation.release != nil {
+				result.reservation.release()
+			}
+			return budgetReservation{}, budgetCanceled
+		}
 		if result.reservation.release != nil || result.cause == budgetUnsafeLock || result.cause == budgetCanceled || result.cause == budgetBadRequest {
 			return result.reservation, result.cause
 		}
@@ -208,6 +221,9 @@ func (b budgetSlots) budgetAttempt(ctx context.Context, request budgetRequest) b
 			return budgetAttemptResult{reservation: budgetReservation{slots, strings.Join(labels, ","), int64(len(slots)) * budgetUnit, release}}
 		}
 		release()
+		if result == budgetBusy {
+			continue
+		}
 		return budgetAttemptResult{cause: result}
 	}
 	return budgetAttemptResult{cause: budgetBusy}

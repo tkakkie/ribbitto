@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"syscall"
@@ -166,7 +167,7 @@ func TestBudgetSlots(t *testing.T) {
 				i.containers = []budgetContainer{budgetContainerFixture("0")}
 			}
 		}
-		budgetAssertCause(t, b, "busy")
+		budgetAssertReserve(t, b, budgetSingle, "1").release()
 		budgetTake(t, b.locks, budgetSlot0)()
 	})
 	t.Run("SIGKILL", func(t *testing.T) {
@@ -221,6 +222,60 @@ func budgetKilledHolder(t *testing.T, b budgetLocks) {
 	if !errors.As(err, &exit) || exit.Sys().(syscall.WaitStatus).Signal() != syscall.SIGKILL {
 		t.Fatalf("child not SIGKILLed: %v", err)
 	}
+}
+
+func TestBudgetParseSlots(t *testing.T) {
+	for _, row := range []struct {
+		label string
+		want  []int
+	}{
+		{"0", []int{0}}, {"1", []int{1}}, {"2", []int{2}},
+		{"0,1", []int{0, 1}}, {"0,2", []int{0, 2}}, {"1,2", []int{1, 2}},
+		{"", nil}, {"3", nil}, {"0,3", nil}, {"9", nil}, {"0,", nil},
+		{"0,0", nil}, {"1,0", nil}, {"2,1", nil}, {"0,1,2", nil},
+		{"a", nil}, {"0;1", nil}, {" 0", nil},
+	} {
+		t.Run("label="+row.label, func(t *testing.T) {
+			got, valid := budgetParseSlots(row.label)
+			if valid != (row.want != nil) || !slices.Equal(got, row.want) && valid {
+				t.Fatalf("parse %q: %v, %v; want %v, %v", row.label, got, valid, row.want, row.want != nil)
+			}
+		})
+	}
+}
+
+func TestBudgetContainerStates(t *testing.T) {
+	for _, verification := range []bool{false, true} {
+		for _, state := range []string{"", "unknown", "created", "running", "paused", "restarting", "exited", "dead", "removing"} {
+			t.Run(fmt.Sprintf("verification=%v/status=%s", verification, state), func(t *testing.T) {
+				b, i, _ := budgetSlotsFixture(t)
+				c := budgetContainerFixture("0")
+				c.State = state
+				label := "1"
+				if !verification {
+					c.Name, c.Labels = "/foreign", nil
+					label = "0"
+				}
+				i.containers = []budgetContainer{c}
+				if state == "" || state == "unknown" {
+					budgetAssertCause(t, b, "unavailable: the container state could not be determined")
+				} else {
+					budgetAssertReserve(t, b, budgetSingle, label).release()
+				}
+			})
+		}
+	}
+	t.Run("precedence", func(t *testing.T) {
+		b, i, p := budgetSlotsFixture(t)
+		p.procs = []procInfo{budgetOrphanFixture(b.locks.uid)}
+		i.containers = []budgetContainer{
+			{State: "unknown"}, budgetContainerFixture("invalid"),
+			budgetContainerFixture("0"), budgetContainerFixture("0"),
+		}
+		budgetAssertCause(t, b, "unavailable: the container state could not be determined")
+		slices.Reverse(i.containers)
+		budgetAssertCause(t, b, "unavailable: the container state could not be determined")
+	})
 }
 
 func TestBudgetUnknownStateContainers(t *testing.T) {
@@ -290,18 +345,20 @@ func TestBudgetUnknownStateContainers(t *testing.T) {
 	t.Run("ownership-and-hook", func(t *testing.T) {
 		b, i, _ := budgetSlotsFixture(t)
 		for _, kind := range []string{"name-only", "owner-only", "empty-owner"} {
-			c := budgetContainerFixture("0")
-			switch kind {
-			case "name-only":
-				delete(c.Labels, containerOwnerLabel)
-			case "owner-only":
-				c.Name = "/foreign"
-			case "empty-owner":
-				c.Name = "/foreign"
-				c.Labels[containerOwnerLabel] = ""
-			}
-			i.containers = []budgetContainer{c}
-			budgetAssertReserve(t, b, budgetSingle, "1").release()
+			t.Run(kind, func(t *testing.T) {
+				c := budgetContainerFixture("0")
+				switch kind {
+				case "name-only":
+					delete(c.Labels, containerOwnerLabel)
+				case "owner-only":
+					c.Name = "/foreign"
+				case "empty-owner":
+					c.Name = "/foreign"
+					c.Labels[containerOwnerLabel] = ""
+				}
+				i.containers = []budgetContainer{c}
+				budgetAssertReserve(t, b, budgetSingle, "1").release()
+			})
 		}
 		c := budgetContainerFixture("invalid")
 		c.Name = "argonreview-check-" + strings.Repeat("a", 32)
@@ -309,10 +366,11 @@ func TestBudgetUnknownStateContainers(t *testing.T) {
 		i.containers = []budgetContainer{c}
 		budgetAssertReserve(t, b, budgetSingle, "0").release()
 		calls := 0
+		i.containers = append(i.containers, budgetContainerFixture("2"))
 		b.budgetHook = func(cs []budgetContainer) ([3]bool, budgetResult) {
 			calls++
-			if len(cs) != 1 || cs[0].Name != c.Name || cs[0].Labels[budgetSlotLabel] != "invalid" {
-				t.Fatal("hook input changed")
+			if !reflect.DeepEqual(cs, i.containers) {
+				t.Fatalf("hook input: %+v; want %+v", cs, i.containers)
 			}
 			return [3]bool{true, false, false}, ""
 		}
@@ -339,8 +397,90 @@ func TestBudgetUnknownStateContainers(t *testing.T) {
 	}
 }
 
+func TestBudgetHook(t *testing.T) {
+	for _, collision := range []bool{false, true} {
+		t.Run(fmt.Sprintf("collision=%v", collision), func(t *testing.T) {
+			b, i, _ := budgetSlotsFixture(t)
+			i.containers = []budgetContainer{
+				budgetContainerFixture("0"),
+				{ID: "foreign", Name: "/foreign", Image: "image", State: "exited", Memory: 123, MemorySwap: 456},
+			}
+			b.budgetHook = func(cs []budgetContainer) ([3]bool, budgetResult) {
+				if !reflect.DeepEqual(cs, i.containers) {
+					t.Fatalf("hook input: %+v; want %+v", cs, i.containers)
+				}
+				if collision {
+					return [3]bool{true}, ""
+				}
+				return [3]bool{false, true}, ""
+			}
+			for range 2 {
+				if collision {
+					budgetAssertCause(t, b, "unavailable: a slot is claimed twice")
+				} else {
+					budgetAssertReserve(t, b, budgetSingle, "2").release()
+				}
+				slices.Reverse(i.containers)
+			}
+		})
+	}
+}
+
 func budgetOrphanFixture(uid int) procInfo {
 	return procInfo{pid: 42, ppid: 1, uid: uid, command: "/usr/local/bin/docker run --pull=never --name argonreview-check-" + strings.Repeat("a", 32) + " --network none image"}
+}
+
+// Sample Err before canceling to reproduce cancellation between the attempt's
+// final check and the caller observing its returned reservation, without a race.
+type budgetCancelAtReturn struct {
+	context.Context
+	cancel context.CancelFunc
+	armed  bool
+}
+
+func (c *budgetCancelAtReturn) Err() error {
+	err := c.Context.Err()
+	if c.armed {
+		c.cancel()
+	}
+	return err
+}
+
+func TestBudgetCancellation(t *testing.T) {
+	for _, kind := range []string{"busy", "unavailable", "acquired-during-read", "acquired"} {
+		t.Run(kind, func(t *testing.T) {
+			b, i, _ := budgetSlotsFixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			boundary := &budgetCancelAtReturn{Context: ctx, cancel: cancel}
+			var requestContext context.Context = ctx
+			switch kind {
+			case "busy":
+				i.containers = []budgetContainer{budgetContainerFixture("0"), budgetContainerFixture("1,2")}
+				i.read = func(int) { cancel() }
+			case "unavailable":
+				i.err = errors.New("listing failed")
+				i.read = func(int) { cancel() }
+			case "acquired-during-read":
+				i.read = func(n int) {
+					if n == 2 {
+						cancel()
+					}
+				}
+			case "acquired":
+				requestContext = boundary
+				i.read = func(n int) { boundary.armed = n == 2 }
+			}
+			r, result := b.budgetReserve(requestContext, budgetSingle)
+			if r.release != nil {
+				t.Cleanup(r.release)
+			}
+			if result != budgetCanceled || r.release != nil || len(r.slots) != 0 || r.label != "" || r.memory != 0 {
+				t.Fatalf("canceled reservation: %+v, %q", r, result)
+			}
+			budgetTake(t, b.locks, budgetSlot0, budgetSlot1, budgetSlot2)()
+		})
+	}
 }
 
 func TestBudgetResumes(t *testing.T) {
@@ -406,18 +546,25 @@ func TestBudgetResumes(t *testing.T) {
 		b, i, _ := budgetSlotsFixture(t)
 		i.read = func(n int) {
 			if n == 2 {
-				i.containers = []budgetContainer{budgetContainerFixture("0")}
+				i.containers = []budgetContainer{budgetContainerFixture("0"), budgetContainerFixture("1,2")}
 			}
 		}
 		b.locks.limit = time.Second
 		now := time.Unix(0, 0)
 		b.locks.now = func() time.Time { return now }
+		sleeps := 0
 		b.locks.sleep = func(_ context.Context, d time.Duration) error {
-			budgetTake(t, b.locks, budgetSlot0, budgetBrowser)()
+			sleeps++
+			probe := b.locks
+			probe.limit = 0
+			budgetTake(t, probe, budgetSlot0, budgetBrowser)()
 			now = now.Add(d)
 			return nil
 		}
 		budgetAssertCause(t, b, "busy")
+		if sleeps != 1 {
+			t.Fatalf("sleeps: %d; want 1", sleeps)
+		}
 	})
 	t.Run("immediate-results", func(t *testing.T) {
 		b, _, _ := budgetSlotsFixture(t)

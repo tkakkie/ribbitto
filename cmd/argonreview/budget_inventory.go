@@ -62,16 +62,17 @@ func (b budgetDockerInventory) budgetInspect(ctx context.Context, id string) (bu
 	var c struct {
 		ID     string `json:"Id"`
 		Name   string
-		Config struct {
+		Config *struct {
 			Image  string
 			Labels map[string]string
 		}
 		State      struct{ Status string }
 		HostConfig struct{ Memory, MemorySwap int64 }
 	}
-	if json.Unmarshal(data, &c) != nil || c.ID != id {
+	if json.Unmarshal(data, &c) != nil || c.ID != id || c.Name == "" || c.Config == nil || c.State.Status == "" {
 		return budgetContainer{}, errors.New("invalid container inspection")
 	}
+	// Memory/MemorySwap presence and consistency belong to M2.
 	return budgetContainer{c.ID, c.Name, c.Config.Image, c.State.Status, c.Config.Labels, c.HostConfig.Memory, c.HostConfig.MemorySwap}, nil
 }
 

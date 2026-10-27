@@ -48,6 +48,7 @@ Read the file for the area you change:
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
+| [`web-htmx.md`](web-htmx.md) | htmx requests and swaps, composer and quote fragments, SSE stream targets, read forms and `htmx-config` |
 | [`web-css-first.md`](web-css-first.md) | the criterion for using HTML or CSS instead of a script, review findings, and current examples |
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, the idempotency key, drafts and the send key |
 | [`web-composer-pending.md`](web-composer-pending.md) | pending own posts and the Remove hold |

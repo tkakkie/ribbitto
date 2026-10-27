@@ -29,7 +29,7 @@ func TestContainerSummaryValidation(t *testing.T) {
 		return 0, nil
 	}}
 	for _, tc := range []struct{ check, pattern string }{{"shell", "."}, {"build", "-x"}, {"generated", "."}} {
-		summary, err := (containerVerifier{"tree", runner, t.TempDir()}).verify(context.Background(), tc.check, tc.pattern)
+		summary, err := (containerVerifier{"tree", runner, t.TempDir(), containerTimeout}).verify(context.Background(), tc.check, tc.pattern)
 		text, bad := verifyResult(summary, err, false, false)
 		if err == nil || summary != "" || !bad || !strings.HasPrefix(text, "NOT VERIFIED: the check could not run\n") {
 			t.Fatalf("invalid summary request: %q, %v", text, err)
@@ -43,6 +43,15 @@ func TestContainerSummaryDifferential(t *testing.T) {
 	failed := containerJSON("p", "start", "run/TestBad") + testOutput("p", "TestBad", forged) + containerJSON("p", "fail/TestBad", "fail")
 	entry := measurementSkips()[0]
 	for _, check := range verifyCheckNames() {
+		for _, stage := range []string{"run", "rm"} {
+			t.Run(check+"/deadline "+stage, func(t *testing.T) {
+				t.Parallel()
+				// Extend the first-line differential through the same host/MCP
+				// paths; the original fixtures and fuzz seeds stay unchanged.
+				row := deadlineRow{"deadline differential", stage, "pass", context.DeadlineExceeded}
+				characterizeDeadlineRow(t, check, row, true)
+			})
+		}
 		type fixture struct {
 			name, stdout, stderr, first, want string
 			code                              int
@@ -104,7 +113,7 @@ func TestContainerSummaryDifferential(t *testing.T) {
 				if first != tc.first {
 					t.Fatalf("host verdict %q, want %q", first, tc.first)
 				}
-				summary, err := (containerVerifier{tree, runner, parent}).verify(context.Background(), check, "./...")
+				summary, err := (containerVerifier{tree, runner, parent, containerTimeout}).verify(context.Background(), check, "./...")
 				if summary != execution.summary || (err == nil) != (runErr == nil) {
 					t.Fatal("MCP did not use the captured summary")
 				}
@@ -171,7 +180,7 @@ func TestContainerSummaryLargeStream(t *testing.T) {
 	stream.WriteString(containerJSON("p", "fail"))
 	for _, check := range []string{"test", "test-db"} {
 		t.Run(check, func(t *testing.T) {
-			v := containerVerifier{containerFixture(t), summaryRunner(stream.String(), "", 1), t.TempDir()}
+			v := containerVerifier{containerFixture(t), summaryRunner(stream.String(), "", 1), t.TempDir(), containerTimeout}
 			summary, err := v.verify(context.Background(), check, ".")
 			if len(summary) > summaryErrorBudget {
 				t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)

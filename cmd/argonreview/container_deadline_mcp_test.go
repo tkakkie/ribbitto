@@ -87,11 +87,11 @@ func TestContainerDeadlineMCPRows(t *testing.T) {
 					_, _ = io.WriteString(diagnostic, "unfinished diagnostic")
 					return -1, nil
 				}}
-				s := verifyMCPServer{verifier: containerVerifier{tree, runner, copies}, callLimit: time.Minute}
+				s := verifyMCPServer{verifier: containerVerifier{tree, runner, copies, containerTimeout}, callLimit: time.Minute}
 				if mode == "call limit" {
 					// Source preparation invokes Git before the runner can wait.
 					// Allow that setup margin even under the race detector.
-					s.callLimit = time.Second
+					s.callLimit = 3 * time.Second
 				} else {
 					s.callDeadline = deadline
 				}
@@ -112,7 +112,12 @@ func TestContainerDeadlineMCPRows(t *testing.T) {
 				if runErr != wantErr {
 					t.Fatalf("run context %v, want %v", runErr, wantErr)
 				}
-				wantSummary := "FAILED\nCheck: " + check + " ./...\nScope: " + containerCheckScope(check) + "\nDetails unavailable: the check did not complete.\n" + deadlineOmitted
+				first := "FAILED"
+				if mode == "call limit" {
+					// #1857: was FAILED
+					first = "NOT VERIFIED: time limit exceeded"
+				}
+				wantSummary := first + "\nCheck: " + check + " ./...\nScope: " + containerCheckScope(check) + "\nDetails unavailable: the check did not complete.\n" + deadlineOmitted
 				wantText := wantSummary + "\n" + wantErr.Error() + "\n" + wantErr.Error() + "\ncontainer check interrupted: " + wantErr.Error()
 				if text != wantText {
 					t.Fatalf("MCP text %q, want %q", text, wantText)

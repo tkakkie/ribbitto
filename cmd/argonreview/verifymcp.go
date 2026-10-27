@@ -37,10 +37,15 @@ type containerVerifier struct {
 	worktree   string
 	runner     containerRunner
 	copyParent string
+	timeout    time.Duration
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent)
+	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout)
+}
+
+func newContainerVerifier(worktree string) containerVerifier {
+	return containerVerifier{worktree, dockerRunner{ownGroup: true}, containerCopyParent, containerTimeout}
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -177,7 +182,7 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 		return 1
 	}
 	if v == nil {
-		v = containerVerifier{args[3], dockerRunner{ownGroup: true}, containerCopyParent}
+		v = newContainerVerifier(args[3])
 	}
 	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
 		// Recheck because the worker can replace paths after startup. This

@@ -159,9 +159,9 @@ written to the worktree.
 | 25 | `FAILED: generated files differ` |
 | 24 (gofmt error), 26 (diff error), other | `FAILED`, with status |
 
-A timeout or runner error fails; the output cap overrides with
-`NOT VERIFIED: output limit exceeded (output cut off)`. Status 0 with stdout
-also fails. A missing or unparseable diff at status 25 never verifies.
+[Timeouts](argon-verify-testdb.md#timeout-and-cancel-results) never verify.
+Output cap: `NOT VERIFIED: output limit exceeded (output cut off)`.
+Status 0 with stdout or a bad status-25 diff never verifies.
 
 Trusted Go code validates complete GNU unified hunks and computes the stat:
 path and added/removed counts, new/only-in-worktree entries, or binary entries.

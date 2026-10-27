@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -61,7 +62,7 @@ func TestContainerSummaryExecutionFailure(t *testing.T) {
 					}}
 					tree, parent := containerFixture(t), t.TempDir()
 					if mcp {
-						summary, err := (containerVerifier{tree, runner, parent}).verify(ctx, check, "./...")
+						summary, err := (containerVerifier{tree, runner, parent, containerTimeout}).verify(ctx, check, "./...")
 						return "", summary, err
 					}
 					var execution containerExecution
@@ -124,7 +125,7 @@ func TestContainerSummaryLateNonverifiedContext(t *testing.T) {
 
 func TestContainerSummaryMalformedGeneratedDiff(t *testing.T) {
 	const raw = "malformed diff content\n+unvalidated addition\n"
-	v := containerVerifier{containerFixture(t), summaryRunner(raw, "", generatedDiffer), t.TempDir()}
+	v := containerVerifier{containerFixture(t), summaryRunner(raw, "", generatedDiffer), t.TempDir(), containerTimeout}
 	report, hostErr := runContainerCheck(context.Background(), v.worktree, "generated", "./...", v.runner, v.copyParent)
 	summary, err := v.verify(context.Background(), "generated", "./...")
 	text, bad := verifyResult(summary, err, false, false)
@@ -133,5 +134,154 @@ func TestContainerSummaryMalformedGeneratedDiff(t *testing.T) {
 	}
 	if !strings.Contains(text, "\nDiff stat: diff was not understood.\n") || !strings.Contains(text, "; 2 lines not shown;") || strings.Contains(text, "malformed diff content") || strings.Contains(text, "unvalidated addition") || strings.Contains(text, "\nDiff:\n") || strings.Contains(text, "Generated:") {
 		t.Fatalf("malformed diff was not diagnosed and omitted: %s", text)
+	}
+}
+
+func TestContainerTimeoutConfiguration(t *testing.T) {
+	production := newContainerVerifier("worktree")
+	if production.worktree != "worktree" || production.timeout != containerTimeout || production.copyParent != containerCopyParent || production.runner != (dockerRunner{ownGroup: true}) {
+		t.Fatalf("production verifier configuration: %+v", production)
+	}
+	for _, path := range []string{"host", "summary", "production verifier", "zero execution", "injected execution", "injected verifier"} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+			tree, copies := containerFixture(t), t.TempDir()
+			limit := containerTimeout
+			if strings.HasPrefix(path, "injected") {
+				limit = 2 * time.Second
+			}
+			called := false
+			runner := fakeContainerRunner{func(ctx context.Context, args, _ []string, _, _ io.Writer) (int, error) {
+				if args[0] != "run" {
+					return 0, nil
+				}
+				called = true
+				deadline, ok := ctx.Deadline()
+				if remaining := time.Until(deadline); !ok || remaining < limit-time.Minute || remaining > limit {
+					t.Fatalf("runner deadline remaining %v, want [%v, %v]", remaining, limit-time.Minute, limit)
+				}
+				if strings.HasPrefix(path, "injected") {
+					<-ctx.Done()
+					return -1, nil
+				}
+				return 0, nil
+			}}
+			var err error
+			switch path {
+			case "host":
+				_, err = runContainerCheck(context.Background(), tree, "build", ".", runner, copies)
+			case "summary":
+				_, err = runContainerSummary(context.Background(), tree, "build", ".", runner, copies, containerTimeout)
+			case "production verifier", "injected verifier":
+				v := newContainerVerifier(tree)
+				v.runner, v.copyParent = runner, copies
+				if path == "injected verifier" {
+					v.timeout = limit
+				}
+				_, err = v.verify(context.Background(), "build", ".")
+			default:
+				var execution containerExecution
+				if path == "injected execution" {
+					execution.timeout = limit
+				}
+				_, err = runContainerExecution(context.Background(), tree, "build", ".", runner, copies, &execution)
+			}
+			if !called || strings.HasPrefix(path, "injected") != errors.Is(err, context.DeadlineExceeded) || limit == containerTimeout && err != nil {
+				t.Fatalf("called=%v, error=%v", called, err)
+			}
+		})
+	}
+}
+
+func TestContainerTimeoutRows(t *testing.T) {
+	for _, row := range []deadlineRow{
+		{"row 1 deadline while running", "run", "interrupted", context.DeadlineExceeded},
+		{"row 2 deadline and output cap", "run", "cap", context.DeadlineExceeded},
+		{"row 3 deadline after pass stop", "stop", "pass", context.DeadlineExceeded},
+		{"row 3 deadline after pass rm", "rm", "pass", context.DeadlineExceeded},
+		{"row 3 deadline after pass finishReport", "finishReport", "pass", context.DeadlineExceeded},
+		{"row 4 deadline after failure", "rm", "fail", context.DeadlineExceeded},
+	} {
+		for _, check := range verifyCheckNames() {
+			t.Run(row.name+"/"+check, func(t *testing.T) {
+				t.Parallel()
+				characterizeDeadlineRow(t, check, row, true)
+			})
+		}
+	}
+}
+
+func TestContainerContextNeverVerified(t *testing.T) {
+	for _, interruption := range []error{context.DeadlineExceeded, context.Canceled} {
+		for _, stage := range []string{"before", "run", "stop", "rm", "finishReport"} {
+			for _, outcome := range []string{"pass", "fail"} {
+				for _, check := range verifyCheckNames() {
+					t.Run(interruption.Error()+"/"+stage+"/"+outcome+"/"+check, func(t *testing.T) {
+						t.Parallel()
+						// The shared row assertion checks the complete host report,
+						// summary, real verifyResult, isError and fixed minimal body.
+						row := deadlineRow{"never verified", stage, outcome, interruption}
+						characterizeDeadlineRow(t, check, row, true)
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestContainerContextCommandExit(t *testing.T) {
+	for _, check := range verifyCheckNames() {
+		for _, stage := range []string{"run", "stop", "rm"} {
+			t.Run(check+"/"+stage, func(t *testing.T) {
+				t.Parallel()
+				var cancel context.CancelFunc
+				stdout, _, _ := deadlineFixture(check, "pass")
+				runner := fakeContainerRunner{func(_ context.Context, args, _ []string, out, _ io.Writer) (int, error) {
+					if args[0] == "run" {
+						cancel = out.(containerStream).output.cancel
+						_, _ = io.WriteString(out, stdout)
+					}
+					if args[0] == stage {
+						cancel()
+					}
+					return 0, nil
+				}}
+				var out, diagnostic bytes.Buffer
+				code := startContainerCheck([]string{containerFixture(t), check, "./..."}, &out, &diagnostic, nil, func(io.Writer) error { return nil }, runner, t.TempDir())
+				if code == 0 || strings.HasPrefix(out.String(), "verified") || !strings.HasPrefix(out.String(), "FAILED\n") {
+					t.Fatalf("command exit %d, report %q, error %s", code, &out, &diagnostic)
+				}
+			})
+		}
+	}
+}
+
+func TestContainerDeadlineRemovalFailure(t *testing.T) {
+	for _, check := range verifyCheckNames() {
+		t.Run(check, func(t *testing.T) {
+			t.Parallel()
+			runner := fakeContainerRunner{func(ctx context.Context, args, _ []string, _, _ io.Writer) (int, error) {
+				if args[0] == "run" {
+					<-ctx.Done()
+					return -1, nil
+				}
+				if args[0] == "rm" {
+					return 1, errors.New("removal unconfirmed")
+				}
+				return 0, nil
+			}}
+			tree, copies := containerFixture(t), t.TempDir()
+			execution := containerExecution{timeout: 2 * time.Second}
+			report, err := runContainerExecution(context.Background(), tree, check, "./...", runner, copies, &execution)
+			if !strings.HasPrefix(report, "FAILED\n") || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "container removal failed") {
+				t.Fatalf("deadline with unconfirmed removal: %q, %v", report, err)
+			}
+			assertIncompleteSummary(t, report, execution.summary, err)
+			summary, mcpErr := (containerVerifier{tree, runner, copies, 2 * time.Second}).verify(context.Background(), check, "./...")
+			if summary != execution.summary || !errors.Is(mcpErr, context.DeadlineExceeded) {
+				t.Fatalf("removal failure host/MCP mismatch: %q, %v", summary, mcpErr)
+			}
+			assertIncompleteSummary(t, report, summary, mcpErr)
+		})
 	}
 }

@@ -82,16 +82,21 @@ func deadlineFixture(check, outcome string) (stdout, verdict string, code int) {
 	return stdout, verdict, code
 }
 
-func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
+func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, injected ...bool) {
 	t.Helper()
 	tree, copies := containerFixture(t), t.TempDir()
 	stdout, original, code := deadlineFixture(check, row.outcome)
 	const stderr = "runner diagnostic"
 	var execution containerExecution
+	timeout := containerTimeout
+	if len(injected) != 0 && injected[0] {
+		timeout = 2 * time.Second
+	}
+	execution.timeout = timeout
 	var baselineSummary string
 	run := func(mcp bool) (string, string, error) {
 		ctx, cancel := context.WithCancel(context.Background())
-		if row.interruption == context.DeadlineExceeded {
+		if row.interruption == context.DeadlineExceeded && (timeout == containerTimeout || row.stage == "before" || row.stage == "finishReport") {
 			cancel()
 			// Leave Git preparation ample time; only the selected hook waits
 			// for expiry. Independent row cases run in parallel to keep this cheap.
@@ -107,7 +112,9 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
 			if row.interruption == context.Canceled {
 				cancel()
 			}
-			<-ctx.Done()
+			if timeout == containerTimeout || row.stage == "before" || row.stage == "finishReport" || row.interruption == context.Canceled {
+				<-ctx.Done()
+			}
 			// A parent's Done can close before cancellation reaches its child.
 			// The verdict reads the derived run context, so wait for it too.
 			if activeRun != nil {
@@ -131,13 +138,13 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
 				interrupt()
 			}
 			if args[0] == "rm" && row.outcome == "cleanup timeout" {
-				if ctx.Err() != nil || runCtx.Err() != nil {
+				if ctx.Err() != nil || runCtx.Err() != nil || activeRun.Err() != nil {
 					t.Fatal("cleanup-only timeout interrupted the run context")
 				}
 				return -1, fmt.Errorf("cleanup: %w", context.DeadlineExceeded)
 			}
 			if args[0] == "run" {
-				if row.stage != "run" && row.stage != "finishReport" && ctx.Err() != nil {
+				if row.stage != "run" && row.stage != "finishReport" && runCtx.Err() != nil {
 					t.Fatal("parent expired before the requested cleanup stage")
 				}
 				if row.stage == "source" {
@@ -169,7 +176,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
 		var report, summary string
 		var err error
 		if mcp {
-			summary, err = (containerVerifier{tree, runner, copies}).verify(runCtx, check, "./...")
+			summary, err = (containerVerifier{tree, runner, copies, timeout}).verify(runCtx, check, "./...")
 		} else {
 			report, err = runContainerExecution(runCtx, tree, check, "./...", runner, copies, &execution)
 			summary = execution.summary
@@ -208,6 +215,10 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
 	report, summary, err := run(false)
 	first := "FAILED"
 	verdict := first
+	if row.interruption == context.DeadlineExceeded && (row.stage == "run" || row.outcome == "pass" && row.stage != "before") {
+		// #1857: was FAILED (rows 1, 3 and row 11's parent-deadline path).
+		verdict = "NOT VERIFIED: time limit exceeded"
+	}
 	if row.stage == "finishReport" && row.outcome != "pass" {
 		verdict = original
 	} else if row.outcome == "cap" {
@@ -278,6 +289,11 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow) {
 	}
 	if !bad || text != wantText || !strings.HasPrefix(text, first+"\n") {
 		t.Fatalf("MCP text %q, isError=%v, want %q", text, bad, wantText)
+	}
+	// Independent of the expected lines above: no context error, at any stage,
+	// may leave the host report, the summary or the MCP text reading verified.
+	if row.interruption != nil && (strings.HasPrefix(report, "verified") || strings.HasPrefix(summary, "verified") || strings.HasPrefix(text, "verified")) {
+		t.Fatalf("interrupted run read verified: report %q, summary %q, MCP %q", report[:min(len(report), 80)], summary, text)
 	}
 }
 

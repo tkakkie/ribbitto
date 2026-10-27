@@ -175,6 +175,7 @@ an empty pre-container report gets its line from the MCP wrapper.
 Only the run context decides a run deadline; a timeout error from independent
 cleanup does not. Unconfirmed container removal keeps `FAILED`, even with a
 run deadline. Parent deadlines reaching the run context follow the same rule.
-Parent cancellation keeps `FAILED`. Timeout and
-cancel summaries keep #1846's fixed minimal body: “Details unavailable: the
-check did not complete.” Output caps keep “Counts unavailable” instead.
+Parent cancellation keeps its existing result for each stage (see the table).
+Timeout and cancel summaries keep #1846's fixed minimal body: “Details
+unavailable: the check did not complete.” Output caps keep “Counts unavailable”
+instead.

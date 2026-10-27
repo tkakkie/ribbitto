@@ -395,7 +395,9 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		// One interruption rule governs host and MCP: an unfinished run or a
 		// completed pass loses verification; other completed verdicts stay pinned.
 		// Read the run context, since joined errors include independent cleanup.
-		if completed {
+		// Row 8 keeps its existing report: status 125 means Docker never ran
+		// the check, so it must not gain generated-check statistics.
+		if completed && code != 125 {
 			verdict, stat, stdout = containerVerdict(check, code, nil, output)
 		}
 		// A runner error returned with a healthy context keeps FAILED even if

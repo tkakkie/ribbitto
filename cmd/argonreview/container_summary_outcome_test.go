@@ -241,6 +241,20 @@ func TestContainerRunnerErrorLateDeadline(t *testing.T) {
 	}
 }
 
+func TestContainerStatus125LateDeadline(t *testing.T) {
+	for _, stage := range []string{"stop", "rm"} {
+		for _, check := range verifyCheckNames() {
+			t.Run(stage+"/"+check, func(t *testing.T) {
+				t.Parallel()
+				// Pin row 8's entire late-deadline host report: a Docker failure
+				// has no generated stat, and its MCP body stays incomplete.
+				row := deadlineRow{"row 8 status 125 then late deadline", stage, "125", context.DeadlineExceeded}
+				characterizeDeadlineRow(t, check, row, true)
+			})
+		}
+	}
+}
+
 func TestContainerLateDeadlineGeneratedOutput(t *testing.T) {
 	for _, stage := range []string{"stop", "rm"} {
 		for _, tc := range []struct {

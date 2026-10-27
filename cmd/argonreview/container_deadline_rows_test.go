@@ -80,7 +80,7 @@ func deadlineFixture(check, outcome string) (stdout, verdict string, code int) {
 	case "cap":
 		stdout = strings.Repeat("x", containerOutputLimit+1)
 	case "125":
-		code = 125
+		verdict, code = "FAILED", 125
 	}
 	return stdout, verdict, code
 }
@@ -257,7 +257,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	if row.outcome == "cleanup timeout" {
 		wantErr = context.DeadlineExceeded
 	}
-	if wantErr != nil && !errors.Is(err, wantErr) || (err == nil) != (row.outcome == "125") {
+	if wantErr != nil && !errors.Is(err, wantErr) || (err == nil) != (row.outcome == "125" && row.interruption == nil) {
 		t.Fatalf("host error %v, expected context error %v", err, wantErr)
 	}
 	for outcome, detail := range map[string]string{"cleanup timeout": "container removal failed", "runner error": "runner failed", "pass": "removing source copy"} {

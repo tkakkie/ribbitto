@@ -10,7 +10,7 @@ import (
 // A key change needs this constant, docs/workflow/argon-verify-image.md and a review.
 const approvedPGDGFingerprint = "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8"
 
-func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string {
+func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion string) []string {
 	var problems, lines []string
 	pending := ""
 	started := false
@@ -84,9 +84,11 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion string) []string
 						name, version, pinned := strings.Cut(arg, "=")
 						installsPostgresqlCommon = installsPostgresqlCommon || name == "postgresql-common"
 						pgdgAction = pgdgAction || name == "postgresql-18"
-						allowed := name == "postgresql-common" || name == "ca-certificates" || name == "postgresql-18"
+						allowed := name == "postgresql-common" || name == "ca-certificates" || name == "postgresql-18" || name == "chromium" || name == "fonts-liberation"
 						if !allowed || !pinned || !regexp.MustCompile(`^[A-Za-z0-9.+~:-]+$`).MatchString(version) {
 							problems = append(problems, "h: forbidden install flag or unapproved/unpinned package: "+arg)
+						} else if name == "chromium" && version != chromiumVersion {
+							problems = append(problems, "l: chromium version must match containerChromiumVersion: "+arg)
 						}
 					}
 				}
@@ -187,11 +189,39 @@ func TestVerifyImageRecipe(t *testing.T) {
 	pgdg := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; " + pgdgScript + " -y; apt-get update; " +
 		"apt-get install -y --no-install-recommends postgresql-18=18.6-1.pgdg13+2; " +
 		"rm -rf /var/lib/apt/lists/*; useradd -u 1000 -m -d /home/check -s /bin/bash check\n"
-	valid := tools + debian + pgdg
+	chromium := "chromium=" + containerChromiumVersion
+	fonts := "fonts-liberation=1:2.3-4"
+	install := "RUN apt-get install -y --no-install-recommends "
+	browser := "RUN set -eu; export DEBIAN_FRONTEND=noninteractive; apt-get update; " +
+		"apt-get install -y --no-install-recommends " + chromium + " " + fonts + "; rm -rf /var/lib/apt/lists/*\n"
+	valid := tools + debian + browser + pgdg
 	change := func(old, replacement string) string { return strings.Replace(valid, old, replacement, 1) }
 	for _, tt := range []struct{ name, recipe, want string }{
 		{"valid", valid, ""},
 		{"generators-only", tools, ""},
+		{"browser-together", tools + browser, ""},
+		{"browser-separate", tools + install + chromium + "\n" + install + fonts + "\n", ""},
+		{"h/chromium-unpinned", tools + install + "chromium\n", "h:"},
+		{"h/fonts-unpinned", tools + install + "fonts-liberation\n", "h:"},
+		{"l/chromium-wrong-version", tools + install + "chromium=155.0.0-1\n", "l:"},
+		{"h/chromium-empty-version", tools + install + "chromium=\n", "h:"},
+		{"h/chromium-version-wildcard", tools + install + "chromium=156.*\n", "h:"},
+		{"h/chromium-star-version", tools + install + "chromium=*\n", "h:"},
+		{"h/chromium-name-wildcard", tools + install + "chromium*\n", "h:"},
+		{"h/fonts-version-wildcard", tools + install + "fonts-liberation=1:2.*\n", "h:"},
+		{"b/browser-upgrade", tools + browser + "RUN apt-get upgrade\n", "b:"},
+		{"b/browser-dist-upgrade", tools + browser + "RUN apt-get dist-upgrade\n", "b:"},
+		{"b/browser-full-upgrade", tools + browser + "RUN apt-get full-upgrade\n", "b:"},
+		{"h/browser-downgrades", tools + install + "--allow-downgrades " + chromium + "\n", "h:"},
+		{"h/browser-held-packages", tools + install + "--allow-change-held-packages " + chromium + "\n", "h:"},
+		{"b/browser-target-release", tools + "RUN apt-get -t trixie-backports install -y --no-install-recommends " + chromium + "\n", "b:"},
+		{"h/browser-backports", tools + install + "chromium/trixie-backports=" + containerChromiumVersion + "\n", "h:"},
+		{"h/chromium-driver", tools + install + "chromium-driver=" + containerChromiumVersion + "\n", "h:"},
+		{"h/chromium-sandbox", tools + install + "chromium-sandbox=" + containerChromiumVersion + "\n", "h:"},
+		{"h/browser-procps", tools + install + "procps=1\n", "h:"},
+		{"h/browser-curl", tools + install + "curl=1\n", "h:"},
+		{"h/chromium-no-y", tools + "RUN apt-get install --no-install-recommends " + chromium + "\n", "h:"},
+		{"h/chromium-no-recommends-flag", tools + "RUN apt-get install -y " + chromium + "\n", "h:"},
 		{"apt-get-update", valid + "RUN apt-get update\n", ""},
 		{"second-install", valid + "RUN apt-get install -y --no-install-recommends ca-certificates=20250419+deb13u1\n", ""},
 		{"apt-get-and", change("; apt-get update;", "&& apt-get update &&"), ""},
@@ -283,8 +313,8 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"h/invalid-version", change("postgresql-common=278", "postgresql-common=278*"), "h:"},
 		{"i/no-check-run", change(debian, ""), "i:"},
 		{"i/check-removed", change(keyCheck, ""), "i:"},
-		{"i/same-run", change(debian+pgdg, strings.TrimSuffix(debian, "\n")+" "+strings.TrimPrefix(pgdg, "RUN set -eu; ")), "i:"},
-		{"i/after-pgdg", change(debian+pgdg, pgdg+debian), "i:"},
+		{"i/same-run", change(debian+browser+pgdg, strings.TrimSuffix(debian, "\n")+" "+strings.TrimPrefix(pgdg, "RUN set -eu; ")+browser), "i:"},
+		{"i/after-pgdg", change(debian+browser+pgdg, pgdg+debian+browser), "i:"},
 		{"i/other-key", change(fingerprint, strings.Repeat("AB", 20)), "i:"},
 		{"i/lowercase", change(fingerprint, strings.ToLower(fingerprint)), "i:"},
 		{"i/short", change(fingerprint, fingerprint[:39]), "i:"},
@@ -314,7 +344,7 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"k/cluster-check-other-run", change(clusterCheck, "") + "RUN " + clusterCheck + "\n", "k:"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			problems := checkVerifyImageRecipe(tt.recipe, digest, "v1.2.3")
+			problems := checkVerifyImageRecipe(tt.recipe, digest, "v1.2.3", containerChromiumVersion)
 			if (tt.want == "" && len(problems) != 0) || (tt.want != "" && (len(problems) != 1 || !strings.HasPrefix(problems[0], tt.want))) {
 				t.Fatalf("want %q, got %v", tt.want, problems)
 			}
@@ -347,7 +377,50 @@ func TestVerifyImageRecipe(t *testing.T) {
 		if !strings.Contains(string(docs), approvedPGDGFingerprint) {
 			t.Fatal("workflow docs must contain the approved PGDG fingerprint")
 		}
-		if problems := checkVerifyImageRecipe(string(recipe), digest, string(version[1])); len(problems) != 0 {
+		browserDocs, err := os.ReadFile("../../docs/workflow/argon-verify-browser-updates.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Read the fonts pin from the recipe so the page cannot drift independently.
+		fontsPins := regexp.MustCompile(`\bfonts-liberation=[^\s;\\]+`).FindAllString(string(recipe), -1)
+		if len(fontsPins) != 1 {
+			t.Fatal("real recipe must contain exactly one fonts-liberation pin")
+		}
+		checkPins := func(recipe, docs string) []string {
+			var problems []string
+			chromiumPins := regexp.MustCompile(`\bchromium=[^\s;\\]+`).FindAllString(recipe, -1)
+			if len(chromiumPins) != 1 || chromiumPins[0] != chromium {
+				problems = append(problems, "chromium recipe pin")
+			}
+			fontsPins := regexp.MustCompile(`\bfonts-liberation=[^\s;\\]+`).FindAllString(recipe, -1)
+			if len(fontsPins) != 1 {
+				problems = append(problems, "fonts recipe pin")
+			} else if !strings.Contains(docs, fontsPins[0]) {
+				problems = append(problems, "fonts docs pin")
+			}
+			if !strings.Contains(docs, chromium) {
+				problems = append(problems, "chromium docs pin")
+			}
+			return problems
+		}
+		for _, tt := range []struct{ name, recipe, docs, want string }{
+			{"pins", string(recipe), string(browserDocs), ""},
+			{"chromium-mismatch", strings.Replace(string(recipe), chromium, "chromium=155.0.0-1", 1), string(browserDocs), "chromium recipe pin"},
+			{"chromium-missing", strings.Replace(string(recipe), chromium, "", 1), string(browserDocs), "chromium recipe pin"},
+			{"chromium-duplicate", string(recipe) + "\n" + chromium, string(browserDocs), "chromium recipe pin"},
+			{"fonts-missing", strings.Replace(string(recipe), fontsPins[0], "", 1), string(browserDocs), "fonts recipe pin"},
+			{"fonts-duplicate", string(recipe) + "\n" + fontsPins[0], string(browserDocs), "fonts recipe pin"},
+			{"docs-chromium-missing", string(recipe), strings.ReplaceAll(string(browserDocs), chromium, ""), "chromium docs pin"},
+			{"docs-fonts-missing", string(recipe), strings.ReplaceAll(string(browserDocs), fontsPins[0], ""), "fonts docs pin"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				problems := checkPins(tt.recipe, tt.docs)
+				if (tt.want == "" && len(problems) != 0) || (tt.want != "" && (len(problems) != 1 || problems[0] != tt.want)) {
+					t.Fatalf("want %q, got %v", tt.want, problems)
+				}
+			})
+		}
+		if problems := checkVerifyImageRecipe(string(recipe), digest, string(version[1]), containerChromiumVersion); len(problems) != 0 {
 			t.Fatal("real recipe:", problems)
 		}
 	})

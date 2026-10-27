@@ -8,7 +8,7 @@ The recipe, build/vet/test regeneration and `generated` check (#1696), the
 (#1700 stage A). Production workers run the launcher `argonreview-2e3a6bf`,
 which pins the image `sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80` (tag `argonreview-verify-image:7957ae8`).
 The old launcher `argonreview-7f607ca` and its official golang image stay for rollback.
-The recipe includes PostgreSQL 18 (#1697 PR A).
+The recipe includes PostgreSQL 18 (#1697 PR A) and Chromium pins (not built or pinned yet).
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
@@ -30,8 +30,8 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   directory, module cache and build cache in that RUN.
 - Only FROM, RUN and COPY are allowed. No ADD, VOLUME, ENTRYPOINT, CMD,
   USER, EXPOSE, HEALTHCHECK, ONBUILD, ARG, ENV or SHELL; no RUN flags
-  (including secret mounts), plain `apt` or browser.
-- Debian packages are `postgresql-common=278` and
+  (including secret mounts), plain `apt`.
+- Debian pins include `postgresql-common=278` and
   `ca-certificates=20250419+deb13u1`; PGDG supplies
   `postgresql-18=18.6-1.pgdg13+2`. Use `apt-get update` and
   `apt-get install -y --no-install-recommends` only, then remove apt lists.
@@ -47,7 +47,7 @@ the trusted runner's flags and pinned image, not this recipe or its test.
   and has no `||`.
   Exactly one fingerprint line is required: any other key fails the build.
 - Decision 42 says apt packages use exact versions. This recipe pins only
-  the three packages it names; dependencies such as `postgresql-client-18`
+  the five packages it names; dependencies such as `postgresql-client-18`
   and `libpq5` float. The maintainer confirmed this reading of decision 42 on 2026-10-26
   (#1697). Rebuilds do not guarantee the same bytes; the host record's
   image ID identifies the build. If `postgresql-common` or `postgresql-18`
@@ -63,8 +63,8 @@ check, bare apt-get commands, pinned allowed packages with `-y` and
 (also required in this page; a key change needs the test constant, this page
 and a review) and the cluster edit with its grep in an errexit RUN.
 Tier A review also checks tool builds, user and cache removal.
-A browser, another package set or a second recipe needs a decision 42
-amendment approved by the maintainer.
+The amendment covers Chromium and fonts-liberation ([updates](argon-verify-browser-updates.md));
+another package set or second recipe still needs maintainer-approved amendment.
 
 ## Runner pin and prelude
 

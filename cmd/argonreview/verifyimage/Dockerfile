@@ -16,7 +16,7 @@ RUN set -eu; \
     GOFLAGS=-mod=readonly CGO_ENABLED=1 go build -o /usr/local/bin/sqlc github.com/sqlc-dev/sqlc/cmd/sqlc; \
     rm -rf /build /go/pkg/mod /root/.cache
 
-# postgresql-common and postgresql-18 pins fail if removed; dependencies float.
+# Package pins fail if removed; transitive dependencies float (see below).
 # ca-certificates matches the base; a newer base makes it a refused downgrade.
 # Keep the signing-key check last, before any PGDG package can be installed.
 RUN set -eu; \
@@ -27,6 +27,15 @@ RUN set -eu; \
     grep -qx 'create_main_cluster = false' /etc/postgresql-common/createcluster.conf; \
     rm -rf /var/lib/apt/lists/*; \
     fingerprint="$(gpg --show-keys --with-colons /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg | grep '^fpr:' | cut -d: -f10)"; test "$fingerprint" = "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8";
+
+# Resolve Chromium's dependencies before PGDG adds its source.
+# Transitive packages float; each build records a dpkg-query -W diff.
+# Unfetchable pins must fail: docs/workflow/argon-verify-browser-updates.md.
+RUN set -eu; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends chromium=156.0.8078.47-1~deb13u1 fonts-liberation=1:2.1.5-3; \
+    rm -rf /var/lib/apt/lists/*
 
 # initdb requires a passwd entry for the runner's uid 1000.
 RUN set -eu; \

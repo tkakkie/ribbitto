@@ -22,7 +22,7 @@ func (s *State) Open(organizationID, memberID, channelID kernel.ID) func() {
 	if channelID == (kernel.ID{}) {
 		return func() {}
 	}
-	key := streamKey{kernel.ID{}, memberID, channelID}
+	key := streamKey{organizationID, kernel.ID{}, channelID}
 	s.mu.Lock()
 	streams := s.streams[key]
 	if streams == nil {

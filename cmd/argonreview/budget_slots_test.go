@@ -391,12 +391,15 @@ func TestBudgetUnknownStateContainers(t *testing.T) {
 		i.err = errors.New("listing failed")
 		budgetAssertCause(t, b, "unavailable: the container state could not be determined")
 		i.err = nil
+		budgetAssertCause(t, b, "unavailable: an orphaned Docker client is present")
+		p.procs = nil
 		budgetAssertCause(t, b, "unavailable: a verification container has no valid slot label")
 		slices.Reverse(i.containers)
 		budgetAssertCause(t, b, "unavailable: a verification container has no valid slot label")
 		i.containers = i.containers[:2]
 		budgetAssertCause(t, b, "unavailable: a slot is claimed twice")
 		i.containers = nil
+		p.procs = []procInfo{budgetOrphanFixture(b.locks.uid)}
 		budgetAssertCause(t, b, "unavailable: an orphaned Docker client is present")
 	})
 	t.Run("ownership-and-hook", func(t *testing.T) {

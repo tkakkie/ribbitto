@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
+
+const budgetInventoryTimeout = 30 * time.Second
 
 type budgetContainer struct {
 	ID, Name, Image, State string
@@ -23,12 +25,21 @@ type budgetInventory interface {
 // A production caller can supply dockerRunner with its existing fixed environment.
 type budgetDockerInventory struct{ runner containerRunner }
 
+// Malformed evidence stays unavailable even if a later listing omits the ID.
+// Only transport failure can be explained by independently confirmed absence.
+type budgetInspectionInvalid struct{}
+
+func (budgetInspectionInvalid) Error() string { return "invalid container inspection" }
+
 func (b budgetDockerInventory) budgetQuery(ctx context.Context, args ...string) ([]byte, error) {
 	if len(args) == 0 || (args[0] != "ps" && args[0] != "inspect") {
 		return nil, errors.New("container query refused")
 	}
 	ctx, cancel := context.WithTimeout(ctx, containerCleanupTimeout)
 	defer cancel()
+	if ctx.Err() != nil {
+		return nil, errors.New("container query failed")
+	}
 	output := containerOutput{cancel: cancel}
 	code, err := b.runner.run(ctx, args, dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	if err != nil || code != 0 || output.over || ctx.Err() != nil {
@@ -59,42 +70,64 @@ func (b budgetDockerInventory) budgetInspect(ctx context.Context, id string) (bu
 	if err != nil {
 		return budgetContainer{}, fmt.Errorf("inspecting container: %w", err)
 	}
-	var c struct {
-		ID     string `json:"Id"`
-		Name   string
-		Config *struct {
-			Image  string
-			Labels map[string]string
-		}
-		State      struct{ Status string }
-		HostConfig struct{ Memory, MemorySwap int64 }
+	// Reuse M2's presence checks: absent limits must never become explicit zero.
+	c, complete := otherCompleteInspect(data, id)
+	if !complete {
+		return budgetContainer{}, budgetInspectionInvalid{}
 	}
-	if json.Unmarshal(data, &c) != nil || c.ID != id || c.Name == "" || c.Config == nil || c.State.Status == "" {
-		return budgetContainer{}, errors.New("invalid container inspection")
-	}
-	// Memory/MemorySwap presence and consistency belong to M2.
 	return budgetContainer{c.ID, c.Name, c.Config.Image, c.State.Status, c.Config.Labels, c.HostConfig.Memory, c.HostConfig.MemorySwap}, nil
 }
 
 func (b budgetDockerInventory) budgetList(ctx context.Context) ([]budgetContainer, error) {
-	ids, err := b.budgetIDs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var containers []budgetContainer
-	for _, id := range ids {
-		c, err := b.budgetInspect(ctx, id)
+	// One deadline covers all calls, including disappearance confirmation and
+	// retries of a stale listing; per-command limits alone grow with inventory.
+	ctx, cancel := context.WithTimeout(ctx, budgetInventoryTimeout)
+	defer cancel()
+	for attempt := 0; attempt < 3; attempt++ {
+		ids, err := b.budgetIDs(ctx)
 		if err != nil {
-			// Disappearance requires independent evidence, not inspect's diagnosis.
-			again, listErr := b.budgetIDs(ctx)
-			if listErr == nil && !slices.Contains(again, id) {
-				continue
-			}
 			return nil, err
 		}
-		containers = append(containers, c)
+		var containers []budgetContainer
+		var inspectionErr error
+		failed := make(map[string]error)
+		for _, id := range ids {
+			c, inspectErr := b.budgetInspect(ctx, id)
+			if ctx.Err() != nil {
+				return nil, errors.New("container query failed")
+			}
+			if inspectErr != nil {
+				var invalid budgetInspectionInvalid
+				if errors.As(inspectErr, &invalid) {
+					inspectionErr = inspectErr
+				} else {
+					failed[id] = inspectErr
+				}
+			} else {
+				containers = append(containers, c)
+			}
+		}
+		// Independent evidence confirms disappearances, and a new arrival makes
+		// the snapshot stale. Match otherPoll without polling Docker twice.
+		again, err := b.budgetIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		stale := false
+		for _, id := range again {
+			if err := failed[id]; err != nil {
+				inspectionErr = err
+			}
+			stale = stale || !slices.Contains(ids, id)
+		}
+		if !stale {
+			if inspectionErr != nil {
+				return nil, inspectionErr
+			}
+			return containers, nil
+		}
 	}
-	return containers, nil
+	return nil, errors.New("unstable container listing")
 }
 
 func budgetOrphan(processes processTable, uid int) (bool, error) {

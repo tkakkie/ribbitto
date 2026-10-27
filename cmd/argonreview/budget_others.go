@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// otherUnit is the reservation size shared with the future budget wiring.
+// otherUnit is the reservation size shared with budgetSlots.
 const otherUnit int64 = 2 << 30
 
 // otherSlots fixes the VM budget without choosing or acquiring a slot.

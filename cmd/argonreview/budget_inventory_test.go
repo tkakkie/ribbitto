@@ -174,8 +174,8 @@ func TestBudgetInspectComplete(t *testing.T) {
 		{"missing-status", `,"Name":"/foreign","Config":{},"State":{}`, false},
 		{"null-status", `,"Name":"/foreign","Config":{},"State":{"Status":null}`, false},
 		{"empty-status", `,"Name":"/foreign","Config":{},"State":{"Status":""}`, false},
-		{"without-labels", `,"Name":"/foreign","Config":{},"State":{"Status":"running"}`, true},
-		{"null-labels", `,"Name":"/foreign","Config":{"Labels":null},"State":{"Status":"running"}`, true},
+		{"without-labels", `,"Name":"/foreign","Config":{},"State":{"Status":"running"},"HostConfig":{"Memory":0,"MemorySwap":0}`, true},
+		{"null-labels", `,"Name":"/foreign","Config":{"Labels":null},"State":{"Status":"running"},"HostConfig":{"Memory":0,"MemorySwap":0}`, true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			listings := 0

@@ -41,6 +41,8 @@ func rules() []rule {
 		{"web/static/brand/*.svg", "brand SVG"},
 		{"web/static/channel-images-v1/*.svg", "channel SVG"},
 		{"docs/**/*.md", "documentation"},
+		{"docs/images/*.png", "documentation image"},
+		{"docs/images/*.webp", "documentation image"},
 		{".github/ISSUE_TEMPLATE/*.md", "issue templates"},
 		{".github/instructions/*.md", "review instructions"},
 		{".github/prompts/*.md", "review prompts"},

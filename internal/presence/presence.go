@@ -16,7 +16,7 @@ import (
 const MaxSnapshotMembers = 100
 
 // MaxChanges bounds one changed-suffix read.
-const MaxChanges = 100
+const MaxChanges = 99
 
 // OfflineRetention bounds how long an offline change remains available.
 const OfflineRetention = 5 * time.Minute

@@ -94,7 +94,7 @@ type Sent struct {
 // that message without writing, or ErrPostKeyReused with it when the body
 // or channel differs: the new text is not a retry and must not be dropped.
 func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.ID, s Send) (Sent, error) {
-	if s.Cursor != nil && (*s.Cursor < 0 || *s.Cursor >= math.MaxInt64-1) {
+	if s.Cursor != nil && (*s.Cursor < -1 || *s.Cursor >= math.MaxInt64-1) {
 		return Sent{}, ErrInvalidPostCursor
 	}
 	body, err := ValidateMessageBody(s.Body)

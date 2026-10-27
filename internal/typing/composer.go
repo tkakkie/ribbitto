@@ -52,7 +52,7 @@ func (s *State) Signal(organizationID kernel.ID, place Place, typist Typist, gen
 	if now.Before(handledAt) || now.Sub(handledAt) > SignalDeadline || s.closed[generation] != nil || !s.issued(organizationID, place, typist.Member, generation) {
 		return false
 	}
-	if s.streams[streamKey{organizationID, typist.Member, place.Channel}] == nil {
+	if place.Topic == (kernel.ID{}) {
 		return false
 	}
 	s.start(organizationID, place, typist)

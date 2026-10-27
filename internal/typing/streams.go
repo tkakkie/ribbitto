@@ -19,6 +19,9 @@ type channelStreams struct {
 // Open counts an accepted channel stream and returns its idempotent cleanup.
 // Interests and selected topic do not affect the member's channel lifetime.
 func (s *State) Open(organizationID, memberID, channelID kernel.ID) func() {
+	if channelID == (kernel.ID{}) {
+		return func() {}
+	}
 	key := streamKey{organizationID, memberID, channelID}
 	s.mu.Lock()
 	streams := s.streams[key]

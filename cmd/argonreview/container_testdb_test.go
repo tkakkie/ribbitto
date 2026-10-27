@@ -69,7 +69,7 @@ func TestContainerTestDBScript(t *testing.T) {
 		t.Fatal("database concurrency drifted from Makefile")
 	}
 	for _, check := range verifyCheckNames() {
-		args := containerArguments("copy", "name", check, "./internal/org/orgpg")
+		args := containerArguments("copy", "name", check, "./internal/org/orgpg", singleContainerReservation())
 		if check == "test-db" {
 			want := []string{"sh", "-c", testDBScriptGolden, "sh", "./internal/org/orgpg"}
 			if !reflect.DeepEqual(args[len(args)-5:], want) {

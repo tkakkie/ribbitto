@@ -184,9 +184,9 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 		var report, summary string
 		var err error
 		if mcp {
-			summary, err = (containerVerifier{tree, runner, copies, timeout}).verify(runCtx, check, "./...")
+			summary, err = (containerVerifier{grantContainerBudget(), tree, runner, copies, timeout}).verify(runCtx, check, "./...")
 		} else {
-			report, err = runContainerExecution(runCtx, tree, check, "./...", runner, copies, &execution)
+			report, err = runContainerExecution(runCtx, tree, check, "./...", runner, copies, grantContainerExecution(&execution))
 			summary = execution.summary
 		}
 		wantCalls := []string{"run", "stop", "rm"}

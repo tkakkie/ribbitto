@@ -35,7 +35,7 @@ type budgetSlots struct {
 	processes processTable
 	locks     budgetLocks
 	// budgetOtherHook validates every reservation before trusting held slots.
-	// Entry-point wiring arrives in M3b; tests can isolate reconciliation here.
+	// Production uses this hook; tests can isolate reconciliation here.
 	budgetHook func([]budgetContainer) ([3]bool, budgetResult)
 }
 

@@ -29,7 +29,7 @@ func TestContainerSummaryValidation(t *testing.T) {
 		return 0, nil
 	}}
 	for _, tc := range []struct{ check, pattern string }{{"shell", "."}, {"build", "-x"}, {"generated", "."}} {
-		summary, err := (containerVerifier{"tree", runner, t.TempDir(), containerTimeout}).verify(context.Background(), tc.check, tc.pattern)
+		summary, err := (containerVerifier{grantContainerBudget(), "tree", runner, t.TempDir(), containerTimeout}).verify(context.Background(), tc.check, tc.pattern)
 		text, bad := verifyResult(summary, err, false, false)
 		if err == nil || summary != "" || !bad || !strings.HasPrefix(text, "NOT VERIFIED: the check could not run\n") {
 			t.Fatalf("invalid summary request: %q, %v", text, err)
@@ -108,12 +108,12 @@ func TestContainerSummaryDifferential(t *testing.T) {
 					}}
 				}
 				var execution containerExecution
-				report, runErr := runContainerExecution(context.Background(), tree, check, "./...", runner, parent, &execution)
+				report, runErr := runContainerExecution(context.Background(), tree, check, "./...", runner, parent, grantContainerExecution(&execution))
 				first, _, _ := strings.Cut(report, "\n")
 				if first != tc.first {
 					t.Fatalf("host verdict %q, want %q", first, tc.first)
 				}
-				summary, err := (containerVerifier{tree, runner, parent, containerTimeout}).verify(context.Background(), check, "./...")
+				summary, err := (containerVerifier{grantContainerBudget(), tree, runner, parent, containerTimeout}).verify(context.Background(), check, "./...")
 				if summary != execution.summary || (err == nil) != (runErr == nil) {
 					t.Fatal("MCP did not use the captured summary")
 				}
@@ -180,7 +180,7 @@ func TestContainerSummaryLargeStream(t *testing.T) {
 	stream.WriteString(containerJSON("p", "fail"))
 	for _, check := range []string{"test", "test-db"} {
 		t.Run(check, func(t *testing.T) {
-			v := containerVerifier{containerFixture(t), summaryRunner(stream.String(), "", 1), t.TempDir(), containerTimeout}
+			v := containerVerifier{grantContainerBudget(), containerFixture(t), summaryRunner(stream.String(), "", 1), t.TempDir(), containerTimeout}
 			summary, err := v.verify(context.Background(), check, ".")
 			if len(summary) > summaryErrorBudget {
 				t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)
@@ -244,7 +244,7 @@ func TestContainerSummarySourceCleanup(t *testing.T) {
 		return 0, nil
 	}}
 	var execution containerExecution
-	report, err := runContainerExecution(context.Background(), containerFixture(t), "build", ".", runner, t.TempDir(), &execution)
+	report, err := runContainerExecution(context.Background(), containerFixture(t), "build", ".", runner, t.TempDir(), grantContainerExecution(&execution))
 	if err == nil || !strings.HasPrefix(report, "FAILED: source cleanup failed\n") || !strings.HasPrefix(execution.summary, "FAILED: source cleanup failed\n") || !strings.Contains(execution.summary, "Details unavailable: the check did not complete.") || strings.Contains(execution.summary, "unconfirmed output") || strings.Contains(execution.summary, "Ran on regenerated sources") {
 		t.Fatalf("cleanup: report %q, summary %q, error %v", report, execution.summary, err)
 	}

@@ -42,9 +42,9 @@ func TestContainerGenerateBoundary(t *testing.T) {
 			t.Fatalf("dispatch %v: %d, %s", args, code, stderr.String())
 		}
 	}
-	want := containerArguments("copy", "name", "vet", "./...")
+	want := containerArguments("copy", "name", "vet", "./...", singleContainerReservation())
 	want = append(want[:len(want)-4:len(want)-4], containerGenerateScript)
-	if got := containerArguments("copy", "name", "writeback", "ignored"); !reflect.DeepEqual(got, want) {
+	if got := containerArguments("copy", "name", "writeback", "ignored", singleContainerReservation()); !reflect.DeepEqual(got, want) {
 		t.Fatal("generation flags differ")
 	}
 	for _, fragment := range []string{containerCopyScript, containerTemplCommand + " >&2 || exit 31", containerSQLCCommand + " >&2 || exit 32", containerCSSCommand + " >&2 || exit 33", "find . -type f -exec", `cmp -s -- "$old/$name" "$file"`, `printf "%s\0" "$name"`, "*) exit 34", "tar --format=ustar --null --verbatim-files-from --no-recursion"} {
@@ -96,7 +96,7 @@ func TestContainerGeneratePreDocker(t *testing.T) {
 				t.Fatal("Docker reached")
 				return 0, nil
 			}}
-			report, err := runContainerGenerate(context.Background(), tree, sweep, runner, t.TempDir(), nil)
+			report, err := runContainerGenerate(context.Background(), tree, sweep, runner, t.TempDir(), nil, grantContainerBudget())
 			if err == nil || !strings.Contains(report, "0 written, 0 identical") || !strings.Contains(report, "refused:") {
 				t.Fatalf("gate accepted: %s, %v", report, err)
 			}
@@ -186,12 +186,12 @@ func TestContainerGenerateResults(t *testing.T) {
 			var err error
 			if kind == "trust" {
 				var out, stderr bytes.Buffer
-				if code := startContainerGenerate(tree, &out, &stderr, errors.New("untrusted"), func(io.Writer) error { t.Fatal("sweep reached"); return nil }, runner, t.TempDir(), nil); code != 1 {
+				if code := startContainerGenerate(tree, &out, &stderr, errors.New("untrusted"), func(io.Writer) error { t.Fatal("sweep reached"); return nil }, runner, t.TempDir(), nil, grantContainerBudget()); code != 1 {
 					t.Fatal("trust accepted")
 				}
 				report, err = out.String(), errors.New("untrusted")
 			} else {
-				report, err = runContainerGenerate(ctx, tree, sweep, runner, t.TempDir(), nil)
+				report, err = runContainerGenerate(ctx, tree, sweep, runner, t.TempDir(), nil, grantContainerBudget())
 			}
 			success := kind == "success" || kind == "empty"
 			if (err == nil) != success || strings.Contains(report, "untrusted diagnostic") || strings.ContainsRune(report, '\x1b') {
@@ -222,7 +222,7 @@ func TestContainerGenerateResults(t *testing.T) {
 					}
 					return 0, nil
 				}}
-				if result, err := runContainerCheck(ctx, tree, "generated", "./...", next, t.TempDir()); err != nil || !strings.HasPrefix(result, "verified\n") {
+				if result, err := runContainerCheck(ctx, tree, "generated", "./...", next, t.TempDir(), grantContainerBudget()); err != nil || !strings.HasPrefix(result, "verified\n") {
 					t.Fatalf("following generated: %s, %v", result, err)
 				}
 			} else {

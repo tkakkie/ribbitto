@@ -64,6 +64,12 @@ configuration.
   absence listing; ENOENT during copy removal needs a confirming descriptor-relative
   stat. A copy gone before opening is ignored. Other errors remain failures.
 
+The [memory budget](argon-verify-budget.md) is merged but not in force until
+an approved launcher update. The sweep never reads or reclaims by the
+`argonreview.slot` label: its ownership, image, liveness, revalidation and
+removal checks are unchanged. A labelled leftover keeps its slot in budget
+reconciliation until swept, even after its runner's lock is released.
+
 ## Liveness
 
 The runner locks its private copy directory with exclusive `flock` immediately

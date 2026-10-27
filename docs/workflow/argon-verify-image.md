@@ -2,13 +2,13 @@
 
 ## Purpose and status
 
-The recipe, build/vet/test regeneration and `generated` check (#1696) are merged but
-**not in force until #1700**.
-The [result summary](argon-verify-testdb.md#result-summary) is also merged but
-not in force until a new launcher build is enabled (#1700).
-Production workers still run the pinned launcher `argonreview-7f607ca`
-and the old image; merging changes nothing in production.
-The recipe now includes PostgreSQL 18 (#1697 PR A). [test-db](argon-verify-testdb.md) is merged but **not in force until #1700**.
+The recipe, build/vet/test regeneration and `generated` check (#1696), the
+[result summary](argon-verify-testdb.md#result-summary) and
+[test-db](argon-verify-testdb.md) (#1697) are in force since 2026-10-27
+(#1700 stage A). Production workers run the launcher `argonreview-2e3a6bf`,
+which pins the image `sha256:12c5636332bb…` (tag `argonreview-verify-image:7957ae8`).
+The old launcher `argonreview-7f607ca` and its official golang image stay for rollback.
+The recipe includes PostgreSQL 18 (#1697 PR A).
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
@@ -188,5 +188,5 @@ rewriting, and also checks internal package `doc.go` presence. Recursive
 formatter traversal here can differ (including hidden directories), and does
 not check package documentation. tbls schema docs, dependency docs, the API
 manifest, golangci-lint, docscheck, languagecheck, race detector, database and
-browser tests remain CI-only. The real Docker/dash/generator path still needs
-#1700 preflight before these merged checks enter force.
+browser tests remain CI-only. #1700's preflight exercised the real
+Docker/dash/generator path before these checks entered force.

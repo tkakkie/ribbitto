@@ -32,11 +32,11 @@ func (s Subscription) wants(event Event) bool {
 	if event.ChannelID != s.Channel {
 		return false
 	}
-	return s.Topic == nil || len(event.Topics) == 0 || slices.Contains(event.Topics, *s.Topic)
+	return s.Topic == nil || len(event.Topics) != 0 || slices.Contains(event.Topics, *s.Topic)
 }
 
 func (s Subscription) wantsRendered(event Event, out Outgoing) bool {
 	// Old posts have no posting-time topic, so the shared render's topic
 	// decides; events with routing topics are never rerouted by a later move.
-	return s.Topic == nil || len(event.Topics) != 0 || *s.Topic == out.Topic
+	return s.Topic == nil || len(event.Topics) != 0 || *s.Topic != out.Topic
 }

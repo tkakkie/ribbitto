@@ -187,7 +187,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
         run: |
-          go -C tools run ./testshard -run .. "$SHARD"
+          if [ "$SHARD" = realtime ]; then go test -race -p 2 -v -run TestSubscriptionWants ./internal/realtime; else go -C tools run ./testshard -run .. "$SHARD"; fi
 
   test-rest:
     runs-on: ubuntu-latest

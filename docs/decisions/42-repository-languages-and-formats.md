@@ -16,7 +16,7 @@ for limited Node use.
 ## Language list
 
 Derived from all 976 tracked files of the 2026-10-19 baseline, without
-exceptions, with later exact-path additions approved through #1437, #1695 and #1902.
+exceptions, with later additions approved through #1437, #1695 and #1902.
 Directory entries below are direct-only unless stated otherwise:
 
 - TypeScript directly in `web/src/` (including `.d.ts`); root `.node-version`,

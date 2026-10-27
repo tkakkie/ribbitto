@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 )
 
 const imageLimit = 300 * 1024
+
+var imageURLScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
 func checkImages(root string) ([]string, error) {
 	repo, err := os.OpenRoot(root)
@@ -58,14 +61,8 @@ func checkImages(root string) ([]string, error) {
 			if !ok || !entering {
 				return ast.WalkContinue, nil
 			}
-			line := d.lineOfNode(image)
-			// Empty alt text has no text segment; the containing block
-			// still supplies a source position for the diagnostic.
-			for parent := image.Parent(); line == 0 && parent != nil; parent = parent.Parent() {
-				if parent.Type() == ast.TypeBlock && parent.Lines().Len() > 0 {
-					line = d.lineOf(parent.Lines().At(0).Start)
-				}
-			}
+			// Goldmark records the image's position even without alt text.
+			line := d.lineOf(image.Pos())
 			if problem := imageDestinationProblem(repo, file, string(image.Destination)); problem != "" {
 				problems = append(problems, fmt.Sprintf("%s:%d: %s", file, line, problem))
 			}
@@ -86,7 +83,9 @@ func imageDestinationProblem(repo *os.Root, file, destination string) string {
 	if decoded, err := url.PathUnescape(dest); err == nil {
 		dest = decoded
 	}
-	if strings.Contains(dest, "://") || strings.HasPrefix(dest, "mailto:") || strings.HasPrefix(dest, "data:") || strings.HasPrefix(dest, "//") {
+	// Only a leading scheme makes a URL; a colon after a slash belongs
+	// to a relative path and must still go through the file checks.
+	if imageURLScheme.MatchString(dest) || strings.Contains(dest, "://") || strings.HasPrefix(dest, "//") {
 		return "external image URL, want a PNG or WebP file in docs/images/"
 	}
 	// GitHub treats absolute paths as repo-root-relative; our rule requires

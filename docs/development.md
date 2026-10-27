@@ -109,10 +109,10 @@ Historical decision records skip this path check; links and
 anchors are checked.
 Markdown images must have non-empty rendered alt text and resolve relative
 to their containing document, after URL decoding and path normalisation,
-to regular PNG or WebP files directly in `docs/images/*`. External URLs and
-absolute paths are refused; extensions are case-sensitive. Each image file
-is limited to 300 KiB (307,200 bytes). Generated schema Markdown is exempt
-from image-link checks.
+to regular PNG or WebP files directly in docs/images/ (no subdirectories).
+External URLs and absolute paths are refused; extensions are case-sensitive.
+Each image file is limited to 300 KiB (307,200 bytes). Generated schema
+Markdown is exempt from image-link checks.
 
 `make prepush` is a quick subset for follow-up pushes: it
 regenerates templates, SQL and CSS and fails if that changes a file, then

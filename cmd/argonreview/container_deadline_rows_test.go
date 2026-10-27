@@ -162,7 +162,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 					_, _ = base.run(runCtx, args, env, out, diagnostic)
 					return -1, errors.New("runner failed")
 				}
-				if row.stage == "run" && row.interruption != nil {
+				if row.stage == "run" && (errors.Is(row.interruption, context.DeadlineExceeded) || errors.Is(row.interruption, context.Canceled)) {
 					_, _ = base.run(runCtx, args, env, out, diagnostic)
 					return -1, nil // Docker's killed-client exit status, without a runner error.
 				}
@@ -230,9 +230,10 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	}
 	first, _, _ = strings.Cut(verdict, "\n")
 	wantReport := deadlineHostReport(check, verdict, stdout, stderr, code, row.stage != "finishReport")
-	if row.stage == "before" {
+	switch row.stage {
+	case "before":
 		wantReport = ""
-	} else if row.stage == "source" {
+	case "source":
 		wantReport = fmt.Sprintf("%s\n%s check result could not be confirmed. %s\n", first, check, containerCheckScope(""))
 	}
 	if report != wantReport {

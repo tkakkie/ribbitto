@@ -58,7 +58,8 @@ are never set by the runner.
 All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
 2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
 mounts.
-A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`.
+A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`; the 10-minute
+timeout reads `NOT VERIFIED: time limit exceeded` ([results](#timeout-and-cancel-results)).
 PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
 standard error and count toward the shared 4 MiB output cap.
 The cap counts the container's standard output and standard error together
@@ -124,7 +125,7 @@ Argon writes can fabricate any events, as it can today. CI stays the check.
 The summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
 launcher `argonreview-2e3a6bf`); Argon read its results inline in the preflight.
 
-MCP returns a summary from the same captured execution as the unchanged full
+MCP returns a summary from the same captured execution as the full
 host report printed by `container-check`. Its format is verdict first, then
 check/package/scope, test-only package and leaf counts plus allowed skips,
 skipped or failing names, test excerpts, compiler/panic/timeout/package
@@ -146,3 +147,33 @@ timeouts, interruptions (including after a non-verified report) and cleanup
 failures show fixed details and trusted metadata only. Output-limit results
 keep their cut-stream diagnostic. Cleanup failures and late context errors apply
 to both outputs; nothing incompletely verified becomes verified.
+
+## Timeout and cancel results
+
+The timeout label change (#1857) is merged but **not in force until the
+pinned launcher is updated (#1700)**. Enabling it needs separate approval;
+Claude must first repeat the host preflight from the trusted merge build.
+The run limit stays 10 minutes, including source preparation. The MCP call
+limit is unchanged. The host report and MCP summary share the decided line;
+an empty pre-container report gets its line from the MCP wrapper.
+
+| Situation | First line |
+|---|---|
+| Run deadline while the container runs | `NOT VERIFIED: time limit exceeded` |
+| Deadline after a complete pass, including final processing | `NOT VERIFIED: time limit exceeded` |
+| Deadline together with the output cap | `NOT VERIFIED: output limit exceeded (output cut off)` |
+| Complete failure, skips or no tests; deadline during stop, removal or source removal | Own failing or `NOT VERIFIED` verdict |
+| Deadline before a container, or MCP call deadline | Wrapper timeout line; a call deadline reaching the runner uses the run deadline rule |
+| Cleanup timeout alone, runner error or status 125 | Existing `FAILED` |
+| Source cleanup failure | `FAILED: source cleanup failed` |
+| Parent cancel before a container | Wrapper's `NOT VERIFIED: cancelled` |
+| Parent cancel while running, or after a pass | Existing `FAILED` |
+| Parent cancel after another verdict | Existing verdict; stop/removal still gives `FAILED` |
+
+Only the run context decides a run deadline; a timeout error from independent
+cleanup does not. Unconfirmed container removal keeps `FAILED`, even with a
+run deadline. Parent deadlines reaching the run context follow the same rule.
+Parent cancellation keeps its existing result for each stage (see the table).
+Timeout and cancel summaries keep #1846's fixed minimal body: “Details
+unavailable: the check did not complete.” Output caps keep “Counts unavailable”
+instead.

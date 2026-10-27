@@ -59,8 +59,7 @@ minimal credentials, Docker and host rights, and no arbitrary-command
 interface. `argonreview verify-mcp` offers one tool and only runs `container-check`.
 
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
-with a trusted binary and fixed source and worktree arguments. Neither agy's
-environment nor a tool argument supplies these. It serves only if its build matches the trusted revision in that source.
+with a trusted binary and fixed source and worktree arguments. It serves only if its build matches the trusted revision in that source.
 Pre- and post-run checks include the MCP file and server.
 
 The server environment allows only `PATH`. Docker connection settings
@@ -112,8 +111,9 @@ exit status; tests use per-test JSON, never package `ok` alone:
   package's final result.
 - Zero passing tests, no test files, missing results, malformed or truncated
   output, non-zero exit, out-of-memory kill or abnormal exit are never
-  `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
+  `verified`. Any test failure gives `FAILED`; any skip gives `NOT VERIFIED`
   with the skipped count and names, except `test-db`'s [measurement skips](argon-verify-testdb.md#limits-and-skips).
+  A run deadline is no test failure: [`NOT VERIFIED: time limit exceeded`](argon-verify-testdb.md#timeout-and-cancel-results).
 - Browser tests stay CI-only. Omitted files still fail or skip.
 
 `verified` is Argon's own check; it never replaces green CI, review or

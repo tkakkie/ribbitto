@@ -37,12 +37,13 @@ const (
 	containerUser           = "1000:1000"
 	// Provision this cache from trusted host module downloads. A fixed path
 	// avoids GOPATH, GOENV, HOME or a worktree selecting an arbitrary host mount.
-	containerModuleCache = "/var/cache/argonreview/go-mod"
-	containerPath        = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
-	containerCopyParent  = "/tmp"
-	containerOwnerLabel  = "argonreview.owner"
-	containerOwnerValue  = "verify"
-	containerNamePattern = `^argonreview-check-[0-9a-f]{32}$`
+	containerModuleCache      = "/var/cache/argonreview/go-mod"
+	containerPath             = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+	containerCopyParent       = "/tmp"
+	containerOwnerLabel       = "argonreview.owner"
+	containerOwnerValue       = "verify"
+	containerNamePattern      = `^argonreview-check-[0-9a-f]{32}$`
+	containerTimeLimitVerdict = "NOT VERIFIED: time limit exceeded"
 )
 
 // A single-run container has a fresh /tmp. Copy dotfiles too, keeping /work read-only.
@@ -241,20 +242,21 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
-	var result containerExecution
+	result := containerExecution{timeout: containerTimeout}
 	return runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 }
 
-func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (string, error) {
+func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, timeout time.Duration) (string, error) {
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
-	var result containerExecution
+	result := containerExecution{timeout: timeout}
 	_, err := runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 	return result.summary, err
 }
 
 type containerExecution struct {
+	timeout time.Duration
 	output  containerOutput
 	code    int
 	summary string
@@ -263,7 +265,11 @@ type containerExecution struct {
 // Both commands share source copying, flags, limits and confirmed cleanup.
 // Callers validate their own interface before reaching this private executor.
 func runContainerExecution(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, result *containerExecution) (report string, err error) {
-	ctx, cancel := context.WithTimeout(parent, containerTimeout)
+	timeout := result.timeout
+	if timeout == 0 {
+		timeout = containerTimeout
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	tree, err = filepath.Abs(tree)
 	if err != nil {
@@ -322,8 +328,12 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	output := &result.output
 	output.cancel = cancel
 	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
+	// Record completion before cleanup: a later deadline cannot undo a finished
+	// container, while an earlier interruption makes its result unknowable.
+	interrupted := ctx.Err() != nil
+	completed := runErr == nil && !interrupted
 	result.code = code
-	return finishContainerRun(ctx, runner, name, check, code, runErr, output, &in)
+	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
@@ -332,7 +342,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		err = errors.Join(err, fmt.Errorf("container check interrupted: %w", ctxErr))
 		if strings.HasPrefix(report, "verified\n") {
-			report = "FAILED" + strings.TrimPrefix(report, "verified")
+			report = interruptedContainerVerdict(ctxErr) + strings.TrimPrefix(report, "verified")
 		}
 	}
 	if in.check != "writeback" && report != "" {
@@ -353,8 +363,9 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, output *containerOutput, in *summaryInput) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
+	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
 		status, cleanupErr := runner.run(cleanupCtx, args, dockerEnvironment(), io.Discard, io.Discard)
@@ -362,6 +373,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		// Removal still runs after a failed stop, and a successful force-removal
 		// suffices even when stop could not reach the container.
 		if args[0] == "rm" && (status != 0 || cleanupErr != nil) {
+			cleanupFailed = true
 			if cleanupErr == nil {
 				cleanupErr = fmt.Errorf("docker rm exited with status %d", status)
 			}
@@ -377,16 +389,28 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		return "", err
 	}
 	in.runnerFailed = runErr != nil || err != nil || code == 125
-	verdict := commandVerdict(code, err, output.over)
-	if check == "test" {
-		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)
+	verdict, stat, stdout := containerVerdict(check, code, err, output)
+	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
+	if deadline {
+		// One interruption rule governs host and MCP: an unfinished run or a
+		// completed pass loses verification; other completed verdicts stay pinned.
+		// Read the run context, since joined errors include independent cleanup.
+		// Row 8 keeps its existing report: status 125 means Docker never ran
+		// the check, so it must not gain generated-check statistics.
+		if completed && code != 125 {
+			verdict, stat, stdout = containerVerdict(check, code, nil, output)
+		}
+		// A runner error returned with a healthy context keeps FAILED even if
+		// cleanup outlives the deadline; only interruption during run is unknown.
+		if interrupted || completed && strings.HasPrefix(verdict, "verified") {
+			verdict = containerTimeLimitVerdict
+		}
 	}
-	if check == "test-db" {
-		verdict = testVerdictWithAllowlist(code, err, output.stdout.Bytes(), output.over, measurementSkips())
+	if output.over {
+		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
 	}
+	in.verdict = verdict
 	if check == "generated" {
-		verdict, stat, stdout := generatedVerdict(code, err, output.stdout.String(), output.over)
-		in.verdict = verdict
 		if !output.over && err == nil {
 			switch code {
 			case generatedDiffer:
@@ -398,11 +422,29 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		}
 		return fmt.Sprintf("%s\n%s%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, stat, containerCheckScope(check), stdout, output.stderr.Bytes()), err
 	}
-	if output.over {
-		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
-	}
-	in.verdict = verdict
 	return fmt.Sprintf("%s\n%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, containerCheckScope(check), output.stdout.Bytes(), output.stderr.Bytes()), err
+}
+
+// interruptedContainerVerdict is also applied after source removal: no context
+// error may leave a pass verified, and only the run's deadline gets this label.
+func interruptedContainerVerdict(ctxErr error) string {
+	if errors.Is(ctxErr, context.DeadlineExceeded) {
+		return containerTimeLimitVerdict
+	}
+	return "FAILED"
+}
+
+func containerVerdict(check string, code int, err error, output *containerOutput) (string, string, string) {
+	switch check {
+	case "generated":
+		return generatedVerdict(code, err, output.stdout.String(), output.over)
+	case "test":
+		return testVerdict(code, err, output.stdout.Bytes(), output.over), "", ""
+	case "test-db":
+		return testVerdictWithAllowlist(code, err, output.stdout.Bytes(), output.over, measurementSkips()), "", ""
+	default:
+		return commandVerdict(code, err, output.over), "", ""
+	}
 }
 
 func checkContainerToolVersions(data []byte) error {

@@ -47,25 +47,25 @@ func TestBudgetInventory(t *testing.T) {
 					case "listing-error":
 						return -1, errors.New("untrusted docker data")
 					case "listing-exit":
-						fmt.Fprint(stderr, "untrusted docker data")
+						_, _ = fmt.Fprint(stderr, "untrusted docker data")
 						return 1, nil
 					case "listing-oversize":
-						fmt.Fprint(stdout, strings.Repeat("x", containerOutputLimit+1))
+						_, _ = fmt.Fprint(stdout, strings.Repeat("x", containerOutputLimit+1))
 						return 0, nil
 					case "stderr-oversize":
-						fmt.Fprint(stderr, strings.Repeat("x", containerOutputLimit+1))
+						_, _ = fmt.Fprint(stderr, strings.Repeat("x", containerOutputLimit+1))
 						return 0, nil
 					case "invalid-id":
-						fmt.Fprintln(stdout, "--bad")
+						_, _ = fmt.Fprintln(stdout, "--bad")
 						return 0, nil
 					case "uppercase-id":
-						fmt.Fprintln(stdout, strings.ToUpper(id))
+						_, _ = fmt.Fprintln(stdout, strings.ToUpper(id))
 						return 0, nil
 					case "duplicate-id":
-						fmt.Fprintln(stdout, id, id)
+						_, _ = fmt.Fprintln(stdout, id, id)
 						return 0, nil
 					case "all-containers":
-						fmt.Fprintln(stdout, id, strings.Repeat("b", 64))
+						_, _ = fmt.Fprintln(stdout, id, strings.Repeat("b", 64))
 						return 0, nil
 					}
 					if listing > 1 {
@@ -73,13 +73,13 @@ func TestBudgetInventory(t *testing.T) {
 						case "inspect-gone":
 							return 0, nil
 						case "inspect-gone-invalid-list":
-							fmt.Fprintln(stdout, "bad")
+							_, _ = fmt.Fprintln(stdout, "bad")
 							return 0, nil
 						case "inspect-gone-list-error":
 							return 1, nil
 						}
 					}
-					fmt.Fprintln(stdout, id)
+					_, _ = fmt.Fprintln(stdout, id)
 					return 0, nil
 				}
 				if len(args) != 4 || !slices.Equal(args[:3], []string{"inspect", "--format", "{{json .}}"}) || !sweepID.MatchString(args[3]) {
@@ -89,25 +89,26 @@ func TestBudgetInventory(t *testing.T) {
 				case "inspect-error-present", "inspect-gone", "inspect-gone-invalid-list", "inspect-gone-list-error":
 					return -1, errors.New("untrusted docker data")
 				case "inspect-exit":
-					fmt.Fprint(stderr, "untrusted docker data")
+					_, _ = fmt.Fprint(stderr, "untrusted docker data")
 					return 1, nil
 				case "inspect-oversize":
-					fmt.Fprint(stdout, strings.Repeat("x", containerOutputLimit+1))
+					_, _ = fmt.Fprint(stdout, strings.Repeat("x", containerOutputLimit+1))
 					return 0, nil
 				case "bad-json":
-					fmt.Fprint(stdout, "untrusted docker data")
+					_, _ = fmt.Fprint(stdout, "untrusted docker data")
 					return 0, nil
 				case "id-mismatch":
-					fmt.Fprintf(stdout, `{"Id":%q}`, strings.Repeat("b", 64))
+					_, _ = fmt.Fprintf(stdout, `{"Id":%q}`, strings.Repeat("b", 64))
 					return 0, nil
 				}
 				// A foreign, stopped container must survive inventory unchanged too.
-				fmt.Fprintf(stdout, `{"Id":%q,"Name":"/foreign","Config":{"Image":"image","Labels":{"x":"y"}},"State":{"Status":"exited"},"HostConfig":{"Memory":123,"MemorySwap":456}}`, args[3])
+				_, _ = fmt.Fprintf(stdout, `{"Id":%q,"Name":"/foreign","Config":{"Image":"image","Labels":{"x":"y"}},"State":{"Status":"exited"},"HostConfig":{"Memory":123,"MemorySwap":456}}`, args[3])
 				return 0, nil
 			}
 			inventory := budgetDockerInventory{runner: runner}
 			containers, err := inventory.budgetList(context.Background())
-			if kind == "valid" || kind == "all-containers" {
+			switch kind {
+			case "valid", "all-containers":
 				want := 1
 				if kind == "all-containers" {
 					want = 2
@@ -120,11 +121,11 @@ func TestBudgetInventory(t *testing.T) {
 						t.Fatalf("lost inspect fields: %+v", c)
 					}
 				}
-			} else if kind == "inspect-gone" {
+			case "inspect-gone":
 				if err != nil || len(containers) != 0 || listing != 2 {
 					t.Fatalf("disappearance: %v, %v", containers, err)
 				}
-			} else {
+			default:
 				if err == nil || len(containers) != 0 {
 					t.Fatalf("accepted %s: %v", kind, containers)
 				}

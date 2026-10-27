@@ -38,8 +38,9 @@ covers measurement approval and caps.
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any edge change.
 - `make check` also checks documents: links and `#anchors`, repository
-  paths in code spans, and each document's size limit (one topic per
-  file). When a file goes over, open an issue, add `<path> #<issue>` to
+  paths in code spans, documentation image sizes, destinations and alt text,
+  and each document's size limit (one topic per file).
+  When a file goes over, open an issue, add `<path> #<issue>` to
   `docs/size-exceptions.txt`, and split it in its own pull request.
 
 ## Layout and dependency direction

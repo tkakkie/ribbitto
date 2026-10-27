@@ -4,6 +4,7 @@
 [workflow log](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6267383947)).
 Amended by the maintainer on 2026-10-20 in #1437.
 Amended by the maintainer on 2026-10-24 in #1695.
+Amended by the maintainer on 2026-10-28 in #1902.
 Use the language list below. A task needing another language, runtime,
 dependency or format stops for the maintainer's explicit approval in its issue. The
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)
@@ -15,7 +16,7 @@ for limited Node use.
 ## Language list
 
 Derived from all 976 tracked files of the 2026-10-19 baseline, without
-exceptions, with later exact-path additions approved through #1437 and #1695.
+exceptions, with later exact-path additions approved through #1437, #1695 and #1902.
 Directory entries below are direct-only unless stated otherwise:
 
 - TypeScript directly in `web/src/` (including `.d.ts`); root `.node-version`,
@@ -36,6 +37,9 @@ Directory entries below are direct-only unless stated otherwise:
 - Markdown recursively in `docs/`, directly in the GitHub issue-template,
   instructions and prompts directories, and the named root instructions,
   index, README and pull request template.
+- PNG or WebP directly in `docs/images/`, at most 300 KiB (307,200 bytes) each,
+  referenced only from Markdown with alt text; kind "documentation image",
+  approved through #1902.
 - YAML for the named root configurations, GitHub issue configuration and
   Dependabot, and directly in `.github/workflows/`; TOML directly in
   `internal/web/i18n/locales/`; the named JSON seed dataset in `cmd/seed/`.

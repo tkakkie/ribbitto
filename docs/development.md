@@ -107,10 +107,16 @@ after the package must be a Go identifier, exported or not, and the
 package directory must hold a regular `.go` file.
 Historical decision records skip this path check; links and
 anchors are checked.
+Markdown images must have non-empty rendered alt text and resolve relative
+to their containing document, after URL decoding and path normalisation,
+to regular PNG or WebP files directly in `docs/images/*`. External URLs and
+absolute paths are refused; extensions are case-sensitive. Each image file
+is limited to 300 KiB (307,200 bytes). Generated schema Markdown is exempt
+from image-link checks.
 
 `make prepush` is a quick subset for follow-up pushes: it
 regenerates templates, SQL and CSS and fails if that changes a file, then
-checks the API and dependency manifests, document sizes and lint, stopping at
+checks the API and dependency manifests, documents and lint, stopping at
 the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.

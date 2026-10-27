@@ -61,6 +61,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "agy-check" {
+		return agyCheckCommand(args[1:], stdout, stderr, agyCheckDefaults())
+	}
 	if len(args) > 0 && args[0] == "implement-run" {
 		return implementRunCommand(args[1:], stdout, stderr, implementRunDefaults())
 	}
@@ -160,7 +163,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage)
 	return 2
 }
 

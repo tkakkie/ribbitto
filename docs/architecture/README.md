@@ -59,6 +59,7 @@ Read the file for the area you change:
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
+| [`web-layers-browser-tests.md`](web-layers-browser-tests.md) | shared go-rod browser tests and the M3 web-layer audit |
 | [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),

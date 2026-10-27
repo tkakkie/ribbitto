@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"regexp"
 	"strconv"
 	"strings"
 )
 
 const (
 	budgetSlotLabel                  = "argonreview.slot"
-	budgetUnit          int64        = 2 << 30
+	budgetUnit          int64        = otherUnit
 	budgetStateUnknown  budgetResult = "unavailable: the container state could not be determined"
 	budgetInvalidLabel  budgetResult = "unavailable: a verification container has no valid slot label"
 	budgetDuplicate     budgetResult = "unavailable: a slot is claimed twice"
@@ -35,9 +34,8 @@ type budgetSlots struct {
 	inventory budgetInventory
 	processes processTable
 	locks     budgetLocks
-	// M3 must apply M2's otherVerificationConsistent before trusting held slots.
-	// This nil-by-default seam receives all containers unchanged, in inventory
-	// order; M1b performs no classification through it.
+	// budgetOtherHook validates every reservation before trusting held slots.
+	// Entry-point wiring arrives in M3b; tests can isolate reconciliation here.
 	budgetHook func([]budgetContainer) ([3]bool, budgetResult)
 }
 
@@ -64,61 +62,48 @@ func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
 	orphan, processErr := budgetOrphan(b.processes, b.locks.uid)
 	containers, err := b.inventory.budgetList(ctx)
 	var held [3]bool
+	var cause budgetResult
 	if err != nil || processErr != nil {
-		return held, budgetStateUnknown
+		cause = budgetStateUnknown
 	}
-	var unknown, invalid, duplicate bool
-	pattern := regexp.MustCompile(containerNamePattern)
+	if orphan {
+		cause = budgetPrefer(cause, budgetOrphanPresent)
+	}
 	for _, c := range containers {
 		switch c.State {
 		case "created", "running", "paused", "restarting", "exited", "dead", "removing":
 		default:
-			unknown = true
+			cause = budgetPrefer(cause, budgetStateUnknown)
 		}
 		_, ownerPresent := c.Labels[containerOwnerLabel]
-		nameMatches := strings.HasPrefix(c.Name, "/") && pattern.MatchString(strings.TrimPrefix(c.Name, "/"))
+		nameMatches := strings.HasPrefix(c.Name, "/") && sweepContainerName.MatchString(strings.TrimPrefix(c.Name, "/"))
 		if !nameMatches && !ownerPresent {
 			continue
 		}
 		// Even exited, dead and removing leftovers outlive their runner's flock.
 		slots, valid := budgetParseSlots(c.Labels[budgetSlotLabel])
 		if !valid {
-			invalid = true
+			cause = budgetPrefer(cause, budgetInvalidLabel)
 			continue
 		}
 		for _, slot := range slots {
 			if held[slot] {
-				duplicate = true
+				cause = budgetPrefer(cause, budgetDuplicate)
 			}
 			held[slot] = true
 		}
 	}
-	// Accumulate before choosing a cause so inventory ordering cannot change it.
-	if unknown {
-		return held, budgetStateUnknown
-	}
-	if invalid {
-		return held, budgetInvalidLabel
-	}
-	if duplicate {
-		return held, budgetDuplicate
-	}
-	if orphan {
-		return held, budgetOrphanPresent
-	}
 	if b.budgetHook != nil {
 		additional, result := b.budgetHook(containers)
-		if result != "" {
-			return held, result
-		}
+		cause = budgetPrefer(cause, result)
 		for slot, occupied := range additional {
 			if occupied && held[slot] {
-				return held, budgetDuplicate
+				cause = budgetPrefer(cause, budgetDuplicate)
 			}
 			held[slot] = held[slot] || occupied
 		}
 	}
-	return held, ""
+	return held, cause
 }
 
 // Enumerate in lowest-slot order; a locked candidate must not hide a free one.

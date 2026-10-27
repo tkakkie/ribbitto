@@ -87,7 +87,7 @@ test stdout remains test2json only. Any generator failure exits nonzero and
 reports `FAILED`. The script ends with `exec go "$@"`; the check, fixed flags
 and package pattern are separate positional arguments. `/work` stays read-only.
 The container is single-run with a fresh tmpfs, so a fixed directory suffices.
-Existing 1 GiB tmpfs limits stay; real Docker capacity validation is for #1700.
+Existing 1 GiB tmpfs limits stay; #1700's preflight ran the limits and three simultaneous containers.
 
 Reports say sources were regenerated; the `generated` check covers whether
 committed generated files are current. CI remains the check.

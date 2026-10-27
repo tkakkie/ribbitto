@@ -72,7 +72,12 @@ agy updates apply to both workers; each worker's builtin trust is a separate
 maintainer decision, even when the lists match. Launcher changes also need
 the maintainer's approval.
 
-Host experiments E0 to E5 were not required and were not run. E1, the quota
+Stage A obligations ([#1700 record](https://github.com/tkakkie/ribbitto/issues/1700#issuecomment-6431742979)):
+every smoke test includes the refusal set and a symlink refusal; after an `agy`
+update, re-run the isolated hook-failure, settings-layer, duplicate-key and
+home-path checks (exceptions E1, E3, E4, R6) before enabling.
+
+The earlier host experiments E0 to E5 (not #1700's exceptions) were not required and were not run. E1, the quota
 experiment, was never started: two parallel runs were enough. The quota
 question stays open; a quota problem means going back to one worker.
 

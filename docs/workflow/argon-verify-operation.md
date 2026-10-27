@@ -9,7 +9,9 @@ that day. Evidence: [step 1][step1], [preflight][preflight],
 On 2026-10-27 the maintainer approved [#1700](https://github.com/tkakkie/ribbitto/issues/1700)
 stage A: both workers run `argonreview-2e3a6bf` and its verify image
 (generator checks, `test-db`, summary). Its window passed the smoke tests, a
-rollback to `7f607ca` and a second switch; the record is on #1700.
+rollback to `7f607ca` and a second switch; the record is on #1700. `agy` does
+not offer `run_command`, so that refusal was not seen in the agent: the guard's
+and the settings layer's own refusals cover it.
 
 The [verify image recipe](argon-verify-image.md) describes the host build procedure;
 each build needs the maintainer's approval in chat.

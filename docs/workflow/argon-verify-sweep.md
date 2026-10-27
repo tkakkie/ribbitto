@@ -142,7 +142,7 @@ with a real SIGKILL leftover and reclaimed the client, container and copy.
 It confirmed these Docker CLI assumptions that fake tests cannot establish:
 
 - For that old launcher, `Config.Image` equals its base-image reference exactly.
-  #1700 must confirm the new verify image ID form and sweep old leftovers with
+  #1700 confirmed the new verify image ID form and swept old leftovers with
   the old launcher before switching; the new runner accepts only its one ID.
 - The label and inspect JSON field names are `Id`, `Name`, `Created`,
   `Config.Image`, `Config.Labels` and `Mounts[].Type/Source/Destination`.

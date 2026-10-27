@@ -21,6 +21,8 @@ type agyCheckObservation struct {
 // not a proof for production. Allows/denies count the alternating hook replies.
 type agyCheckSummary struct {
 	ToolSteps, HookInvocations, Allows, Denies, Errors, FilesCreated, ParallelBatches int
+	// Totals alone cannot prove alternation; count adjacent identical hook replies.
+	Repeats int
 }
 
 type agyCheckPin struct {
@@ -89,13 +91,13 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
 	case "counts reconcile":
 		s := o.Summary
-		r.Observed = fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d batches=%d",
-			s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.ParallelBatches)
+		r.Observed = fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d batches=%d repeats=%d",
+			s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.ParallelBatches, s.Repeats)
 		// Either starting reply is possible; alternation needs both and a gap <= 1.
 		r.OK = minimum > 0 && s.ToolSteps >= minimum && s.ParallelBatches >= 2 &&
 			s.Allows > 0 && s.Denies > 0 && s.Allows-s.Denies >= -1 && s.Allows-s.Denies <= 1 &&
 			s.Allows <= s.HookInvocations && s.Denies == s.HookInvocations-s.Allows &&
-			s.ToolSteps == s.HookInvocations && s.Errors == s.Denies && s.FilesCreated == s.Allows
+			s.ToolSteps == s.HookInvocations && s.Errors == s.Denies && s.FilesCreated == s.Allows && s.Repeats == 0
 	default:
 		r.Observed = "unknown expectation: " + row.Expected
 	}

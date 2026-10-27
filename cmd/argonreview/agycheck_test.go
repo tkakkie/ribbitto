@@ -19,7 +19,7 @@ func agyCheckFixtures() (agyCheckPin, []agyCheckObservation) {
 	for _, pair := range strings.Fields(agyCheckFixtureRows) {
 		id, outcome, _ := strings.Cut(pair, "=")
 		observations = append(observations, agyCheckObservation{ID: id, Outcome: strings.ReplaceAll(outcome, "_", " "),
-			Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2}})
+			Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}})
 	}
 	return agyCheckPin{"1.4.7", strings.Repeat("a", 64)}, observations
 }
@@ -117,25 +117,30 @@ func TestAgyCheckReconciliation(t *testing.T) {
 		minimum int
 		ok      bool
 	}{
-		{"default", agyCheckSummary{30, 30, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, true},
-		{"odd", agyCheckSummary{31, 31, 16, 15, 15, 16, 2}, 31, true},
-		{"override", agyCheckSummary{40, 40, 20, 20, 20, 20, 2}, 40, true},
-		{"too few", agyCheckSummary{28, 28, 14, 14, 14, 14, 2}, agyCheckDefaultCalls, false},
-		{"override too few", agyCheckSummary{30, 30, 15, 15, 15, 15, 2}, 40, false},
-		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1}, agyCheckDefaultCalls, false},
-		{"steps", agyCheckSummary{31, 30, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, false},
-		{"hooks", agyCheckSummary{30, 31, 15, 15, 15, 15, 2}, agyCheckDefaultCalls, false},
-		{"errors", agyCheckSummary{30, 30, 15, 15, 14, 15, 2}, agyCheckDefaultCalls, false},
-		{"files", agyCheckSummary{30, 30, 15, 15, 15, 14, 2}, agyCheckDefaultCalls, false},
-		{"total", agyCheckSummary{30, 30, 14, 15, 15, 14, 2}, agyCheckDefaultCalls, false},
-		{"alternation", agyCheckSummary{30, 30, 17, 13, 13, 17, 2}, agyCheckDefaultCalls, false},
-		{"negative", agyCheckSummary{30, 30, -1, 31, 31, -1, 2}, agyCheckDefaultCalls, false},
-		{"no allows", agyCheckSummary{1, 1, 0, 1, 1, 0, 2}, 1, false},
-		{"no denies", agyCheckSummary{1, 1, 1, 0, 0, 1, 2}, 1, false},
+		{"default", agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}, agyCheckDefaultCalls, true},
+		{"odd", agyCheckSummary{31, 31, 16, 15, 15, 16, 2, 0}, 31, true},
+		{"override", agyCheckSummary{40, 40, 20, 20, 20, 20, 2, 0}, 40, true},
+		{"too few", agyCheckSummary{28, 28, 14, 14, 14, 14, 2, 0}, agyCheckDefaultCalls, false},
+		{"override too few", agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}, 40, false},
+		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1, 0}, agyCheckDefaultCalls, false},
+		{"steps", agyCheckSummary{31, 30, 15, 15, 15, 15, 2, 0}, agyCheckDefaultCalls, false},
+		{"hooks", agyCheckSummary{30, 31, 15, 15, 15, 15, 2, 0}, agyCheckDefaultCalls, false},
+		{"errors", agyCheckSummary{30, 30, 15, 15, 14, 15, 2, 0}, agyCheckDefaultCalls, false},
+		{"files", agyCheckSummary{30, 30, 15, 15, 15, 14, 2, 0}, agyCheckDefaultCalls, false},
+		{"total", agyCheckSummary{30, 30, 14, 15, 15, 14, 2, 0}, agyCheckDefaultCalls, false},
+		{"alternation", agyCheckSummary{30, 30, 17, 13, 13, 17, 2, 0}, agyCheckDefaultCalls, false},
+		{"repeats", agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 28}, agyCheckDefaultCalls, false},
+		{"negative", agyCheckSummary{30, 30, -1, 31, 31, -1, 2, 0}, agyCheckDefaultCalls, false},
+		{"no allows", agyCheckSummary{1, 1, 0, 1, 1, 0, 2, 0}, 1, false},
+		{"no denies", agyCheckSummary{1, 1, 1, 0, 0, 1, 2, 0}, 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if r := agyCheckClassify(agyCheckObservation{ID: "reconciliation", Summary: tc.summary}, tc.minimum); r.OK != tc.ok {
+			r := agyCheckClassify(agyCheckObservation{ID: "reconciliation", Summary: tc.summary}, tc.minimum)
+			if r.OK != tc.ok {
 				t.Fatalf("%+v", r)
+			}
+			if tc.ok && !strings.Contains(r.Observed, "repeats=0") {
+				t.Fatalf("missing repeat count: %q", r.Observed)
 			}
 		})
 	}

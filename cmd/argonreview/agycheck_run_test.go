@@ -146,17 +146,41 @@ func TestAgyCheckArguments(t *testing.T) {
 			}
 		})
 	}
-	for _, flag := range []string{"home", "agy", "calls", "model"} {
-		for _, value := range []string{"", "0", "-1", "nope", "99999999999999999999999999999"} {
-			args := append(append([]string{}, base...), "--calls", value)
-			if _, err := agyCheckArguments(args); err == nil {
-				t.Fatalf("accepted invalid calls %q", value)
+	for _, tc := range []struct {
+		flag, valid string
+		invalid     []string
+	}{
+		{"home", "/check/home", []string{"", "home", "/a/../home", "/", "/settings.json"}},
+		{"agy", "/trusted-agy/agy", []string{"", "agy", "/a/../agy", "/", "/settings.json"}},
+		{"calls", "30", []string{"", "0", "-1", "nope", "99999999999999999999999999999"}},
+		{"model", agyCheckModel, []string{"", " ", "\t"}},
+	} {
+		t.Run(tc.flag, func(t *testing.T) {
+			var prefix []string
+			for i := 0; i < len(base); i += 2 {
+				if base[i] != "--"+tc.flag {
+					prefix = append(prefix, base[i:i+2]...)
+				}
 			}
-		}
-		args := append(append([]string{}, base...), "--"+flag, "one", "--"+flag, "two")
-		if _, err := agyCheckArguments(args); err == nil {
-			t.Fatalf("accepted repeated %s", flag)
-		}
+			args := append(prefix, "--"+tc.flag, tc.valid)
+			if _, err := agyCheckArguments(args); err != nil {
+				t.Fatalf("valid %s refused: %v", tc.flag, err)
+			}
+			for _, value := range tc.invalid {
+				args[len(args)-1] = value
+				if _, err := agyCheckArguments(args); err == nil {
+					t.Fatalf("accepted invalid %s %q", tc.flag, value)
+				}
+			}
+			if _, err := agyCheckArguments(args[:len(args)-1]); err == nil {
+				t.Fatalf("accepted missing value for %s", tc.flag)
+			}
+			args[len(args)-1] = tc.valid
+			args = append(args, "--"+tc.flag, tc.valid)
+			if _, err := agyCheckArguments(args); err == nil {
+				t.Fatalf("accepted repeated %s", tc.flag)
+			}
+		})
 	}
 }
 
@@ -178,13 +202,13 @@ func TestAgyCheckRefusals(t *testing.T) {
 		{"unknown field", "decoding isolation marker", func(h *agyCheckHarness) { withExtra(h, `"unexpected":1`) }},
 		{"duplicate", "decoding isolation marker", func(h *agyCheckHarness) { withExtra(h, `"version":1`) }},
 		{"trailing", "decoding isolation marker", func(h *agyCheckHarness) { data, _ := json.Marshal(h.m); h.data = string(data) + `{}` }},
-		{"version", "marker version", func(h *agyCheckHarness) { h.m.Version = 2 }},
-		{"home", "home does not match", func(h *agyCheckHarness) {
+		{"version", "marker version does not match", func(h *agyCheckHarness) { h.m.Version = 2 }},
+		{"home", "marker home does not match", func(h *agyCheckHarness) {
 			h.m.Home, h.m.Isolation = "/other", "/other/isolation"
 			h.info[h.m.Home], h.info[h.m.Isolation] = agyCheckInfo{os.ModeDir | 0o700, 501}, agyCheckInfo{os.ModeDir | 0o700, 501}
 			h.info[filepath.Join(h.m.Home, agyCheckMarkerName)] = agyCheckInfo{0o600, 501}
 		}},
-		{"empty user", "dedicated user", func(h *agyCheckHarness) { h.m.User, h.user.Username = "", "" }},
+		{"empty user", "marker dedicated user is empty", func(h *agyCheckHarness) { h.m.User, h.user.Username = "", "" }},
 		{"user mismatch", "dedicated user", func(h *agyCheckHarness) { h.user.Username = "other" }},
 		{"real uid", "dedicated user", func(h *agyCheckHarness) { h.real = 502 }},
 		{"effective uid", "dedicated user", func(h *agyCheckHarness) { h.euid = 502 }},
@@ -305,7 +329,7 @@ func TestAgyCheckProtectedPredicates(t *testing.T) {
 func TestAgyCheckCanaries(t *testing.T) {
 	for _, path := range agyCheckFixtureCanaries(agyCheckNewHarness(t).m) {
 		for _, mode := range []uint32{4, 2, 1} {
-			for _, outcome := range []error{syscall.EACCES, syscall.EPERM, syscall.ENOENT, nil, syscall.EIO} {
+			for _, outcome := range []error{syscall.EACCES, syscall.EPERM, syscall.EROFS, syscall.ENOENT, syscall.ELOOP, nil, syscall.EIO} {
 				t.Run(filepath.Base(path)+"/"+string(rune('0'+mode))+"/"+fmt.Sprint(outcome), func(t *testing.T) {
 					h := agyCheckNewHarness(t)
 					h.probe[path] = map[uint32]error{mode: outcome}
@@ -322,7 +346,7 @@ func TestAgyCheckCanaries(t *testing.T) {
 
 func TestAgyCheckExecutablePredicates(t *testing.T) {
 	for _, path := range []string{"/trusted-agy/agy", "/trusted-tool/argonreview"} {
-		for _, kind := range []string{"writable file", "writable directory", "writable ancestor", "nonregular", "no execute bits", "no execute access", "symlink", "parent symlink", "access error"} {
+		for _, kind := range []string{"writable file", "writable directory", "writable ancestor", "nonregular", "no execute bits", "no execute access", "symlink", "parent symlink", "access error", "setuid", "setgid"} {
 			t.Run(filepath.Base(path)+"/"+kind, func(t *testing.T) {
 				h := agyCheckNewHarness(t)
 				switch kind {
@@ -344,12 +368,92 @@ func TestAgyCheckExecutablePredicates(t *testing.T) {
 					h.info[filepath.Dir(path)] = agyCheckInfo{os.ModeSymlink | 0o755, 0}
 				case "access error":
 					h.probe[path] = map[uint32]error{2: syscall.ENOENT}
+				case "setuid":
+					h.info[path] = agyCheckInfo{os.ModeSetuid | 0o555, 0}
+				case "setgid":
+					h.info[path] = agyCheckInfo{os.ModeSetgid | 0o555, 0}
 				}
 				if _, err := agyCheckValidate(h.o, h.d); err == nil {
 					t.Fatal("unsafe executable accepted")
 				}
 			})
 		}
+	}
+}
+
+func TestAgyCheckExecutableWriteAccess(t *testing.T) {
+	for _, target := range []string{"/trusted-agy/agy", "/trusted-agy", "/"} {
+		for _, outcome := range []error{syscall.EACCES, syscall.EPERM, syscall.EROFS, nil, syscall.ENOENT, syscall.ELOOP} {
+			t.Run(target+"/"+fmt.Sprint(outcome), func(t *testing.T) {
+				h := agyCheckNewHarness(t)
+				h.probe[target] = map[uint32]error{2: outcome}
+				_, err := agyCheckValidate(h.o, h.d)
+				want := outcome == syscall.EACCES || outcome == syscall.EPERM || outcome == syscall.EROFS
+				if (err == nil) != want {
+					t.Fatalf("write access %s outcome %v accepted=%t: %v", target, outcome, want, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAgyCheckRootWriteAccess(t *testing.T) {
+	err := syscall.Access("/", 2)
+	if !agyCheckNotWritable(err) && !(err == nil && os.Geteuid() == 0) {
+		t.Fatalf("root write access unclassified: uid=%d error=%v", os.Geteuid(), err)
+	}
+	if agyCheckAccessDenied(syscall.EROFS) {
+		t.Fatal("EROFS must not count as canary access denial")
+	}
+}
+
+func TestAgyCheckExecutableOwnership(t *testing.T) {
+	for _, path := range []string{"/trusted-agy/agy", "/trusted-tool/argonreview"} {
+		for _, target := range []string{path, filepath.Dir(path), "/", ""} {
+			t.Run(path+"/owner="+target, func(t *testing.T) {
+				h := agyCheckNewHarness(t)
+				for _, p := range []string{path, filepath.Dir(path), "/"} {
+					mode := os.ModeDir | 0o555
+					if p == path {
+						mode = 0o555
+					}
+					uid := uint32(502)
+					if p == target {
+						uid = 501
+					}
+					h.info[p] = agyCheckInfo{mode, uid}
+				}
+				_, err := agyCheckValidate(h.o, h.d)
+				if target == "" {
+					if err != nil {
+						t.Fatalf("other owners refused: %v", err)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "dedicated ownership") {
+					t.Fatalf("dedicated owner %s not refused: %v", target, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAgyCheckIsolationCaseFold(t *testing.T) {
+	for _, tc := range []struct {
+		isolation string
+		accepted  bool
+	}{
+		{"/check/HOME", false},
+		{"/CHECK/home/isolation", true},
+		{"/CHECK/home-other/isolation", false},
+	} {
+		t.Run(tc.isolation, func(t *testing.T) {
+			h := agyCheckNewHarness(t)
+			h.m.Isolation = tc.isolation
+			h.info[tc.isolation] = agyCheckInfo{os.ModeDir | 0o700, 501}
+			_, err := agyCheckValidate(h.o, h.d)
+			if (err == nil) != tc.accepted || (err != nil && !strings.Contains(err.Error(), "strictly inside")) {
+				t.Fatalf("isolation %s accepted=%t: %v", tc.isolation, tc.accepted, err)
+			}
+		})
 	}
 }
 
@@ -366,5 +470,20 @@ func TestAgyCheckCommandFailsClosed(t *testing.T) {
 		if code := run(args, strings.NewReader(""), &out, &stderr); code != 2 || !strings.Contains(out.String(), "USAGE:") {
 			t.Fatalf("dispatch/hook form did not fail closed: %d %q", code, out.String())
 		}
+	}
+}
+
+func TestAgyCheckCommandRevalidatesMarker(t *testing.T) {
+	h := agyCheckNewHarness(t)
+	var out, stderr strings.Builder
+	args := []string{"--home", h.o.home, "--agy", h.o.agy}
+	if code := agyCheckCommand(args, &out, &stderr, h.d); code != 1 || !strings.Contains(out.String(), "row execution is not implemented yet") {
+		t.Fatalf("initial validation failed: %d %q", code, out.String())
+	}
+	h.m.AccountHome = "/protected/new-account"
+	h.probe[h.m.AccountHome] = map[uint32]error{4: nil}
+	out.Reset()
+	if code := agyCheckCommand(args, &out, &stderr, h.d); code != 1 || !strings.Contains(out.String(), "canary access not denied") || !strings.Contains(out.String(), h.m.AccountHome) {
+		t.Fatalf("new marker root not revalidated: %d %q", code, out.String())
 	}
 }

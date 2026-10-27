@@ -29,6 +29,7 @@ type agyCheckDeps struct {
 	executable func() (string, error)
 	lstat      func(string) (os.FileInfo, error)
 	read       func(string, int64) ([]byte, error)
+	open       func(string) (io.ReadCloser, error)
 	access     func(string, uint32) error
 }
 
@@ -37,6 +38,7 @@ func agyCheckDefaults() agyCheckDeps {
 		current: user.Current, ids: func() (int, int) { return os.Getuid(), os.Geteuid() },
 		executable: os.Executable, lstat: os.Lstat, access: syscall.Access,
 		read: func(path string, cap int64) ([]byte, error) { return implementRead(path, cap, false) },
+		open: func(path string) (io.ReadCloser, error) { return os.Open(path) },
 	}
 }
 
@@ -79,6 +81,8 @@ func agyCheckCommand(args []string, stdout, stderr io.Writer, d agyCheckDeps) in
 		_, _ = fmt.Fprintln(stderr, "usage: argonreview "+agyCheckRunUsage)
 		return agyCheckExitCode(r)
 	}
+	// Part B must call agyCheckValidate before each agy start to re-read and
+	// re-validate the marker, canaries and executables; never reuse it across rows.
 	_, err = agyCheckValidate(o, d)
 	if err == nil {
 		// Part A deliberately cannot start even --version. Part B must connect

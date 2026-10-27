@@ -18,6 +18,25 @@ type agyCheckFake struct {
 	Home   string
 }
 
+type agyCheckPinReader struct {
+	io.Reader
+	readErr error
+	closed  bool
+}
+
+func (r *agyCheckPinReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if err == io.EOF && r.readErr != nil {
+		err = r.readErr
+	}
+	return n, err
+}
+
+func (r *agyCheckPinReader) Close() error {
+	r.closed = true
+	return nil
+}
+
 func TestMain(m *testing.M) {
 	if filepath.Base(os.Args[0]) == "agy-check-fake" {
 		data, err := os.ReadFile(os.Args[0] + ".fixture")
@@ -71,6 +90,7 @@ func TestAgyCheckPinRecording(t *testing.T) {
 		{"version failed", "agy 1.4.7", 3, false, true},
 		{"version malformed", "agy unknown", 0, false, true},
 		{"hash failed", "agy 1.4.7", 0, false, true},
+		{"hash open failed", "agy 1.4.7", 0, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isolation := t.TempDir()
@@ -81,18 +101,27 @@ func TestAgyCheckPinRecording(t *testing.T) {
 			ops.scan = func(int) ([]int, error) { return nil, nil }
 			d := agyCheckDefaults()
 			reads := 0
-			d.read = func(p string, _ int64) ([]byte, error) {
+			var opened []*agyCheckPinReader
+			d.open = func(p string) (io.ReadCloser, error) {
 				if p != path {
 					t.Fatalf("pin read outside executable: %s", p)
 				}
 				reads++
-				if tc.name == "hash failed" && reads == 2 {
+				if tc.name == "hash open failed" && reads == 2 {
 					return nil, os.ErrPermission
 				}
+				data := "executable"
 				if tc.hashChange && reads == 2 {
-					return []byte("changed executable"), nil
+					data = "changed executable"
 				}
-				return []byte("executable"), nil
+				r := &agyCheckPinReader{Reader: strings.NewReader(data)}
+				if reads == 2 {
+					if tc.name == "hash failed" {
+						r.readErr = os.ErrPermission
+					}
+				}
+				opened = append(opened, r)
+				return r, nil
 			}
 			writeFixture := func(output string, code int) {
 				t.Helper()
@@ -112,8 +141,13 @@ func TestAgyCheckPinRecording(t *testing.T) {
 			}
 			writeFixture(tc.second, tc.code)
 			after, err := agyCheckRecordPin(context.Background(), o, isolation, d, ops)
-			if (err != nil) != (tc.code != 0 || tc.name == "hash failed") {
+			if (err != nil) != (tc.code != 0 || strings.HasSuffix(tc.name, "failed")) {
 				t.Fatalf("version command failure lost: %v", err)
+			}
+			for _, r := range opened {
+				if !r.closed {
+					t.Fatal("pin executable left open")
+				}
 			}
 			r := agyCheckEvaluate(before, after, nil, 30, "")
 			if (r.InvalidReason != "") != tc.invalid {

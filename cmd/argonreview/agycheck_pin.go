@@ -13,6 +13,8 @@ import (
 
 // This primitive is intentionally not called by part A's command. Part B must
 // call it twice, around the rows, after validation; never reuse the first pin.
+// Before each agy start, part B must call agyCheckValidate to re-read and
+// re-validate the marker, canaries and executables; never reuse it across rows.
 func agyCheckRecordPin(ctx context.Context, o agyCheckOptions, isolation string, d agyCheckDeps, ops cleanupOps) (pin agyCheckPin, err error) {
 	if err := ctx.Err(); err != nil {
 		return pin, fmt.Errorf("recording pin: %w", err)
@@ -51,10 +53,15 @@ func agyCheckRecordPin(ctx context.Context, o agyCheckOptions, isolation string,
 			break
 		}
 	}
-	data, err = d.read(o.agy, 512<<20)
+	executable, err := d.open(o.agy)
 	if err != nil {
+		return pin, fmt.Errorf("opening executable for pin: %w", err)
+	}
+	defer func() { err = errors.Join(err, executable.Close()) }()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, executable); err != nil {
 		return pin, fmt.Errorf("reading executable for pin: %w", err)
 	}
-	pin.ExecutableSHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
+	pin.ExecutableSHA256 = fmt.Sprintf("%x", hash.Sum(nil))
 	return pin, nil
 }

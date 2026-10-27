@@ -79,8 +79,14 @@ func agyCheckReadMarker(home string, d agyCheckDeps) (agyCheckMarker, error) {
 	if err := decoder.Decode(&m); err != nil {
 		return m, fmt.Errorf("decoding isolation marker: %w", err)
 	}
-	if m.Version != 1 || m.User == "" || m.Home != home {
-		return m, errors.New("marker version, dedicated user or home does not match")
+	if m.Version != 1 {
+		return m, errors.New("marker version does not match")
+	}
+	if m.User == "" {
+		return m, errors.New("marker dedicated user is empty")
+	}
+	if m.Home != home {
+		return m, errors.New("marker home does not match")
 	}
 	return m, nil
 }
@@ -119,7 +125,7 @@ func agyCheckValidate(o agyCheckOptions, d agyCheckDeps) (agyCheckMarker, error)
 		}
 	}
 	for _, path := range []string{self, o.agy} {
-		if err := agyCheckExecutable(path, d); err != nil {
+		if err := agyCheckExecutable(path, uid, d); err != nil {
 			return m, err
 		}
 	}
@@ -144,7 +150,8 @@ func (m agyCheckMarker) paths(o agyCheckOptions, self string) error {
 			return errors.New("marker and executable paths must not name settings files")
 		}
 	}
-	if m.Isolation == m.Home || !implementRunInside(m.Home, m.Isolation) {
+	home, isolation := strings.ToLower(m.Home), strings.ToLower(m.Isolation)
+	if isolation == home || !implementRunInside(home, isolation) {
 		return errors.New("isolation directory must be strictly inside the marked home")
 	}
 	for _, path := range m.canaries() {
@@ -155,7 +162,7 @@ func (m agyCheckMarker) paths(o agyCheckOptions, self string) error {
 	return nil
 }
 
-func agyCheckRealPath(path string, d agyCheckDeps) (os.FileInfo, error) {
+func agyCheckRealPath(path string, d agyCheckDeps, check func(string, os.FileInfo) error) (os.FileInfo, error) {
 	info, err := d.lstat(path)
 	if err != nil {
 		return nil, fmt.Errorf("examining private path: %w", err)
@@ -168,6 +175,11 @@ func agyCheckRealPath(path string, d agyCheckDeps) (os.FileInfo, error) {
 		if part.Mode()&os.ModeSymlink != 0 {
 			return nil, errors.New("private and executable paths must not contain symlinks")
 		}
+		if check != nil {
+			if err := check(current, part); err != nil {
+				return nil, err
+			}
+		}
 		if current == filepath.Dir(current) {
 			return info, nil
 		}
@@ -175,7 +187,7 @@ func agyCheckRealPath(path string, d agyCheckDeps) (os.FileInfo, error) {
 }
 
 func agyCheckPrivate(path string, mode os.FileMode, uid int, d agyCheckDeps) error {
-	info, err := agyCheckRealPath(path, d)
+	info, err := agyCheckRealPath(path, d, nil)
 	if err != nil {
 		return err
 	}
@@ -190,22 +202,28 @@ func agyCheckAccessDenied(err error) bool {
 	return errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)
 }
 
-func agyCheckExecutable(path string, d agyCheckDeps) error {
-	info, err := agyCheckRealPath(path, d)
+func agyCheckNotWritable(err error) bool {
+	// macOS's sealed system volume reports EROFS even for access("/", W_OK).
+	return agyCheckAccessDenied(err) || errors.Is(err, syscall.EROFS)
+}
+
+func agyCheckExecutable(path string, uid int, d agyCheckDeps) error {
+	info, err := agyCheckRealPath(path, d, func(target string, info os.FileInfo) error {
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		// An owner can chmod a read-only file or directory and replace the binary.
+		if !ok || int(stat.Uid) == uid {
+			return errors.New("trusted executable or its ancestor has dedicated ownership or unknown owner")
+		}
+		if !agyCheckNotWritable(d.access(target, 2)) {
+			return errors.New("trusted executable or its directory is writable or uncheckable")
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 || d.access(path, 1) != nil {
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid) != 0 || d.access(path, 1) != nil {
 		return errors.New("trusted executable must be a regular executable file")
-	}
-	for target := path; ; target = filepath.Dir(target) {
-		if !agyCheckAccessDenied(d.access(target, 2)) {
-			return errors.New("trusted executable or its directory is writable or uncheckable")
-		}
-		// A writable ancestor could replace a read-only executable directory.
-		if target == filepath.Dir(target) {
-			break
-		}
 	}
 	return nil
 }

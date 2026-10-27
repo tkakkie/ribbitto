@@ -2,13 +2,13 @@
 
 ## Purpose and status
 
-The recipe, build/vet/test regeneration and `generated` check (#1696) are merged but
-**not in force until #1700**.
-The [result summary](argon-verify-testdb.md#result-summary) is also merged but
-not in force until a new launcher build is enabled (#1700).
-Production workers still run the pinned launcher `argonreview-7f607ca`
-and the old image; merging changes nothing in production.
-The recipe now includes PostgreSQL 18 (#1697 PR A). [test-db](argon-verify-testdb.md) is merged but **not in force until #1700**.
+The recipe, build/vet/test regeneration and `generated` check (#1696), the
+[result summary](argon-verify-testdb.md#result-summary) and
+[test-db](argon-verify-testdb.md) (#1697) are in force since 2026-10-27
+(#1700 stage A). Production workers run the launcher `argonreview-2e3a6bf`,
+which pins the image `sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80` (tag `argonreview-verify-image:7957ae8`).
+The old launcher `argonreview-7f607ca` and its official golang image stay for rollback.
+The recipe includes PostgreSQL 18 (#1697 PR A).
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,
 the exact path and kind admitted by
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list).
@@ -87,7 +87,7 @@ test stdout remains test2json only. Any generator failure exits nonzero and
 reports `FAILED`. The script ends with `exec go "$@"`; the check, fixed flags
 and package pattern are separate positional arguments. `/work` stays read-only.
 The container is single-run with a fresh tmpfs, so a fixed directory suffices.
-Existing 1 GiB tmpfs limits stay; real Docker capacity validation is for #1700.
+Existing 1 GiB tmpfs limits stay; #1700's preflight ran the limits and three simultaneous containers.
 
 Reports say sources were regenerated; the `generated` check covers whether
 committed generated files are current. CI remains the check.
@@ -187,6 +187,7 @@ That tool enumerates files except root `bin/`, compares templ stdout without
 rewriting, and also checks internal package `doc.go` presence. Recursive
 formatter traversal here can differ (including hidden directories), and does
 not check package documentation. tbls schema docs, dependency docs, the API
-manifest, golangci-lint, docscheck, languagecheck, race detector, database and
-browser tests remain CI-only. The real Docker/dash/generator path still needs
-#1700 preflight before these merged checks enter force.
+manifest, golangci-lint, docscheck, languagecheck, race detector, browser tests
+and database tests other than [test-db](argon-verify-testdb.md) remain CI-only.
+#1700's preflight exercised the real
+Docker/dash/generator path before these checks entered force.

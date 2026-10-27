@@ -2,11 +2,10 @@
 
 ## Status
 
-`test-db` (#1697) is merged but **not in force until #1700**.
-Production still runs `argonreview-7f607ca` and the old image.
-The real container path (Docker, PostgreSQL in the image and the script)
-is untested by Codex, which has no Docker. #1700 must validate that path
-before enabling it. CI stays the check; this does not replace review or
+`test-db` (#1697) is in force since 2026-10-27 (#1700 stage A, launcher
+`argonreview-2e3a6bf`). The real container path (Docker, PostgreSQL in the
+image and the script) is untested by Codex, which has no Docker; #1700's
+preflight validated it. CI stays the check; this does not replace review or
 [handoff checks](running-other-ai.md#handoff-of-another-ais-code).
 
 ## Fixed runner
@@ -122,9 +121,8 @@ Argon writes can fabricate any events, as it can today. CI stays the check.
 
 ## Result summary
 
-The summary wiring (#1846) is merged but **not in force until a new launcher
-build is enabled (#1700)**. Production still pins `argonreview-7f607ca` and
-the old image; CI and #1700's stage A re-run remain required before enabling.
+The summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
+launcher `argonreview-2e3a6bf`); Argon read its results inline in the preflight.
 
 MCP returns a summary from the same captured execution as the unchanged full
 host report printed by `container-check`. Its format is verdict first, then

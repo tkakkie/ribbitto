@@ -3,9 +3,8 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[Generator checks](argon-verify-image.md) and the merged [summary](argon-verify-testdb.md#result-summary)
-are not in force until #1700 enables a new launcher build.
-Production pins `argonreview-7f607ca` and the old image.
+[Generator checks](argon-verify-image.md), [test-db](argon-verify-testdb.md) and the [summary](argon-verify-testdb.md#result-summary)
+are in force since 2026-10-27 (#1700 stage A): production pins `argonreview-2e3a6bf`.
 [Write-back](argon-verify-writeback.md) awaits stage B.
 
 [Leftover sweep](argon-verify-sweep.md).
@@ -115,8 +114,7 @@ exit status; tests use per-test JSON, never package `ok` alone:
   output, non-zero exit, out-of-memory kill or abnormal exit are never
   `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
   with the skipped count and names, except `test-db`'s [measurement skips](argon-verify-testdb.md#limits-and-skips).
-- Browser tests stay CI-only. [test-db](argon-verify-testdb.md) is merged but
-  **not in force until #1700**. Omitted files still fail or skip.
+- Browser tests stay CI-only. Omitted files still fail or skip.
 
 `verified` is Argon's own check; it never replaces green CI, review or
 [handoff](running-other-ai.md#handoff-of-another-ais-code).

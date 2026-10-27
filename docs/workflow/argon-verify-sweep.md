@@ -3,9 +3,9 @@
 The separate [implementer run command](argon-implement-run.md) documents
 its feature-off session cleanup and staged adoption.
 
-The regeneration prelude and image pin (#1696) are merged but **not in force
-until #1700**. Production still pins
-launcher `argonreview-7f607ca` and the old image; see [image](argon-verify-image.md).
+The regeneration prelude and image pin (#1696) are in force since 2026-10-27
+(#1700 stage A). Production pins launcher `argonreview-2e3a6bf`; see
+[image](argon-verify-image.md).
 
 The trusted launcher provides `argonreview container-sweep [--dry-run]`.
 Set `RIBBITTO_ARGON_SOURCE` to the trusted source checkout, as for
@@ -142,7 +142,7 @@ with a real SIGKILL leftover and reclaimed the client, container and copy.
 It confirmed these Docker CLI assumptions that fake tests cannot establish:
 
 - For that old launcher, `Config.Image` equals its base-image reference exactly.
-  #1700 must confirm the new verify image ID form and sweep old leftovers with
+  #1700 confirmed the new verify image ID form and swept old leftovers with
   the old launcher before switching; the new runner accepts only its one ID.
 - The label and inspect JSON field names are `Id`, `Name`, `Created`,
   `Config.Image`, `Config.Labels` and `Mounts[].Type/Source/Destination`.

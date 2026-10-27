@@ -77,8 +77,7 @@ Directory entries below are direct-only unless stated otherwise:
   other package set or a second recipe still requires a new amendment
   approved by the maintainer in each case.
   [Approval record](https://github.com/tkakkie/ribbitto/issues/1908#issuecomment-6447910120)
-  (#1908, 2026-10-28): this amendment's wording is reviewed and merged only
-  on the maintainer's own instruction. The recipe pins,
+  (#1908, 2026-10-28). The recipe pins,
   `containerChromiumVersion` and update path are in
   [browser updates](../workflow/argon-verify-browser-updates.md).
   No `.dockerignore`, compose or CI change, or script file.

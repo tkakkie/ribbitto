@@ -38,6 +38,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 	}
 	fromCount, fromOK, downloadCount := 0, true, 0
 	keyChecked, uncheckedPGDG := false, false
+	pgdgConfigured := false
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		instruction := strings.ToUpper(fields[0])
@@ -60,7 +61,8 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 			if regexp.MustCompile(`\bapt\s`).MatchString(body) {
 				problems = append(problems, "b: plain apt is forbidden")
 			}
-			pgdgAction := strings.Contains(body, "apt.postgresql.org.sh")
+			pgdgSetup := strings.Index(body, "apt.postgresql.org.sh")
+			pgdgAction := pgdgSetup >= 0
 			installsPostgresqlCommon := false
 			for _, at := range regexp.MustCompile(`[^\s;|&]*\bapt-get\b[^\s;|&]*`).FindAllStringIndex(body, -1) {
 				args := strings.Fields(regexp.MustCompile(`[;|&]`).Split(body[at[0]:], 2)[0])
@@ -71,6 +73,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 					continue
 				}
 				if args[1] == "install" {
+					installsBrowser := false
 					if !strings.Contains(" "+strings.Join(args[2:], " ")+" ", " -y ") {
 						problems = append(problems, "h: install needs -y")
 					}
@@ -82,6 +85,7 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 							continue
 						}
 						name, version, pinned := strings.Cut(arg, "=")
+						installsBrowser = installsBrowser || name == "chromium" || name == "fonts-liberation"
 						installsPostgresqlCommon = installsPostgresqlCommon || name == "postgresql-common"
 						pgdgAction = pgdgAction || name == "postgresql-18"
 						allowed := name == "postgresql-common" || name == "ca-certificates" || name == "postgresql-18" || name == "chromium" || name == "fonts-liberation"
@@ -91,8 +95,12 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 							problems = append(problems, "l: chromium version must match containerChromiumVersion: "+arg)
 						}
 					}
+					if installsBrowser && (pgdgConfigured || pgdgSetup >= 0 && at[0] > pgdgSetup) {
+						problems = append(problems, "m: browser packages must be installed before the PGDG configuration")
+					}
 				}
 			}
+			pgdgConfigured = pgdgConfigured || pgdgSetup >= 0
 			for _, at := range regexp.MustCompile(`[^\s;|&]*apt\.postgresql\.org\.sh[^\s;|&]*`).FindAllStringIndex(body, -1) {
 				if body[at[0]:at[1]] != "/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh" ||
 					!regexp.MustCompile(`(?:^|;|&&)\s*$`).MatchString(body[:at[0]]) ||
@@ -201,6 +209,9 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"generators-only", tools, ""},
 		{"browser-together", tools + browser, ""},
 		{"browser-separate", tools + install + chromium + "\n" + install + fonts + "\n", ""},
+		{"m/browser-after-pgdg", tools + debian + pgdg + browser, "m:"},
+		{"m/browser-same-run-after-pgdg-setup", tools + debian + strings.Replace(pgdg, pgdgScript+" -y;", pgdgScript+" -y; apt-get install -y --no-install-recommends "+chromium+" "+fonts+";", 1), "m:"},
+		{"browser-same-run-before-pgdg-setup", tools + debian + strings.Replace(pgdg, pgdgScript+" -y;", "apt-get install -y --no-install-recommends "+chromium+" "+fonts+"; "+pgdgScript+" -y;", 1), ""},
 		{"h/chromium-unpinned", tools + install + "chromium\n", "h:"},
 		{"h/fonts-unpinned", tools + install + "fonts-liberation\n", "h:"},
 		{"l/chromium-wrong-version", tools + install + "chromium=155.0.0-1\n", "l:"},
@@ -313,8 +324,8 @@ func TestVerifyImageRecipe(t *testing.T) {
 		{"h/invalid-version", change("postgresql-common=278", "postgresql-common=278*"), "h:"},
 		{"i/no-check-run", change(debian, ""), "i:"},
 		{"i/check-removed", change(keyCheck, ""), "i:"},
-		{"i/same-run", change(debian+browser+pgdg, strings.TrimSuffix(debian, "\n")+" "+strings.TrimPrefix(pgdg, "RUN set -eu; ")+browser), "i:"},
-		{"i/after-pgdg", change(debian+browser+pgdg, pgdg+debian+browser), "i:"},
+		{"i/same-run", change(debian+browser+pgdg, browser+strings.TrimSuffix(debian, "\n")+" "+strings.TrimPrefix(pgdg, "RUN set -eu; ")), "i:"},
+		{"i/after-pgdg", change(debian+browser+pgdg, browser+pgdg+debian), "i:"},
 		{"i/other-key", change(fingerprint, strings.Repeat("AB", 20)), "i:"},
 		{"i/lowercase", change(fingerprint, strings.ToLower(fingerprint)), "i:"},
 		{"i/short", change(fingerprint, fingerprint[:39]), "i:"},

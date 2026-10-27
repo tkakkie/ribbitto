@@ -5,6 +5,8 @@ pinned, the launcher is unchanged, and nothing here enables the browser
 check (#1908). Building, pinning, the launcher update and `browser-mode on`
 each need the maintainer's separate approval. This page records PR A's
 recipe and update contract; it does not authorize those later steps.
+PR A changes no runner, flags or launcher; B3a's masking below is a
+precondition for A2, not implemented here.
 
 ## Recipe pins
 
@@ -23,14 +25,25 @@ Chromium's recipe version. `TestVerifyImageRecipe` checks that equality,
 that each recipe pin appears exactly once, and that this page contains both
 pins. Change the recipe, constant and this page together.
 
-Chromium and fonts install before the PGDG source is configured, so PGDG
-cannot supply their floating dependencies. Transitive packages float, like
+Pins go stale: trixie-security keeps only the newest Chromium build, so a
+pin may become unfetchable within weeks. Just before requesting build
+approval, re-check Debian with `apt-cache madison` for the architecture or
+the trixie-security arm64 Packages index. If the pin is gone, start a new
+pin pull request; never use snapshot.debian.org or another source without
+an amendment.
+
+The recipe test refuses browser installs after PGDG setup, whether later
+in the same RUN or in a subsequent RUN; earlier installs in that RUN are
+allowed. Chromium and fonts initially install from Debian, but a later
+`postgresql-18` install can upgrade shared libraries from PGDG; the
+`dpkg-query -W` diff review covers those changes. Transitive packages float, like
 `postgresql-client-18` and `libpq5` today; exact top-level pins do not imply
 identical build bytes. A pin that cannot be fetched makes the build fail.
 It never falls back to the latest version; use the update path below.
 
 `TestVerifyImageRecipe` refuses `upgrade`, `dist-upgrade`, `full-upgrade`,
-`--allow-downgrades`, wildcards, an unpinned package or any other package.
+`--allow-downgrades`, wildcards, an unpinned package or any other package,
+and browser installs after PGDG setup in the same or a later RUN.
 Installs need `-y` and `--no-install-recommends`; only the recipe's allowed
 packages may be named. This is a check, not a security boundary. As in
 [decision 42](../decisions/42-repository-languages-and-formats.md#language-list),
@@ -75,7 +88,8 @@ installed generator binaries. Record the browser build on #1908 with:
 
 These are requirements for a later approved host build, not results from
 PR A. The record establishes what was actually built; the recipe alone
-cannot establish an image ID. PR A2 uses the recorded ID only after review.
+cannot establish an image ID. PR A2 uses the recorded ID only after review
+and the B3a prerequisite below.
 
 ## Update path
 
@@ -90,7 +104,27 @@ build are required, in this order:
    List the downloads, then obtain the maintainer's chat approval before
    building. Record the image ID and all build record items above. There
    is no exception for building an unmerged recipe on the host.
-3. **Image-ID pull request:** pin `containerVerifyImage` to the recorded ID,
+3. **B3a prerequisite, then image-ID pull request (A2) and launcher:** once
+   the pinned image contains `/usr/bin/chromium`, existing `test` and
+   `test-db` checks would find it through go-rod's `launcher.LookPath` and
+   launch Chromium outside `browser-mode`, `browser.lock`, the 2-unit
+   budget and the 14-day gate. `test-db ./cmd/ribbitto` could even return
+   `verified` after a browser run. Chromium must run only through
+   `test-browser`.
+
+   Before A2, B3a (#1908 runner wiring) must run every non-browser check
+   with Chromium unreachable inside the container: a read-only `--tmpfs`
+   over the Chromium install directory, or an equivalent forced skip.
+   `TestContainerArgumentsGolden` must pin this masking, with a named test
+   proving a non-browser check cannot launch Chromium; only `test-browser`
+   omits masking. The preflight must verify it.
+
+   A2 must not merge, and the launcher must not be updated, until B3a is
+   merged and the preflight verifies its masking. If masking would weaken
+   another boundary, stop and report on #1908 before A2. This is a
+   precondition recorded here; PR A implements no runner change.
+
+   After that prerequisite, pin `containerVerifyImage` to the recorded ID,
    with tier A review and merge on the maintainer's instruction. Then run
    a preflight subset and update the launcher; each needs the maintainer's
    separate approval.

@@ -16,13 +16,16 @@ func TestBudgetNeverTouchesForeign(t *testing.T) {
 		otherMemory(otherFixture("dev", "1", "running"), 0),
 		otherMemory(otherFixture("verification", "2", "running"), 0),
 		otherFixture("dev", "0", "private-unknown-state"),
+		otherEdit(otherFixture("dev", "0", "running"), func(c *otherInspect) { c.HostConfig.MemorySwap = -1 }),
+		otherFixture("dev", "0", "running"),
+		otherFixture("dev", "0", "running"),
 	}
 	f := otherFakeDocker(t, fixtures...)
 	if got := otherPoll(f.otherQuery); got.line != otherStateLine {
 		t.Fatalf("unexpected report: %+v", got)
 	}
 	forbidden := []string{"stop", "rm", "kill", "pause", "update", "start", "restart", "create", "run", "exec"}
-	if len(f.calls) != 1+len(fixtures) {
+	if len(f.calls) != 2+len(fixtures) {
 		t.Fatalf("did not inspect all fixtures: %v", f.calls)
 	}
 	for _, args := range f.calls {

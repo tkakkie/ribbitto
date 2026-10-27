@@ -125,6 +125,19 @@ func TestBudgetVerificationConsistency(t *testing.T) {
 	}
 }
 
+// TestBudgetVerificationConsistencySlotCount bypasses the parser to isolate
+// the consistency function's own reservation bound.
+func TestBudgetVerificationConsistencySlotCount(t *testing.T) {
+	for _, slots := range [][]int{{}, {0, 1, 2}} {
+		t.Run(fmt.Sprintf("%d slots", len(slots)), func(t *testing.T) {
+			c := otherMemory(otherFixture("verification", "0", "running"), int64(len(slots))*otherUnit)
+			if otherVerificationConsistent(c, true, slots, true) {
+				t.Fatal("accepted reservation outside one or two slots")
+			}
+		})
+	}
+}
+
 // TestBudgetOthers pins counts, held slots, privacy, and order-independent precedence.
 func TestBudgetOthers(t *testing.T) {
 	dev := otherFixture("dev", "1", "running")
@@ -207,21 +220,28 @@ func TestBudgetOthersSlotLabel(t *testing.T) {
 	}
 }
 
-// otherFake records every transport call and supports disappearance races.
+type otherInspectResult struct {
+	data []byte
+	err  error
+}
+
+// otherFake records every transport call and supports discovery races.
 type otherFake struct {
-	inspects   map[string][]byte
-	fail       map[string]bool
-	listings   []string
-	listErr    bool
-	listFailAt int
-	calls      [][]string
-	lists      int
+	inspectResults map[string][]otherInspectResult
+	inspected      map[string]int
+	inspects       map[string][]byte
+	fail           map[string]bool
+	listings       []string
+	listErr        bool
+	listFailAt     int
+	calls          [][]string
+	lists          int
 }
 
 // otherFakeDocker assigns distinct full IDs so multi-container fixtures are real.
 func otherFakeDocker(t *testing.T, list ...otherInspect) *otherFake {
 	t.Helper()
-	f := &otherFake{inspects: map[string][]byte{}, fail: map[string]bool{}}
+	f := &otherFake{inspects: map[string][]byte{}, fail: map[string]bool{}, inspectResults: map[string][]otherInspectResult{}, inspected: map[string]int{}}
 	var ids []string
 	for i, c := range list {
 		c.ID = fmt.Sprintf("%064x", i+1)
@@ -246,11 +266,18 @@ func (f *otherFake) otherQuery(args ...string) ([]byte, error) {
 		f.lists++
 		return []byte(listing), nil
 	}
-	if len(args) == 4 && slices.Equal(args[:3], []string{"inspect", "--format", "{{json .}}"}) {
-		if f.fail[args[3]] {
+	if len(args) == 6 && slices.Equal(args[:5], []string{"inspect", "--type", "container", "--format", "{{json .}}"}) {
+		id := args[5]
+		call := f.inspected[id]
+		f.inspected[id]++
+		if results := f.inspectResults[id]; len(results) > 0 {
+			r := results[min(call, len(results)-1)]
+			return r.data, r.err
+		}
+		if f.fail[id] {
 			return nil, errors.New("private-inspect-error")
 		}
-		return f.inspects[args[3]], nil
+		return f.inspects[id], nil
 	}
 	return nil, errors.New("unexpected query")
 }
@@ -265,15 +292,32 @@ func TestBudgetOthersPoll(t *testing.T) {
 		want  otherContainers
 		calls int
 	}{
-		{"lists and inspects all", func(*otherFake) {}, otherContainers{line: otherExclusiveLine, dev: 1, exclusive: 1, total: 2, held: [3]bool{false, true}}, 3},
+		{"lists and inspects all", func(*otherFake) {}, otherContainers{line: otherExclusiveLine, dev: 1, exclusive: 1, total: 2, held: [3]bool{false, true}}, 4},
 		{"listing error", func(f *otherFake) { f.listErr = true }, otherContainers{line: otherStateLine}, 1},
 		{"inspect error still listed", func(f *otherFake) { f.fail[id] = true }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 4},
 		{"invalid ID", func(f *otherFake) { f.listings[0] += "\nprivate-invalid-id" }, otherContainers{line: otherStateLine}, 1},
+		{"duplicate listing ID", func(f *otherFake) { f.listings[0] += "\n" + id }, otherContainers{line: otherStateLine}, 1},
 		{"uppercase ID", func(f *otherFake) { f.listings[0] = strings.Repeat("A", 64) }, otherContainers{line: otherStateLine}, 1},
-		{"invalid JSON", func(f *otherFake) { f.inspects[id] = []byte("{private-invalid-json") }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 3},
-		{"ID mismatch", func(f *otherFake) { f.inspects[id] = f.inspects[fmt.Sprintf("%064x", 2)] }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 3},
+		{"invalid JSON", func(f *otherFake) { f.inspects[id] = []byte("{private-invalid-json") }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 4},
+		{"ID mismatch", func(f *otherFake) { f.inspects[id] = f.inspects[fmt.Sprintf("%064x", 2)] }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 4},
 		{"vanished", func(f *otherFake) { f.fail[id] = true; f.listings = append(f.listings, fmt.Sprintf("%064x", 2)) }, otherContainers{line: otherExclusiveLine, exclusive: 1, total: 1}, 4},
 		{"absence listing error", func(f *otherFake) { f.fail[id] = true; f.listFailAt = 2 }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 4},
+		{"fresh listing error", func(f *otherFake) { f.listFailAt = 2 }, otherContainers{line: otherStateLine, dev: 1, exclusive: 1, total: 2, held: [3]bool{false, true}}, 4},
+		{"fresh listing invalid", func(f *otherFake) { f.listings = append(f.listings, "private-invalid-id") }, otherContainers{line: otherStateLine, dev: 1, exclusive: 1, total: 2, held: [3]bool{false, true}}, 4},
+		{"appearance retries whole poll", func(f *otherFake) {
+			f.listings = []string{id, f.listings[0]}
+			first := otherFakeDocker(t, otherLabel(dev, otherSlotLabel, "0"))
+			f.inspectResults[id] = []otherInspectResult{{data: first.inspects[id]}, {data: f.inspects[id]}}
+		}, otherContainers{line: otherExclusiveLine, dev: 1, exclusive: 1, total: 2, held: [3]bool{false, true}}, 7},
+		{"persistent appearance exhausts retries", func(f *otherFake) {
+			growing := otherFakeDocker(t, dev, exclusive, exclusive, exclusive, exclusive, exclusive)
+			f.inspects = growing.inspects
+			ids := strings.Fields(growing.listings[0])
+			f.listings = nil
+			for n := 1; n <= len(ids); n++ {
+				f.listings = append(f.listings, strings.Join(ids[:n], "\n"))
+			}
+		}, otherContainers{line: otherStateLine}, 15},
 		{"absence listing invalid", func(f *otherFake) { f.fail[id] = true; f.listings = append(f.listings, "private-invalid-id") }, otherContainers{line: otherStateLine, exclusive: 1, total: 1}, 4},
 	}
 	for _, row := range rows {
@@ -284,9 +328,80 @@ func TestBudgetOthersPoll(t *testing.T) {
 			if len(f.calls) != row.calls || !slices.Equal(f.calls[0], []string{"ps", "-a", "-q", "--no-trunc"}) {
 				t.Fatalf("unexpected calls: %v", f.calls)
 			}
-			if row.name == "lists and inspects all" && (!slices.Equal(f.calls[1], []string{"inspect", "--format", "{{json .}}", id}) || !slices.Equal(f.calls[2], []string{"inspect", "--format", "{{json .}}", fmt.Sprintf("%064x", 2)})) {
+			if row.name == "lists and inspects all" && (!slices.Equal(f.calls[1], []string{"inspect", "--type", "container", "--format", "{{json .}}", id}) || !slices.Equal(f.calls[2], []string{"inspect", "--type", "container", "--format", "{{json .}}", fmt.Sprintf("%064x", 2)})) {
 				t.Fatalf("did not inspect every full ID: %v", f.calls)
 			}
 		})
 	}
+}
+
+// TestBudgetOthersPollIncomplete requires one complete inspection object, while
+// allowing absent labels and explicit zero limits in ordinary Docker fixtures.
+func TestBudgetOthersPollIncomplete(t *testing.T) {
+	verify := otherFixture("verification", "0", "running")
+	rows := []struct {
+		name string
+		raw  func([]byte) []byte
+		edit func(map[string]any)
+	}{
+		{"empty output", func([]byte) []byte { return nil }, nil},
+		{"truncated JSON", func(data []byte) []byte { return data[:len(data)-1] }, nil},
+		{"null", func([]byte) []byte { return []byte(`null`) }, nil},
+		{"trailing garbage", func(data []byte) []byte { return append(data, []byte(`private-garbage`)...) }, nil},
+		{"second object", func(data []byte) []byte { return append(data, []byte(` {}`)...) }, nil},
+		{"missing Name", nil, func(c map[string]any) { delete(c, "Name") }},
+		{"empty Name", nil, func(c map[string]any) { c["Name"] = "" }},
+		{"missing Config", nil, func(c map[string]any) { delete(c, "Config") }},
+		{"missing State", nil, func(c map[string]any) { delete(c, "State") }},
+		{"missing Status", nil, func(c map[string]any) { delete(c["State"].(map[string]any), "Status") }},
+		{"empty Status", nil, func(c map[string]any) { c["State"].(map[string]any)["Status"] = "" }},
+		{"missing HostConfig", nil, func(c map[string]any) { delete(c, "HostConfig") }},
+		{"missing Memory", nil, func(c map[string]any) { delete(c["HostConfig"].(map[string]any), "Memory") }},
+		{"missing MemorySwap", nil, func(c map[string]any) { delete(c["HostConfig"].(map[string]any), "MemorySwap") }},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			f := otherFakeDocker(t, verify)
+			id := fmt.Sprintf("%064x", 1)
+			data := f.inspects[id]
+			if row.raw != nil {
+				data = row.raw(data)
+			} else {
+				var object map[string]any
+				if err := json.Unmarshal(f.inspects[id], &object); err != nil {
+					t.Fatal(err)
+				}
+				row.edit(object)
+				var err error
+				data, err = json.Marshal(object)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.inspects[id] = data
+			otherAssert(t, otherPoll(f.otherQuery), otherContainers{line: otherStateLine}, []otherInspect{verify})
+			if len(f.calls) != 3 {
+				t.Fatalf("unexpected calls: %v", f.calls)
+			}
+		})
+	}
+	for _, labels := range []string{"absent", "null"} {
+		t.Run("labels "+labels, func(t *testing.T) {
+			c := otherFixture("unregistered", "", "exited")
+			f := otherFakeDocker(t, c)
+			id := fmt.Sprintf("%064x", 1)
+			if labels == "absent" {
+				f.inspects[id] = []byte(strings.Replace(string(f.inspects[id]), `"Labels":`, `"Ignored":`, 1))
+			} else {
+				c.Config.Labels = nil
+				f = otherFakeDocker(t, c)
+			}
+			otherAssert(t, otherPoll(f.otherQuery), otherContainers{}, []otherInspect{c})
+		})
+	}
+	t.Run("explicit zero limits", func(t *testing.T) {
+		c := otherMemory(otherFixture("dev", "0", "running"), 0)
+		f := otherFakeDocker(t, c)
+		otherAssert(t, otherPoll(f.otherQuery), otherContainers{line: otherUnlimitedLine, dev: 1, total: 1}, []otherInspect{c})
+	})
 }

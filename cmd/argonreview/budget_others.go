@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 )
 
@@ -91,10 +90,12 @@ func otherIDs(docker otherDocker) ([]string, error) {
 		return nil, err
 	}
 	ids := strings.Fields(string(data))
+	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
-		if !otherValidID(id) {
+		if !otherValidID(id) || seen[id] {
 			return nil, errors.New("invalid container listing")
 		}
+		seen[id] = true
 	}
 	return ids, nil
 }
@@ -112,29 +113,74 @@ func otherValidID(id string) bool {
 	return true
 }
 
+// otherCompleteInspect distinguishes missing limits from explicit zero limits.
+// Presence is decoded separately to keep classifier fixtures in Docker's shape.
+func otherCompleteInspect(data []byte, id string) (otherInspect, bool) {
+	var c otherInspect
+	var required struct {
+		Name       *string
+		Config     *struct{}
+		State      *struct{ Status string }
+		HostConfig *struct{ Memory, MemorySwap *int64 }
+	}
+	if json.Unmarshal(data, &c) != nil || json.Unmarshal(data, &required) != nil || c.ID != id {
+		return c, false
+	}
+	if required.Name == nil || c.Name == "" || required.Config == nil || required.State == nil || required.HostConfig == nil {
+		return c, false
+	}
+	if required.State != nil && required.State.Status == "" {
+		return c, false
+	}
+	if required.HostConfig != nil && (required.HostConfig.Memory == nil || required.HostConfig.MemorySwap == nil) {
+		return c, false
+	}
+	return c, true
+}
+
 // otherPoll observes every container, including stopped verification leftovers.
 func otherPoll(docker otherDocker) otherContainers {
-	ids, err := otherIDs(docker)
-	var list []otherInspect
-	for _, id := range ids {
-		data, inspectErr := otherReadOnly(docker, "inspect", "--format", "{{json .}}", id)
-		if inspectErr != nil {
-			// A concurrent disappearance is safe only with a fresh valid listing.
-			again, listErr := otherIDs(docker)
-			if listErr == nil && !otherContainsID(again, id) {
+	for attempt := 0; attempt < 3; attempt++ {
+		ids, err := otherIDs(docker)
+		if err != nil {
+			return otherClassify(nil, err)
+		}
+		var list []otherInspect
+		var failed []string
+		for _, id := range ids {
+			data, inspectErr := otherReadOnly(docker, "inspect", "--type", "container", "--format", "{{json .}}", id)
+			if inspectErr != nil {
+				failed = append(failed, id)
 				continue
 			}
-			err = inspectErr
-			continue
+			c, complete := otherCompleteInspect(data, id)
+			if !complete {
+				err = errors.New("invalid container inspection")
+				continue
+			}
+			list = append(list, c)
 		}
-		var c otherInspect
-		if json.Unmarshal(data, &c) != nil || c.ID != id {
-			err = errors.New("invalid container inspection")
-			continue
+		// One fresh listing confirms disappearances and detects stale views.
+		again, listErr := otherIDs(docker)
+		if listErr != nil {
+			return otherClassify(list, listErr)
 		}
-		list = append(list, c)
+		for _, id := range failed {
+			if otherContainsID(again, id) {
+				err = errors.New("container inspection failed")
+			}
+		}
+		stale := false
+		for _, id := range again {
+			if !otherContainsID(ids, id) {
+				stale = true
+			}
+		}
+		if !stale {
+			return otherClassify(list, err)
+		}
 	}
-	return otherClassify(list, err)
+	return otherClassify(nil, errors.New("unstable container listing"))
 }
 
 // otherContainsID keeps disappearance checks separate from classification.
@@ -180,6 +226,10 @@ func otherVerificationConsistent(c otherInspect, nameMatches bool, slots []int, 
 	if !valid {
 		return false
 	}
+	// Keep the reservation bound independent of the label parser.
+	if len(slots) < 1 || len(slots) > 2 {
+		return false
+	}
 	class := c.Config.Labels[otherClassLabel]
 	if class != "" && class != "browser" {
 		return false
@@ -218,9 +268,8 @@ func otherClassify(list []otherInspect, listErr error) otherContainers {
 	var result otherContainers
 	var problems [7]bool
 	problems[0] = listErr != nil
-	namePattern := regexp.MustCompile(containerNamePattern)
 	for _, c := range list {
-		nameMatches := strings.HasPrefix(c.Name, "/") && namePattern.MatchString(strings.TrimPrefix(c.Name, "/"))
+		nameMatches := strings.HasPrefix(c.Name, "/") && sweepContainerName.MatchString(strings.TrimPrefix(c.Name, "/"))
 		_, ownerPresent := c.Config.Labels[containerOwnerLabel]
 		verification := nameMatches || ownerPresent
 		counted, known := otherCountedState(c.State.Status, verification)

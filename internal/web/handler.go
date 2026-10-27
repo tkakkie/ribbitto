@@ -204,11 +204,7 @@ type pageRenderer struct {
 }
 
 func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int, page func(stylesheetURL string) templ.Component) {
-	url, err := p.stylesheetURL()
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+	url, _ := p.stylesheetURL()
 	templ.Handler(page(url), templ.WithStatus(status)).ServeHTTP(w, r)
 }
 

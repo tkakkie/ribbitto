@@ -104,30 +104,36 @@ build are required, in this order:
    List the downloads, then obtain the maintainer's chat approval before
    building. Record the image ID and all build record items above. There
    is no exception for building an unmerged recipe on the host.
-3. **B3a prerequisite, then image-ID pull request (A2) and launcher:** once
-   the pinned image contains `/usr/bin/chromium`, existing `test` and
+3. **B3a masking, then image-ID pull request (A2), preflight and launcher:**
+   once the pinned image contains `/usr/bin/chromium`, existing `test` and
    `test-db` checks would find it through go-rod's `launcher.LookPath` and
    launch Chromium outside `browser-mode`, `browser.lock`, the 2-unit
    budget and the 14-day gate. `test-db ./cmd/ribbitto` could even return
    `verified` after a browser run. Chromium must run only through
    `test-browser`.
 
-   Before A2, B3a (#1908 runner wiring) must run every non-browser check
-   with Chromium unreachable inside the container: a read-only `--tmpfs`
-   over the Chromium install directory, or an equivalent forced skip.
+   First, B3a (#1908 runner wiring) merges, once M3, B1 and B2 are
+   satisfied. It must run every non-browser check with Chromium
+   unreachable inside the container: a read-only `--tmpfs` over the
+   Chromium install directory, or an equivalent forced skip.
    `TestContainerArgumentsGolden` must pin this masking, with a named test
    proving a non-browser check cannot launch Chromium; only `test-browser`
-   omits masking. The preflight must verify it.
+   omits masking. These tests need no image, so B3a does not wait for A2,
+   and both must pass before B3a merges.
 
-   A2 must not merge, and the launcher must not be updated, until B3a is
-   merged and the preflight verifies its masking. If masking would weaken
-   another boundary, stop and report on #1908 before A2. This is a
-   precondition recorded here; PR A implements no runner change.
+   Second, A2 pins `containerVerifyImage` to the recorded ID, with tier A
+   review and merge on the maintainer's instruction. A2 must not merge until
+   B3a is merged and its masking tests pass; it does not wait for the
+   preflight. If masking would weaken another boundary, stop and report on
+   #1908 before A2. This is a precondition recorded here; PR A implements
+   no runner change.
 
-   After that prerequisite, pin `containerVerifyImage` to the recorded ID,
-   with tier A review and merge on the maintainer's instruction. Then run
-   a preflight subset and update the launcher; each needs the maintainer's
-   separate approval.
+   Third, build a candidate binary from a pinned commit that includes A2.
+   Its integrated preflight must verify on the real image that no
+   non-browser check can run Chromium. The launcher must not be updated
+   until that preflight succeeds; then update it on the maintainer's
+   separate approval. The preflight and the launcher update each need that
+   approval.
 
 A later Debian security fix to Chromium repeats this path, including the
 package diff review. Emergency pausing is covered by the browser-check

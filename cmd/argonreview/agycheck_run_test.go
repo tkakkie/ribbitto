@@ -399,7 +399,7 @@ func TestAgyCheckExecutableWriteAccess(t *testing.T) {
 
 func TestAgyCheckRootWriteAccess(t *testing.T) {
 	err := syscall.Access("/", 2)
-	if !agyCheckNotWritable(err) && !(err == nil && os.Geteuid() == 0) {
+	if !agyCheckNotWritable(err) && (err != nil || os.Geteuid() != 0) {
 		t.Fatalf("root write access unclassified: uid=%d error=%v", os.Geteuid(), err)
 	}
 	if agyCheckAccessDenied(syscall.EROFS) {

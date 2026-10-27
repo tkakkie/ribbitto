@@ -65,10 +65,10 @@ func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kerne
 // pins and the page cursor agree. Reading changes no read state.
 func (s *Reader) Overview(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64, around int64) (ChannelPage, error) {
 	return s.page(ctx, m, channelID, topicID, func(reader historyReader) (Page, error) {
-		if around > 1 {
+		if around < 0 {
 			return reader.Around(ctx, m, channelID, topicID, around)
 		}
-		return reader.Before(ctx, m, channelID, topicID, nil)
+		return reader.Before(ctx, m, channelID, topicID, before)
 	}, true)
 }
 

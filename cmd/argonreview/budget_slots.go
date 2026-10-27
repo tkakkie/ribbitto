@@ -59,7 +59,7 @@ func budgetParseSlots(label string) ([]int, bool) {
 func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
 	// Read processes first, as in containerSweep.run: the client's exit is the
 	// cause and the container's existence the effect, so neither can be missed.
-	orphan, processErr := budgetOrphan(b.processes, b.locks.uid)
+	orphan, processErr := budgetOrphan(ctx, b.processes, b.locks.uid)
 	containers, err := b.inventory.budgetList(ctx)
 	var held [3]bool
 	var cause budgetResult
@@ -131,22 +131,38 @@ func budgetPlans(held [3]bool, request budgetRequest) [][]int {
 	return plans
 }
 
-func (b budgetSlots) budgetReserve(ctx context.Context, request budgetRequest) (budgetReservation, budgetResult) {
+func (b budgetSlots) budgetReserve(parent context.Context, request budgetRequest) (budgetReservation, budgetResult) {
 	if request < budgetSingle || request > budgetExclusive || b.locks.limit < 0 || b.locks.poll <= 0 {
 		return budgetReservation{}, budgetBadRequest
 	}
 	deadline := b.locks.now().Add(b.locks.limit)
+	ctx := parent
+	if b.locks.limit > 0 {
+		// Share one wall-clock deadline across attempts and inventory deadlines.
+		// Zero retains the nonblocking, single-attempt contract used by callers.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(parent, b.locks.limit)
+		defer cancel()
+	}
+	lastCause := budgetStateUnknown
 	for {
-		if ctx.Err() != nil {
+		if parent.Err() != nil {
 			return budgetReservation{}, budgetCanceled
 		}
-		result := b.budgetAttempt(ctx, request)
 		if ctx.Err() != nil {
+			return budgetReservation{}, lastCause
+		}
+		result := b.budgetAttempt(ctx, request)
+		if parent.Err() != nil || ctx.Err() != nil || (b.locks.limit > 0 && !b.locks.now().Before(deadline)) {
 			if result.reservation.release != nil {
 				result.reservation.release()
 			}
-			return budgetReservation{}, budgetCanceled
+			if parent.Err() != nil {
+				return budgetReservation{}, budgetCanceled
+			}
+			return budgetReservation{}, lastCause
 		}
+		lastCause = result.cause
 		if result.reservation.release != nil || result.cause == budgetUnsafeLock || result.cause == budgetCanceled || result.cause == budgetBadRequest {
 			return result.reservation, result.cause
 		}
@@ -157,8 +173,11 @@ func (b budgetSlots) budgetReserve(ctx context.Context, request budgetRequest) (
 		if b.locks.aboutToSleep != nil {
 			b.locks.aboutToSleep()
 		}
-		if b.locks.sleep(ctx, min(b.locks.poll, remaining)) != nil || ctx.Err() != nil {
-			return budgetReservation{}, budgetCanceled
+		if sleepErr := b.locks.sleep(ctx, min(b.locks.poll, remaining)); sleepErr != nil || ctx.Err() != nil || parent.Err() != nil {
+			if parent.Err() != nil || ctx.Err() == nil {
+				return budgetReservation{}, budgetCanceled
+			}
+			return budgetReservation{}, lastCause
 		}
 		if !b.locks.now().Before(deadline) {
 			return budgetReservation{}, result.cause

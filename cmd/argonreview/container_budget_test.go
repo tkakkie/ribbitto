@@ -286,6 +286,15 @@ func TestContainerBudgetWait(t *testing.T) {
 			now := time.Unix(0, 0)
 			start := now
 			b.locks = newBudgetLocks()
+			dir := t.TempDir()
+			for lock := range b.locks.paths {
+				b.locks.paths[lock] = filepath.Join(dir, fmt.Sprintf("lock-%d", lock))
+			}
+			for _, path := range b.locks.paths {
+				if strings.HasPrefix(path, "/var/cache") {
+					t.Fatalf("host lock path: %s", path)
+				}
+			}
 			b.locks.now = func() time.Time { return now }
 			polls := 0
 			ctx, cancel := context.WithCancel(context.Background())

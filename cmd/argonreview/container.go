@@ -289,7 +289,10 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 		}
 		return "", fmt.Errorf("preparing container: %w", ctx.Err())
 	}
-	if cause != "" || reservation.release == nil {
+	if cause != "" || reservation.release == nil || reservation.memory <= 0 || reservation.label == "" {
+		if reservation.release != nil {
+			reservation.release()
+		}
 		if cause == "" {
 			cause = budgetStateUnknown
 		}

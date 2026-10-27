@@ -76,7 +76,7 @@ func budgetSleep(ctx context.Context, d time.Duration) error {
 // Each open creates a distinct open file description: dup would share flock
 // ownership. Process death releases flock, but cannot free a container's label.
 // This primitive alone is not permission to start a container; reconciliation
-// under the locks belongs to budgetSlots; entry-point wiring arrives in M3b.
+// under the locks belongs to budgetSlots, as wired by runContainerExecution.
 func (b budgetLocks) acquire(ctx context.Context, requested []budgetLock) (func(), budgetResult) {
 	locks := slices.Clone(requested)
 	slices.Sort(locks)

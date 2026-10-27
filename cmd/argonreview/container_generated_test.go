@@ -18,9 +18,9 @@ func generatedFixture(rel, body string) string {
 
 func TestGeneratedArguments(t *testing.T) {
 	// The common prefix is already independently golden-tested for all Go checks.
-	want := containerArguments("copy", "name", "vet", "./...")
+	want := containerArguments("copy", "name", "vet", "./...", singleContainerReservation())
 	want = append(want[:len(want)-4:len(want)-4], containerGeneratedScript)
-	if got := containerArguments("copy", "name", "generated", "caller-text"); !reflect.DeepEqual(got, want) {
+	if got := containerArguments("copy", "name", "generated", "caller-text", singleContainerReservation()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("generated arguments: %q, want %q", got, want)
 	}
 	const script = `set -eu
@@ -56,7 +56,7 @@ esac
 				t.Fatal("Docker reached")
 				return 0, nil
 			}}
-			if _, err := runContainerCheck(context.Background(), "tree", "generated", pattern, runner, t.TempDir()); err == nil || !strings.Contains(err.Error(), "whole-tree package (./...)") {
+			if _, err := runContainerCheck(context.Background(), "tree", "generated", pattern, runner, t.TempDir(), grantContainerBudget()); err == nil || !strings.Contains(err.Error(), "whole-tree package (./...)") {
 				t.Fatalf("refusal: %v", err)
 			}
 		})
@@ -118,7 +118,7 @@ func TestGeneratedVerdicts(t *testing.T) {
 				}
 				return tc.code, tc.runErr
 			}}
-			report, runErr := runContainerCheck(ctx, containerFixture(t), "generated", "./...", runner, t.TempDir())
+			report, runErr := runContainerCheck(ctx, containerFixture(t), "generated", "./...", runner, t.TempDir(), grantContainerBudget())
 			first, _, _ := strings.Cut(report, "\n")
 			if first != tc.verdict || !reflect.DeepEqual(calls, []string{"run", "stop", "rm"}) {
 				t.Fatalf("report %q, calls %v, error %v", report[:min(len(report), 500)], calls, runErr)
@@ -143,7 +143,7 @@ func TestGeneratedVerdicts(t *testing.T) {
 		t.Fatal("expired call reached Docker")
 		return 0, nil
 	}}
-	if report, err := runContainerCheck(ctx, containerFixture(t), "generated", "./...", runner, t.TempDir()); err == nil || strings.HasPrefix(report, "verified") {
+	if report, err := runContainerCheck(ctx, containerFixture(t), "generated", "./...", runner, t.TempDir(), grantContainerBudget()); err == nil || strings.HasPrefix(report, "verified") {
 		t.Fatal("expired run verified")
 	}
 }
@@ -251,7 +251,7 @@ func TestGeneratedReportCaps(t *testing.T) {
 	if len(report) >= containerReportLimit || len(out) > generatedDiffLimit+30 || !strings.Contains(out, "[diff cut off]") {
 		t.Fatalf("report too large: %d, diff %d", len(report), len(out))
 	}
-	v := containerVerifier{containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir(), containerTimeout}
+	v := containerVerifier{grantContainerBudget(), containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir(), containerTimeout}
 	summary, err := v.verify(context.Background(), "generated", "./...")
 	if len(summary) > summaryErrorBudget {
 		t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)

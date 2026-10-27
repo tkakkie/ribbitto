@@ -49,3 +49,4 @@ After cleanup, stdout reports escaped replaced paths, SHA-256 before (`absent`
 for new files)/after, written/identical counts, refusals and paths not replaced. Names/diagnostics are escaped and bounded.
 Empty tar succeeds: `0 written, 0 identical`. Exit 0 requires every file
 written/equal. Stale outputs remain for review.
+A budget refusal exits 1; the report's first line is `NOT VERIFIED: verification budget ...` instead of `N written, M identical`.

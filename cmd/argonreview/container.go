@@ -28,7 +28,6 @@ const (
 	containerSQLCVersion    = "v1.31.1"
 	containerTimeout        = 10 * time.Minute
 	containerCleanupTimeout = 20 * time.Second
-	containerMemory         = "2g"
 	containerPIDs           = "256"
 	containerCPUs           = "2"
 	containerOutputLimit    = 4 << 20
@@ -120,11 +119,11 @@ func dockerEnvironment() []string {
 	return []string{"PATH=" + containerPath, "HOME=/nonexistent", "DOCKER_CONFIG=/nonexistent", "DOCKER_HOST=unix:///var/run/docker.sock"}
 }
 
-func containerArguments(copyDir, name, check, pattern string) []string {
+func containerArguments(copyDir, name, check, pattern string, reservation budgetReservation) []string {
 	// Explicit removal below replaces --rm: verification waits for Docker to
 	// acknowledge removal, and interruption cannot race automatic removal.
 	args := []string{"run", "--pull=never", "--name", name,
-		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
+		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--label", budgetSlotLabel + "=" + reservation.label, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
 		// Both tmpfs mounts allow execution: Go executes test binaries from its
 		// temporary build/cache directories. nosuid/nodev still apply.
 		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
@@ -136,7 +135,8 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 	if check == "test-db" {
 		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
 	}
-	args = append(args, "--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
+	memory := fmt.Sprintf("%dg", reservation.memory/(1<<30))
+	args = append(args, "--memory", memory, "--memory-swap", memory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
 		containerVerifyImage, "sh", "-c")
 	if check == "generated" {
 		return append(args, containerGeneratedScript)
@@ -216,10 +216,10 @@ func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	info, ok := debug.ReadBuildInfo()
 	_, err := trusted(info, ok, func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) })
-	return startContainerCheck(args, stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent)
+	return startContainerCheck(args, stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent, newContainerBudget(dockerRunner{}))
 }
 
-func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string) int {
+func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string, budget containerBudget) int {
 	code := 1
 	if err == nil {
 		err = sweep(stderr)
@@ -228,7 +228,7 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var report string
-		report, err = runContainerCheck(ctx, args[0], args[1], args[2], runner, copyParent)
+		report, err = runContainerCheck(ctx, args[0], args[1], args[2], runner, copyParent, budget)
 		// Cleanup has completed before writing to a potentially closed pipe.
 		if _, writeErr := io.WriteString(stdout, report); writeErr != nil {
 			err = errors.Join(err, fmt.Errorf("writing container report: %w", writeErr))
@@ -243,24 +243,25 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 	return code
 }
 
-func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (report string, err error) {
+func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, budget containerBudget) (report string, err error) {
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
-	result := containerExecution{timeout: containerTimeout}
+	result := containerExecution{timeout: containerTimeout, budget: budget}
 	return runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 }
 
-func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, timeout time.Duration) (string, error) {
+func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, timeout time.Duration, budget containerBudget) (string, error) {
 	if err := validateContainerCheck(tree, check, pattern); err != nil {
 		return "", err
 	}
-	result := containerExecution{timeout: timeout}
+	result := containerExecution{timeout: timeout, budget: budget}
 	_, err := runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 	return result.summary, err
 }
 
 type containerExecution struct {
+	budget  containerBudget
 	timeout time.Duration
 	output  containerOutput
 	code    int
@@ -276,6 +277,33 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
+	// Reserve before even creating the copy directory. Register release first:
+	// container cleanup, source removal and the copy lock's Close all precede it.
+	reservation, cause := budgetReservation{}, budgetStateUnknown
+	if result.budget != nil {
+		reservation, cause = result.budget.budgetReserve(ctx, budgetSingle)
+	}
+	if ctx.Err() != nil {
+		if reservation.release != nil {
+			reservation.release()
+		}
+		return "", fmt.Errorf("preparing container: %w", ctx.Err())
+	}
+	if cause != "" || reservation.release == nil || reservation.memory <= 0 || reservation.label == "" {
+		if reservation.release != nil {
+			reservation.release()
+		}
+		if cause == "" {
+			cause = budgetStateUnknown
+		}
+		result.code = 1
+		line := cause.line("verification budget")
+		in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check), verdict: line, runnerFailed: true}
+		result.summary = buildContainerSummary(in)
+		return line + "\n" + in.scope + "\n", nil
+	}
+	// A failed removal still leaves its slot held by label reconciliation.
+	defer reservation.release()
 	tree, err = filepath.Abs(tree)
 	if err != nil {
 		return "", fmt.Errorf("resolving worktree: %w", err)
@@ -332,7 +360,7 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	name := fmt.Sprintf("argonreview-check-%x", suffix)
 	output := &result.output
 	output.cancel = cancel
-	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
+	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern, reservation), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	// Record completion before cleanup: a later deadline cannot undo a finished
 	// container, while an earlier interruption makes its result unknowable.
 	interrupted := ctx.Err() != nil

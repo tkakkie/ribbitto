@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"syscall"
 )
 
@@ -58,16 +59,16 @@ func containerGenerateCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	info, ok := debug.ReadBuildInfo()
 	_, err := trusted(info, ok, func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) })
-	return startContainerGenerate(args[0], stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent, nil)
+	return startContainerGenerate(args[0], stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent, nil, newContainerBudget(dockerRunner{}))
 }
 
-func startContainerGenerate(tree string, stdout, stderr io.Writer, trustErr error, sweep func(io.Writer) error, runner containerRunner, copyParent string, hook func(string, string)) int {
+func startContainerGenerate(tree string, stdout, stderr io.Writer, trustErr error, sweep func(io.Writer) error, runner containerRunner, copyParent string, hook func(string, string), budget containerBudget) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var report string
 	err := trustErr
 	if err == nil {
-		report, err = runContainerGenerate(ctx, tree, sweep, runner, copyParent, hook)
+		report, err = runContainerGenerate(ctx, tree, sweep, runner, copyParent, hook, budget)
 	}
 	if report == "" {
 		report = writebackReport(nil, nil, err)
@@ -80,10 +81,13 @@ func startContainerGenerate(tree string, stdout, stderr io.Writer, trustErr erro
 		_, _ = fmt.Fprintln(stderr, "argonreview: container-generate failed; see refusal report")
 		return 1
 	}
+	if strings.HasPrefix(report, "NOT VERIFIED:") {
+		return 1
+	}
 	return 0
 }
 
-func runContainerGenerate(ctx context.Context, tree string, sweep func(io.Writer) error, runner containerRunner, copyParent string, hook func(string, string)) (report string, err error) {
+func runContainerGenerate(ctx context.Context, tree string, sweep func(io.Writer) error, runner containerRunner, copyParent string, hook func(string, string), budget containerBudget) (report string, err error) {
 	defer func() {
 		if report == "" {
 			report = writebackReport(nil, nil, err)
@@ -98,8 +102,11 @@ func runContainerGenerate(ctx context.Context, tree string, sweep func(io.Writer
 	if err := sweep(io.Discard); err != nil {
 		return "", fmt.Errorf("sweeping before generation: %w", err)
 	}
-	var result containerExecution
-	_, err = runContainerExecution(ctx, tree, "writeback", "", runner, copyParent, &result)
+	result := containerExecution{budget: budget}
+	report, err = runContainerExecution(ctx, tree, "writeback", "", runner, copyParent, &result)
+	if strings.HasPrefix(report, "NOT VERIFIED: verification budget ") {
+		return report, err
+	}
 	if result.output.over {
 		return "", errors.Join(err, errors.New("container output limit exceeded (stdout and stderr share 4 MiB)"))
 	}

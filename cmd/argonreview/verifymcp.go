@@ -34,6 +34,7 @@ type verifier interface {
 	verify(context.Context, string, string) (string, error)
 }
 type containerVerifier struct {
+	budget     containerBudget
 	worktree   string
 	runner     containerRunner
 	copyParent string
@@ -41,11 +42,12 @@ type containerVerifier struct {
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout)
+	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout, v.budget)
 }
 
 func newContainerVerifier(worktree string) containerVerifier {
-	return containerVerifier{worktree, dockerRunner{ownGroup: true}, containerCopyParent, containerTimeout}
+	runner := dockerRunner{ownGroup: true}
+	return containerVerifier{newContainerBudget(runner), worktree, runner, containerCopyParent, containerTimeout}
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

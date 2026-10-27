@@ -52,7 +52,7 @@ func TestContainerValidation(t *testing.T) {
 				t.Fatalf("validation %q: %v", tc.pattern, err)
 			}
 			if !tc.valid {
-				if _, err := runContainerCheck(context.Background(), "tree", "test", tc.pattern, runner, t.TempDir()); err == nil {
+				if _, err := runContainerCheck(context.Background(), "tree", "test", tc.pattern, runner, t.TempDir(), grantContainerBudget()); err == nil {
 					t.Fatal("invalid pattern accepted")
 				}
 			}
@@ -88,14 +88,27 @@ func TestContainerDispatchAndTrust(t *testing.T) {
 }
 
 func TestContainerArgumentsGolden(t *testing.T) {
-	for _, check := range []string{"build", "vet", "test", "generated", "test-db"} {
-		t.Run(check, func(t *testing.T) {
+	for _, row := range []struct {
+		name, check, label, memory string
+		bytes                      int64
+	}{
+		{"build", "build", "0", "2g", budgetUnit},
+		{"vet", "vet", "0", "2g", budgetUnit},
+		{"test", "test", "0", "2g", budgetUnit},
+		{"generated", "generated", "0", "2g", budgetUnit},
+		{"test-db", "test-db", "0", "2g", budgetUnit},
+		{"writeback", "writeback", "0", "2g", budgetUnit},
+		{"nonzero slot", "build", "2", "2g", budgetUnit},
+		{"multi-unit reservation", "build", "1,2", "4g", 2 * budgetUnit},
+	} {
+		check := row.check
+		t.Run(row.name, func(t *testing.T) {
 			for _, name := range []string{"GH_TOKEN", "RIBBITTO_TEST_DATABASE_URL", "RIBBITTO_REQUIRE_DB", "RIBBITTO_REQUIRE_BROWSER", "CI", "RIBBITTO_READ_COST", "RIBBITTO_DATABASE_URL", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "GOPATH", "GOMODCACHE", "GOENV", "HOME", "PATH"} {
 				t.Setenv(name, "dummy-excluded")
 			}
 			want := []string{
 				"run", "--pull=never", "--name", "argonreview-check-fixed",
-				"--network", "none", "--label", "argonreview.owner=verify", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
+				"--network", "none", "--label", "argonreview.owner=verify", "--label", "argonreview.slot=" + row.label, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", "1000:1000",
 				"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
 				"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
 				"--mount", "type=bind,src=/var/cache/argonreview/go-mod,dst=/go/pkg/mod,readonly",
@@ -106,10 +119,12 @@ func TestContainerArgumentsGolden(t *testing.T) {
 			if check == "test-db" {
 				want = append(want, "-e", "RIBBITTO_TEST_DATABASE_URL=postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable", "-e", "RIBBITTO_REQUIRE_DB=1")
 			}
-			want = append(want, "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256", "--cpus", "2",
+			want = append(want, "--memory", row.memory, "--memory-swap", row.memory, "--pids-limit", "256", "--cpus", "2",
 				"sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80", "sh", "-c")
 			var command []string
 			switch check {
+			case "writeback":
+				command = []string{containerGenerateScript}
 			case "generated":
 				command = []string{containerGeneratedScript}
 			case "test-db":
@@ -134,8 +149,19 @@ exec go "$@"
 				command = append(command, "./...")
 			}
 			want = append(want, command...)
-			if got := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./..."); !reflect.DeepEqual(got, want) {
+			if got := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes}); !reflect.DeepEqual(got, want) {
 				t.Fatalf("args:\n%q\nwant:\n%q", got, want)
+			}
+			args := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes})
+			for i, arg := range args {
+				for _, forbidden := range []string{"--privileged", "--cap-add", "--userns", "--ipc", "--device", "--add-host", "-p", "--publish", "--pid"} {
+					if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {
+						t.Fatalf("forbidden option %q", arg)
+					}
+				}
+				if strings.Contains(arg, "seccomp") || strings.HasPrefix(arg, "--network=") || arg == "--network" && args[i+1] != "none" {
+					t.Fatalf("unsafe boundary argument %q", arg)
+				}
 			}
 			if got, want := dockerEnvironment(), []string{"PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin", "HOME=/nonexistent", "DOCKER_CONFIG=/nonexistent", "DOCKER_HOST=unix:///var/run/docker.sock"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("Docker environment differs: %q", got)
@@ -165,7 +191,7 @@ func TestContainerPrelude(t *testing.T) {
 	}
 	for _, check := range []string{"build", "vet", "test"} {
 		for _, pattern := range []string{"./...", "./internal/foo/..."} {
-			args := containerArguments("copy", "name", check, pattern)
+			args := containerArguments("copy", "name", check, pattern, singleContainerReservation())
 			if strings.Contains(containerPrelude, pattern) || args[len(args)-1] != pattern || args[len(args)-2] == pattern {
 				t.Fatal("package pattern must be a separate positional argument")
 			}
@@ -251,7 +277,7 @@ func TestContainerToolVersions(t *testing.T) {
 				}
 				return 0, nil
 			}}
-			_, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir())
+			_, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir(), grantContainerBudget())
 			if (err == nil) != tc.valid || tc.valid && runs != 1 || err != nil && !strings.Contains(err.Error(), "the verify image needs a rebuild") {
 				t.Fatalf("version check: runs %d, error %v", runs, err)
 			}
@@ -278,7 +304,7 @@ func TestContainerGoVersion(t *testing.T) {
 		t.Fatal("Docker ran for mismatched Go version")
 		return 0, nil
 	}}
-	if _, err := runContainerCheck(context.Background(), dir, "build", "./...", runner, t.TempDir()); err == nil || !strings.Contains(err.Error(), "go.mod") {
+	if _, err := runContainerCheck(context.Background(), dir, "build", "./...", runner, t.TempDir(), grantContainerBudget()); err == nil || !strings.Contains(err.Error(), "go.mod") {
 		t.Fatalf("version mismatch: %v", err)
 	}
 }
@@ -383,7 +409,7 @@ func TestContainerRunAndCleanup(t *testing.T) {
 				}
 				return tc.status, nil
 			}}
-			report, err := runContainerCheck(ctx, dir, "build", "./...", runner, t.TempDir())
+			report, err := runContainerCheck(ctx, dir, "build", "./...", runner, t.TempDir(), grantContainerBudget())
 			success := tc.name == "success" || tc.name == "stop fails"
 			if strings.HasPrefix(report, "verified\n") != success {
 				t.Fatalf("report %q, err %v", report[:min(len(report), 300)], err)
@@ -429,7 +455,7 @@ func TestContainerNamesAreUnique(t *testing.T) {
 		return 0, nil
 	}}
 	for range 2 {
-		if _, err := runContainerCheck(context.Background(), dir, "vet", ".", runner, t.TempDir()); err != nil {
+		if _, err := runContainerCheck(context.Background(), dir, "vet", ".", runner, t.TempDir(), grantContainerBudget()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -454,7 +480,7 @@ func TestContainerValidationCleanup(t *testing.T) {
 				return 0, nil
 			}}
 			copyParent := t.TempDir()
-			if _, err := runContainerCheck(context.Background(), tree, "test", "./...", runner, copyParent); err == nil {
+			if _, err := runContainerCheck(context.Background(), tree, "test", "./...", runner, copyParent, grantContainerBudget()); err == nil {
 				t.Fatal("validation passed")
 			}
 			entries, err := os.ReadDir(copyParent)
@@ -486,7 +512,7 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 				}
 				return 0, nil
 			}}
-			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner, t.TempDir())
+			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner, t.TempDir(), grantContainerBudget())
 			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
 				t.Fatalf("report %q, err %v", report, err)
 			}
@@ -519,7 +545,7 @@ func TestContainerSourceCleanupFailure(t *testing.T) {
 		}
 		return 0, nil
 	}}
-	report, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir())
+	report, err := runContainerCheck(context.Background(), tree, "build", ".", runner, t.TempDir(), grantContainerBudget())
 	if err == nil || !strings.Contains(err.Error(), "removing source copy") || !strings.HasPrefix(report, "FAILED: source cleanup failed\n") {
 		t.Fatalf("source cleanup failure: report %q, error %v", report, err)
 	}

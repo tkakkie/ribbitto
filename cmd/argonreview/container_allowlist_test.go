@@ -113,7 +113,7 @@ func TestContainerTestDBEndToEnd(t *testing.T) {
 				}
 				return 0, nil
 			}}
-			report, err := runContainerCheck(context.Background(), containerFixture(t), tc.check, "./...", runner, t.TempDir())
+			report, err := runContainerCheck(context.Background(), containerFixture(t), tc.check, "./...", runner, t.TempDir(), grantContainerBudget())
 			if err != nil || !strings.HasPrefix(report, tc.want) {
 				t.Fatalf("report %q, error %v", report, err)
 			}

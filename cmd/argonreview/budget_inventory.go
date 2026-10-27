@@ -135,8 +135,17 @@ func (b budgetDockerInventory) budgetList(ctx context.Context) ([]budgetContaine
 	return nil, errors.New("unstable container listing")
 }
 
-func budgetOrphan(processes processTable, uid int) (bool, error) {
-	procs, err := processes.list()
+func budgetOrphan(ctx context.Context, processes processTable, uid int) (bool, error) {
+	// Production process discovery must share the reservation's deadline too.
+	var procs []procInfo
+	var err error
+	if contextual, ok := processes.(interface {
+		listContext(context.Context) ([]procInfo, error)
+	}); ok {
+		procs, err = contextual.listContext(ctx)
+	} else {
+		procs, err = processes.list()
+	}
 	if err != nil {
 		return false, errors.New("process listing failed")
 	}

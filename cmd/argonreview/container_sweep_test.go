@@ -360,7 +360,7 @@ func TestSweepRunnerLock(t *testing.T) {
 		}
 		return 0, nil
 	}}
-	if _, err := runContainerCheck(context.Background(), tree, "build", ".", runner, s.parent); err != nil {
+	if _, err := runContainerCheck(context.Background(), tree, "build", ".", runner, s.parent, grantContainerBudget()); err != nil {
 		t.Fatal(err)
 	}
 	if err := unix.Flock(int(held.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
@@ -942,7 +942,7 @@ func TestSweepStartup(t *testing.T) {
 			log.Reset()
 			calls := 0
 			runner := fakeContainerRunner{func(context.Context, []string, []string, io.Writer, io.Writer) (int, error) { calls++; return 0, nil }}
-			code = startContainerCheck([]string{tree, "build", "."}, &out, &log, nil, sweep, runner, s.parent)
+			code = startContainerCheck([]string{tree, "build", "."}, &out, &log, nil, sweep, runner, s.parent, grantContainerBudget())
 			if code != want || failed && (out.Len() != 0 || calls != 0) || !failed && (!strings.HasPrefix(out.String(), "verified\n") || calls != 3) || !strings.Contains(log.String(), "reclaimed client 41") {
 				t.Fatalf("check startup %d calls %d %q %q", code, calls, &out, &log)
 			}
@@ -996,7 +996,7 @@ func TestSweepStartupChecks(t *testing.T) {
 				t.Fatalf("sweep before startup checks: %d calls %d stdout %q", code, calls, &out)
 			}
 			calls = 0
-			code = startContainerCheck([]string{tree, "build", "."}, &out, &log, errors.New("trust refused"), sweep, nil, t.TempDir())
+			code = startContainerCheck([]string{tree, "build", "."}, &out, &log, errors.New("trust refused"), sweep, nil, t.TempDir(), grantContainerBudget())
 			if code != 1 || calls != 0 || out.Len() != 0 {
 				t.Fatalf("check swept before trust: %d calls %d", code, calls)
 			}

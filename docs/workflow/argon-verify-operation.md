@@ -16,59 +16,7 @@ and the settings layer's own refusals cover it.
 The [verify image recipe](argon-verify-image.md) describes the host build procedure;
 each build needs the maintainer's approval in chat.
 
-## Memory-budget reconciliation (not in force)
-
-The budget primitives and combined inventory are merged code, **not in force**.
-Production remains on `argonreview-2e3a6bf`; entry-point wiring, per-check
-reservations and the budget page arrive in #1908 M3b. A later binary needs
-a separately approved launcher update. This section describes M3a's inventory
-contract, not an instruction to change the host or start a container.
-
-One complete Docker snapshot feeds slot reconciliation and M2 classification.
-The adapter reuses M2's inspection-presence checks: missing or null memory and
-swap fields are unavailable, not zero. An explicit zero remains evidence of
-an unlimited container. Failed inspections need a fresh listing to confirm
-disappearance; malformed inspection data stays unavailable even if the ID
-disappears. A new ID in that listing retries the entire snapshot, at most
-three attempts; persistent arrivals are unavailable. All listing, inspection,
-confirmation and retry calls share a **30-second total deadline**, inside the
-caller's context, in addition to each command's 20-second limit. Expiry means
-the container state could not be determined.
-
-The hook calls M2's classifier and reservation-consistency function. It checks
-the name, owner, pinned image, one or two slots, browser class exactly for two
-slots, memory exactly slots times 2 GiB, and equal swap. M1b additionally
-requires strictly ascending slot labels. Verification containers in any state
-remain held by M1b; the hook contributes only registered dev containers in
-created, running, paused or restarting states. A consistent verification
-container is counted once; a dev container sharing its slot is a duplicate.
-Nothing in this observation path starts, stops or removes a container.
-
-The first matching row below wins, independently of inventory order. Every
-line begins with `NOT VERIFIED: verification budget ` followed by the exact
-suffix in the table. M2's full lines are reused without copying their text.
-
-| Rank | Exact suffix |
-|---|---|
-| 1 | unavailable: the container state could not be determined |
-| 2 | unavailable: an orphaned Docker client is present |
-| 3 | unavailable: a verification container does not match its reservation |
-| 4 | unavailable: a verification container has no valid slot label |
-| 5 | unavailable: a registered container does not match its registration |
-| 6 | unavailable: a container has no memory limit |
-| 7 | unavailable: an unregistered container is present |
-| 8 | unavailable: a slot is claimed twice |
-| 9 | paused: an exclusive container is present |
-
-First establish whether the observation itself can be trusted, then identify
-which container is wrong, then check slot arithmetic. Pause only when nothing
-is unavailable. M2's ordering is a subsequence of this order, so its highest
-cause preserves the evidence needed to combine both layers. With no such
-cause and no free reservation, the suffix is `busy`. Lock-file safety,
-invalid requests and interruption keep their existing fixed refusal lines.
-The reservation layer polls every second for at most 120 seconds and returns
-the last observed cause; M3b must apply that wait inside the ten-minute run
-context before copying source and preserve refusals in reports and summaries.
+[Verification memory budget](argon-verify-budget.md) is merged but not in force.
 
 ## Switch and run
 

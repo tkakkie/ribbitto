@@ -22,7 +22,8 @@ type processTable interface {
 	signal(int, syscall.Signal) error
 }
 type psTable struct {
-	run func(...string) (string, error)
+	run        func(...string) (string, error)
+	runContext func(context.Context, ...string) (string, error)
 }
 
 func parseSweepProcesses(data string) ([]procInfo, error) {
@@ -87,8 +88,8 @@ func parseSweepProcessHeader(line string) (procInfo, bool) {
 	}
 	return procInfo{pid, ppid, uid, start, strings.TrimLeft(rest, " \t")}, true
 }
-func sweepPS(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
+func sweepPS(parent context.Context, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, containerCleanupTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/ps", args...)
 	cmd.Env = dockerEnvironment()
@@ -108,13 +109,22 @@ func sweepPS(args ...string) (string, error) {
 	return out.stdout.String(), nil
 }
 func (p psTable) query(args ...string) (string, error) {
+	return p.queryContext(context.Background(), args...)
+}
+func (p psTable) queryContext(ctx context.Context, args ...string) (string, error) {
+	if p.runContext != nil {
+		return p.runContext(ctx, args...)
+	}
 	if p.run != nil {
 		return p.run(args...)
 	}
-	return sweepPS(args...)
+	return sweepPS(ctx, args...)
 }
 func (p psTable) list() ([]procInfo, error) {
-	data, err := p.query("-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
+	return p.listContext(context.Background())
+}
+func (p psTable) listContext(ctx context.Context) ([]procInfo, error) {
+	data, err := p.queryContext(ctx, "-axww", "-o", "pid=,ppid=,uid=,lstart=,command=")
 	if err != nil {
 		return nil, err
 	}

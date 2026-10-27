@@ -86,7 +86,7 @@ func TestBudgetSlots(t *testing.T) {
 			t.Fatal(result)
 		}
 		defer release()
-		fmt.Fprintln(os.Stdout, "ready")
+		_, _ = fmt.Fprintln(os.Stdout, "ready")
 		for {
 			time.Sleep(time.Hour)
 		}

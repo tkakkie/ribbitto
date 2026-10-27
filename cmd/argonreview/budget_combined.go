@@ -2,6 +2,9 @@ package main
 
 import "strings"
 
+// budgetOtherResult converts M2's full NOT VERIFIED lines to budgetResult causes
+// so the combined precedence can reuse M2's wording. An empty line has no cause;
+// a line without M2's prefix is state unknown to fail closed.
 func budgetOtherResult(line string) budgetResult {
 	if line == "" {
 		return ""

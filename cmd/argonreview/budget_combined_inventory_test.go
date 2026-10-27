@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -65,6 +66,9 @@ func TestBudgetInventoryDeadline(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestBudgetReadReusesNameMatcher(t *testing.T) {
 	// Recompiling the name grammar on every read is forbidden independently of
 	// timing: pin reuse of the sweep matcher without an allocation benchmark.
 	source, err := os.ReadFile("budget_slots.go")
@@ -179,5 +183,47 @@ func TestBudgetCombinedMalformedDisappears(t *testing.T) {
 	budgetAssertCause(t, b, string(budgetStateUnknown))
 	if listings != 2 {
 		t.Fatalf("malformed inspection omitted confirmation: %d listings", listings)
+	}
+}
+
+func TestBudgetCombinedMalformedDisappearsAcrossRetry(t *testing.T) {
+	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	c := otherFixture("dev", "0", "running")
+	c.ID = b
+	stable, _ := budgetCombinedFixture(t, c)
+	budgetAssertReserve(t, stable, budgetSingle, "1").release()
+
+	listings := 0
+	var inspects []string
+	runner := &budgetRecordingRunner{t: t, respond: func(args []string, stdout, _ io.Writer) (int, error) {
+		if args[0] == "ps" {
+			listings++
+			switch listings {
+			case 1:
+				_, _ = fmt.Fprintln(stdout, a)
+			case 2:
+				_, _ = fmt.Fprintln(stdout, a, b)
+			default:
+				_, _ = fmt.Fprintln(stdout, b)
+			}
+		} else {
+			id := args[len(args)-1]
+			inspects = append(inspects, id)
+			if id == a {
+				_, _ = io.WriteString(stdout, `{}`)
+			} else {
+				_ = json.NewEncoder(stdout).Encode(c)
+			}
+		}
+		return 0, nil
+	}}
+	combined, _ := budgetCombinedFixture(t)
+	combined.inventory = budgetDockerInventory{runner: runner}
+	budgetAssertCause(t, combined, string(budgetStateUnknown))
+	if listings != 4 || len(inspects) != 2 {
+		t.Fatalf("snapshot calls = %d listings, %d inspects; want 4, 2", listings, len(inspects))
+	}
+	if !slices.Equal(inspects, []string{a, b}) {
+		t.Fatalf("inspection order = %v; want [A B]", inspects)
 	}
 }

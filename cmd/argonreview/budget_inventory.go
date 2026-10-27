@@ -83,6 +83,8 @@ func (b budgetDockerInventory) budgetList(ctx context.Context) ([]budgetContaine
 	// retries of a stale listing; per-command limits alone grow with inventory.
 	ctx, cancel := context.WithTimeout(ctx, budgetInventoryTimeout)
 	defer cancel()
+	// A snapshot retry cannot explain away malformed evidence by disappearance.
+	var malformed error
 	for attempt := 0; attempt < 3; attempt++ {
 		ids, err := b.budgetIDs(ctx)
 		if err != nil {
@@ -99,7 +101,7 @@ func (b budgetDockerInventory) budgetList(ctx context.Context) ([]budgetContaine
 			if inspectErr != nil {
 				var invalid budgetInspectionInvalid
 				if errors.As(inspectErr, &invalid) {
-					inspectionErr = inspectErr
+					malformed = inspectErr
 				} else {
 					failed[id] = inspectErr
 				}
@@ -121,6 +123,9 @@ func (b budgetDockerInventory) budgetList(ctx context.Context) ([]budgetContaine
 			stale = stale || !slices.Contains(ids, id)
 		}
 		if !stale {
+			if malformed != nil {
+				return nil, malformed
+			}
 			if inspectionErr != nil {
 				return nil, inspectionErr
 			}

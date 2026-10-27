@@ -269,7 +269,10 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return err
 	})
 	if err != nil {
-		return Sent{}, fmt.Errorf("%w", err)
+		if errors.Is(err, ErrMessageNotFound) {
+			return Sent{}, fmt.Errorf("finding repeated message: %w", err)
+		}
+		return Sent{}, fmt.Errorf("finding repeated message: %v", err)
 	}
 	var quote *Quote
 	if s.Quote != nil {

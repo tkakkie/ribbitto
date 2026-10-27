@@ -37,6 +37,8 @@ func browserVerdictCases() []browserVerdictCase {
 		{name: "second package", data: pass + containerEvents("q", run, "pass"), want: outside},
 		{name: "ancestors allowed", data: containerJSON(pkg, "start", "run/TestBrowser", "run/"+run, "pass/"+run, "pass/TestBrowser", "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
 		{name: "descendants only counted", data: containerJSON(pkg, "start", "run/"+run, "run/"+run+"/child", "pass/"+run+"/child", "pass/"+run, "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
+		{name: "parallel leaf", data: containerJSON(pkg, "start", "run/"+run, "run/"+run+"/a", "pause/"+run+"/a", "cont/"+run+"/a", "pass/"+run+"/a", "pass/"+run, "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
+		{name: "unfinished paused leaf", data: containerJSON(pkg, "start", "run/"+run, "run/"+run+"/a", "pause/"+run+"/a", "pass/"+run, "pass"), want: "FAILED: missing test result"},
 		{name: "top level", run: "TestTopicPostBrowser", data: containerEvents(pkg, "TestTopicPostBrowser", "pass"), want: "verified\nnamed test: TestTopicPostBrowser passed (1 leaf tests)"},
 		{name: "cut stream", data: strings.TrimSuffix(pass, "\n")},
 		{name: "malformed JSON", data: pass + "{\n"},

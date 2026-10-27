@@ -56,6 +56,10 @@ func browserVerdict(importPath, run string, code int, runErr error, data []byte,
 			return "FAILED: malformed test stream"
 		}
 	}
+	return browserScope(run, tests, outside)
+}
+
+func browserScope(run string, tests map[string]string, outside bool) string {
 	if tests[run] != "pass" {
 		return "NOT VERIFIED: the named test did not run: " + run
 	}
@@ -86,7 +90,7 @@ func browserVerdict(importPath, run string, code int, runErr error, data []byte,
 		}
 	}
 	if leaves > browserLeafLimit {
-		return fmt.Sprintf("NOT VERIFIED: too many tests ran (%d, limit 64); name fewer tests", leaves)
+		return fmt.Sprintf("NOT VERIFIED: too many tests ran (%d, limit %d); name fewer tests", leaves, browserLeafLimit)
 	}
 	return fmt.Sprintf("verified\nnamed test: %s passed (%d leaf tests)", run, leaves)
 }

@@ -187,6 +187,7 @@ That tool enumerates files except root `bin/`, compares templ stdout without
 rewriting, and also checks internal package `doc.go` presence. Recursive
 formatter traversal here can differ (including hidden directories), and does
 not check package documentation. tbls schema docs, dependency docs, the API
-manifest, golangci-lint, docscheck, languagecheck, race detector, database and
-browser tests remain CI-only. #1700's preflight exercised the real
+manifest, golangci-lint, docscheck, languagecheck, race detector, browser tests
+and database tests other than [test-db](argon-verify-testdb.md) remain CI-only.
+#1700's preflight exercised the real
 Docker/dash/generator path before these checks entered force.

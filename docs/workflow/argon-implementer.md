@@ -1,17 +1,17 @@
 # Argon as implementer
 
-Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements eligible issues
+Argon (Gemini 4 Argon in the `agy` CLI) implements eligible issues
 under [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
 [#1247](https://github.com/tkakkie/ribbitto/issues/1247). If a boundary
 fails, Argon stops at once; the maintainer decides.
 
 See [assignment and steps](argon-intake.md).
 
-**Start gate.** Each run requires an issue recording a full passing preflight
+**Start gate.** A run needs an issue recording a full passing preflight
 for its `agy` version and custom agent.
 [Verify](argon-verify.md#status) is in force since 2026-10-21; preflight:
 [#1433](https://github.com/tkakkie/ribbitto/issues/1433#issuecomment-6304130212),
-[#1700](https://github.com/tkakkie/ribbitto/issues/1700).
+[#1700](https://github.com/tkakkie/ribbitto/issues/1700#issuecomment-6431742979).
 
 ## Which issues
 

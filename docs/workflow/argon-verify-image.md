@@ -6,7 +6,7 @@ The recipe, build/vet/test regeneration and `generated` check (#1696), the
 [result summary](argon-verify-testdb.md#result-summary) and
 [test-db](argon-verify-testdb.md) (#1697) are in force since 2026-10-27
 (#1700 stage A). Production workers run the launcher `argonreview-2e3a6bf`,
-which pins the image `sha256:12c5636332bb…` (tag `argonreview-verify-image:7957ae8`).
+which pins the image `sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80` (tag `argonreview-verify-image:7957ae8`).
 The old launcher `argonreview-7f607ca` and its official golang image stay for rollback.
 The recipe includes PostgreSQL 18 (#1697 PR A).
 The recipe is `cmd/argonreview/verifyimage/Dockerfile`,

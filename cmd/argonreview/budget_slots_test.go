@@ -453,7 +453,7 @@ func TestBudgetCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			boundary := &budgetCancelAtReturn{Context: ctx, cancel: cancel}
-			var requestContext context.Context = ctx
+			requestContext := ctx
 			switch kind {
 			case "busy":
 				i.containers = []budgetContainer{budgetContainerFixture("0"), budgetContainerFixture("1,2")}

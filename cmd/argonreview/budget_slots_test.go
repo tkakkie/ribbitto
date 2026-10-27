@@ -34,11 +34,19 @@ func (b *budgetFakeInventory) budgetList(context.Context) ([]budgetContainer, er
 // Any process read or signal is a test failure through the nil embedded table.
 type budgetFakeProcesses struct {
 	processTable
-	procs []procInfo
-	err   error
+	procs    []procInfo
+	err      error
+	reads    int
+	listRead func(int)
 }
 
-func (b *budgetFakeProcesses) list() ([]procInfo, error) { return b.procs, b.err }
+func (b *budgetFakeProcesses) list() ([]procInfo, error) {
+	b.reads++
+	if b.listRead != nil {
+		b.listRead(b.reads)
+	}
+	return b.procs, b.err
+}
 
 func budgetContainerFixture(label string) budgetContainer {
 	return budgetContainer{ID: strings.Repeat("a", 64), Name: "/argonreview-check-" + strings.Repeat("a", 32),
@@ -75,6 +83,55 @@ func budgetAssertCause(t *testing.T, b budgetSlots, cause string) {
 	}
 	if got := result.line("verification budget"); got != "NOT VERIFIED: verification budget "+cause {
 		t.Fatalf("line: %q; want cause %q", got, cause)
+	}
+}
+
+func TestBudgetReadOrder(t *testing.T) {
+	for _, row := range []struct {
+		name      string
+		firstRead int
+	}{
+		{"pre-lock", 1},
+		{"reconciliation", 3},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			b, i, p := budgetSlotsFixture(t)
+			orphan := budgetOrphanFixture(b.locks.uid)
+			procs := []procInfo{orphan}
+			var containers []budgetContainer
+			if row.firstRead == 3 {
+				procs = nil
+			}
+			reads := 0
+			completeRead := func() {
+				reads++
+				if reads == row.firstRead-1 {
+					procs = []procInfo{orphan}
+				}
+				if reads == row.firstRead {
+					procs = nil
+					containers = []budgetContainer{budgetContainerFixture("0")}
+				}
+			}
+			// Snapshot each response before advancing the shared world, so the
+			// transition occurs between reads regardless of their order.
+			i.read = func(int) { i.containers = containers; completeRead() }
+			p.listRead = func(int) { p.procs = procs; completeRead() }
+			r, result := b.budgetReserve(context.Background(), budgetSingle)
+			if r.release != nil {
+				t.Cleanup(r.release)
+			}
+			want := "NOT VERIFIED: verification budget unavailable: an orphaned Docker client is present"
+			if got := result.line("verification budget"); got != want || r.release != nil {
+				t.Fatalf("reserve: line=%q label=%q; want line=%q and no reservation", got, r.label, want)
+			}
+			if reads != row.firstRead+1 {
+				t.Fatalf("reads: %d; want %d", reads, row.firstRead+1)
+			}
+			i.read, p.listRead = nil, nil
+			i.containers, p.procs = nil, nil
+			budgetAssertReserve(t, b, budgetSingle, "0").release()
+		})
 	}
 }
 

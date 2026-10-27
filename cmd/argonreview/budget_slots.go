@@ -59,8 +59,10 @@ func budgetParseSlots(label string) ([]int, bool) {
 }
 
 func (b budgetSlots) budgetRead(ctx context.Context) ([3]bool, budgetResult) {
-	containers, err := b.inventory.budgetList(ctx)
+	// Read processes first, as in containerSweep.run: the client's exit is the
+	// cause and the container's existence the effect, so neither can be missed.
 	orphan, processErr := budgetOrphan(b.processes, b.locks.uid)
+	containers, err := b.inventory.budgetList(ctx)
 	var held [3]bool
 	if err != nil || processErr != nil {
 		return held, budgetStateUnknown

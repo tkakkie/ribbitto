@@ -103,6 +103,32 @@ func TestAgyCheckDiscoveryRefusedNames(t *testing.T) {
 	}
 }
 
+func TestAgyCheckDiscoveryContradictingOutcome(t *testing.T) {
+	for _, facts := range []struct {
+		name   string
+		loaded bool
+	}{
+		{"unloaded", false},
+		{"loaded", true},
+	} {
+		t.Run(facts.name, func(t *testing.T) {
+			for _, outcome := range []string{"error", "allowed", "unknown", "denied", "answered", "not exercisable", "counts reconcile", "covered if loaded", ""} {
+				t.Run(outcome, func(t *testing.T) {
+					r := agyCheckClassify(agyCheckObservation{ID: "discovery-agent", Outcome: outcome,
+						Loaded: facts.loaded, Ran: facts.loaded}, agyCheckDefaultCalls)
+					wantOK := outcome == "" || outcome == "covered if loaded"
+					if r.OK != wantOK {
+						t.Errorf("outcome %q: %+v", outcome, r)
+					}
+					if !wantOK && r.Observed != outcome {
+						t.Errorf("outcome %q replaced by %q", outcome, r.Observed)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestAgyCheckDiscoveryEmptyLocation(t *testing.T) {
 	r := agyCheckClassifyRow(agyCheckRow{Expected: "covered if loaded"}, agyCheckObservation{Loaded: false, Ran: false}, agyCheckDefaultCalls)
 	if r.OK {
@@ -141,6 +167,37 @@ func TestAgyCheckReconciliation(t *testing.T) {
 			}
 			if tc.ok && !strings.Contains(r.Observed, "repeats=0") {
 				t.Fatalf("missing repeat count: %q", r.Observed)
+			}
+		})
+	}
+}
+
+func TestAgyCheckReconciliationContradictingOutcome(t *testing.T) {
+	for _, outcome := range []string{"error", "allowed", "unknown", "denied", "answered", "not exercisable", "covered if loaded", "counts reconcile", ""} {
+		t.Run(outcome, func(t *testing.T) {
+			r := agyCheckClassify(agyCheckObservation{ID: "reconciliation", Outcome: outcome,
+				Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, agyCheckDefaultCalls)
+			wantOK := outcome == "" || outcome == "counts reconcile"
+			if r.OK != wantOK {
+				t.Errorf("outcome %q: %+v", outcome, r)
+			}
+			if !wantOK && r.Observed != outcome {
+				t.Errorf("outcome %q replaced by %q", outcome, r.Observed)
+			}
+		})
+	}
+}
+
+func TestAgyCheckUnknownExpectation(t *testing.T) {
+	for _, outcome := range []string{"", "unknown", "error", "allowed", "denied", "answered", "covered if loaded", "counts reconcile", "not exercisable"} {
+		t.Run(outcome, func(t *testing.T) {
+			r := agyCheckClassifyRow(agyCheckRow{Expected: "unknown"}, agyCheckObservation{Outcome: outcome}, agyCheckDefaultCalls)
+			wantObserved := "unknown expectation: unknown"
+			if outcome == "not exercisable" {
+				wantObserved = outcome
+			}
+			if r.OK || r.Observed != wantObserved {
+				t.Fatalf("outcome %q: %+v", outcome, r)
 			}
 		})
 	}

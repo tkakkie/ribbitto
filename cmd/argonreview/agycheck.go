@@ -72,7 +72,8 @@ func agyCheckClassify(observation agyCheckObservation, minimum int) agyCheckResu
 
 func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) agyCheckResultRow {
 	r := agyCheckResultRow{agyCheckRow: row, Observed: o.Outcome}
-	if o.Outcome == "not exercisable" && row.Expected != "not exercisable" {
+	if o.Outcome != "" && o.Outcome != row.Expected &&
+		(o.Outcome == "not exercisable" || row.Expected == "covered if loaded" || row.Expected == "counts reconcile") {
 		return r
 	}
 	switch row.Expected {

@@ -65,7 +65,7 @@ func (s *State) Start(organizationID kernel.ID, place Place, typist Typist) {
 }
 
 func (s *State) start(organizationID kernel.ID, place Place, typist Typist) {
-	streams := s.streams[streamKey{organizationID, typist.Member, place.Channel}]
+	streams := s.streams[streamKey{kernel.ID{}, typist.Member, place.Channel}]
 	if place.Topic == (kernel.ID{}) || streams == nil {
 		return
 	}

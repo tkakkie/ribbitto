@@ -167,7 +167,7 @@ or tamper resistance.
 
 Exit 1 means a row difference or an invalid run; exit 2 means usage error.
 Marker, UID, canary, placement and pin refusals print `RESULT INVALID: <reason>`
-with exit 1, no table and no INFO; they do not establish a version failure.
+with exit 1 and no table (pre-run ones no INFO); they do not establish a version failure.
 Do not trust a new list on failure; record the row/reason. The maintainer decides
 the response, including for already-trusted versions.
 

@@ -1,6 +1,6 @@
 # Argon browser check
 
-**Merged but not in force:** the internal browser runner and admission checks
+**Merged but not in force:** the browser runner and admission checks
 are merged; nothing here enables or authorizes anything. The
 [preflight and separate approvals](argon-verify-browser-preflight.md) govern
 adoption. [Verify operation](argon-verify-operation.md) retains the current
@@ -35,8 +35,13 @@ and [update order](argon-verify-browser-updates.md#update-path).
 
 ## Call arguments
 
-For the candidate's public `test-browser` call, require `check`, `package`
-and `run`.
+The `verify` schema includes `test-browser` and a string `run` property.
+With `--allow-verify`, the guard uses `parseVerifyArguments`; MCP uses the
+same parser and dispatches to `verifyBrowser`. `container-check` accepts
+`<worktree> test-browser <package> <run> [--browser-mode <abs path>]`;
+both paths reach `runContainerExecution`.
+
+For the `test-browser` call, require `check`, `package` and `run`.
 These are its acceptance rules; they do not authorize a call before enabling.
 `package` is exactly `./internal/web` or `./cmd/ribbitto`.
 `run` is required for this check only and refused for other checks.
@@ -58,11 +63,12 @@ or duplicate key (including escaped spellings), missing value, `null` or number.
 Examples accepted by the validator are
 `TestBrowser/drafts-markers/sidebar-sse`,
 `TestBrowser/quote/scripts=true/width=1280` and `TestTopicPostBrowser`.
-For an invalid package or run, the internal `containerVerifier.verifyBrowser`
-caller receives an error and an empty summary from `runContainerExecution`
-before any switch or gate read, reservation, copy or container. The package
-error is `browser package is not allowed`; run errors identify the violated
-validator rule. CLI/MCP exposure awaits B3b.
+`validateContainerCheck` validates package and run on the common path,
+including direct `container-check` and MCP calls. Invalid values are refused
+before admission, any switch/gate read, reservation, copy or container.
+`container-check` prints usage to stderr and exits 2; MCP returns JSON-RPC
+error `-32602` (`invalid verify arguments`). The package validator's error
+is `browser package is not allowed`; run errors identify the violated rule.
 
 ## Switch and admission order
 
@@ -82,6 +88,9 @@ regenerates and compares it byte for byte, including that path.
 Paths must be absolute, clean, valid UTF-8, non-root, with no single quote
 or control character.
 
+The guard checks argument shape only through `parseVerifyArguments` and
+the shared package/run validators. The runner reads the switch and, if on,
+the gate on every call, never at server start or in the guard.
 Every `test-browser` call reads the switch before any units or source copy.
 The opened file must be regular, uid-owned, not a symlink, and not group-
 or world-writable. Only bytes `on` or `on` plus one newline enable admission.
@@ -100,6 +109,8 @@ Those include exclusive pause, unknown state, unsafe locks, invalid
 reservations, unlimited/unregistered containers, duplicate slots and orphans.
 Refusals start no container and create no source copy.
 
+After reservation, the runner rechecks switch/gate before copying; refusal
+releases the reservation.
 After admission: reserve, copy, run, stop/remove, remove source copy and
 close its lock, release units. Failed removal never makes a leftover's
 labelled slots free; use the [sweep](argon-verify-sweep.md).

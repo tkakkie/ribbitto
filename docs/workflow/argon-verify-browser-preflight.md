@@ -30,8 +30,8 @@ Under host approvals, Claude prepares/records:
    [recorded-ID database lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
    thereafter. Start all later host containers through `budget-start`;
    use the [dev/exclusive procedures](argon-verify-budget-start.md#start-procedure).
-3. Before switching, require no leftover from the **old launcher's**
-   `container-sweep`. After A2, the new sweep cannot reclaim old-image
+3. Run the old launcher's `container-sweep` first; require no leftover before
+   switching. After A2, the new sweep cannot reclaim old-image
    leftovers; they fail every check closed. Never switch around them.
 4. Use one new build for all callers: both workers' run/check wrappers and
    Claude's `container-check` and `container-generate`. Older callers take
@@ -75,22 +75,23 @@ non-browser check launching Chromium forbids launcher update: report on
 ## Numbered browser probes
 
 Run probes only in the approved preflight window via the candidate's
-public `test-browser` call. Under #1908 Approvals 3, switch states use the
+`test-browser` call. Under #1908 Approvals 3, switch states use the
 temporary two-home swap: probes 1–5 need `browser-mode` `on` and a fresh gate;
 probe 6 varies them. The host gate is fixed at
 `/var/cache/argonreview/browser-security-check` (`browserGatePath` in
 `cmd/argonreview/browser_gate.go`), outside the swap.
-Before probe 6, save a gate copy (bytes, mode, link count) or record absence
-(normal before enabling). Manually replace/remove that path for expired,
-future and missing states only in the approved window.
+Before probe 6, save a gate copy (bytes, mode, link count) or record absence.
+For expired, future and missing states, manually replace/remove the path
+only in that window. If absent before the window, window
+authority alone permits this: create by hand and remove again. Otherwise,
+first get separate maintainer deletion approval, including for a
+production gate from `--init`.
 Before window end, restore production: `browser-mode` `off`,
 the production gate restored from the saved copy (or absent as before).
 #1700 restoration evidence must show bytes, mode, link count (or absence)
-match the saved state and the switch reads `off`. Deleting a real production gate
-(from `--init`) needs separate maintainer approval: see
+match the saved state and the switch reads `off`. See
 [recording](argon-verify-browser-record.md#initial-and-routine-recording)
-(path changes need approval to remove the gate). Only a gate absent before
-the window may be removed again on window authority alone.
+(path changes need approval to remove the gate).
 Approval 3 never authorizes production `browser-mode on`: approval 6 follows
 launcher update (4) and stage B enabling (5). Passing authorizes nothing else
 (#1908 Approvals 3–6; Enabling sequence 6–8).

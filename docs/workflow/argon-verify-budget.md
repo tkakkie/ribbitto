@@ -9,12 +9,12 @@ still apply to every caller, including both workers and host commands.
 
 ## Reservations and cleanup
 
-The Docker VM budget is three units of **2 GiB**. Every current check takes
+The Docker VM budget is three units of **2 GiB**. Each ordinary check takes
 one unit (`budgetSingle`) before even creating its source-copy directory:
 `build`, `vet`, `test`, `generated`, `test-db` and `container-generate`'s
 internal writeback check. `container-check`, `verify-mcp` and
 `container-generate` share `runContainerExecution`; a missing budget refuses
-execution. The internal browser runner takes two units; exposure awaits B3b.
+execution. `test-browser` takes two units through the verify path.
 A two-unit reservation means 4 GiB.
 
 Units use nonblocking `flock` on slot files. A one-unit request takes the lowest

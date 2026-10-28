@@ -31,6 +31,7 @@
 // worktree (#1430).
 // container-sweep [--dry-run] reclaims abandoned verification clients, labelled
 // containers and private source copies using the trusted build (#1433).
+// budget-start --container <full 64-hex ID> starts a registered host container under budget locks.
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
@@ -82,6 +83,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "verify-mcp" {
 		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "budget-start" {
+		return budgetStartCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-sweep" {
 		return containerSweepCommand(args[1:], stdout, stderr)
@@ -173,7 +177,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage)
 	return 2
 }
 

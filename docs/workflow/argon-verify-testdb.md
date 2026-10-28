@@ -3,16 +3,15 @@
 ## Status
 
 `test-db` (#1697) is in force since 2026-10-27 (#1700 stage A, launcher
-`argonreview-2e3a6bf`). The real container path (Docker, PostgreSQL in the
-image and the script) is untested by Codex, which has no Docker; #1700's
-preflight validated it. CI stays the check; this does not replace review or
+`argonreview-2e3a6bf`). Codex has no Docker; #1700's preflight validated
+the Docker/PostgreSQL/script path. CI stays the check, alongside review and
 [handoff checks](running-other-ai.md#handoff-of-another-ais-code).
 
 ## Fixed runner
 
-The [runner](../../cmd/argonreview/container_testdb.go) uses the same local
-package-pattern validation as `test`; callers cannot supply flags, an
-image, environment, command or server settings. The pattern is positional:
+The [runner](../../cmd/argonreview/container_testdb.go) shares `test`'s local
+package-pattern validator; callers supply no flags, image, environment,
+command or server settings. The pattern is positional:
 `sh -c <fixed script> sh <pattern>`. The shared schema still has exactly
 `check` and `package`, with no additional properties.
 
@@ -99,10 +98,10 @@ count, then (if present) `allowed measurement skips: <package>/<Test>, ...`
 in sorted order. With aggregation, scope follows the first line, then the
 whole retained record replaces raw test output.
 
-The AST scan in `cmd/argonreview/container_allowlist_scan_test.go` runs in
-`make check`. It walks every repository test file, excluding caches and
-vendor directories, and finds `.Skip`, `.Skipf` and `.SkipNow` calls whose
-literal messages name a measurement gate of the form `RIBBITTO_<NAME>=1`.
+`make check`'s AST scan in `cmd/argonreview/container_allowlist_scan_test.go`
+walks repository test files except caches/vendor, finding `.Skip`, `.Skipf`
+and `.SkipNow` calls whose literal messages name a measurement gate of the
+form `RIBBITTO_<NAME>=1`.
 It handles literal concatenation and attributes closures to their enclosing
 top-level function; fixture strings are not calls. Database variables and
 `RIBBITTO_REQUIRE_BROWSER`, `RIBBITTO_BROWSER_SHARD`,
@@ -112,47 +111,56 @@ gated sites require a tier A allowlist review; stale or renamed entries fail.
 Gated measurement skips must use a constant message via `t.Skip` or a verb-free
 `t.Skipf` with no further arguments; the scan rejects any `%` in a gated `Skipf`.
 The scan cannot see a gate passed through a helper that calls `t.Skip(reason)`.
-Such a skip fails closed: it stays `NOT VERIFIED` because it is not in the allowlist.
+That skip stays `NOT VERIFIED`: it is not allowlisted.
 
-This is a convenience for honest code, **not a security control**: code
-Argon writes can fabricate any events, as it can today. CI stays the check.
+This convenience for honest code is **not a security control**: Argon can
+fabricate events. CI stays the check.
 
 ## Result summary
 
-The summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
-launcher `argonreview-2e3a6bf`); Argon read its results inline in the preflight.
+Summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
+launcher `argonreview-2e3a6bf`); Argon read results inline in preflight.
 
-MCP reads the same aggregation record as the full
-host report printed by `container-check`. Its format is verdict first, then
+MCP shares `container-check`'s aggregation record. It gives verdict, then
 check/package/scope, test-only package and leaf counts plus allowed skips,
 skipped or failing names, test excerpts, compiler/panic/timeout/package
 diagnostics, generated totals/paths/gofmt/diff, stderr, and omission counts.
-Names cap at 30; excerpts at 8 lines of 200 bytes; diff at 16 lines. The byte
-budget binds first: a verified, non-error result is at most 2,048 bytes;
-an error result is at most 7,000 bytes, including a 512-byte reserve for the
-wrapper's prefix and capped error text. Its hard cut remains a backstop.
-Generated totals precede paths and survive their cap. An unparsed generated
-diff gets a trusted diagnostic; its excerpt is omitted and counted.
+Names cap at 30; excerpts at 8 lines of 200 bytes; diff at 16 lines. Bytes bind
+first: at most 2,048 for verified non-errors; 7,000 for errors, including a
+512-byte wrapper/error-text reserve. A hard cut is the backstop.
+Generated totals precede paths and survive their cap. Unparsed generated diffs
+get a trusted diagnostic; omitted excerpts are counted.
 
-Every container line is sanitised and indented with `  | `; only trusted
-report lines start at column zero. The decided first line stays, except a
-success with incomplete record facts or disagreement with the leaf count or
-allowed-skip line downgrades the MCP summary to
-`NOT VERIFIED: summary inconsistent with verdict`. The host report is not
-downgraded. The summary drops verified build/vet stderr. Docker/runner errors,
-timeouts, interruptions (including after a non-verified report) and cleanup
-failures show fixed details and trusted metadata only. Output-limit results
-keep their cut-stream diagnostic. Cleanup failures and late context errors apply
-to both outputs; nothing incompletely verified becomes verified.
+Container lines are sanitised and indented with `  | `; only trusted lines
+start at column zero. The decided first line stays, except success with
+incomplete facts or a leaf-count/allowed-skip mismatch downgrades MCP alone to
+`NOT VERIFIED: summary inconsistent with verdict`.
+MCP drops verified build/vet stderr and stderr marked not servable; the host
+retains it. Runner errors, timeouts, interruptions (even after non-verified
+reports) and cleanup failures get trusted metadata and the fixed minimal body:
+“Details unavailable: the check did not complete.” This also applies when
+a cap, malformed stop or deadline wins the first line alongside
+a real runner, cleanup or interruption failure. An aggregator stop alone keeps
+its normal body, including the cap's cut-stream diagnostic; its own
+cap/malformed cancellation is not a runner failure. Cleanup failures and late
+context errors govern both outputs; incomplete verification never verifies.
+
+On 2026-10-28 the maintainer accepted that the attribution of a client kill
+to our own cancellation is best-effort, because a successful process-group
+kill cannot tell our kill from an independent SIGKILL of the same client
+racing our own cap or malformed stop; in that rare case the result is never
+`verified`, it is FAILED when a confirmed failure exists and can be NOT VERIFIED
+when the output cap hit without one, its first line follows the
+[N1 precedence](argon-verify-aggregation.md#n1-verdict-precedence), and only
+the body and the servability of stderr differ.
 
 ## Timeout and cancel results
 
-The timeout label change (#1857) is merged but **not in force until the
-pinned launcher is updated (#1700)**. Enabling it needs separate approval;
-Claude must first repeat the host preflight from the trusted merge build.
-The run limit stays 10 minutes, including source preparation. The MCP call
-limit is unchanged. The host report and MCP summary share the decided line;
-an empty pre-container report gets its line from the MCP wrapper.
+#1857's timeout label is merged but **not in force until the pinned launcher
+is updated (#1700)**. Enabling needs separate approval after Claude repeats
+host preflight from the trusted merge build. The run limit stays 10 minutes,
+including source preparation; MCP's call limit is unchanged. Host and MCP
+share the decided line; MCP's wrapper supplies it for empty pre-container reports.
 
 | Situation | First line |
 |---|---|
@@ -167,10 +175,9 @@ an empty pre-container report gets its line from the MCP wrapper.
 | Parent cancel while running, or after a pass | Existing `FAILED` |
 | Parent cancel after another verdict | Existing verdict; stop/removal still gives `FAILED` |
 
-Only the run context decides a run deadline; a timeout error from independent
-cleanup does not. Unconfirmed container removal keeps `FAILED`, even with a
-run deadline. Parent deadlines reaching the run context follow the same rule.
-Parent cancellation keeps its existing result for each stage (see the table).
-Timeout and cancel summaries keep #1846's fixed minimal body: “Details
-unavailable: the check did not complete.” Output caps keep “Counts unavailable”
-instead.
+Only the run context decides a run deadline, not independent cleanup timeouts.
+Parent deadlines reaching it follow that rule; cancellation follows the table.
+Unconfirmed removal keeps `FAILED` unless a cap wins
+[N1 precedence](argon-verify-aggregation.md#n1-verdict-precedence).
+Caps/malformed stops/deadlines with real runner, cleanup or interruption failures
+get the minimal MCP body (#1846); stops alone keep normal bodies ([summary](#result-summary)).

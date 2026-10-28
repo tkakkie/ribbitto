@@ -58,10 +58,12 @@ argonreview browser-check-record --init --browser-mode <abs path> --completed-at
 
 `--init` requires a regular uid-owned switch file in a real uid-owned
 directory of exactly 0500, also containing a regular `verify-mode` (no
-symlink). These are location checks; the command checks neither switch
-content nor mode 0400. Before `--init`, Claude or the host-side frozen
-wrapper with its pinned binary hash must confirm that the switch reads
-`off` and is mode 0400: both are operator rules. It never overwrites an
+symlink). After these location checks, `--init` refuses a switch that reads
+as enabled: a regular, uid-owned, non-symlink file, not group- or
+world-writable, containing exactly `on` or `on` plus one newline.
+It does not require `off` or mode 0400. Before `--init`, Claude or the
+host-side frozen wrapper with its pinned binary hash must confirm that the
+switch reads `off` and is mode 0400: both are operator rules. It never overwrites an
 existing gate,
 including a symlink. Changing the recorded path requires the maintainer's
 approval to remove the gate first.
@@ -94,6 +96,7 @@ browser-check-record: invalid completion, reference or switch path
 browser-check-record: initial switch must be a regular owned file
 browser-check-record: initial switch directory must be owned and mode 0500
 browser-check-record: initial switch directory must contain regular verify-mode
+browser-check-record: initial check cannot be recorded while browser-mode is on
 browser-check-record: completion is in the future
 browser-check-record: completion is older than the recorded check
 browser-check-record: expired check cannot be refreshed while browser-mode is on

@@ -51,7 +51,7 @@ func (a *containerAggregator) event(line []byte) {
 			if !a.charge(aggregatorEntryCharge) {
 				return
 			}
-			n := &aggregatorEntry{kind: "package", pkg: a.clone(e.ImportPath), state: "fail"}
+			n := &aggregatorEntry{kind: "package", pkg: a.clone(e.ImportPath), state: "fail", buildFailed: true}
 			if a.record.stop != stopNone {
 				return
 			}

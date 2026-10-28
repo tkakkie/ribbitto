@@ -114,8 +114,17 @@ func TestContainerTestDBEndToEnd(t *testing.T) {
 				return 0, nil
 			}}
 			report, err := runContainerCheck(context.Background(), containerFixture(t), tc.check, "./...", runner, t.TempDir(), grantContainerBudget())
-			if err != nil || !strings.HasPrefix(report, tc.want) {
+			first, detail, _ := strings.Cut(strings.TrimSuffix(tc.want, "\n"), "\n")
+			if err != nil || !strings.HasPrefix(report, first+"\n"+containerCheckScope(tc.check)+"\n") {
 				t.Fatalf("report %q, error %v", report, err)
+			}
+			for line := range strings.SplitSeq(detail, "\n") {
+				if line != "" && !strings.Contains(report, "  | "+line+"\n") {
+					t.Fatalf("record lost verdict detail %q: %s", line, report)
+				}
+			}
+			if strings.Contains(report, `"Action"`) {
+				t.Fatal("raw test stream escaped")
 			}
 		})
 	}

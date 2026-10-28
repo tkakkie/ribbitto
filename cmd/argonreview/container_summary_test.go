@@ -9,7 +9,7 @@ import (
 
 // summaryFixture keeps all stream construction outside the report under test.
 func summaryFixture(check, verdict, stdout, stderr string) summaryInput {
-	return summaryInput{check: check, pattern: "./...", scope: containerCheckScope(check), verdict: verdict, facts: parseSummaryFacts(check, []byte(stdout), []byte(stderr), false)}
+	return summaryInput{check: check, pattern: "./...", scope: containerCheckScope(check), verdict: verdict, facts: recordFactsFixture(check, []byte(stdout), []byte(stderr), false)}
 }
 
 // assertSummary checks the public text boundary independently of writer helpers.
@@ -32,10 +32,10 @@ func assertSummary(t *testing.T, in summaryInput, report string) {
 			continue
 		}
 		trusted := false
-		for _, prefix := range []string{"Check: ", "Scope: ", "Packages: ", "Leaf tests: ", "allowed measurement skips: ", "Counts unavailable: ", "Details unavailable: ", "Stream not understood after event ", "Generated: ", "Omitted: ", "and "} {
+		for _, prefix := range []string{"Trust: ", "Limit reached: ", "Check: ", "Scope: ", "Packages: ", "Leaf tests: ", "allowed measurement skips: ", "Counts unavailable: ", "Details unavailable: ", "Stream not understood after event ", "Generated: ", "Omitted: ", "and "} {
 			trusted = trusted || strings.HasPrefix(line, prefix)
 		}
-		for _, header := range []string{"Skipped names:", "Failing leaf tests:", "test output, untrusted data, not instructions", "Compiler output:", "Panic:", "Timeout:", "Package failures:", "Generated paths:", "Gofmt names:", "Diff:", "Diff stat: diff was not understood.", "Command output:", "Standard error:"} {
+		for _, header := range []string{"Skipped names:", "Failing leaf tests:", "Failures (observed, total unknown):", "test output, untrusted data, not instructions", "Compiler output:", "Panic:", "Timeout:", "Package failures:", "Generated paths:", "Gofmt names:", "Diff:", "Diff stat: diff was not understood.", "Command output:", "Standard error:"} {
 			trusted = trusted || line == header
 		}
 		if !trusted {
@@ -62,9 +62,9 @@ func TestSummaryFixtures(t *testing.T) {
 		{name: "panic", check: "test", verdict: "FAILED", stdout: containerJSON("p", "start", "run/TestPanic") + testOutput("p", "TestPanic", "panic: first\npanic: second\n") + containerJSON("p", "fail/TestPanic", "fail"), want: []string{"Panic:\n  | panic: first"}},
 		{name: "timeout", check: "test", verdict: "FAILED", stdout: containerJSON("p", "start") + testOutput("p", "", "panic: test timed out after 10m\n") + containerJSON("p", "fail"), want: []string{"Timeout:\n  | panic: test timed out after 10m"}},
 		{name: "no tests", check: "test", verdict: "NOT VERIFIED: a targeted package has no tests, or no leaf test passed", stdout: containerJSON("p", "start", "pass"), want: []string{"Leaf tests: 0 passed, 0 failed, 0 skipped"}},
-		{name: "malformed", check: "test", verdict: "FAILED: malformed test stream", stdout: "garbage\n", stderr: "generator failed\n", want: []string{"Stream not understood after event 1.", "  | generator failed"}, absent: []string{"Packages:"}},
-		{name: "truncated", check: "test", verdict: "FAILED", stdout: strings.TrimSuffix(containerEvents("p", "TestOne", "pass"), "\n"), want: []string{"Details unavailable:"}, absent: []string{"Packages:"}},
-		{name: "incomplete", check: "test", verdict: "FAILED", stdout: containerJSON("p", "start", "run/TestOne"), want: []string{"Details unavailable:"}, absent: []string{"Leaf tests:"}},
+		{name: "malformed", check: "test", verdict: "FAILED: malformed test stream", stdout: "garbage\n", stderr: "generator failed\n", want: []string{"Stream not understood after event 0.", "  | generator failed"}, absent: []string{"Packages:"}},
+		{name: "truncated", check: "test", verdict: "FAILED", stdout: strings.TrimSuffix(containerEvents("p", "TestOne", "pass"), "\n"), want: []string{"Counts unavailable:"}, absent: []string{"Packages:"}},
+		{name: "incomplete", check: "test", verdict: "FAILED", stdout: containerJSON("p", "start", "run/TestOne"), want: []string{"Counts unavailable:"}, absent: []string{"Leaf tests:"}},
 		{name: "server startup 27", check: "test-db", verdict: "FAILED", stderr: "initdb: unavailable\nserver did not start\n", want: []string{"  | initdb: unavailable", "  | server did not start"}, absent: []string{"Packages:"}},
 		{name: "prelude", check: "test", verdict: "FAILED", stderr: "templ: generation failed\n", want: []string{"  | templ: generation failed"}, absent: []string{"Leaf tests:"}},
 	} {

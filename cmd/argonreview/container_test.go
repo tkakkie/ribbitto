@@ -530,13 +530,31 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 				return 0, nil
 			}}
 			report, err := runContainerCheck(context.Background(), tree, tc.check, ".", runner, t.TempDir(), grantContainerBudget())
-			if err != nil || !strings.HasPrefix(report, tc.verdict+"\n") {
+			first, detail, _ := strings.Cut(tc.verdict, "\n")
+			if err != nil || !strings.HasPrefix(report, first+"\n") {
 				t.Fatalf("report %q, err %v", report, err)
 			}
-			if !strings.Contains(report, "Ran on regenerated sources (templ, sqlc, Tailwind); the generated check covers whether the committed generated files are current.") ||
-				!strings.Contains(report, "--- stdout\n"+tc.output+"\n--- stderr\ngenerator diagnostic") {
-				t.Fatalf("scope or stream separation: %q", report)
+			if detail != "" && !strings.Contains(report, "  | "+detail+"\n") {
+				t.Fatal("record lost skipped identity")
 			}
+			if tc.check == "test" {
+				facts := recordFactsFixture(tc.check, []byte(tc.output), []byte("generator diagnostic"), false)
+				if strings.Contains(report, `"Action"`) || !strings.Contains(report, "Standard error:\n  | generator diagnostic\n") {
+					t.Fatal("raw stream retained or record stderr missing")
+				}
+				if facts.leaves.passed > 0 && tc.status != 137 && !strings.Contains(report, "Leaf tests: 1 passed") {
+					t.Fatal("record lost passing leaf count")
+				}
+				if tc.status == 137 && (!strings.Contains(report, "Counts unavailable: the stream was cut.\n") || strings.Contains(report, "Leaf tests:")) {
+					t.Fatal("killed stream supplied a total")
+				}
+			} else if !strings.Contains(report, "--- stdout\n"+tc.output+"\n--- stderr\ngenerator diagnostic") {
+				t.Fatalf("stream separation: %q", report)
+			}
+			if !strings.Contains(report, "Ran on regenerated sources (templ, sqlc, Tailwind); the generated check covers whether the committed generated files are current.") {
+				t.Fatal("scope missing")
+			}
+
 		})
 	}
 }

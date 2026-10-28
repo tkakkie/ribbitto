@@ -77,8 +77,8 @@ func TestContainerSummaryDifferential(t *testing.T) {
 				{"timeout", containerJSON("p", "start", "run/TestSlow") + testOutput("p", "", "panic: test timed out after 10m\n") + containerJSON("p", "fail"), "FAILED", "Timeout:\n  | panic: test timed out"},
 				{"no tests", containerJSON("p", "start", "pass"), "NOT VERIFIED: a targeted package has no tests, or no leaf test passed", "Leaf tests: 0 passed"},
 				{"malformed", "garbage\n", "FAILED: malformed test stream", "Stream not understood"},
-				// The verdict parser accepts this identity; facts refuse its size.
-				{"downgrade", strings.ReplaceAll(pass, "TestOne", "Test"+strings.Repeat("x", summaryIdentityLimit)), "verified", summaryInconsistent},
+				// The per-line identity rule is stricter: host and MCP both refuse it.
+				{"identity limit", strings.ReplaceAll(pass, "TestOne", strings.Repeat("x", summaryIdentityLimit+1)), "NOT VERIFIED: output limit exceeded (output cut off)", "Limit reached: identity length"},
 			} {
 				cases = append(cases, fixture{tc.name, tc.stdout, "", tc.first, tc.want, 0})
 			}
@@ -118,9 +118,7 @@ func TestContainerSummaryDifferential(t *testing.T) {
 					t.Fatal("MCP did not use the captured summary")
 				}
 				wantFirst := first
-				if tc.name == "downgrade" {
-					wantFirst = summaryInconsistent
-				}
+
 				gotFirst, _, _ := strings.Cut(summary, "\n")
 				if gotFirst != wantFirst {
 					t.Fatalf("summary verdict %q, host %q", gotFirst, first)
@@ -208,13 +206,16 @@ func TestContainerSummaryLargeStream(t *testing.T) {
 }
 
 func TestContainerSummaryLateContext(t *testing.T) {
-	var execution containerExecution
+	a := aggregatorFixture(containerEvents("p", "TestOne", "pass"))
+	aggregatorFinish(a)
+	execution := containerExecution{record: a.record}
 	in := summaryFixture("test", "verified\n1 passing leaf tests", "", "")
-	execution.output.stdout.WriteString(containerEvents("p", "TestOne", "pass"))
+	before := recordHostReport(in.verdict, "scope", execution.record)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	report, err := execution.finishReport(ctx, "verified\n1 passing leaf tests\nscope\n--- stdout\n", nil, in)
-	if !errors.Is(err, context.Canceled) || report != "FAILED\n1 passing leaf tests\nscope\n--- stdout\n" || !strings.HasPrefix(execution.summary, "FAILED\n") {
+	report, err := execution.finishReport(ctx, before, nil, in)
+	want := "FAILED" + strings.TrimPrefix(before, "verified")
+	if !errors.Is(err, context.Canceled) || report != want || !strings.HasPrefix(execution.summary, "FAILED\n") || strings.Contains(report, `"Action"`) {
 		t.Fatalf("late context: report %q, summary %q, error %v", report, execution.summary, err)
 	}
 	text, bad := verifyResult(execution.summary, err, false, false)

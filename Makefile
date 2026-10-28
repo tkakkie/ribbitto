@@ -126,9 +126,19 @@ prepush: $(TEMPL) $(TAILWIND)
 	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI
-# next to make check rather than inside it. Scans the application module.
+# next to make check rather than inside it. Source scans use ./... for the
+# root application and tools/ modules; tools/tbls/ has no local packages, so
+# it scans the named github.com/k1LoW/tbls main package. All three always run;
+# any failed scan fails the target, preserving the last failed scan's status.
 vuln:
-	go tool -modfile=tools/go.mod govulncheck ./...
+	@status=0; \
+	printf '%s\n' 'Scanning root application module'; \
+	go tool -modfile=tools/go.mod govulncheck ./... || status=$$?; \
+	printf '%s\n' 'Scanning tools/ module'; \
+	go -C tools tool govulncheck ./... || status=$$?; \
+	printf '%s\n' 'Scanning tools/tbls/ module (github.com/k1LoW/tbls)'; \
+	go -C tools/tbls tool -modfile=../go.mod govulncheck github.com/k1LoW/tbls || status=$$?; \
+	exit $$status
 
 # tools/lintfixtures proves the lint configuration rejects what it must, on
 # the fixtures in internal/lintfixture; its package comment lists them.

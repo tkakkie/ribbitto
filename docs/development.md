@@ -18,7 +18,7 @@ make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests (with -race)
-make vuln                  # govulncheck: known vulnerabilities reachable from our code
+make vuln                  # govulncheck on the root, tools/ and tools/tbls/ modules; any failure fails
 make deps                  # regenerates docs/dependencies.md after an import change
 make api                   # regenerates docs/api/ after a module API or doc-comment change
 make db-down               # stops PostgreSQL; keeps the named data volume
@@ -126,9 +126,11 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 docs or `make vuln`, which CI runs separately.
 
 The Argon launcher's Go tests run in the `argonreview` shard in CI.
-CI's `vuln` job runs
-`make vuln` (pinned `govulncheck` on the application module),
-failing if a known vulnerability is statically reachable from our code.
+CI's `vuln` job runs `make vuln`: three source scans with `govulncheck` pinned
+in `tools/go.mod`. The root application and `tools/` modules each use `./...`;
+`tools/tbls/` names the `github.com/k1LoW/tbls` main package because it has no
+local packages. All three always run; any failure (including a reachable
+known vulnerability) fails the target, preserving the last failed scan's status.
 It needs the network, so it is not part of `make check`. When it fails:
 bump the dependency in its own pull request, or upgrade Go for a
 standard-library finding; without a fix, the maintainer decides.

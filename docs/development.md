@@ -129,8 +129,9 @@ The Argon launcher's Go tests run in the `argonreview` shard in CI.
 CI's `vuln` job runs `make vuln`: three source scans with `govulncheck` pinned
 in `tools/go.mod`. The root application and `tools/` modules each use `./...`;
 `tools/tbls/` names the `github.com/k1LoW/tbls` main package because it has no
-local packages. All three always run; any failure (including a reachable
-known vulnerability) fails the target, preserving the last failed scan's status.
+local packages. `make vuln` runs the three as separate targets (`vuln-root`,
+`vuln-tools`, `vuln-tbls`) with `make -k`, so all three always run; any failure
+(including a reachable known vulnerability) fails `make vuln`.
 It needs the network, so it is not part of `make check`. When it fails:
 bump the dependency in its own pull request, or upgrade Go for a
 standard-library finding; without a fix, the maintainer decides.

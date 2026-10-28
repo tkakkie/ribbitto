@@ -15,7 +15,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 GO_TEST_FLAGS ?= -p 2
 # CI passes GO_TEST_PACKAGES through tools/testshard; unset runs every package.
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles
 
 bundles:
 	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
@@ -126,19 +126,24 @@ prepush: $(TEMPL) $(TAILWIND)
 	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI
-# next to make check rather than inside it. Source scans use ./... for the
-# root application and tools/ modules; tools/tbls/ has no local packages, so
-# it scans the named github.com/k1LoW/tbls main package. All three always run;
-# any failed scan fails the target, preserving the last failed scan's status.
+# next to make check rather than inside it. Three scans, one per Go module, as
+# separate targets: make -k runs all of them even after one fails, and a failed
+# scan fails make vuln. Root and tools/ scan ./...; tools/tbls/ has no local
+# packages, so it scans the named github.com/k1LoW/tbls main package.
 vuln:
-	@status=0; \
-	printf '%s\n' 'Scanning root application module'; \
-	go tool -modfile=tools/go.mod govulncheck ./... || status=$$?; \
-	printf '%s\n' 'Scanning tools/ module'; \
-	go -C tools tool govulncheck ./... || status=$$?; \
-	printf '%s\n' 'Scanning tools/tbls/ module (github.com/k1LoW/tbls)'; \
-	go -C tools/tbls tool -modfile=../go.mod govulncheck github.com/k1LoW/tbls || status=$$?; \
-	exit $$status
+	$(MAKE) -k vuln-root vuln-tools vuln-tbls
+
+vuln-root:
+	@printf '%s\n' 'Scanning root application module'
+	go tool -modfile=tools/go.mod govulncheck ./...
+
+vuln-tools:
+	@printf '%s\n' 'Scanning tools/ module'
+	go -C tools tool govulncheck ./...
+
+vuln-tbls:
+	@printf '%s\n' 'Scanning tools/tbls/ module (github.com/k1LoW/tbls)'
+	go -C tools/tbls tool -modfile=../go.mod govulncheck github.com/k1LoW/tbls
 
 # tools/lintfixtures proves the lint configuration rejects what it must, on
 # the fixtures in internal/lintfixture; its package comment lists them.

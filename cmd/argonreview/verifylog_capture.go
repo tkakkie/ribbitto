@@ -30,36 +30,40 @@ func newVerifyLogCapture(first string, r *containerRecord) *verifyLogCapture {
 	for _, e := range r.entries {
 		c.taint[&e.output] = verifyLogScanOutput(&e.output)
 	}
-	c.packageDetections = verifyLogScan(string(r.packageOutput.head) + string(r.packageOutput.tail) + string(r.compiler.head) + string(r.compiler.tail))
+	c.packageDetections = max(c.taint[&r.packageOutput], c.taint[&r.compiler],
+		verifyLogScanSegments(string(r.packageOutput.head), string(r.packageOutput.tail), string(r.compiler.head), string(r.compiler.tail)))
 	c.size = c.pinnedBytes()
 	return c
 }
 
-// pinnedBytes counts every retained field reachable through the record, even
-// fields that are never served. Fixed arrays use the record's base charge;
-// entry charges cover structs, and derived text/maps are charged separately.
-// This is conservative accounting, not a second output-retention policy.
+// pinnedBytes follows grow/keep/budget: retained output capacities, not lengths,
+// consume the shared and per-stream limits. The base already reserves all index
+// entries and fixed arrays. Static kind/state/cap strings and trusted match text
+// add no allocation; finish releases slots, and skipped aliases entry skipName.
 func (c *verifyLogCapture) pinnedBytes() int {
 	r := c.record
-	n := aggregatorBaseCharge + len(r.capName) + len(r.panicLine) + len(r.timeoutLine) + verifyLogIDBytes*2
+	n := aggregatorBaseCharge + verifyLogIDBytes*2
 	for o := range c.taint {
-		n += len(o.head) + len(o.tail) + aggregatorNameSlotCharge*2
+		n += cap(o.head) + cap(o.tail) + aggregatorSlotCharge
 	}
 	for _, e := range r.entries {
-		n += aggregatorEntryCharge + len(e.kind) + len(e.pkg) + len(e.name) + len(e.state) + len(e.skipName) + len(e.match) + len(e.slot)
+		n += textCharge(len(e.pkg)) + textCharge(len(e.name)) + textCharge(len(e.skipName))
 	}
-	for _, names := range [][]string{r.allowed, r.skipped} {
-		for _, name := range names {
-			n += aggregatorNameSlotCharge + len(name)
-		}
+	n += cap(r.allowed) * aggregatorNameSlotCharge
+	for _, name := range r.allowed {
+		n += textCharge(len(name))
 	}
+	// A verifyLogEntry has a pointer, string and two flags (32 bytes).
+	// SlotCharge conservatively covers each tripwire map key/value and buckets.
+	n += cap(c.entries) * 2 * aggregatorNameSlotCharge
 	for _, e := range c.entries {
-		n += aggregatorEntryCharge + len(e.display)
+		n += textCharge(len(e.display))
 	}
+	n += textCharge(len(r.panicLine)) + textCharge(len(r.timeoutLine))
 	if b := r.browser; b != nil {
-		n += aggregatorBrowserCharge + len(b.importPath) + len(b.run) + len(b.namedState)
+		n += aggregatorBrowserCharge + textCharge(len(b.importPath)) + textCharge(len(b.run))
 		for _, e := range b.entries {
-			n += len(e.name) + len(e.state)
+			n += textCharge(len(e.name))
 		}
 	}
 	return n

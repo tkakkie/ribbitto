@@ -6,9 +6,36 @@ since 2026-10-22 (#1436 Stage 2).
 After reading #1433's record, the maintainer approved enabling in chat
 that day. Evidence: [step 1][step1], [preflight][preflight],
 [enabling and passing smoke test][smoke]. Stage 2 is independent of enabling.
+On 2026-10-27 the maintainer approved [#1700](https://github.com/tkakkie/ribbitto/issues/1700)
+stage A: both workers run `argonreview-2e3a6bf` and its verify image
+(generator checks, `test-db`, summary). Its window passed the smoke tests, a
+rollback to `7f607ca` and a second switch; the record is on #1700. `agy` does
+not offer `run_command`, so that refusal was not seen in the agent: the guard's
+and the settings layer's own refusals cover it.
 
 The [verify image recipe](argon-verify-image.md) describes the host build procedure;
 each build needs the maintainer's approval in chat.
+
+[Verification memory budget](argon-verify-budget.md) is merged but not in force.
+
+The optional `--browser-mode <abs path>` is available on `implement-run`,
+`implement-check`, `implement-config`, `verify-mcp` and `container-check`.
+The browser admission checks and host-only `browser-check-record` command are
+merged but not in force. `verify` accepts `test-browser` with a `run`; calls are
+paused unless `browser-mode` is `on` and the 14-day gate passes. An absent flag
+means paused. The implementer commands require verify on (config: mode on).
+The gate directory also holds `browser-security-check.lock`, which serialises
+host record updates; runners read the atomically replaced gate without locking.
+The next smoke set replaces stage A’s “`test-browser` is an unknown check” row:
+`test-browser` is admitted by the guard and, with `browser-mode off`, gives
+`NOT VERIFIED: browser check paused`.
+Nothing here enables or authorizes anything for the browser check.
+See [browser operation](argon-verify-browser.md),
+[gate recording](argon-verify-browser-record.md),
+[preflight and approvals](argon-verify-browser-preflight.md) and
+[weekly updates](argon-verify-browser-updates.md#weekly-check-and-expiry).
+Both workers' run/check wrappers and `container-check` must pass the same
+`--browser-mode` path: worker 1's file beside `verify-mode`; worker 2 reads it.
 
 ## Switch and run
 
@@ -50,8 +77,7 @@ In `on` mode:
 On-mode MCP admits only the exact `verify` call through agreeing guard and
 settings layers. In [preflight][preflight], the guard refused every invalid
 call first; the settings and server layers were not probed separately.
-Arbitrary shell and `run_command` remain refused. Database and
-browser tests stay CI-only. `verified` never replaces CI, review or handoff
+Arbitrary shell and `run_command` remain refused. Browser tests stay CI-only. `verified` never replaces CI, review or handoff
 checks. The Start gate and review independence stay.
 
 ## Write-back at handoff

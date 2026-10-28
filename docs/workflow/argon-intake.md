@@ -6,14 +6,15 @@ Assignment, steps, calibration and throughput follow the maintainer's decisions
 [first set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6351468411),
 [second set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6352203895),
 [third set](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6354263122);
-[step 2 approval, 2026-10-24](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798)).
+[step 2 approval, 2026-10-24](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798);
+[step 3 approval, 2026-10-28](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6447736760)).
 
 ## Default assignment
 
 An issue eligible under [Which issues](argon-implementer.md#which-issues)
 names *Implementer* `Argon` unless the issue records why not.
-This default applies only within maintainer-approved steps; today steps 1 and 2
-are approved. A step-3 issue names Argon only when the maintainer says so.
+This default applies only within maintainer-approved steps; today steps 1, 2 and 3
+are approved.
 Claude's [issue review](reviewing.md#issue-review) and the maintainer check
 this default. The [trusted issue-review prompt](../../.github/prompts/issue-review.md)
 is unchanged; changing reviewer prompts is a separate maintainer decision.
@@ -33,11 +34,14 @@ Eligibility and the [boundary](argon-implementer.md#the-boundary) are unchanged.
 2. **Approved** (maintainer, 2026-10-24,
    [#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6380944798)):
    small behaviour fixes in tier B code where the issue supplies the failing test.
-3. **Unapproved:** larger tier B changes.
+3. **Approved** (maintainer, 2026-10-28,
+   [#1561](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6447736760)):
+   larger tier B changes.
 
 Step 2 was approved before the step-1 ten-run summary and per-run quality and
-rework evaluation were posted on #1561; both remain owed there as a record,
-not a gate for the approved step.
+rework evaluation were posted on #1561; the [ten-run summary](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6381749111)
+and [per-PR evaluation](https://github.com/tkakkie/ribbitto/issues/1561#issuecomment-6381749378)
+were both posted on 2026-10-24 as a record, not a gate for the approved step.
 
 The maintainer approves each step at the time. Tier A and `high`-risk paths
 stay out of Argon in every step. Production code changes to organisation

@@ -2,11 +2,10 @@
 
 ## Status
 
-`test-db` (#1697) is merged but **not in force until #1700**.
-Production still runs `argonreview-7f607ca` and the old image.
-The real container path (Docker, PostgreSQL in the image and the script)
-is untested by Codex, which has no Docker. #1700 must validate that path
-before enabling it. CI stays the check; this does not replace review or
+`test-db` (#1697) is in force since 2026-10-27 (#1700 stage A, launcher
+`argonreview-2e3a6bf`). The real container path (Docker, PostgreSQL in the
+image and the script) is untested by Codex, which has no Docker; #1700's
+preflight validated it. CI stays the check; this does not replace review or
 [handoff checks](running-other-ai.md#handoff-of-another-ais-code).
 
 ## Fixed runner
@@ -56,15 +55,12 @@ are never set by the runner.
 
 ## Limits and skips
 
-All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
-2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
-mounts.
-A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`.
-PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
-standard error and count toward the shared 4 MiB output cap.
-The cap counts the container's standard output and standard error together
-(`containerOutputLimit`, `cmd/argonreview/container.go`), so a report that
-would exceed it gives `NOT VERIFIED` (output cut off).
+Container limits remain 2 GiB memory with equal swap, 256 PIDs, 2 CPUs,
+10 minutes and 1 GiB per tmpfs. Test streams use [aggregation](argon-verify-aggregation.md):
+merged but not in force until the production launcher is updated (#1700).
+Its limits replace the combined capture cap; PostgreSQL stderr counts toward
+total streamed bytes, with a separate soft retention limit. Hard stops never
+verify. The [timeout line](#timeout-and-cancel-results) is unchanged.
 Browser tests, cgo-dependent packages and race checks remain CI-only.
 
 #1700 stage A phase 1 observed on the unchanged repository: `test ./internal/web` produced
@@ -100,7 +96,8 @@ continues to reject every skip.
 
 Successful host reports start with exactly `verified`, then the passing leaf
 count, then (if present) `allowed measurement skips: <package>/<Test>, ...`
-in sorted order. The host report then includes captured output.
+in sorted order. With aggregation, scope follows the first line, then the
+whole retained record replaces raw test output.
 
 The AST scan in `cmd/argonreview/container_allowlist_scan_test.go` runs in
 `make check`. It walks every repository test file, excluding caches and
@@ -122,11 +119,10 @@ Argon writes can fabricate any events, as it can today. CI stays the check.
 
 ## Result summary
 
-The summary wiring (#1846) is merged but **not in force until a new launcher
-build is enabled (#1700)**. Production still pins `argonreview-7f607ca` and
-the old image; CI and #1700's stage A re-run remain required before enabling.
+The summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
+launcher `argonreview-2e3a6bf`); Argon read its results inline in the preflight.
 
-MCP returns a summary from the same captured execution as the unchanged full
+MCP reads the same aggregation record as the full
 host report printed by `container-check`. Its format is verdict first, then
 check/package/scope, test-only package and leaf counts plus allowed skips,
 skipped or failing names, test excerpts, compiler/panic/timeout/package
@@ -140,7 +136,7 @@ diff gets a trusted diagnostic; its excerpt is omitted and counted.
 
 Every container line is sanitised and indented with `  | `; only trusted
 report lines start at column zero. The decided first line stays, except a
-success with a facts-parse error or disagreement with the leaf count or
+success with incomplete record facts or disagreement with the leaf count or
 allowed-skip line downgrades the MCP summary to
 `NOT VERIFIED: summary inconsistent with verdict`. The host report is not
 downgraded. The summary drops verified build/vet stderr. Docker/runner errors,
@@ -148,3 +144,33 @@ timeouts, interruptions (including after a non-verified report) and cleanup
 failures show fixed details and trusted metadata only. Output-limit results
 keep their cut-stream diagnostic. Cleanup failures and late context errors apply
 to both outputs; nothing incompletely verified becomes verified.
+
+## Timeout and cancel results
+
+The timeout label change (#1857) is merged but **not in force until the
+pinned launcher is updated (#1700)**. Enabling it needs separate approval;
+Claude must first repeat the host preflight from the trusted merge build.
+The run limit stays 10 minutes, including source preparation. The MCP call
+limit is unchanged. The host report and MCP summary share the decided line;
+an empty pre-container report gets its line from the MCP wrapper.
+
+| Situation | First line |
+|---|---|
+| Run deadline while the container runs | `NOT VERIFIED: time limit exceeded` |
+| Deadline after a complete pass, including final processing | `NOT VERIFIED: time limit exceeded` |
+| Deadline together with the output cap | `NOT VERIFIED: output limit exceeded (output cut off)` |
+| Complete failure, skips or no tests; deadline during stop, removal or source removal | Own failing or `NOT VERIFIED` verdict |
+| Deadline before a container, or MCP call deadline | Wrapper timeout line; a call deadline reaching the runner uses the run deadline rule |
+| Cleanup timeout alone, runner error or status 125 | Existing `FAILED` |
+| Source cleanup failure | `FAILED: source cleanup failed` |
+| Parent cancel before a container | Wrapper's `NOT VERIFIED: cancelled` |
+| Parent cancel while running, or after a pass | Existing `FAILED` |
+| Parent cancel after another verdict | Existing verdict; stop/removal still gives `FAILED` |
+
+Only the run context decides a run deadline; a timeout error from independent
+cleanup does not. Unconfirmed container removal keeps `FAILED`, even with a
+run deadline. Parent deadlines reaching the run context follow the same rule.
+Parent cancellation keeps its existing result for each stage (see the table).
+Timeout and cancel summaries keep #1846's fixed minimal body: “Details
+unavailable: the check did not complete.” Output caps keep “Counts unavailable”
+instead.

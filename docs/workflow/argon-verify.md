@@ -3,20 +3,20 @@
 Option B (2026-10-19)
 ([#1427](https://github.com/tkakkie/ribbitto/issues/1427), [spike part
 2](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266769368)).
-[Generator checks](argon-verify-image.md) and the merged [summary](argon-verify-testdb.md#result-summary)
-are not in force until #1700 enables a new launcher build.
-Production pins `argonreview-7f607ca` and the old image.
+[Generator checks](argon-verify-image.md), [test-db](argon-verify-testdb.md) and the [summary](argon-verify-testdb.md#result-summary)
+are in force since 2026-10-27 (#1700 stage A): production pins `argonreview-2e3a6bf`.
 [Write-back](argon-verify-writeback.md) awaits stage B.
-
 [Leftover sweep](argon-verify-sweep.md).
+
+[Aggregation](argon-verify-aggregation.md) is merged but not in force until the launcher is updated.
 
 ## Status
 
 The `verify` permission is **in force since 2026-10-21**. Production uses
-Go since 2026-10-22 (Stage 2). The maintainer approved enabling in
+Go since 2026-10-22 (Stage 2). The maintainer approved it in
 chat after reading [#1433]'s record. Evidence: [step 1][step1],
 [preflight][preflight], [enabling and smoke test][smoke].
-The Start gate and review independence stay. Only during a run, feature-on
+The Start gate and review independence stay. During a run, feature-on
 settings replace the blanket `mcp(*)` deny; the home returns
 to feature-off at rest. See [operation](argon-verify-operation.md).
 
@@ -51,7 +51,7 @@ The feature switch, settings variant, guard mode and `mcp_config.json` must
 agree before and after each run; any mismatch fails closed. A changed
 settings, hooks or MCP file makes the run not count, as `denied_actions`
 does. Server identity, arguments and configuration bytes are fixed
-in #1430/#1432 code.
+in #1430/#1432.
 
 ## Trusted server
 
@@ -60,20 +60,17 @@ minimal credentials, Docker and host rights, and no arbitrary-command
 interface. `argonreview verify-mcp` offers one tool and only runs `container-check`.
 
 A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
-with a trusted binary and fixed source and worktree arguments. Neither agy's
-environment nor a tool argument supplies these. It serves only if its build matches the trusted revision in that source.
+with a trusted binary and fixed source and worktree arguments. It serves only if its build matches the trusted revision in that source.
 Pre- and post-run checks include the MCP file and server.
 
 The server environment allows only `PATH`. Docker connection settings
-are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
+are runner constants; its copy uses `/tmp`, ignoring `TMPDIR`.
 `FAILED` and `NOT VERIFIED` results set `isError`.
 
 ## Verification container
 
-The runner has no outbound or loopback network reach, including the
-host gateway and Docker Desktop VM. The spike's loopback probe logged no
-request under `--network none` ([part
-1](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
+The runner has no network reach, including the host gateway and Docker
+Desktop VM ([probe](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
 It uses an isolated, throwaway source copy, never the original:
 
 - Copy tracked and untracked non-ignored files with the hardened git
@@ -113,10 +110,10 @@ exit status; tests use per-test JSON, never package `ok` alone:
   package's final result.
 - Zero passing tests, no test files, missing results, malformed or truncated
   output, non-zero exit, out-of-memory kill or abnormal exit are never
-  `verified`. Any failure gives `FAILED`; any skip gives `NOT VERIFIED`
+  `verified`. Any test failure gives `FAILED`; any skip gives `NOT VERIFIED`
   with the skipped count and names, except `test-db`'s [measurement skips](argon-verify-testdb.md#limits-and-skips).
-- Browser tests stay CI-only. [test-db](argon-verify-testdb.md) is merged but
-  **not in force until #1700**. Omitted files still fail or skip.
+  A run deadline is no test failure: [`NOT VERIFIED: time limit exceeded`](argon-verify-testdb.md#timeout-and-cancel-results).
+- Browser tests stay CI-only. Omitted files still fail or skip.
 
 `verified` is Argon's own check; it never replaces green CI, review or
 [handoff](running-other-ai.md#handoff-of-another-ais-code).
@@ -152,7 +149,7 @@ feature-on settings, guard mode and MCP file. Always restore and check feature-o
 the agent directory and `brain/` as before, no remaining session state or
 session process. Record restoration.
 
-The evidence comment records every command and log, agy version, trusted
+Evidence records every command and log, agy version, trusted
 commit SHA, binary hash, image digest and guard,
 settings and MCP configuration hashes. List tools run and refused; for each
 refusal, layer (guard, settings, server or container), any side effect

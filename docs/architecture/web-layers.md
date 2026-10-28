@@ -58,5 +58,6 @@ the composer script keeps the reader's position as the list resizes.
 
 ## How the rules are checked
 
-[`web-layers-checks.md`](web-layers-checks.md): go-rod browser
-tests (#349), JavaScript pattern check and M3 audit.
+[`web-layers-checks.md`](web-layers-checks.md): rules and the JavaScript
+pattern check; [`web-layers-browser-tests.md`](web-layers-browser-tests.md):
+go-rod browser tests (#349) and the M3 audit.

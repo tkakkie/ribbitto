@@ -131,3 +131,26 @@ standard-library finding; without a fix, the maintainer decides.
 
 CodeQL (`.github/workflows/codeql.yml`) runs on `main` and weekly, not on
 pull requests; alerts are in the Security tab.
+
+### README screenshot
+
+`docs/images/screenshot.webp` is one image: the desktop screen on the left,
+the phone screen on the right, both of the same state. Refresh it when the
+look changes, with development data only (no real people, no secrets):
+
+1. On an empty database run `make db-up`, `make migrate` and
+   `make seed ARGS='-messages 12'`; the command prints this run's password
+   ([seed data](seed-data.md)). Start the server (`go run ./cmd/ribbitto`).
+2. In a Chromium-based browser, English UI (`Accept-Language: en`) and light
+   theme, sign in at `/signin` as `mira@example.test`.
+3. Open the `chorus` topic of `general`: the sidebar then shows unread counts
+   for `dev` (12), `general` (62), its topics `garden-time` (1) and
+   `rooftop-garden` (61), `incident-garden` (12) and `random` (12). Opening
+   a topic reads only that topic; opening the channel feed would reset counts.
+4. Capture the same page twice with device emulation: desktop at 1000 × 844 and
+   phone at 390 × 844 (touch, mobile layout), both with device pixel ratio 2.
+5. Place both captures side by side on a light grey background, 24 px
+   padding and gaps, rounded corners, 1462 × 892 CSS pixels at ratio 2 (2924 × 1784
+   pixels), and save as WebP of at most 300 KiB. View it at 830 px wide, the
+   README column on GitHub: channel names, topics and counts must stay
+   readable; if not, use the desktop capture alone.

@@ -32,6 +32,12 @@ func agyCheckStub(args []string, stdout, stderr io.Writer, d agyCheckStubDeps) i
 	pipe := make(chan os.Signal, 1)
 	signal.Notify(pipe, syscall.SIGPIPE)
 	defer signal.Stop(pipe)
+	// Records are tokens, not structure: request precedes handling, and response
+	// follows written reply bytes. A missing response can only lose confirmation;
+	// response covers JSON-RPC errors too. B3-2 must take success from the
+	// transcript, require start first, and pair each response <tag> with the
+	// immediately preceding request <tag>. ANY request on a denied MCP row is a
+	// breach even without a response; an unpaired allowed request is a difference.
 	record := func(kind, tag string) error { _, err := agyCheckHookClaim(args[0], kind, tag, d.hook); return err }
 	if record("start", "-") != nil {
 		return fail()

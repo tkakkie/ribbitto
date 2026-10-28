@@ -22,6 +22,7 @@ type agyCheckFakeScript struct {
 	Isolation                                                                   string
 	VersionCode                                                                 int
 	Code                                                                        int
+	Signal                                                                      syscall.Signal
 	Sleep                                                                       time.Duration
 	Config                                                                      map[string]string
 	Fixtures                                                                    map[string]string
@@ -70,6 +71,12 @@ func agyCheckScriptedFake(data []byte) bool {
 		}
 	}
 	fmt.Print(f.Transcript)
+	if f.Signal != 0 {
+		if err := syscall.Kill(os.Getpid(), f.Signal); err != nil {
+			os.Exit(95)
+		}
+		select {}
+	}
 	time.Sleep(f.Sleep)
 	os.Exit(f.Code)
 	return true
@@ -119,7 +126,7 @@ type agyCheckRunnerHarness struct {
 func agyCheckNewRunner(t *testing.T) *agyCheckRunnerHarness {
 	t.Helper()
 	m, r, f := agyCheckTestRow(t)
-	path, err := filepath.EvalSymlinks(agyCheckFakeBinary(t))
+	path, err := filepath.EvalSymlinks(agyCheckLinkedBinary(t, "agy-check-fake"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,6 +174,7 @@ func (h *agyCheckRunnerHarness) run(t *testing.T, collect func(agyCheckRowDirs) 
 func TestAgyCheckRunner(t *testing.T) {
 	for _, name := range []string{"success", "version", "hash", "pin-error", "pin-after-error", "pin-version-failure", "malformed-pin", "validate-before", "validate-main", "validate-after", "marker-change", "oversize", "timeout", "signal", "panic", "collect-error", "cleanup-error", "straggler", "straggler-failure", "reused", "long-limit"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			h := agyCheckNewRunner(t)
 			original := []byte("original home configuration\n")
 			path := filepath.Join(h.m.Home, ".gemini/config/hooks.json")
@@ -282,7 +290,7 @@ func TestAgyCheckRunner(t *testing.T) {
 				}
 				return nil
 			})
-			wantErr := name != "success" && name != "timeout" && name != "signal" && name != "straggler" && name != "long-limit"
+			wantErr := name != "success" && name != "timeout" && name != "straggler" && name != "long-limit"
 			if (err != nil) != wantErr {
 				t.Fatalf("runner invalidity lost: result=%+v err=%v", result, err)
 			}
@@ -308,6 +316,9 @@ func TestAgyCheckRunner(t *testing.T) {
 			}
 			if name == "signal" && result.Code != 143 {
 				t.Fatalf("signal not supervised: %d", result.Code)
+			}
+			if name == "signal" && !collected {
+				t.Fatal("signal skipped collection")
 			}
 			if name != "cleanup-error" {
 				if _, e := os.Lstat(h.r.Run); !errors.Is(e, os.ErrNotExist) {

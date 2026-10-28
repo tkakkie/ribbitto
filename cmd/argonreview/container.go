@@ -598,7 +598,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 // expected; independent runner signals/errors still require the minimal MCP
 // body even when the stop won verdict precedence.
 func containerRunnerFailed(code int, err error, ownStop bool) bool {
-	return code >= 125 && code <= 127 || (code < 0 || err != nil) && !(ownStop && errors.Is(err, context.Canceled))
+	return code >= 125 && code <= 127 || (code < 0 || err != nil) && (!ownStop || !errors.Is(err, context.Canceled))
 }
 
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
@@ -633,7 +633,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		in.runnerFailed = cleanupFailed
 		return "", err
 	}
-	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, output.over) || ctx.Err() != nil && !(output.over && ctx.Err() == context.Canceled)
+	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, output.over) || ctx.Err() != nil && (!output.over || ctx.Err() != context.Canceled)
 	verdict, stat, stdout := containerVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {

@@ -220,13 +220,22 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	}
+	// Wait receives the context watcher's result before returning, so the
+	// flag is read only after Cancel has finished.
+	killed := false
+	kill := cmd.Cancel
+	cmd.Cancel = func() error {
+		err := kill()
+		killed = err == nil
+		return err
+	}
 	cmd.WaitDelay = time.Second
 	err := cmd.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		// Preserve cancellation provenance when our context killed the client;
 		// a negative status alone denotes an independent runner signal.
-		if exit.ExitCode() < 0 && ctx.Err() != nil {
+		if containerClientOwnCancel(exit, killed) && ctx.Err() != nil {
 			return exit.ExitCode(), ctx.Err()
 		}
 		return exit.ExitCode(), nil
@@ -235,6 +244,13 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 		return -1, fmt.Errorf("running docker: %w", err)
 	}
 	return 0, nil
+}
+
+// A signal alone cannot prove that cancellation killed the client: the
+// output-copy goroutines can cancel the context after an independent exit.
+func containerClientOwnCancel(exit *exec.ExitError, killed bool) bool {
+	status, ok := exit.Sys().(syscall.WaitStatus)
+	return ok && killed && status.Signaled() && status.Signal() == syscall.SIGKILL
 }
 
 const containerCheckUsage = "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-check <worktree> test-browser <package> <run> [--browser-mode <abs path>]"
@@ -354,6 +370,7 @@ type containerExecution struct {
 	code                          int
 	summary                       string
 	refused                       bool
+	ownCancel                     bool
 }
 
 // Both commands share source copying, flags, limits and confirmed cleanup.
@@ -474,7 +491,9 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	}
 	name := fmt.Sprintf("argonreview-check-%x", suffix)
 	output := &result.output
-	output.cancel = cancel
+	runnerCtx, stop := context.WithCancel(ctx)
+	result.runnerContext = runnerCtx
+	output.cancel = stop
 	args := containerArguments(copyDir, name, check, pattern, reservation)
 	if check == "test-browser" {
 		args, err = containerBrowserArguments(copyDir, name, pattern, result.browserRun, reservation)
@@ -487,15 +506,11 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 		return "", fmt.Errorf("unclassified container check %q", check)
 	}
 	var stdout, stderr io.Writer = output.stdoutWriter(), output.stderrWriter()
-	runnerCtx := ctx
 	if test2json {
 		var allowlist []measurementSkip
 		if check == "test-db" {
 			allowlist = measurementSkips()
 		}
-		var stop context.CancelFunc
-		runnerCtx, stop = context.WithCancel(ctx)
-		result.runnerContext = runnerCtx
 		result.aggregation = newContainerAggregator(stop, allowlist)
 		if check == "test-browser" {
 			result.aggregation.retainBrowserScope(result.browserImportPath, result.browserRun)
@@ -511,7 +526,12 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	code, runErr := runner.run(runnerCtx, args, dockerEnvironment(), stdout, stderr)
 	// Record completion before cleanup: a later deadline cannot undo a finished
 	// container, while an earlier interruption makes its result unknowable.
-	ownStop := result.aggregation != nil && result.aggregation.record.stop != stopNone
+	ownStop := output.over || result.aggregation != nil && result.aggregation.record.stop != stopNone
+	ownCancel := code < 0 && errors.Is(runErr, context.Canceled) && parent.Err() == nil && ownStop && ctx.Err() == nil
+	result.ownCancel = ownCancel
+	if ownCancel {
+		runErr = nil
+	}
 	interrupted := ctx.Err() != nil || parent.Err() != nil || runnerCtx.Err() != nil && !ownStop
 	completed := runErr == nil && !interrupted
 	result.code, result.runErr = code, runErr
@@ -519,7 +539,7 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 		result.runState = aggregatorRunState{completed: completed, interrupted: interrupted,
 			deadline: errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(parent.Err(), context.DeadlineExceeded), parentCancelled: (parent.Err() != nil || runnerCtx.Err() == context.Canceled && !ownStop) && !errors.Is(ctx.Err(), context.DeadlineExceeded)}
 	}
-	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil)
+	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil, ownCancel)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
@@ -547,7 +567,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		result.record = a.record
 		result.aggregation = nil // Do not keep protocol maps or running output alive.
 		cleanupFailed := in.runnerFailed
-		in.runnerFailed = in.runnerFailed || state.parentCancelled || state.deadline && state.interrupted || containerRunnerFailed(result.code, result.runErr, result.record.stop != stopNone)
+		in.runnerFailed = in.runnerFailed || state.parentCancelled || state.deadline && state.interrupted || containerRunnerFailed(result.code, result.runErr, result.ownCancel)
 		decided.verdict = recordVerdict(decided.verdict, result.record)
 		in.verdict = decided.verdict
 		if in.check == "test-browser" {
@@ -575,10 +595,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		if first != original {
 			in.verdict = first
 		}
-		// Command checks cancel the run context at their cap; an independent
-		// parent cancellation or deadline still requires the minimal body.
-		ownCancel := result.output.over && ctx.Err() == context.Canceled && result.parent != nil && result.parent.Err() == nil
-		in.runnerFailed = in.runnerFailed || err != nil && !ownCancel && (ctx.Err() != nil || result.record == nil)
+		in.runnerFailed = in.runnerFailed || err != nil && (ctx.Err() != nil || result.record == nil)
 		if result.record == nil {
 			result.record = commandRecord(&result.output)
 			result.record.stderrNotServable = result.code >= 125 && result.code <= 127 || result.runErr != nil || ctx.Err() != nil
@@ -597,14 +614,14 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 // A limit or protocol stop can return its own cancellation error. This is
 // expected; independent runner signals/errors still require the minimal MCP
 // body even when the stop won verdict precedence.
-func containerRunnerFailed(code int, err error, ownStop bool) bool {
-	return code >= 125 && code <= 127 || (code < 0 || err != nil) && (!ownStop || !errors.Is(err, context.Canceled))
+func containerRunnerFailed(code int, err error, ownCancel bool) bool {
+	return code >= 125 && code <= 127 || (code < 0 || err != nil) && !ownCancel
 }
 
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated bool) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated, ownCancel bool) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
 	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
@@ -633,7 +650,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		in.runnerFailed = cleanupFailed
 		return "", err
 	}
-	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, output.over) || ctx.Err() != nil && (!output.over || ctx.Err() != context.Canceled)
+	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, ownCancel) || ctx.Err() != nil
 	verdict, stat, stdout := containerVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {

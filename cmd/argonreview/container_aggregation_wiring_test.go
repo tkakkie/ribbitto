@@ -69,6 +69,7 @@ func TestContainerAggregationN1(t *testing.T) {
 		{name: "F pass", stream: pass, first: "verified"},
 		{name: "F fail", stream: fail + containerJSON("p", "fail"), first: "FAILED"},
 	}
+	rows = append(rows, row{name: "E6 own cancel provenance", stream: fail, cap: "total output", first: failedCap, code: -1, runErr: context.Canceled})
 	for _, capName := range []string{"line length", "test count", "package count", "retained memory", "identity length", "event fields"} {
 		rows = append(rows, row{name: "A2 " + capName, stream: fail, cap: capName, first: failedCap}, row{name: "B2 " + capName, cap: capName, first: capped})
 	}
@@ -138,7 +139,7 @@ func TestContainerAggregationN1(t *testing.T) {
 				}
 				return row.code, row.runErr
 			}}
-			report, _ := runContainerExecution(parent, tree, "test", ".", runner, copies, grantContainerExecution(&execution))
+			report, err := runContainerExecution(parent, tree, "test", ".", runner, copies, grantContainerExecution(&execution))
 			first, rest, _ := strings.Cut(report, "\n")
 			if first != row.first || !strings.HasPrefix(rest, containerCheckScope("test")+"\n") {
 				t.Fatalf("report %q, want %q then scope", report, row.first)
@@ -168,6 +169,12 @@ func TestContainerAggregationN1(t *testing.T) {
 			}
 			if row.first == containerTimeLimitVerdict && !strings.HasSuffix(execution.summary, "Details unavailable: the check did not complete.\n"+deadlineOmitted) {
 				t.Fatal("fixed timeout body changed")
+			}
+			if row.name == "E6 own cancel provenance" {
+				if err != nil || !execution.runState.completed || r.stderrNotServable || execution.runState.parentCancelled {
+					t.Fatalf("own cancellation provenance changed completion: err=%v state=%+v stderrNotServable=%v", err, execution.runState, r.stderrNotServable)
+				}
+				return
 			}
 			if row.code >= 125 && row.code <= 127 || row.runErr != nil || strings.Contains(row.timing, "deadline") || row.timing == "parent cancel" {
 				if !r.stderrNotServable {

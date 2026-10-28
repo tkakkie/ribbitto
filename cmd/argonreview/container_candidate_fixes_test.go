@@ -154,7 +154,7 @@ func TestContainerFailureBodyWithStop(t *testing.T) {
 					parent, expire = context.WithTimeout(parent, 2*time.Second)
 					defer expire()
 				}
-				report, _ := runContainerExecution(parent, containerFixture(t), "test", ".", runner, t.TempDir(), grantContainerExecution(&execution))
+				report, err := runContainerExecution(parent, containerFixture(t), "test", ".", runner, t.TempDir(), grantContainerExecution(&execution))
 				want := "FAILED: malformed test stream"
 				if stop == "cap" {
 					want = "NOT VERIFIED: output limit exceeded (output cut off)"
@@ -167,6 +167,9 @@ func TestContainerFailureBodyWithStop(t *testing.T) {
 					t.Fatalf("first line changed: report=%q summary=%q want=%q", first, summaryFirst, want)
 				}
 				own := strings.HasPrefix(failure, "own-")
+				if own && err != nil {
+					t.Fatalf("own stop returned error: %v", err)
+				}
 				if strings.Contains(execution.summary, minimal) == own {
 					t.Fatalf("wrong failure body: %s", execution.summary)
 				}

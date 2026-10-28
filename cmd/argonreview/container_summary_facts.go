@@ -33,6 +33,7 @@ type summaryFacts struct {
 	incomplete                                bool
 	capName                                   string
 	failedTotal, skippedTotal                 int
+	namesNotRetained                          int
 	observed                                  []string
 }
 

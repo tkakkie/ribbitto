@@ -42,7 +42,11 @@ func TestSummarySkippedOmissionCounts(t *testing.T) {
 						t.Fatalf("shown=%d, total=%d: %s", shown, count, got)
 					}
 					if omitted > 0 {
-						if !strings.Contains(got, fmt.Sprintf("\nand %d more\n", omitted)) {
+						continuation := fmt.Sprintf("\nand %d more\n", omitted)
+						if shown == 0 {
+							continuation = fmt.Sprintf("\nSkipped names: %d more not shown\n", omitted)
+						}
+						if !strings.Contains(got, continuation) {
 							t.Fatal(got)
 						}
 					} else if strings.Contains(got, "\nand ") {

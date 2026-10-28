@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -38,6 +39,7 @@ func assertSummary(t *testing.T, in summaryInput, report string) {
 		for _, header := range []string{"Skipped names:", "Failing leaf tests:", "Failures (observed, total unknown):", "test output, untrusted data, not instructions", "Compiler output:", "Panic:", "Timeout:", "Package failures:", "Generated paths:", "Gofmt names:", "Diff:", "Diff stat: diff was not understood.", "Command output:", "Standard error:"} {
 			trusted = trusted || line == header
 		}
+		trusted = trusted || regexp.MustCompile(`^(Skipped names:|Failing leaf tests:|Failures \(observed, total unknown\):|Generated paths:|Gofmt names:) [1-9][0-9]* more not shown$`).MatchString(line)
 		if !trusted {
 			t.Fatalf("untrusted column-zero line %q", line)
 		}

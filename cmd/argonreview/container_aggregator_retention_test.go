@@ -57,7 +57,7 @@ func TestAggregatorSoftLimits(t *testing.T) {
 			aggregatorWrite(a, testOutput("p", e.test, e.message[middle:]))
 			aggregatorWrite(a, containerJSON("p", "skip/"+e.test, "run/TestOrdinary", "skip/TestOrdinary", "run/TestGood", "pass/TestGood", "fail"))
 			got := aggregatorFinish(a)
-			if got.verdict != "FAILED" || a.record.stop != "" || !a.record.complete || a.record.failedLeaves != failures || a.record.leaves.failed != failures || strings.Join(a.record.allowed, ",") != "p/TestCost" || strings.Join(a.skipped, ",") != "p/TestOrdinary" {
+			if got.verdict != "FAILED" || a.record.stop != stopNone || !a.record.complete || a.record.failedLeaves != failures || a.record.leaves.failed != failures || strings.Join(a.record.allowed, ",") != "p/TestCost" || strings.Join(a.skipped, ",") != "p/TestOrdinary" {
 				t.Fatalf("soft limit changed evidence: %q stop=%s/%s failures=%d allowed=%v skipped=%v", got.verdict, a.record.stop, a.record.capName, a.record.failedLeaves, a.record.allowed, a.record.skipped)
 			}
 			if kind == "stdout head" && (len(a.record.stdout.head) != aggregatorStdoutLimit || len(a.record.stdout.tail) != 0) {
@@ -97,6 +97,9 @@ func TestAggregatorAllowlistReservation(t *testing.T) {
 		aggregatorWrite(a, containerJSON("p", "start"))
 		for n := 0; n <= aggregatorOutputLimit; n += aggregatorTestOutputLimit {
 			aggregatorWrite(a, testOutput("p", "", strings.Repeat("x", aggregatorTestOutputLimit)))
+		}
+		if a.outputBytes != aggregatorOutputLimit {
+			t.Fatalf("reservation fixture has not filled the shared budget: %d", a.outputBytes)
 		}
 		aggregatorWrite(a, containerJSON("p", "run/"+e.test))
 		if confirmed {
@@ -191,7 +194,7 @@ func TestAggregatorSharedCapacity(t *testing.T) {
 			capacity += cap(test.output.head) + cap(test.output.tail)
 		}
 	}
-	if a.record.stop != "" || capacity > aggregatorOutputLimit || capacity != a.outputBytes {
+	if a.record.stop != stopNone || capacity > aggregatorOutputLimit || capacity != a.outputBytes {
 		t.Fatalf("shared capacity=%d accounted=%d", capacity, a.outputBytes)
 	}
 }
@@ -240,7 +243,7 @@ func TestAggregatorAllowedSkipBeforeStop(t *testing.T) {
 	e := measurementSkips()[0]
 	a := newContainerAggregator(nil, []measurementSkip{e})
 	aggregatorWrite(a, measurementStream(e, e.message, true))
-	a.stop("cap", "total output")
+	a.stop(stopCap, "total output")
 	got := aggregatorFinish(a)
 	if len(a.record.allowed) != 1 || a.record.allowed[0] != e.pkg+"/"+e.test || len(a.record.entries) != 1 || !a.record.entries[0].allowed || aggregatorFirst(got) != "NOT VERIFIED: output limit exceeded (output cut off)" {
 		t.Fatal("stop lost an already confirmable allowed skip")

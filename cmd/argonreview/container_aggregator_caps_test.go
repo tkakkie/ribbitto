@@ -86,7 +86,7 @@ func TestAggregatorLineLimit(t *testing.T) {
 				}
 				chunk := bytes.Repeat([]byte("x"), aggregatorLineLimit)
 				_, _ = w.Write(chunk)
-				if a.record.stop != "" {
+				if a.record.stop != stopNone {
 					t.Fatal("line boundary refused")
 				}
 				last := []byte("x")
@@ -119,7 +119,7 @@ func TestAggregatorCountLimits(t *testing.T) {
 					aggregatorWrite(a, containerJSON(fmt.Sprintf("p%d", i), "start", "pass"))
 				}
 			}
-			if a.record.stop != "" {
+			if a.record.stop != stopNone {
 				t.Fatalf("boundary refused: %s/%s", a.record.stop, a.record.capName)
 			}
 			if kind == "test count" {
@@ -137,7 +137,7 @@ func TestAggregatorCountLimits(t *testing.T) {
 func TestAggregatorMemoryLimit(t *testing.T) {
 	a := aggregatorFixture(containerJSON("p", "start"))
 	noise := strings.Repeat("x", aggregatorTestOutputLimit)
-	for i := 0; i <= aggregatorMemoryLimit/aggregatorTestOutputLimit && a.record.stop == ""; i++ {
+	for i := 0; i <= aggregatorMemoryLimit/aggregatorTestOutputLimit && a.record.stop == stopNone; i++ {
 		name := fmt.Sprintf("Test%d", i)
 		aggregatorWrite(a, containerJSON("p", "run/"+name)+testOutput("p", name, noise))
 	}
@@ -169,7 +169,7 @@ func TestAggregatorStreamLimit(t *testing.T) {
 		t.Run(fmt.Sprintf("stderr=%v", stderr), func(t *testing.T) {
 			a := aggregatorFixture(containerJSON("p", "start", "run/TestNoise"))
 			aggregatorFlood(a, aggregatorStreamLimit-a.record.streamed, stderr)
-			if a.record.stop != "" {
+			if a.record.stop != stopNone {
 				t.Fatalf("stream boundary refused: %s/%s", a.record.stop, a.record.capName)
 			}
 			_, _ = a.stderrWriter().Write([]byte("x"))
@@ -206,16 +206,16 @@ func TestAggregatorExitAndTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := newContainerAggregator(cancel, nil)
 	aggregatorWrite(a, "invalid\n")
-	if ctx.Err() != context.Canceled || a.record.stop != "malformed test stream" {
+	if ctx.Err() != context.Canceled || a.record.stop != stopMalformed {
 		t.Fatal("stop failed to cancel")
 	}
-	a.stop("cap", "total output")
-	if a.record.stop != "malformed test stream" || a.record.capName != "" || a.record.afterEvent != 0 {
+	a.stop(stopCap, "total output")
+	if a.record.stop != stopMalformed || a.record.capName != "" || a.record.afterEvent != 0 {
 		t.Fatal("first reason overwritten")
 	}
 	a = aggregatorFixture(containerEvents("p", "TestOne", "pass"))
 	got := a.finish(-1, context.DeadlineExceeded, aggregatorRunState{deadline: true, interrupted: true})
-	if aggregatorFirst(got) != containerTimeLimitVerdict || !a.record.stderrNotServable || a.record.stop != "deadline" {
+	if aggregatorFirst(got) != containerTimeLimitVerdict || !a.record.stderrNotServable || a.record.stop != stopDeadline {
 		t.Fatalf("timeout: %q", got.verdict)
 	}
 }
@@ -324,7 +324,7 @@ func TestAggregatorForgedEvents(t *testing.T) {
 func TestAggregatorMalformedBeforeCut(t *testing.T) {
 	a := aggregatorFixture("garbage\n{")
 	got := aggregatorFinish(a)
-	if aggregatorFirst(got) != "FAILED: malformed test stream" || oracleVerdict(0, nil, []byte("garbage\n{"), false, nil) != "FAILED: empty or truncated test stream" {
+	if aggregatorFirst(got) != "FAILED: malformed test stream" || a.record.stop != stopMalformed || oracleVerdict(0, nil, []byte("garbage\n{"), false, nil) != "FAILED: empty or truncated test stream" {
 		t.Fatal("N1 malformed-line precedence changed")
 	}
 }
@@ -332,7 +332,7 @@ func TestAggregatorMalformedBeforeCut(t *testing.T) {
 func TestAggregatorFirstStopEvent(t *testing.T) {
 	a := aggregatorFixture(containerJSON("p", "start", "run/TestBad", "fail/TestBad") + "garbage\n")
 	aggregatorWrite(a, containerEvents("q", "TestLater", "fail"))
-	if a.record.events != 3 || a.record.afterEvent != 3 || a.record.stop != "malformed test stream" || a.record.confirmedFailures != 1 {
+	if a.record.events != 3 || a.record.afterEvent != 3 || a.record.stop != stopMalformed || a.record.confirmedFailures != 1 {
 		t.Fatal("first stop boundary changed")
 	}
 }

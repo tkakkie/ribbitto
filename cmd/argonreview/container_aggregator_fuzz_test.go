@@ -15,7 +15,7 @@ func FuzzAggregator(f *testing.F) {
 		containerJSON("p", "start", "run/TestBad", "fail/TestBad", "fail"),
 		containerJSON("p", "start", "run/TestParent", "pause/TestParent", "cont/TestParent", "run/TestParent/child", "skip/TestParent/child", "pass/TestParent", "pass"),
 		containerJSON("p", "start") + `{"Time":"2026-10-28T00:00:00Z","Action":"output","Package":"p","Elapsed":0,"FailedBuild":"q","Output":"hello\n"}` + "\n" + containerJSON("p", "pass"),
-		"", "null\n", "garbage\n", "{} \n", `{"Action":"pass","ACTION":"fail"}` + "\n",
+		"", "null\n", "garbage\n", "garbage\n{", "{} \n", `{"Action":"pass","ACTION":"fail"}` + "\n",
 	}
 	for _, e := range measurementSkips() {
 		seeds = append(seeds, measurementStream(e, e.message, true))
@@ -41,8 +41,13 @@ func FuzzAggregator(f *testing.F) {
 		// N1 gives an already malformed line precedence over a later cut line;
 		// the frozen oracle checks the final newline before reading any event.
 		cut := len(data) == 0 || data[len(data)-1] != '\n'
-		precedenceConflict := cut && a.record.stop != "empty or truncated test stream" && a.record.capName == ""
+		precedenceConflict := cut && a.record.stop != stopTruncated && a.record.capName == ""
 		stricter := a.record.capName != "" || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0
+		if !stricter && precedenceConflict {
+			if !strings.HasPrefix(got.verdict, "FAILED") || !a.record.stop.malformed() {
+				t.Fatalf("precedence exception must be a malformed FAILED: %q stop=%s", got.verdict, a.record.stop)
+			}
+		}
 		if !stricter && !precedenceConflict && got.verdict != want {
 			t.Fatalf("differential: got %q want %q", got.verdict, want)
 		}

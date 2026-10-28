@@ -33,51 +33,57 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 	if len(a.lines[1]) > 0 {
 		a.notice(string(a.lines[1]))
 	}
-	r.complete = completed && runErr == nil && r.stop == "" && r.stdoutBytes > 0 && len(a.lines[0]) == 0
-	missing := ""
-	for _, p := range a.packages {
-		if p.state == "" {
-			missing = "missing package result"
+	r.complete = completed && !state.interrupted && runErr == nil && r.stop == stopNone && r.stdoutBytes > 0 && len(a.lines[0]) == 0
+	missing, missingPackage := stopNone, ""
+	for pkg, p := range a.packages {
+		packageMissing := stopNone
+		if p.entry.state == "" {
+			packageMissing = stopMissingPackage
 		}
 		if p.runs == 0 {
 			a.noTests = true
 		}
-		summaryCount(&r.packages, p.state)
+		summaryCount(&r.packages, p.entry.state)
 		passing := 0
 		for _, t := range p.tests {
 			if t.started && !t.parent && t.state == "pass" {
 				passing++
 			}
 		}
-		if p.state == "skip" {
+		if p.entry.state == "skip" {
 			r.disallowedSkips++
-			p.skipName = a.name(&a.skipped, p.pkg+" (package)")
+			p.entry.skipName = a.name(&a.skipped, p.entry.pkg+" (package)")
 		}
 		for _, t := range p.tests {
 			if !t.started {
 				continue
 			}
-			if t.state == "" && missing == "" {
-				missing = "missing test result"
+			if t.state == "" && packageMissing == stopNone {
+				packageMissing = stopMissingTest
 			}
 			if !t.parent {
 				summaryCount(&r.leaves, t.state)
 			}
 			if t.state == "skip" {
-				allowed := t.message && allowedMeasurementSkip(a.allowlist, p.pkg, t.name, t.match, t.parent, passing)
+				allowed := t.message && allowedMeasurementSkip(a.allowlist, p.entry.pkg, t.name, t.match, t.parent, passing)
 				if allowed {
 					t.allowed = true
-					r.allowed = append(r.allowed, a.allowedName(p.pkg, t.name))
+					r.allowed = append(r.allowed, a.allowedName(p.entry.pkg, t.name))
 				} else {
 					r.disallowedSkips++
-					t.skipName = a.name(&a.skipped, p.pkg+"/"+t.name)
+					t.skipName = a.name(&a.skipped, p.entry.pkg+"/"+t.name)
 				}
 			}
 			a.record.accounted -= cap(t.slot)
 			t.slot = nil
 		}
+		// Match the oracle's sorted package walk without allocating a key slice
+		// after a stop. Within one package its missing result precedes its tests.
+		if packageMissing != stopNone && (missing == stopNone || pkg < missingPackage) {
+			missing, missingPackage = packageMissing, pkg
+		}
 	}
-	if missing != "" {
+	if missing != stopNone {
 		r.complete = false
 	}
 	// The index uses its precharged storage even after a stop. Selecting here
@@ -109,34 +115,38 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 		}
 		n = next
 	}
-	if r.stop == "" {
+	if r.stop == stopNone {
 		switch {
 		case deadline && state.interrupted:
-			a.stop("deadline", "")
+			a.stop(stopDeadline, "")
 		case parentCancelled && !completed:
-			a.stop("parent cancellation", "")
+			a.stop(stopParentCancellation, "")
 		case code == 137:
-			a.stop("kill", "")
+			a.stop(stopKill, "")
 		case r.stdoutBytes == 0 || len(a.lines[0]) > 0:
-			a.stop("empty or truncated test stream", "")
-		case missing != "":
+			a.stop(stopTruncated, "")
+		case missing != stopNone:
 			a.stop(missing, "")
+		case runErr != nil:
+			a.stop(stopRunnerError, "")
+		case !completed || state.interrupted:
+			a.stop(stopIncompleteRun, "")
 		}
 	}
-	if r.stop != "" {
+	if r.stop != stopNone {
 		r.complete = false
 	}
 	sort.Strings(r.allowed)
 	sort.Strings(r.skipped)
 	sort.Strings(a.skipped)
-	r.stderrNotServable = code >= 125 && code <= 127 || runErr != nil || deadline || parentCancelled || !completed
+	r.stderrNotServable = code >= 125 && code <= 127 || runErr != nil || deadline || parentCancelled || !completed || state.interrupted
 	r.sealed = true
 	return a.decide(code, runErr, state)
 }
 
 // name reserves both the slice slot and cloned text before retaining a name.
 func (a *containerAggregator) name(names *[]string, name string) string {
-	if a.record.stop != "" {
+	if a.record.stop != stopNone {
 		return ""
 	}
 	if !a.charge(textCharge(len(name))) {
@@ -171,20 +181,20 @@ func (a *containerAggregator) decide(code int, runErr error, state aggregatorRun
 		}
 	case deadline && state.interrupted:
 		verdict, minimal = containerTimeLimitVerdict, true
-	case r.stop != "" && r.stop != "deadline" && r.stop != "kill" && r.stop != "parent cancellation" && r.stop != "missing package result" && r.stop != "missing test result" && r.stop != "empty or truncated test stream":
-		verdict = "FAILED: " + r.stop
+	case r.stop.malformed():
+		verdict = "FAILED: " + r.stop.String()
 	case code != 0 || runErr != nil || parentCancelled:
 		minimal = runErr != nil || parentCancelled || code >= 125 && code <= 127
-	case r.stop == "empty or truncated test stream":
+	case r.stop == stopTruncated:
 		verdict = "FAILED: empty or truncated test stream"
 	case a.failureSignal:
-	case r.stop != "":
-		verdict = "FAILED: " + r.stop
+	case r.stop != stopNone:
+		verdict = "FAILED: " + r.stop.String()
 	case r.disallowedSkips > 0:
 		verdict = fmt.Sprintf("NOT VERIFIED: %d skipped\n%s", r.disallowedSkips, strings.Join(a.skipped, "\n"))
 	case a.noTests || r.leaves.passed == 0:
 		verdict = "NOT VERIFIED: a targeted package has no tests, or no leaf test passed"
-	default:
+	case r.complete:
 		verdict = fmt.Sprintf("verified\n%d passing leaf tests", r.leaves.passed)
 		if len(r.allowed) > 0 {
 			verdict += "\nallowed measurement skips: " + strings.Join(r.allowed, ", ")

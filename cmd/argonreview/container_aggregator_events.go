@@ -11,20 +11,20 @@ import (
 // with a field cap, so temporary decoder storage stays bounded by one line.
 func (a *containerAggregator) event(line []byte) {
 	if !utf8.Valid(line) || bytes.IndexByte(line, 0) >= 0 {
-		a.stop("malformed test stream", "")
+		a.stop(stopMalformed, "")
 		return
 	}
 	e, err := summaryEvent(line)
 	if err != nil {
 		if err.Error() == "event fields exceed limit" {
-			a.stop("cap", "event fields")
+			a.stop(stopCap, "event fields")
 		} else {
-			a.stop("malformed test stream", "")
+			a.stop(stopMalformed, "")
 		}
 		return
 	}
 	if len(e.Package) > summaryIdentityLimit || len(e.Test) > summaryIdentityLimit || len(e.ImportPath) > summaryIdentityLimit {
-		a.stop("cap", "identity length")
+		a.stop(stopCap, "identity length")
 		return
 	}
 	switch e.Action {
@@ -32,11 +32,11 @@ func (a *containerAggregator) event(line []byte) {
 	default:
 		// Keep the oracle's diagnostic order even though action validation is
 		// a per-line check, before any protocol state can be changed.
-		reason := "unknown test action"
+		reason := stopUnknownAction
 		if e.Package == "" {
-			reason = "event without package"
-		} else if p := a.packages[e.Package]; p == nil || p.state != "" {
-			reason = "event outside a running package"
+			reason = stopWithoutPackage
+		} else if p := a.packages[e.Package]; p == nil || p.entry.state != "" {
+			reason = stopOutsidePackage
 		}
 		a.stop(reason, "")
 		return
@@ -44,7 +44,7 @@ func (a *containerAggregator) event(line []byte) {
 	if e.Action == "build-output" || e.Action == "build-fail" {
 		a.notice(e.Output)
 		a.keep(&a.record.compiler, e.Output, aggregatorOutputLimit, true)
-		if a.record.stop != "" {
+		if a.record.stop != stopNone {
 			return
 		}
 		if e.Action == "build-fail" {
@@ -52,7 +52,7 @@ func (a *containerAggregator) event(line []byte) {
 				return
 			}
 			n := &aggregatorEntry{kind: "package", pkg: a.clone(e.ImportPath), state: "fail"}
-			if a.record.stop != "" {
+			if a.record.stop != stopNone {
 				return
 			}
 			a.result(n)
@@ -62,44 +62,44 @@ func (a *containerAggregator) event(line []byte) {
 		return
 	}
 	if e.Package == "" {
-		a.stop("event without package", "")
+		a.stop(stopWithoutPackage, "")
 		return
 	}
 	p := a.packages[e.Package]
 	if e.Action == "start" {
 		if p != nil || e.Test != "" {
-			a.stop("duplicate or invalid package start", "")
+			a.stop(stopInvalidStart, "")
 			return
 		}
 		if len(a.packages) == aggregatorPackageLimit {
-			a.stop("cap", "package count")
+			a.stop(stopCap, "package count")
 			return
 		}
 		if !a.charge(aggregatorPackageCharge + textCharge(len(e.Package))) {
 			return
 		}
 		name := strings.Clone(e.Package)
-		a.packages[name] = &aggregatorPackage{aggregatorEntry: aggregatorEntry{kind: "package", pkg: name}, tests: make(map[string]*aggregatorEntry)}
+		a.packages[name] = &aggregatorPackage{entry: &aggregatorEntry{kind: "package", pkg: name}, tests: make(map[string]*aggregatorEntry)}
 		a.record.events++
 		return
 	}
-	if p == nil || p.state != "" {
-		a.stop("event outside a running package", "")
+	if p == nil || p.entry.state != "" {
+		a.stop(stopOutsidePackage, "")
 		return
 	}
 	t := p.tests[e.Test]
 	switch e.Action {
 	case "run":
 		if e.Test == "" {
-			a.stop("test without name", "")
+			a.stop(stopWithoutTest, "")
 			return
 		}
 		if t != nil && t.started {
-			a.stop("duplicate test", "")
+			a.stop(stopDuplicateTest, "")
 			return
 		}
 		if a.tests == aggregatorTestLimit {
-			a.stop("cap", "test count")
+			a.stop(stopCap, "test count")
 			return
 		}
 		t = a.test(p, e.Test)
@@ -123,13 +123,13 @@ func (a *containerAggregator) event(line []byte) {
 		a.tests++
 	case "pause", "cont":
 		if t == nil || !t.started || t.state != "" {
-			a.stop("event outside a running test", "")
+			a.stop(stopOutsideTest, "")
 			return
 		}
 	case "output":
 		// Markers are evidence even when the corresponding test later passes.
 		a.notice(e.Output)
-		if a.record.stop != "" {
+		if a.record.stop != stopNone {
 			return
 		}
 		if strings.Contains(e.Output, "[no test files]") {
@@ -150,16 +150,16 @@ func (a *containerAggregator) event(line []byte) {
 			} else if t.state != "pass" {
 				a.keep(&t.output, e.Output, aggregatorTestOutputLimit, true)
 			}
-			if a.record.stop != "" {
+			if a.record.stop != stopNone {
 				return
 			}
 			a.skipMessage(t, e.Output)
 		}
 	case "pass", "fail", "skip":
-		n := &p.aggregatorEntry
+		n := p.entry
 		if e.Test != "" {
 			if t == nil || !t.started || t.state != "" {
-				a.stop("result without a running test", "")
+				a.stop(stopWithoutRun, "")
 				return
 			}
 			n = t
@@ -167,7 +167,7 @@ func (a *containerAggregator) event(line []byte) {
 		if e.Action != "pass" && n.kind == "test" {
 			a.budget(&n.output)
 		}
-		if a.record.stop != "" {
+		if a.record.stop != stopNone {
 			return
 		}
 		// Use static states rather than retaining a decoder's string allocation.
@@ -185,7 +185,7 @@ func (a *containerAggregator) event(line []byte) {
 			a.result(n)
 		}
 	}
-	if a.record.stop == "" {
+	if a.record.stop == stopNone {
 		a.record.events++
 	}
 }
@@ -200,10 +200,10 @@ func (a *containerAggregator) test(p *aggregatorPackage, name string) *aggregato
 		return nil
 	}
 	name = strings.Clone(name)
-	t := &aggregatorEntry{kind: "test", pkg: p.pkg, name: name}
+	t := &aggregatorEntry{kind: "test", pkg: p.entry.pkg, name: name}
 	eligible, slotSize := false, 0
 	for _, entry := range a.allowlist {
-		if entry.pkg == p.pkg && entry.test == name {
+		if entry.pkg == p.entry.pkg && entry.test == name {
 			eligible = true
 			slotSize = max(slotSize, len(entry.message))
 			t.message = t.message || entry.message == ""
@@ -258,13 +258,13 @@ func (a *containerAggregator) result(n *aggregatorEntry) {
 // notice runs before dropping passing output so markers cannot disappear.
 func (a *containerAggregator) notice(output string) {
 	for line := range strings.SplitSeq(output, "\n") {
-		if a.record.stop != "" {
+		if a.record.stop != stopNone {
 			return
 		}
 		if a.record.panicLine == "" && strings.Contains(line, "panic:") {
 			a.record.panicLine = a.clone(line)
 		}
-		if a.record.stop != "" {
+		if a.record.stop != stopNone {
 			return
 		}
 		if a.record.timeoutLine == "" && strings.Contains(line, "test timed out") {

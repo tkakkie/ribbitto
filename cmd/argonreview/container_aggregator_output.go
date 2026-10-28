@@ -3,7 +3,7 @@ package main
 // keep retains head and tail halves without a growing concatenation. The
 // command head and stderr keep a prefix instead, matching their retrieval API.
 func (a *containerAggregator) keep(o *retainedOutput, text string, limit int, shared bool) {
-	if a.record.stop != "" {
+	if a.record.stop != stopNone {
 		return
 	}
 	o.total += len(text)
@@ -77,8 +77,10 @@ func (a *containerAggregator) budget(o *retainedOutput) {
 	}
 	old := *o
 	*o = retainedOutput{}
-	a.keep(o, string(old.head), available, true)
-	a.keep(o, string(old.tail), available, true)
+	if available > 0 {
+		a.keep(o, string(old.head), available, true)
+		a.keep(o, string(old.tail), available, true)
+	}
 	o.total, o.notRetained = old.total, true
 	a.record.accounted -= cap(old.head) + cap(old.tail)
 }
@@ -88,7 +90,7 @@ func (a *containerAggregator) budget(o *retainedOutput) {
 func (a *containerAggregator) retainCommandHead(data []byte) {
 	a.record.mu.Lock()
 	defer a.record.mu.Unlock()
-	if a.record.stop != "" || a.record.sealed {
+	if a.record.stop != stopNone || a.record.sealed {
 		return
 	}
 	a.keep(&a.record.stdout, string(data[:min(len(data), aggregatorStdoutLimit)]), aggregatorStdoutLimit, false)

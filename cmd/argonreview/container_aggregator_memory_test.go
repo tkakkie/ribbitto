@@ -31,7 +31,7 @@ func TestAggregatorChargesCapacity(t *testing.T) {
 }
 
 func TestAggregatorNoAllocationAfterStop(t *testing.T) {
-	for _, reason := range []string{"cap", "malformed test stream", "deadline", "parent cancellation", "kill"} {
+	for _, reason := range []aggregatorStopReason{stopCap, stopMalformed, stopDeadline, stopParentCancellation, stopKill} {
 		a := newContainerAggregator(nil, nil)
 		a.stop(reason, "")
 		out, errout := a.stdoutWriter(), a.stderrWriter()
@@ -55,7 +55,7 @@ func TestAggregatorChargeBeforeAllocate(t *testing.T) {
 	a := newContainerAggregator(nil, nil)
 	buf := make([]byte, 0, 16)
 	allocs := testing.AllocsPerRun(100, func() {
-		a.record.stop = ""
+		a.record.stop = stopNone
 		a.record.accounted = aggregatorMemoryLimit
 		a.grow(&buf, cap(buf)+1, aggregatorLineLimit)
 	})
@@ -77,11 +77,14 @@ func TestAggregatorSealed(t *testing.T) {
 func TestAggregatorAccountingCoversHeap(t *testing.T) {
 	for _, shape := range []string{"tests", "packages", "ancestors", "output", "skips"} {
 		t.Run(shape, func(t *testing.T) {
+			a := newContainerAggregator(nil, []measurementSkip{{"p", "TestCost", "measure"}})
+			aggregatorWrite(a, containerJSON("p", "start"))
+			base := a.record.accounted
+			// Measure incremental ownership: the pre-existing base envelope must
+			// not hide an undercharged test or map entry.
 			runtime.GC()
 			var before, after runtime.MemStats
 			runtime.ReadMemStats(&before)
-			a := newContainerAggregator(nil, []measurementSkip{{"p", "TestCost", "measure"}})
-			aggregatorWrite(a, containerJSON("p", "start"))
 			for i := 0; i < aggregatorTestLimit/16; i++ {
 				name := fmt.Sprintf("Test%d", i)
 				switch shape {
@@ -91,6 +94,7 @@ func TestAggregatorAccountingCoversHeap(t *testing.T) {
 					aggregatorWrite(a, containerJSON("p", "run/"+name+"/a/b/c", "pass/"+name+"/a/b/c"))
 				case "output":
 					if i >= aggregatorOutputLimit/aggregatorTestOutputLimit {
+						aggregatorWrite(a, containerJSON("p", "run/"+name, "pass/"+name))
 						continue
 					}
 					aggregatorWrite(a, containerJSON("p", "run/"+name)+testOutput("p", name, strings.Repeat("x", aggregatorTestOutputLimit))+containerJSON("p", "fail/"+name))
@@ -105,8 +109,9 @@ func TestAggregatorAccountingCoversHeap(t *testing.T) {
 			runtime.GC()
 			runtime.ReadMemStats(&after)
 			delta := int64(after.HeapAlloc) - int64(before.HeapAlloc)
-			if a.record.stop != "" || int64(a.record.accounted) < delta {
-				t.Fatalf("%s: accounted=%d live delta=%d stop=%s/%s", shape, a.record.accounted, delta, a.record.stop, a.record.capName)
+			accounted := a.record.accounted - base
+			if a.record.stop != stopNone || int64(accounted) < delta {
+				t.Fatalf("%s: accounted excluding base=%d live delta=%d stop=%s/%s", shape, accounted, delta, a.record.stop, a.record.capName)
 			}
 			runtime.KeepAlive(a)
 		})
@@ -116,27 +121,53 @@ func TestAggregatorAccountingCoversHeap(t *testing.T) {
 // finishedAggregatorRecord deliberately lets the protocol maps die before the
 // caller measures the saved record. An interior pointer into the aggregator
 // would otherwise pin all passing identities despite a bounded retrieval index.
-func finishedAggregatorRecord() *containerRecord {
+func finishedAggregatorRecord(result string) *containerRecord {
 	a := aggregatorFixture(containerJSON("p", "start"))
 	for i := 0; i < aggregatorTestLimit; i++ {
 		name := fmt.Sprintf("Test%d", i)
 		aggregatorWrite(a, containerJSON("p", "run/"+name, "pass/"+name))
 	}
-	aggregatorWrite(a, containerJSON("p", "pass"))
+	aggregatorWrite(a, containerJSON("p", result))
 	aggregatorFinish(a)
 	return a.record
 }
 
 func TestAggregatorRecordReleasesProtocolState(t *testing.T) {
-	runtime.GC()
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	r := finishedAggregatorRecord()
-	runtime.GC()
-	runtime.ReadMemStats(&after)
-	bound := aggregatorOutputLimit + aggregatorStderrLimit + aggregatorNameLimit + aggregatorIndexLimit*aggregatorEntryCharge + aggregatorStdoutLimit + 2*aggregatorLineLimit + aggregatorBaseCharge
-	if !r.complete || r.leaves.passed != aggregatorTestLimit || int64(after.HeapAlloc)-int64(before.HeapAlloc) > int64(bound) {
-		t.Fatalf("saved record pins protocol state: complete=%v passed=%d live=%d bound=%d", r.complete, r.leaves.passed, int64(after.HeapAlloc)-int64(before.HeapAlloc), bound)
+	for _, result := range []string{"pass", "fail", "skip"} {
+		t.Run(result, func(t *testing.T) {
+			runtime.GC()
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			r := finishedAggregatorRecord(result)
+			if result != "pass" && (len(r.entries) != 1 || r.entries[0].kind != "package" || r.entries[0].state != result) {
+				t.Fatalf("retention fixture lost package result: %s", result)
+			}
+			runtime.GC()
+			runtime.ReadMemStats(&after)
+			bound := aggregatorOutputLimit + aggregatorStderrLimit + aggregatorNameLimit + aggregatorIndexLimit*aggregatorEntryCharge + aggregatorStdoutLimit + 2*aggregatorLineLimit + aggregatorBaseCharge
+			if !r.complete || r.leaves.passed != aggregatorTestLimit || int64(after.HeapAlloc)-int64(before.HeapAlloc) > int64(bound) {
+				t.Fatalf("saved record pins protocol state: complete=%v passed=%d live=%d bound=%d", r.complete, r.leaves.passed, int64(after.HeapAlloc)-int64(before.HeapAlloc), bound)
+			}
+			runtime.KeepAlive(r)
+		})
 	}
-	runtime.KeepAlive(r)
+}
+
+func TestAggregatorZeroBudgetAllocations(t *testing.T) {
+	a := newContainerAggregator(nil, nil)
+	a.outputBytes = aggregatorOutputLimit
+	head := make([]byte, aggregatorTestOutputLimit/2)
+	tail := make([]byte, aggregatorTestOutputLimit/2)
+	before := a.record.accounted
+	allocs := testing.AllocsPerRun(100, func() {
+		o := retainedOutput{head: head, tail: tail, total: len(head) + len(tail)}
+		a.record.accounted = before + cap(head) + cap(tail)
+		a.budget(&o)
+		if !o.notRetained || o.total != len(head)+len(tail) || len(o.head)+len(o.tail) != 0 || a.record.accounted != before {
+			t.Fatal("zero budget changed output accounting")
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("zero budget copied diagnostics: %v allocations", allocs)
+	}
 }

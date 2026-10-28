@@ -62,8 +62,8 @@ func (a *containerAggregator) stderrWriter() aggregatorStream {
 }
 
 // stop preserves the first loss of understanding, including its event boundary.
-func (a *containerAggregator) stop(reason, capName string) {
-	if a.record.stop != "" {
+func (a *containerAggregator) stop(reason aggregatorStopReason, capName string) {
+	if a.record.stop != stopNone {
 		return
 	}
 	a.record.stop, a.record.capName = reason, capName
@@ -76,11 +76,11 @@ func (a *containerAggregator) stop(reason, capName string) {
 // charge checks before allocation, including replacement buffers while their
 // old backing arrays are still live. Callers release the old charge afterwards.
 func (a *containerAggregator) charge(n int) bool {
-	if a.record.stop != "" {
+	if a.record.stop != stopNone {
 		return false
 	}
 	if n > aggregatorMemoryLimit-a.record.accounted {
-		a.stop("cap", "retained memory")
+		a.stop(stopCap, "retained memory")
 		return false
 	}
 	a.record.accounted += n
@@ -122,7 +122,7 @@ func (s aggregatorStream) Write(p []byte) (int, error) {
 	a.record.mu.Lock()
 	defer a.record.mu.Unlock()
 	n := len(p)
-	if a.record.stop != "" || a.record.sealed {
+	if a.record.stop != stopNone || a.record.sealed {
 		return n, nil
 	}
 	size := min(n, aggregatorStreamLimit-a.record.streamed)
@@ -136,7 +136,7 @@ func (s aggregatorStream) Write(p []byte) (int, error) {
 	} else {
 		a.record.stdoutBytes += size
 	}
-	for len(data) > 0 && a.record.stop == "" {
+	for len(data) > 0 && a.record.stop == stopNone {
 		end := bytes.IndexByte(data, '\n')
 		part := len(data)
 		if end >= 0 {
@@ -144,7 +144,7 @@ func (s aggregatorStream) Write(p []byte) (int, error) {
 		}
 		line := &a.lines[which]
 		if part > aggregatorLineLimit-len(*line) {
-			a.stop("cap", "line length")
+			a.stop(stopCap, "line length")
 			break
 		}
 		if !a.grow(line, len(*line)+part, aggregatorLineLimit) {
@@ -164,7 +164,7 @@ func (s aggregatorStream) Write(p []byte) (int, error) {
 		*line = (*line)[:0]
 	}
 	if size < n {
-		a.stop("cap", "total output")
+		a.stop(stopCap, "total output")
 	}
 	return n, nil
 }

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
 
 // oracleRunVerdict applies only #1857's runner-return and late-context rules
-// around the frozen parser below; its stream decisions remain verbatim.
+// around the parser below; its stream decisions retain the original rules.
 func oracleRunVerdict(code int, runErr error, data []byte, state aggregatorRunState) string {
 	verdict := oracleVerdict(code, runErr, data, false, nil)
 	if state.deadline && state.interrupted {
@@ -102,8 +104,9 @@ func oracleCompleteFacts(data []byte, allowlist []measurementSkip) (summaryFacts
 	return f, confirmed
 }
 
-// oracleVerdict is the frozen pre-aggregation decision, kept independently
-// while production callers still require the original unwired implementation.
+// oracleVerdict is the pre-aggregation decision, kept independently while
+// production callers still require the original unwired implementation. Sorted
+// package/test walks make missing-result diagnostics deterministic.
 func oracleVerdict(code int, runErr error, data []byte, truncated bool, allowlist []measurementSkip) string {
 	if code != 0 || runErr != nil {
 		return "FAILED"
@@ -188,7 +191,8 @@ func oracleVerdict(code int, runErr error, data []byte, truncated bool, allowlis
 	}
 	passing := 0
 	var skipped, allowed []string
-	for name, p := range packages {
+	for _, name := range slices.Sorted(maps.Keys(packages)) {
+		p := packages[name]
 		if len(p.tests) == 0 {
 			noTests = true
 		}
@@ -215,7 +219,8 @@ func oracleVerdict(code int, runErr error, data []byte, truncated bool, allowlis
 				packagePassing++
 			}
 		}
-		for test, state := range p.tests {
+		for _, test := range slices.Sorted(maps.Keys(p.tests)) {
+			state := p.tests[test]
 			if state == "" {
 				return "FAILED: missing test result"
 			}

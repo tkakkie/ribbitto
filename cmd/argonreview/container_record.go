@@ -8,7 +8,8 @@ import "sync"
 type containerRecord struct {
 	mu                                                sync.Mutex
 	complete, sealed, stderrNotServable               bool
-	stop, capName                                     string
+	stop                                              aggregatorStopReason
+	capName                                           string
 	events, afterEvent, streamed, accounted           int
 	stdoutBytes                                       int
 	packages, leaves                                  summaryCounts
@@ -30,8 +31,9 @@ type retainedOutput struct {
 }
 
 // aggregatorEntry keeps raw identities; renderers must quote untrusted text.
-// Result links are embedded in protocol state so the index can be selected in
-// arrival order after later descendants have established which tests are leaves.
+// Result links preserve arrival order until later descendants establish which
+// tests are leaves. Entries have independent allocations so saved results cannot
+// retain the package that owns the protocol map.
 type aggregatorEntry struct {
 	kind, pkg, name, state string
 	skipName               string
@@ -47,7 +49,7 @@ type aggregatorEntry struct {
 // aggregatorPackage owns placeholders for output-before-run and slash ancestors,
 // both accepted by the oracle. Only explicit run events consume the test cap.
 type aggregatorPackage struct {
-	aggregatorEntry
+	entry *aggregatorEntry
 	tests map[string]*aggregatorEntry
 	runs  int
 }

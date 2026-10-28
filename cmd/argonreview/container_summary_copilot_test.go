@@ -28,7 +28,7 @@ func TestSummarySkippedOmissionCounts(t *testing.T) {
 					limit := summaryErrorBudget
 					switch mode {
 					case "malformed":
-						in.facts = parseSummaryFacts("test", []byte(stream.String()+"garbage\n"), nil, false)
+						in.facts = recordFactsFixture("test", []byte(stream.String()+"garbage\n"), nil, false)
 					case "cut":
 						in.facts.cut = true
 					case "small budget":
@@ -42,7 +42,11 @@ func TestSummarySkippedOmissionCounts(t *testing.T) {
 						t.Fatalf("shown=%d, total=%d: %s", shown, count, got)
 					}
 					if omitted > 0 {
-						if !strings.Contains(got, fmt.Sprintf("\nand %d more\n", omitted)) {
+						continuation := fmt.Sprintf("\nand %d more\n", omitted)
+						if shown == 0 {
+							continuation = fmt.Sprintf("\nSkipped names: %d more not shown\n", omitted)
+						}
+						if !strings.Contains(got, continuation) {
 							t.Fatal(got)
 						}
 					} else if strings.Contains(got, "\nand ") {
@@ -118,7 +122,7 @@ func TestSummaryNonverifiedAllowedSkips(t *testing.T) {
 						case "cut":
 							in.facts.cut = true
 						case "malformed":
-							in.facts = parseSummaryFacts("test-db", []byte(stream+"garbage\n"), nil, false)
+							in.facts = recordFactsFixture("test-db", []byte(stream+"garbage\n"), nil, false)
 						case "ordinary test":
 							in.check = "test"
 							in.verdict = testVerdict(tc.code, nil, []byte(stream), false)
@@ -171,7 +175,7 @@ func TestSummaryRunnerFailureMinimal(t *testing.T) {
 					stream := measurementStream(entry, entry.message, true) +
 						containerJSON("q", "start", "run/TestBad") + testOutput("q", "TestBad", "panic: partial stream\n") + containerJSON("q", "fail/TestBad", "fail")
 					for _, output := range []string{"", stream, stream + "garbage\n", containerJSON("q", "start", "run/TestRunning")} {
-						in.facts = parseSummaryFacts(check, []byte(output), []byte("partial stderr\n"), false)
+						in.facts = recordFactsFixture(check, []byte(output), []byte("partial stderr\n"), false)
 						in.stat = generatedStat{paths: 1, entries: []generatedStatEntry{{path: "partial path"}}}
 						in.hasStat = true
 						in.gofmtNames = []string{"partial gofmt"}

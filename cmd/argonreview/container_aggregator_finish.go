@@ -84,6 +84,7 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 			missing, missingPackage = packageMissing, pkg
 		}
 	}
+	a.finishBrowser()
 	if missing != stopNone {
 		r.complete = false
 	}
@@ -153,6 +154,7 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 	sort.Strings(r.skipped)
 	sort.Strings(a.skipped)
 	r.stderrNotServable = code >= 125 && code <= 127 || runErr != nil || deadline || parentCancelled || !completed || state.interrupted
+	r.noTests, r.failureSignal = a.noTests, a.failureSignal
 	r.sealed = true
 	// Preserve classification rather than rendered text: retaining a rendered
 	// report would duplicate the diagnostic budget in the live aggregator.
@@ -256,7 +258,11 @@ func (a *containerAggregator) body(minimal bool) string {
 	if r.capName != "" {
 		fmt.Fprintf(&b, "Counts unavailable: output limit exceeded; the stream was cut.\nLimit reached: %s\n", r.capName)
 	} else if !r.complete {
-		b.WriteString("Counts unavailable: the stream was cut.\n")
+		if r.stop == stopKill || r.stop == stopTruncated {
+			b.WriteString("Counts unavailable: the stream was cut.\n")
+		} else {
+			b.WriteString("Counts unavailable: the stream is incomplete.\n")
+		}
 	}
 	if r.complete {
 		fmt.Fprintf(&b, "Packages: %d passed, %d failed, %d skipped\nLeaf tests: %d passed, %d failed, %d skipped\n", r.packages.passed, r.packages.failed, r.packages.skipped, r.leaves.passed, r.leaves.failed, r.leaves.skipped)
@@ -270,11 +276,15 @@ func (a *containerAggregator) body(minimal bool) string {
 		fmt.Fprintf(&b, "  | %s/%s (%s, %s)\n", aggregatorText(e.pkg), aggregatorText(e.name), e.kind, e.state)
 		writeRetainedOutput(&b, e.output)
 	}
-	if omitted := r.disallowedSkips - len(a.skipped); omitted > 0 {
+	if omitted := r.disallowedSkips - len(r.skipped); omitted > 0 {
 		fmt.Fprintf(&b, "%d skip names not retained\n", omitted)
 	}
 	if r.namesNotRetained > 0 {
-		fmt.Fprintf(&b, "names not retained for %d failures\n", r.namesNotRetained)
+		if r.complete {
+			fmt.Fprintf(&b, "names not retained for %d failures\n", r.namesNotRetained)
+		} else {
+			fmt.Fprintf(&b, observedFailuresNotRetained, r.namesNotRetained)
+		}
 	}
 	writeRetainedOutput(&b, r.packageOutput)
 	writeRetainedOutput(&b, r.compiler)

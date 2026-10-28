@@ -70,7 +70,19 @@ func TestContainerSummaryExecutionFailure(t *testing.T) {
 					return report, execution.summary, err
 				}
 				report, summary, err := run(false)
-				if !strings.HasPrefix(report, "FAILED\n") || !strings.Contains(report, summaryUnconfirmedStream()) || !strings.Contains(report, "/host/private/worktree") || (err == nil) != (outcome == "docker 125") {
+				hostOutput := summaryUnconfirmedStream()
+				if test2json, _ := containerCheckKind(check); test2json {
+					hostOutput = "unconfirmed excerpt"
+					for _, want := range []string{"p/TestUnconfirmed", "a.go:3: undefined: x", "panic: broken"} {
+						if !strings.Contains(report, want) {
+							t.Fatalf("host record lost %q: %s", want, report)
+						}
+					}
+					if strings.Contains(report, `"Action"`) {
+						t.Fatal("raw test stream escaped")
+					}
+				}
+				if !strings.HasPrefix(report, "FAILED\n") || !strings.Contains(report, hostOutput) || !strings.Contains(report, "/host/private/worktree") || (err == nil) != (outcome == "docker 125") {
 					t.Fatalf("host report changed: %q, error %v", report, err)
 				}
 				if outcome == "timeout" && !errors.Is(err, context.DeadlineExceeded) || outcome == "cancelled" && !errors.Is(err, context.Canceled) {
@@ -311,7 +323,14 @@ func TestContainerContextCommandExit(t *testing.T) {
 				stdout, _, _ := deadlineFixture(check, "pass")
 				runner := fakeContainerRunner{func(_ context.Context, args, _ []string, out, _ io.Writer) (int, error) {
 					if args[0] == "run" {
-						cancel = out.(containerStream).output.cancel
+						switch stream := out.(type) {
+						case containerStream:
+							cancel = stream.output.cancel
+						case aggregatorStream:
+							cancel = stream.aggregator.cancel
+						default:
+							t.Fatal("unknown container writer")
+						}
 						_, _ = io.WriteString(out, stdout)
 					}
 					if args[0] == stage {

@@ -42,10 +42,3 @@ func (result *containerExecution) refuse(check, pattern, line string) string {
 	result.summary = buildContainerSummary(in)
 	return line + "\n" + in.scope + "\n"
 }
-
-func (in summaryInput) runVerdict(check string, code int, err error, output *containerOutput) (string, string, string) {
-	if check == "test-browser" {
-		return browserVerdict(in.browserImportPath, in.browserRun, code, err, output.stdout.Bytes(), output.over), "", ""
-	}
-	return containerVerdict(check, code, err, output)
-}

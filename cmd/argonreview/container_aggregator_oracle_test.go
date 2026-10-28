@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+type containerTestPackage struct {
+	final  string
+	tests  map[string]string
+	output map[string]string
+}
+
 // oracleRunVerdict applies only #1857's runner-return and late-context rules
 // around the parser below; its stream decisions retain the original rules.
 func oracleRunVerdict(code int, runErr error, data []byte, state aggregatorRunState) string {

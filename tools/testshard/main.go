@@ -3,6 +3,7 @@
 // check-test with a shard's packages, browser selector and flags; -check
 // fails unless every package is covered and the workflow runs each shard in
 // exactly one job, with disjoint browser and non-browser execution ranges.
+// It also pins the local full-run wiring so argonreview gets the same timeout.
 // The named shards hold the slowest packages; "rest" is everything else, so
 // a package added later runs in CI without editing this list or the workflow.
 // make check runs -check.
@@ -25,7 +26,8 @@ import (
 
 // The named shards hold the packages that take longest on CI (#992), so
 // each job finishes at about the same time; "rest" runs in its own test-rest job.
-// cmd and web run separately so their browser tests do not compete for CPUs.
+// cmd and web run separately so their browser tests do not compete for CPUs;
+// argonreview needs more margin than Go's default package timeout (#1948).
 type shard struct {
 	name     string
 	packages []string
@@ -35,11 +37,13 @@ type shard struct {
 
 const browserTestName = "TestBrowser"
 const browserTestPattern = "^" + browserTestName + "$"
+const argonreviewFlags = "-p 2 -timeout 20m"
 
 func shards() []shard {
 	return []shard{
 		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2"},
 		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2"},
+		{"argonreview", []string{"./cmd/argonreview"}, "", argonreviewFlags},
 		{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern},
 		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2 -run " + browserTestPattern},
 		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run " + browserTestPattern},
@@ -97,7 +101,14 @@ func run(root, name string, check, execute bool) error {
 		if err != nil {
 			return fmt.Errorf("reading the workflow: %w", err)
 		}
-		return scheduled(string(source), specs)
+		if err := scheduled(string(source), specs); err != nil {
+			return err
+		}
+		source, err = os.ReadFile(filepath.Join(root, "Makefile"))
+		if err != nil {
+			return fmt.Errorf("reading the Makefile: %w", err)
+		}
+		return checkMakefile(string(source))
 	}
 	packages, err := pick(parts, name)
 	if err != nil {
@@ -157,7 +168,7 @@ func checkBrowserTests(root string, specs []shard) error {
 		return err
 	}
 	for _, s := range specs {
-		selection, err := parseFlags(s.flags)
+		selection, err := s.selection()
 		if err != nil {
 			return fmt.Errorf("shard %s: %w", s.name, err)
 		}
@@ -226,6 +237,16 @@ func parseFlags(flags string) (string, error) {
 	return args[2], nil
 }
 
+func (s shard) selection() (string, error) {
+	if s.name == "argonreview" {
+		if !slices.Equal(s.packages, []string{"./cmd/argonreview"}) || s.browser != "" || s.flags != argonreviewFlags {
+			return "", fmt.Errorf("argonreview must run only ./cmd/argonreview with flags %q and no browser selector", argonreviewFlags)
+		}
+		return "", nil
+	}
+	return parseFlags(s.flags)
+}
+
 // Each package runs either once in full, or in one non-browser slice plus a
 // complete set of browser selectors. Names expose selector drift in the matrix.
 func validateShards(specs []shard) error {
@@ -244,7 +265,7 @@ func validateShards(specs []shard) error {
 		seen := map[int]bool{}
 		nonBrowser, total := 0, 0
 		for _, s := range group {
-			selection, err := parseFlags(s.flags)
+			selection, err := s.selection()
 			if err != nil {
 				return fmt.Errorf("shard %s: %w", s.name, err)
 			}
@@ -472,4 +493,30 @@ func runs(lines, want []string) int {
 		}
 	}
 	return n
+}
+
+// Pin the branch as well as the commands: a timeout applies per test binary,
+// so folding the two local runs together would raise every package's timeout.
+func checkMakefile(source string) error {
+	const wiring = `check-test: db-health
+ifeq ($(origin GO_TEST_PACKAGES),undefined)
+	go test -race $(GO_TEST_FLAGS) $(or $(strip $(shell go list -f '{{if ne .ImportPath (print .Module.Path "/cmd/argonreview")}}{{.ImportPath}}{{end}}' ./...)),$(error no packages outside cmd/argonreview))
+	go -C tools run ./testshard -run .. argonreview
+else
+	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
+endif`
+	if n := runs(strings.Split(source, "\n"), strings.Split(wiring, "\n")); n != 1 {
+		return fmt.Errorf("Makefile: local check-test wiring appears %d times, want once", n)
+	}
+	// A default package variable would bypass the full-run branch entirely.
+	uses := 0
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			uses += strings.Count(line, "GO_TEST_PACKAGES")
+		}
+	}
+	if uses != 2 {
+		return fmt.Errorf("Makefile: found %d GO_TEST_PACKAGES uses, want 2 in local check-test wiring", uses)
+	}
+	return nil
 }

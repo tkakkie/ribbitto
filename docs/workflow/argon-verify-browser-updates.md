@@ -1,14 +1,15 @@
 # Verify browser image updates
 
-**Merged but not in force:** no image with Chromium has been built or
-pinned, the launcher is unchanged, and nothing here enables the browser
-check (#1908). Building, pinning, the launcher update and `browser-mode on`
-each need the maintainer's separate approval. This page records PR A's
-recipe and update contract; it does not authorize those later steps.
-Nothing here enables or authorizes anything; the
+**Merged but not in force:** the Chromium image is [built and recorded][build];
+A2 pins `containerVerifyImage` to that ID in source. Not in force: the enabled
+launcher `argonreview-2e3a6bf` (both workers) still pins the old image (#1697)
+and is unaffected. Only a launcher built from a commit including A2 uses the
+new image, after the integrated preflight and the maintainer's separate
+approval. Stage B and `browser-mode on` each need their own.
+Nothing here enables or authorizes anything;
 [preflight and approvals](argon-verify-browser-preflight.md) remain separate.
-PR A changes no runner, flags or launcher. B3a implements the masking below
-as a precondition for A2; A2 must not merge before B3a is merged.
+PR A changed no runner, flags or launcher. B3a's masking is merged;
+A2 had to merge after B3a, with its masking tests passing.
 
 ## Recipe pins
 
@@ -55,8 +56,8 @@ See the image page's [recipe rules](argon-verify-image.md#recipe-rules).
 ## The `dpkg-query -W` diff rule
 
 Every build records the full `dpkg-query -W` list. The reviewer diffs it
-against the list recorded for the image currently pinned. For the first
-browser build, compare against the current image's #1697 record, not a new
+against the currently pinned image's record. The first browser build used
+the old image's #1697 record, not a new
 build of the old recipe: floating dependencies could already have changed.
 List every added, removed or changed package, including old and new
 versions where applicable; an empty diff must also be recorded explicitly.
@@ -81,17 +82,17 @@ installed generator binaries. Record the browser build on #1908 with:
 - `chromium --version` from the built image.
 - The full `dpkg-query -W` list and its reviewed diff against the current
   image, following the rule above.
-- The image size against the current image's **1,765,140,168 bytes**;
+- The image size against the old image's **1,765,140,168 bytes**;
   state both sizes and the difference.
 - The build time.
 - One headless `about:blank` run under the production flags, with its
   result. Here, "production flags" means the container flags of the browser
   check as pinned by the argument golden; this PR does not define new ones.
 
-These are requirements for a later approved host build, not results from
-PR A. The record establishes what was actually built; the recipe alone
-cannot establish an image ID. PR A2 uses the recorded ID only after review
-and the B3a prerequisite below.
+The [first browser build][build] recorded **2,829,756,460 bytes** (+60.3 %).
+These requirements apply to every approved build. The record, not PR A's
+recipe alone, establishes the image ID. A2 pins it after record review and
+the B3a prerequisite below.
 
 ## Update path
 
@@ -106,29 +107,27 @@ build are required, in this order:
    List the downloads, then obtain the maintainer's chat approval before
    building. Record the image ID and all build record items above. There
    is no exception for building an unmerged recipe on the host.
-3. **B3a masking, then image-ID pull request (A2), preflight and launcher:**
-   once the pinned image contains `/usr/bin/chromium`, existing `test` and
-   `test-db` checks would find it through go-rod's `launcher.LookPath` and
+3. **Merged B3a masking, A2 pin, then preflight and launcher:**
+   without masking, `test` and `test-db` would find `/usr/bin/chromium`
+   through go-rod's `launcher.LookPath` and
    launch Chromium outside `browser-mode`, `browser.lock`, the 2-unit
    budget and the 14-day gate. `test-db ./cmd/ribbitto` could even return
    `verified` after a browser run. Chromium must run only through
    `test-browser`.
 
-   First, B3a (#1908 runner wiring) merges, once M3, B1 and B2 are
-   satisfied. B3a runs every non-browser check with Chromium unreachable:
+   First, B3a (#1908 runner wiring) merged after M3, B1 and B2.
+   It runs every non-browser check with Chromium unreachable:
    `--tmpfs /usr/lib/chromium:ro,noexec,nosuid,nodev,size=1m` masks Debian's
    install directory. Only `test-browser` omits it.
    `TestContainerChromiumMasked` and `TestContainerArgumentsGolden` pin the
-   masking and prove a non-browser check cannot launch Chromium from its
-   final arguments. These tests need no image, so B3a does not wait for A2,
-   and both must pass before B3a merges.
+   masking against non-browser launches in final arguments. These image-free
+   tests let B3a precede A2; both had to pass before B3a merged.
 
    Second, A2 pins `containerVerifyImage` to the recorded ID, with tier A
    review and merge on the maintainer's instruction. A2 must not merge until
    B3a is merged and its masking tests pass; it does not wait for the
    preflight. If masking would weaken another boundary, stop and report on
-   #1908 before A2. This is a precondition recorded here; PR A implements
-   no runner change.
+   #1908 before A2. PR A changed no runner.
 
    Third, build a candidate binary from a pinned commit that includes A2.
    Its integrated preflight must verify `dpkg -L chromium` places the binary
@@ -197,3 +196,5 @@ exploitable High or above with serious impact without the sandbox triggers
 the immediate [emergency pause](argon-verify-browser.md#removal-authority-and-emergency-pause).
 Other fixes start the update path immediately; records and fixed images
 authorize no re-enabling.
+
+[build]: https://github.com/tkakkie/ribbitto/issues/1908#issuecomment-6462194722

@@ -183,6 +183,10 @@ func TestVerifyMCPBrowserAdmission(t *testing.T) {
 			if !bad || !strings.HasPrefix(text, want+"\n") {
 				t.Fatalf("MCP admission %s must refuse: %q want=%q", kind, text, want)
 			}
+			expected := want + "\nCheck: test-browser ./internal/web " + browserTestRun + "\nScope: " + containerCheckScope(verifyBrowserCheck) + "\nDetails unavailable: the check did not complete.\n" + deadlineOmitted
+			if text != expected {
+				t.Fatalf("browser refusal body must stay unchanged, before the trust line: %q", text)
+			}
 			assertNoContainerCopy(t, v.copyParent)
 		})
 	}

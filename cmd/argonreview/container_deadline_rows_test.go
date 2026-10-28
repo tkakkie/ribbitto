@@ -97,7 +97,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 		timeout = 2 * time.Second
 	}
 	execution.timeout = timeout
-	var baselineSummary string
+	var baselineSummary, baselineReport string
 	run := func(mcp bool) (string, string, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		if row.interruption == context.DeadlineExceeded && (timeout == containerTimeout || row.stage == "before" || row.stage == "finishReport") {
@@ -118,6 +118,12 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 			}
 			if timeout == containerTimeout || row.stage == "before" || row.stage == "finishReport" || row.interruption == context.Canceled {
 				<-ctx.Done()
+				// Err takes the context's lock, which its cancellation holds while
+				// it cancels every child: after this call the run's own context has
+				// seen the parent's deadline even when the aggregator already
+				// cancelled the runner's context (a malformed stream) and the wait
+				// on activeRun below returns at once.
+				_ = ctx.Err()
 			}
 			// A parent's Done can close before cancellation reaches its child.
 			// The verdict reads the derived run context, so wait for it too.
@@ -203,7 +209,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 				t.Fatal(err)
 			}
 			if !mcp {
-				baselineSummary = summary
+				baselineSummary, baselineReport = summary, report
 			}
 			if row.interruption == context.Canceled {
 				cancel()
@@ -213,6 +219,9 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 					t.Fatal("verifier baseline differs from captured execution")
 				}
 				report = deadlineHostReport(check, original, stdout, stderr, code, false)
+				if isTest, _ := containerCheckKind(check); isTest {
+					report = baselineReport
+				}
 			}
 			in := summaryFixture(check, original, "", "")
 			report, err = execution.finishReport(ctx, report, nil, in)
@@ -250,7 +259,10 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 	case "source":
 		wantReport = fmt.Sprintf("%s\n%s check result could not be confirmed. %s\n", first, check, containerCheckScope(""))
 	}
-	if report != wantReport {
+	isTest, _ := containerCheckKind(check)
+	if isTest && row.stage != "before" && row.stage != "source" {
+		assertDeadlineRecord(t, check, first, stdout, stderr, report, execution.record)
+	} else if report != wantReport {
 		t.Fatalf("host report differs: got %q, want %q", report[:min(len(report), 1500)], wantReport[:min(len(wantReport), 1500)])
 	}
 	wantErr := row.interruption
@@ -289,7 +301,16 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 		if row.outcome == "cap" {
 			body = "Counts unavailable: output limit exceeded; the stream was cut.\n"
 		}
-		want := first + "\nCheck: " + check + " ./...\nScope: " + scope + "\n" + body + deadlineOmitted
+		footer := deadlineOmitted
+		trust := ""
+		if row.outcome == "cap" && isTest {
+			trust = summaryTrust + "\n"
+			body += "Limit reached: line length\n"
+			footer = "Omitted: excerpts shown for 0 observed failing tests; total unknown; 0 names not shown; 0 lines not shown; 0 lines shortened.\n"
+		} else if row.outcome == "cap" {
+			body += "Limit reached: total output\n"
+		}
+		want := first + "\nCheck: " + check + " ./...\nScope: " + scope + "\n" + trust + body + footer
 		if summary != want {
 			t.Fatalf("summary body differs: %q, want %q", summary, want)
 		}

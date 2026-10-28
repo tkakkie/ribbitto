@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// TestSummaryFactsProtocol ensures tolerance never makes malformed protocol
+// TestSummaryFactsProtocol ensures stopped interpretation never makes malformed protocol
 // usable as complete evidence, including duplicates and incomplete states.
 func TestSummaryFactsProtocol(t *testing.T) {
 	pass := containerEvents("p", "TestOne", "pass")
@@ -22,9 +22,9 @@ func TestSummaryFactsProtocol(t *testing.T) {
 		containerJSON("p", "start", "run/Test", "run/Test", "pass"),
 		containerJSON("p", "start", "pause/Test", "pass"), containerJSON("p", "start", "mystery", "pass"),
 		containerJSON("p", "start", "run/Test", "pass"),
-		strings.Repeat("x", summaryEventLimit+1) + "\n",
+		strings.Repeat("x", aggregatorLineLimit+1) + "\n",
 	} {
-		f := parseSummaryFacts("test", []byte(data), nil, false)
+		f := recordFactsFixture("test", []byte(data), nil, false)
 		if f.err == nil {
 			t.Fatalf("understood malformed %q", data[:min(len(data), 200)])
 		}
@@ -33,9 +33,14 @@ func TestSummaryFactsProtocol(t *testing.T) {
 		}
 	}
 	broken := "bad\n" + containerJSON("p", "start", "run/TestBad") + testOutput("p", "TestBad", "panic: later diagnostic\n") + containerJSON("p", "fail/TestBad", "fail")
-	f := parseSummaryFacts("test", []byte(broken), nil, false)
-	if f.err == nil || f.afterEvent != 1 || len(f.failures) != 1 || f.panicLine != "panic: later diagnostic" {
-		t.Fatalf("tolerance lost facts: %+v", f)
+	f := recordFactsFixture("test", []byte(broken), nil, false)
+	if f.err == nil || f.afterEvent != 0 || f.events != 0 || len(f.failures) != 0 || f.panicLine != "" {
+		t.Fatalf("events after first stop were interpreted: %+v", f)
+	}
+	// A failure before the bad line remains observed; later text cannot supply evidence.
+	f = recordFactsFixture("test", []byte(containerEvents("p", "TestBad", "fail")+"bad\n"), nil, false)
+	if f.err == nil || len(f.failures) != 1 || !f.incomplete {
+		t.Fatalf("observed failure lost: %+v", f)
 	}
 }
 
@@ -43,7 +48,7 @@ func TestSummaryFactsProtocol(t *testing.T) {
 // ancestor, and proves failed parents never appear as failing leaf names.
 func TestSummaryFactsLeafLogic(t *testing.T) {
 	data := containerJSON("p", "start", "run/TestParent", "run/TestParent/child/a", "pass/TestParent/child/a", "fail/TestParent", "run/TestSkip", "skip/TestSkip", "run/TestBad", "fail/TestBad", "fail")
-	f := parseSummaryFacts("test", []byte(data), nil, false)
+	f := recordFactsFixture("test", []byte(data), nil, false)
 	if f.err != nil || f.leaves != (summaryCounts{passed: 1, failed: 1, skipped: 1}) || len(f.failures) != 1 || f.failures[0].name != "p/TestBad" {
 		t.Fatalf("leaf facts %+v", f)
 	}
@@ -53,19 +58,19 @@ func TestSummaryFactsLeafLogic(t *testing.T) {
 // identity cap. Neither path retains output proportional to the event count.
 func TestSummaryFactsFlood(t *testing.T) {
 	data := containerJSON("p", "start", "run/TestOne") + strings.Repeat(testOutput("p", "TestOne", "noise\n"), 100000) + containerJSON("p", "pass/TestOne", "pass")
-	f := parseSummaryFacts("test", []byte(data), nil, false)
+	f := recordFactsFixture("test", []byte(data), nil, false)
 	if f.err != nil || f.leaves.passed != 1 || len(f.failures) != 0 || len(f.stdout.lines) > 8 {
 		t.Fatalf("flood facts %+v", f)
 	}
 	var stream strings.Builder
 	stream.WriteString(containerJSON("p", "start"))
-	for i := 0; i < summaryTestLimit+1; i++ {
+	for i := 0; i < aggregatorTestLimit+1; i++ {
 		name := fmt.Sprintf("Test%05d", i)
 		stream.WriteString(containerJSON("p", "run/"+name, "pass/"+name))
 	}
 	stream.WriteString(containerJSON("p", "pass"))
-	f = parseSummaryFacts("test", []byte(stream.String()), nil, false)
-	if f.err == nil || f.leaves.passed != summaryTestLimit {
+	f = recordFactsFixture("test", []byte(stream.String()), nil, false)
+	if f.err == nil || f.leaves.passed != aggregatorTestLimit {
 		t.Fatal("retention cap not enforced")
 	}
 }
@@ -187,7 +192,7 @@ func summaryFixtureExpression(t *testing.T, expr ast.Expr) string {
 // preceding server noise, while keeping stdout first when both contain one.
 func TestSummaryStderrSignals(t *testing.T) {
 	stderr := strings.Repeat("server noise\n", 100) + "panic: test timed out after 10m\n"
-	f := parseSummaryFacts("test", []byte(containerJSON("p", "start", "fail")), []byte(stderr), false)
+	f := recordFactsFixture("test", []byte(containerJSON("p", "start", "fail")), []byte(stderr), false)
 	if f.err != nil || f.panicLine != "panic: test timed out after 10m" || f.timeoutLine != f.panicLine || len(f.stderr.lines) != 8 {
 		t.Fatalf("stderr signals %+v", f)
 	}

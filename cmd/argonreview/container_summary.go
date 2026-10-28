@@ -9,6 +9,10 @@ import (
 )
 
 const (
+	summaryTrust = "Trust: stdout cannot be authenticated within one uid and one container. Structural rules check consistency, not proof. verified is Argon's own check, never a security control; CI, review and handoff checks remain the check."
+	// summaryExcerptLimit applies only to presentation of retained diagnostics.
+	summaryExcerptLimit = 8
+
 	// summaryVerifiedLimit keeps non-error results comfortably inline.
 	summaryVerifiedLimit = 2048
 	// summaryErrorLimit is the MCP wrapper's hard limit.
@@ -35,6 +39,7 @@ const (
 // generated data is supplied explicitly, without reinterpreting a host report.
 // Scope, check and pattern must come from the trusted scope/argument validation.
 type summaryInput struct {
+	browserRun, browserImportPath  string
 	verdict, check, pattern, scope string
 	facts                          summaryFacts
 	stat                           generatedStat
@@ -90,7 +95,11 @@ func (w *summaryWriter) names(header string, names []string, total int) {
 	omitted := max(0, total-shown)
 	w.namesOmitted += omitted
 	if omitted > 0 {
-		w.put(fmt.Sprintf("and %d more", omitted))
+		if shown == 0 {
+			w.put(fmt.Sprintf("%s %d more not shown", header, omitted))
+		} else {
+			w.put(fmt.Sprintf("and %d more", omitted))
+		}
 	}
 }
 
@@ -226,7 +235,15 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			trustedFits = false
 		}
 	}
-	trusted("Check: " + summaryText(in.check) + " " + summaryText(in.pattern))
+	checkLine := "Check: " + summaryText(in.check) + " " + summaryText(in.pattern)
+	if in.check == "test-browser" {
+		checkLine += " " + in.browserRun
+	}
+	trusted(checkLine)
+	if verified && in.check == "test-browser" {
+		_, named, _ := strings.Cut(in.verdict, "\n")
+		trusted(named)
+	}
 	scope := in.scope
 	// Scope is trusted source text, capped separately from container diagnostics.
 	if len(scope) > summaryScopeLimit {
@@ -244,7 +261,10 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		return w.finish(0)
 	}
 	f := in.facts
-	isTest := in.check == "test" || in.check == "test-db"
+	isTest, _ := containerCheckKind(in.check)
+	if isTest {
+		w.put(summaryTrust)
+	}
 	cut := f.cut || strings.Contains(first, "output limit exceeded")
 	minimal := first == summaryInconsistent || f.err != nil || cut
 	hasResults := f.packages.passed+f.packages.failed+f.packages.skipped > 0
@@ -267,34 +287,47 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		}
 		return w.finish(0)
 	}
-	if minimal {
-		w.namesOmitted += len(f.failures)
-		for _, failure := range f.failures {
-			w.linesOmitted += failure.output.total
-		}
-	}
+
 	if cut {
 		w.put("Counts unavailable: output limit exceeded; the stream was cut.")
+		if f.capName != "" {
+			w.put("Limit reached: " + f.capName)
+		}
 	} else if minimal {
-		w.put("Details unavailable: the stream was not understood completely.")
+		if f.streamCut {
+			w.put("Counts unavailable: the stream was cut.")
+		} else {
+			w.put("Counts unavailable: the stream is incomplete.")
+		}
 		if f.err != nil {
 			w.put(fmt.Sprintf("Stream not understood after event %d.", f.afterEvent))
 		}
 	}
 	if strings.HasPrefix(first, "NOT VERIFIED:") {
 		_, rest, _ := strings.Cut(in.verdict, "\n")
-		if strings.HasSuffix(first, " skipped") && rest != "" {
-			names := strings.Split(rest, "\n")
-			w.names("Skipped names:", names, len(names))
+		if strings.HasSuffix(first, " skipped") && (rest != "" || f.skippedTotal > 0) {
+			var names []string
+			if rest != "" {
+				names = strings.Split(rest, "\n")
+			}
+			w.names("Skipped names:", names, max(len(names), f.skippedTotal))
 		}
 	}
 	failed := strings.HasPrefix(first, "FAILED")
-	if failed && !minimal {
-		names := make([]string, 0, len(f.failures))
-		for _, failure := range f.failures {
-			names = append(names, failure.name)
+	if f.incomplete {
+		if len(f.observed) == 0 && f.namesNotRetained > 0 {
+			w.put("Failures (observed, total unknown):")
 		}
-		w.names("Failing leaf tests:", names, len(names))
+		w.names("Failures (observed, total unknown):", f.observed, len(f.observed))
+	}
+	if failed && !minimal || f.incomplete && len(f.failures) > 0 {
+		if !f.incomplete {
+			names := make([]string, 0, len(f.failures))
+			for _, failure := range f.failures {
+				names = append(names, failure.name)
+			}
+			w.names("Failing leaf tests:", names, max(len(names), f.failedTotal))
+		}
 		for _, failure := range f.failures {
 			if len(failure.output.lines) == 0 {
 				continue
@@ -360,7 +393,10 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		// Counts above are refused, but its stderr still explains the failure.
 		w.lines("Standard error:", f.stderr)
 	}
-	return w.finish(len(f.failures))
+	if f.incomplete {
+		return w.finishObserved(f.namesNotRetained)
+	}
+	return w.finish(max(len(f.failures), f.failedTotal))
 }
 
 // finish uses the space reserved before optional writes, including when a cap

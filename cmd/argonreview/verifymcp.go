@@ -1,7 +1,7 @@
 package main
 
 // verify-mcp is trusted control code outside agy's sandbox. Startup fixes its
-// source and worktree; the wire exposes only the runner's two check arguments.
+// source and worktree; the wire exposes only the runner's validated check arguments.
 
 import (
 	"bufio"
@@ -27,20 +27,33 @@ const (
 	verifyCallLimit     = containerTimeout + 2*containerCleanupTimeout + time.Minute
 	verifyShutdownGrace = 2*containerCleanupTimeout + 5*time.Second
 	verifyMCPPath       = "/usr/bin:/bin"
-	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path>"
+	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>]"
 )
 
 type verifier interface {
 	verify(context.Context, string, string) (string, error)
 }
+type browserVerifier interface {
+	verifyBrowser(context.Context, string, string) (string, error)
+}
+
 type containerVerifier struct {
-	worktree   string
-	runner     containerRunner
-	copyParent string
+	browserMode     string
+	browserSecurity browserSecurity
+	budget          containerBudget
+	worktree        string
+	runner          containerRunner
+	copyParent      string
+	timeout         time.Duration
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent)
+	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout, v.budget)
+}
+
+func newContainerVerifier(worktree, browserMode string) containerVerifier {
+	runner := dockerRunner{ownGroup: true}
+	return containerVerifier{browserMode: browserMode, budget: newContainerBudget(runner), worktree: worktree, runner: runner, copyParent: containerCopyParent, timeout: containerTimeout, browserSecurity: newBrowserSecurity()}
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -151,9 +164,17 @@ func verifyEnvironment(environ []string) error {
 }
 
 func startVerifyMCP(ctx context.Context, args, environ []string, trust func(string) error, sweep func(io.Writer) error, v verifier, stdin io.Reader, stdout, stderr io.Writer) int {
-	if len(args) != 4 || args[0] != "--trusted-source" || args[2] != "--worktree" {
+	if (len(args) != 4 && len(args) != 6) || args[0] != "--trusted-source" || args[2] != "--worktree" {
 		_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
 		return 2
+	}
+	browserMode := ""
+	if len(args) == 6 {
+		if args[4] != "--browser-mode" || browserModePath(args[5]) != nil {
+			_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
+			return 2
+		}
+		browserMode = args[5]
 	}
 	err := verifyEnvironment(environ)
 	if err == nil {
@@ -177,7 +198,7 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 		return 1
 	}
 	if v == nil {
-		v = containerVerifier{args[3], dockerRunner{ownGroup: true}, containerCopyParent}
+		v = newContainerVerifier(args[3], browserMode)
 	}
 	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
 		// Recheck because the worker can replace paths after startup. This
@@ -559,7 +580,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					rpcError(req.id, -32602, "invalid tools/list params")
 					continue
 				}
-				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated or test-db in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
+				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated, test-db or test-browser in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
 			case "tools/call":
 				if !initialized {
 					rpcError(req.id, -32600, "initialize required")
@@ -590,7 +611,16 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					deadline = s.callDeadline
 				}
 				go func() {
-					report, err := s.verifier.verify(callCtx, args.check, args.pattern)
+					var report string
+					var err error
+					if args.check == verifyBrowserCheck {
+						report = browserPaused + "\n"
+						if v, ok := s.verifier.(browserVerifier); ok {
+							report, err = v.verifyBrowser(callCtx, args.pattern, args.run)
+						}
+					} else {
+						report, err = s.verifier.verify(callCtx, args.check, args.pattern)
+					}
 					completed <- verifyCompletion{report, err}
 				}()
 			default:

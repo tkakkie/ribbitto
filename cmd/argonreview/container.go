@@ -20,15 +20,14 @@ import (
 )
 
 const (
-	// The recipe pins the base; runs and sweeps pin the built image recorded on #1697.
+	// The recipe pins the base; runs and sweeps pin the built image recorded on #1908.
 	containerBaseImage      = "golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261"
-	containerVerifyImage    = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
+	containerVerifyImage    = "sha256:bdd988255da2296494d1d4dcb2e944702c082480482aa5b8777fceadf8fc1ef1"
 	containerGoVersion      = "1.27.3"
 	containerTemplVersion   = "v0.3.1070"
 	containerSQLCVersion    = "v1.31.1"
 	containerTimeout        = 10 * time.Minute
 	containerCleanupTimeout = 20 * time.Second
-	containerMemory         = "2g"
 	containerPIDs           = "256"
 	containerCPUs           = "2"
 	containerOutputLimit    = 4 << 20
@@ -37,13 +36,19 @@ const (
 	containerUser           = "1000:1000"
 	// Provision this cache from trusted host module downloads. A fixed path
 	// avoids GOPATH, GOENV, HOME or a worktree selecting an arbitrary host mount.
-	containerModuleCache = "/var/cache/argonreview/go-mod"
-	containerPath        = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
-	containerCopyParent  = "/tmp"
-	containerOwnerLabel  = "argonreview.owner"
-	containerOwnerValue  = "verify"
-	containerNamePattern = `^argonreview-check-[0-9a-f]{32}$`
+	containerModuleCache      = "/var/cache/argonreview/go-mod"
+	containerPath             = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+	containerCopyParent       = "/tmp"
+	containerOwnerLabel       = "argonreview.owner"
+	containerOwnerValue       = "verify"
+	containerNamePattern      = `^argonreview-check-[0-9a-f]{32}$`
+	containerTimeLimitVerdict = "NOT VERIFIED: time limit exceeded"
 )
+
+// The recipe pins Chromium; the browser check's scope text will name it. The
+// recipe test keeps the two equal. A separate declaration keeps the block above
+// free of realignment conflicts with later edits to containerVerifyImage.
+const containerChromiumVersion = "156.0.8078.47-1~deb13u1"
 
 // A single-run container has a fresh /tmp. Copy dotfiles too, keeping /work read-only.
 // Generator stdout must not contaminate the test2json stream.
@@ -77,6 +82,8 @@ esac
 func containerCheckScope(check string) string {
 	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 	switch check {
+	case "test-browser":
+		return "Chromium " + containerChromiumVersion + " (Debian). Sandbox disabled: the container is the only boundary. Not CI's Chrome; not a browser-targets record. Only the named test ran. No race detector."
 	case "test-db":
 		return "Race detector was not run. Cgo-dependent packages and browser tests are CI-only. Ran on regenerated sources with PostgreSQL 18 and the trusted measurement-skip allowlist; the generated check covers committed generated files. test-db is merged but not in force until #1700. Whether ./... fits the unchanged container limits is unestablished."
 	case "generated":
@@ -91,9 +98,19 @@ func containerCheckScope(check string) string {
 // Only local patterns are admitted; ... is allowed only as the final segment.
 var containerPattern = regexp.MustCompile(`^(\.|\./\.\.\.|\./[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]*)*(/\.\.\.)?)$`)
 
-func validateContainerCheck(tree, check, pattern string) error {
+func validateContainerCheck(tree, check, pattern, run string) error {
 	if tree == "" || strings.ContainsRune(tree, 0) {
 		return errors.New("a worktree path is required")
+	}
+	if check == verifyBrowserCheck {
+		if _, err := browserPackageImportPath(pattern); err != nil {
+			return err
+		}
+		_, err := browserRunPattern(run)
+		return err
+	}
+	if run != "" {
+		return errors.New("run is only allowed for test-browser")
 	}
 	if check != "build" && check != "vet" && check != "test" && check != "generated" && check != "test-db" {
 		return errors.New("check must be build, vet, test, generated or test-db")
@@ -114,24 +131,8 @@ func dockerEnvironment() []string {
 	return []string{"PATH=" + containerPath, "HOME=/nonexistent", "DOCKER_CONFIG=/nonexistent", "DOCKER_HOST=unix:///var/run/docker.sock"}
 }
 
-func containerArguments(copyDir, name, check, pattern string) []string {
-	// Explicit removal below replaces --rm: verification waits for Docker to
-	// acknowledge removal, and interruption cannot race automatic removal.
-	args := []string{"run", "--pull=never", "--name", name,
-		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
-		// Both tmpfs mounts allow execution: Go executes test binaries from its
-		// temporary build/cache directories. nosuid/nodev still apply.
-		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
-		"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
-		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
-		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
-		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
-		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go"}
-	if check == "test-db" {
-		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
-	}
-	args = append(args, "--memory", containerMemory, "--memory-swap", containerMemory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
-		containerVerifyImage, "sh", "-c")
+func containerArguments(copyDir, name, check, pattern string, reservation budgetReservation) []string {
+	args := containerBaseArguments(copyDir, name, check, reservation, false)
 	if check == "generated" {
 		return append(args, containerGeneratedScript)
 	}
@@ -149,6 +150,34 @@ func containerArguments(copyDir, name, check, pattern string) []string {
 		args = append(args, "-count=1", "-json")
 	}
 	return append(args, pattern)
+}
+
+func containerBaseArguments(copyDir, name, check string, reservation budgetReservation, browser bool) []string {
+	// Explicit removal below replaces --rm: verification waits for Docker to
+	// acknowledge removal, and interruption cannot race automatic removal.
+	args := []string{"run", "--pull=never", "--name", name,
+		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--label", budgetSlotLabel + "=" + reservation.label, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
+		// Both tmpfs mounts allow execution: Go executes test binaries from its
+		// temporary build/cache directories. nosuid/nodev still apply.
+		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
+		"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
+		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
+		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
+		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
+		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go"}
+	pids := containerPIDs
+	if browser {
+		pids = containerBrowserPIDs
+		args = append(args, "--label", otherClassLabel+"=browser", "-e", containerRequireBrowser)
+	} else {
+		args = append(args, "--tmpfs", containerChromiumDirectory+":ro,noexec,nosuid,nodev,size=1m")
+	}
+	if browser || check == "test-db" {
+		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
+	}
+	memory := fmt.Sprintf("%dg", reservation.memory/(1<<30))
+	return append(args, "--memory", memory, "--memory-swap", memory, "--pids-limit", pids, "--cpus", containerCPUs,
+		containerVerifyImage, "sh", "-c")
 }
 
 type containerRunner interface {
@@ -203,17 +232,59 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 	return 0, nil
 }
 
+const containerCheckUsage = "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-check <worktree> test-browser <package> <run> [--browser-mode <abs path>]"
+
+func parseContainerCheck(args []string) (verifyArguments, string, error) {
+	mode := ""
+	if len(args) >= 2 && args[len(args)-2] == "--browser-mode" {
+		mode = args[len(args)-1]
+		if err := browserModePath(mode); err != nil {
+			return verifyArguments{}, "", err
+		}
+		args = args[:len(args)-2]
+	}
+	a := verifyArguments{}
+	if len(args) < 3 {
+		return a, mode, errors.New(containerCheckUsage)
+	}
+	a.check, a.pattern = args[1], args[2]
+	if a.check == verifyBrowserCheck && len(args) == 4 {
+		a.run = args[3]
+	} else if len(args) != 3 {
+		return a, mode, errors.New(containerCheckUsage)
+	}
+	return a, mode, validateContainerCheck(args[0], a.check, a.pattern, a.run)
+}
+
 func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 3 || validateContainerCheck(args[0], args[1], args[2]) != nil {
-		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern>")
+	if _, _, err := parseContainerCheck(args); err != nil {
+		_, _ = fmt.Fprintln(stderr, containerCheckUsage)
 		return 2
 	}
 	info, ok := debug.ReadBuildInfo()
 	_, err := trusted(info, ok, func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) })
-	return startContainerCheck(args, stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent)
+	return startContainerCheck(args, stdout, stderr, err, sweepContainers, dockerRunner{}, containerCopyParent, newContainerBudget(dockerRunner{}))
 }
 
-func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string) int {
+func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string, budget containerBudget) int {
+	v := newContainerVerifier("", "")
+	v.runner, v.copyParent, v.budget = runner, copyParent, budget
+	return v.containerCheck(args, stdout, stderr, err, sweep)
+}
+
+func (v containerVerifier) containerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error) int {
+	a, mode, parseErr := parseContainerCheck(args)
+	if parseErr != nil {
+		_, _ = fmt.Fprintln(stderr, containerCheckUsage)
+		return 2
+	}
+	v.worktree, v.browserMode = args[0], mode
+	if a.check == verifyBrowserCheck {
+		if line := v.browserAdmission(); line != "" {
+			_, _ = fmt.Fprintln(stdout, line)
+			return 1
+		}
+	}
 	code := 1
 	if err == nil {
 		err = sweep(stderr)
@@ -222,7 +293,12 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var report string
-		report, err = runContainerCheck(ctx, args[0], args[1], args[2], runner, copyParent)
+		if a.check == verifyBrowserCheck {
+			result := containerExecution{timeout: containerTimeout, budget: v.budget, browserRun: a.run, admit: v.browserAdmission}
+			report, err = runContainerExecution(ctx, args[0], a.check, a.pattern, v.runner, v.copyParent, &result)
+		} else {
+			report, err = runContainerCheck(ctx, args[0], a.check, a.pattern, v.runner, v.copyParent, v.budget)
+		}
 		// Cleanup has completed before writing to a potentially closed pipe.
 		if _, writeErr := io.WriteString(stdout, report); writeErr != nil {
 			err = errors.Join(err, fmt.Errorf("writing container report: %w", writeErr))
@@ -237,34 +313,102 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 	return code
 }
 
-func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (report string, err error) {
-	if err := validateContainerCheck(tree, check, pattern); err != nil {
+func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, budget containerBudget) (report string, err error) {
+	if err := validateContainerCheck(tree, check, pattern, ""); err != nil {
 		return "", err
 	}
-	var result containerExecution
+	result := containerExecution{timeout: containerTimeout, budget: budget}
 	return runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 }
 
-func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string) (string, error) {
-	if err := validateContainerCheck(tree, check, pattern); err != nil {
+func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, timeout time.Duration, budget containerBudget) (string, error) {
+	if err := validateContainerCheck(tree, check, pattern, ""); err != nil {
 		return "", err
 	}
-	var result containerExecution
+	result := containerExecution{timeout: timeout, budget: budget}
 	_, err := runContainerExecution(parent, tree, check, pattern, runner, copyParent, &result)
 	return result.summary, err
 }
 
 type containerExecution struct {
-	output  containerOutput
-	code    int
-	summary string
+	browserRun, browserImportPath string
+	admit                         func() string
+	budget                        containerBudget
+	timeout                       time.Duration
+	output                        containerOutput
+	record                        *containerRecord
+	aggregation                   *containerAggregator
+	runState                      aggregatorRunState
+	runErr                        error
+	parent                        context.Context
+	runnerContext                 context.Context
+	finishAggregation             func(*containerAggregator, int, error, aggregatorRunState) aggregatorResult
+	code                          int
+	summary                       string
 }
 
 // Both commands share source copying, flags, limits and confirmed cleanup.
-// Callers validate their own interface before reaching this private executor.
+// Browser inputs are validated here before admission or resource acquisition.
 func runContainerExecution(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, result *containerExecution) (report string, err error) {
-	ctx, cancel := context.WithTimeout(parent, containerTimeout)
+	result.parent = parent
+	timeout := result.timeout
+	if timeout == 0 {
+		timeout = containerTimeout
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
+	request := budgetSingle
+	if check == "test-browser" {
+		importPath, err := browserPackageImportPath(pattern)
+		if err != nil {
+			return "", err
+		}
+		if _, err := browserRunPattern(result.browserRun); err != nil {
+			return "", err
+		}
+		result.browserImportPath = importPath
+		line := browserPaused
+		if result.admit != nil {
+			line = result.admit()
+		}
+		if line != "" {
+			return result.refuse(check, pattern, line), nil
+		}
+		request = budgetBrowserRequest
+	}
+	// Reserve before even creating the copy directory. Register release first:
+	// container cleanup, source removal and the copy lock's Close all precede it.
+	reservation, cause := budgetReservation{}, budgetStateUnknown
+	if result.budget != nil {
+		reservation, cause = result.budget.budgetReserve(ctx, request)
+	}
+	if ctx.Err() != nil {
+		if reservation.release != nil {
+			reservation.release()
+		}
+		return "", fmt.Errorf("preparing container: %w", ctx.Err())
+	}
+	if cause != "" || reservation.release == nil || reservation.memory <= 0 || reservation.label == "" {
+		if reservation.release != nil {
+			reservation.release()
+		}
+		if cause == "" {
+			cause = budgetStateUnknown
+		}
+		line := cause.line("verification budget")
+		if check == "test-browser" {
+			line = browserBudgetLine(cause)
+		}
+		return result.refuse(check, pattern, line), nil
+	}
+	// A failed removal still leaves its slot held by label reconciliation.
+	defer reservation.release()
+	// Admission can change during the budget wait; refuse before making a copy.
+	if check == verifyBrowserCheck {
+		if line := result.admit(); line != "" {
+			return result.refuse(check, pattern, line), nil
+		}
+	}
 	tree, err = filepath.Abs(tree)
 	if err != nil {
 		return "", fmt.Errorf("resolving worktree: %w", err)
@@ -281,7 +425,7 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	if lockErr == nil {
 		defer func() { _ = lock.Close() }()
 	}
-	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check)}
+	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check), browserRun: result.browserRun, browserImportPath: result.browserImportPath}
 	defer func() {
 		if removeErr := os.RemoveAll(dir); removeErr != nil {
 			in.scope = containerCheckScope("")
@@ -321,18 +465,83 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	name := fmt.Sprintf("argonreview-check-%x", suffix)
 	output := &result.output
 	output.cancel = cancel
-	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
-	result.code = code
-	return finishContainerRun(ctx, runner, name, check, code, runErr, output, &in)
+	args := containerArguments(copyDir, name, check, pattern, reservation)
+	if check == "test-browser" {
+		args, err = containerBrowserArguments(copyDir, name, pattern, result.browserRun, reservation)
+		if err != nil {
+			return "", err
+		}
+	}
+	test2json, classified := containerCheckKind(check)
+	if !classified {
+		return "", fmt.Errorf("unclassified container check %q", check)
+	}
+	var stdout, stderr io.Writer = output.stdoutWriter(), output.stderrWriter()
+	runnerCtx := ctx
+	if test2json {
+		var allowlist []measurementSkip
+		if check == "test-db" {
+			allowlist = measurementSkips()
+		}
+		var stop context.CancelFunc
+		runnerCtx, stop = context.WithCancel(ctx)
+		result.runnerContext = runnerCtx
+		result.aggregation = newContainerAggregator(stop, allowlist)
+		if check == "test-browser" {
+			result.aggregation.retainBrowserScope(result.browserImportPath, result.browserRun)
+		}
+		stdout, stderr = result.aggregation.stdoutWriter(), result.aggregation.stderrWriter()
+	}
+	code, runErr := runner.run(runnerCtx, args, dockerEnvironment(), stdout, stderr)
+	// Record completion before cleanup: a later deadline cannot undo a finished
+	// container, while an earlier interruption makes its result unknowable.
+	ownStop := result.aggregation != nil && result.aggregation.record.stop != stopNone
+	interrupted := ctx.Err() != nil || parent.Err() != nil || runnerCtx.Err() != nil && !ownStop
+	completed := runErr == nil && !interrupted
+	result.code, result.runErr = code, runErr
+	if result.aggregation != nil {
+		result.runState = aggregatorRunState{completed: completed, interrupted: interrupted,
+			deadline: errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(parent.Err(), context.DeadlineExceeded), parentCancelled: (parent.Err() != nil || runnerCtx.Err() == context.Canceled && !ownStop) && !errors.Is(ctx.Err(), context.DeadlineExceeded)}
+	}
+	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
 // failures govern both presentations of the same captured execution.
 func (result *containerExecution) finishReport(ctx context.Context, report string, err error, in summaryInput) (string, error) {
+	if result.aggregation != nil {
+		a := result.aggregation
+		state := result.runState
+		state.deadline = state.deadline || errors.Is(ctx.Err(), context.DeadlineExceeded) || result.parent != nil && errors.Is(result.parent.Err(), context.DeadlineExceeded)
+		// A healthy parent was captured at return. A later external cancellation
+		// still refuses success, while the aggregator's own cancel is never E6.
+		state.parentCancelled = state.parentCancelled || result.parent != nil && result.parent.Err() != nil && !state.deadline || result.runnerContext != nil && result.runnerContext.Err() == context.Canceled && a.record.stop == stopNone
+		finish := result.finishAggregation
+		if finish == nil {
+			finish = (*containerAggregator).finish
+		}
+		decided := finish(a, result.code, result.runErr, state)
+		result.record = a.record
+		result.aggregation = nil // Do not keep protocol maps or running output alive.
+		cleanupFailed := in.runnerFailed
+		in.runnerFailed = in.runnerFailed || state.parentCancelled || state.deadline && state.interrupted || result.code >= 125 && result.code <= 127
+		decided.verdict = recordVerdict(decided.verdict, result.record)
+		in.verdict = decided.verdict
+		if in.check == "test-browser" {
+			in.verdict = browserVerdict(in.browserRun, result.record, decided)
+		}
+		if !strings.HasPrefix(report, "FAILED: source cleanup failed\n") {
+			if cleanupFailed && result.record.capName == "" {
+				in.verdict = "FAILED"
+			}
+			report = recordHostReport(in.verdict, in.scope, result.record)
+		}
+	}
+
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		err = errors.Join(err, fmt.Errorf("container check interrupted: %w", ctxErr))
 		if strings.HasPrefix(report, "verified\n") {
-			report = "FAILED" + strings.TrimPrefix(report, "verified")
+			report = interruptedContainerVerdict(ctxErr) + strings.TrimPrefix(report, "verified")
 		}
 	}
 	if in.check != "writeback" && report != "" {
@@ -343,18 +552,28 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		if first != original {
 			in.verdict = first
 		}
-		in.runnerFailed = in.runnerFailed || err != nil
-		in.facts = parseSummaryFacts(in.check, result.output.stdout.Bytes(), result.output.stderr.Bytes(), result.output.over)
+		in.runnerFailed = in.runnerFailed || err != nil && (ctx.Err() != nil || result.record == nil || !result.record.stop.malformed() && result.record.capName == "")
+		if result.record == nil {
+			result.record = commandRecord(&result.output)
+			result.record.stderrNotServable = result.code >= 125 && result.code <= 127 || result.runErr != nil || ctx.Err() != nil
+		}
+		in.facts = recordSummaryFacts(result.record)
 		result.summary = buildContainerSummary(in)
 	}
+	if in.check != "generated" && in.check != "writeback" {
+		result.output.stdout = bytes.Buffer{}
+		result.output.stderr = bytes.Buffer{}
+	}
+	result.parent, result.runnerContext, result.output.cancel = nil, nil, nil
 	return report, err
 }
 
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, output *containerOutput, in *summaryInput) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated bool) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
+	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), containerCleanupTimeout)
 		status, cleanupErr := runner.run(cleanupCtx, args, dockerEnvironment(), io.Discard, io.Discard)
@@ -362,6 +581,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		// Removal still runs after a failed stop, and a successful force-removal
 		// suffices even when stop could not reach the container.
 		if args[0] == "rm" && (status != 0 || cleanupErr != nil) {
+			cleanupFailed = true
 			if cleanupErr == nil {
 				cleanupErr = fmt.Errorf("docker rm exited with status %d", status)
 			}
@@ -376,17 +596,33 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	if check == "writeback" {
 		return "", err
 	}
+	if aggregated {
+		in.runnerFailed = cleanupFailed
+		return "", err
+	}
 	in.runnerFailed = runErr != nil || err != nil || code == 125
-	verdict := commandVerdict(code, err, output.over)
-	if check == "test" {
-		verdict = testVerdict(code, err, output.stdout.Bytes(), output.over)
+	verdict, stat, stdout := containerVerdict(check, code, err, output)
+	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
+	if deadline {
+		// One interruption rule governs host and MCP: an unfinished run or a
+		// completed pass loses verification; other completed verdicts stay pinned.
+		// Read the run context, since joined errors include independent cleanup.
+		// Row 8 keeps its existing report: status 125 means Docker never ran
+		// the check, so it must not gain generated-check statistics.
+		if completed && code != 125 {
+			verdict, stat, stdout = containerVerdict(check, code, nil, output)
+		}
+		// A runner error returned with a healthy context keeps FAILED even if
+		// cleanup outlives the deadline; only interruption during run is unknown.
+		if interrupted || completed && strings.HasPrefix(verdict, "verified") {
+			verdict = containerTimeLimitVerdict
+		}
 	}
-	if check == "test-db" {
-		verdict = testVerdictWithAllowlist(code, err, output.stdout.Bytes(), output.over, measurementSkips())
+	if output.over {
+		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
 	}
+	in.verdict = verdict
 	if check == "generated" {
-		verdict, stat, stdout := generatedVerdict(code, err, output.stdout.String(), output.over)
-		in.verdict = verdict
 		if !output.over && err == nil {
 			switch code {
 			case generatedDiffer:
@@ -398,11 +634,25 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		}
 		return fmt.Sprintf("%s\n%s%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, stat, containerCheckScope(check), stdout, output.stderr.Bytes()), err
 	}
-	if output.over {
-		verdict = "NOT VERIFIED: output limit exceeded (output cut off)"
-	}
-	in.verdict = verdict
 	return fmt.Sprintf("%s\n%s\n--- stdout\n%s\n--- stderr\n%s\n", verdict, containerCheckScope(check), output.stdout.Bytes(), output.stderr.Bytes()), err
+}
+
+// interruptedContainerVerdict is also applied after source removal: no context
+// error may leave a pass verified, and only the run's deadline gets this label.
+func interruptedContainerVerdict(ctxErr error) string {
+	if errors.Is(ctxErr, context.DeadlineExceeded) {
+		return containerTimeLimitVerdict
+	}
+	return "FAILED"
+}
+
+func containerVerdict(check string, code int, err error, output *containerOutput) (string, string, string) {
+	switch check {
+	case "generated":
+		return generatedVerdict(code, err, output.stdout.String(), output.over)
+	default:
+		return commandVerdict(code, err, output.over), "", ""
+	}
 }
 
 func checkContainerToolVersions(data []byte) error {

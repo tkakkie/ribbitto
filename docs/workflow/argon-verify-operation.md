@@ -23,7 +23,8 @@ The optional `--browser-mode <abs path>` is available on `implement-run`,
 The browser admission checks and host-only `browser-check-record` command are
 merged but not in force. `verify` accepts `test-browser` with a `run`; calls are
 paused unless `browser-mode` is `on` and the 14-day gate passes. An absent flag
-means paused. The implementer commands require verify on (config: mode on).
+means paused. `implement-run` and `implement-check` refuse `--browser-mode` unless
+`--verify on`; `implement-config` refuses it unless `--mode on`.
 The gate directory also holds `browser-security-check.lock`, which serialises
 host record updates; runners read the atomically replaced gate without locking.
 The next smoke set replaces stage A’s “`test-browser` is an unknown check” row:
@@ -34,8 +35,12 @@ See [browser operation](argon-verify-browser.md),
 [gate recording](argon-verify-browser-record.md),
 [preflight and approvals](argon-verify-browser-preflight.md) and
 [weekly updates](argon-verify-browser-updates.md#weekly-check-and-expiry).
-Both workers' run/check wrappers and `container-check` must pass the same
-`--browser-mode` path: worker 1's file beside `verify-mode`; worker 2 reads it.
+Both workers' run/check wrappers pass the same absolute `--browser-mode`
+path, worker 1's file beside `verify-mode`, only when `--verify on`;
+worker 2 reads worker 1's file, never a separate copy. With `--verify off`
+(the `checks.zsh` idle check and the `verify-mode off` rollback), they never
+pass it: those commands refuse the flag, so an unconditional flag would
+make them refuse. `container-check` passes it for `test-browser`.
 
 ## Switch and run
 
@@ -46,12 +51,13 @@ It is `on` as of 2026-10-22.
 The complete config-generator invocation is:
 
 ```text
-implement-config --mode off|on --binary <abs> --guard-dir <abs> [--trusted-source <abs> --worktree <abs>] --out <dir>
+implement-config --mode off|on --binary <abs> --guard-dir <abs> [--trusted-source <abs> --worktree <abs>] [--browser-mode <abs>] --out <dir>
 ```
 
 Both modes require `--mode`, `--binary`, `--guard-dir` and `--out`.
 On mode requires `--trusted-source` and `--worktree`; off mode forbids them.
-All paths, including `--out`, must be absolute and clean.
+`--browser-mode` is optional and allowed only with `--mode on`.
+All paths, including `--browser-mode` and `--out`, must be absolute and clean.
 The output contains `settings.json`, `hooks.json` and `mcp_config.json`.
 `--out` must be absent or an existing empty real directory.
 
@@ -100,8 +106,8 @@ container and does not relax the rule against running unverified code on the hos
 ## Switch off and problems
 
 Write `off` to `verify-mode`; the wrappers pass `--verify off` to the Go
-commands. The `run.zsh.verify-off` / `checks.zsh.verify-off` scripts are from
-older rollback sets. See the
+commands without `--browser-mode`. The `run.zsh.verify-off` /
+`checks.zsh.verify-off` scripts are from older rollback sets. See the
 [switch record](argon-implement-switch.md) for the sets and rollback steps.
 
 If a run shows a problem, switch off with `verify-mode`, restore and check

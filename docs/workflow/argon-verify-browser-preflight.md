@@ -36,8 +36,13 @@ Under host approvals, Claude prepares/records:
 4. Use one new build for all callers: both workers' run/check wrappers and
    Claude's `container-check` and `container-generate`. Older callers take
    no slots; never mix launchers.
-   Both workers/`container-check` pass worker 1's
-   [browser switch path](argon-verify-browser.md#switch-and-admission-order).
+   Both workers' run/check wrappers pass the same absolute worker-1
+   [browser switch path](argon-verify-browser.md#switch-and-admission-order)
+   only with `--verify on`; worker 2 reads worker 1's file, never a separate
+   copy. With `--verify off` (`checks.zsh` idle check or `verify-mode off`
+   rollback), never pass `--browser-mode`: the commands refuse it, so an
+   unconditional flag would make them refuse. `container-check` passes it
+   for `test-browser`; an absent flag means paused.
 5. Complete the first [weekly record](argon-verify-browser-updates.md#weekly-check-and-expiry)
    and run `browser-check-record --init` via the frozen
    wrapper with every [initialization check](argon-verify-browser-record.md#initial-and-routine-recording):
@@ -74,84 +79,8 @@ non-browser check launching Chromium forbids launcher update: report on
 
 ## Numbered browser probes
 
-Run probes only in the approved preflight window via the candidate's
-`test-browser` call. Under #1908 Approvals 3, switch states use the
-temporary two-home swap: probes 1–5 need `browser-mode` `on` and a fresh gate;
-probe 6 varies them. The host gate is fixed at
-`/var/cache/argonreview/browser-security-check` (`browserGatePath` in
-`cmd/argonreview/browser_gate.go`), outside the swap.
-Before probe 6, save a gate copy (bytes, mode, link count) or record absence.
-For expired, future and missing states, manually replace/remove the path
-only in that window. If absent before the window, window
-authority alone permits this: create by hand and remove again. Otherwise,
-first get separate maintainer deletion approval, including for a
-production gate from `--init`.
-Before window end, restore production: `browser-mode` `off`,
-the production gate restored from the saved copy (or absent as before).
-#1700 restoration evidence must show bytes, mode, link count (or absence)
-match the saved state and the switch reads `off`. See
-[recording](argon-verify-browser-record.md#initial-and-routine-recording)
-(path changes need approval to remove the gate).
-Approval 3 never authorizes production `browser-mode on`: approval 6 follows
-launcher update (4) and stage B enabling (5). Passing authorizes nothing else
-(#1908 Approvals 3–6; Enabling sequence 6–8).
-
-Require determinism; timing-dependent contention never passes.
-Argon reads each result inline. Keep stage A's refusal, smoke, restoration
-and evidence requirements from
-[extended preflight](argon-verify.md#extended-preflight) and
-[#1700's stage A obligations](argon-workers-operation.md#updates-and-capacity).
-
-1. **Success:** require `verified` for `TestBrowser/htmx-load-count`,
-   `TestBrowser/drafts-markers/sidebar-sse` and
-   `TestBrowser/quote/scripts=true/width=1280` in `./internal/web`, and
-   `TestTopicPostBrowser` in `./cmd/ribbitto`.
-2. **Failure/skip/nothing run:** a broken template gives `FAILED`; `t.Skip`
-   gives `NOT VERIFIED`; `TestBrowser/no-such-scenario` and
-   `TestBrowser/quote-selection` give “did not run”. Record each.
-3. **Limits:** sleeping 11 minutes gives
-   `NOT VERIFIED: time limit exceeded`; more than 4 GiB or more than
-   2,048 threads is never `verified`. Then require no container,
-   source copy or held slot.
-4. **Controlled holders:** use dummy dev containers on the pinned verify
-   image, `--network none --read-only`, 1 GiB, one slot each, `sleep 900`,
-   started through `budget-start`; use a 300 s browser test to hold
-   `browser.lock`. With slots 1 and 2 held, require `test` `verified` and
-   `test-browser` busy after **120 s ± 5 s**. With all three
-   slots held, a 1-unit call is busy. With the browser holder running,
-   a second `test-browser` is busy. Remove a holder 30 s into a wait: require
-   `verified` and a logged wait of at least 30 s. With no holders,
-   all three 1-unit calls are `verified`. A `SIGKILL`ed runner's leftover
-   blocks its slot until `container-sweep`; after that, a call is
-   `verified`. A mismatched verification-named container fails closed.
-5. **Other containers:** an unlabelled container or a dev container without a limit
-   fails closed and stays untouched; after removal the next call
-   is `verified` with no approval. `make db-up` fails closed until the wrapper
-   runs again. A created exclusive container pauses. Exclusive
-   `budget-start` waits out the browser holder; `budget-start` refuses a
-   running container, wrong ID or wrong labels. Run one full Codex database
-   lifecycle with its recorded-ID and process checks.
-6. **Switch/gate:** follow the swap and gate save/restore rule above.
-   `off`, missing or malformed switches from worker 1,
-   worker 2 and `container-check` give `NOT VERIFIED: browser check paused`
-   without starting a container. With the switch `on`, expired, future or
-   missing gate entries give
-   `NOT VERIFIED: browser check paused: security check overdue`.
-   `browser-check-record` refuses expired refresh with the switch `on`.
-   The [emergency pause](argon-verify-browser.md#removal-authority-and-emergency-pause)
-   leaves no browser container or copy, and every slot free.
-7. **Refusals through Argon:** exercise the
-   [run-validator rows](../../cmd/argonreview/container_browser_test.go)
-   that are typable, plus stage A's refusal/smoke set. Replace only
-   its “`test-browser` is an unknown check” row with guard admission followed
-   by `NOT VERIFIED: browser check paused` when `browser-mode` is `off`.
-   Keep all other refusals and absent effects.
-8. **Inside the container:** inspect network `none`, read-only root, no
-   capabilities, `no-new-privileges`, uid 1000, no seccomp option, pinned
-   image and labels. Chrome runs as uid 1000 with `--no-sandbox`. Loading
-   host listeners on loopback, `host.docker.internal`, 192.168.65.x,
-   172.17.0.1 and the LAN address must log no request; a default-network
-   control container must log requests.
+Follow the [numbered browser probes](argon-verify-browser-probes.md#numbered-browser-probes),
+including the window's state and restoration rules.
 
 ## Enabling sequence and record
 
@@ -164,18 +93,21 @@ and evidence requirements from
    trusted binary there; use it throughout.
 3. Meet provisioning above; require the old launcher's sweep clean before
    switching. Obtain separate window/two-home-swap approval (3); follow the
-   state/restoration rule above for browser probes, mask preflight, stage A
+   [state/restoration rule](argon-verify-browser-probes.md#numbered-browser-probes)
+   for browser probes, mask preflight, stage A
    smoke and #1700 stage B's [write-back probes](argon-verify-writeback.md).
    Browser results cannot replace stage B: each needs its own pass, record
    and enabling word, on the same candidate in the same window.
 4. Record the browser stage on #1700 in its required format: every
    deterministic pass/fail and unmet item; retain extended preflight's
-   commands, logs and restoration evidence above. Stage B keeps a
-   separate record. Past results are not approval.
+   commands, logs and [restoration evidence](argon-verify-browser-probes.md#numbered-browser-probes).
+   Stage B keeps a separate record. Past results are not approval.
 5. Obtain separate launcher-update approval (4). Switch both workers in one
    window and all container-starting callers to the new binary; include
    smoke/rollback checks. Run the new launcher's sweep before rollback.
-   `test-browser` smoke uses the paused row above, not unknown-check refusal.
+   `test-browser` smoke uses the
+   [paused row (probe 7)](argon-verify-browser-probes.md#numbered-browser-probes),
+   not unknown-check refusal.
 6. After launcher update, obtain and record stage B's enabling word (5),
    then separate production `browser-mode on` approval (6), in that window
    or later. Approval 3/results supply neither. List every unmet

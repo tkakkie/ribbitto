@@ -23,7 +23,7 @@ func TestContainerBrowserPublicArguments(t *testing.T) {
 		{"bad-package", []string{"/tree", "test-browser", "./...", "TestBrowser/quote"}, false},
 		{"bad-run", []string{"/tree", "test-browser", "./internal/web", "TestBrowser"}, false},
 		{"ordinary", []string{"/tree", "test", "./..."}, true},
-		{"ordinary-mode", []string{"/tree", "test", "./...", "--browser-mode", "/trusted/browser-mode"}, true},
+		{"ordinary-mode", []string{"/tree", "test", "./...", "--browser-mode", "/trusted/browser-mode"}, false},
 		{"ordinary-run", []string{"/tree", "test", "./...", "TestBrowser/quote"}, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {

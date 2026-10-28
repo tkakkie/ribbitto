@@ -158,7 +158,12 @@ func TestContainerAggregationN1(t *testing.T) {
 			if !r.complete && (strings.Contains(execution.summary, "Packages:") || strings.Contains(execution.summary, "Leaf tests:") || strings.Contains(execution.summary, " of ") && !strings.Contains(execution.summary, "Details unavailable: the check did not complete.")) {
 				t.Fatalf("incomplete stream supplied totals: %s", execution.summary)
 			}
-			if !r.complete && r.confirmedFailures > 0 && !strings.Contains(row.timing, "run deadline") && !strings.Contains(execution.summary, "observed, total unknown") {
+			if strings.Contains(row.timing, "then") {
+				want := row.first + "\nCheck: test .\nScope: " + containerCheckScope("test") + "\nDetails unavailable: the check did not complete.\n" + deadlineOmitted
+				if execution.summary != want {
+					t.Fatalf("cap with interruption must have fixed minimal body: %s", execution.summary)
+				}
+			} else if !r.complete && r.confirmedFailures > 0 && !strings.Contains(row.timing, "run deadline") && !strings.Contains(execution.summary, "observed, total unknown") {
 				t.Fatalf("observed failure lost: %s", execution.summary)
 			}
 			if row.first == containerTimeLimitVerdict && !strings.HasSuffix(execution.summary, "Details unavailable: the check did not complete.\n"+deadlineOmitted) {

@@ -350,6 +350,50 @@ func TestBudgetStart(t *testing.T) {
 	}
 }
 
+type budgetStartFailWriter struct {
+	n   int
+	err error
+}
+
+func (w budgetStartFailWriter) Write(p []byte) (int, error) {
+	return min(w.n, len(p)), w.err
+}
+
+func TestBudgetStartStdoutFailure(t *testing.T) {
+	for _, row := range []struct {
+		name   string
+		writer io.Writer
+	}{
+		{"immediate-error", budgetStartFailWriter{0, errors.New("broken pipe")}},
+		{"short-write", budgetStartFailWriter{5, io.ErrShortWrite}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			f := newBudgetStartFixture(t)
+			var stderr bytes.Buffer
+			code := f.start.command(context.Background(), []string{"--container", f.first.ID}, row.writer, &stderr)
+			if code != 1 {
+				t.Errorf("exit code=%d; want 1", code)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("stderr=%q; want empty", stderr.String())
+			}
+			wantMutations := [][]string{{"start", f.first.ID}}
+			if !slices.EqualFunc(f.mutations(), wantMutations, slices.Equal[[]string]) {
+				t.Errorf("mutations=%v; want %v", f.mutations(), wantMutations)
+			}
+			probe := f.start.locks
+			probe.limit = 0
+			probe.acquired = nil
+			release, cause := probe.acquire(context.Background(), []budgetLock{budgetBrowser, budgetSlot0, budgetSlot1, budgetSlot2})
+			if cause != "" {
+				t.Errorf("locks leaked: %s", cause)
+			} else {
+				release()
+			}
+		})
+	}
+}
+
 func TestBudgetStartAllowlist(t *testing.T) {
 	id := strings.Repeat("a", 64)
 	for _, args := range [][]string{nil, {"rm", id}, {"kill", id}, {"pause", id}, {"update", id}, {"run", id}, {"create", id}, {"stop", id}, {"stop", "--time", "3", id}, {"start", "name"}, {"start", "aaaa"}, {"start", id, "extra"}, {"stop", "--time", "2", id, "extra"}, {"start"}, {"start", strings.Repeat("A", 64)}, {"start", id}, {"stop", "--time", "2", id}} {

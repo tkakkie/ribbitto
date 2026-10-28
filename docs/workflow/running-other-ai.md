@@ -158,13 +158,13 @@ The brief also includes:
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
   (`bin/` is git-ignored).
-- **Database.** Codex cannot use Docker. Only while an implementation needs
+- **Database.** Codex cannot use Docker. Once in force, only while an implementation needs
   database tests, Claude follows the [recorded-ID lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
   for `ribbitto-codex-pg`: create registered, `budget-start`, then a **30-try**
   readiness wait on port **55433**. Start Codex only if all applicable steps exit 0;
   reviews and database-free work need no database and set neither value below. End/interruption cleanup
   uses the recorded ID after identity and process checks, never the name.
-  Not in force until the launcher update; until then follow the page's
+  Not in force until the launcher update; until then see
   [interim steps](argon-verify-budget-start.md#before-enabling).
   When a database is running, the brief supplies `make check` with
   `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`

@@ -82,6 +82,9 @@ func (b budgetStart) command(ctx context.Context, args []string, stdout, stderr 
 		_, _ = fmt.Fprintln(stderr, "argonreview: budget-start "+check)
 		return 1
 	}
+	// Start succeeded and locks are released: a write failure returns 1 silently.
+	// Stopping would act on a container the caller can still verify; the caller
+	// must inspect the recorded ID and decide, since it may be running.
 	_, err := fmt.Fprintln(stdout, args[1])
 	if err != nil {
 		return 1

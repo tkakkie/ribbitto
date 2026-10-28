@@ -81,6 +81,9 @@ requires the same trusted-build check as [container-sweep](argon-verify-sweep.md
 Exit 0 means started; 1 means refused or failed; 2 means usage. Refusal stdout
 is empty. Diagnostics name checks with fixed text only, never Docker-controlled
 names, labels, errors or output. Read queries use the read-only inventory.
+If writing the ID line fails after a successful start, the exit is 1 but the
+container may be running: `budget-start` does not stop it. The caller must
+`docker inspect` the recorded ID and decide, never assuming it stopped.
 A separate mutating adapter permits **only** `start <valid ID>` and
 `stop --time 2 <valid ID>`, with the runner's fixed environment, output cap
 and per-call time limit; no other verb or argument shape reaches Docker.
@@ -125,7 +128,7 @@ new verification; [measurement rules](investigations.md#host-measurements)
 still require workers to stop before measurements. Removing the throwaway
 measurement database is Claude's own cleanup by recorded full ID under
 [investigations step 9](investigations.md#host-measurements), outside the tooling
-table above; no tool in this PR removes it. The budget is not measurement approval.
+table above; no tool here removes it. The budget is not measurement approval.
 
 ## Codex database lifecycle
 
@@ -145,6 +148,7 @@ as `codex-pg.id`. Call the trusted `argonreview budget-start --container <ID>`.
 Then wait for readiness using that recorded ID:
 
 ```sh
+id=$(cat codex-pg.id)  # recorded ID, verified as below
 (
   for i in $(seq 1 30); do
     docker exec "$id" pg_isready -U postgres >/dev/null 2>&1 && exit 0
@@ -155,7 +159,9 @@ Then wait for readiness using that recorded ID:
 )
 ```
 
-Here `id` is the validated full ID from creation and the record. Start Codex
+Set `id` from the record before the loop, only after confirming it equals the
+64-hex ID `docker create` returned and that `docker inspect` of it shows the
+expected name, both labels and image. Start Codex
 only if creation, recording, `budget-start` and this 30-try wait all exit 0.
 The implementation brief supplies port **55433** and the test environment
 [values](running-other-ai.md#implementation-brief). If the port is taken,
@@ -173,7 +179,7 @@ recorded container by the same checks and procedure. An unknown ID, an
 unregistered container or a live Codex process means no new work until
 investigated. Do not guess an ID or remove an unrelated container.
 Both databases at once consume two units, leaving only one; browser calls
-need two units and are busy. This does not enable browser checks.
+need two units and are busy.
 
 ## Limits
 

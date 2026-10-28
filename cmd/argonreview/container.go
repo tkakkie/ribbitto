@@ -82,6 +82,8 @@ esac
 func containerCheckScope(check string) string {
 	const limits = "Race detector was not run. Cgo-dependent packages and database/browser tests are CI-only."
 	switch check {
+	case "test-browser":
+		return "Chromium " + containerChromiumVersion + " (Debian). Sandbox disabled: the container is the only boundary. Not CI's Chrome; not a browser-targets record. Only the named test ran. No race detector."
 	case "test-db":
 		return "Race detector was not run. Cgo-dependent packages and browser tests are CI-only. Ran on regenerated sources with PostgreSQL 18 and the trusted measurement-skip allowlist; the generated check covers committed generated files. test-db is merged but not in force until #1700. Whether ./... fits the unchanged container limits is unestablished."
 	case "generated":
@@ -120,24 +122,7 @@ func dockerEnvironment() []string {
 }
 
 func containerArguments(copyDir, name, check, pattern string, reservation budgetReservation) []string {
-	// Explicit removal below replaces --rm: verification waits for Docker to
-	// acknowledge removal, and interruption cannot race automatic removal.
-	args := []string{"run", "--pull=never", "--name", name,
-		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--label", budgetSlotLabel + "=" + reservation.label, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
-		// Both tmpfs mounts allow execution: Go executes test binaries from its
-		// temporary build/cache directories. nosuid/nodev still apply.
-		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
-		"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
-		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
-		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
-		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
-		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go"}
-	if check == "test-db" {
-		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
-	}
-	memory := fmt.Sprintf("%dg", reservation.memory/(1<<30))
-	args = append(args, "--memory", memory, "--memory-swap", memory, "--pids-limit", containerPIDs, "--cpus", containerCPUs,
-		containerVerifyImage, "sh", "-c")
+	args := containerBaseArguments(copyDir, name, check, reservation, false)
 	if check == "generated" {
 		return append(args, containerGeneratedScript)
 	}
@@ -155,6 +140,34 @@ func containerArguments(copyDir, name, check, pattern string, reservation budget
 		args = append(args, "-count=1", "-json")
 	}
 	return append(args, pattern)
+}
+
+func containerBaseArguments(copyDir, name, check string, reservation budgetReservation, browser bool) []string {
+	// Explicit removal below replaces --rm: verification waits for Docker to
+	// acknowledge removal, and interruption cannot race automatic removal.
+	args := []string{"run", "--pull=never", "--name", name,
+		"--network", "none", "--label", containerOwnerLabel + "=" + containerOwnerValue, "--label", budgetSlotLabel + "=" + reservation.label, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--user", containerUser,
+		// Both tmpfs mounts allow execution: Go executes test binaries from its
+		// temporary build/cache directories. nosuid/nodev still apply.
+		"--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
+		"--tmpfs", "/home/check:rw,exec,nosuid,nodev,size=1g,uid=1000,gid=1000,mode=0700",
+		"--mount", "type=bind,src=" + containerModuleCache + ",dst=/go/pkg/mod,readonly",
+		"--mount", "type=bind,src=" + copyDir + ",dst=/work,readonly",
+		"-w", "/work", "-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
+		"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go"}
+	pids := containerPIDs
+	if browser {
+		pids = containerBrowserPIDs
+		args = append(args, "--label", otherClassLabel+"=browser", "-e", containerRequireBrowser)
+	} else {
+		args = append(args, "--tmpfs", containerChromiumDirectory+":ro,noexec,nosuid,nodev,size=1m")
+	}
+	if browser || check == "test-db" {
+		args = append(args, "-e", containerTestDatabaseURL, "-e", containerRequireDB)
+	}
+	memory := fmt.Sprintf("%dg", reservation.memory/(1<<30))
+	return append(args, "--memory", memory, "--memory-swap", memory, "--pids-limit", pids, "--cpus", containerCPUs,
+		containerVerifyImage, "sh", "-c")
 }
 
 type containerRunner interface {
@@ -264,11 +277,13 @@ func runContainerSummary(parent context.Context, tree, check, pattern string, ru
 }
 
 type containerExecution struct {
-	budget  containerBudget
-	timeout time.Duration
-	output  containerOutput
-	code    int
-	summary string
+	browserRun, browserImportPath string
+	admit                         func() string
+	budget                        containerBudget
+	timeout                       time.Duration
+	output                        containerOutput
+	code                          int
+	summary                       string
 }
 
 // Both commands share source copying, flags, limits and confirmed cleanup.
@@ -280,11 +295,22 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
+	request := budgetSingle
+	if check == "test-browser" {
+		line := browserPaused
+		if result.admit != nil {
+			line = result.admit()
+		}
+		if line != "" {
+			return result.refuse(check, pattern, line), nil
+		}
+		request = budgetBrowserRequest
+	}
 	// Reserve before even creating the copy directory. Register release first:
 	// container cleanup, source removal and the copy lock's Close all precede it.
 	reservation, cause := budgetReservation{}, budgetStateUnknown
 	if result.budget != nil {
-		reservation, cause = result.budget.budgetReserve(ctx, budgetSingle)
+		reservation, cause = result.budget.budgetReserve(ctx, request)
 	}
 	if ctx.Err() != nil {
 		if reservation.release != nil {
@@ -299,11 +325,11 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 		if cause == "" {
 			cause = budgetStateUnknown
 		}
-		result.code = 1
 		line := cause.line("verification budget")
-		in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check), verdict: line, runnerFailed: true}
-		result.summary = buildContainerSummary(in)
-		return line + "\n" + in.scope + "\n", nil
+		if check == "test-browser" {
+			line = browserBudgetLine(cause)
+		}
+		return result.refuse(check, pattern, line), nil
 	}
 	// A failed removal still leaves its slot held by label reconciliation.
 	defer reservation.release()
@@ -323,7 +349,7 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	if lockErr == nil {
 		defer func() { _ = lock.Close() }()
 	}
-	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check)}
+	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check), browserRun: result.browserRun, browserImportPath: result.browserImportPath}
 	defer func() {
 		if removeErr := os.RemoveAll(dir); removeErr != nil {
 			in.scope = containerCheckScope("")
@@ -363,7 +389,11 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	name := fmt.Sprintf("argonreview-check-%x", suffix)
 	output := &result.output
 	output.cancel = cancel
-	code, runErr := runner.run(ctx, containerArguments(copyDir, name, check, pattern, reservation), dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
+	args := containerArguments(copyDir, name, check, pattern, reservation)
+	if check == "test-browser" {
+		args = containerBrowserArguments(copyDir, name, pattern, result.browserRun, reservation)
+	}
+	code, runErr := runner.run(ctx, args, dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	// Record completion before cleanup: a later deadline cannot undo a finished
 	// container, while an earlier interruption makes its result unknowable.
 	interrupted := ctx.Err() != nil
@@ -425,7 +455,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		return "", err
 	}
 	in.runnerFailed = runErr != nil || err != nil || code == 125
-	verdict, stat, stdout := containerVerdict(check, code, err, output)
+	verdict, stat, stdout := in.runVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {
 		// One interruption rule governs host and MCP: an unfinished run or a
@@ -434,7 +464,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		// Row 8 keeps its existing report: status 125 means Docker never ran
 		// the check, so it must not gain generated-check statistics.
 		if completed && code != 125 {
-			verdict, stat, stdout = containerVerdict(check, code, nil, output)
+			verdict, stat, stdout = in.runVerdict(check, code, nil, output)
 		}
 		// A runner error returned with a healthy context keeps FAILED even if
 		// cleanup outlives the deadline; only interruption during run is unknown.

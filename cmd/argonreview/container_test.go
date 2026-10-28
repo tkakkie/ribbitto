@@ -98,6 +98,7 @@ func TestContainerArgumentsGolden(t *testing.T) {
 		{"generated", "generated", "0", "2g", budgetUnit},
 		{"test-db", "test-db", "0", "2g", budgetUnit},
 		{"writeback", "writeback", "0", "2g", budgetUnit},
+		{"test-browser", "test-browser", "0,1", "4g", 2 * budgetUnit},
 		{"nonzero slot", "build", "2", "2g", budgetUnit},
 		{"multi-unit reservation", "build", "1,2", "4g", 2 * budgetUnit},
 	} {
@@ -116,13 +117,22 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				"-e", "GOPROXY=off", "-e", "GOTOOLCHAIN=local", "-e", "GOWORK=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0",
 				"-e", "HOME=/home/check", "-e", "GOCACHE=/home/check/cache", "-e", "GOTMPDIR=/tmp", "-e", "GOMODCACHE=/go/pkg/mod", "-e", "GOPATH=/go",
 			}
-			if check == "test-db" {
+			pids := "256"
+			if check == "test-browser" {
+				pids = "2048"
+				want = append(want, "--label", "argonreview.class=browser", "-e", "RIBBITTO_REQUIRE_BROWSER=1")
+			} else {
+				want = append(want, "--tmpfs", "/usr/lib/chromium:ro,noexec,nosuid,nodev,size=1m")
+			}
+			if check == "test-db" || check == "test-browser" {
 				want = append(want, "-e", "RIBBITTO_TEST_DATABASE_URL=postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable", "-e", "RIBBITTO_REQUIRE_DB=1")
 			}
-			want = append(want, "--memory", row.memory, "--memory-swap", row.memory, "--pids-limit", "256", "--cpus", "2",
+			want = append(want, "--memory", row.memory, "--memory-swap", row.memory, "--pids-limit", pids, "--cpus", "2",
 				"sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80", "sh", "-c")
 			var command []string
 			switch check {
+			case "test-browser":
+				command = []string{strings.Replace(testDBScriptGolden, `go test -count=1 -json -p 2 "$1"`, `go test -count=1 -json -p 2 -run "$2" "$1"`, 1), "sh", "./internal/web", "^TestBrowser$/^quote$"}
 			case "writeback":
 				command = []string{containerGenerateScript}
 			case "generated":
@@ -149,10 +159,13 @@ exec go "$@"
 				command = append(command, "./...")
 			}
 			want = append(want, command...)
-			if got := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes}); !reflect.DeepEqual(got, want) {
+			args := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes})
+			if check == "test-browser" {
+				args = containerBrowserArguments("/tmp/copy/tree", "argonreview-check-fixed", "./internal/web", browserTestRun, budgetReservation{label: row.label, memory: row.bytes})
+			}
+			if got := args; !reflect.DeepEqual(got, want) {
 				t.Fatalf("args:\n%q\nwant:\n%q", got, want)
 			}
-			args := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes})
 			for i, arg := range args {
 				for _, forbidden := range []string{"--privileged", "--cap-add", "--userns", "--ipc", "--device", "--add-host", "-p", "--publish", "--pid"} {
 					if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {

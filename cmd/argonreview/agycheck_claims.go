@@ -1,0 +1,109 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+const agyCheckClaimBytes = 64
+
+type agyCheckClaim struct {
+	N         int
+	Word, Tag string
+}
+type agyCheckStubRecord struct {
+	N         int
+	Kind, Tag string
+}
+
+// Records are an ordinary-agent regression check, not tamper resistance: an
+// allow-everything agent could write them itself. Missing, contradictory or
+// malformed evidence is an error; a match never approves trust of a version.
+// The explicit isolation argument prevents callers from reading state elsewhere.
+func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]agyCheckClaim, error) {
+	bad := func() ([]agyCheckClaim, error) { return nil, errors.New(agyCheckPrintable("invalid call records")) }
+	if err := f.path(isolation, dir); err != nil {
+		return bad()
+	}
+	calls := filepath.Join(dir, "calls")
+	if err := f.path(dir, calls); err != nil {
+		return bad()
+	}
+	_, err := f.lstat(calls)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil || f.private(calls, true) != nil {
+		return bad()
+	}
+	entries, err := f.entries(calls)
+	if err != nil || len(entries) > agyCheckHookCallCap {
+		return bad()
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	var claims []agyCheckClaim
+	for i, entry := range entries {
+		if entry.Name() != fmt.Sprintf("%06d", i+1) {
+			return bad()
+		}
+		path := filepath.Join(calls, entry.Name())
+		if err := f.private(path, false); err != nil {
+			return bad()
+		}
+		data, err := f.readInside(dir, path, agyCheckClaimBytes)
+		if err != nil || len(data) > agyCheckClaimBytes || !strings.HasSuffix(string(data), "\n") {
+			return bad()
+		}
+		word, tag, ok := strings.Cut(strings.TrimSuffix(string(data), "\n"), " ")
+		if !ok || tag != "-" && !agyCheckHookTag(tag) {
+			return bad()
+		}
+		valid := false
+		if stub {
+			valid = word == "start" || word == "request" || word == "response"
+		} else {
+			mode, known := agyCheckHookFindMode(word)
+			valid = known && mode.name != "alternate"
+		}
+		if !valid {
+			return bad()
+		}
+		claims = append(claims, agyCheckClaim{i + 1, word, tag})
+	}
+	return claims, nil
+}
+
+func agyCheckReadClaims(isolation, dir string, f agyCheckFiles) ([]agyCheckClaim, error) {
+	return agyCheckDecodeClaims(isolation, dir, false, f)
+}
+
+func agyCheckReadStubRecords(isolation, dir string, f agyCheckFiles) ([]agyCheckStubRecord, error) {
+	claims, err := agyCheckDecodeClaims(isolation, dir, true, f)
+	if err != nil {
+		return nil, err
+	}
+	var records []agyCheckStubRecord
+	for _, claim := range claims {
+		records = append(records, agyCheckStubRecord{claim.N, claim.Word, claim.Tag})
+	}
+	return records, nil
+}
+
+func agyCheckClaimReplies(claims []agyCheckClaim, tag string) ([]string, error) {
+	ordered := append([]agyCheckClaim(nil), claims...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].N < ordered[j].N })
+	var replies []string
+	for i, claim := range ordered {
+		if claim.N != i+1 || claim.Word != "allow" && claim.Word != "deny" {
+			return nil, errors.New("invalid decision records")
+		}
+		if claim.Tag == tag {
+			replies = append(replies, claim.Word)
+		}
+	}
+	return replies, nil
+}

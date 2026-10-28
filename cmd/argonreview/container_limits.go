@@ -1,6 +1,10 @@
 package main
 
 const (
+	// Per-line identity and field bounds also bound slash and key comparisons.
+	summaryIdentityLimit = 4096
+	summaryFieldLimit    = 32
+
 	// Hard total-stream cap includes both exec copy goroutines.
 	aggregatorStreamLimit = 32 << 20
 	// Hard line cap bounds decoder temporaries, including newline-free output.
@@ -28,6 +32,7 @@ const (
 
 	// Accounting constants include allocator rounding and amortised map buckets.
 	// Keep these conservative: the live-heap test checks their combined bound.
+	aggregatorBrowserCharge     = 128 + (browserLeafLimit+1)*2*aggregatorNameSlotCharge
 	aggregatorBaseCharge        = 2048 + aggregatorIndexLimit*aggregatorEntryCharge
 	aggregatorPackageCharge     = 512
 	aggregatorTestCharge        = 384

@@ -64,15 +64,15 @@ func browserVerdictCases() []browserVerdictCase {
 			rows = append(rows, browserVerdictCase{name: result + " " + node, data: containerJSON(pkg, append(events, "pass")...)})
 		}
 	}
-	for _, count := range []int{64, 65} {
+	for _, count := range []int{browserLeafLimit, browserLeafLimit + 1} {
 		events := []string{"start", "run/" + run}
 		for i := range count {
 			child := fmt.Sprintf("%s/child%d", run, i)
 			events = append(events, "run/"+child, "pass/"+child)
 		}
-		want := "verified\nnamed test: " + run + " passed (64 leaf tests)"
-		if count == 65 {
-			want = "NOT VERIFIED: too many tests ran (65, limit 64); name fewer tests"
+		want := fmt.Sprintf("verified\nnamed test: %s passed (%d leaf tests)", run, browserLeafLimit)
+		if count > browserLeafLimit {
+			want = fmt.Sprintf("NOT VERIFIED: too many tests ran (%d, limit %d); name fewer tests", count, browserLeafLimit)
 		}
 		rows = append(rows, browserVerdictCase{name: fmt.Sprintf("%d leaves", count), data: containerJSON(pkg, append(events, "pass/"+run, "pass")...), want: want})
 	}
@@ -81,7 +81,7 @@ func browserVerdictCases() []browserVerdictCase {
 			rows[i].run = run
 		}
 		if rows[i].want == "" {
-			rows[i].want = testVerdictWithAllowlist(rows[i].code, rows[i].err, []byte(rows[i].data), rows[i].truncated, nil)
+			rows[i].want = oracleVerdict(rows[i].code, rows[i].err, []byte(rows[i].data), rows[i].truncated, nil)
 		}
 	}
 	return rows
@@ -90,7 +90,7 @@ func browserVerdictCases() []browserVerdictCase {
 func TestBrowserVerdict(t *testing.T) {
 	for _, tc := range browserVerdictCases() {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := browserVerdict(browserTestPackage, tc.run, tc.code, tc.err, []byte(tc.data), tc.truncated); got != tc.want {
+			if got := browserVerdictFixture(browserTestPackage, tc.run, tc.code, tc.err, []byte(tc.data), tc.truncated); got != tc.want {
 				t.Fatalf("verdict = %q, want %q", got, tc.want)
 			}
 		})
@@ -100,7 +100,7 @@ func TestBrowserVerdict(t *testing.T) {
 func browserVerdictNeverWeaker(t *testing.T, run string, code int, runErr error, data []byte, truncated bool) {
 	t.Helper()
 	base := testVerdictWithAllowlist(code, runErr, data, truncated, nil)
-	got := browserVerdict(browserTestPackage, run, code, runErr, data, truncated)
+	got := browserVerdictFixture(browserTestPackage, run, code, runErr, data, truncated)
 	if !strings.HasPrefix(base, "verified") && got != base {
 		t.Fatalf("base = %q; browser = %q", base, got)
 	}

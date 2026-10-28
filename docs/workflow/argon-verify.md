@@ -7,7 +7,7 @@ Option B (2026-10-19)
 are in force since 2026-10-27 (#1700 stage A): production pins `argonreview-2e3a6bf`.
 [Write-back](argon-verify-writeback.md) awaits stage B.
 
-[Leftover sweep](argon-verify-sweep.md).
+[Aggregation](argon-verify-aggregation.md) is merged but not in force until the launcher is updated.
 
 ## Status
 
@@ -68,10 +68,8 @@ are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
 
 ## Verification container
 
-The runner has no outbound or loopback network reach, including the
-host gateway and Docker Desktop VM. The spike's loopback probe logged no
-request under `--network none` ([part
-1](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
+The runner has no network reach, including the host gateway and Docker
+Desktop VM ([probe](https://github.com/tkakkie/ribbitto/issues/1427#issuecomment-6266603639)).
 It uses an isolated, throwaway source copy, never the original:
 
 - Copy tracked and untracked non-ignored files with the hardened git

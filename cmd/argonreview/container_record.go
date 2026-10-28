@@ -7,6 +7,9 @@ import "sync"
 // Readers may inspect it only after finish has sealed both writers.
 type containerRecord struct {
 	mu                                                sync.Mutex
+	browser                                           *browserRecord
+	noTests, failureSignal                            bool
+	command                                           bool
 	complete, sealed, stderrNotServable               bool
 	stop                                              aggregatorStopReason
 	capName                                           string
@@ -40,6 +43,7 @@ type aggregatorEntry struct {
 	output                 retainedOutput
 	next                   *aggregatorEntry
 	parent, started        bool
+	buildFailed            bool
 	allowed                bool
 	slot                   []byte
 	message                bool

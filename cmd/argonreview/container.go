@@ -282,6 +282,13 @@ type containerExecution struct {
 	budget                        containerBudget
 	timeout                       time.Duration
 	output                        containerOutput
+	record                        *containerRecord
+	aggregation                   *containerAggregator
+	runState                      aggregatorRunState
+	runErr                        error
+	parent                        context.Context
+	runnerContext                 context.Context
+	finishAggregation             func(*containerAggregator, int, error, aggregatorRunState) aggregatorResult
 	code                          int
 	summary                       string
 }
@@ -289,6 +296,7 @@ type containerExecution struct {
 // Both commands share source copying, flags, limits and confirmed cleanup.
 // Browser inputs are validated here before admission or resource acquisition.
 func runContainerExecution(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, result *containerExecution) (report string, err error) {
+	result.parent = parent
 	timeout := result.timeout
 	if timeout == 0 {
 		timeout = containerTimeout
@@ -404,18 +412,71 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 			return "", err
 		}
 	}
-	code, runErr := runner.run(ctx, args, dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
+	test2json, classified := containerCheckKind(check)
+	if !classified {
+		return "", fmt.Errorf("unclassified container check %q", check)
+	}
+	var stdout, stderr io.Writer = output.stdoutWriter(), output.stderrWriter()
+	runnerCtx := ctx
+	if test2json {
+		var allowlist []measurementSkip
+		if check == "test-db" {
+			allowlist = measurementSkips()
+		}
+		var stop context.CancelFunc
+		runnerCtx, stop = context.WithCancel(ctx)
+		result.runnerContext = runnerCtx
+		result.aggregation = newContainerAggregator(stop, allowlist)
+		if check == "test-browser" {
+			result.aggregation.retainBrowserScope(result.browserImportPath, result.browserRun)
+		}
+		stdout, stderr = result.aggregation.stdoutWriter(), result.aggregation.stderrWriter()
+	}
+	code, runErr := runner.run(runnerCtx, args, dockerEnvironment(), stdout, stderr)
 	// Record completion before cleanup: a later deadline cannot undo a finished
 	// container, while an earlier interruption makes its result unknowable.
-	interrupted := ctx.Err() != nil
+	ownStop := result.aggregation != nil && result.aggregation.record.stop != stopNone
+	interrupted := ctx.Err() != nil || parent.Err() != nil || runnerCtx.Err() != nil && !ownStop
 	completed := runErr == nil && !interrupted
-	result.code = code
-	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in)
+	result.code, result.runErr = code, runErr
+	if result.aggregation != nil {
+		result.runState = aggregatorRunState{completed: completed, interrupted: interrupted,
+			deadline: errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(parent.Err(), context.DeadlineExceeded), parentCancelled: (parent.Err() != nil || runnerCtx.Err() == context.Canceled && !ownStop) && !errors.Is(ctx.Err(), context.DeadlineExceeded)}
+	}
+	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
 // failures govern both presentations of the same captured execution.
 func (result *containerExecution) finishReport(ctx context.Context, report string, err error, in summaryInput) (string, error) {
+	if result.aggregation != nil {
+		a := result.aggregation
+		state := result.runState
+		state.deadline = state.deadline || errors.Is(ctx.Err(), context.DeadlineExceeded) || result.parent != nil && errors.Is(result.parent.Err(), context.DeadlineExceeded)
+		// A healthy parent was captured at return. A later external cancellation
+		// still refuses success, while the aggregator's own cancel is never E6.
+		state.parentCancelled = state.parentCancelled || result.parent != nil && result.parent.Err() != nil && !state.deadline || result.runnerContext != nil && result.runnerContext.Err() == context.Canceled && a.record.stop == stopNone
+		finish := result.finishAggregation
+		if finish == nil {
+			finish = (*containerAggregator).finish
+		}
+		decided := finish(a, result.code, result.runErr, state)
+		result.record = a.record
+		result.aggregation = nil // Do not keep protocol maps or running output alive.
+		cleanupFailed := in.runnerFailed
+		in.runnerFailed = in.runnerFailed || state.parentCancelled || state.deadline && state.interrupted || result.code >= 125 && result.code <= 127
+		in.verdict = recordVerdict(decided.verdict, result.record)
+		if in.check == "test-browser" {
+			in.verdict = browserVerdict(in.browserRun, result.record, decided)
+		}
+		if !strings.HasPrefix(report, "FAILED: source cleanup failed\n") {
+			if cleanupFailed && result.record.capName == "" {
+				in.verdict = "FAILED"
+			}
+			report = recordHostReport(in.verdict, in.scope, result.record)
+		}
+	}
+
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		err = errors.Join(err, fmt.Errorf("container check interrupted: %w", ctxErr))
 		if strings.HasPrefix(report, "verified\n") {
@@ -430,17 +491,26 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		if first != original {
 			in.verdict = first
 		}
-		in.runnerFailed = in.runnerFailed || err != nil
-		in.facts = parseSummaryFacts(in.check, result.output.stdout.Bytes(), result.output.stderr.Bytes(), result.output.over)
+		in.runnerFailed = in.runnerFailed || err != nil && (ctx.Err() != nil || result.record == nil || !result.record.stop.malformed() && result.record.capName == "")
+		if result.record == nil {
+			result.record = commandRecord(&result.output)
+			result.record.stderrNotServable = result.code >= 125 && result.code <= 127 || result.runErr != nil || ctx.Err() != nil
+		}
+		in.facts = recordSummaryFacts(result.record)
 		result.summary = buildContainerSummary(in)
 	}
+	if in.check != "generated" && in.check != "writeback" {
+		result.output.stdout = bytes.Buffer{}
+		result.output.stderr = bytes.Buffer{}
+	}
+	result.parent, result.runnerContext, result.output.cancel = nil, nil, nil
 	return report, err
 }
 
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput) (string, error) {
+func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated bool) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
 	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
@@ -465,8 +535,12 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 	if check == "writeback" {
 		return "", err
 	}
+	if aggregated {
+		in.runnerFailed = cleanupFailed
+		return "", err
+	}
 	in.runnerFailed = runErr != nil || err != nil || code == 125
-	verdict, stat, stdout := in.runVerdict(check, code, err, output)
+	verdict, stat, stdout := containerVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {
 		// One interruption rule governs host and MCP: an unfinished run or a
@@ -475,7 +549,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		// Row 8 keeps its existing report: status 125 means Docker never ran
 		// the check, so it must not gain generated-check statistics.
 		if completed && code != 125 {
-			verdict, stat, stdout = in.runVerdict(check, code, nil, output)
+			verdict, stat, stdout = containerVerdict(check, code, nil, output)
 		}
 		// A runner error returned with a healthy context keeps FAILED even if
 		// cleanup outlives the deadline; only interruption during run is unknown.
@@ -515,10 +589,6 @@ func containerVerdict(check string, code int, err error, output *containerOutput
 	switch check {
 	case "generated":
 		return generatedVerdict(code, err, output.stdout.String(), output.over)
-	case "test":
-		return testVerdict(code, err, output.stdout.Bytes(), output.over), "", ""
-	case "test-db":
-		return testVerdictWithAllowlist(code, err, output.stdout.Bytes(), output.over, measurementSkips()), "", ""
 	default:
 		return commandVerdict(code, err, output.over), "", ""
 	}

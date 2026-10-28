@@ -55,16 +55,12 @@ are never set by the runner.
 
 ## Limits and skips
 
-All existing limits stay: 2 GiB memory with equal swap limit, 256 PIDs,
-2 CPUs, 10 minutes, 4 MiB combined output, and 1 GiB each for the two tmpfs
-mounts.
-A limit hit gives `FAILED` or `NOT VERIFIED`, never `verified`; the 10-minute
-timeout reads `NOT VERIFIED: time limit exceeded` ([results](#timeout-and-cancel-results)).
-PostgreSQL's own log lines, including ERROR and STATEMENT lines, go to
-standard error and count toward the shared 4 MiB output cap.
-The cap counts the container's standard output and standard error together
-(`containerOutputLimit`, `cmd/argonreview/container.go`), so a report that
-would exceed it gives `NOT VERIFIED` (output cut off).
+Container limits remain 2 GiB memory with equal swap, 256 PIDs, 2 CPUs,
+10 minutes and 1 GiB per tmpfs. Test streams use [aggregation](argon-verify-aggregation.md):
+merged but not in force until the production launcher is updated (#1700).
+Its limits replace the combined capture cap; PostgreSQL stderr counts toward
+total streamed bytes, with a separate soft retention limit. Hard stops never
+verify. The [timeout line](#timeout-and-cancel-results) is unchanged.
 Browser tests, cgo-dependent packages and race checks remain CI-only.
 
 #1700 stage A phase 1 observed on the unchanged repository: `test ./internal/web` produced
@@ -100,7 +96,8 @@ continues to reject every skip.
 
 Successful host reports start with exactly `verified`, then the passing leaf
 count, then (if present) `allowed measurement skips: <package>/<Test>, ...`
-in sorted order. The host report then includes captured output.
+in sorted order. With aggregation, scope follows the first line, then the
+whole retained record replaces raw test output.
 
 The AST scan in `cmd/argonreview/container_allowlist_scan_test.go` runs in
 `make check`. It walks every repository test file, excluding caches and
@@ -125,7 +122,7 @@ Argon writes can fabricate any events, as it can today. CI stays the check.
 The summary wiring (#1846) is in force since 2026-10-27 (#1700 stage A,
 launcher `argonreview-2e3a6bf`); Argon read its results inline in the preflight.
 
-MCP returns a summary from the same captured execution as the full
+MCP reads the same aggregation record as the full
 host report printed by `container-check`. Its format is verdict first, then
 check/package/scope, test-only package and leaf counts plus allowed skips,
 skipped or failing names, test excerpts, compiler/panic/timeout/package
@@ -139,7 +136,7 @@ diff gets a trusted diagnostic; its excerpt is omitted and counted.
 
 Every container line is sanitised and indented with `  | `; only trusted
 report lines start at column zero. The decided first line stays, except a
-success with a facts-parse error or disagreement with the leaf count or
+success with incomplete record facts or disagreement with the leaf count or
 allowed-skip line downgrades the MCP summary to
 `NOT VERIFIED: summary inconsistent with verdict`. The host report is not
 downgraded. The summary drops verified build/vet stderr. Docker/runner errors,

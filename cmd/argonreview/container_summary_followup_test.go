@@ -18,7 +18,7 @@ func TestSummaryIncompleteTimeout(t *testing.T) {
 	}
 	got := buildContainerSummary(in)
 	assertSummary(t, in, got)
-	for _, want := range []string{"Timeout:\n  | panic: test timed out after 10m", "Panic:\n  | panic: test timed out after 10m", "Package failures:\n  | p: package failed", "Details unavailable:", "Stream not understood after event 4."} {
+	for _, want := range []string{"Timeout:\n  | panic: test timed out after 10m", "Panic:\n  | panic: test timed out after 10m", "Package failures:\n  | p: package failed", "Counts unavailable:", "Stream not understood after event 4."} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q: %s", want, got)
 		}
@@ -31,7 +31,7 @@ func TestSummaryIncompleteTimeout(t *testing.T) {
 }
 
 // TestSummaryIncompleteDiagnostics separates package diagnostics from per-test
-// evidence and ensures cut streams still refuse these sections.
+// evidence: confirmed failures remain observed even when totals are refused.
 func TestSummaryIncompleteDiagnostics(t *testing.T) {
 	stream := containerJSON("p", "start", "run/TestRunning", "run/TestBad") +
 		testOutput("p", "TestBad", "private per-test excerpt\n") +
@@ -49,11 +49,7 @@ func TestSummaryIncompleteDiagnostics(t *testing.T) {
 					t.Fatalf("cut=%v, diagnostic %q: %s", cut, diagnostic, got)
 				}
 			}
-			omitted := 1
-			if cut {
-				omitted = 4
-			}
-			if strings.Contains(got, "private per-test excerpt") || strings.Contains(got, "Failing leaf tests:") || !strings.Contains(got, fmt.Sprintf("%d lines not shown", omitted)) {
+			if !strings.Contains(got, "private per-test excerpt") || strings.Contains(got, "Failing leaf tests:") || !strings.Contains(got, "Failures (observed, total unknown):") || strings.Contains(got, " of 1 failing tests") {
 				t.Fatal(got)
 			}
 		})
@@ -92,7 +88,7 @@ func TestSummaryVerifiedTrustedBudget(t *testing.T) {
 		if !strings.HasPrefix(got, summaryInconsistent+"\n") || len(got) > summaryFooterReserve {
 			t.Fatalf("downgrade lost the tiny error limit: %d bytes: %s", len(got), got)
 		}
-		if strings.Contains(got, "Check:") || strings.Contains(got, "Scope:") || strings.Contains(got, "Details unavailable:") {
+		if strings.Contains(got, "Check:") || strings.Contains(got, "Scope:") || strings.Contains(got, "Counts unavailable:") {
 			t.Fatalf("downgrade used production space for optional lines: %s", got)
 		}
 	})
@@ -135,8 +131,8 @@ func TestSummaryMinimalSkippedNames(t *testing.T) {
 	}
 }
 
-// TestSummaryFactsCommandOutputOnly keeps raw test JSON and generated output
-// out of excerpts that are displayed only for build and vet.
+// TestSummaryFactsCommandOutputOnly keeps test JSON out of command heads.
+// Generated retains its command head but never displays it as command output.
 func TestSummaryFactsCommandOutputOnly(t *testing.T) {
 	for _, check := range verifyCheckNames() {
 		t.Run(check, func(t *testing.T) {
@@ -144,14 +140,19 @@ func TestSummaryFactsCommandOutputOnly(t *testing.T) {
 			if check == "test" || check == "test-db" {
 				stdout = containerJSON("p", "start") + testOutput("p", "", stdout) + containerJSON("p", "fail")
 			}
-			facts := parseSummaryFacts(check, []byte(stdout), nil, false)
+			facts := recordFactsFixture(check, []byte(stdout), nil, false)
 			wantLines := 0
-			if check == "build" || check == "vet" {
+			if check == "build" || check == "vet" || check == "generated" {
 				wantLines = 1
 			}
 			if facts.stdout.total != wantLines || facts.panicLine != "panic: command failed" {
 				t.Fatalf("unexpected retained output for %s: %+v", check, facts)
 			}
+			in := summaryInput{check: check, verdict: "FAILED", facts: facts}
+			if check != "build" && check != "vet" && strings.Contains(buildContainerSummary(in), "Command output:") {
+				t.Fatal("command-only excerpt escaped")
+			}
+
 		})
 	}
 }

@@ -98,6 +98,9 @@ func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObserv
 	}
 	switch row.Group {
 	case "hook", "workspace", "settings", "exposure":
+		// Workspace locations do not imply discovery semantics. B3 must check
+		// both same-name hook claims in claim-number order and absent side effect
+		// alongside the final deny; Replies and RanLocations are not that check.
 		return agyCheckObservation{ID: row.ID, Outcome: agyCheckTranscriptOutcome(row, transcript.Steps)}
 	case "discovery":
 		// Hook execution is recorded only on a tool call, so no call proves nothing.

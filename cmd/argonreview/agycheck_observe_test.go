@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"slices"
@@ -10,7 +11,9 @@ import (
 
 // agyCheckObserveFixtures are ASSUMED, unverified against real agy. Explicit
 // JSONL makes each row's evidence reviewable without a runner or generated files.
-func agyCheckObserveFixtures() map[string]agyCheckObserveInput {
+// Same-name scenarios follow B1b's generator at call time.
+func agyCheckObserveFixtures(t *testing.T) map[string]agyCheckObserveInput {
+	t.Helper()
 	transcripts := map[string]string{
 		"hook-decision": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
@@ -129,6 +132,9 @@ func agyCheckObserveFixtures() map[string]agyCheckObserveInput {
 {"event":"result"}
 `,
 	}
+	for _, fixture := range agyCheckObserveSameName(t) {
+		transcripts[fixture.ID] = transcripts["hook-precedence"]
+	}
 	inputs := make(map[string]agyCheckObserveInput)
 	for id, transcript := range transcripts {
 		inputs[id] = agyCheckObserveInput{Transcript: []byte(transcript)}
@@ -153,6 +159,122 @@ func agyCheckObserveFixtures() map[string]agyCheckObserveInput {
 		inputs[row.ID] = in
 	}
 	return inputs
+}
+
+func agyCheckObserveSameName(t *testing.T) []agyCheckSameNameConfig {
+	t.Helper()
+	// B1b only builds bytes and validates paths; these paths need not exist.
+	fixtures, err := agyCheckConfigSameName("/trusted/argonreview", "/check/isolation/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixtures
+}
+
+func agyCheckObserveFindRow(t *testing.T, id string) agyCheckRow {
+	t.Helper()
+	for _, row := range agyCheckExpected {
+		if row.ID == id {
+			return row
+		}
+	}
+	t.Fatalf("missing table row %s", id)
+	return agyCheckRow{}
+}
+
+// TestAgyCheckObserveSameNameFixtures cross-checks generator, table, tool map
+// and observe fixtures without duplicating B1b's JSON contract tests.
+func TestAgyCheckObserveSameNameFixtures(t *testing.T) {
+	fixtures := agyCheckObserveSameName(t)
+	want := make(map[string]string)
+	for _, row := range agyCheckExpected {
+		if row.Group == "workspace" && row.Location != "" {
+			want[row.ID] = row.Location
+		}
+	}
+	if len(fixtures) != len(want) {
+		t.Fatalf("same-name fixture/table set differs: %d fixtures, %d rows", len(fixtures), len(want))
+	}
+	inputs := agyCheckObserveFixtures(t)
+	seen := make(map[string]bool)
+	for _, fixture := range fixtures {
+		t.Run(fixture.ID, func(t *testing.T) {
+			if location, ok := want[fixture.ID]; !ok || location != fixture.Location || seen[fixture.ID] {
+				t.Fatalf("same-name ID/location set drift: %+v", fixture)
+			}
+			seen[fixture.ID] = true
+			name := []byte(`"ribbitto-implementer-guard"`)
+			if bytes.Equal(fixture.Home, fixture.Workspace) || !bytes.Contains(fixture.Home, name) || !bytes.Contains(fixture.Workspace, name) {
+				t.Fatal("same-name home/workspace bytes must differ and name the same hook")
+			}
+			if tool, ok := agyCheckTranscriptTools[fixture.ID]; !ok || tool != "write_to_file" {
+				t.Fatal("same-name tool mapping missing or changed")
+			}
+			in, ok := inputs[fixture.ID]
+			if !ok || !bytes.Equal(in.Transcript, inputs["hook-precedence"].Transcript) {
+				t.Fatal("same-name observe fixture missing or differs from precedence")
+			}
+		})
+	}
+}
+
+// TestAgyCheckObserveSameNameDispatch requires workspace outcome semantics even
+// though these rows have locations, unlike the original precedence row.
+func TestAgyCheckObserveSameNameDispatch(t *testing.T) {
+	const step = "{\"event\":\"tool_step\",\"tool\":\"write_to_file\",\"state\":\"ERROR\"}\n"
+	const result = "{\"event\":\"result\"}\n"
+	for _, fixture := range agyCheckObserveSameName(t) {
+		row := agyCheckObserveFindRow(t, fixture.ID)
+		for _, tc := range []struct {
+			name, transcript, outcome string
+			ok                        bool
+		}{
+			{"error", step + result, "denied", true},
+			{"done", strings.Replace(step, "ERROR", "DONE", 1) + result, "allowed", false},
+			{"no step", result, "no step", false},
+			{"two steps", step + step + result, "multiple steps", false},
+			{"unparsed", "UNTRUSTED_TRANSCRIPT_MARKER\n", "unparsed transcript", false},
+		} {
+			t.Run(fixture.ID+"/"+tc.name, func(t *testing.T) {
+				got := agyCheckObserveRow(row, agyCheckObserveInput{Transcript: []byte(tc.transcript)})
+				classified := agyCheckClassify(got, agyCheckDefaultCalls)
+				if got != (agyCheckObservation{ID: fixture.ID, Outcome: tc.outcome}) || classified.OK != tc.ok || classified.Observed != tc.outcome {
+					t.Fatalf("same-name workspace observation=%+v classified=%+v want %s OK=%t", got, classified, tc.outcome, tc.ok)
+				}
+			})
+		}
+	}
+}
+
+// TestAgyCheckObserveSameNameIgnoresRecords pins the adapter boundary: B3 must
+// check BOTH hook claims in claim-number order, final deny and absent side effect
+// before a row may pass. That record cross-check belongs to B3 here.
+func TestAgyCheckObserveSameNameIgnoresRecords(t *testing.T) {
+	inputs := agyCheckObserveFixtures(t)
+	for _, fixture := range agyCheckObserveSameName(t) {
+		row := agyCheckObserveFindRow(t, fixture.ID)
+		in := inputs[fixture.ID]
+		// Loaded/Ran are discovery facts; same-name rows judge the tool outcome.
+		in.Transcript = fmt.Appendf(nil, "{\"event\":\"hook_loaded\",\"path\":%q}\n%s", fixture.Location, in.Transcript)
+		want := agyCheckObservation{ID: fixture.ID, Outcome: "denied"}
+		for _, tc := range []struct {
+			name         string
+			replies, ran []string
+		}{
+			{"neither", nil, nil},
+			{"replies only", []string{"allow", "deny"}, nil},
+			{"ran only", nil, []string{fixture.Location}},
+			{"both", []string{"deny", "allow"}, []string{fixture.Location}},
+			{"unknown records", []string{"UNTRUSTED_TRANSCRIPT_MARKER"}, []string{"elsewhere"}},
+		} {
+			t.Run(fixture.ID+"/"+tc.name, func(t *testing.T) {
+				in.Replies, in.RanLocations = tc.replies, tc.ran
+				if got := agyCheckObserveRow(row, in); got != want || !agyCheckClassify(got, agyCheckDefaultCalls).OK {
+					t.Fatalf("same-name rows must ignore Replies and RanLocations: %+v want %+v", got, want)
+				}
+			})
+		}
+	}
 }
 
 // agyCheckObserveEvaluate gives every integration assertion the same valid pins.
@@ -194,11 +316,14 @@ func agyCheckObserveAssertDifference(t *testing.T, inputs map[string]agyCheckObs
 	}
 }
 
-// TestAgyCheckObserveAll pins all 27 assumed scenarios and deterministic order.
+// TestAgyCheckObserveAll pins the assumed scenarios and deterministic order.
 func TestAgyCheckObserveAll(t *testing.T) {
-	inputs := agyCheckObserveFixtures()
+	inputs := agyCheckObserveFixtures(t)
 	observations := agyCheckObserveAll(inputs)
-	if len(inputs) != 27 || len(observations) != 27 {
+	if len(agyCheckExpected) != 29 {
+		t.Fatal("expected row count changed")
+	}
+	if len(inputs) != len(agyCheckExpected) || len(observations) != len(agyCheckExpected) {
 		t.Fatal("fixture/table size drift")
 	}
 	for i, row := range agyCheckExpected {
@@ -207,6 +332,10 @@ func TestAgyCheckObserveAll(t *testing.T) {
 		}
 	}
 	r, out := agyCheckObserveEvaluate(t, inputs)
+	if len(r.Rows) != len(agyCheckExpected) || strings.Count(out, "\n") != len(agyCheckExpected)+3 ||
+		!strings.Contains(out, fmt.Sprintf("Rows: %d; differing: 0\n", len(agyCheckExpected))) {
+		t.Fatalf("report row count drift: %q", out)
+	}
 	for _, row := range r.Rows {
 		if !row.OK {
 			t.Fatalf("assumed fixture differs: %+v", row)
@@ -217,7 +346,7 @@ func TestAgyCheckObserveAll(t *testing.T) {
 	}
 	for _, row := range agyCheckExpected {
 		t.Run("missing/"+row.ID, func(t *testing.T) {
-			inputs := agyCheckObserveFixtures()
+			inputs := agyCheckObserveFixtures(t)
 			delete(inputs, row.ID)
 			agyCheckObserveAssertDifference(t, inputs, row.ID, "missing input")
 		})
@@ -234,7 +363,7 @@ func TestAgyCheckObserveUnknownRows(t *testing.T) {
 		{"reverse", []string{"z-extra", "extra\n\t\x1b", "a-extra", "Hook-Decision"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			inputs := agyCheckObserveFixtures()
+			inputs := agyCheckObserveFixtures(t)
 			want := agyCheckObserveAll(inputs)
 			unknown := []string{"Hook-Decision", "a-extra", "extra\n\t\x1b", "z-extra"}
 			for _, id := range unknown {
@@ -287,7 +416,7 @@ func TestAgyCheckObserveDiscoverySteps(t *testing.T) {
 			{"step loaded and ran", true, true},
 		} {
 			t.Run(row.ID+"/"+tc.name, func(t *testing.T) {
-				inputs := agyCheckObserveFixtures()
+				inputs := agyCheckObserveFixtures(t)
 				var in agyCheckObserveInput
 				if tc.loaded {
 					in.Transcript = fmt.Appendf(in.Transcript, "{\"event\":\"hook_loaded\",\"path\":%q}\n", row.Location)
@@ -330,7 +459,7 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 		}
 		for _, change := range []string{"flip", "drop", "duplicate"} {
 			t.Run(row.ID+"/"+change, func(t *testing.T) {
-				inputs := agyCheckObserveFixtures()
+				inputs := agyCheckObserveFixtures(t)
 				in := inputs[row.ID]
 				line, _, _ := strings.Cut(string(in.Transcript), "\n")
 				url := row.ID == "read-url" || row.ID == "execute-url"
@@ -377,7 +506,7 @@ func TestAgyCheckObserveParseFailures(t *testing.T) {
 	for _, tc := range agyCheckTranscriptFailures() {
 		for _, id := range []string{"hook-decision", "hook-precedence", "command-on", "task-on", "discovery-agent", "reconciliation"} {
 			t.Run(tc.name+"/"+id, func(t *testing.T) {
-				inputs := agyCheckObserveFixtures()
+				inputs := agyCheckObserveFixtures(t)
 				in := inputs[id]
 				in.Transcript = []byte(tc.data)
 				inputs[id] = in
@@ -401,11 +530,11 @@ func TestAgyCheckObserveParseFailures(t *testing.T) {
 func TestAgyCheckObserveUnknownGroup(t *testing.T) {
 	row := agyCheckExpected[0]
 	row.Group = "UNTRUSTED_TRANSCRIPT_MARKER"
-	got := agyCheckObserveRow(row, agyCheckObserveFixtures()[row.ID])
+	got := agyCheckObserveRow(row, agyCheckObserveFixtures(t)[row.ID])
 	if got != (agyCheckObservation{ID: row.ID, Outcome: "unparsed transcript"}) {
 		t.Fatalf("unknown group: %+v", got)
 	}
-	inputs := agyCheckObserveFixtures()
+	inputs := agyCheckObserveFixtures(t)
 	observations := agyCheckObserveAll(inputs)
 	observations[0] = got
 	pin := agyCheckPin{"1.4.7", strings.Repeat("a", 64)}
@@ -461,9 +590,9 @@ func TestAgyCheckObserveUnlistedLoads(t *testing.T) {
 	if !slices.Equal(inputs, []string{"z/new", ".agent/hooks.json", "a/new", "z/new", "hooks.json", "Hooks.json", "a/new"}) {
 		t.Fatal("input loads were mutated")
 	}
-	r, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures())
+	r, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
 	_ = agyCheckObserveUnlistedLoads(inputs)
-	afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures())
+	afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
 	if agyCheckExitCode(r) != 0 || agyCheckExitCode(afterR) != 0 || before != after {
 		t.Fatal("unlisted information altered result")
 	}
@@ -471,7 +600,7 @@ func TestAgyCheckObserveUnlistedLoads(t *testing.T) {
 
 // TestAgyCheckObserveSummary pins exact counts rather than only the core's OK.
 func TestAgyCheckObserveSummary(t *testing.T) {
-	in := agyCheckObserveFixtures()["reconciliation"]
+	in := agyCheckObserveFixtures(t)["reconciliation"]
 	transcript, err := agyCheckTranscriptParse(in.Transcript)
 	if err != nil {
 		t.Fatal(err)
@@ -554,11 +683,11 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 		{"slash file", "unparsed transcript", func(in *agyCheckObserveInput) { in.CreatedFiles[0] = "created-/UNTRUSTED_TRANSCRIPT_MARKER" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			inputs := agyCheckObserveFixtures()
+			inputs := agyCheckObserveFixtures(t)
 			in := inputs["reconciliation"]
 			tc.change(&in)
 			inputs["reconciliation"] = in
-			got := agyCheckObserveRow(agyCheckExpected[26], in)
+			got := agyCheckObserveRow(agyCheckObserveFindRow(t, "reconciliation"), in)
 			if tc.want == "unparsed transcript" && got != (agyCheckObservation{ID: "reconciliation", Outcome: "unparsed transcript"}) {
 				t.Fatalf("summary failure retained facts or echoed content: %+v", got)
 			}
@@ -591,9 +720,9 @@ func TestAgyCheckBuiltinInfo(t *testing.T) {
 			if info != want || strings.Contains(info, "UNTRUSTED_TRANSCRIPT_MARKER") {
 				t.Fatalf("builtin info=%q want %q", info, want)
 			}
-			beforeR, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures())
+			beforeR, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
 			_ = agyCheckBuiltinInfo([]byte(tc.listing))
-			afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures())
+			afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
 			if agyCheckExitCode(beforeR) != 0 || agyCheckExitCode(afterR) != 0 || before != after || strings.Contains(after, "INFO builtin/") {
 				t.Fatal("builtin information altered exit code or report")
 			}

@@ -16,15 +16,18 @@ func TestPartition(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, want := range map[string][]string{
-		"loadgen":        {"./cmd/loadgen", "./cmd/seed"},
-		"cmd":            {"./cmd/ribbitto"},
-		"argonreview":    {"./cmd/argonreview"},
-		"web-nonbrowser": {"./internal/web"},
-		"web-1/3":        {"./internal/web"},
-		"web-2/3":        {"./internal/web"},
-		"web-3/3":        {"./internal/web"},
-		"realtime":       {"./internal/realtime"},
-		rest:             {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
+		"loadgen":                        {"./cmd/loadgen", "./cmd/seed"},
+		"cmd":                            {"./cmd/ribbitto"},
+		"argonreview-agy-command":        {"./cmd/argonreview"},
+		"argonreview-container-deadline": {"./cmd/argonreview"},
+		"argonreview-aggregation":        {"./cmd/argonreview"},
+		"argonreview-rest":               {"./cmd/argonreview"},
+		"web-nonbrowser":                 {"./internal/web"},
+		"web-1/3":                        {"./internal/web"},
+		"web-2/3":                        {"./internal/web"},
+		"web-3/3":                        {"./internal/web"},
+		"realtime":                       {"./internal/realtime"},
+		rest:                             {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
 	} {
 		if !slices.Equal(parts[name], want) {
 			t.Errorf("shard %s = %v, want %v", name, parts[name], want)
@@ -97,23 +100,25 @@ func TestPick(t *testing.T) {
 
 func TestScheduled(t *testing.T) {
 	const (
-		matrix    = "        shard: [loadgen, cmd, argonreview, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
+		matrix    = "        shard: [loadgen, cmd, argonreview-agy-command, argonreview-container-deadline, argonreview-aggregation, argonreview-rest, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
 		restStep  = "          go -C tools run ./testshard -run .. rest\n"
 		shardStep = "          go -C tools run ./testshard -run .. \"$SHARD\"\n"
-		valid     = matrix + restStep + shardStep
+		valid     = matrix + restStep + shardStep + ciNeeds + "\n" + ciSuccess + "\n"
 	)
 	for _, tc := range []struct {
 		name, source, want string
 	}{
 		{"every shard once", valid, ""},
+		{"ci dependency missing", strings.Replace(valid, "test-rest, vuln", "vuln", 1), "ci gate"},
+		{"ci dependency count wrong", strings.Replace(valid, "length == 5", "length == 4", 1), "ci gate"},
 		{"named shard omitted", strings.Replace(valid, "web-2/3, ", "", 1), "shard web-2/3 0 times"},
 		{"named shard repeated", strings.Replace(valid, "web-2/3, ", "web-2/3, web-2/3, ", 1), "shard web-2/3 2 times"},
 		{"non-browser shard omitted", strings.Replace(valid, "web-nonbrowser, ", "", 1), "shard web-nonbrowser 0 times"},
 		{"non-browser shard repeated", strings.Replace(valid, "web-nonbrowser, ", "web-nonbrowser, web-nonbrowser, ", 1), "shard web-nonbrowser 2 times"},
 		{"cmd shard omitted", strings.Replace(valid, "cmd, ", "", 1), "shard cmd 0 times"},
 		{"cmd shard repeated", strings.Replace(valid, "cmd, ", "cmd, cmd, ", 1), "shard cmd 2 times"},
-		{"argonreview shard omitted", strings.Replace(valid, "argonreview, ", "", 1), "shard argonreview 0 times"},
-		{"argonreview shard repeated", strings.Replace(valid, "argonreview, ", "argonreview, argonreview, ", 1), "shard argonreview 2 times"},
+		{"argonreview shard omitted", strings.Replace(valid, "argonreview-aggregation, ", "", 1), "shard argonreview-aggregation 0 times"},
+		{"argonreview shard repeated", strings.Replace(valid, "argonreview-aggregation, ", "argonreview-aggregation, argonreview-aggregation, ", 1), "shard argonreview-aggregation 2 times"},
 		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
 		{"no matrix", restStep + shardStep, "found 0"},
 		{"two matrices", matrix + valid, "found 2"},
@@ -155,7 +160,9 @@ func TestArgonreviewShard(t *testing.T) {
 		{"other shard timeout", func(s []shard) []shard { s[0].flags += " -timeout 20m"; return s }, "shard loadgen: flags"},
 		{"other package", func(s []shard) []shard { s[2].packages = []string{"./other"}; return s }, "argonreview must run only"},
 		{"browser selector", func(s []shard) []shard { s[2].browser = "1/3"; return s }, "argonreview must run only"},
-		{"package in two shards", func(s []shard) []shard { return append(s, shard{"extra", []string{"./cmd/argonreview"}, "", "-p 2"}) }, "./cmd/argonreview: whole-package range overlaps"},
+		{"package in two shards", func(s []shard) []shard {
+			return append(s, shard{"extra", []string{"./cmd/argonreview"}, "", "-p 2", "", ""})
+		}, "argonreview must run only"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateShards(tc.edit(shards()))
@@ -165,8 +172,13 @@ func TestArgonreviewShard(t *testing.T) {
 		})
 	}
 	t.Run("package in no shard", func(t *testing.T) {
-		specs := []shard{{"argonreview", []string{"./cmd/argonreview"}, "", argonreviewFlags}}
-		err := covers(map[string][]string{"argonreview": {"./cmd/argonreview"}}, []string{"./cmd/argonreview", "./new"}, specs)
+		specs := shards()
+		parts := map[string][]string{}
+		for _, s := range specs {
+			parts[s.name] = s.packages
+		}
+		all := []string{"./cmd/argonreview", "./cmd/loadgen", "./cmd/seed", "./cmd/ribbitto", "./internal/web", "./internal/realtime", "./new"}
+		err := covers(parts, all, specs)
 		if err == nil || !strings.Contains(err.Error(), "./new is in no shard") {
 			t.Fatalf("covers = %v, want ./new in no shard", err)
 		}
@@ -204,9 +216,21 @@ func TestMakefile(t *testing.T) {
 			t.Fatalf("checkMakefile = %v, want rejected default package list", err)
 		}
 	})
+	for _, s := range shards() {
+		if !slices.Contains(s.packages, argonreviewPackage) {
+			continue
+		}
+		line := "\tgo -C tools run ./testshard -run .. " + s.name + "\n"
+		for _, source := range []string{strings.Replace(valid, line, "", 1), valid + line} {
+			if err := checkMakefile(source); err == nil {
+				t.Fatalf("accepted missing or repeated %s", s.name)
+			}
+		}
+	}
+
 	for _, tc := range []struct{ name, source string }{
 		{"missing wiring", ""},
-		{"missing runner", strings.Replace(valid, "\tgo -C tools run ./testshard -run .. argonreview\n", "", 1)},
+		{"missing runner", strings.Replace(valid, "\tgo -C tools run ./testshard -run .. argonreview-aggregation\n", "", 1)},
 		{"altered exclusion", strings.Replace(valid, `"/cmd/argonreview"`, `"/cmd/other"`, 1)},
 		{"missing empty guard", strings.Replace(valid, "$(error no packages outside cmd/argonreview)", "", 1)},
 		{"altered condition", strings.Replace(valid, "ifeq ($(origin GO_TEST_PACKAGES),undefined)", "ifdef GO_TEST_PACKAGES", 1)},
@@ -222,10 +246,10 @@ func TestMakefile(t *testing.T) {
 
 func browserShards() []shard {
 	const n = 3
-	specs := []shard{{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern}}
+	specs := []shard{{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern, "", ""}}
 	for k := 1; k <= n; k++ {
 		selector := fmt.Sprintf("%d/%d", k, n)
-		specs = append(specs, shard{"web-" + selector, []string{"./internal/web"}, selector, "-p 2 -run " + browserTestPattern})
+		specs = append(specs, shard{"web-" + selector, []string{"./internal/web"}, selector, "-p 2 -run " + browserTestPattern, "", ""})
 	}
 	return specs
 }
@@ -304,7 +328,7 @@ func TestBrowserShardCoverage(t *testing.T) {
 }
 
 func TestScheduledBrowserShards(t *testing.T) {
-	valid := "shard: [web-nonbrowser, web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n"
+	valid := "shard: [web-nonbrowser, web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n" + ciNeeds + "\n" + ciSuccess + "\n"
 	if err := scheduled(valid, browserShards()); err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +358,7 @@ func TestCommand(t *testing.T) {
 	t.Setenv("GOFLAGS", "-run=X")
 	for _, s := range append(shards(), browserShards()...) {
 		cmd := testCommand("/repository", s)
-		want := []string{"make", "check-test", "GO_TEST_PACKAGES=" + strings.Join(s.packages, " "), "GO_TEST_FLAGS=" + strings.ReplaceAll(s.flags, "$", "$$")}
+		want := []string{"make", "check-test", "GO_TEST_PACKAGES=" + strings.Join(s.packages, " "), "GO_TEST_FLAGS=" + strings.ReplaceAll(s.testFlags(), "$", "$$")}
 		if cmd.Dir != "/repository" || !slices.Equal(cmd.Args, want) {
 			t.Fatalf("command = %v in %s, want %v", cmd.Args, cmd.Dir, want)
 		}
@@ -349,7 +373,11 @@ func TestCommand(t *testing.T) {
 		// MAKEFLAGS would make this make print "Entering directory" lines.
 		cmd.Env = append(cmd.Env, "MAKELEVEL=0", "MAKEFLAGS=")
 		out, err := cmd.Output()
-		wantOutput := strings.Join(append(append(strings.Fields(s.flags), s.packages...), s.browser, "-count=1"), "\n") + "\n"
+		args := strings.Fields(s.flags)
+		if s.kind != "" {
+			args = append(args, s.kind, s.pattern)
+		}
+		wantOutput := strings.Join(append(append(args, s.packages...), s.browser, "-count=1"), "\n") + "\n"
 		if err != nil || string(out) != wantOutput {
 			t.Fatalf("make output = %q, %v; want %q", out, err, wantOutput)
 		}
@@ -425,5 +453,58 @@ func TestCheckBrowserTests(t *testing.T) {
 				t.Fatalf("checkBrowserTests = %v", err)
 			}
 		})
+	}
+}
+
+func TestCheckArgonreviewTests(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, argonreviewPackage)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := "package main\nimport \"testing\"\n"
+	for _, name := range []string{"TestAgyCheckCommandEndToEnd", "TestContainerDeadline", "TestAggregatorFlood", "TestOther"} {
+		source += "func " + name + "(t *testing.T) {}\n"
+	}
+	source += "func Testhelper(t *testing.T) {}\nfunc (s suite) TestMethod(t *testing.T) {}\nfunc TestWrongSignature(t testing.T) {}\n"
+	source += "func ExampleOther() {\n// Output:\n}\nfunc FuzzOther(f *testing.F) {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "slice_test.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		edit func([]shard)
+		want string
+	}{
+		{"valid", func(s []shard) {}, ""},
+		{"dropped skip pattern", func(s []shard) { s[5].pattern = agyCommandPattern }, "skip must be exactly"},
+		{"reordered skip union", func(s []shard) { s[2], s[3] = s[3], s[2] }, "skip must be exactly"},
+		{"shell quote", func(s []shard) { s[2].pattern += "'" }, "requires a top-level"},
+		{"invalid regex", func(s []shard) { s[2].pattern = "[" }, "compiling"},
+		{"extra skip pattern", func(s []shard) { s[5].pattern += "|TestOther" }, "skip must be exactly"},
+		{"whole package", func(s []shard) { s[2].kind = "" }, "requires a top-level"},
+		{"remainder not skipping", func(s []shard) { s[5].kind = "" }, "requires a top-level"},
+		{"duplicate pattern", func(s []shard) { s[3].pattern = s[2].pattern; s[5].pattern = argonreviewUnion(s) }, "overlaps"},
+		{"overlap", func(s []shard) { s[3].pattern = "AgyCheck"; s[5].pattern = argonreviewUnion(s) }, "overlaps"},
+		{"helper excluded", func(s []shard) { s[2].pattern = "^Testhelper$"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"method excluded", func(s []shard) { s[2].pattern = "^TestMethod$"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"wrong signature excluded", func(s []shard) { s[2].pattern = "^TestWrongSignature$"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"empty pinned slice", func(s []shard) { s[2].pattern = "^TestMissing"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"empty remainder", func(s []shard) { s[2].pattern += "|Other"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"subtest pattern", func(s []shard) { s[2].pattern += "/child" }, "requires a top-level"},
+		{"example selected", func(s []shard) { s[2].pattern = "^ExampleOther"; s[5].pattern = argonreviewUnion(s) }, ""},
+		{"fuzz selected", func(s []shard) { s[2].pattern = "^FuzzOther"; s[5].pattern = argonreviewUnion(s) }, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			specs := shards()
+			tc.edit(specs)
+			err := checkArgonreviewTests(root, specs)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("checkArgonreviewTests = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	if err := checkArgonreviewTests("../..", shards()); err != nil {
+		t.Fatal(err)
 	}
 }

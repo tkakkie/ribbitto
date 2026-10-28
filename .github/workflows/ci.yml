@@ -150,13 +150,13 @@ jobs:
   # The slowest packages, one tools/testshard shard per job. testshard -check
   # (in make check) fails unless this matrix names each of its shards once.
   # Web has one non-browser slice and three slices running only TestBrowser.
-  # Argonreview gets its own timeout from testshard (#1948).
+  # Argonreview has four test-name slices, each with a 20m timeout (#1969).
   # The remaining packages run in test-rest beside checks.
   test:
     strategy:
       fail-fast: false
       matrix:
-        shard: [loadgen, cmd, argonreview, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]
+        shard: [loadgen, cmd, argonreview-agy-command, argonreview-container-deadline, argonreview-aggregation, argonreview-rest, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]
     runs-on: ubuntu-latest
     services:
       postgres:

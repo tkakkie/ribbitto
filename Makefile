@@ -90,7 +90,10 @@ check-static: $(TEMPL)
 check-test: db-health
 ifeq ($(origin GO_TEST_PACKAGES),undefined)
 	go test -race $(GO_TEST_FLAGS) $(or $(strip $(shell go list -f '{{if ne .ImportPath (print .Module.Path "/cmd/argonreview")}}{{.ImportPath}}{{end}}' ./...)),$(error no packages outside cmd/argonreview))
-	go -C tools run ./testshard -run .. argonreview
+	go -C tools run ./testshard -run .. argonreview-agy-command
+	go -C tools run ./testshard -run .. argonreview-container-deadline
+	go -C tools run ./testshard -run .. argonreview-aggregation
+	go -C tools run ./testshard -run .. argonreview-rest
 else
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 endif

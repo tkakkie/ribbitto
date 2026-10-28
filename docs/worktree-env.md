@@ -74,9 +74,11 @@ rejecting independent package lists or flags. `-run` sets `GOFLAGS=-count=1`
 for every shard, whatever the workflow sets, because setup-go restores Go's test result cache; the
 workflow's `GOFLAGS` line is redundant. Web runs as `web-nonbrowser`, `web-1/3`,
 `web-2/3` and `web-3/3`; `cmd` runs `cmd/ribbitto` as a whole package.
-`argonreview` runs `cmd/argonreview` alone with `-timeout 20m`, shared by CI
-and local `make check-test`; the local full run excludes it from the first
-invocation and then calls the shard runner. Other packages keep the default timeout.
+Four `argonreview-*` slices run `cmd/argonreview` with `-timeout 20m` in CI
+and local `make check-test`: agy-command, container-deadline, aggregation and rest.
+The remainder skips the pinned patterns’ union; `-check` parses test sources
+to reject empty or overlapping slices. The local full run excludes the package
+first, then calls each slice. Other packages keep the default timeout.
 Selectors use `RIBBITTO_BROWSER_SHARD=k/n`; empty or unset runs all scenarios,
 and malformed or empty shards fail.
 Registration filters full scenario names: the six slowest are pinned in

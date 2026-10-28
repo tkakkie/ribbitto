@@ -90,8 +90,8 @@ It runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI
 in a parallel `test` matrix job, `rest` in `test-rest`,
 and TypeScript in `web-types` (`.github/workflows/ci.yml`).
 [`testshard -run`](../tools/testshard/main.go) owns test packages, selectors and flags.
-The `argonreview` shard runs `cmd/argonreview` with `-timeout 20m`;
-local `check-test` runs it through the same runner after all other packages.
+Four `argonreview-*` slices run `cmd/argonreview` with `-timeout 20m`;
+local `check-test` runs each through the same runner after all other packages.
 Other packages retain Go's default timeout. `testshard -check` pins both
 the CI commands and the local Makefile wiring.
 `make check` checks formatting and internal `doc.go` files via
@@ -125,7 +125,8 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.
 
-The Argon launcher's Go tests run in the `argonreview` shard in CI.
+The Argon launcher's CI slices select command, deadline and aggregation tests;
+the remainder skips their union. `-check` parses test sources to prove coverage.
 CI's `vuln` job runs `make vuln`: three source scans with `govulncheck` pinned
 in `tools/go.mod`. The root application and `tools/` modules each use `./...`;
 `tools/tbls/` names the `github.com/k1LoW/tbls` main package because it has no

@@ -122,3 +122,26 @@ func TestContainerBrowserScope(t *testing.T) {
 		}
 	}
 }
+
+func TestContainerBrowserFailureSummary(t *testing.T) {
+	longRun := "TestBrowser/" + strings.Repeat("a", 62) + "/" + strings.Repeat("b", 62) + "/" + strings.Repeat("c", 62)
+	for _, run := range []string{browserTestRun, longRun} {
+		t.Run(run, func(t *testing.T) {
+			v := browserRunFixture(t)
+			v.runner = summaryRunner(containerJSON(browserTestPackage, "start", "run/"+run, "fail/"+run, "fail"), strings.Repeat("stderr\n", 10000), 1)
+			summary, err := v.verifyBrowser(context.Background(), "./internal/web", run)
+			name := browserTestPackage + "/" + run
+			if run == longRun {
+				name = browserTestPackage + "/TestBrowser/" + strings.Repeat("a", 62)
+			}
+			for _, text := range []string{"FAILED\n", "Packages: 0 passed, 1 failed, 0 skipped", "Leaf tests: 0 passed, 1 failed, 0 skipped", "Failing leaf tests:", name} {
+				if err != nil || !strings.Contains(summary, text) {
+					t.Fatalf("failed browser summary must retain counts and failing name: missing=%q summary=%q err=%v", text, summary, err)
+				}
+			}
+			if len(summary) > 2048 {
+				t.Fatalf("failed browser summary must keep 2048-byte budget with 200-byte run: %d", len(summary))
+			}
+		})
+	}
+}

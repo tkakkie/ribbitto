@@ -21,11 +21,14 @@ each build needs the maintainer's approval in chat.
 The optional `--browser-mode <abs path>` is available on `implement-run`,
 `implement-check`, `implement-config`, `verify-mcp` and `container-check`.
 The browser admission checks and host-only `browser-check-record` command are
-merged but not in force; the internal browser runner is wired but unreachable
-through CLI/MCP until B3b. An absent flag means
-paused. The implementer commands require verify on (config: mode on).
+merged but not in force. `verify` accepts `test-browser` with a `run`; calls are
+paused unless `browser-mode` is `on` and the 14-day gate passes. An absent flag
+means paused. The implementer commands require verify on (config: mode on).
 The gate directory also holds `browser-security-check.lock`, which serialises
 host record updates; runners read the atomically replaced gate without locking.
+The next smoke set replaces stage A’s “`test-browser` is an unknown check” row:
+`test-browser` is admitted by the guard and, with `browser-mode off`, gives
+`NOT VERIFIED: browser check paused`.
 
 ## Switch and run
 

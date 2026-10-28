@@ -159,6 +159,7 @@ var agyCheckTranscriptTools = map[string]string{
 	"hook-decision": "write_to_file", "hook-exit2": "write_to_file", "hook-exit1": "write_to_file",
 	"hook-missing": "write_to_file", "hook-timeout": "write_to_file", "hook-unparseable": "write_to_file",
 	"hook-silent": "write_to_file", "hook-precedence": "write_to_file",
+	"hook-same-name-agent": "write_to_file", "hook-same-name-agents": "write_to_file",
 	"command-on": "run_command", "command-off": "run_command",
 	"mcp-on": "call_mcp_tool", "mcp-off": "call_mcp_tool",
 	"read-url": "read_url", "execute-url": "execute_url",

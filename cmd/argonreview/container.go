@@ -98,9 +98,19 @@ func containerCheckScope(check string) string {
 // Only local patterns are admitted; ... is allowed only as the final segment.
 var containerPattern = regexp.MustCompile(`^(\.|\./\.\.\.|\./[A-Za-z0-9_][A-Za-z0-9_-]*(/[A-Za-z0-9_][A-Za-z0-9_-]*)*(/\.\.\.)?)$`)
 
-func validateContainerCheck(tree, check, pattern string) error {
+func validateContainerCheck(tree, check, pattern, run string) error {
 	if tree == "" || strings.ContainsRune(tree, 0) {
 		return errors.New("a worktree path is required")
+	}
+	if check == verifyBrowserCheck {
+		if _, err := browserPackageImportPath(pattern); err != nil {
+			return err
+		}
+		_, err := browserRunPattern(run)
+		return err
+	}
+	if run != "" {
+		return errors.New("run is only allowed for test-browser")
 	}
 	if check != "build" && check != "vet" && check != "test" && check != "generated" && check != "test-db" {
 		return errors.New("check must be build, vet, test, generated or test-db")
@@ -222,12 +232,33 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 	return 0, nil
 }
 
-func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 5 && args[3] == "--browser-mode" && browserModePath(args[4]) == nil {
-		args = args[:3]
+const containerCheckUsage = "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-check <worktree> test-browser <package> <run> [--browser-mode <abs path>]"
+
+func parseContainerCheck(args []string) (verifyArguments, string, error) {
+	mode := ""
+	if len(args) >= 2 && args[len(args)-2] == "--browser-mode" {
+		mode = args[len(args)-1]
+		if err := browserModePath(mode); err != nil {
+			return verifyArguments{}, "", err
+		}
+		args = args[:len(args)-2]
 	}
-	if len(args) != 3 || validateContainerCheck(args[0], args[1], args[2]) != nil {
-		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>]")
+	a := verifyArguments{}
+	if len(args) < 3 {
+		return a, mode, errors.New(containerCheckUsage)
+	}
+	a.check, a.pattern = args[1], args[2]
+	if a.check == verifyBrowserCheck && len(args) == 4 {
+		a.run = args[3]
+	} else if len(args) != 3 {
+		return a, mode, errors.New(containerCheckUsage)
+	}
+	return a, mode, validateContainerCheck(args[0], a.check, a.pattern, a.run)
+}
+
+func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
+	if _, _, err := parseContainerCheck(args); err != nil {
+		_, _ = fmt.Fprintln(stderr, containerCheckUsage)
 		return 2
 	}
 	info, ok := debug.ReadBuildInfo()
@@ -236,6 +267,24 @@ func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
 }
 
 func startContainerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error, runner containerRunner, copyParent string, budget containerBudget) int {
+	v := newContainerVerifier("", "")
+	v.runner, v.copyParent, v.budget = runner, copyParent, budget
+	return v.containerCheck(args, stdout, stderr, err, sweep)
+}
+
+func (v containerVerifier) containerCheck(args []string, stdout, stderr io.Writer, err error, sweep func(io.Writer) error) int {
+	a, mode, parseErr := parseContainerCheck(args)
+	if parseErr != nil {
+		_, _ = fmt.Fprintln(stderr, containerCheckUsage)
+		return 2
+	}
+	v.worktree, v.browserMode = args[0], mode
+	if a.check == verifyBrowserCheck {
+		if line := v.browserAdmission(); line != "" {
+			_, _ = fmt.Fprintln(stdout, line)
+			return 1
+		}
+	}
 	code := 1
 	if err == nil {
 		err = sweep(stderr)
@@ -244,7 +293,12 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		var report string
-		report, err = runContainerCheck(ctx, args[0], args[1], args[2], runner, copyParent, budget)
+		if a.check == verifyBrowserCheck {
+			result := containerExecution{timeout: containerTimeout, budget: v.budget, browserRun: a.run, admit: v.browserAdmission}
+			report, err = runContainerExecution(ctx, args[0], a.check, a.pattern, v.runner, v.copyParent, &result)
+		} else {
+			report, err = runContainerCheck(ctx, args[0], a.check, a.pattern, v.runner, v.copyParent, v.budget)
+		}
 		// Cleanup has completed before writing to a potentially closed pipe.
 		if _, writeErr := io.WriteString(stdout, report); writeErr != nil {
 			err = errors.Join(err, fmt.Errorf("writing container report: %w", writeErr))
@@ -260,7 +314,7 @@ func startContainerCheck(args []string, stdout, stderr io.Writer, err error, swe
 }
 
 func runContainerCheck(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, budget containerBudget) (report string, err error) {
-	if err := validateContainerCheck(tree, check, pattern); err != nil {
+	if err := validateContainerCheck(tree, check, pattern, ""); err != nil {
 		return "", err
 	}
 	result := containerExecution{timeout: containerTimeout, budget: budget}
@@ -268,7 +322,7 @@ func runContainerCheck(parent context.Context, tree, check, pattern string, runn
 }
 
 func runContainerSummary(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, timeout time.Duration, budget containerBudget) (string, error) {
-	if err := validateContainerCheck(tree, check, pattern); err != nil {
+	if err := validateContainerCheck(tree, check, pattern, ""); err != nil {
 		return "", err
 	}
 	result := containerExecution{timeout: timeout, budget: budget}
@@ -349,6 +403,12 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	}
 	// A failed removal still leaves its slot held by label reconciliation.
 	defer reservation.release()
+	// Admission can change during the budget wait; refuse before making a copy.
+	if check == verifyBrowserCheck {
+		if line := result.admit(); line != "" {
+			return result.refuse(check, pattern, line), nil
+		}
+	}
 	tree, err = filepath.Abs(tree)
 	if err != nil {
 		return "", fmt.Errorf("resolving worktree: %w", err)

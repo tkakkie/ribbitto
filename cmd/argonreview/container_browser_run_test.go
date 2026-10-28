@@ -90,7 +90,7 @@ func TestContainerBrowserOrder(t *testing.T) {
 		if copyLock != nil {
 			_ = copyLock.Close()
 		}
-		want := []string{"validate", "switch", "gate", "reserve", "copy dir created", "docker run", "stop", "rm", "copy removed", "release"}
+		want := []string{"validate", "switch", "gate", "reserve", "validate", "switch", "gate", "copy dir created", "docker run", "stop", "rm", "copy removed", "release"}
 		if err != nil || !strings.HasPrefix(summary, "verified\n") || !reflect.DeepEqual(events, want) {
 			t.Fatalf("browser lifecycle order: events=%v summary=%q err=%v", events, summary, err)
 		}

@@ -175,6 +175,40 @@ func checkVerifyImageRecipe(recipe, baseDigest, tailwindVersion, chromiumVersion
 	return problems
 }
 
+func TestVerifyImagePin(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		ok   bool
+	}{
+		{"recorded ID", containerVerifyImage == "sha256:bdd988255da2296494d1d4dcb2e944702c082480482aa5b8777fceadf8fc1ef1"},
+		{"full lowercase SHA256", regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(containerVerifyImage)},
+		{"replaces old ID", containerVerifyImage != "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if !row.ok {
+				t.Fatalf("verify image pin: %s: %q", row.name, containerVerifyImage)
+			}
+		})
+	}
+}
+
+func TestVerifyImagePinDocumentation(t *testing.T) {
+	docs, err := os.ReadFile("../../docs/workflow/argon-verify-image.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct{ name, pin string }{
+		{"pinned ID", containerVerifyImage},
+		{"recorded tag", "argonreview-verify-image:91dfaa7"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if !strings.Contains(string(docs), row.pin) {
+				t.Fatalf("image docs missing %s: %q", row.name, row.pin)
+			}
+		})
+	}
+}
+
 func TestVerifyImageRecipe(t *testing.T) {
 	digest, hash := "sha256:"+strings.Repeat("a", 64), strings.Repeat("b", 64)
 	base := "FROM golang@" + digest + "\n"

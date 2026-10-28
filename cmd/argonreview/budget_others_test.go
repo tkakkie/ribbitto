@@ -96,6 +96,9 @@ func TestBudgetVerificationConsistency(t *testing.T) {
 		{"class with one slot", otherLabel(one, otherClassLabel, "browser"), false},
 		{"three slots", otherLabel(two, otherSlotLabel, "0,1,2"), false},
 		{"another image", otherEdit(one, func(c *otherInspect) { c.Config.Image = "another-private-image" }), false},
+		{"old verify image", otherEdit(one, func(c *otherInspect) {
+			c.Config.Image = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
+		}), false},
 		{"wrong owner", otherLabel(one, containerOwnerLabel, "private-owner"), false},
 		{"owner with foreign name", otherEdit(one, func(c *otherInspect) { c.Name = "/private-foreign" }), false},
 		{"foreign name with arbitrary owner value", otherEdit(one, func(c *otherInspect) {

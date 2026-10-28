@@ -128,7 +128,7 @@ func TestContainerArgumentsGolden(t *testing.T) {
 				want = append(want, "-e", "RIBBITTO_TEST_DATABASE_URL=postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable", "-e", "RIBBITTO_REQUIRE_DB=1")
 			}
 			want = append(want, "--memory", row.memory, "--memory-swap", row.memory, "--pids-limit", pids, "--cpus", "2",
-				"sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80", "sh", "-c")
+				"sha256:bdd988255da2296494d1d4dcb2e944702c082480482aa5b8777fceadf8fc1ef1", "sh", "-c")
 			var command []string
 			switch check {
 			case "test-browser":

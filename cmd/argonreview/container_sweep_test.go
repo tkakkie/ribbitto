@@ -210,9 +210,9 @@ func TestSweepContainerReclaim(t *testing.T) {
 }
 
 func TestSweepContainerRevalidation(t *testing.T) {
-	for _, change := range []string{"vanish", "label", "image", "old image", "name", "live", "id"} {
+	for _, change := range []string{"vanish", "label", "image", "old image", "old verify image", "name", "live", "id"} {
 		t.Run(change, func(t *testing.T) {
-			s, _, dir := sweepFixture(t)
+			s, out, dir := sweepFixture(t)
 			c := sweepContainerFixture(t, s, dir)
 			switch change {
 			case "vanish":
@@ -223,6 +223,8 @@ func TestSweepContainerRevalidation(t *testing.T) {
 				c.Config.Image = "other"
 			case "old image":
 				c.Config.Image = containerBaseImage
+			case "old verify image":
+				c.Config.Image = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
 			case "name":
 				c.Name = "/foreign"
 			case "live":
@@ -236,15 +238,18 @@ func TestSweepContainerRevalidation(t *testing.T) {
 			}
 			write(t, filepath.Join(dir, sweepTestID+".next"), string(data))
 			err = s.run()
-			if (err != nil) != (change == "id" || change == "image" || change == "old image") {
+			if (err != nil) != (change == "id" || change == "image" || change == "old image" || change == "old verify image") {
 				t.Fatalf("result: %v", err)
 			}
 			assertNoSweepRM(t, dir)
+			if change == "old verify image" && out.String() != "leftover container "+sweepTestID+" "+sweepTestName+"\nunreclaimed container "+sweepTestID+"\n" {
+				t.Fatalf("old verify image revalidation report: %q", out)
+			}
 		})
 	}
 }
 func TestSweepContainerScope(t *testing.T) {
-	for _, change := range []string{"no label", "wrong label", "image", "old image", "unlabelled image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
+	for _, change := range []string{"no label", "wrong label", "image", "old image", "old verify image", "unlabelled image", "xyz", "31 hex", "uppercase", "foreign", "double slash"} {
 		t.Run(change, func(t *testing.T) {
 			s, out, dir := sweepFixture(t)
 			c := sweepContainerFixture(t, s, dir)
@@ -257,6 +262,8 @@ func TestSweepContainerScope(t *testing.T) {
 				c.Config.Image = "other"
 			case "old image":
 				c.Config.Image = containerBaseImage
+			case "old verify image":
+				c.Config.Image = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
 			case "unlabelled image":
 				c.Config.Image = "other"
 				c.Config.Labels = nil
@@ -273,7 +280,7 @@ func TestSweepContainerScope(t *testing.T) {
 			}
 			saveSweepContainer(t, dir, c, ".json")
 			err := s.run()
-			if change == "image" || change == "old image" {
+			if change == "image" || change == "old image" || change == "old verify image" {
 				if err == nil || out.String() != "unreclaimed container "+c.ID+"\n" {
 					t.Fatalf("image mismatch: %v %q", err, out)
 				}
@@ -281,6 +288,9 @@ func TestSweepContainerScope(t *testing.T) {
 				t.Fatalf("scope: %v %q", err, out)
 			}
 			assertNoSweepRM(t, dir)
+			if change == "old verify image" && strings.Count(sweepCalls(t, dir), "inspect --format {{json .}} "+c.ID+"\n") != 1 {
+				t.Fatal("old verify image must stop at first inspection")
+			}
 		})
 	}
 }

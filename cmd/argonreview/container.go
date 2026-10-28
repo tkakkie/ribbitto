@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	// The recipe pins the base; runs and sweeps pin the built image recorded on #1697.
+	// The recipe pins the base; runs and sweeps pin the built image recorded on #1908.
 	containerBaseImage      = "golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261"
-	containerVerifyImage    = "sha256:12c5636332bebbfbc6f734bac9c7bb59b3bdd9ac9e4ed373beb180fca8e79e80"
+	containerVerifyImage    = "sha256:bdd988255da2296494d1d4dcb2e944702c082480482aa5b8777fceadf8fc1ef1"
 	containerGoVersion      = "1.27.3"
 	containerTemplVersion   = "v0.3.1070"
 	containerSQLCVersion    = "v1.31.1"

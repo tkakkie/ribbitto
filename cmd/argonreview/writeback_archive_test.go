@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,6 +112,10 @@ func TestWritebackArchive(t *testing.T) {
 	paxLink := bytes.Clone(pax)
 	copy(paxLink[157:257], "link")
 	writebackRawChecksum(paxLink[:512])
+	longName := strings.Repeat("a", 90) + "/" + strings.Repeat("b", 40)
+	prefix := func(name, prefix string) []byte {
+		return writebackRawArchive(writebackRawHeader(name, 0, tar.TypeReg, "", prefix), nil)
+	}
 	for _, tc := range []struct {
 		name string
 		data []byte
@@ -122,6 +127,13 @@ func TestWritebackArchive(t *testing.T) {
 		{"absolute", raw("/x", tar.TypeReg), "absolute", 0},
 		{"parent", raw("../x", tar.TypeReg), "component", 0},
 		{"inner_parent", raw("a/../b", tar.TypeReg), "component", 0},
+		{"end_parent", raw("a/..", tar.TypeReg), "component", 0},
+		{"prefix_inner_parent", prefix("b", "a/.."), "component", 0},
+		{"prefix_parent", prefix("x", ".."), "component", 0},
+		{"prefix_end_parent", prefix("..", "a/b"), "component", 0},
+		{"prefix_absolute", prefix("x", "/abs"), "absolute", 0},
+		{"prefix_backslash", prefix("x", "a\\b"), "backslash", 0},
+		{"long_USTAR", writebackTestArchive(t, []writebackEntry{entry(longName, 0)}, tar.FormatUSTAR, nil), "", 1},
 		{"dot", raw("./a", tar.TypeReg), "component", 0},
 		{"empty_component", raw("a//b", tar.TypeReg), "component", 0},
 		{"trailing_slash", raw("a/", tar.TypeReg), "component", 0},
@@ -147,6 +159,7 @@ func TestWritebackArchive(t *testing.T) {
 		{"regular_link_name", writebackRawArchive(writebackRawHeader("a", 0, tar.TypeReg, "other", ""), nil), "link name", 0},
 		{"duplicate", archive(entry("a", 0), entry("a", 0)), "duplicate", 0},
 		{"ASCII_duplicate", archive(entry("A", 0), entry("a", 0)), "duplicate", 0},
+		{"directory_duplicate", archive(entry("A/b", 0), entry("a/b", 0)), "duplicate", 0},
 		{"Kelvin_duplicate", archive(entry("\u212a", 0), entry("k", 0)), "duplicate", 0},
 		{"long_s_duplicate", archive(entry("\u017f", 0), entry("s", 0)), "duplicate", 0},
 		{"file_at_limit", archive(entry("a", 1<<20)), "", 1},
@@ -198,6 +211,9 @@ func TestWritebackArchive(t *testing.T) {
 			if tc.name == "PAX_path_only" && (got[0].name != "other" || string(got[0].content) != "data") {
 				t.Fatalf("PAX override lost: %+v", got)
 			}
+			if tc.name == "long_USTAR" && got[0].name != longName {
+				t.Fatalf("USTAR prefix/name join changed: got %q, want %q", got[0].name, longName)
+			}
 		})
 	}
 }
@@ -208,6 +224,10 @@ func TestWritebackName(t *testing.T) {
 		{"\xff", "UTF-8"}, {"a\x00b", "NUL"}, {"a\\b", "backslash"},
 		{"/a", "absolute"}, {"", "empty name"}, {"a//b", "component"},
 		{"a/./b", "component"}, {"a/../b", "component"},
+		{"..", "component"}, {"../a", "component"}, {"a/..", "component"},
+		{"a/b/..", "component"}, {"/..", "absolute"}, {"..\\a", "backslash"},
+		{"a/", "component"}, {"./a", "component"}, {"\x00", "NUL"},
+		{"a..b", ""}, {"..a", ""}, {"a../b", ""}, {"...", ""},
 	} {
 		t.Run(strconv.Quote(tc.name), func(t *testing.T) {
 			err := validateWritebackName(tc.name)
@@ -220,6 +240,34 @@ func TestWritebackName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWritebackNameCleanUnreachable(t *testing.T) {
+	// Earlier refusals must explain every name Clean would change.
+	var enumerate func(string)
+	enumerate = func(name string) {
+		err := validateWritebackName(name)
+		if err != nil {
+			if strings.Contains(err.Error(), "path.Clean") {
+				t.Errorf("%q reached path.Clean refusal: %v", name, err)
+			}
+		} else {
+			if name == "" || strings.HasPrefix(name, "/") || path.Clean(name) != name {
+				t.Errorf("accepted unclean name %q", name)
+			}
+			for _, component := range strings.Split(name, "/") {
+				if component == "" || component == "." || component == ".." {
+					t.Errorf("accepted invalid component in %q", name)
+				}
+			}
+		}
+		if len(name) < 8 {
+			for _, c := range []string{"a", ".", "/"} {
+				enumerate(name + c)
+			}
+		}
+	}
+	enumerate("")
 }
 
 type writebackErrorReader struct{}

@@ -27,12 +27,17 @@ or the builtin list differ from worker 1's.
 The maintainer signed in worker 2 and trusted `builtin.agy-1.4.7.txt`;
 its 21 entries match worker 1's trusted list.
 
-The wrappers will pass `--browser-mode <abs path>` for browser checks.
+The wrappers will pass `--browser-mode <abs path>` for browser checks only
+with `--verify on`. With `--verify off` (`checks.zsh` idle check or
+`verify-mode off` rollback), they never pass it: the commands refuse that
+flag, so an unconditional flag would make them refuse. `container-check`
+passes it for `test-browser`; an absent flag means paused.
 See [verify operation](argon-verify-operation.md) for the flags and the `browser-check-record` command;
 this support is merged but not in force.
 Nothing here enables or authorizes anything for the browser check.
-Both workers' run/check wrappers must pass worker 1's single `browser-mode`
-path beside `verify-mode`; worker 2 never uses a separate copy. Follow the
+Both workers' run/check wrappers must pass the same absolute path to
+worker 1's single `browser-mode` file beside `verify-mode` only with
+`--verify on`; worker 2 reads worker 1's file, never a separate copy. Follow the
 [browser switch rules](argon-verify-browser.md#switch-and-admission-order)
 and [separate approvals](argon-verify-browser-preflight.md#separate-approvals).
 

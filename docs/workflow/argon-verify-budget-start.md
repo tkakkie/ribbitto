@@ -37,6 +37,8 @@ still apply. All following sections apply once in force.
 
 ## Start procedure
 
+See [development PostgreSQL and load containers](argon-verify-budget-dev.md).
+
 The host-only command is `argonreview budget-start --container <full 64-hex ID>`.
 It accepts exactly that option and a full lowercase hexadecimal ID: no command,
 image, slot override or extra argument. It is never offered to Argon through
@@ -93,6 +95,27 @@ labelled slots in reconciliation, and verification runners re-read the world
 under their chosen locks before using a reservation. Every starter must use
 this procedure; the [limits](#limits) still apply.
 
+## Create just before starting
+
+Create the dev or Codex database container immediately before `budget-start`,
+never earlier: a created container already holds its labelled slots.
+If recording its ID, `budget-start` or the readiness wait fails, clean up
+**at once**, with no waiting or manual leftovers.
+For the Codex database, this is case 5's interruption: no Codex process has
+started. Stop and remove only the ID `docker create` returned, after the
+[recorded-ID Codex database lifecycle](#codex-database-lifecycle) inspection
+of name, both labels and image. If recording failed, inspect that returned
+ID, never the name. If no ID was returned or it cannot be confirmed, remove
+nothing (never by name or label, never guess an ID); list and report, and
+stop for the maintainer under the lifecycle's unknown-ID rule.
+The development database wrapper is the maintainer's harness outside N3's
+tooling cases; its cleanup is the maintainer's and grants Claude and the
+tooling no removal authority.
+A created container claiming a slot a verification already holds
+makes every caller get `unavailable: a slot is claimed twice` until one of
+them ends; a transient message of that kind can come from this.
+The code is deliberately unchanged: N2 counts `created`.
+
 ## Stop and removal authority
 
 N3 permits only these five tooling cases; labels alone never grant removal authority.
@@ -104,31 +127,6 @@ N3 permits only these five tooling cases; labels alone never grant removal autho
 | Emergency stop (B9) | Claude | Full ID with owner and browser-class labels; inspect confirms name, labels and image; it may be live | Only on a B9 trigger after `browser-mode off`: `stop`, `rm -f <ID>`, absence confirmed, recorded. |
 | Failed start | `budget-start` | The ID it started in this call, seconds earlier | Only if `start` errored or the post-start inspection differs: one `stop --time 2`, never removal. |
 | Codex database | Claude | The recorded full ID; inspect confirms name, both labels and `postgres:18` | After use or interruption, once no Codex process remains ([lifecycle](#codex-database-lifecycle)). |
-
-## Development PostgreSQL
-
-The maintainer's harness supplies a `compose.budget.yml` override and wrapper;
-neither lives in this repository. `Makefile` and `compose.yml` stay unchanged.
-The override registers PostgreSQL with `argonreview.budget=dev`,
-`argonreview.slot=2`, `mem_limit: 1g` and `memswap_limit: 1g`.
-It consumes a whole 2 GiB unit despite its smaller limit.
-
-The wrapper runs `docker compose -f compose.yml -f <override> create postgres`,
-obtains its full ID, calls `budget-start --container <ID>`, then waits for
-health. Any failure stops the procedure. Run it only while used; stop with
-`make db-down`. Running `make db-up` by habit recreates it unlabelled: discovery
-blocks all new verifications until the wrapper runs again. A plain `docker run`
-Codex database is likewise unregistered and blocks checks.
-
-## Load and measurement containers
-
-Create load and measurement containers with `argonreview.budget=exclusive`
-and no slot label, then start their full IDs through `budget-start`. They pause
-new verification; [measurement rules](investigations.md#host-measurements)
-still require workers to stop before measurements. Removing the throwaway
-measurement database is Claude's own cleanup by recorded full ID under
-[investigations step 9](investigations.md#host-measurements), outside the tooling
-table above; no tool here removes it. The budget is not measurement approval.
 
 ## Codex database lifecycle
 
@@ -163,6 +161,7 @@ Set `id` from the record before the loop, only after confirming it equals the
 64-hex ID `docker create` returned and that `docker inspect` of it shows the
 expected name, both labels and image. Start Codex
 only if creation, recording, `budget-start` and this 30-try wait all exit 0.
+Follow [Create just before starting](#create-just-before-starting).
 The implementation brief supplies port **55433** and the test environment
 [values](running-other-ai.md#implementation-brief). If the port is taken,
 change it in creation and the test URL together; no fallback database.

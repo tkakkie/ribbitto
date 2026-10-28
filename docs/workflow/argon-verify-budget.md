@@ -1,6 +1,6 @@
 # Verification memory budget
 
-The budget and per-check wiring are merged code, **NOT in force** until a
+The budget, per-check wiring and host start procedure are merged code, **NOT in force** until a
 separately approved launcher update (see [enabling preconditions](#host-lock-provisioning)).
 This page describes the candidate mechanism, not approval to provision the host,
 start containers or update a launcher. The combined security review, preflight
@@ -21,7 +21,7 @@ Units use nonblocking `flock` on slot files. A one-unit request takes the lowest
 usable slot. The global lock order is `browser.lock`, then slot 0, 1, 2.
 Every acquirer takes its complete lock set or none, releasing partial sets
 before sleeping; nothing is held while waiting. The lock primitive supports
-browser and exclusive callers, but their start procedures are separate work.
+browser and exclusive callers; host starts use [budget-start](argon-verify-budget-start.md#start-procedure).
 
 The container receives `argonreview.slot=<k>` (comma-separated for multiple
 units); both memory and swap equal units times 2 GiB (`2g` for one unit).
@@ -119,10 +119,11 @@ All enabling preconditions are collected here:
    Slot files and `browser.lock` then self-create at 0600. All callers, including
    both workers' wrappers and Claude's `container-check`/`container-generate`,
    must run as that uid; every sandbox must allow file creation and flock there.
-2. Any unregistered Docker container in a counted state (created, running,
-   paused or restarting) blocks every check. This includes development
-   PostgreSQL, `ribbitto-codex-pg` and `ribbitto-load`. Until M4 supplies
-   `budget-start`/registration, `docker ps -a` must be clean before enabling.
+2. Registered dev containers started through `budget-start` are counted;
+   exclusive containers pause new checks. Every other container in a counted
+   state (created, running, paused or restarting) blocks all checks, including
+   a plain `docker run` Codex database or `make db-up` run by habit. Follow the
+   [database and start procedures](argon-verify-budget-start.md).
 3. Leftovers from the old binary have no slot label and block every check.
    Run the old launcher's `container-sweep` before switching, following
    [#1700's sweep rule](argon-verify-sweep.md).
@@ -166,18 +167,7 @@ labelled container started with plain `docker start`, `docker update` between
 polls, another Docker engine, or VM-level memory use. An out-of-memory kill is
 never verified. No browser behavior is enabled by this wiring.
 
-## Database and start procedures: design only
+## Database and start procedures
 
-`budget-start`, the host start procedures and the Codex database lifecycle
-arrive in M4 and are **NOT in force**. Their design registers development
-PostgreSQL as `argonreview.budget=dev`, slot 2, with 1 GiB memory and equal swap
-in a harness Compose override; `ribbitto-codex-pg` uses slot 1 with the same
-1 GiB limits, only while database tests need it. Each consumes a whole 2 GiB
-unit despite its smaller limit. Both running leaves only one unit free.
-An unregistered `make db-up` is detected and blocks new verification.
-
-The planned host-only `budget-start` derives all locks from inspected labels,
-rechecks under those locks and starts only that full container ID. Exclusive
-load/measurement containers pause verification; workers must still stop for
-measurements. The coordinated start, no-`docker update` rule and recorded-ID
-Codex cleanup belong to M4. This page does not authorize those host actions.
+[Host starts and database lifecycles](argon-verify-budget-start.md) are merged,
+**NOT in force** until the separately approved launcher update; no host action is authorized here.

@@ -312,7 +312,7 @@ func TestVerifyRefusesThisBinary(t *testing.T) {
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"review"}, {"guard", "extra"}} {
 		var stderr bytes.Buffer
-		if code := run(args, nil, &bytes.Buffer{}, &stderr); code != 2 || !strings.Contains(stderr.String(), "usage:") {
+		if code := run(args, nil, &bytes.Buffer{}, &stderr); code != 2 || !strings.Contains(stderr.String(), "usage:") || !strings.Contains(stderr.String(), "container-sweep [--dry-run] | budget-start --container <full 64-hex ID>") {
 			t.Fatalf("%v: exit %d, stderr %q", args, code, stderr.String())
 		}
 	}

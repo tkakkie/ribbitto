@@ -5,8 +5,8 @@ pinned, the launcher is unchanged, and nothing here enables the browser
 check (#1908). Building, pinning, the launcher update and `browser-mode on`
 each need the maintainer's separate approval. This page records PR A's
 recipe and update contract; it does not authorize those later steps.
-PR A changes no runner, flags or launcher; B3a's masking below is a
-precondition for A2, not implemented here.
+PR A changes no runner, flags or launcher. B3a implements the masking below
+as a precondition for A2; A2 must not merge before B3a is merged.
 
 ## Recipe pins
 
@@ -113,12 +113,12 @@ build are required, in this order:
    `test-browser`.
 
    First, B3a (#1908 runner wiring) merges, once M3, B1 and B2 are
-   satisfied. It must run every non-browser check with Chromium
-   unreachable inside the container: a read-only `--tmpfs` over the
-   Chromium install directory, or an equivalent forced skip.
-   `TestContainerArgumentsGolden` must pin this masking, with a named test
-   proving a non-browser check cannot launch Chromium; only `test-browser`
-   omits masking. These tests need no image, so B3a does not wait for A2,
+   satisfied. B3a runs every non-browser check with Chromium unreachable:
+   `--tmpfs /usr/lib/chromium:ro,noexec,nosuid,nodev,size=1m` masks Debian's
+   install directory. Only `test-browser` omits it.
+   `TestContainerChromiumMasked` and `TestContainerArgumentsGolden` pin the
+   masking and prove a non-browser check cannot launch Chromium from its
+   final arguments. These tests need no image, so B3a does not wait for A2,
    and both must pass before B3a merges.
 
    Second, A2 pins `containerVerifyImage` to the recorded ID, with tier A
@@ -129,8 +129,9 @@ build are required, in this order:
    no runner change.
 
    Third, build a candidate binary from a pinned commit that includes A2.
-   Its integrated preflight must verify on the real image that no
-   non-browser check can run Chromium. The launcher must not be updated
+   Its integrated preflight must verify `dpkg -L chromium` places the binary
+   under the masked directory and that no non-browser check can run Chromium
+   on the real image. The launcher must not be updated
    until that preflight succeeds; then update it on the maintainer's
    separate approval. The preflight and the launcher update each need that
    approval.

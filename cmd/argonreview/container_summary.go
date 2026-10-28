@@ -35,6 +35,7 @@ const (
 // generated data is supplied explicitly, without reinterpreting a host report.
 // Scope, check and pattern must come from the trusted scope/argument validation.
 type summaryInput struct {
+	browserRun, browserImportPath  string
 	verdict, check, pattern, scope string
 	facts                          summaryFacts
 	stat                           generatedStat
@@ -226,7 +227,15 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			trustedFits = false
 		}
 	}
-	trusted("Check: " + summaryText(in.check) + " " + summaryText(in.pattern))
+	checkLine := "Check: " + summaryText(in.check) + " " + summaryText(in.pattern)
+	if in.check == "test-browser" {
+		checkLine += " " + in.browserRun
+	}
+	trusted(checkLine)
+	if verified && in.check == "test-browser" {
+		_, named, _ := strings.Cut(in.verdict, "\n")
+		trusted(named)
+	}
 	scope := in.scope
 	// Scope is trusted source text, capped separately from container diagnostics.
 	if len(scope) > summaryScopeLimit {

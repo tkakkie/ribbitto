@@ -21,7 +21,8 @@ each build needs the maintainer's approval in chat.
 The optional `--browser-mode <abs path>` is available on `implement-run`,
 `implement-check`, `implement-config`, `verify-mcp` and `container-check`.
 The browser admission checks and host-only `browser-check-record` command are
-merged but not in force; the browser runner is unwired. An absent flag means
+merged but not in force; the internal browser runner is wired but unreachable
+through CLI/MCP until B3b. An absent flag means
 paused. The implementer commands require verify on (config: mode on).
 The gate directory also holds `browser-security-check.lock`, which serialises
 host record updates; runners read the atomically replaced gate without locking.

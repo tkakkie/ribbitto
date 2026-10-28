@@ -43,7 +43,7 @@ func browserSwitchOn(path string, uid int) bool {
 	return err == nil && (string(data) == "on" || string(data) == "on\n")
 }
 
-// browserAdmission is deliberately unwired until B3a. Read both files per call
+// browserAdmission guards the internal runner; B3b exposes it. Read both files per call
 // so a running MCP server observes a pause immediately, before locks or copies.
 func (v containerVerifier) browserAdmission() string {
 	if !browserSwitchOn(v.browserMode, v.browserSecurity.uid) {

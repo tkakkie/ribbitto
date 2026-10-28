@@ -14,8 +14,8 @@ one unit (`budgetSingle`) before even creating its source-copy directory:
 `build`, `vet`, `test`, `generated`, `test-db` and `container-generate`'s
 internal writeback check. `container-check`, `verify-mcp` and
 `container-generate` share `runContainerExecution`; a missing budget refuses
-execution. The request and reservation support multiple units without adding
-a browser check here. A two-unit reservation means 4 GiB.
+execution. The internal browser runner takes two units; exposure awaits B3b.
+A two-unit reservation means 4 GiB.
 
 Units use nonblocking `flock` on slot files. A one-unit request takes the lowest
 usable slot. The global lock order is `browser.lock`, then slot 0, 1, 2.

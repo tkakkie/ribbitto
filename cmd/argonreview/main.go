@@ -41,8 +41,7 @@
 // in a separate output directory without running the binary (#1433).
 // Optional --browser-mode on implement-run, implement-check, implement-config,
 // verify-mcp and container-check carries the trusted switch path. Browser admission
-// remains unwired; host-only browser-check-record provisions and refreshes its gate
-// (#1908 B2).
+// guards the internal runner (hidden until B3b); browser-check-record is host-only.
 package main
 
 import (

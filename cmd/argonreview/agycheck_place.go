@@ -139,7 +139,7 @@ func agyCheckPlace(m agyCheckMarker, r agyCheckRowDirs, config agyCheckConfigFil
 			restoreErr = errors.Join(restoreErr, f.remove(created[i]))
 		}
 		if restoreErr != nil {
-			err = errors.Join(err, errors.New("restoring agy-check configuration failed"), restoreErr)
+			err = errors.Join(err, errors.New("restoring agy-check configuration failed"), agyCheckFailed(agyCheckRestoration, restoreErr))
 		}
 	}()
 	for i := range files {

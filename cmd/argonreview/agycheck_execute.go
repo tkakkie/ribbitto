@@ -36,30 +36,38 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 	result.Code = 1
 	// Validate the entire layout before assuming ownership for cleanup.
 	if err := r.validate(m.Isolation, d.files); err != nil {
-		return result, errors.Join(err, d.files.cleanup(m.Isolation, r.Run))
+		return result, errors.Join(agyCheckFailed(agyCheckValidation, err), agyCheckFailed(agyCheckCleanup, d.files.cleanup(m.Isolation, r.Run)))
 	}
 	// An exclusive lease prevents accidental reuse of an existing row, including
 	// a second call from collect while the first invocation still owns the row.
 	if err := d.files.write(m.Isolation, filepath.Join(r.Row, "started"), nil, true, 0o600); err != nil {
-		return result, err
+		return result, agyCheckFailed(agyCheckExecution, err)
 	}
-	defer func() {
-		if recover() != nil {
-			err = errors.Join(err, errors.New("agy-check runner panic"))
+	_, err = d.signals(func(signals <-chan os.Signal) (code int, err error) {
+		defer func() {
+			if recover() != nil {
+				err = errors.Join(err, agyCheckFailed(agyCheckExecution, errors.New("agy-check runner panic")))
+			}
+			err = errors.Join(err, agyCheckFailed(agyCheckCleanup, d.files.cleanup(m.Isolation, r.Run)))
+			// A signal during the final pin, collection or cleanup must invalidate
+			// the row while signal handling still belongs to this invocation.
+			select {
+			case <-signals:
+				err = errors.Join(err, agyCheckInterruption)
+			default:
+			}
+		}()
+		if limit <= 0 {
+			return 1, agyCheckFailed(agyCheckExecution, errors.New("run time limit must be positive"))
 		}
-		err = errors.Join(err, d.files.cleanup(m.Isolation, r.Run))
-	}()
-	if limit <= 0 {
-		return result, errors.New("run time limit must be positive")
-	}
-	_, err = d.signals(func(signals <-chan os.Signal) (int, error) {
-		validate := func() error {
+		validate := func() (err error) {
+			defer func() { err = agyCheckFailed(agyCheckValidation, err) }()
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			select {
 			case <-signals:
-				return errors.New("agy-check interrupted")
+				return agyCheckInterruption
 			default:
 			}
 			fresh, err := d.validate(o, d.check)
@@ -79,7 +87,8 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			if err := validate(); err != nil {
 				return agyCheckPin{}, err
 			}
-			return agyCheckRecordPin(ctx, o, m.Isolation, d.check, ops)
+			pin, err := agyCheckRecordPin(ctx, o, m.Isolation, d.check, ops)
+			return pin, agyCheckFailed(agyCheckPinning, err)
 		}
 		before, err := pin()
 		result.Before = before
@@ -87,13 +96,14 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			return 1, err
 		}
 		if reason := agyCheckPinReason(before, before); reason != "" {
-			return 1, errors.New(reason)
+			return 1, agyCheckFailed(agyCheckPinning, errors.New(reason))
 		}
 		// No validation from --version is reused for the actual agent start.
 		if err := validate(); err != nil {
 			return 1, err
 		}
 		runErr := agyCheckPlace(m, r, config, fixtures, d.files, func() (err error) {
+			defer func() { err = agyCheckFailed(agyCheckExecution, err) }()
 			logs := make([]*os.File, 0, 2)
 			defer func() {
 				for _, log := range logs {
@@ -130,10 +140,10 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 		after, pinErr := pin()
 		result.After = after
 		if reason := agyCheckPinReason(before, after); reason != "" {
-			pinErr = errors.Join(pinErr, errors.New(reason))
+			pinErr = errors.Join(pinErr, agyCheckFailed(agyCheckPinning, errors.New(reason)))
 		}
 		if collect != nil {
-			runErr = errors.Join(runErr, collect(r))
+			runErr = errors.Join(runErr, agyCheckFailed(agyCheckCollection, collect(r)))
 		}
 		return result.Code, errors.Join(runErr, pinErr)
 	})

@@ -242,6 +242,19 @@ func TestMakefile(t *testing.T) {
 			}
 		})
 	}
+	for _, tc := range []struct{ name, source, want string }{
+		{"extra slice runner elsewhere", valid + "\nextra:\n\tgo -C tools run ./testshard -run .. cmd\n", "found 6 testshard invocations, want 5"},
+		{"extra runner on a continued line", strings.Replace(valid, "\tgo -C tools run ./testshard -check ..\n", "\tgo -C tools run ./testshard -check .. && go -C tools run ./testshard -run .. cmd\n", 1), "testshard -check line appears 0 times"},
+		{"missing check", strings.Replace(valid, "\tgo -C tools run ./testshard -check ..\n", "", 1), "testshard -check line appears 0 times"},
+		{"commented runner ignored", valid + "\n# go -C tools run ./testshard -run .. cmd\n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkMakefile(tc.source)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("checkMakefile = %v, want %q", err, tc.want)
+			}
+		})
+	}
 }
 
 func browserShards() []shard {
@@ -468,6 +481,8 @@ func TestCheckArgonreviewTests(t *testing.T) {
 	}
 	source += "func Testhelper(t *testing.T) {}\nfunc (s suite) TestMethod(t *testing.T) {}\nfunc TestWrongSignature(t testing.T) {}\n"
 	source += "func ExampleOther() {\n// Output:\n}\nfunc FuzzOther(f *testing.F) {}\n"
+	// A bare Example never runs; unordered output counts; go test matches the type by name only.
+	source += "func ExampleOtherNoOutput() {\n}\nfunc ExampleOtherUnordered() {\n// Unordered output:\n}\nfunc TestOtherAliased(t *alias.T) {}\n"
 	if err := os.WriteFile(filepath.Join(dir, "slice_test.go"), []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -494,6 +509,9 @@ func TestCheckArgonreviewTests(t *testing.T) {
 		{"subtest pattern", func(s []shard) { s[2].pattern += "/child" }, "requires a top-level"},
 		{"example selected", func(s []shard) { s[2].pattern = "^ExampleOther"; s[5].pattern = argonreviewUnion(s) }, ""},
 		{"fuzz selected", func(s []shard) { s[2].pattern = "^FuzzOther"; s[5].pattern = argonreviewUnion(s) }, ""},
+		{"example without output excluded", func(s []shard) { s[2].pattern = "^ExampleOtherNoOutput"; s[5].pattern = argonreviewUnion(s) }, "selects no tests"},
+		{"unordered example selected", func(s []shard) { s[2].pattern = "^ExampleOtherUnordered"; s[5].pattern = argonreviewUnion(s) }, ""},
+		{"aliased test type selected like go test", func(s []shard) { s[2].pattern = "^TestOtherAliased"; s[5].pattern = argonreviewUnion(s) }, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			specs := shards()
@@ -506,5 +524,29 @@ func TestCheckArgonreviewTests(t *testing.T) {
 	}
 	if err := checkArgonreviewTests("../..", shards()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCheckArgonreviewPlatformFiles(t *testing.T) {
+	for _, tc := range []struct{ name, file, source string }{
+		{"go:build line", "x_test.go", "//go:build !windows\n\npackage main\n"},
+		{"plus build line", "x_test.go", "// +build ignore\n\npackage main\n"},
+		{"GOOS suffix", "x_plan9_test.go", "package main\n"},
+		{"GOARCH suffix", "x_s390x_test.go", "package main\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, argonreviewPackage)
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, tc.file), []byte(tc.source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := checkArgonreviewTests(root, shards())
+			if err == nil || !strings.Contains(err.Error(), "cannot classify") {
+				t.Fatalf("checkArgonreviewTests = %v, want an unclassifiable file", err)
+			}
+		})
 	}
 }

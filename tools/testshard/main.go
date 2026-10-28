@@ -13,6 +13,8 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/build/constraint"
 	"go/doc"
 	"go/parser"
 	"go/token"
@@ -327,6 +329,10 @@ func checkArgonreviewTests(root string, specs []shard) error {
 		if err != nil {
 			return fmt.Errorf("parsing argonreview tests: %w", err)
 		}
+		if err := platformIndependent(path, file); err != nil {
+			return err
+		}
+		// Like go test, an Example runs only with an Output or Unordered output comment.
 		for _, example := range doc.Examples(file) {
 			if example.Output != "" || example.EmptyOutput {
 				names = append(names, "Example"+example.Name)
@@ -353,6 +359,8 @@ func checkArgonreviewTests(root string, specs []shard) error {
 				if !ok {
 					continue
 				}
+				// The same name-only test as cmd/go's isTestFunc, which cannot
+				// resolve import aliases either; go vet checks the real type.
 				selector, ok := ptr.X.(*ast.SelectorExpr)
 				ident, local := ptr.X.(*ast.Ident)
 				if ok && selector.Sel.Name == typ || local && ident.Name == typ {
@@ -682,6 +690,44 @@ endif`
 	}
 	if uses != 2 {
 		return fmt.Errorf("Makefile: found %d GO_TEST_PACKAGES uses, want 2 in local check-test wiring", uses)
+	}
+	// Only the slice lines above and -check may run testshard: an extra command
+	// elsewhere could bypass the pinned selection or the timeout.
+	const checkLine = "\tgo -C tools run ./testshard -check .."
+	if n := runs(strings.Split(source, "\n"), []string{checkLine}); n != 1 {
+		return fmt.Errorf("Makefile: testshard -check line appears %d times, want once", n)
+	}
+	invocations := 0
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			invocations += strings.Count(line, "./testshard")
+		}
+	}
+	if want := strings.Count(wiring, "./testshard") + 1; invocations != want {
+		return fmt.Errorf("Makefile: found %d testshard invocations, want %d (the slices and -check)", invocations, want)
+	}
+	return nil
+}
+
+// The source check counts every test in a file, so a file that go test may
+// skip on the runner's platform would make a slice look covered when it is
+// not. None exists today; refuse any rather than evaluate constraints here.
+func platformIndependent(path string, file *ast.File) error {
+	// No platform is called "testshard", so a _GOOS or _GOARCH file name suffix
+	// or a tag requirement excludes the file; "!tag" lines are caught below.
+	ctx := build.Context{GOOS: "testshard", GOARCH: "testshard", Compiler: "gc"}
+	if ok, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path)); err != nil || !ok {
+		return fmt.Errorf("%s: cannot classify a platform-specific test file for the slice check", path)
+	}
+	for _, group := range file.Comments {
+		if group.Pos() >= file.Package {
+			break
+		}
+		for _, comment := range group.List {
+			if constraint.IsGoBuild(comment.Text) || constraint.IsPlusBuild(comment.Text) {
+				return fmt.Errorf("%s: cannot classify a test file with a build constraint for the slice check", path)
+			}
+		}
 	}
 	return nil
 }

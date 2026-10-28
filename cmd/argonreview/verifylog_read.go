@@ -19,11 +19,14 @@ func verifyLogOutputLines(o *retainedOutput, prefix bool) []string {
 			lines = append(lines, strings.Split(strings.TrimSuffix(string(part), "\n"), "\n")...)
 		}
 	}
-	if dropped := o.total - len(head) - len(tail); dropped > 0 {
+	if dropped := o.total - len(o.head) - len(o.tail); dropped > 0 {
 		lines = append(lines, fmt.Sprintf("truncated: %d bytes not retained", dropped))
 	}
 	if o.notRetained {
 		lines = append(lines, "not retained")
+	}
+	if unserved := len(o.head) + len(o.tail) - len(head) - len(tail); unserved > 0 {
+		lines = append(lines, fmt.Sprintf("first 16 KiB served; %d retained bytes not served", unserved))
 	}
 	if len(lines) == 0 {
 		lines = []string{"(no retained output)"}
@@ -101,6 +104,19 @@ func verifyLogReadLimit(stream string) int {
 	}
 }
 
+func verifyLogBudgetGroup(stream string) int {
+	switch stream {
+	case "index":
+		return 0
+	case "test", "package":
+		return 1
+	case "stderr", "output":
+		return 2
+	default:
+		return -1
+	}
+}
+
 // readRaw returns exactly the encoded line to write. Budgets count that line,
 // including refused requests and the protocol envelope, never captured bytes.
 // PR 2 owns writing it and emitting its one audit line.
@@ -121,18 +137,18 @@ func (s *verifyLogStore) read(a verifyLogArguments, id json.RawMessage, class ve
 		class = verifyLogMalformed
 	}
 	c := s.find(a.run)
-	stream := verifyLogStream(a.stream)
+	group := verifyLogBudgetGroup(a.stream)
 	if class == verifyLogOK && (!verifyLogRunID(a.run) || c == nil) {
 		class = verifyLogNoRun
 	}
 	if class != verifyLogMalformed && (s.reads >= verifyLogServerReads || s.served >= verifyLogServerBytes) {
 		class = verifyLogBudget
 	}
-	if c != nil && stream >= 0 {
-		if class != verifyLogMalformed && c.reads[stream] >= verifyLogReadLimit(a.stream) {
+	if c != nil && group >= 0 {
+		if class != verifyLogMalformed && c.reads[group] >= verifyLogReadLimit(a.stream) {
 			class = verifyLogBudget
 		}
-		c.reads[stream]++
+		c.reads[group]++
 	}
 	s.reads++
 	detections, names := 0, 0

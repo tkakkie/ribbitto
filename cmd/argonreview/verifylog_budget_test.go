@@ -8,11 +8,14 @@ import (
 
 func TestVerifyLogStreamBudgets(t *testing.T) {
 	for _, row := range []struct {
-		stream, name string
-		limit        int
+		stream, name, shared, sharedName string
+		limit                            int
 	}{
-		{"index", "", verifyLogIndexReads}, {"test", "#1", verifyLogEntryReads},
-		{"package", "#2", verifyLogEntryReads}, {"stderr", "", verifyLogAuxReads}, {"output", "", verifyLogAuxReads},
+		{"index", "", "index", "", verifyLogIndexReads},
+		{"test", "#1", "package", "#2", verifyLogEntryReads},
+		{"package", "#2", "test", "#1", verifyLogEntryReads},
+		{"stderr", "", "output", "", verifyLogAuxReads},
+		{"output", "", "stderr", "", verifyLogAuxReads},
 	} {
 		t.Run(row.stream, func(t *testing.T) {
 			s := &verifyLogStore{}
@@ -26,13 +29,18 @@ func TestVerifyLogStreamBudgets(t *testing.T) {
 					t.Fatalf("read %d class %s", i+1, reply.class)
 				}
 			}
-			// A spent stream does not consume another stream's sub-budget.
-			other := "index"
-			if row.stream == other {
-				other = "stderr"
+			shared := verifyLogRead(t, s, c, row.shared, row.sharedName, "1")
+			if shared.class != verifyLogBudget || verifyLogReplyText(shared) != "spent budget" {
+				t.Fatalf("%s did not share %s budget: %s", row.shared, row.stream, shared.class)
 			}
-			if verifyLogRead(t, s, c, other, "", "1").class != verifyLogOK {
-				t.Fatal("stream budgets are coupled")
+			// Exhausting one group leaves both other groups independent.
+			for _, other := range []struct{ stream, name string }{{"index", ""}, {"test", "#1"}, {"stderr", ""}} {
+				if other.stream == row.stream || other.stream == row.shared {
+					continue
+				}
+				if verifyLogRead(t, s, c, other.stream, other.name, "1").class != verifyLogOK {
+					t.Fatalf("%s budget coupled to %s", other.stream, row.stream)
+				}
 			}
 		})
 	}
@@ -88,15 +96,33 @@ func TestVerifyLogServerByteBudget(t *testing.T) {
 }
 
 func TestVerifyLogRefusalsSpendCaptureBudget(t *testing.T) {
-	s := &verifyLogStore{}
-	c := s.capture("FAILED", verifyLogFixture("evidence"))
-	for range verifyLogEntryReads {
-		if verifyLogRead(t, s, c, "test", "absent", "1").class != verifyLogNotListed {
-			t.Fatal("unexpected refusal")
-		}
-	}
-	if verifyLogRead(t, s, c, "test", "#1", "1").class != verifyLogBudget {
-		t.Fatal("refusals did not consume per-capture budget")
+	for _, row := range []struct {
+		stream, name, start, shared, sharedName string
+		limit                                   int
+		class                                   verifyLogClass
+	}{
+		{"index", "", strings.Repeat("9", verifyLogStartDigits), "index", "", verifyLogIndexReads, verifyLogRange},
+		{"test", "absent", "1", "package", "#2", verifyLogEntryReads, verifyLogNotListed},
+		{"package", "absent", "1", "test", "#1", verifyLogEntryReads, verifyLogNotListed},
+		{"stderr", "", "1", "output", "", verifyLogAuxReads, verifyLogStderrDenied},
+		{"output", "", "1", "stderr", "", verifyLogAuxReads, verifyLogStreamDenied},
+	} {
+		t.Run(row.stream, func(t *testing.T) {
+			s := &verifyLogStore{}
+			r := verifyLogFixture("evidence")
+			r.command = row.stream != "output"
+			r.stderrNotServable = row.stream == "stderr"
+			r.entries = append(r.entries, &aggregatorEntry{kind: "package", pkg: "p", state: "fail"})
+			c := s.capture("FAILED", r)
+			for range row.limit {
+				if reply := verifyLogRead(t, s, c, row.stream, row.name, row.start); reply.class != row.class {
+					t.Fatalf("unexpected refusal: %s", reply.class)
+				}
+			}
+			if verifyLogRead(t, s, c, row.shared, row.sharedName, "1").class != verifyLogBudget {
+				t.Fatal("refusals did not consume shared per-capture budget")
+			}
+		})
 	}
 }
 

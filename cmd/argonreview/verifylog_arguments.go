@@ -20,11 +20,11 @@ func parseVerifyLogArguments(raw []byte) (verifyLogArguments, error) {
 	bad := errors.New("malformed verify-log arguments")
 	a := verifyLogArguments{}
 	if !utf8.Valid(raw) {
-		return a, bad
+		return verifyLogArguments{}, bad
 	}
 	fields, err := verifyObject(raw)
 	if err != nil {
-		return a, bad
+		return verifyLogArguments{}, bad
 	}
 	var start string
 	for key, raw := range fields {
@@ -39,29 +39,29 @@ func parseVerifyLogArguments(raw []byte) (verifyLogArguments, error) {
 		case "start":
 			target = &start
 		default:
-			return a, bad
+			return verifyLogArguments{}, bad
 		}
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, target) != nil {
-			return a, bad
+			return verifyLogArguments{}, bad
 		}
 	}
 	_, named := fields["name"]
 	wantName := a.stream == "test" || a.stream == "package"
 	if len(fields) != 3+boolVerifyLog(wantName) || named != wantName || !verifyLogRunID(a.run) || verifyLogStream(a.stream) < 0 || !verifyLogDigits(start, verifyLogStartDigits) {
-		return a, bad
+		return verifyLogArguments{}, bad
 	}
 	if named {
 		if a.name == "" || len(a.name) > verifyLogNameBytes || !utf8.ValidString(a.name) {
-			return a, bad
+			return verifyLogArguments{}, bad
 		}
 		if strings.HasPrefix(a.name, "#") {
 			if !verifyLogDigits(a.name[1:], verifyLogOrdinalDigits) {
-				return a, bad
+				return verifyLogArguments{}, bad
 			}
 		} else {
 			for _, r := range a.name {
 				if verifyLogInvisible(r) {
-					return a, bad
+					return verifyLogArguments{}, bad
 				}
 			}
 		}

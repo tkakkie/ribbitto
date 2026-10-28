@@ -31,15 +31,15 @@ func TestVerifyLogArguments(t *testing.T) {
 	}
 	for _, start := range []string{"0", "00", "01", "007", "-1", "+1", "1e1", "１", strings.Repeat("9", verifyLogStartDigits+1), ""} {
 		t.Run("start="+start, func(t *testing.T) {
-			if _, err := parseVerifyLogArguments(verifyLogArgsJSON(run, "index", "", start)); err == nil {
-				t.Fatal("bad start accepted")
+			if a, err := parseVerifyLogArguments(verifyLogArgsJSON(run, "index", "", start)); err == nil || a != (verifyLogArguments{}) {
+				t.Fatal("bad start must return zero arguments and an error")
 			}
 		})
 	}
 	for _, name := range []string{"#0", "#01", "#-1", "#99999999", "#１", "#١", "#1 ", strings.Repeat("x", summaryIdentityLimit), "x\x00", "x\x1b[31m", "x\u202e", "x\u200b"} {
 		t.Run(fmt.Sprintf("name=%q", name[:min(len(name), 12)]), func(t *testing.T) {
-			if _, err := parseVerifyLogArguments(verifyLogArgsJSON(run, "test", name, "1")); err == nil {
-				t.Fatal("bad name accepted")
+			if a, err := parseVerifyLogArguments(verifyLogArgsJSON(run, "test", name, "1")); err == nil || a != (verifyLogArguments{}) {
+				t.Fatal("bad name must return zero arguments and an error")
 			}
 		})
 	}
@@ -67,8 +67,38 @@ func TestVerifyLogArguments(t *testing.T) {
 		strings.Replace(base, "index", "\xff", 1), string(verifyLogArgsJSON(run[:len(run)-1], "index", "", "1")),
 		strings.Replace(string(verifyLogArgsJSON(run, "test", "invalid", "1")), "invalid", "bad\xffname", 1),
 	} {
-		if _, err := parseVerifyLogArguments([]byte(raw)); err == nil {
-			t.Fatalf("malformed JSON arguments accepted: %q", raw)
+		if a, err := parseVerifyLogArguments([]byte(raw)); err == nil || a != (verifyLogArguments{}) {
+			t.Fatalf("malformed JSON must return zero arguments and an error: %q", raw)
+		}
+	}
+}
+
+func TestVerifyLogMalformedKeyOrder(t *testing.T) {
+	for _, bad := range []string{`"0"`, `null`, `1`} {
+		for _, order := range []string{"first", "middle", "last"} {
+			t.Run(bad+"/"+order, func(t *testing.T) {
+				s := &verifyLogStore{}
+				c := s.capture("FAILED", verifyLogFixture("evidence"))
+				run := `"run":"` + c.id + `"`
+				stream, start := `"stream":"index"`, `"start":`+bad
+				fields := []string{start, run, stream}
+				switch order {
+				case "middle":
+					fields = []string{run, start, stream}
+				case "last":
+					fields = []string{run, stream, start}
+				}
+				raw := []byte("{" + strings.Join(fields, ",") + "}")
+				want := verifyLogRefuse(verifyLogMaxID(), verifyLogMalformed)
+				wantAudit := fmt.Sprintf("verify-log run=- stream=- range=0-0 bytes=%d class=malformed detections=0 names=0\n", len(want.line))
+				reply, audit := s.readRaw(raw, verifyLogMaxID())
+				if reply.class != verifyLogMalformed || s.reads != 1 || s.served != len(want.line) || c.reads != ([5]int{}) {
+					t.Fatalf("malformed budget: class=%s server=%d bytes=%d capture=%v", reply.class, s.reads, s.served, c.reads)
+				}
+				if audit != wantAudit {
+					t.Fatalf("audit = %q, want %q", audit, wantAudit)
+				}
+			})
 		}
 	}
 }

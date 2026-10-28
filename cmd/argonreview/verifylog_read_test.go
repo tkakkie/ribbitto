@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -192,6 +193,41 @@ func TestVerifyLogReadPackage(t *testing.T) {
 
 func TestVerifyLogReadPrefix(t *testing.T) {
 	for _, stream := range []string{"stderr", "output"} {
+		for _, row := range []struct {
+			name      string
+			headBytes int
+			tail      string
+			dropped   int
+			unserved  int
+		}{
+			{"over-prefix", verifyLogPrefixBytes + len("outside prefix"), "", len("omitted"), len("outside prefix")},
+			{"at-prefix", verifyLogPrefixBytes, "", len("omitted"), 0},
+			{"below-prefix", verifyLogPrefixBytes - 1, "", len("omitted"), 0},
+			{"with-tail", verifyLogPrefixBytes + len("outside prefix"), "retained tail\n", len("omitted"), len("outside prefix") + len("retained tail\n")},
+			{"short-head-with-tail", verifyLogPrefixBytes - 1, "retained tail\n", len("omitted"), len("retained tail\n")},
+		} {
+			t.Run(stream+"/"+row.name, func(t *testing.T) {
+				s := &verifyLogStore{}
+				r := verifyLogFixture("")
+				r.command = true
+				o := &r.stderr
+				if stream == "output" {
+					o = &r.stdout
+				}
+				o.head, o.tail = []byte(strings.Repeat("x", row.headBytes)), []byte(row.tail)
+				o.total = len(o.head) + len(o.tail) + row.dropped
+				o.notRetained = true
+				c := s.capture("FAILED", r)
+				lines, _, class := c.unit(verifyLogArguments{stream: stream})
+				want := []string{strings.Repeat("x", min(row.headBytes, verifyLogPrefixBytes)), fmt.Sprintf("truncated: %d bytes not retained", row.dropped), "not retained"}
+				if row.unserved > 0 {
+					want = append(want, fmt.Sprintf("first 16 KiB served; %d retained bytes not served", row.unserved))
+				}
+				if class != verifyLogOK || !slices.Equal(lines, want) {
+					t.Fatalf("prefix lines = %q, want %q (class %s)", lines, want, class)
+				}
+			})
+		}
 		s := &verifyLogStore{}
 		r := verifyLogFixture("")
 		r.command = true
@@ -206,8 +242,8 @@ func TestVerifyLogReadPrefix(t *testing.T) {
 		if class != verifyLogOK || len(lines[0]) != verifyLogPrefixBytes || strings.Contains(strings.Join(lines, "\n"), "outside prefix") {
 			t.Fatal("auxiliary prefix boundary")
 		}
-		if !strings.Contains(strings.Join(lines, "\n"), fmt.Sprintf("truncated: %d bytes not retained", len("outside prefix"))) {
-			t.Fatal("prefix omission missing")
+		if !strings.Contains(strings.Join(lines, "\n"), fmt.Sprintf("first 16 KiB served; %d retained bytes not served", len("outside prefix"))) || strings.Contains(strings.Join(lines, "\n"), "bytes not retained") {
+			t.Fatal("prefix omission confused with record loss")
 		}
 		// Detection covers the retained unit even beyond the served prefix.
 		o.head = append(o.head, []byte("ghp_placeholder")...)
@@ -244,7 +280,7 @@ func TestVerifyLogRefusals(t *testing.T) {
 		t.Fatal("spent budget changed a protocol error")
 	}
 	c := s.capture("FAILED", verifyLogFixture("safe"))
-	c.reads[verifyLogStream("test")] = verifyLogEntryReads
+	c.reads[verifyLogBudgetGroup("test")] = verifyLogEntryReads
 	r, _ = s.readRaw(verifyLogArgsJSON(c.id, "test", "#0", "1"), json.RawMessage(`1`))
 	if r.class != verifyLogMalformed {
 		t.Fatal("capture budget changed a protocol error")

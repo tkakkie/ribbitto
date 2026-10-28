@@ -210,8 +210,11 @@ func (r dockerRunner) run(ctx context.Context, args, env []string, stdout, stder
 }
 
 func containerCheckCommand(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 5 && args[3] == "--browser-mode" && browserModePath(args[4]) == nil {
+		args = args[:3]
+	}
 	if len(args) != 3 || validateContainerCheck(args[0], args[1], args[2]) != nil {
-		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern>")
+		_, _ = fmt.Fprintln(stderr, "usage: argonreview container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>]")
 		return 2
 	}
 	info, ok := debug.ReadBuildInfo()

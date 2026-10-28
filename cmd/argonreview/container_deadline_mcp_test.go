@@ -87,7 +87,7 @@ func TestContainerDeadlineMCPRows(t *testing.T) {
 					_, _ = io.WriteString(diagnostic, "unfinished diagnostic")
 					return -1, nil
 				}}
-				s := verifyMCPServer{verifier: containerVerifier{grantContainerBudget(), tree, runner, copies, containerTimeout}, callLimit: time.Minute}
+				s := verifyMCPServer{verifier: containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, containerTimeout}, callLimit: time.Minute}
 				if mode == "call limit" {
 					// Source preparation invokes Git before the runner can wait.
 					// Allow that setup margin even under the race detector.

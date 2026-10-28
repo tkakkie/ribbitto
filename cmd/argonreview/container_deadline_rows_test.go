@@ -184,7 +184,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 		var report, summary string
 		var err error
 		if mcp {
-			summary, err = (containerVerifier{grantContainerBudget(), tree, runner, copies, timeout}).verify(runCtx, check, "./...")
+			summary, err = (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, timeout}).verify(runCtx, check, "./...")
 		} else {
 			report, err = runContainerExecution(runCtx, tree, check, "./...", runner, copies, grantContainerExecution(&execution))
 			summary = execution.summary

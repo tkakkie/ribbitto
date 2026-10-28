@@ -107,7 +107,15 @@ func implementerSettings(verify bool) []byte {
 	return append(data, '\n')
 }
 
-func implementerMCPConfig(verify bool, binary, source, worktree string) ([]byte, error) {
+func implementerMCPConfig(verify bool, binary, source, worktree, browserMode string) ([]byte, error) {
+	if browserMode != "" {
+		if !verify {
+			return nil, errors.New("browser-mode requires verify on")
+		}
+		if err := browserModePath(browserMode); err != nil {
+			return nil, err
+		}
+	}
 	if !verify {
 		return nil, nil
 	}
@@ -116,9 +124,13 @@ func implementerMCPConfig(verify bool, binary, source, worktree string) ([]byte,
 			return nil, errors.New("MCP paths must be absolute and clean")
 		}
 	}
+	args := []string{"-i", "PATH=" + verifyMCPPath, binary, "verify-mcp", "--trusted-source", source, "--worktree", worktree}
+	if browserMode != "" {
+		args = append(args, "--browser-mode", browserMode)
+	}
 	// Maps give agy's sorted keys, with its indentation and trailing newline.
 	config := map[string]any{"mcpServers": map[string]any{verifyServerName: map[string]any{
-		"args":    []string{"-i", "PATH=" + verifyMCPPath, binary, "verify-mcp", "--trusted-source", source, "--worktree", worktree},
+		"args":    args,
 		"command": "/usr/bin/env", "disabled": false,
 	}}}
 	data, err := json.MarshalIndent(config, "", "  ")
@@ -133,7 +145,7 @@ func implementerMCPConfig(verify bool, binary, source, worktree string) ([]byte,
 // the one place the guard mode is read from. All file bytes are observed state.
 // The launchers must also reject changed hooks/settings/MCP files and
 // denied_actions; those checks live outside here.
-func checkImplementerConfig(verify bool, hooks, settings, mcpConfig []byte, binary, source, worktree, guardDir string) error {
+func checkImplementerConfig(verify bool, hooks, settings, mcpConfig []byte, binary, source, worktree, guardDir, browserMode string) error {
 	expectedHooks, err := implementerHooks(verify, binary, guardDir)
 	if err != nil {
 		return err
@@ -144,7 +156,7 @@ func checkImplementerConfig(verify bool, hooks, settings, mcpConfig []byte, bina
 	if !bytes.Equal(settings, implementerSettings(verify)) {
 		return errors.New("implementer settings do not match verify switch")
 	}
-	expected, err := implementerMCPConfig(verify, binary, source, worktree)
+	expected, err := implementerMCPConfig(verify, binary, source, worktree, browserMode)
 	if err != nil {
 		return err
 	}

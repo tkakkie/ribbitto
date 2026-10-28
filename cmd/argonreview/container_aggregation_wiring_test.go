@@ -241,11 +241,14 @@ func TestContainerAggregationFlood(t *testing.T) {
 				}
 				_, _ = io.WriteString(out, containerJSON("p", "start", "run/TestNoise"))
 				// Model a 2 GiB printer without allocating or retaining a 2 GiB fixture.
+			flood:
 				for sent := 0; sent < aggregatorStreamLimit*64; sent += len(block) {
 					_, _ = io.WriteString(out, block)
 					writes++
-					if ctx.Err() != nil {
-						break
+					select {
+					case <-ctx.Done():
+						break flood
+					default:
 					}
 				}
 				return 137, nil

@@ -69,7 +69,7 @@ func commandRecord(output *containerOutput) *containerRecord {
 	a := newContainerAggregator(nil, nil)
 	a.record.command = true
 	a.retainCommandHead(output.stdout.Bytes())
-	a.keep(&a.record.stderr, string(output.stderr.Bytes()), aggregatorStderrLimit, false)
+	a.keep(&a.record.stderr, output.stderr.String(), aggregatorStderrLimit, false)
 	for _, data := range []string{output.stdout.String(), output.stderr.String()} {
 		for line := range strings.SplitSeq(data, "\n") {
 			if a.record.panicLine == "" && strings.Contains(line, "panic:") {

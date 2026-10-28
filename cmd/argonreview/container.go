@@ -539,7 +539,7 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 		result.runState = aggregatorRunState{completed: completed, interrupted: interrupted,
 			deadline: errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(parent.Err(), context.DeadlineExceeded), parentCancelled: (parent.Err() != nil || runnerCtx.Err() == context.Canceled && !ownStop) && !errors.Is(ctx.Err(), context.DeadlineExceeded)}
 	}
-	return finishContainerRun(ctx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil, ownCancel)
+	return finishContainerRun(ctx, runnerCtx, runner, name, check, code, runErr, completed, interrupted, output, &in, result.aggregation != nil, ownCancel)
 }
 
 // finishReport runs after source removal, so late interruption and cleanup
@@ -621,7 +621,7 @@ func containerRunnerFailed(code int, err error, ownCancel bool) bool {
 // Cleanup uses independent contexts, so a canceled run cannot suppress either
 // operation. Explicit removal also confirms cleanup after a normal exit; an
 // unavailable daemon or unconfirmed removal must fail closed.
-func finishContainerRun(ctx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated, ownCancel bool) (string, error) {
+func finishContainerRun(ctx, runnerCtx context.Context, runner containerRunner, name, check string, code int, runErr error, completed, interrupted bool, output *containerOutput, in *summaryInput, aggregated, ownCancel bool) (string, error) {
 	err := errors.Join(runErr, ctx.Err())
 	cleanupFailed := false
 	for _, args := range [][]string{{"stop", "--time", "2", name}, {"rm", "-f", name}} {
@@ -642,7 +642,13 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 			}
 		}
 	}
-	err = errors.Join(err, ctx.Err())
+	contextErr := ctx.Err()
+	// Commands and writeback must retain child interruption through cleanup;
+	// the output cap's own cancellation is an expected stop.
+	if !aggregated && !output.over && contextErr == nil {
+		contextErr = errors.Join(contextErr, runnerCtx.Err())
+	}
+	err = errors.Join(err, contextErr)
 	if check == "writeback" {
 		return "", err
 	}
@@ -650,7 +656,7 @@ func finishContainerRun(ctx context.Context, runner containerRunner, name, check
 		in.runnerFailed = cleanupFailed
 		return "", err
 	}
-	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, ownCancel) || ctx.Err() != nil
+	in.runnerFailed = cleanupFailed || containerRunnerFailed(code, runErr, ownCancel) || contextErr != nil
 	verdict, stat, stdout := containerVerdict(check, code, err, output)
 	deadline := errors.Is(ctx.Err(), context.DeadlineExceeded) && !output.over && !cleanupFailed
 	if deadline {

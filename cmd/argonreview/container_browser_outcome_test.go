@@ -150,3 +150,40 @@ func TestContainerBrowserFailureSummary(t *testing.T) {
 		})
 	}
 }
+
+// TestContainerBrowserLateDeadline pins D1 even when the completed passing
+// stream would otherwise receive the browser scope refusal.
+func TestContainerBrowserLateDeadline(t *testing.T) {
+	for _, outside := range []bool{false, true} {
+		t.Run(fmt.Sprintf("outside=%v", outside), func(t *testing.T) {
+			t.Parallel()
+			stream := containerEvents(browserTestPackage, browserTestRun, "pass")
+			if outside {
+				stream = containerJSON(browserTestPackage, "start", "run/"+browserTestRun, "pass/"+browserTestRun, "run/TestOutside", "pass/TestOutside", "pass")
+				if got := browserVerdictFixture(browserTestPackage, browserTestRun, 0, nil, []byte(stream), false); got != "NOT VERIFIED: a test outside the named test ran" {
+					t.Fatalf("fixture must otherwise refuse scope: %q", got)
+				}
+			}
+			v := browserRunFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			v.runner = fakeContainerRunner{func(runCtx context.Context, args, _ []string, stdout, _ io.Writer) (int, error) {
+				if args[0] == "run" {
+					_, _ = io.WriteString(stdout, stream)
+				}
+				if args[0] == "stop" {
+					<-ctx.Done()
+				}
+				return 0, runCtx.Err()
+			}}
+			summary, err := v.verifyBrowser(ctx, "./internal/web", browserTestRun)
+			want := "NOT VERIFIED: time limit exceeded\nCheck: test-browser ./internal/web " + browserTestRun + "\nScope: " + containerCheckScope("test-browser") + "\nDetails unavailable: the check did not complete.\n" + deadlineOmitted
+			if summary != want {
+				t.Fatalf("D1 deadline first line and fixed reason changed: got %q want %q", summary, want)
+			}
+			if err == nil || !strings.Contains(err.Error(), "container check interrupted: context deadline exceeded") {
+				t.Fatalf("D1 deadline error reason changed: %v", err)
+			}
+		})
+	}
+}

@@ -16,41 +16,46 @@ and a mutex. After a stop, writers acknowledge and discard bytes
 without parsing or allocating. Cancellation stops the runner's child context;
 it cannot masquerade as parent cancellation or erase the run's own deadline.
 
-After container and source cleanup, the runner calls `finish` exactly once.
-It supplies completion/interruption captured at runner return and the later
-run deadline and parent state. The sealed `containerRecord` in
-`cmd/argonreview/container_record.go` is shared by reference with the verdict,
-host report, MCP summary and future log retrieval (#1847). The execution drops
-the aggregator and its protocol maps. No second parse remains.
+After container/source cleanup, the runner calls `finish` once to seal the
+`containerRecord` in `cmd/argonreview/container_record.go`, using
+completion/interruption at runner return and later deadline/parent state.
+Verdict, host report, MCP summary and future #1847 logs share its reference.
+Execution drops aggregator/protocol maps; no second parse.
 
-The record holds completeness, first stop and event boundary, exact package
-and leaf counters, observed failures, allowed/disallowed skips, retained
-failure/package/compiler output, stderr and its omitted bytes, and first
-panic/timeout lines. The failed/skipped leaf and failed-package index keeps
-arrival order under entry/name budgets. Names cannot pin decoder buffers or
-protocol maps. Skip names are optional diagnostics; omissions say `skip names
-not retained`. Names retained at the memory ceiling need not be deterministic.
-Browser evidence separately retains the named result, outside-package/test
-flag, exact leaf count and at most `browserLeafLimit + 1` leaf names/results,
-charged under the same ceiling (bounded by 65 identities).
+The record holds completeness, first stop/event boundary, exact package/leaf
+counts, observed failures, allowed/disallowed skips, retained failure/package/
+compiler output, stderr/omitted bytes and first panic/timeout lines.
+The failed/skipped leaf and failed-package index is first-come under entry/name budgets.
+Names pin no decoder buffers or protocol maps. Optional skip omissions say `skip
+names not retained`; memory-ceiling retention need not be deterministic. Browser
+evidence separately keeps named result, outside-package/test flag, exact leaf
+count and at most `browserLeafLimit + 1` leaf names/results under the same
+ceiling (at most 65 identities).
 
-The host's `container-check` prints the verdict first, scope second, then the
-whole record, quoting untrusted identities and diagnostic lines. A storage
-omission prints `truncated: N bytes not retained`; exhausted shared output
-storage also prints `not retained`. It prints retained stderr even when marked
-not servable to #1847: Docker statuses 125–127, runner error, cancellation or
-timeout can expose Docker-client paths. MCP keeps its existing display budgets:
-2,048 bytes for verified results, 7,000 including wrapper/error reserve for
-errors, 30 names, 8 excerpt lines of 200 bytes and 16 generated-diff lines.
-Incomplete streams list failures as **observed, total unknown**.
+Host `container-check` prints verdict, scope, then record, quoting untrusted
+identities/diagnostics. Storage loss prints `truncated: N bytes not retained`;
+exhausted shared output storage also prints `not retained`. Host prints retained
+stderr even when not servable to #1847: Docker statuses 125–127, runner error,
+cancellation or timeout can expose Docker-client paths. MCP budgets: 2,048 bytes
+verified; 7,000 including wrapper/error reserve for errors; 30 names; 8 excerpt
+lines of 200 bytes; 16 generated-diff lines.
+Incomplete streams list `Failures (observed, total unknown):`.
+Both print `Observed failures not named (not retained): N`, even with zero
+retained names. MCP reserves the footer notice after names.
+`and N more` follows its header. It and `Omitted: ... names not shown` count only
+retained display omissions: shown + display-omitted + not-retained = observed failures.
+With no names shown, MCP uses `<header> N more not shown`, or footer accounting
+if it cannot fit. Host has no continuations; complete streams otherwise stay unchanged.
 Totals need EOF with all results. Counts: `cut` for caps, kills or truncated
 tails; `incomplete` otherwise. #1846's timeout body is fixed.
+D5/Details-unavailable MCP bodies stay minimal. D1/test-browser late deadlines
+keep `NOT VERIFIED: time limit exceeded` even with browser scope refusal.
 
-`build`, `vet`, `generated` and write-back keep the command writer and its
-4 MiB combined cap. Build/vet/generated copy a 16 KiB stdout prefix into the
-record. Build/vet release their capture buffers after rendering; generated
-keeps its whole stdout for the existing diff/stat behavior. Write-back keeps
-its archive behavior. Image, recipe, guard and MCP schema stay.
+`build`, `vet`, `generated` and write-back keep the command writer's 4 MiB
+combined cap. Build/vet/generated copy a 16 KiB stdout prefix into the record.
+Build/vet release buffers after rendering; generated keeps whole stdout for
+diff/stat. Write-back keeps its archive. Image, recipe, guard and MCP schema
+stay.
 
 ## Limits and retention
 
@@ -74,21 +79,20 @@ they change no verdict, count or allowlist decision.
 | Index entries / name bytes | soft | 1,000 / 256 KiB; measured maxima 629 / 54,317 |
 | Command stdout prefix | soft | 16 KiB; command capture/diff behavior above remains |
 
-Every retaining allocation is charged before allocation, including buffer
-capacity, replacement buffers while old ones remain live, cloned identities,
-map overhead, index storage, browser evidence and reserved allowlist slots.
-Decoder temporaries are bounded by one line and the field cap. Heap tests
-check the accounting constants. The #1847 record bound is failure output + stderr + name bytes + entries
-times entry charge + command prefix + bounded browser evidence + constant (about 1.5 MiB plus entries
-and at most 65 identity-length browser names).
-Passing noise and protocol maps do not survive.
+Charge every retaining allocation first: buffer capacities, replacements while
+old buffers live, cloned identities, map overhead, index storage, browser
+evidence and reserved allowlist slots. Decoder temporaries are bounded by one
+line/field cap; heap tests check constants. #1847 record bound: failure output +
+stderr + name bytes + entries × entry charge + command prefix + bounded browser
+evidence + constant (about 1.5 MiB plus entries and at most 65 identity-length
+browser names). Passing noise/protocol maps do not survive.
 
 Malformed JSON, invalid UTF-8, raw NUL, duplicate/case-folded keys, unknown
-actions and impossible protocol states fail closed. Unknown test2json fields
-such as Time, Elapsed and FailedBuild remain accepted; escaped NUL is accepted.
-A partial last line or missing result also refuses verification. Allowlisted
-skip messages use reserved per-test storage outside the output pool; an
-unconfirmable message stays disallowed. Soft storage loss cannot permit it.
+actions and impossible states fail closed. Unknown fields such as Time, Elapsed
+and FailedBuild and escaped NUL remain accepted. Partial last lines and missing
+results refuse verification. Allowlisted skip messages use reserved per-test
+storage outside the output pool; unconfirmable messages stay disallowed, even
+with soft storage loss.
 
 ## N1 verdict precedence
 
@@ -125,13 +129,13 @@ Panic/timeout output markers alone confirm no failure on an incomplete stream.
 | F | Complete stream, no stop | Oracle verdict and bounded summary; only a full pass is `verified` |
 
 After source cleanup: cap, running deadline, first malformed line, then
-exit/completed-stream rules, including late deadlines. Unconfirmed container
-removal refuses success; its independent timeout is not a run deadline.
-All results except `verified` set MCP `isError`. The legacy production parser is deleted; the test-only differential/fuzz
-oracle stays. The approved `garbage\n{` exception gives the earlier malformed line
-E5 precedence over a truncated tail; both parsers fail. Missing-result reasons
-use deterministic package order. The 4,097-byte-name fixture is a **stricter**
-per-line refusal, now shared by host and MCP, not a weakened check.
+exit/completed-stream rules including late deadlines. Unconfirmed container
+removal refuses success; its independent timeout is not a run deadline. All
+non-`verified` results set MCP `isError`. The legacy parser remains only as the
+test differential/fuzz oracle. Approved `garbage\n{` gives E5's earlier
+malformed line precedence over a truncated tail; both parsers fail.
+Missing-result reasons use deterministic package order. The 4,097-byte-name
+fixture is a **stricter** per-line refusal shared by host and MCP.
 
 ## Trust and changing a limit
 
@@ -141,22 +145,21 @@ consistency, not proof. `verified` is Argon's own check, never a security
 control. CI, review and the [handoff checks](running-other-ai.md#handoff-of-another-ais-code)
 remain the check. Consistent forgery can pass.
 
-Change a limit in one small PR in `cmd/argonreview/container_limits.go`,
-with this table and constant-derived boundary tests. Include preflight rows
-for that limit: below/at/above for hard caps (including a confirmed failure
-before crossing and a crossing-line failure), retention and omission markers
-for soft limits, and allowlist decisions with exhausted output. Memory changes
-also need heap accounting and runner peak RSS against the baseline. Timeout
-changes need D1–D5 plus cap precedence and parent cancellation. Browser storage
-changes need the leaf-limit and outside-scope corpus. Run the differential
-oracle/fuzzer and mutation assertions for the changed branch.
+Limit changes need one small PR in `cmd/argonreview/container_limits.go`, this
+table and constant-derived boundary tests. Preflight: hard caps below/at/above
+(including confirmed failure before crossing and crossing-line failure); soft
+retention and omission markers; allowlist decisions with exhausted output. Memory:
+heap accounting and runner peak RSS against baseline. Timeouts: D1–D5, cap
+precedence, parent cancellation. Browser storage: leaf-limit/outside-scope
+corpus. Run the differential oracle/fuzzer and mutation assertions for the
+changed branch.
 
-Claude performs the post-merge host preflight from a trusted rebuilt binary,
-with the temporary two-home swap authorised first, and records on #1700:
-`test-db ./internal/web` (counts and RSS within baseline), templ-rename failure
-(names), a 2 GiB printer and sweep, failure then flood (A1), forged valid stdout,
-and repeated stage A test/test-db/memory/PID probes. Record each result's byte
-size and whether agy displayed it inline. This PR does not run those probes or
-update the launcher; enabling still needs separate maintainer approval.
+For post-merge host preflight, Claude uses a trusted rebuilt binary after the
+authorised temporary two-home swap. Record on #1700: `test-db ./internal/web`
+(counts/RSS within baseline), templ-rename failure (names), 2 GiB printer and
+sweep, failure then flood (A1), forged valid stdout, repeated stage A
+test/test-db/memory/PID probes. Record result bytes and agy's inline display.
+This PR runs no probes or launcher update; enabling needs separate maintainer
+approval.
 
 [measurement]: https://github.com/tkakkie/ribbitto/issues/1850#issuecomment-6449085912

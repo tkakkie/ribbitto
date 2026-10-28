@@ -95,7 +95,11 @@ func (w *summaryWriter) names(header string, names []string, total int) {
 	omitted := max(0, total-shown)
 	w.namesOmitted += omitted
 	if omitted > 0 {
-		w.put(fmt.Sprintf("and %d more", omitted))
+		if shown == 0 {
+			w.put(fmt.Sprintf("%s %d more not shown", header, omitted))
+		} else {
+			w.put(fmt.Sprintf("and %d more", omitted))
+		}
 	}
 }
 
@@ -310,7 +314,10 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		}
 	}
 	failed := strings.HasPrefix(first, "FAILED")
-	if f.incomplete && len(f.observed) > 0 {
+	if f.incomplete {
+		if len(f.observed) == 0 && f.namesNotRetained > 0 {
+			w.put("Failures (observed, total unknown):")
+		}
 		w.names("Failures (observed, total unknown):", f.observed, len(f.observed))
 	}
 	if failed && !minimal || f.incomplete && len(f.failures) > 0 {
@@ -387,7 +394,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		w.lines("Standard error:", f.stderr)
 	}
 	if f.incomplete {
-		return w.finishObserved()
+		return w.finishObserved(f.namesNotRetained)
 	}
 	return w.finish(max(len(f.failures), f.failedTotal))
 }
@@ -396,11 +403,5 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 // rather than the budget discarded the evidence.
 func (w *summaryWriter) finish(failing int) string {
 	fmt.Fprintf(&w.text, "Omitted: excerpts shown for %d of %d failing tests; %d names not shown; %d lines not shown; %d lines shortened.\n", w.excerpts, failing, w.namesOmitted, w.linesOmitted, w.shortened)
-	return w.text.String()
-}
-
-// finishObserved never labels an incomplete stream with a total failure count.
-func (w *summaryWriter) finishObserved() string {
-	fmt.Fprintf(&w.text, "Omitted: excerpts shown for %d observed failing tests; total unknown; %d names not shown; %d lines not shown; %d lines shortened.\n", w.excerpts, w.namesOmitted, w.linesOmitted, w.shortened)
 	return w.text.String()
 }

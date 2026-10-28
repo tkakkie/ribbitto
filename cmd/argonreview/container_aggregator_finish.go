@@ -280,7 +280,11 @@ func (a *containerAggregator) body(minimal bool) string {
 		fmt.Fprintf(&b, "%d skip names not retained\n", omitted)
 	}
 	if r.namesNotRetained > 0 {
-		fmt.Fprintf(&b, "names not retained for %d failures\n", r.namesNotRetained)
+		if r.complete {
+			fmt.Fprintf(&b, "names not retained for %d failures\n", r.namesNotRetained)
+		} else {
+			fmt.Fprintf(&b, observedFailuresNotRetained, r.namesNotRetained)
+		}
 	}
 	writeRetainedOutput(&b, r.packageOutput)
 	writeRetainedOutput(&b, r.compiler)

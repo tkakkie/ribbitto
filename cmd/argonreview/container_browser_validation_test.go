@@ -54,7 +54,7 @@ func TestContainerBrowserCommonPathValidation(t *testing.T) {
 				if err != nil || !strings.HasPrefix(report, "verified\n") || !strings.HasPrefix(result.summary, "verified\n") {
 					t.Fatalf("valid-common-path: report=%q summary=%q error=%v", report, result.summary, err)
 				}
-				if admissions != 1 || reservations != 1 || releases != 1 || len(calls) != 3 {
+				if admissions != 2 || reservations != 1 || releases != 1 || len(calls) != 3 {
 					t.Fatalf("valid-lifecycle: admission=%d budget=%d release=%d calls=%v", admissions, reservations, releases, calls)
 				}
 				want, err := browserRunPattern(row.run)

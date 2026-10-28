@@ -37,6 +37,7 @@ func containerBrowserArguments(copyDir, name, pattern, run string, reservation b
 }
 
 func (result *containerExecution) refuse(check, pattern, line string) string {
+	result.refused = true
 	result.code = 1
 	in := summaryInput{check: check, pattern: pattern, scope: containerCheckScope(check), verdict: line, runnerFailed: true, browserRun: result.browserRun}
 	result.summary = buildContainerSummary(in)

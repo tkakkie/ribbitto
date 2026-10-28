@@ -155,7 +155,7 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 			}
 			// The real command fails its existing trusted-build gate only after parsing.
 			log.Reset()
-			code = containerCheckCommand(append([]string{"/tree", "test", "./..."}, suffix...), io.Discard, &log)
+			code = containerCheckCommand(append([]string{"/tree", "test-browser", "./internal/web", browserTestRun}, suffix...), io.Discard, &log)
 			want := 2
 			if kind == "valid" {
 				want = 1
@@ -251,7 +251,7 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 		if code := run(nil, nil, io.Discard, &log); code != 2 {
 			t.Fatal(code)
 		}
-		if strings.Count(log.String(), "--browser-mode") != 7 || !strings.Contains(log.String(), browserRecordUsage) || !strings.Contains(verifyMCPUsage, "--browser-mode") || !strings.Contains(implementConfigUsage, "--browser-mode") || !strings.Contains(implementRunUsage, "--browser-mode") {
+		if strings.Count(log.String(), "--browser-mode") != 6 || !strings.Contains(log.String(), browserRecordUsage) || !strings.Contains(verifyMCPUsage, "--browser-mode") || !strings.Contains(implementConfigUsage, "--browser-mode") || !strings.Contains(implementRunUsage, "--browser-mode") {
 			t.Fatalf("usage missing browser flags: %s", &log)
 		}
 		if err := validateContainerCheck("/tree", "test-browser", "./internal/web", "TestBrowser/a"); err != nil {

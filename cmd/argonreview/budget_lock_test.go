@@ -167,6 +167,15 @@ func TestBudgetUnknownState(t *testing.T) {
 }
 
 func TestBudgetNoDeadlock(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		run  func(*testing.T)
+	}{{"primitive", budgetPrimitiveNoDeadlock}, {"wired", budgetWiredNoDeadlock}} {
+		t.Run(row.name, row.run)
+	}
+}
+
+func budgetPrimitiveNoDeadlock(t *testing.T) {
 	b := budgetLockFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

@@ -31,6 +31,7 @@
 // worktree (#1430).
 // container-sweep [--dry-run] reclaims abandoned verification clients, labelled
 // containers and private source copies using the trusted build (#1433).
+// budget-start --container <full 64-hex ID> starts a registered host container under budget locks.
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
@@ -69,6 +70,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "verify-mcp" {
 		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "budget-start" {
+		return budgetStartCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-sweep" {
 		return containerSweepCommand(args[1:], stdout, stderr)

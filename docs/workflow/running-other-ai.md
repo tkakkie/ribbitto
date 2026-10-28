@@ -158,35 +158,24 @@ The brief also includes:
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
   (`bin/` is git-ignored).
-- **Database.** Codex cannot use Docker. The orchestrator starts and waits
-  for PostgreSQL, then the brief says to run
-  `make check` with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
-  and `RIBBITTO_REQUIRE_DB=1`. The race detector works in this profile;
+- **Database.** Codex cannot use Docker. Only while an implementation needs
+  database tests, Claude follows the [recorded-ID lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
+  for `ribbitto-codex-pg`: create registered, `budget-start`, then a **30-try**
+  readiness wait on port **55433**. Start Codex only if every step exits 0;
+  reviews and database-free work need no database. End/interruption cleanup
+  uses the recorded ID after identity and process checks, never the name.
+  This budget lifecycle is merged, **not in force** until a separately
+  approved launcher update; production still uses `argonreview-2e3a6bf`.
+  The brief supplies `make check` with
+  `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
+  and `RIBBITTO_REQUIRE_DB=1`. If port 55433 is taken, change creation and
+  the test URL together. The race detector works in this profile;
   `make vuln` needs `vuln.go.dev`, which is not allowed, so CI runs it
   ([Checks](../../README.md#checks)). Without `ps`,
   `check-test` fails in `cmd/argonreview`, `cmd/capacity` and `cmd/dev`
   process tests; `make check` stops before `check-tools`
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
   expected; CI runs the full check ([handoff][h]).
-
-  ```sh
-  if ! docker ps --format '{{.Names}}' | grep -qx ribbitto-codex-pg; then
-    docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
-      -e POSTGRES_PASSWORD=codex-dev-only postgres:18
-  fi &&
-  (
-    for i in $(seq 1 30); do
-      docker exec ribbitto-codex-pg pg_isready -U postgres >/dev/null 2>&1 && exit 0
-      sleep 1
-    done
-    echo "ribbitto-codex-pg: PostgreSQL not ready after 30 tries" >&2
-    exit 1
-  )
-  ```
-
-  Start Codex only if this exits 0. A stopped container with that name
-  makes `docker run` fail; remove it with `docker rm -f ribbitto-codex-pg`,
-  also used for cleanup. If port 55433 is taken, change it in both commands.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`, which never contains a connection string with

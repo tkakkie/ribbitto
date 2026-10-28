@@ -19,7 +19,7 @@ All conditions apply:
 with measurement pending; CI passes at that head before `ai-reviewed`.
 Measure after that label. Before asking for merge, the orchestrator
 checks results against the issue's *Done when*.
-2. Match the full build/run SHA to reviews and CI; a label is not enough.
+2. Match full build/run SHA to reviews and CI; labels do not suffice.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
 that SHA (#1273, #1276).
@@ -34,7 +34,7 @@ Both routes build both approved full SHAs from fresh, verified clean
 checkouts with the [trusted git settings and `GOENV=off`](running-argon.md#the-trusted-invocation).
 Never build from the implementer's worktree or sandbox: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
-assets; run time needs no head tree.
+assets; runtime needs no head tree.
 6. If isolation is impossible, build as the dedicated low-privilege
 user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
@@ -44,10 +44,11 @@ maintainer creates the user (a system change) and installs/validates the
 profile once. If restrictions fail, keep them; stop for a case-by-case
 maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
-on its chosen `127.0.0.1` port, with disposable data and credentials.
+on its chosen `127.0.0.1` port, with disposable data and credentials, created
+exclusive and started with `budget-start`.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. In PR, record that it was a host measurement, SHAs, conditions (toolchain,
+10. In PR, record host measurement, SHAs, conditions (toolchain,
 image digest, restrictions), exact commands and results. Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session: same
@@ -57,7 +58,7 @@ warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Host measurements need no Node. Once #1411/#1820 land, Go asset generation
+Host measurements need no Node. After #1411/#1820, Go asset generation
 must precede compilation in a writable copy of the verified checkout, in the
 same isolated build (same trusted checkouts/flags, no Node on `PATH`), outside
 Argon verify. These commands cannot yet build SHAs needing generation.
@@ -99,7 +100,7 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
 
 Apple silicon only, never Rosetta. In-tree: only this Go build.
 Before staging record SHA and `shasum -a 256`;
-`-buildvcs=false` avoids container git ownership mismatches.
+`-buildvcs=false` avoids git ownership mismatches.
 
 If unusable, record why. Maintainer: stage read-only source in
 `build`, no old output/caches or escaping symlinks. User writes only
@@ -125,12 +126,12 @@ Maintainer-only setup:
 
 - Create non-admin `_ribbitto_measure`: no login, credentials, privileged
 groups or access to Docker, developer homes or shared data.
-- Create administrator-owned `/private/var/ribbitto-measure`: read-only
+- Create admin-owned `/private/var/ribbitto-measure`: read-only
 `server` slot, user-writable `data`, separate fallback `build` unreadable
 by the server profile. Real paths, no symlinks.
-- Install the administrator-owned profile below at
+- Install the admin-owned profile below at
 `/private/var/ribbitto-measure/server.sb`, not writable by measurement
-user. Reserve ports 18080 (server) and 55434 (database) exclusively.
+user. Reserve ports 18080 (server), 55434 (database) exclusively.
 Change ports in profile and commands together; never allow all loopback.
 - Validate this macOS version in order as dedicated user with
 trusted base. Watch denials:
@@ -146,7 +147,7 @@ with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
 `/usr/bin/nc`; same user/environment and other file/network rules.
 Confirm denial: outside reads (including operator's `~`), connections to
 5432/55433/Chrome's DevTools port, other execution and address/port binds.
-Record results/profiles in PR. A denial stops; widening needs review and
+Record results/profiles in PR. Denial stops; widening needs review and
 maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
@@ -178,7 +179,7 @@ sockets. Run in foreground.
 Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
 before the profile; `env -i` alone leaves files open.
-Ctrl-C then stops only the waiting parent; stop the server by PID.
+Ctrl-C stops only the waiting parent; stop the server by PID.
 
 ```sh
 cd /private/var/ribbitto-measure/data &&

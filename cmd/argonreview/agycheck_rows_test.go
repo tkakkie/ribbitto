@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -40,7 +40,7 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 	h.m = agyCheckMarker{1, account.Username, home, isolation, "/protected/account", "/protected/repository", []string{"/protected/worker"}, "/protected/review"}
 	b, _ := json.Marshal(h.m)
 	agyCheckTestWrite(t, filepath.Join(home, agyCheckMarkerName), b, 0o600)
-	b, _ = json.Marshal(agyCheckRowFake{Rows: true, Home: home, Isolation: isolation, Row: row, Deviation: deviation})
+	b, _ = json.Marshal(agyCheckRowFake{Rows: true, RealHooks: deviation == "real-hooks", Home: home, Isolation: isolation, Row: row, Deviation: deviation})
 	agyCheckTestWrite(t, h.agy+".fixture", b, 0o600)
 	h.settings = filepath.Join(home, ".gemini/antigravity-cli/settings.json")
 	agyCheckTestWrite(t, h.settings, []byte("original marked-home settings\n"), 0o600)
@@ -158,16 +158,66 @@ func (h *agyCheckCommandHarness) restored(t *testing.T) {
 	}
 }
 
+// Predicate deviations need one real row's collection and effects. The other
+// rows use the same passing observations as the report unit tests; full command
+// coverage remains in match, larger-calls, timeout and the lifecycle cases.
+func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
+	t.Helper()
+	row := agyCheckObserveFindRow(t, id)
+	s, err := agyCheckScenarioFor(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := agyCheckNewRowDirs(h.m.Isolation, h.x.runner.files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, fixtures, err := s.config(h.tool, row, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence agyCheckEvidence
+	var diagnostic string
+	h.x.runner.check = h.d
+	run, err := agyCheckRunAgy(context.Background(), agyCheckOptions{home: h.m.Home, agy: h.agy, model: agyCheckModel}, h.x.runner, h.m, r, s.prompt(r, 30), config, fixtures, h.x.limit, h.x.ops, func(r agyCheckRowDirs) error {
+		var err error
+		evidence, diagnostic, err = agyCheckCollect(h.m.Isolation, r, s, h.x.runner.files)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("row execution failed: %v", err)
+	}
+	observation := agyCheckEvidenceObservation(row, s, evidence)
+	if diagnostic != "" {
+		observation = agyCheckObservation{ID: id, Outcome: diagnostic}
+	}
+	_, observations := agyCheckFixtures()
+	for i := range observations {
+		if observations[i].ID == id {
+			observations[i] = observation
+		}
+	}
+	parsed, _ := agyCheckTranscriptParse(evidence.Input.Transcript)
+	result := agyCheckEvaluate(run.Before, run.After, observations, 30, "", parsed.LoadedPaths...)
+	listing, err := agyCheckBuiltinListing(h.m.Home, h.x.runner.files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result.BuiltinInfo = agyCheckBuiltinInfo(listing)
+	var out strings.Builder
+	if err := agyCheckRender(&out, result); err != nil {
+		t.Fatal(err)
+	}
+	return agyCheckExitCode(result), out.String()
+}
+
 func TestAgyCheckCommandEndToEnd(t *testing.T) {
-	// Each run owns its complete home and executables. Bound concurrency because
-	// the race-instrumented helpers wait at exit and reconciliation forks hooks.
-	slots := make(chan struct{}, 8)
-	var runs sync.WaitGroup
+	t.Parallel()
 	for _, tc := range []struct {
 		name, row, deviation string
 		calls, code          int
 	}{
-		{"match", "", "", 0, 0}, {"larger-calls", "", "", 42, 0},
+		{"match", "", "real-hooks", 0, 0}, {"larger-calls", "", "", 42, 0},
 		{"flipped", "hook-silent", "flip", 0, 1},
 		{"deny-other-cause", "hook-decision", "no-claim", 0, 1},
 		{"hook-never-ran", "task-on", "no-claim", 0, 1},
@@ -188,69 +238,93 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		{"nonzero-without-result", "hook-exit1", "nonzero-no-result", 0, 1},
 		{"timeout", "hook-silent", "timeout", 0, 1},
 	} {
-		slots <- struct{}{}
-		runs.Go(func() {
-			defer func() { <-slots }()
-			t.Run(tc.name, func(t *testing.T) {
-				h := agyCheckNewCommandHarness(t, tc.row, tc.deviation)
-				code, out := h.run(t, tc.calls)
-				if code != tc.code {
-					t.Fatalf("command exit=%d want %d:\n%s", code, tc.code, out)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := agyCheckNewCommandHarness(t, tc.row, tc.deviation)
+			if tc.name == "timeout" {
+				// Only this fake sleeps for a minute. Five seconds still allows
+				// ordinary modeled rows and their real stub to exit under race.
+				h.x.limit = 5 * time.Second
+			}
+			var code int
+			var out string
+			if tc.row == "" || tc.name == "timeout" {
+				code, out = h.run(t, tc.calls)
+			} else {
+				code, out = h.runRow(t, tc.row)
+			}
+			if code != tc.code {
+				t.Fatalf("command exit=%d want %d:\n%s", code, tc.code, out)
+			}
+			if strings.Contains(out, "RESULT INVALID") || !strings.Contains(out, "Rows: 29;") && tc.deviation != "unprotected-load" {
+				t.Fatalf("row run did not produce a valid table: %s", out)
+			}
+			wantDiagnostic := map[string]string{
+				"hook-never-ran": "invalid hook claim",
+				"gap":            "invalid call records",
+				"contradiction":  "contradictory reconciliation records",
+				"unparsed":       "unparsed transcript",
+				"retry":          "no single intended step",
+				"timeout":        "run timeout",
+			}[tc.name]
+			if wantDiagnostic != "" && !strings.Contains(out, wantDiagnostic) {
+				t.Fatalf("row diagnostic changed: want %q in %s", wantDiagnostic, out)
+			}
+			if tc.name == "resource-denied" && !strings.Contains(out, "invalid stub evidence") {
+				t.Fatalf("denied resource executed RPC: %s", out)
+			}
+			if tc.code == 0 && !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
+				t.Fatal("verbatim success final line missing")
+			}
+			if tc.code == 1 {
+				if !strings.Contains(out, "differing: 1\n") {
+					t.Fatalf("single deviation changed other rows: %s", out)
 				}
-				if strings.Contains(out, "RESULT INVALID") || !strings.Contains(out, "Rows: 29;") && tc.deviation != "unprotected-load" {
-					t.Fatalf("row run did not produce a valid table: %s", out)
+				if strings.Contains(out, agyCheckSuccessLine) {
+					t.Fatal("difference printed success")
 				}
-				if tc.name == "resource-denied" && !strings.Contains(out, "invalid stub evidence") {
-					t.Fatalf("denied resource executed RPC: %s", out)
-				}
-				if tc.code == 0 && !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
-					t.Fatal("verbatim success final line missing")
-				}
-				if tc.code == 1 {
-					if !strings.Contains(out, "differing: 1\n") {
-						t.Fatalf("single deviation changed other rows: %s", out)
+				differing := false
+				for _, line := range strings.Split(out, "\n") {
+					if strings.HasPrefix(line, tc.row+" ") && strings.Contains(line, "differs") {
+						differing = true
 					}
-					if strings.Contains(out, agyCheckSuccessLine) {
-						t.Fatal("difference printed success")
-					}
-					differing := false
-					for _, line := range strings.Split(out, "\n") {
-						if strings.HasPrefix(line, tc.row+" ") && strings.Contains(line, "differs") {
-							differing = true
-						}
-					}
-					if tc.deviation == "unprotected-load" {
-						differing = strings.Contains(out, "unlisted-load")
-					}
-					if !differing {
-						t.Fatalf("named row did not differ: %s", out)
-					}
 				}
-				if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {
-					if !strings.HasPrefix(out, "LOADED BUT UNLISTED") || strings.Index(out, "INFO builtin/") > strings.Index(out, "ID ") {
-						t.Fatal("extra blocks in wrong order")
-					}
+				if tc.deviation == "unprotected-load" {
+					differing = strings.Contains(out, "unlisted-load")
 				}
-				if h.validations != 88 || h.starts != 87 || h.pins != 58 {
-					t.Fatalf("per-start validation/pins lost: validations=%d starts=%d pins=%d", h.validations, h.starts, h.pins)
+				if !differing {
+					t.Fatalf("named row did not differ: %s", out)
 				}
-				wantCalls := 30
-				if tc.calls > 0 {
-					wantCalls = tc.calls
+			}
+			if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {
+				if !strings.HasPrefix(out, "LOADED BUT UNLISTED") || strings.Index(out, "INFO builtin/") > strings.Index(out, "ID ") {
+					t.Fatal("extra blocks in wrong order")
 				}
-				if tc.row != "reconciliation" && !strings.Contains(out, fmt.Sprintf("steps=%d hooks=%d", wantCalls, wantCalls)) {
-					t.Fatal("--calls not honoured")
-				}
-				h.restored(t)
-			})
+			}
+			validations, starts, pins := 3, 3, 2
+			if tc.row == "" || tc.name == "timeout" {
+				validations, starts, pins = 88, 87, 58
+			}
+			if h.validations != validations || h.starts != starts || h.pins != pins {
+				t.Fatalf("per-start validation/pins lost: validations=%d starts=%d pins=%d", h.validations, h.starts, h.pins)
+			}
+			wantCalls := 30
+			if tc.calls > 0 {
+				wantCalls = tc.calls
+			}
+			if tc.row != "reconciliation" && !strings.Contains(out, fmt.Sprintf("steps=%d hooks=%d", wantCalls, wantCalls)) {
+				t.Fatal("--calls not honoured")
+			}
+			h.restored(t)
 		})
 	}
-	runs.Wait()
 }
 
 func TestAgyCheckCommandInvalidLifecycle(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"pin-before", "pin-after", "pin-between", "version-between", "executable", "validation", "marker-changed", "restore", "cleanup", "collection", "unmarked", "setup"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			h := agyCheckNewCommandHarness(t, "", "")
 			switch name {
 			case "setup":
@@ -284,7 +358,7 @@ func TestAgyCheckCommandInvalidLifecycle(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						if err := os.Chmod(h.agy, 0o700); err != nil {
+						if err := os.Remove(h.agy); err != nil {
 							t.Fatal(err)
 						}
 						if err := os.WriteFile(h.agy, data, 0o500); err != nil {

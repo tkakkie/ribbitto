@@ -18,7 +18,7 @@ import (
 )
 
 type agyCheckRowFake struct {
-	Rows                            bool
+	Rows, RealHooks                 bool
 	Home, Isolation, Row, Deviation string
 	Version                         string
 }
@@ -177,6 +177,10 @@ func agyCheckRowsFake(data []byte) bool {
 		if h.Timeout != 20 {
 			os.Exit(95)
 		}
+		realHook := f.RealHooks && (id == "hook-decision" || id == "reconciliation")
+		if !realHook {
+			return agyCheckModelHook(h.Command, state)
+		}
 		// Scale only the fake's wait for the real hanging fixture. The generated
 		// configuration still carries 20 seconds; no real agy is used by tests.
 		limit := 5 * time.Second
@@ -330,4 +334,53 @@ func agyCheckRowsFake(data []byte) bool {
 	}
 	os.Exit(0)
 	return true
+}
+
+// This model deliberately uses only the generated command vocabulary. The full
+// match run retains real denial and concurrent reconciliation hook subprocesses;
+// TestAgyCheckGeneratedProcesses also exercises generated hook/stub commands.
+func agyCheckModelHook(command, state string) bool {
+	if command == "'"+filepath.Join(state, "hook-missing")+"'" {
+		return false
+	}
+	_, tail, ok := strings.Cut(command, "' agy-check hook ")
+	if !ok {
+		os.Exit(98)
+	}
+	mode, tail, ok := strings.Cut(tail, " '")
+	if !ok {
+		os.Exit(98)
+	}
+	dir, tag, ok := strings.Cut(tail, "' ")
+	if !ok || dir != state || !agyCheckHookTag(tag) {
+		os.Exit(98)
+	}
+	calls := filepath.Join(state, "calls")
+	if err := os.MkdirAll(calls, 0o700); err != nil {
+		os.Exit(98)
+	}
+	for n := 1; n <= agyCheckHookCallCap; n++ {
+		file, err := os.OpenFile(filepath.Join(calls, fmt.Sprintf("%06d", n)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			os.Exit(98)
+		}
+		word := mode
+		if mode == "alternate" {
+			word = "deny"
+			if n%2 == 1 {
+				word = "allow"
+			}
+		}
+		_, writeErr := fmt.Fprintf(file, "%s %s\n", word, tag)
+		closeErr := file.Close()
+		if writeErr != nil || closeErr != nil {
+			os.Exit(98)
+		}
+		return word == "allow" || word == "silent"
+	}
+	os.Exit(98)
+	return false
 }

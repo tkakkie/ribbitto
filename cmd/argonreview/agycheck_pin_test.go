@@ -60,18 +60,24 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func agyCheckFakeBinary(t *testing.T) string {
+// Hard links share immutable test-binary bytes while retaining private fixture
+// paths and sidecars. The replacement case unlinks its path before writing.
+func agyCheckLinkedBinary(t *testing.T, name string) string {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := filepath.Join(agyCheckRealTemp(t), name)
+	if err := os.Link(self, path); err == nil {
+		return path
+	}
+	// A different filesystem cannot hard-link: fall back to a private copy.
 	in, err := os.Open(self)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = in.Close() }()
-	path := filepath.Join(agyCheckRealTemp(t), "agy-check-fake")
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o500)
 	if err != nil {
 		t.Fatal(err)
@@ -84,9 +90,13 @@ func agyCheckFakeBinary(t *testing.T) string {
 	return path
 }
 
+func agyCheckFakeBinary(t *testing.T) string {
+	t.Helper()
+	return agyCheckLinkedBinary(t, "agy-check-fake")
+}
+
 func TestAgyCheckPinRecording(t *testing.T) {
-	path := agyCheckFakeBinary(t)
-	t.Setenv("AGY_CHECK_FORBIDDEN_ENV", "must be scrubbed")
+	t.Parallel()
 	for _, tc := range []struct {
 		name, second string
 		code         int
@@ -102,6 +112,8 @@ func TestAgyCheckPinRecording(t *testing.T) {
 		{"hash open failed", "agy 1.4.7", 0, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := agyCheckFakeBinary(t)
 			isolation := t.TempDir()
 			o := agyCheckOptions{home: "/fake-home", agy: path}
 			ops := systemCleanup()
@@ -172,5 +184,24 @@ func TestAgyCheckPinRecording(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Environment mutation stays in a sequential test; pin fixtures only share
+// immutable executable bytes and can run concurrently with command fixtures.
+func TestAgyCheckPinScrubsEnvironment(t *testing.T) {
+	path := agyCheckFakeBinary(t)
+	t.Setenv("AGY_CHECK_FORBIDDEN_ENV", "must be scrubbed")
+	home := "/fake-home"
+	data, err := json.Marshal(agyCheckFake{"agy 1.4.7", 0, home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agyCheckTestWrite(t, path+".fixture", data, 0o600)
+	ops := systemCleanup()
+	ops.scan = func(int) ([]int, error) { return nil, nil }
+	pin, err := agyCheckRecordPin(context.Background(), agyCheckOptions{home: home, agy: path}, t.TempDir(), agyCheckDefaults(), ops)
+	if err != nil || pin.Version != "1.4.7" {
+		t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
 	}
 }

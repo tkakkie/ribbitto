@@ -94,6 +94,11 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 		return err
 	}
 	defer closeFD(parent)
+	lock, err := b.lockRecord(parent)
+	if err != nil {
+		return err
+	}
+	defer closeFD(lock)
 	if init {
 		if err := browserInitSwitch(path, b.uid); err != nil {
 			return err
@@ -102,6 +107,9 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 		entry, err := b.readAt(parent)
 		if err != nil {
 			return err
+		}
+		if b.afterRead != nil {
+			b.afterRead()
 		}
 		path = entry.switchPath
 		if completed.Before(entry.completed) {
@@ -118,6 +126,38 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 		return errors.New("security check exceeds size limit")
 	}
 	return b.publish(parent, entry.bytes(), init)
+}
+
+// lockRecord uses a sibling because publication replaces the gate inode; a
+// lock on the gate itself would not exclude writers opening its replacement.
+func (b browserSecurity) lockRecord(parent int) (int, error) {
+	unsafe := errors.New("security check lock unavailable or unsafe")
+	fd, err := unix.Openat(parent, browserGateLock, unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0o600)
+	if err != nil {
+		return -1, unsafe
+	}
+	var st unix.Stat_t
+	if unix.Fstat(fd, &st) != nil || !budgetSafeStat(st, false, b.uid) {
+		closeFD(fd)
+		return -1, unsafe
+	}
+	deadline := b.now().Add(b.lockLimit)
+	for {
+		err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			return fd, nil
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
+			closeFD(fd)
+			return -1, unsafe
+		}
+		remaining := deadline.Sub(b.now())
+		if remaining <= 0 {
+			closeFD(fd)
+			return -1, errors.New("security check is being updated")
+		}
+		b.sleep(min(100*time.Millisecond, remaining))
+	}
 }
 
 // publish uses a same-directory exclusive temporary file; linkat publishes an
@@ -145,6 +185,9 @@ func (b browserSecurity) publish(parent int, data []byte, init bool) error {
 		return fmt.Errorf("writing security check: %w", err)
 	}
 	target := filepath.Base(b.path)
+	if b.beforePublish != nil {
+		b.beforePublish()
+	}
 	if init {
 		err = unix.Linkat(parent, name, parent, target, 0)
 	} else {

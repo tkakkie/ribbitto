@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // browserRecordFixture models the read-only harness directory and restores it
@@ -14,6 +16,17 @@ import (
 func browserRecordFixture(t *testing.T) (browserSecurity, string, browserSecurityEntry) {
 	t.Helper()
 	b, _, entry := browserGateFixture(t)
+	b.beforePublish = func() {
+		fd, err := unix.Open(filepath.Join(filepath.Dir(b.path), browserGateLock), unix.O_RDWR|unix.O_CLOEXEC, 0)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer closeFD(fd)
+		if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != unix.EWOULDBLOCK && err != unix.EAGAIN {
+			t.Errorf("writer lock not held through publication: %v", err)
+		}
+	}
 	dir := filepath.Join(filepath.Dir(b.path), "implementer")
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -83,7 +96,137 @@ func browserRecordCall(t *testing.T, b browserSecurity, args []string, want int)
 			t.Fatal("staging file left behind")
 		}
 	}
+	lockPath := filepath.Join(filepath.Dir(b.path), browserGateLock)
+	if fd, err := unix.Open(lockPath, unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0); err == nil {
+		defer closeFD(fd)
+		if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
+			t.Fatalf("record left lock held: %v", err)
+		}
+	}
 	return log.String()
+}
+
+func TestBrowserCheckRecordConcurrent(t *testing.T) {
+	b, _, entry := browserRecordFixture(t)
+	browserWrite(t, b.path, string(entry.bytes()), 0o600)
+	if b.admit(entry.switchPath) != "" {
+		t.Fatal("fresh admission refused")
+	}
+	if _, err := os.Lstat(filepath.Join(filepath.Dir(b.path), browserGateLock)); !os.IsNotExist(err) {
+		t.Fatalf("admission created writer lock: %v", err)
+	}
+	read, release := make(chan struct{}), make(chan struct{})
+	a := b
+	a.afterRead = func() { close(read); <-release }
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { first <- a.record(false, "", entry.completed.Add(time.Minute), entry.record) }()
+	select {
+	case <-read:
+	case <-time.After(3 * time.Second):
+		t.Fatal("first refresh did not read entry")
+	}
+	waiting := make(chan struct{}, 1)
+	b.sleep = func(d time.Duration) {
+		select {
+		case waiting <- struct{}{}:
+		default:
+		}
+		time.Sleep(d)
+	}
+	go func() { second <- b.record(false, "", entry.completed.Add(2*time.Minute), entry.record) }()
+	select {
+	case <-waiting:
+	case err := <-second:
+		close(release)
+		<-first
+		t.Fatalf("second refresh completed while first held lock: %v", err)
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("second refresh did not attempt lock")
+	}
+	select {
+	case err := <-second:
+		close(release)
+		<-first
+		t.Fatalf("second refresh completed while first held lock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-second; err != nil {
+		t.Fatal(err)
+	}
+	entry.completed = entry.completed.Add(2 * time.Minute)
+	data, err := os.ReadFile(b.path)
+	if err != nil || !bytes.Equal(data, entry.bytes()) {
+		t.Fatalf("completion regressed: %q, %v", data, err)
+	}
+	browserRecordCall(t, b, browserRecordArgs(entry, false), 0)
+}
+
+func TestBrowserCheckRecordLock(t *testing.T) {
+	for _, kind := range []string{"symlink", "mode", "two-links", "directory", "timeout", "init"} {
+		t.Run(kind, func(t *testing.T) {
+			b, _, entry := browserRecordFixture(t)
+			if kind != "init" {
+				browserWrite(t, b.path, string(entry.bytes()), 0o600)
+			}
+			path := filepath.Join(filepath.Dir(b.path), browserGateLock)
+			browserWrite(t, path, "", 0o600)
+			switch kind {
+			case "symlink", "two-links":
+				if err := os.Link(path, path+"-real"); err != nil {
+					t.Fatal(err)
+				}
+				if kind == "symlink" {
+					browserRemove(t, path)
+					if err := os.Symlink(path+"-real", path); err != nil {
+						t.Fatal(err)
+					}
+				}
+			case "mode":
+				browserWrite(t, path, "", 0o644)
+			case "directory":
+				browserRemove(t, path)
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := "browser-check-record: security check lock unavailable or unsafe\n"
+			if kind == "timeout" || kind == "init" {
+				parent, err := b.parent()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer closeFD(parent)
+				fd, err := b.lockRecord(parent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				now, slept := b.now(), time.Duration(0)
+				b.now = func() time.Time { return now }
+				b.sleep = func(d time.Duration) { now = now.Add(d); slept += d }
+				// Admission must neither wait on nor create the writer lock.
+				_ = b.admit(entry.switchPath)
+				var out, log bytes.Buffer
+				code := browserRecordCommand(browserRecordArgs(entry, kind == "init"), &out, &log, b)
+				closeFD(fd)
+				if code != 1 || log.String() != "browser-check-record: security check is being updated\n" || slept != b.lockLimit || out.Len() != 0 {
+					t.Fatalf("lock timeout: code=%d log=%q slept=%v", code, &log, slept)
+				}
+			} else if log := browserRecordCall(t, b, browserRecordArgs(entry, false), 1); log != want {
+				t.Fatalf("unsafe lock refusal=%q", log)
+			}
+			data, _ := os.ReadFile(b.path)
+			if kind != "init" && !bytes.Equal(data, entry.bytes()) || kind == "init" && data != nil {
+				t.Fatal("lock refusal changed gate bytes")
+			}
+			browserRemove(t, path)
+			browserRecordCall(t, b, browserRecordArgs(entry, kind == "init"), 0)
+		})
+	}
 }
 
 // TestBrowserCheckRecord proves initial provisioning and each refresh refusal

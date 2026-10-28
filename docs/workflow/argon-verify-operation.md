@@ -23,6 +23,8 @@ The optional `--browser-mode <abs path>` is available on `implement-run`,
 The browser admission checks and host-only `browser-check-record` command are
 merged but not in force; the browser runner is unwired. An absent flag means
 paused. The implementer commands require verify on (config: mode on).
+The gate directory also holds `browser-security-check.lock`, which serialises
+host record updates; runners read the atomically replaced gate without locking.
 
 ## Switch and run
 

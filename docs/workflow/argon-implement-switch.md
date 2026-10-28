@@ -28,12 +28,6 @@ clone `argon-trusted/src-2e3a6bf` as `RIBBITTO_ARGON_SOURCE` and, in on mode,
 as `--trusted-source`. Worker 2 and the launcher updates are in
 [worker operation](argon-workers-operation.md).
 
-The optional `--browser-mode <abs path>` is available on `implement-run`,
-`implement-check`, `implement-config`, `verify-mcp` and `container-check`.
-The browser admission checks and host-only `browser-check-record` command are
-merged but not in force; the browser runner is unwired. An absent flag means
-paused. The implementer commands require verify on (config: mode on).
-
 ## Recovery and rollback
 
 A started run that does not count leaves `guard/implement-run.recovery-needed`

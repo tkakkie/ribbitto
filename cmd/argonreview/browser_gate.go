@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +15,8 @@ import (
 // browserGatePath is host state, never an MCP argument or environment override.
 const browserGatePath = "/var/cache/argonreview/browser-security-check"
 
+const browserGateLock = "browser-security-check.lock"
+
 // browserSecurityAge makes the exact 14-day boundary fail closed.
 const browserSecurityAge = 14 * 24 * time.Hour
 
@@ -24,9 +25,13 @@ const browserOverdue = "NOT VERIFIED: browser check paused: security check overd
 
 // browserSecurity keeps the clock and host-state seams out of the wire protocol.
 type browserSecurity struct {
-	path string
-	uid  int
-	now  func() time.Time
+	path          string
+	uid           int
+	now           func() time.Time
+	sleep         func(time.Duration)
+	lockLimit     time.Duration
+	afterRead     func()
+	beforePublish func()
 }
 
 // browserSecurityEntry stores only validated control data; the URL is never read.
@@ -38,7 +43,8 @@ type browserSecurityEntry struct {
 
 // newBrowserSecurity fixes production state while tests use private directories.
 func newBrowserSecurity() browserSecurity {
-	return browserSecurity{browserGatePath, os.Geteuid(), time.Now}
+	return browserSecurity{path: browserGatePath, uid: os.Geteuid(), now: time.Now,
+		sleep: time.Sleep, lockLimit: 10 * time.Second}
 }
 
 // browserCompleted requires canonical UTC, including canonical fractional seconds.
@@ -52,7 +58,24 @@ func browserCompleted(value string) (time.Time, error) {
 
 // browserRecordURL limits references to this repository's issues and comments.
 func browserRecordURL(value string) bool {
-	return regexp.MustCompile(`\Ahttps://github\.com/tkakkie/ribbitto/issues/[0-9]+(#issuecomment-[0-9]+)?\z`).MatchString(value)
+	const prefix = "https://github.com/tkakkie/ribbitto/issues/"
+	if !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	issue, comment, found := strings.Cut(strings.TrimPrefix(value, prefix), "#issuecomment-")
+	return browserRecordDigits(issue) && (!found || browserRecordDigits(comment))
+}
+
+func browserRecordDigits(value string) bool {
+	if len(value) < 1 || len(value) > 20 {
+		return false
+	}
+	for i := range len(value) {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // parent pins the checked directory for all descriptor-relative I/O.
@@ -99,7 +122,8 @@ func (b browserSecurity) readAt(parent int) (browserSecurityEntry, error) {
 	return entry, nil
 }
 
-// admit rechecks the record on every call, after the switch and before any lock.
+// admit never locks or creates files: atomic rename lets runners read without
+// blocking on the host writer, after the switch and before budget reservation.
 func (b browserSecurity) admit(switchPath string) string {
 	parent, err := b.parent()
 	if err != nil {

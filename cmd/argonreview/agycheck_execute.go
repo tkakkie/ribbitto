@@ -119,6 +119,9 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			sup := supervisor{limit, 5 * time.Second, signals, ops}
 			run := sup.runResult(o.agy, args, agyEnvironment([]string{"PATH=" + agyCheckRunPath}, m.Home, r.Tmp), r.Workspace, logs[0], logs[1])
 			result.Code, result.Stragglers = run.code, run.stragglers
+			if run.code >= 128 {
+				run.err = errors.Join(run.err, errors.New("agy-check interrupted or agent terminated by signal"))
+			}
 			result.Transcript, err = agyCheckReadLog(logs[0])
 			return errors.Join(run.err, err)
 		})

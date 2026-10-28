@@ -29,6 +29,9 @@ func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]
 	if err := f.path(isolation, dir); err != nil {
 		return bad()
 	}
+	if err := f.private(dir, true); err != nil {
+		return bad()
+	}
 	calls := filepath.Join(dir, "calls")
 	if err := f.path(dir, calls); err != nil {
 		return bad()
@@ -81,6 +84,13 @@ func agyCheckReadClaims(isolation, dir string, f agyCheckFiles) ([]agyCheckClaim
 	return agyCheckDecodeClaims(isolation, dir, false, f)
 }
 
+// Stub records are tokens, not structure. B3-2 must require start first and pair
+// each response <tag> with the immediately preceding request <tag>. ANY request
+// on a denied MCP row is a breach, with or without a response; an unpaired
+// request on an allowed row is a difference. Requests precede handling and
+// responses follow written reply bytes, so a missing response can only lose
+// confirmation. Success must come from the transcript: response does not
+// distinguish a result from a JSON-RPC error.
 func agyCheckReadStubRecords(isolation, dir string, f agyCheckFiles) ([]agyCheckStubRecord, error) {
 	claims, err := agyCheckDecodeClaims(isolation, dir, true, f)
 	if err != nil {

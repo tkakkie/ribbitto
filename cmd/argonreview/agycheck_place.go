@@ -14,11 +14,15 @@ type agyCheckSavedFile struct {
 	data             []byte
 	mode             os.FileMode
 	present, touched bool
+	parentPresent    bool
 }
 
 // Only these three marked-home targets are exceptions to isolation confinement.
 // No account-wide configuration is inspected, named, or hashed here.
 func agyCheckPlace(m agyCheckMarker, r agyCheckRowDirs, config agyCheckConfigFiles, fixtures map[string][]byte, f agyCheckFiles, body func() error) (err error) {
+	if m.AccountHome != "" && agyCheckOverlap(m.Home, m.AccountHome) {
+		return errors.New("placement home overlaps account home")
+	}
 	if err := r.validate(m.Isolation, f); err != nil {
 		return err
 	}
@@ -52,6 +56,12 @@ func agyCheckPlace(m agyCheckMarker, r agyCheckRowDirs, config agyCheckConfigFil
 		}
 		info, statErr := f.lstat(s.path)
 		if errors.Is(statErr, os.ErrNotExist) {
+			_, parentErr := f.lstat(filepath.Dir(s.path))
+			if parentErr == nil {
+				s.parentPresent = true
+			} else if !errors.Is(parentErr, os.ErrNotExist) {
+				return parentErr
+			}
 			continue
 		}
 		if statErr != nil || !info.Mode().IsRegular() {
@@ -100,8 +110,18 @@ func agyCheckPlace(m agyCheckMarker, r agyCheckRowDirs, config agyCheckConfigFil
 					if e != nil || statErr != nil || !bytes.Equal(data, s.data) || info.Mode() != s.mode {
 						return errors.New("restoration verification failed")
 					}
-				} else if _, e := f.lstat(s.path); !errors.Is(e, os.ErrNotExist) {
-					return errors.New("restoration left an absent target")
+				} else {
+					if _, e := f.lstat(s.path); !errors.Is(e, os.ErrNotExist) {
+						return errors.New("restoration left an absent target")
+					}
+					// An absent leaf alone cannot confirm restoration if agy also
+					// removed or replaced its pre-existing parent directory.
+					if s.parentPresent {
+						parent, e := f.lstat(filepath.Dir(s.path))
+						if e != nil || !parent.IsDir() {
+							return errors.New("restoration verification failed")
+						}
+					}
 				}
 				return nil
 			}

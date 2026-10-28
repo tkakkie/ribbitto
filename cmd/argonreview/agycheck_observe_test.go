@@ -34,21 +34,27 @@ func agyCheckObserveFixtures() map[string]agyCheckObserveInput {
 {"event":"result"}
 `,
 		"discovery-agent": `{"event":"hook_loaded","path":".agent/hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"discovery-agents": `{"event":"hook_loaded","path":".agents/hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"discovery-gemini-config": `{"event":"hook_loaded","path":".gemini/config/hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"discovery-gemini": `{"event":"hook_loaded","path":".gemini/hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"discovery-antigravity": `{"event":"hook_loaded","path":".antigravity/hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"discovery-root": `{"event":"hook_loaded","path":"hooks.json"}
+{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
 {"event":"result"}
 `,
 		"hook-precedence": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
@@ -215,6 +221,102 @@ func TestAgyCheckObserveAll(t *testing.T) {
 			delete(inputs, row.ID)
 			agyCheckObserveAssertDifference(t, inputs, row.ID, "missing input")
 		})
+	}
+}
+
+// TestAgyCheckObserveUnknownRows keeps unexpected input visible after table rows.
+func TestAgyCheckObserveUnknownRows(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []string
+	}{
+		{"forward", []string{"Hook-Decision", "a-extra", "extra\n\t\x1b", "z-extra"}},
+		{"reverse", []string{"z-extra", "extra\n\t\x1b", "a-extra", "Hook-Decision"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inputs := agyCheckObserveFixtures()
+			want := agyCheckObserveAll(inputs)
+			unknown := []string{"Hook-Decision", "a-extra", "extra\n\t\x1b", "z-extra"}
+			for _, id := range unknown {
+				want = append(want, agyCheckObservation{ID: id, Outcome: "unknown row"})
+			}
+			for _, id := range tc.keys {
+				inputs[id] = agyCheckObserveInput{}
+			}
+			if got := agyCheckObserveAll(inputs); !slices.Equal(got, want) {
+				t.Fatalf("observation list=%+v want %+v", got, want)
+			}
+			r, out := agyCheckObserveEvaluate(t, inputs)
+			if agyCheckExitCode(r) != 1 || strings.Contains(out, agyCheckSuccessLine) || len(r.Rows) != len(want) {
+				t.Fatalf("unknown rows lost differing result: %+v", r)
+			}
+			for i, row := range r.Rows {
+				if i < len(agyCheckExpected) {
+					if !row.OK {
+						t.Fatalf("unrelated row differs: %+v", row)
+					}
+				} else if row.ID != want[i].ID || row.OK || row.Observed != "unknown row" {
+					t.Fatalf("unknown row=%+v want %+v differing", row, want[i])
+				}
+			}
+			for _, id := range []string{"Hook-Decision", "a-extra", "extra???", "z-extra"} {
+				if !strings.Contains(out, "\n"+id+" ") {
+					t.Fatalf("printable unknown ID %q missing from report: %q", id, out)
+				}
+			}
+			if strings.ContainsAny(out, "\t\x1b") || strings.Contains(out, "extra\n") {
+				t.Fatalf("unknown ID escaped printable sanitisation: %q", out)
+			}
+		})
+	}
+}
+
+// TestAgyCheckObserveDiscoverySteps requires evidence before judging discovery.
+func TestAgyCheckObserveDiscoverySteps(t *testing.T) {
+	for _, row := range agyCheckExpected {
+		if row.Group != "discovery" {
+			continue
+		}
+		for _, tc := range []struct {
+			name         string
+			step, loaded bool
+		}{
+			{"result only", false, false},
+			{"loaded without step", false, true},
+			{"step neither loaded nor ran", true, false},
+			{"step loaded and ran", true, true},
+		} {
+			t.Run(row.ID+"/"+tc.name, func(t *testing.T) {
+				inputs := agyCheckObserveFixtures()
+				var in agyCheckObserveInput
+				if tc.loaded {
+					in.Transcript = fmt.Appendf(in.Transcript, "{\"event\":\"hook_loaded\",\"path\":%q}\n", row.Location)
+					in.RanLocations = []string{row.Location}
+				}
+				if tc.step {
+					in.Transcript = append(in.Transcript, "{\"event\":\"tool_step\",\"tool\":\"write_to_file\",\"state\":\"ERROR\"}\n"...)
+				}
+				in.Transcript = append(in.Transcript, "{\"event\":\"result\"}\n"...)
+				inputs[row.ID] = in
+				if !tc.step {
+					if got := agyCheckObserveRow(row, in); got != (agyCheckObservation{ID: row.ID, Outcome: "no step"}) {
+						t.Fatalf("absent step observation=%+v want no step without partial facts", got)
+					}
+					// ObserveAll and Evaluate must preserve the fixed outcome as a difference.
+					agyCheckObserveAssertDifference(t, inputs, row.ID, "no step")
+					return
+				}
+				r, out := agyCheckObserveEvaluate(t, inputs)
+				for _, got := range r.Rows {
+					if !got.OK {
+						t.Fatalf("discovery with step differs: %+v", got)
+					}
+				}
+				if agyCheckExitCode(r) != 0 || !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
+					t.Fatalf("discovery with step lost success: %q", out)
+				}
+			})
+		}
 	}
 }
 
@@ -494,6 +596,32 @@ func TestAgyCheckBuiltinInfo(t *testing.T) {
 			afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures())
 			if agyCheckExitCode(beforeR) != 0 || agyCheckExitCode(afterR) != 0 || before != after || strings.Contains(after, "INFO builtin/") {
 				t.Fatal("builtin information altered exit code or report")
+			}
+		})
+	}
+}
+
+// TestAgyCheckBuiltinInfoSize pins implement-check's inclusive listing limit.
+func TestAgyCheckBuiltinInfoSize(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		size  int
+		valid bool
+	}{
+		{"at cap", 1 << 20, true},
+		{"over cap", (1 << 20) + 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listing := []byte("LINK ./" + strings.Repeat("a", tc.size-len("LINK ./\n")) + "\n")
+			if _, err := implementBuiltinList(listing); err != nil || len(listing) != tc.size {
+				t.Fatalf("size fixture is not valid listing syntax: bytes=%d error=%v", len(listing), err)
+			}
+			want := "INFO builtin/ listing could not be hashed: invalid listing"
+			if tc.valid {
+				want = fmt.Sprintf("INFO builtin/ listing SHA-256 %x over %d bytes; information only, no trusted file is written; the maintainer decides", sha256.Sum256(listing), len(listing))
+			}
+			if got := agyCheckBuiltinInfo(listing); got != want {
+				t.Fatalf("builtin info at %d bytes=%q want %q", tc.size, got, want)
 			}
 		})
 	}

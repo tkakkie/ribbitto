@@ -44,6 +44,9 @@ func agyCheckObserveUnlistedLoads(loadedPaths []string) []string {
 // that a directory entry came from an allowed tool call.
 const agyCheckObserveCreatedPrefix = "created-"
 
+// agyCheckObserveNoStep distinguishes absent evidence from an unloaded hook.
+const agyCheckObserveNoStep = "no step"
+
 // agyCheckObserveSummary refuses ambiguous records instead of repairing totals;
 // only the core decides whether the independently collected counts reconcile.
 func agyCheckObserveSummary(steps []agyCheckTranscriptStep, replies, createdFiles []string) (agyCheckSummary, error) {
@@ -97,6 +100,10 @@ func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObserv
 	case "hook", "workspace", "settings", "exposure":
 		return agyCheckObservation{ID: row.ID, Outcome: agyCheckTranscriptOutcome(row, transcript.Steps)}
 	case "discovery":
+		// Hook execution is recorded only on a tool call, so no call proves nothing.
+		if len(transcript.Steps) == 0 {
+			return agyCheckObservation{ID: row.ID, Outcome: agyCheckObserveNoStep}
+		}
 		return agyCheckObserveDiscovery(row, transcript.LoadedPaths, in.RanLocations)
 	case "reconciliation":
 		summary, err := agyCheckObserveSummary(transcript.Steps, in.Replies, in.CreatedFiles)
@@ -113,7 +120,9 @@ func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObserv
 // reproducible even when collection finishes in a different order.
 func agyCheckObserveAll(inputs map[string]agyCheckObserveInput) []agyCheckObservation {
 	observations := make([]agyCheckObservation, 0, len(agyCheckExpected))
+	known := make(map[string]bool, len(agyCheckExpected))
 	for _, row := range agyCheckExpected {
+		known[row.ID] = true
 		in, exists := inputs[row.ID]
 		if !exists {
 			observations = append(observations, agyCheckObservation{ID: row.ID, Outcome: "missing input"})
@@ -121,14 +130,32 @@ func agyCheckObserveAll(inputs map[string]agyCheckObserveInput) []agyCheckObserv
 		}
 		observations = append(observations, agyCheckObserveRow(row, in))
 	}
+	var unknown []string
+	for id := range inputs {
+		if !known[id] {
+			unknown = append(unknown, id)
+		}
+	}
+	slices.Sort(unknown)
+	for _, id := range unknown {
+		observations = append(observations, agyCheckObservation{ID: id, Outcome: "unknown row"})
+	}
 	return observations
 }
+
+// agyCheckBuiltinMaxBytes matches implementcheck.go's implementRead(list, 1<<20,
+// false) cap: information must never hash a list implement-check could not read.
+const agyCheckBuiltinMaxBytes = 1 << 20
 
 // agyCheckBuiltinInfo hashes exact validated listing bytes for human comparison.
 // Keeping information as a string prevents it becoming a trusted result row.
 func agyCheckBuiltinInfo(listing []byte) string {
+	const invalid = "INFO builtin/ listing could not be hashed: invalid listing"
+	if len(listing) > agyCheckBuiltinMaxBytes {
+		return invalid
+	}
 	if _, err := implementBuiltinList(listing); err != nil {
-		return "INFO builtin/ listing could not be hashed: invalid listing"
+		return invalid
 	}
 	return fmt.Sprintf("INFO builtin/ listing SHA-256 %x over %d bytes; information only, no trusted file is written; the maintainer decides", sha256.Sum256(listing), len(listing))
 }

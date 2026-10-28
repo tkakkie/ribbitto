@@ -17,8 +17,10 @@ type agyCheckObservation struct {
 	Summary     agyCheckSummary
 }
 
-// Reconciliation is evidence for the throwaway home's default agent only,
-// not a proof for production. Allows/denies count the alternating hook replies.
+// Reconciliation checks ordinary-agent regressions, not tamper resistance: an
+// allow-everything agent can write the records. It is not proof for production,
+// whose guard keeps no decision log. A match never approves version trust.
+// Allows/denies count the alternating hook replies in claim-number order.
 type agyCheckSummary struct {
 	ToolSteps, HookInvocations, Allows, Denies, Errors, FilesCreated, ParallelBatches int
 	// Totals alone cannot prove alternation; count adjacent identical hook replies.
@@ -38,6 +40,24 @@ type agyCheckResultRow struct {
 type agyCheckResult struct {
 	InvalidReason, UsageError string
 	Rows                      []agyCheckResultRow
+	Unlisted                  []agyCheckLoad
+	BuiltinInfo               string
+}
+
+type agyCheckLoad struct {
+	Path      string
+	Protected bool
+}
+
+func agyCheckLoadProtected(path string) bool {
+	for _, part := range strings.Split(path, "/") {
+		for _, refused := range implementRefusedNames {
+			if strings.ToLower(part) == refused {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var (
@@ -80,14 +100,7 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 	case "allowed", "denied", "answered", "not exercisable":
 		r.OK = o.Outcome == row.Expected
 	case "covered if loaded":
-		covered := false
-		for _, part := range strings.Split(row.Location, "/") {
-			for _, refused := range implementRefusedNames {
-				if strings.ToLower(part) == refused {
-					covered = true
-				}
-			}
-		}
+		covered := agyCheckLoadProtected(row.Location)
 		r.Observed = fmt.Sprintf("loaded=%t ran=%t covered=%t", o.Loaded, o.Ran, covered)
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
 	case "counts reconcile":
@@ -105,7 +118,7 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 	return r
 }
 
-func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string) agyCheckResult {
+func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string, loadedPaths ...string) agyCheckResult {
 	r := agyCheckResult{UsageError: usageError}
 	if usageError != "" {
 		return r
@@ -142,6 +155,13 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 			r.Rows = append(r.Rows, agyCheckClassify(o, minimum))
 		}
 	}
+	for _, path := range agyCheckObserveUnlistedLoads(loadedPaths) {
+		protected := agyCheckLoadProtected(path)
+		r.Unlisted = append(r.Unlisted, agyCheckLoad{path, protected})
+		if !protected {
+			r.Rows = append(r.Rows, agyCheckResultRow{agyCheckRow: agyCheckRow{ID: "unlisted-load", Expected: "protected", Description: "Loaded workspace hook outside the known table"}, Observed: "unprotected load"})
+		}
+	}
 	return r
 }
 
@@ -153,6 +173,11 @@ func agyCheckExitCode(r agyCheckResult) int {
 	}
 	if r.InvalidReason != "" {
 		return agyCheckDiffers
+	}
+	for _, load := range r.Unlisted {
+		if !load.Protected {
+			return agyCheckDiffers
+		}
 	}
 	for _, row := range r.Rows {
 		if !row.OK {
@@ -173,6 +198,19 @@ func agyCheckPrintable(value string) string {
 
 func agyCheckRender(w io.Writer, r agyCheckResult) error {
 	var out strings.Builder
+	if len(r.Unlisted) > 0 {
+		fmt.Fprintln(&out, "LOADED BUT UNLISTED WORKSPACE HOOKS")
+		for _, load := range r.Unlisted {
+			protection := "UNPROTECTED: check differs"
+			if load.Protected {
+				protection = "PROTECTED by refused names"
+			}
+			fmt.Fprintf(&out, "%s: %s\n", protection, agyCheckPrintable(load.Path))
+		}
+	}
+	if r.BuiltinInfo != "" {
+		fmt.Fprintln(&out, r.BuiltinInfo)
+	}
 	switch {
 	case r.UsageError != "":
 		fmt.Fprintf(&out, "USAGE: %s\n", r.UsageError)

@@ -191,8 +191,8 @@ func TestAgyCheckTranscriptBatches(t *testing.T) {
 // TestAgyCheckTranscriptOutcomes cross-checks the mapping domain against the
 // core table, including both non-exercisable URL rows and silent exit 0.
 func TestAgyCheckTranscriptOutcomes(t *testing.T) {
-	if len(agyCheckTranscriptTools) != 22 {
-		t.Fatal("tool mapping must cover exactly 22 rows")
+	if len(agyCheckTranscriptTools) != 29 {
+		t.Fatal("tool mapping must cover exactly 29 rows")
 	}
 	for _, pair := range strings.Fields(`hook-decision=write_to_file hook-exit2=write_to_file hook-exit1=write_to_file hook-missing=write_to_file hook-timeout=write_to_file hook-unparseable=write_to_file hook-silent=write_to_file hook-precedence=write_to_file hook-same-name-agent=write_to_file hook-same-name-agents=write_to_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_to_file outside-read=view_file`) {
 		id, tool, _ := strings.Cut(pair, "=")
@@ -203,11 +203,13 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 	count := 0
 	for _, row := range agyCheckExpected {
 		tool, exists := agyCheckTranscriptTools[row.ID]
-		if exists != (row.Group != "discovery" && row.Group != "reconciliation") {
+		if !exists || tool == "" {
 			t.Fatalf("tool coverage: %+v", row)
 		}
-		if !exists {
-			continue
+		if row.Group == "discovery" || row.Group == "reconciliation" {
+			if tool != "write_to_file" {
+				t.Fatalf("file scenario tool changed: %s", row.ID)
+			}
 		}
 		count++
 		t.Run(row.ID, func(t *testing.T) {
@@ -236,7 +238,7 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 			}
 		})
 	}
-	if count != 22 || agyCheckTranscriptOutcome(agyCheckRow{ID: "unknown"}, nil) != "unknown row" {
+	if count != 29 || agyCheckTranscriptOutcome(agyCheckRow{ID: "unknown"}, nil) != "unknown row" {
 		t.Fatal("mapping domain drifted")
 	}
 }

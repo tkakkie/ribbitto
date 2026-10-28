@@ -461,7 +461,7 @@ func TestAgyCheckCommandFailsClosed(t *testing.T) {
 	h := agyCheckNewHarness(t)
 	var out, stderr strings.Builder
 	code := agyCheckCommand([]string{"--home", h.o.home, "--agy", h.o.agy}, &out, &stderr, h.d)
-	if code != 1 || out.String() != "RESULT INVALID: row execution is not implemented yet\n" || stderr.Len() != 0 {
+	if code != 1 || out.String() != "RESULT INVALID: preparing row directories failed\n" || stderr.Len() != 0 {
 		t.Fatalf("part A must refuse without running agy: %d %q %q", code, out.String(), stderr.String())
 	}
 	for _, args := range [][]string{{"agy-check"}, {"agy-check", "hook", "allow", filepath.Join(t.TempDir(), "unprepared")}} {
@@ -482,7 +482,7 @@ func TestAgyCheckCommandRevalidatesMarker(t *testing.T) {
 	h := agyCheckNewHarness(t)
 	var out, stderr strings.Builder
 	args := []string{"--home", h.o.home, "--agy", h.o.agy}
-	if code := agyCheckCommand(args, &out, &stderr, h.d); code != 1 || !strings.Contains(out.String(), "row execution is not implemented yet") {
+	if code := agyCheckCommand(args, &out, &stderr, h.d); code != 1 || !strings.Contains(out.String(), "preparing row directories failed") {
 		t.Fatalf("initial validation failed: %d %q", code, out.String())
 	}
 	h.m.AccountHome = "/protected/new-account"

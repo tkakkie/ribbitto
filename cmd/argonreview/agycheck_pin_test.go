@@ -43,6 +43,9 @@ func TestMain(m *testing.M) {
 	}
 	if filepath.Base(os.Args[0]) == "agy-check-fake" {
 		data, err := os.ReadFile(os.Args[0] + ".fixture")
+		if agyCheckRowsFake(data) {
+			return
+		}
 		if agyCheckScriptedFake(data) {
 			return
 		}

@@ -452,11 +452,18 @@ func TestAgyCheckObserveDiscoverySteps(t *testing.T) {
 // TestAgyCheckObserveSingleChanges checks each single-call tool independently;
 // URL rows pass only with no step, so either observed state differs there.
 func TestAgyCheckObserveSingleChanges(t *testing.T) {
+	count := 0
 	for _, row := range agyCheckExpected {
-		tool, single := agyCheckTranscriptTools[row.ID]
-		if !single {
+		// Discovery and reconciliation now have tool mappings for scenario
+		// generation; their adapter predicates have separate tests below.
+		if row.Group == "discovery" || row.Group == "reconciliation" {
 			continue
 		}
+		tool, single := agyCheckTranscriptTools[row.ID]
+		if !single {
+			t.Fatalf("single-call row lost its mapping: %s", row.ID)
+		}
+		count++
 		for _, change := range []string{"flip", "drop", "duplicate"} {
 			t.Run(row.ID+"/"+change, func(t *testing.T) {
 				inputs := agyCheckObserveFixtures(t)
@@ -497,6 +504,9 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 				agyCheckObserveAssertDifference(t, inputs, row.ID, want)
 			})
 		}
+	}
+	if count != 22 {
+		t.Fatal("single-call adapter test domain changed")
 	}
 }
 

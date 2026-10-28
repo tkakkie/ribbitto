@@ -44,5 +44,5 @@ var agyCheckExpected = []agyCheckRow{
 	{"read-resource", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, read_resource answers for stub", "answered", ""},
 	{"outside-write", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, file write outside workspace", "allowed", ""},
 	{"outside-read", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, file read outside workspace", "allowed", ""},
-	{"reconciliation", "reconciliation", "Alternating allow/deny, at least two parallel batches", "counts reconcile", ""},
+	{"reconciliation", "reconciliation", "Ordinary-agent regression check, not tamper resistance or proof for production (the production guard keeps no decision log); a match never approves version trust; alternating allow/deny, at least two parallel batches", "counts reconcile", ""},
 }

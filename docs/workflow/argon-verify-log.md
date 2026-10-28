@@ -105,9 +105,9 @@ and indexes stay behind `| `; framing cannot prevent a model following them.
 
 ## Secret tripwire
 
-The container has fixed variables, a public CI database URL and protected
-source. Files, host diagnostics/errors, saved agy output and other workers'
-runs are never served.
+The container holds only fixed variables, the public CI-only database URL and
+a source copy without the protected files (no secrets). Files, host
+diagnostics/errors, saved agy output and other workers' runs are never served.
 
 Once at capture, scan every retained output unit and entry name for the CI
 password derived from the runner constant and token shapes `ghp_`,

@@ -79,7 +79,7 @@ func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMa
 		return nil
 	})
 	if err != nil {
-		return errors.New("row validation, pin, collection, restoration or cleanup failed")
+		return agyCheckRowFailure(err)
 	}
 	if len(results.observations) == 0 {
 		results.before = run.Before

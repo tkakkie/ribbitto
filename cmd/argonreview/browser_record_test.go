@@ -448,7 +448,11 @@ func TestBrowserCheckRecordClockAfterLock(t *testing.T) {
 				browserWrite(t, b.path, string(entry.bytes()), 0o600)
 			}
 			locked, clockAfterLock := false, false
-			b.afterLock = func() { locked = true }
+			if kind == "init" {
+				b.afterLock = func() { locked = true }
+			} else {
+				b.afterRead = func() { locked = true }
+			}
 			// Lock retries also read the clock, so phase, not call count, sets time.
 			b.now = func() time.Time {
 				if locked {

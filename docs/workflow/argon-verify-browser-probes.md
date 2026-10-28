@@ -13,11 +13,11 @@ probe 6 varies them. The host gate is fixed at
 `cmd/argonreview/browser_gate.go`), outside the swap.
 At the start of the window, before probe 1, save a gate copy (bytes, mode,
 link count) or record its absence.
-For expired, future and missing states, manually replace/remove the path
-only in that window. If absent at the start of the window, window
-authority alone permits this: create by hand and remove again. Otherwise,
-first get separate maintainer deletion approval, including for a
-production gate from `--init`.
+For expired, future and missing states, manual replace/remove is allowed
+only in that window. Window authority alone permits it only if the gate
+was absent at window start: create by hand and remove again. Otherwise,
+separate maintainer deletion approval is required first, including for any
+real `--init` gate.
 Before window end, restore production: `browser-mode` `off`,
 the production gate restored from the saved copy (or absent as before).
 If absent at the start, verify at window end that the gate does not exist
@@ -57,6 +57,11 @@ and evidence requirements from
    `NOT VERIFIED: time limit exceeded`; more than 4 GiB or more than
    2,048 threads is never `verified`. Then require no container,
    source copy or held slot.
+   For cap/kill observations, attribution to our own cancellation is
+   best-effort: a successful process-group kill cannot distinguish an
+   independent SIGKILL racing our cap or malformed stop. See the
+   [accepted residual risk](argon-verify-testdb.md#result-summary) and
+   [N1 precedence](argon-verify-aggregation.md#n1-verdict-precedence).
 4. **Controlled holders:** use dummy dev containers on the pinned verify
    image, `--network none --read-only`, 1 GiB, one slot each, `sleep 900`,
    started through `budget-start`; use a 300 s browser test to hold
@@ -77,6 +82,8 @@ and evidence requirements from
    lifecycle with its recorded-ID and process checks.
 6. **Switch/gate:** follow the
    [swap and gate save/restore rule](argon-verify-browser-probes.md#numbered-browser-probes).
+   “Replace/remove” never applies to a real `--init` gate without separate
+   maintainer deletion approval.
    `off`, missing or malformed switches from worker 1,
    worker 2 and `container-check` give `NOT VERIFIED: browser check paused`
    without starting a container. With the switch `on`, expired, future or
@@ -91,6 +98,9 @@ and evidence requirements from
    its “`test-browser` is an unknown check” row with guard admission followed
    by `NOT VERIFIED: browser check paused` when `browser-mode` is `off`.
    Keep all other refusals and absent effects.
+   The guard checks argument shape only; `parseVerifyArguments` also applies
+   package/run validators. It reads no switch or gate and never starts a
+   container; admission is the runner's check.
 8. **Inside the container:** inspect network `none`, read-only root, no
    capabilities, `no-new-privileges`, uid 1000, no seccomp option, pinned
    image and labels. Chrome runs as uid 1000 with `--no-sandbox`. Loading

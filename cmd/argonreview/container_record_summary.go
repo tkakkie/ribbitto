@@ -16,7 +16,9 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 	if !r.complete && !r.command {
 		f.err = fmt.Errorf("incomplete container record: %s", r.stop)
 	}
-	f.stderr = retainedSummaryLines(r.stderr)
+	if !r.stderrNotServable {
+		f.stderr = retainedSummaryLines(r.stderr)
+	}
 	f.stdout = retainedSummaryLines(r.stdout)
 	f.compiler = retainedSummaryLines(r.compiler)
 	for _, part := range [][]byte{r.packageOutput.head, r.packageOutput.tail} {

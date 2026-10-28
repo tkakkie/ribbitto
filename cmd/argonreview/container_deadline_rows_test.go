@@ -298,19 +298,7 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 			scope = containerCheckScope("")
 		}
 		body := "Details unavailable: the check did not complete.\n"
-		if row.outcome == "cap" {
-			body = "Counts unavailable: output limit exceeded; the stream was cut.\n"
-		}
-		footer := deadlineOmitted
-		trust := ""
-		if row.outcome == "cap" && isTest {
-			trust = summaryTrust + "\n"
-			body += "Limit reached: line length\n"
-			footer = "Omitted: excerpts shown for 0 observed failing tests; total unknown; 0 names not shown; 0 lines not shown; 0 lines shortened.\n"
-		} else if row.outcome == "cap" {
-			body += "Limit reached: total output\n"
-		}
-		want := first + "\nCheck: " + check + " ./...\nScope: " + scope + "\n" + trust + body + footer
+		want := first + "\nCheck: " + check + " ./...\nScope: " + scope + "\n" + body + deadlineOmitted
 		if summary != want {
 			t.Fatalf("summary body differs: %q, want %q", summary, want)
 		}

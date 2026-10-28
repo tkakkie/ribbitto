@@ -19,7 +19,8 @@ each build needs the maintainer's approval in chat.
 [Verification memory budget](argon-verify-budget.md) is merged but not in force.
 
 The optional `--browser-mode <abs path>` is available on `implement-run`,
-`implement-check`, `implement-config`, `verify-mcp` and `container-check`.
+`implement-check`, `implement-config`, `verify-mcp` and `container-check`
+(only for `test-browser`; all other checks refuse it).
 The browser admission checks and host-only `browser-check-record` command are
 merged but not in force. `verify` accepts `test-browser` with a `run`; calls are
 paused unless `browser-mode` is `on` and the 14-day gate passes. An absent flag
@@ -40,7 +41,8 @@ path, worker 1's file beside `verify-mode`, only when `--verify on`;
 worker 2 reads worker 1's file, never a separate copy. With `--verify off`
 (the `checks.zsh` idle check and the `verify-mode off` rollback), they never
 pass it: those commands refuse the flag, so an unconditional flag would
-make them refuse. `container-check` passes it for `test-browser`.
+make them refuse. Pass it to `container-check` only for `test-browser`;
+ordinary checks refuse it.
 
 ## Switch and run
 

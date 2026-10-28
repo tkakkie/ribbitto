@@ -103,6 +103,9 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 		if err := browserInitSwitch(path, b.uid); err != nil {
 			return err
 		}
+		if browserSwitchOn(path, b.uid) {
+			return errors.New("initial check cannot be recorded while browser-mode is on")
+		}
 	} else {
 		entry, err = b.readAt(parent)
 		if err != nil {

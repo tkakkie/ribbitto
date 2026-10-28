@@ -42,15 +42,16 @@ Under host approvals, Claude prepares/records:
    only with `--verify on`; worker 2 reads worker 1's file, never a separate
    copy. With `--verify off` (`checks.zsh` idle check or `verify-mode off`
    rollback), never pass `--browser-mode`: the commands refuse it, so an
-   unconditional flag would make them refuse. `container-check` passes it
-   for `test-browser`; an absent flag means paused.
+   unconditional flag would make them refuse. `container-check` accepts it
+   only for `test-browser` and refuses it for other checks; absent means paused.
 5. Complete the first [weekly record](argon-verify-browser-updates.md#weekly-check-and-expiry)
    and run `browser-check-record --init` via the frozen
    wrapper with every [initialization check](argon-verify-browser-record.md#initial-and-routine-recording):
    regular uid-owned switch, uid-owned 0500 `implementer/`, regular
-   `verify-mode` beside it. These check location, not switch content/mode;
-   before `--init`, Claude or the host-side frozen wrapper with pinned
-   binary hash must confirm `off`/0400 as operator rules.
+   `verify-mode` beside it. `--init` also refuses a switch that reads as
+   enabled; it requires neither exact `off` content nor 0400. Claude or the
+   host-side frozen wrapper with pinned binary hash must still confirm
+   `off`/0400 before `--init` as operator rules.
    The gate directory holds `browser-security-check.lock` for writers.
 
 ## Chromium mask preflight
@@ -82,6 +83,8 @@ non-browser check launching Chromium forbids launcher update: report on
 
 Follow the [numbered browser probes](argon-verify-browser-probes.md#numbered-browser-probes),
 including the window's state and restoration rules.
+For cap/kill observations, attribution to our own cancellation is
+best-effort; see the [accepted residual risk](argon-verify-testdb.md#result-summary).
 
 ## Enabling sequence and record
 

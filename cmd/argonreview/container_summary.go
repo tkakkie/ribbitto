@@ -254,9 +254,9 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		scope = scope[:end]
 	}
 	trusted("Scope: " + scope)
-	// Hitting the output cap cancels execution too, but keeps its own cut-stream
-	// diagnostic rather than turning into an unexplained runner failure.
-	if in.runnerFailed && !strings.Contains(first, "output limit exceeded") || summaryRunnerFailure(first) {
+	// The caller excludes the aggregator's own cancellation from runner failure.
+	// A real failure needs this body even when a cap or malformed stop won N1.
+	if in.runnerFailed || summaryRunnerFailure(first) {
 		w.put("Details unavailable: the check did not complete.")
 		return w.finish(0)
 	}

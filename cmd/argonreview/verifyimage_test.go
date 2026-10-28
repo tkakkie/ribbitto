@@ -197,13 +197,26 @@ func TestVerifyImagePinDocumentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	section := func(heading string) string {
+		t.Helper()
+		_, body, ok := strings.Cut(string(docs), "\n## "+heading+"\n")
+		if !ok {
+			t.Fatalf("image docs missing section %q", heading)
+		}
+		body, _, _ = strings.Cut(body, "\n## ")
+		return body
+	}
+	runner, status := section("Runner pin and prelude"), section("Purpose and status")
 	for _, row := range []struct{ name, pin string }{
 		{"pinned ID", containerVerifyImage},
 		{"recorded tag", "argonreview-verify-image:91dfaa7"},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			if !strings.Contains(string(docs), row.pin) {
-				t.Fatalf("image docs missing %s: %q", row.name, row.pin)
+			if !strings.Contains(runner, row.pin) {
+				t.Fatalf("image docs Runner pin and prelude missing %s: %q", row.name, row.pin)
+			}
+			if strings.Contains(status, row.pin) {
+				t.Fatalf("image docs Purpose and status presents source %s: %q", row.name, row.pin)
 			}
 		})
 	}

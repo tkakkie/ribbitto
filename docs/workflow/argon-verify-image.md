@@ -92,7 +92,7 @@ templ, sqlc and Tailwind generators from that repository root, using
 test stdout remains test2json only. Any generator failure exits nonzero and
 reports `FAILED`. The script ends with `exec go "$@"`; the check, fixed flags
 and package pattern are separate positional arguments. `/work` stays read-only.
-Single-run containers get fresh tmpfs; a fixed directory suffices.
+Fresh tmpfs per run makes a fixed directory sufficient.
 1 GiB tmpfs limits stay; #1700's preflight ran the limits and three simultaneous containers.
 
 Reports say sources were regenerated; `generated` checks committed output
@@ -147,7 +147,7 @@ in the same pull request.
 
 `generated` refuses packages other than `./...` before Docker. Its separate
 fixed script takes no caller arguments.
-Shared copy and generator command constants preserve build/vet/test's prelude.
+Shared copy/generator constants preserve build/vet/test's prelude.
 After copying and the three generators, it runs `templ fmt -fail .`, captures
 `gofmt -l .`, then compares `diff -ru /work /tmp/work`. Generator and formatter
 diagnostics go to stderr; stdout carries gofmt names or the diff.
@@ -184,10 +184,11 @@ ignored untracked files are absent. A newly generated file appears as
 not descend into directories present on only one side. The image pins
 Tailwind; the runner does not detect Tailwind version drift in the copy.
 
-CI's `check-static` runs `tools/formatcheck`: it enumerates files except root
-`bin/`, compares templ stdout without rewriting and checks internal `doc.go`
-presence. This check's recursive formatters can traverse differently (including
-hidden directories) and omit package documentation. tbls schema docs, dependency docs, the API
+Formatting runs in this check. CI's `check-static` runs `tools/formatcheck`:
+it lists files except root `bin/`, compares templ stdout without rewriting
+and checks internal `doc.go` presence. This check's recursive formatters can
+traverse differently (including hidden directories) and omit package
+documentation. tbls schema docs, dependency docs, the API
 manifest, golangci-lint, docscheck, languagecheck, race detector, browser tests
 and database tests other than [test-db](argon-verify-testdb.md) remain CI-only.
 #1700's preflight exercised real Docker/dash/generators before these checks entered force.

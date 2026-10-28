@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -160,50 +159,24 @@ func (h *agyCheckCommandHarness) restored(t *testing.T) {
 
 // Predicate deviations need one real row's collection and effects. The other
 // rows use the same passing observations as the report unit tests; full command
-// coverage remains in match, larger-calls, timeout and the lifecycle cases.
+// coverage remains in match, larger-calls, timeout, unlisted loads and lifecycle cases.
 func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	t.Helper()
 	row := agyCheckObserveFindRow(t, id)
-	s, err := agyCheckScenarioFor(id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := agyCheckNewRowDirs(h.m.Isolation, h.x.runner.files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	config, fixtures, err := s.config(h.tool, row, r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var evidence agyCheckEvidence
-	var diagnostic string
 	h.x.runner.check = h.d
-	run, err := agyCheckRunAgy(context.Background(), agyCheckOptions{home: h.m.Home, agy: h.agy, model: agyCheckModel}, h.x.runner, h.m, r, s.prompt(r, 30), config, fixtures, h.x.limit, h.x.ops, func(r agyCheckRowDirs) error {
-		var err error
-		evidence, diagnostic, err = agyCheckCollect(h.m.Isolation, r, s, h.x.runner.files)
-		return err
-	})
-	if err != nil {
+	var results agyCheckRowResults
+	o := agyCheckOptions{home: h.m.Home, agy: h.agy, model: agyCheckModel, calls: 30}
+	if err := agyCheckExecuteRow(o, h.x, h.m, h.tool, row, &results); err != nil {
 		t.Fatalf("row execution failed: %v", err)
-	}
-	observation := agyCheckEvidenceObservation(row, s, evidence)
-	if diagnostic != "" {
-		observation = agyCheckObservation{ID: id, Outcome: diagnostic}
 	}
 	_, observations := agyCheckFixtures()
 	for i := range observations {
 		if observations[i].ID == id {
-			observations[i] = observation
+			observations[i] = results.observations[0]
 		}
 	}
-	parsed, _ := agyCheckTranscriptParse(evidence.Input.Transcript)
-	result := agyCheckEvaluate(run.Before, run.After, observations, 30, "", parsed.LoadedPaths...)
-	listing, err := agyCheckBuiltinListing(h.m.Home, h.x.runner.files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result.BuiltinInfo = agyCheckBuiltinInfo(listing)
+	results.observations = observations
+	result := agyCheckAssemble(h.m, h.x.runner.files, results, 30)
 	var out strings.Builder
 	if err := agyCheckRender(&out, result); err != nil {
 		t.Fatal(err)
@@ -237,10 +210,23 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		{"nonzero-with-result", "hook-exit1", "nonzero-result", 0, 0},
 		{"nonzero-without-result", "hook-exit1", "nonzero-no-result", 0, 1},
 		{"timeout", "hook-silent", "timeout", 0, 1},
+		{"straggler", "hook-silent", "", 0, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			h := agyCheckNewCommandHarness(t, tc.row, tc.deviation)
+			if tc.name == "straggler" {
+				scans := 0
+				h.x.ops.scan = func(int) ([]int, error) {
+					scans++
+					if scans == 2 {
+						return []int{999999}, nil
+					}
+					return nil, nil
+				}
+				h.x.ops.killMember = func(int, *child) {}
+				h.x.ops.commandLine = func(int) string { return "fake straggler" }
+			}
 			if tc.name == "timeout" {
 				// Only this fake sleeps for a minute. Five seconds still allows
 				// ordinary modeled rows and their real stub to exit under race.
@@ -248,7 +234,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			}
 			var code int
 			var out string
-			if tc.row == "" || tc.name == "timeout" {
+			if tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected" {
 				code, out = h.run(t, tc.calls)
 			} else {
 				code, out = h.runRow(t, tc.row)
@@ -266,6 +252,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				"unparsed":       "unparsed transcript",
 				"retry":          "no single intended step",
 				"timeout":        "run timeout",
+				"straggler":      "run left processes",
 			}[tc.name]
 			if wantDiagnostic != "" && !strings.Contains(out, wantDiagnostic) {
 				t.Fatalf("row diagnostic changed: want %q in %s", wantDiagnostic, out)
@@ -297,12 +284,15 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				}
 			}
 			if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {
+				if !strings.Contains(out, "INFO builtin/") {
+					t.Fatal("builtin information missing")
+				}
 				if !strings.HasPrefix(out, "LOADED BUT UNLISTED") || strings.Index(out, "INFO builtin/") > strings.Index(out, "ID ") {
 					t.Fatal("extra blocks in wrong order")
 				}
 			}
 			validations, starts, pins := 3, 3, 2
-			if tc.row == "" || tc.name == "timeout" {
+			if tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected" {
 				validations, starts, pins = 88, 87, 58
 			}
 			if h.validations != validations || h.starts != starts || h.pins != pins {

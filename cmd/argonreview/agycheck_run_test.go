@@ -462,7 +462,7 @@ func TestAgyCheckCommandFailsClosed(t *testing.T) {
 	var out, stderr strings.Builder
 	code := agyCheckCommand([]string{"--home", h.o.home, "--agy", h.o.agy}, &out, &stderr, h.d)
 	if code != 1 || out.String() != "RESULT INVALID: preparing row directories failed\n" || stderr.Len() != 0 {
-		t.Fatalf("part A must refuse without running agy: %d %q %q", code, out.String(), stderr.String())
+		t.Fatalf("synthetic isolation must fail row preparation without running agy: %d %q %q", code, out.String(), stderr.String())
 	}
 	for _, args := range [][]string{{"agy-check"}, {"agy-check", "hook", "allow", filepath.Join(t.TempDir(), "unprepared")}} {
 		out.Reset()

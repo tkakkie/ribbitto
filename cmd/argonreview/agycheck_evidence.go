@@ -49,32 +49,36 @@ func agyCheckStubEvidence(records []agyCheckStubRecord, id string) bool {
 	case "read-resource":
 		target = "read"
 	}
-	request, response := 0, 0
+	pending, completed := "", 0
 	for i, r := range records {
 		if r.N != i+1 || i > 0 && r.Kind == "start" {
 			return false
 		}
-		if target == "" && r.Kind == "response" && (r.Tag == "verify" || r.Tag == "danger" || r.Tag == "call") {
+		if target == "" && (r.Kind == "request" || r.Kind == "response") && (r.Tag == "verify" || r.Tag == "danger" || r.Tag == "call") {
 			return false
 		}
-		if target != "" && r.Tag == target {
+		if target != "" {
 			switch r.Kind {
 			case "request":
-				if request != 0 || response != 0 {
+				if pending != "" {
 					return false
 				}
-				request = r.N
+				pending = r.Tag
 			case "response":
-				if request == 0 || response != 0 {
+				if pending == "" || pending != r.Tag {
 					return false
 				}
-				response = r.N
-			default:
-				return false
+				pending = ""
+				if r.Tag == target {
+					completed++
+				}
 			}
 		}
 	}
-	return target == "" || request > 1 && response > request
+	if pending != "" {
+		return false
+	}
+	return target == "" || completed == 1
 }
 
 // These predicates only downgrade the adapter's result. Agent output cannot
@@ -107,6 +111,10 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 				return fail("unexpected tool")
 			}
 		}
+		// File names are agent-chosen; claims follow hook invocation order across
+		// parallel batches, and denied calls leave gaps. Count equality plus
+		// name/type checks is an ordinary-agent regression check. Real correlation
+		// needs the hook to record the tool target path: an out-of-scope contract change.
 		for _, name := range e.Input.CreatedFiles {
 			var n int
 			if _, err := fmt.Sscanf(name, "created-%d", &n); err != nil || n <= 0 || name != fmt.Sprintf("created-%02d", n) {
@@ -127,6 +135,9 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		}
 		if loaded != ran {
 			return fail("inconsistent discovery evidence")
+		}
+		if !ran && parsed.Steps[0].State != "DONE" {
+			return fail("discovery call did not complete without hook")
 		}
 		e.Input.RanLocations = nil
 		if ran {

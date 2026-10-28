@@ -28,65 +28,86 @@ func agyCheckExecute(o agyCheckOptions, d agyCheckDeps) agyCheckResult {
 	if err != nil {
 		return agyCheckResult{InvalidReason: "finding check executable"}
 	}
-	var before, after agyCheckPin
-	var observations []agyCheckObservation
-	var loads []string
+	var results agyCheckRowResults
 	for _, row := range agyCheckExpected {
-		s, err := agyCheckScenarioFor(row.ID)
-		if err != nil {
-			return agyCheckResult{InvalidReason: "missing scenario"}
+		if err := agyCheckExecuteRow(o, x, m, binary, row, &results); err != nil {
+			return agyCheckResult{InvalidReason: err.Error()}
 		}
-		r, err := agyCheckNewRowDirs(m.Isolation, x.runner.files)
-		if err != nil {
-			return agyCheckResult{InvalidReason: "preparing row directories failed"}
-		}
-		config, fixtures, err := s.config(binary, row, r)
-		if err == nil && row.ID == "outside-read" {
-			err = x.runner.files.write(m.Isolation, s.probe(r), []byte("outside fixture\n"), true, 0o600)
-		}
-		if err != nil {
-			_ = x.runner.files.cleanup(m.Isolation, r.Run)
-			return agyCheckResult{InvalidReason: "preparing row configuration failed"}
-		}
-		observation := agyCheckObservation{ID: row.ID, Outcome: "collection failed"}
-		run, err := agyCheckRunAgy(context.Background(), o, x.runner, m, r, s.prompt(r, o.calls), config, fixtures, x.limit, x.ops, func(r agyCheckRowDirs) error {
-			e, diagnostic, err := agyCheckCollect(m.Isolation, r, s, x.runner.files)
-			if err != nil {
-				return err
-			}
-			parsed, parseErr := agyCheckTranscriptParse(e.Input.Transcript)
-			if parseErr == nil {
-				loads = append(loads, parsed.LoadedPaths...)
-			}
-			if diagnostic != "" {
-				observation.Outcome = diagnostic
-				return nil
-			}
-			observation = agyCheckEvidenceObservation(row, s, e)
-			return nil
-		})
-		if err != nil {
-			return agyCheckResult{InvalidReason: "row validation, pin, collection, restoration or cleanup failed"}
-		}
-		if len(observations) == 0 {
-			before = run.Before
-		}
-		after = run.After
-		if agyCheckPinReason(before, run.Before) != "" || agyCheckPinReason(before, after) != "" {
-			return agyCheckResult{InvalidReason: "pin changed between rows"}
-		}
-		if run.Code == 124 {
-			observation = agyCheckObservation{ID: row.ID, Outcome: "run timeout"}
-		}
-		if len(run.Stragglers) > 0 {
-			observation = agyCheckObservation{ID: row.ID, Outcome: "run left processes"}
-		}
-		// A nonzero exit can contain expected tool denials, but never repairs a
-		// missing/malformed result; parsing already discards every partial fact.
-		observations = append(observations, observation)
 	}
-	result := agyCheckEvaluate(before, after, observations, o.calls, "", loads...)
-	listing, err := agyCheckBuiltinListing(m.Home, x.runner.files)
+	return agyCheckAssemble(m, x.runner.files, results, o.calls)
+}
+
+type agyCheckRowResults struct {
+	before, after agyCheckPin
+	observations  []agyCheckObservation
+	loads         []string
+}
+
+// Both full-command and single-row checks use this collection and override path.
+func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMarker, binary string, row agyCheckRow, results *agyCheckRowResults) error {
+	s, err := agyCheckScenarioFor(row.ID)
+	if err != nil {
+		return errors.New("missing scenario")
+	}
+	r, err := agyCheckNewRowDirs(m.Isolation, x.runner.files)
+	if err != nil {
+		return errors.New("preparing row directories failed")
+	}
+	config, fixtures, err := s.config(binary, row, r)
+	if err == nil && row.ID == "outside-read" {
+		err = x.runner.files.write(m.Isolation, s.probe(r), []byte("outside fixture\n"), true, 0o600)
+	}
+	if err != nil {
+		_ = x.runner.files.cleanup(m.Isolation, r.Run)
+		return errors.New("preparing row configuration failed")
+	}
+	observation := agyCheckObservation{ID: row.ID, Outcome: "collection failed"}
+	run, err := agyCheckRunAgy(context.Background(), o, x.runner, m, r, s.prompt(r, o.calls), config, fixtures, x.limit, x.ops, func(r agyCheckRowDirs) error {
+		e, diagnostic, err := agyCheckCollect(m.Isolation, r, s, x.runner.files)
+		if err != nil {
+			return err
+		}
+		parsed, parseErr := agyCheckTranscriptParse(e.Input.Transcript)
+		if parseErr == nil {
+			results.loads = append(results.loads, parsed.LoadedPaths...)
+		}
+		if diagnostic != "" {
+			observation.Outcome = diagnostic
+			return nil
+		}
+		observation = agyCheckEvidenceObservation(row, s, e)
+		return nil
+	})
+	if err != nil {
+		return errors.New("row validation, pin, collection, restoration or cleanup failed")
+	}
+	if len(results.observations) == 0 {
+		results.before = run.Before
+	}
+	results.after = run.After
+	if agyCheckPinReason(results.before, run.Before) != "" || agyCheckPinReason(results.before, results.after) != "" {
+		return errors.New("pin changed between rows")
+	}
+	observation = agyCheckRunObservation(row, observation, run)
+	// A nonzero exit can contain expected tool denials, but never repairs a
+	// missing/malformed result; parsing already discards every partial fact.
+	results.observations = append(results.observations, observation)
+	return nil
+}
+
+func agyCheckRunObservation(row agyCheckRow, observation agyCheckObservation, run agyCheckRunResult) agyCheckObservation {
+	if run.Code == 124 {
+		observation = agyCheckObservation{ID: row.ID, Outcome: "run timeout"}
+	}
+	if len(run.Stragglers) > 0 {
+		observation = agyCheckObservation{ID: row.ID, Outcome: "run left processes"}
+	}
+	return observation
+}
+
+func agyCheckAssemble(m agyCheckMarker, f agyCheckFiles, results agyCheckRowResults, calls int) agyCheckResult {
+	result := agyCheckEvaluate(results.before, results.after, results.observations, calls, "", results.loads...)
+	listing, err := agyCheckBuiltinListing(m.Home, f)
 	if err != nil {
 		listing = nil
 	}

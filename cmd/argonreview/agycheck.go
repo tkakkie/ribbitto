@@ -196,17 +196,33 @@ func agyCheckPrintable(value string) string {
 	}, value)
 }
 
+// Bound agent-controlled diagnostics without limiting the evidence used to decide.
+const (
+	agyCheckPrintedLoads     = 20
+	agyCheckPrintedPathRunes = 256
+)
+
 func agyCheckRender(w io.Writer, r agyCheckResult) error {
 	var out strings.Builder
 	if len(r.Unlisted) > 0 {
 		fmt.Fprintln(&out, "LOADED BUT UNLISTED WORKSPACE HOOKS")
-		for _, load := range r.Unlisted {
+		shown := min(len(r.Unlisted), agyCheckPrintedLoads)
+		shortened := 0
+		for _, load := range r.Unlisted[:shown] {
 			protection := "UNPROTECTED: check differs"
 			if load.Protected {
 				protection = "PROTECTED by refused names"
 			}
-			fmt.Fprintf(&out, "%s: %s\n", protection, agyCheckPrintable(load.Path))
+			path := []rune(agyCheckPrintable(load.Path))
+			if len(path) > agyCheckPrintedPathRunes {
+				path = path[:agyCheckPrintedPathRunes]
+				shortened++
+				fmt.Fprintf(&out, "%s: %s... [truncated]\n", protection, string(path))
+			} else {
+				fmt.Fprintf(&out, "%s: %s\n", protection, string(path))
+			}
 		}
+		fmt.Fprintf(&out, "Unlisted paths: %d; omitted: %d; shortened: %d\n", len(r.Unlisted), len(r.Unlisted)-shown, shortened)
 	}
 	if r.BuiltinInfo != "" {
 		fmt.Fprintln(&out, r.BuiltinInfo)

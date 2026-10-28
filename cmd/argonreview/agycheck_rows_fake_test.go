@@ -110,6 +110,8 @@ func agyCheckRowsFake(data []byte) bool {
 		emit(map[string]any{"event": "hook_loaded", "path": ".agent/new/config.json"})
 	case "unprotected-load":
 		emit(map[string]any{"event": "hook_loaded", "path": "new/config.json"})
+	case "signal":
+		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 	case "timeout":
 		time.Sleep(time.Minute)
 	case "unparsed":

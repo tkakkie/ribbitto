@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,7 +15,7 @@ import (
 	"time"
 )
 
-const agyCheckHookTestDir = "/fictional-check/hook"
+const agyCheckHookTestDir = "/fictional-check/middle/parent/hook"
 
 type agyCheckHookFile struct {
 	bytes.Buffer
@@ -44,19 +45,25 @@ type agyCheckHookHarness struct {
 func agyCheckHookHarnessNew(t *testing.T) *agyCheckHookHarness {
 	t.Helper()
 	h := &agyCheckHookHarness{info: map[string]agyCheckInfo{
-		agyCheckHookTestDir: {os.ModeDir | 0o700, 501},
+		"/":                              {os.ModeDir | 0o755, 0},
+		"/fictional-check":               {os.ModeDir | 0o755, 0},
+		"/fictional-check/middle":        {os.ModeDir | 0o755, 0},
+		"/fictional-check/middle/parent": {os.ModeDir | 0o755, 0},
+		agyCheckHookTestDir:              {os.ModeDir | 0o700, 501},
 		agyCheckHookTestDir + "/" + agyCheckHookSentinel: {0o600, 501},
 		agyCheckHookTestDir + "/calls":                   {os.ModeDir | 0o700, 501},
 	}, files: make(map[string]*agyCheckHookFile)}
 	guard := func(path string) {
 		t.Helper()
 		// Fictional protected roots are intercepted before any filesystem access.
-		if !implementRunInside(agyCheckHookTestDir, path) || agyCheckSettingsPath(path) {
+		ancestor := path == "/" || strings.HasPrefix(agyCheckHookTestDir, path+"/")
+		if (!ancestor && !implementRunInside(agyCheckHookTestDir, path)) || agyCheckSettingsPath(path) {
 			t.Fatalf("forbidden filesystem access: %s", path)
 		}
 	}
 	h.d = agyCheckHookDeps{
-		uid: func() (int, int) { return 501, 501 }, stdin: strings.NewReader("ignored"),
+		current: func() (*user.User, error) { return &user.User{Uid: "501"}, nil },
+		uid:     func() (int, int) { return 501, 501 }, stdin: strings.NewReader("ignored"),
 		lstat: func(path string) (os.FileInfo, error) {
 			guard(path)
 			if info, ok := h.info[path]; ok {
@@ -180,17 +187,84 @@ func TestAgyCheckHookStateRefusals(t *testing.T) {
 			})
 		}
 	}
-	for _, real := range []int{0, 501} {
-		t.Run(fmt.Sprintf("effective uid zero, real %d", real), func(t *testing.T) {
+}
+
+func TestAgyCheckHookAncestors(t *testing.T) {
+	for _, tc := range []struct {
+		name, path string
+		mode       os.FileMode
+		err        error
+	}{
+		{"root", "/", os.ModeSymlink | 0o755, nil},
+		{"first", "/fictional-check", os.ModeSymlink | 0o755, nil},
+		{"middle", "/fictional-check/middle", os.ModeSymlink | 0o755, nil},
+		{"parent", filepath.Dir(agyCheckHookTestDir), os.ModeSymlink | 0o755, nil},
+		{"non-directory", "/fictional-check/middle", 0o755, nil},
+		{"lstat error", "/fictional-check/middle", os.ModeDir | 0o755, os.ErrPermission},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			h := agyCheckHookHarnessNew(t)
-			h.d.uid = func() (int, int) { return real, 0 }
+			h.info[tc.path] = agyCheckInfo{tc.mode, 0}
+			lstat := h.d.lstat
+			var visited []string
+			h.d.lstat = func(path string) (os.FileInfo, error) {
+				visited = append(visited, path)
+				if path == tc.path && tc.err != nil {
+					return nil, tc.err
+				}
+				return lstat(path)
+			}
+			var out, stderr strings.Builder
+			code := agyCheckHook([]string{"allow", agyCheckHookTestDir}, &out, &stderr, h.d)
+			if code != 1 || out.Len() != 0 || stderr.Len() == 0 || len(h.files) != 0 {
+				t.Fatalf("unsafe ancestor accepted: %d %q %q", code, out.String(), stderr.String())
+			}
+			// Metadata checks must stop at the bad component, before traversing it.
+			if len(visited) == 0 || visited[len(visited)-1] != tc.path {
+				t.Fatalf("walk did not stop at %s: %v", tc.path, visited)
+			}
+		})
+	}
+}
+
+func TestAgyCheckHookIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name, uid       string
+		real, effective int
+		err             error
+		want            int
+	}{
+		{"normal", "501", 501, 501, nil, 0},
+		{"real root", "501", 0, 501, nil, 1},
+		{"effective root", "501", 501, 0, nil, 1},
+		{"both root", "0", 0, 0, nil, 1},
+		{"real mismatch", "501", 502, 501, nil, 1},
+		{"effective mismatch", "501", 501, 502, nil, 1},
+		{"lookup mismatch", "502", 501, 501, nil, 1},
+		{"lookup failure", "501", 501, 501, os.ErrPermission, 1},
+		{"unparsable uid", "bad", 501, 501, nil, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := agyCheckHookHarnessNew(t)
+			h.d.uid = func() (int, int) { return tc.real, tc.effective }
+			h.d.current = func() (*user.User, error) { return &user.User{Uid: tc.uid}, tc.err }
+			// Match filesystem ownership to the real uid so a weakened identity
+			// predicate cannot be rescued by an unrelated ownership refusal.
 			for path, info := range h.info {
-				info.uid = uint32(real)
+				info.uid = uint32(tc.real)
 				h.info[path] = info
 			}
 			var out, stderr strings.Builder
-			if code := agyCheckHook([]string{"allow", agyCheckHookTestDir}, &out, &stderr, h.d); code != 1 || out.Len() != 0 || !strings.Contains(stderr.String(), "uid 0") {
-				t.Fatalf("root accepted: %d %q %q", code, out.String(), stderr.String())
+			code := agyCheckHook([]string{"allow", agyCheckHookTestDir}, &out, &stderr, h.d)
+			if code != tc.want {
+				t.Fatalf("identity exit: got %d want %d (%q)", code, tc.want, stderr.String())
+			}
+			if tc.want == 1 {
+				if out.Len() != 0 || stderr.Len() == 0 || len(h.files) != 0 {
+					t.Fatalf("identity refusal leaked output/claim: %q %q %d", out.String(), stderr.String(), len(h.files))
+				}
+			} else if out.String() != "{\"decision\":\"allow\"}\n" || stderr.Len() != 0 || len(h.files) != 1 {
+				t.Fatalf("normal identity refused: %q %q %d", out.String(), stderr.String(), len(h.files))
 			}
 		})
 	}
@@ -216,10 +290,14 @@ func TestAgyCheckHookUsage(t *testing.T) {
 }
 
 type agyCheckHookReader struct {
-	err error
+	err   error
+	check func()
 }
 
 func (r *agyCheckHookReader) Read([]byte) (int, error) {
+	if r.check != nil {
+		r.check()
+	}
 	return 0, r.err
 }
 
@@ -234,10 +312,31 @@ func TestAgyCheckHookStdin(t *testing.T) {
 		}
 	}
 	h := agyCheckHookHarnessNew(t)
-	h.d.stdin = &agyCheckHookReader{err: errors.New("input failure")}
+	h.d.stdin = &agyCheckHookReader{err: errors.New("input failure"), check: func() {
+		f := h.files[agyCheckHookTestDir+"/calls/000001"]
+		if f == nil || !f.closed || f.String() != "allow -\n" {
+			t.Error("stdin read preceded completed claim")
+		}
+	}}
 	agyCheckHookRun(t, h, []string{"allow", agyCheckHookTestDir}, 1, "", "agy-check hook: reading hook input: input failure\n")
-	if len(h.files) != 0 {
-		t.Fatal("read failure recorded a call")
+	f := h.files[agyCheckHookTestDir+"/calls/000001"]
+	if len(h.files) != 1 || f == nil || !f.closed || f.String() != "allow -\n" {
+		t.Fatal("stdin failure must leave exactly one completed claim")
+	}
+	// Also exercise removal of an already-written record on the real filesystem.
+	dir := agyCheckHookPrepared(t)
+	var out, stderr strings.Builder
+	code := agyCheckHook([]string{"allow", dir}, &out, &stderr, agyCheckHookFileDeps(&agyCheckHookReader{err: errors.New("input failure")}))
+	if code != 1 || out.Len() != 0 || !strings.Contains(stderr.String(), "reading hook input: input failure") {
+		t.Fatalf("stdin failure emitted a decision: %d %q %q", code, out.String(), stderr.String())
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "calls"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "000001" {
+		t.Fatalf("stdin failure must preserve exactly one claim: %v %v", entries, err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "calls", "000001"))
+	if err != nil || string(data) != "allow -\n" {
+		t.Fatalf("stdin failure changed claim: %q %v", data, err)
 	}
 }
 
@@ -329,7 +428,11 @@ func TestAgyCheckHookOutputFailures(t *testing.T) {
 
 func agyCheckHookPrepared(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	// macOS temporary paths can contain /var, which is a symlink.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -341,21 +444,45 @@ func agyCheckHookPrepared(t *testing.T) string {
 
 func agyCheckHookFileDeps(stdin io.Reader) agyCheckHookDeps {
 	d := agyCheckHookDefaults(stdin)
-	// Keep real ownership checks while allowing real-file tests in root CI;
-	// the effective uid is simulated, without requiring a second user.
-	d.uid = func() (int, int) { return os.Getuid(), 1 }
+	// Use the real owner's equal uid pair. These tests must fail under root,
+	// since the hook's nonzero process-identity condition still applies.
+	d.uid = func() (int, int) { return os.Getuid(), os.Getuid() }
 	return d
 }
 
 func TestAgyCheckHookConcurrent(t *testing.T) {
 	dir := agyCheckHookPrepared(t)
 	const workers, calls = 8, 7
-	var wg sync.WaitGroup
+	var wg, arrived sync.WaitGroup
+	arrived.Add(workers)
+	release := make(chan struct{})
+	var mu sync.Mutex
+	reached := 0
+	go func() {
+		arrived.Wait()
+		close(release)
+	}()
 	for range workers {
 		wg.Go(func() {
+			var arrival sync.Once
+			// A refusal before create must release the other workers without a timer.
+			defer arrival.Do(arrived.Done)
+			d := agyCheckHookFileDeps(strings.NewReader("{}"))
+			create := d.create
+			first := true
+			d.create = func(path string, flags int, mode os.FileMode) (io.WriteCloser, error) {
+				if first {
+					first = false
+					mu.Lock()
+					reached++
+					mu.Unlock()
+					arrival.Do(arrived.Done)
+					<-release
+				}
+				return create(path, flags, mode)
+			}
 			for range calls {
 				var out, stderr strings.Builder
-				d := agyCheckHookFileDeps(strings.NewReader("{}"))
 				if code := agyCheckHook([]string{"alternate", dir}, &out, &stderr, d); code != 0 || stderr.Len() != 0 {
 					t.Errorf("concurrent hook: %d %q", code, stderr.String())
 				}
@@ -363,6 +490,10 @@ func TestAgyCheckHookConcurrent(t *testing.T) {
 		})
 	}
 	wg.Wait()
+	<-release
+	if reached != workers {
+		t.Fatalf("first-claim barrier reached by %d workers, want %d", reached, workers)
+	}
 	entries, err := os.ReadDir(filepath.Join(dir, "calls"))
 	if err != nil {
 		t.Fatal(err)
@@ -428,8 +559,43 @@ func TestAgyCheckHookNoFollow(t *testing.T) {
 
 func TestAgyCheckHookDispatch(t *testing.T) {
 	var out, stderr strings.Builder
-	code := run([]string{"agy-check", "hook", "allow", filepath.Join(t.TempDir(), "unprepared")}, &agyCheckHookReader{err: errors.New("dispatch input failure")}, &out, &stderr)
+	code := run([]string{"agy-check", "hook", "allow", agyCheckHookPrepared(t)}, &agyCheckHookReader{err: errors.New("dispatch input failure")}, &out, &stderr)
 	if code != 1 || out.Len() != 0 || !strings.Contains(stderr.String(), "reading hook input: dispatch input failure") {
 		t.Fatalf("hook dispatch lost stdin: %d %q %q", code, out.String(), stderr.String())
+	}
+}
+
+func TestAgyCheckHookSymlinkedAncestor(t *testing.T) {
+	dir := agyCheckHookPrepared(t)
+	link := filepath.Join(agyCheckHookPrepared(t), "link")
+	if err := os.Symlink(filepath.Dir(dir), link); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr strings.Builder
+	code := agyCheckHook([]string{"allow", filepath.Join(link, filepath.Base(dir))}, &out, &stderr, agyCheckHookFileDeps(strings.NewReader("")))
+	if code != 1 || out.Len() != 0 || !strings.Contains(stderr.String(), "real directory") {
+		t.Fatalf("symlinked ancestor accepted: %d %q %q", code, out.String(), stderr.String())
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != agyCheckHookSentinel {
+		t.Fatalf("refused hook created files in target: %v", entries)
+	}
+}
+
+func TestAgyCheckHookSharedTags(t *testing.T) {
+	h := agyCheckHookHarnessNew(t)
+	agyCheckHookRun(t, h, []string{"deny", agyCheckHookTestDir, "home"}, 0, "{\"decision\":\"deny\",\"reason\":\"agy-check fixture denial\"}\n", "")
+	agyCheckHookRun(t, h, []string{"allow", agyCheckHookTestDir, "workspace"}, 0, "{\"decision\":\"allow\"}\n", "")
+	if len(h.files) != 2 {
+		t.Fatalf("shared hooks need two records: got %d", len(h.files))
+	}
+	for n, want := range []string{"deny home\n", "allow workspace\n"} {
+		f := h.files[fmt.Sprintf("%s/calls/%06d", agyCheckHookTestDir, n+1)]
+		if f == nil || !f.closed || f.String() != want {
+			t.Fatalf("shared hook %d lost tag/decision: %+v; want %q", n+1, f, want)
+		}
 	}
 }

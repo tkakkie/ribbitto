@@ -469,7 +469,7 @@ func TestAgyCheckCommandFailsClosed(t *testing.T) {
 		stderr.Reset()
 		code := run(args, strings.NewReader(""), &out, &stderr)
 		if len(args) > 1 {
-			if code == 0 || out.Len() != 0 || stderr.Len() == 0 {
+			if code != 1 || out.Len() != 0 || stderr.Len() == 0 {
 				t.Fatalf("unprepared hook did not fail closed: %d %q %q", code, out.String(), stderr.String())
 			}
 		} else if code != 2 || !strings.Contains(out.String(), "USAGE:") {

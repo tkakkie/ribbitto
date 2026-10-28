@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -34,18 +35,20 @@ var agyCheckHookModes = []agyCheckHookMode{
 }
 
 type agyCheckHookDeps struct {
-	uid    func() (int, int)
-	lstat  func(string) (os.FileInfo, error)
-	mkdir  func(string, os.FileMode) error
-	create func(string, int, os.FileMode) (io.WriteCloser, error)
-	sleep  func(time.Duration)
-	stdin  io.Reader
+	current func() (*user.User, error)
+	uid     func() (int, int)
+	lstat   func(string) (os.FileInfo, error)
+	mkdir   func(string, os.FileMode) error
+	create  func(string, int, os.FileMode) (io.WriteCloser, error)
+	sleep   func(time.Duration)
+	stdin   io.Reader
 }
 
 func agyCheckHookDefaults(stdin io.Reader) agyCheckHookDeps {
 	return agyCheckHookDeps{
-		uid:   func() (int, int) { return os.Getuid(), os.Geteuid() },
-		lstat: os.Lstat, mkdir: os.Mkdir, sleep: time.Sleep, stdin: stdin,
+		current: user.Current,
+		uid:     func() (int, int) { return os.Getuid(), os.Geteuid() },
+		lstat:   os.Lstat, mkdir: os.Mkdir, sleep: time.Sleep, stdin: stdin,
 		create: func(path string, flags int, mode os.FileMode) (io.WriteCloser, error) {
 			return os.OpenFile(path, flags, mode)
 		},
@@ -96,15 +99,42 @@ func agyCheckHookState(dir string, d agyCheckHookDeps) error {
 	if !agyCheckCleanPath(dir) || agyCheckSettingsPath(dir) {
 		return errors.New("hook directory must be absolute, clean, non-root and not a settings path")
 	}
-	uid, effective := d.uid()
-	if effective == 0 {
-		return errors.New("hook must not run as uid 0")
+	account, err := d.current()
+	if err != nil {
+		return fmt.Errorf("finding hook process user: %w", err)
+	}
+	real, effective := d.uid()
+	uid, err := agyCheckProcessIdentity(account, real, effective)
+	if err != nil {
+		return err
+	}
+	// Walk from / down so no lstat reaches through a symlinked ancestor.
+	// The check-then-create window remains. B3 and the preparation page must
+	// place state under the marker's isolation directory; this hook has no marker
+	// with which to verify that requirement.
+	component := string(filepath.Separator)
+	for _, part := range strings.Split(dir, string(filepath.Separator)) {
+		component = filepath.Join(component, part)
+		info, err := d.lstat(component)
+		if err != nil {
+			return fmt.Errorf("examining hook directory component %q: %w", component, err)
+		}
+		if !info.Mode().IsDir() {
+			return fmt.Errorf("hook directory component must be a real directory: %q", component)
+		}
 	}
 	if err := agyCheckHookPrivate(dir, true, uid, d); err != nil {
 		return err
 	}
-	// B3 must create this sentinel in a fresh state directory per row. Requiring
-	// deliberate preparation prevents accidental use as a production home hook.
+	// B3 must prepare a fresh state directory and sentinel per row. Their owner
+	// must equal the process uid; agyCheckValidate binds the username to the
+	// marker before every agy start (B3). This deliberate preparation prevents
+	// accidental production use. Calls stay separate from agent output where
+	// possible: the hook writes calls/ records, never agent prompts. Missing,
+	// contradictory or malformed records are differences in B3, never normal.
+	// Reconciliation checks ordinary-agent regressions, not adversarial tampering:
+	// an allow-everything agent can write records itself. A match never
+	// auto-approves trust of a new version.
 	return agyCheckHookPrivate(filepath.Join(dir, agyCheckHookSentinel), false, uid, d)
 }
 
@@ -131,8 +161,11 @@ func agyCheckHookClaim(dir, mode, tag string, d agyCheckHookDeps) (string, error
 	if tag == "" {
 		tag = "-"
 	}
-	// An allow-everything agent can itself write this evidence. It describes
-	// the default agent only; it is not tamper-proof production evidence.
+	// Hook-written calls/ records stay separate from agent output where possible,
+	// never supplied by agent prompts. B3 treats missing, contradictory or
+	// malformed records as differences. This is an ordinary-agent regression
+	// check: an allow-everything agent can write records itself, so a matching
+	// result never auto-approves trust of a new version.
 	for n := 1; n <= agyCheckHookCallCap; n++ {
 		file, err := d.create(filepath.Join(calls, fmt.Sprintf("%06d", n)), os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
 		if errors.Is(err, os.ErrExist) {
@@ -187,17 +220,18 @@ func agyCheckHook(args []string, stdout, stderr io.Writer, d agyCheckHookDeps) i
 		_, _ = fmt.Fprintf(stderr, "agy-check hook: %s\n", agyCheckPrintable(err.Error()))
 		return 1
 	}
-	// Consume the production guard's bounded input even though fixture decisions
-	// do not depend on its contents. Bytes beyond the bound are ignored.
-	if _, err := io.Copy(io.Discard, io.LimitReader(d.stdin, maxGuardInput+1)); err != nil {
-		return refuse(fmt.Errorf("reading hook input: %w", err))
-	}
 	if err := agyCheckHookState(args[1], d); err != nil {
 		return refuse(err)
 	}
 	word, err := agyCheckHookClaim(args[1], mode.name, tag, d)
 	if err != nil {
 		return refuse(err)
+	}
+	// Record before reading: never-closing or failing stdin must still leave a
+	// claim for the runner, since agy sees a refused hook as a deny. Consume the
+	// guard's bounded input; bytes beyond the bound are ignored.
+	if _, err := io.Copy(io.Discard, io.LimitReader(d.stdin, maxGuardInput+1)); err != nil {
+		return refuse(fmt.Errorf("reading hook input: %w", err))
 	}
 	decision := mode.decision
 	if mode.name == "alternate" {

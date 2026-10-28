@@ -25,10 +25,11 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 	if len(data) == 0 || len(data) > agyCheckTranscriptMaxBytes || !bytes.HasSuffix(data, []byte{'\n'}) {
 		return agyCheckTranscriptResult{}, errors.New("invalid transcript framing")
 	}
-	lines := bytes.Split(data[:len(data)-1], []byte{'\n'})
-	if len(lines) > agyCheckTranscriptMaxLines {
+	// Count before splitting so tiny-line floods cannot allocate a slice per line.
+	if bytes.Count(data, []byte{'\n'}) > agyCheckTranscriptMaxLines {
 		return agyCheckTranscriptResult{}, errors.New("transcript line limit exceeded")
 	}
+	lines := bytes.Split(data[:len(data)-1], []byte{'\n'})
 	var result agyCheckTranscriptResult
 	for i, line := range lines {
 		invalid := func() (agyCheckTranscriptResult, error) {
@@ -115,6 +116,11 @@ func agyCheckTranscriptString(fields map[string]json.RawMessage, name string) (s
 func agyCheckTranscriptPath(path string) bool {
 	if strings.ContainsAny(path, "\x00\\") {
 		return false
+	}
+	for i := 0; i < len(path); i++ {
+		if path[i] < 0x20 || path[i] == 0x7f {
+			return false
+		}
 	}
 	for _, part := range strings.Split(path, "/") {
 		if part == "" || part == "." || part == ".." {

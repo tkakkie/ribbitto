@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -54,6 +55,77 @@ func agyCheckTranscriptFailures() []struct{ name, data string } {
 		{"empty component", "{\"event\":\"hook_loaded\",\"path\":\"a//" + marker + "\"}\n" + end},
 		{"nul path", "{\"event\":\"hook_loaded\",\"path\":\"a\\u0000" + marker + "\"}\n" + end},
 		{"noncontiguous batch", strings.Replace(step, "}", `,"batch":"a"}`, 1) + step + strings.Replace(step, "}", `,"batch":"a"}`, 1) + end},
+	}
+}
+
+// TestAgyCheckTranscriptLineLimit isolates line bounds from byte and event bounds.
+func TestAgyCheckTranscriptLineLimit(t *testing.T) {
+	const message = "{\"event\":\"message\"}\n"
+	const end = "{\"event\":\"result\"}\n"
+	for _, tc := range []struct {
+		name  string
+		lines int
+		want  string
+	}{
+		{"boundary", agyCheckTranscriptMaxLines, ""},
+		{"flood", agyCheckTranscriptMaxLines + 1, "transcript line limit exceeded"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := strings.Repeat(message, tc.lines-1) + end
+			if len(data) >= agyCheckTranscriptMaxBytes || strings.Count(data, "\n") != tc.lines {
+				t.Fatal("fixture must isolate the line limit below the byte limit")
+			}
+			got, err := agyCheckTranscriptParse([]byte(data))
+			if tc.want == "" {
+				if err != nil || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
+					t.Fatalf("line boundary rejected or invented facts: %+v %v", got, err)
+				}
+			} else if err == nil || err.Error() != tc.want || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
+				t.Fatalf("line flood must fail with fixed diagnostic and no facts: %+v %v", got, err)
+			}
+		})
+	}
+}
+
+// TestAgyCheckTranscriptPaths keeps unsafe report text from retaining any facts.
+func TestAgyCheckTranscriptPaths(t *testing.T) {
+	const marker = "UNTRUSTED_TRANSCRIPT_MARKER"
+	const prefix = "{\"event\":\"hook_loaded\",\"path\":\"hooks.json\"}\n" +
+		"{\"event\":\"tool_step\",\"tool\":\"view_file\",\"state\":\"DONE\"}\n"
+	for _, tc := range []struct {
+		name, path string
+		invalid    bool
+	}{
+		{"newline", "\n" + marker, true},
+		{"carriage return", "\r" + marker, true},
+		{"tab", "\t" + marker, true},
+		{"escape", "\x1b" + marker, true},
+		{"control one", "\x01" + marker, true},
+		{"delete", "\x7f" + marker, true},
+		{"later component", "hooks/" + marker + "\n.json", true},
+		{"ordinary", ".agent/hooks.json", false},
+		// Spaces and printable non-ASCII bytes cannot inject ASCII report controls;
+		// rejecting them would unnecessarily exclude otherwise valid workspace names.
+		{"spaces", "my hooks/hooks file.json", false},
+		{"non ASCII", "フック/設定.json", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path, err := json.Marshal(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := prefix + "{\"event\":\"hook_loaded\",\"path\":" + string(path) + "}\n{\"event\":\"result\"}\n"
+			got, err := agyCheckTranscriptParse([]byte(data))
+			if tc.invalid {
+				if err == nil || err.Error() != "invalid transcript event at line 3" || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
+					t.Fatalf("unsafe path must fail with fixed diagnostic and no facts: %+v %v", got, err)
+				}
+				return
+			}
+			if err != nil || fmt.Sprint(got.Steps) != "[{view_file DONE }]" || len(got.LoadedPaths) != 2 || got.LoadedPaths[0] != "hooks.json" || got.LoadedPaths[1] != tc.path {
+				t.Fatalf("valid path lost ordered facts: %+v %v", got, err)
+			}
+		})
 	}
 }
 

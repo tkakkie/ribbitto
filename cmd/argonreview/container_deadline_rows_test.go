@@ -118,6 +118,12 @@ func characterizeDeadlineRow(t *testing.T, check string, row deadlineRow, inject
 			}
 			if timeout == containerTimeout || row.stage == "before" || row.stage == "finishReport" || row.interruption == context.Canceled {
 				<-ctx.Done()
+				// Err takes the context's lock, which its cancellation holds while
+				// it cancels every child: after this call the run's own context has
+				// seen the parent's deadline even when the aggregator already
+				// cancelled the runner's context (a malformed stream) and the wait
+				// on activeRun below returns at once.
+				_ = ctx.Err()
 			}
 			// A parent's Done can close before cancellation reaches its child.
 			// The verdict reads the derived run context, so wait for it too.

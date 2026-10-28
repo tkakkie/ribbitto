@@ -58,8 +58,11 @@ or duplicate key (including escaped spellings), missing value, `null` or number.
 Examples accepted by the validator are
 `TestBrowser/drafts-markers/sidebar-sse`,
 `TestBrowser/quote/scripts=true/width=1280` and `TestTopicPostBrowser`.
-Validation precedes switch/gate admission, reservation and source copying;
-invalid inputs build no container arguments and start no container.
+For an invalid package or run, the internal `containerVerifier.verifyBrowser`
+caller receives an error and an empty summary from `runContainerExecution`
+before any switch or gate read, reservation, copy or container. The package
+error is `browser package is not allowed`; run errors identify the violated
+validator rule. CLI/MCP exposure awaits B3b.
 
 ## Switch and admission order
 
@@ -120,7 +123,6 @@ NOT VERIFIED: browser check busy
 NOT VERIFIED: the named test did not run: <name>
 NOT VERIFIED: a test outside the named test ran
 NOT VERIFIED: too many tests ran (<k>, limit 64); name fewer tests
-FAILED: invalid browser run
 ```
 
 Inherited test-stream refusals remain exact:

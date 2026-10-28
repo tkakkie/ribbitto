@@ -1,7 +1,6 @@
 # Browser preflight and enabling
 
-**Merged but not in force:** the internal browser runner is merged;
-nothing here enables or authorizes anything. For the candidate, see
+**Merged but not in force:** nothing here enables or authorizes anything. See
 [operation](argon-verify-browser.md),
 [security records](argon-verify-browser-record.md) and
 [image updates](argon-verify-browser-updates.md).
@@ -13,8 +12,8 @@ the maintainer's instruction; the host image build in chat after listing downloa
 preflight window and its temporary two-home swap; the production launcher
 update (date, commit and procedure fresh; past results are not approval);
 stage B enabling; `browser-mode on`; and any scheduled task (follow-up).
-Later Chromium updates repeat the host-build and launcher-update approvals
-through the [update path](argon-verify-browser-updates.md#update-path).
+Later updates repeat build/update approvals through the
+[update path](argon-verify-browser-updates.md#update-path).
 
 ## Provisioning before enabling
 
@@ -44,8 +43,10 @@ Claude prepares and records these preconditions under the host approvals:
    and make its `browser-check-record --init` entry through the frozen
    wrapper, following every [initialization check](argon-verify-browser-record.md#initial-and-routine-recording):
    regular uid-owned switch, uid-owned 0500 `implementer/`, regular
-   `verify-mode` beside it; switch 0400. The gate directory also holds
-   `browser-security-check.lock` for record writers.
+   `verify-mode` beside it. The command checks location, not switch content
+   or mode; Claude or the host-side frozen wrapper with its pinned binary
+   hash must confirm `off` and 0400 before `--init` as operator rules.
+   The gate directory also holds `browser-security-check.lock` for writers.
 
 ## Chromium mask preflight
 
@@ -58,10 +59,10 @@ On the real image, verify with `dpkg -L chromium` that the executable files
 needed to launch Chromium sit under `/usr/lib/chromium`, the directory masked
 for every non-browser check by
 `--tmpfs /usr/lib/chromium:ro,noexec,nosuid,nodev,size=1m`.
-Only `test-browser` omits it. This separate tmpfs mount neither writes to
-nor makes the read-only root writable.
-The argument tests also reject later overlapping mounts or browser
-environment/script overrides that would defeat the mask.
+Only `test-browser` omits it. This tmpfs neither writes to nor makes the
+read-only root writable.
+Argument tests reject later overlapping mounts and browser
+environment/script overrides that defeat the mask.
 
 Verify that a non-browser check cannot launch Chromium on that image and
 run one ordinary check with the mask before the launcher update. The
@@ -69,14 +70,27 @@ go-rod helpers skip for a missing or unlaunchable browser without
 `RIBBITTO_REQUIRE_BROWSER=1`; non-browser checks do not set it. A wrapper
 found on `PATH` alone is not evidence that its masked binary can launch.
 Record the skip/launch refusal; unit tests establish neither timing nor
-a real browser run. The mask must be harmless
-with `--read-only`, including on the image without Chromium.
+a real browser run. The mask must be harmless with `--read-only`, even
+without Chromium.
+A launch-capable executable outside `/usr/lib/chromium`, or a masked
+non-browser check that launches Chromium, means no launcher update and a
+report on #1908 before A2; nothing is enabled.
 
 ## Numbered browser probes
 
-The probes run through the public `test-browser` call of the candidate
-binary. Use deterministic conditions; timing-dependent contention is never
-a pass condition. Argon reads each result inline. Keep stage A's refusal,
+Browser probes run only inside the approved preflight window on the
+candidate binary, through its public `test-browser` call. Under #1908's
+Approvals item 3 ("the preflight window and its temporary two-home swap"),
+set switch and gate states only inside that temporary swap: probes 1–5
+require `browser-mode` reading `on` and a fresh gate; probe 6 varies them.
+Before the window ends, restore production state (`browser-mode` `off`,
+the production gate untouched) and record restoration evidence on #1700.
+Approval 3 never authorizes production `browser-mode on`: that needs
+approval 6, after launcher update (4) and stage B enabling (5). A passing
+window authorizes nothing else (#1908 Approvals 3–6; Enabling sequence 6–8).
+
+Use deterministic conditions; timing-dependent contention never passes.
+Argon reads each result inline. Keep stage A's refusal,
 smoke, restoration and evidence requirements from
 [extended preflight](argon-verify.md#extended-preflight) and
 [#1700's stage A obligations](argon-workers-operation.md#updates-and-capacity).
@@ -110,9 +124,11 @@ smoke, restoration and evidence requirements from
    `budget-start` waits out the browser holder; `budget-start` refuses a
    running container, a wrong ID or wrong labels. Run one full Codex database
    lifecycle under its recorded-ID and process checks.
-6. **Switch/gate:** `off`, missing or malformed switches from worker 1,
+6. **Switch/gate:** vary states only inside the temporary swap above.
+   `off`, missing or malformed switches from worker 1,
    worker 2 and `container-check` give `NOT VERIFIED: browser check paused`
-   with no container started. Expired, future or missing gate entries give
+   with no container started. With the switch `on`, expired, future or
+   missing gate entries give
    `NOT VERIFIED: browser check paused: security check overdue`.
    `browser-check-record` refuses expired refresh while the switch is `on`.
    The [emergency pause](argon-verify-browser.md#removal-authority-and-emergency-pause)
@@ -141,23 +157,25 @@ smoke, restoration and evidence requirements from
    trusted binary at that fixed commit; use this one candidate throughout.
 3. Meet the provisioning preconditions above and require the old launcher's
    sweep clean before switching. Obtain the separate window/two-home-swap
-   approval; run one window with the browser probes, the mask preflight,
+   approval (3); apply the temporary-state/restoration rule above while
+   running the browser probes, the mask preflight,
    stage A smoke and #1700 stage B's
    [write-back probes](argon-verify-writeback.md).
    Do not substitute browser results for stage B: each stage keeps its own
    pass, record and enabling word, on the same candidate in the same window.
 4. Record the browser stage on #1700 in its required format, with each
-   deterministic pass/fail and unmet item; retain the commands, logs and
-   restoration evidence required by extended preflight. Stage B keeps its
-   separate record. Past results are not approval.
-5. Obtain the separate launcher-update approval. Switch both workers in one
+   deterministic pass/fail and unmet item; retain extended preflight's
+   commands, logs and restoration evidence under the rule above. Stage B
+   keeps its separate record. Past results are not approval.
+5. Obtain the separate launcher-update approval (4). Switch both workers in one
    window and every container-starting caller to the new binary; include
    smoke and rollback checks. The new launcher's sweep must run before
    reverting for rollback. The smoke row for `test-browser` is the paused
    row above, not unknown-check refusal.
-6. Obtain and record stage B's enabling word and, separately, the
-   maintainer's approval for `browser-mode on`, in that order, in this
-   window or later. List every unmet item. Only later documentation pull
+6. After the launcher update, obtain and record stage B's enabling word
+   (approval 5), then the separate production `browser-mode on` approval
+   (6), in that window or later. Approval 3 and its results supply neither.
+   List every unmet item. Only later documentation pull
    requests state that the stages are in force. Eligibility widening
    remains its own process issue, after preflight, launcher update,
    `browser-mode on` and smoke.

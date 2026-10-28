@@ -11,7 +11,7 @@ establish the completion being recorded.
 
 Only `argonreview browser-check-record` writes
 `/var/cache/argonreview/browser-security-check`; it is host-only, never an
-Argon, guard or MCP command. The runner never reads the tracking issue or
+Argon, guard or MCP command. The runner never reads tracking issue #1910 or
 fetches the record URL. It reads the gate on every `test-browser` call
 after the switch and before reservation or copy.
 
@@ -47,7 +47,7 @@ and reading the previous entry, so waiting cannot bypass expiry.
 
 ## Initial and routine recording
 
-Claude first completes the tracking issue's weekly record. Initialize only
+Claude first completes tracking issue #1910's weekly record. Initialize only
 through a frozen wrapper in worker 1's `implementer/` (0500). It hard-codes
 worker 1's switch path and pins the binary hash as `run.zsh` does for
 `verify-mode`. The command form used by that wrapper is:
@@ -58,8 +58,11 @@ argonreview browser-check-record --init --browser-mode <abs path> --completed-at
 
 `--init` requires a regular uid-owned switch file in a real uid-owned
 directory of exactly 0500, also containing a regular `verify-mode` (no
-symlink). It checks location, not whether the switch reads `on`; retain
-the operational file mode 0400. It never overwrites an existing gate,
+symlink). These are location checks; the command checks neither switch
+content nor mode 0400. Before `--init`, Claude or the host-side frozen
+wrapper with its pinned binary hash must confirm that the switch reads
+`off` and is mode 0400: both are operator rules. It never overwrites an
+existing gate,
 including a symlink. Changing the recorded path requires the maintainer's
 approval to remove the gate first.
 
@@ -77,8 +80,9 @@ supplies the maintainer's re-enabling approval. The command can record an
 already old completion, but that does not make the runner gate fresh.
 
 Exit 0 prints `browser-check-record: recorded`; usage/field errors exit 2,
-recording errors exit 1. Success records supplied completion data; it does
-not establish that the weekly check was complete or fetch its sources.
+recording errors exit 1. Exit 1 also covers failure to write the success
+line after publishing the entry; re-read the gate before retrying. Success
+records supplied data, not proof of completeness or source fetches.
 
 ## Refusals
 
@@ -110,3 +114,13 @@ and its system error: `opening security check directory`,
 `syncing security check directory`. Existing-gate initialization fails at
 publication. Diagnose the named step; do not treat an error as recording
 success or as approval to remove or replace trusted state.
+
+## Update costs
+
+Later Debian Chromium fixes repeat the full
+[update path](argon-verify-browser-updates.md#update-path), including package
+diff review. Every update costs a tier A pin pull request, an approved
+host build, a tier A image-ID pull request, a preflight subset and a separately
+approved launcher update; this can recur about weekly. The issue's image
+estimate is roughly +1 GB (2.82 GB versus 1.77 GB); the build record must
+establish the actual size.

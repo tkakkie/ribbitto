@@ -13,16 +13,16 @@ import (
 	"unicode/utf8"
 )
 
-const implementConfigUsage = "implement-config --mode off|on --binary <abs path> --guard-dir <abs path> [--trusted-source <abs path> --worktree <abs path>] --out <dir>"
+const implementConfigUsage = "implement-config --mode off|on --binary <abs path> --guard-dir <abs path> [--trusted-source <abs path> --worktree <abs path>] [--browser-mode <abs path>] --out <dir>"
 
 type implementConfig struct {
-	verify                                  bool
-	binary, guardDir, source, worktree, out string
+	verify                                               bool
+	binary, guardDir, source, worktree, out, browserMode string
 }
 
 func parseImplementConfig(args []string) (implementConfig, error) {
 	var c implementConfig
-	values := map[string]string{"--mode": "", "--binary": "", "--guard-dir": "", "--trusted-source": "", "--worktree": "", "--out": ""}
+	values := map[string]string{"--mode": "", "--binary": "", "--guard-dir": "", "--trusted-source": "", "--worktree": "", "--out": "", "--browser-mode": ""}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i += 2 {
 		flag := args[i]
@@ -40,9 +40,17 @@ func parseImplementConfig(args []string) (implementConfig, error) {
 	if values["--mode"] != "off" && values["--mode"] != "on" {
 		return c, errors.New("mode must be off or on")
 	}
-	c = implementConfig{values["--mode"] == "on", values["--binary"], values["--guard-dir"], values["--trusted-source"], values["--worktree"], values["--out"]}
+	c = implementConfig{values["--mode"] == "on", values["--binary"], values["--guard-dir"], values["--trusted-source"], values["--worktree"], values["--out"], values["--browser-mode"]}
+	if !c.verify && seen["--browser-mode"] {
+		return c, errors.New("browser-mode requires mode on")
+	}
 	if !c.verify && (seen["--trusted-source"] || seen["--worktree"]) {
 		return c, errors.New("off mode forbids trusted-source and worktree")
+	}
+	if seen["--browser-mode"] {
+		if err := browserModePath(c.browserMode); err != nil {
+			return c, err
+		}
 	}
 	for _, flag := range []string{"--binary", "--guard-dir", "--out", "--trusted-source", "--worktree"} {
 		if !c.verify && (flag == "--trusted-source" || flag == "--worktree") {
@@ -145,12 +153,12 @@ func implementConfigOutside(out, root string) error {
 	}
 }
 
-func implementConfigFiles(verify bool, binary, guardDir, source, worktree string) (hooks, settings, mcp []byte, err error) {
+func implementConfigFiles(verify bool, binary, guardDir, source, worktree, browserMode string) (hooks, settings, mcp []byte, err error) {
 	hooks, err = implementerHooks(verify, binary, guardDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	mcp, err = implementerMCPConfig(verify, binary, source, worktree)
+	mcp, err = implementerMCPConfig(verify, binary, source, worktree, browserMode)
 	return hooks, implementerSettings(verify), mcp, err
 }
 
@@ -176,7 +184,7 @@ func writeImplementConfigFile(path string, data []byte) error {
 }
 
 func writeImplementConfig(c implementConfig, fs implementConfigIO) (string, error) {
-	hooks, settings, mcp, err := implementConfigFiles(c.verify, c.binary, c.guardDir, c.source, c.worktree)
+	hooks, settings, mcp, err := implementConfigFiles(c.verify, c.binary, c.guardDir, c.source, c.worktree, c.browserMode)
 	if err != nil {
 		return "", err
 	}
@@ -219,7 +227,7 @@ func writeImplementConfig(c implementConfig, fs implementConfigIO) (string, erro
 		}
 		_, _ = fmt.Fprintf(&report, "%x  %s\n", sha256.Sum256(data[i]), name)
 	}
-	if err := checkImplementerConfig(c.verify, data[0], data[1], data[2], c.binary, c.source, c.worktree, c.guardDir); err != nil {
+	if err := checkImplementerConfig(c.verify, data[0], data[1], data[2], c.binary, c.source, c.worktree, c.guardDir, c.browserMode); err != nil {
 		return "", fmt.Errorf("checking written configuration: %w", err)
 	}
 	if err := implementConfigEmptyOut(c.out); err != nil {

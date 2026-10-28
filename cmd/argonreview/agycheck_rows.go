@@ -125,14 +125,11 @@ func agyCheckCollect(isolation string, r agyCheckRowDirs, s agyCheckScenario, f 
 	claims, claimErr := agyCheckReadClaims(isolation, r.State, f)
 	records, stubErr := agyCheckReadStubRecords(isolation, r.Stub, f)
 	e.Claims, e.Stub = claims, records
-	// These two intentionally evidence-free rows judge only the parsed tool
-	// steps. Their claims cannot make an absent tool exercisable or trustworthy.
-	url := s.ID == "read-url" || s.ID == "execute-url"
 	diagnostic := ""
 	if claimErr != nil || stubErr != nil {
 		diagnostic = "invalid call records"
 	}
-	if !url && diagnostic != "" {
+	if diagnostic != "" {
 		return e, diagnostic, nil
 	}
 	path := s.probe(r)

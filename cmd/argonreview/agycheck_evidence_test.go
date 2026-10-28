@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -256,33 +255,6 @@ func TestAgyCheckOutputBlocks(t *testing.T) {
 				if tc.code != 0 && strings.Contains(text, agyCheckSuccessLine) {
 					t.Fatal("unprotected load printed success")
 				}
-			}
-		})
-	}
-}
-
-func TestAgyCheckURLClaimsIgnored(t *testing.T) {
-	for _, id := range []string{"read-url", "execute-url", "task-off"} {
-		t.Run(id, func(t *testing.T) {
-			m, r, f := agyCheckTestRow(t)
-			defer func() {
-				if err := f.cleanup(m.Isolation, r.Run); err != nil {
-					t.Error(err)
-				}
-			}()
-			agyCheckTestWrite(t, filepath.Join(r.Row, "out.jsonl"), []byte("{\"event\":\"result\"}\n"), 0o600)
-			agyCheckTestWrite(t, filepath.Join(r.State, "calls/000001"), []byte("malformed record\n"), 0o600)
-			s, _ := agyCheckScenarioFor(id)
-			e, diagnostic, err := agyCheckCollect(m.Isolation, r, s, f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			url := id == "read-url" || id == "execute-url"
-			if (diagnostic == "") != url {
-				t.Fatalf("URL claim exception widened or lost: diagnostic=%q", diagnostic)
-			}
-			if url && !agyCheckClassify(agyCheckEvidenceObservation(agyCheckObserveFindRow(t, id), s, e), 30).OK {
-				t.Fatal("URL claims changed observation")
 			}
 		})
 	}

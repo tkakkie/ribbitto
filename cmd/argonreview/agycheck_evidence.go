@@ -13,6 +13,29 @@ type agyCheckEvidence struct {
 	Probe  bool
 }
 
+func agyCheckURLStubEvidence(records []agyCheckStubRecord) bool {
+	if len(records) == 0 {
+		return true
+	}
+	// The placed MCP configuration can start the stub on every row. As on
+	// denied MCP rows, a handshake is not a tool invocation; tolerate only
+	// its known tags, never resource or tool calls (including unknown tags).
+	for _, r := range records {
+		if r.Kind == "start" && r.Tag == "-" {
+			continue
+		}
+		if r.Kind != "request" && r.Kind != "response" {
+			return false
+		}
+		switch r.Tag {
+		case "initialize", "initialized", "toolslist", "ping":
+		default:
+			return false
+		}
+	}
+	return agyCheckStubEvidence(records, "")
+}
+
 func agyCheckOneClaim(claims []agyCheckClaim, tag, word string) bool {
 	return len(claims) == 1 && claims[0].N == 1 && claims[0].Tag == tag && claims[0].Word == word
 }
@@ -94,6 +117,15 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		return fail(agyCheckTranscriptUnparsed)
 	}
 	if row.ID == "read-url" || row.ID == "execute-url" {
+		if len(parsed.Steps) != 0 {
+			return fail("unexpected tool activity")
+		}
+		if len(e.Claims) != 0 {
+			return fail("unexpected hook claim")
+		}
+		if !agyCheckURLStubEvidence(e.Stub) {
+			return fail("invalid stub evidence")
+		}
 		return agyCheckObserveRow(row, e.Input)
 	}
 	if row.Group == "reconciliation" {

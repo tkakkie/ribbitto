@@ -464,10 +464,15 @@ func TestAgyCheckCommandFailsClosed(t *testing.T) {
 	if code != 1 || out.String() != "RESULT INVALID: row execution is not implemented yet\n" || stderr.Len() != 0 {
 		t.Fatalf("part A must refuse without running agy: %d %q %q", code, out.String(), stderr.String())
 	}
-	for _, args := range [][]string{{"agy-check"}, {"agy-check", "hook", "allow", h.m.Isolation}} {
+	for _, args := range [][]string{{"agy-check"}, {"agy-check", "hook", "allow", filepath.Join(t.TempDir(), "unprepared")}} {
 		out.Reset()
 		stderr.Reset()
-		if code := run(args, strings.NewReader(""), &out, &stderr); code != 2 || !strings.Contains(out.String(), "USAGE:") {
+		code := run(args, strings.NewReader(""), &out, &stderr)
+		if len(args) > 1 {
+			if code == 0 || out.Len() != 0 || stderr.Len() == 0 {
+				t.Fatalf("unprepared hook did not fail closed: %d %q %q", code, out.String(), stderr.String())
+			}
+		} else if code != 2 || !strings.Contains(out.String(), "USAGE:") {
 			t.Fatalf("dispatch/hook form did not fail closed: %d %q", code, out.String())
 		}
 	}

@@ -30,6 +30,11 @@ its 21 entries match worker 1's trusted list.
 The wrappers will pass `--browser-mode <abs path>` for browser checks.
 See [verify operation](argon-verify-operation.md) for the flags and the `browser-check-record` command;
 this support is merged but not in force.
+Nothing here enables or authorizes anything for the browser check.
+Both workers' run/check wrappers must pass worker 1's single `browser-mode`
+path beside `verify-mode`; worker 2 never uses a separate copy. Follow the
+[browser switch rules](argon-verify-browser.md#switch-and-admission-order)
+and [separate approvals](argon-verify-browser-preflight.md#separate-approvals).
 
 ## Assignment
 

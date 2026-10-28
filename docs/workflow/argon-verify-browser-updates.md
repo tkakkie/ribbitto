@@ -5,6 +5,8 @@ pinned, the launcher is unchanged, and nothing here enables the browser
 check (#1908). Building, pinning, the launcher update and `browser-mode on`
 each need the maintainer's separate approval. This page records PR A's
 recipe and update contract; it does not authorize those later steps.
+Nothing here enables or authorizes anything; the
+[preflight and approvals](argon-verify-browser-preflight.md) remain separate.
 PR A changes no runner, flags or launcher. B3a implements the masking below
 as a precondition for A2; A2 must not merge before B3a is merged.
 
@@ -131,12 +133,55 @@ build are required, in this order:
    Third, build a candidate binary from a pinned commit that includes A2.
    Its integrated preflight must verify `dpkg -L chromium` places the binary
    under the masked directory and that no non-browser check can run Chromium
-   on the real image. The launcher must not be updated
+   on the real image. Follow the full
+   [mask preflight](argon-verify-browser-preflight.md#chromium-mask-preflight),
+   including an ordinary masked check and verification that the separate
+   tmpfs mount is harmless with `--read-only`. The launcher must not be updated
    until that preflight succeeds; then update it on the maintainer's
    separate approval. The preflight and the launcher update each need that
    approval.
 
 A later Debian security fix to Chromium repeats this path, including the
-package diff review. Emergency pausing is covered by the browser-check
-pages that come with the browser check itself. The weekly check and the
-14-day rule are added to this page with the browser pages of #1908 (PR D).
+package diff review. Every update costs a tier A pin pull request, an approved
+host build, a tier A image-ID pull request, a preflight subset and a separately
+approved launcher update; this can recur about weekly. The issue's image
+estimate is roughly +1 GB (2.82 GB versus 1.77 GB); the build record must
+establish the actual size.
+
+## Weekly check and expiry
+
+Claude checks by hand **every Monday (JST)** and records it on the weekly
+tracking issue. Use that issue's maintainer-defined items and sources as
+the record; this page adds no substitute item list. Fetch every source and
+finish every item. A record counts only with **`Result: complete`** and
+every item done and every source fetched. An incomplete record does not
+reset the clock.
+
+After each complete record, Claude runs the host-only
+[`browser-check-record`](argon-verify-browser-record.md#initial-and-routine-recording)
+with its completion time and record URL. The first entry uses `--init`
+through the frozen wrapper; routine updates take no switch path. Do not
+record a completion time for a check that is incomplete.
+
+If **14 days or more** have passed since the last complete record, or none
+exists, Claude writes `off` to `browser-mode`. Re-enabling always needs the
+maintainer. At every session start and before any Argon run or
+`container-check`, Claude checks the switch itself against this rule.
+The runner's [gate](argon-verify-browser-record.md#gate-file) enforces expiry
+mechanically at each browser call without waiting for a session: an entry
+exactly 14 days old is expired. Missing, malformed, unsafe or future entries
+also fail closed. Refreshing an expired entry while its switch reads `on`
+is refused; pausing, refreshing and re-enabling are distinct steps.
+Scheduled monitoring that flips the switch remains a follow-up and needs
+its own approval.
+
+## Security fixes and emergency pause
+
+Exploitation in the wild, Critical severity, container escape, or an
+exploitable High or above with serious impact without the sandbox triggers
+Claude's immediate [six-step emergency pause](argon-verify-browser.md#removal-authority-and-emergency-pause):
+switch off, list by browser label, apply full-ID emergency removal checks,
+sweep, confirm no browser container or copy and every slot free, record and
+tell the maintainer. Other fixes start the update path immediately.
+Neither a complete weekly record nor a fixed image supplies re-enabling
+approval.

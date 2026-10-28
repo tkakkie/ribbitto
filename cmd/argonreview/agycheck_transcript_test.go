@@ -191,10 +191,10 @@ func TestAgyCheckTranscriptBatches(t *testing.T) {
 // TestAgyCheckTranscriptOutcomes cross-checks the mapping domain against the
 // core table, including both non-exercisable URL rows and silent exit 0.
 func TestAgyCheckTranscriptOutcomes(t *testing.T) {
-	if len(agyCheckTranscriptTools) != 20 {
-		t.Fatal("tool mapping must cover exactly 20 rows")
+	if len(agyCheckTranscriptTools) != 22 {
+		t.Fatal("tool mapping must cover exactly 22 rows")
 	}
-	for _, pair := range strings.Fields(`hook-decision=write_to_file hook-exit2=write_to_file hook-exit1=write_to_file hook-missing=write_to_file hook-timeout=write_to_file hook-unparseable=write_to_file hook-silent=write_to_file hook-precedence=write_to_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_to_file outside-read=view_file`) {
+	for _, pair := range strings.Fields(`hook-decision=write_to_file hook-exit2=write_to_file hook-exit1=write_to_file hook-missing=write_to_file hook-timeout=write_to_file hook-unparseable=write_to_file hook-silent=write_to_file hook-precedence=write_to_file hook-same-name-agent=write_to_file hook-same-name-agents=write_to_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_to_file outside-read=view_file`) {
 		id, tool, _ := strings.Cut(pair, "=")
 		if agyCheckTranscriptTools[id] != tool {
 			t.Fatalf("tool name for %s: %q want %q", id, agyCheckTranscriptTools[id], tool)
@@ -236,7 +236,7 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 			}
 		})
 	}
-	if count != 20 || agyCheckTranscriptOutcome(agyCheckRow{ID: "unknown"}, nil) != "unknown row" {
+	if count != 22 || agyCheckTranscriptOutcome(agyCheckRow{ID: "unknown"}, nil) != "unknown row" {
 		t.Fatal("mapping domain drifted")
 	}
 }

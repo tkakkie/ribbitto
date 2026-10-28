@@ -14,7 +14,7 @@ approved". Its final line is:
 
 An allow-everything agent can write call records (maintainer accepted,
 2026-10-28, [#1890][issue]).
-Production's guard has no decision log; reconciliation provides no production proof.
+Reconciliation is no production proof: the guard keeps no decision log.
 
 ## Isolation and preparation
 
@@ -65,7 +65,14 @@ Claude follows this order **before trust**, at `implement-check`'s first
    After sign-in and first start, before the check, the maintainer saves a clean
    home baseline (contents, permissions, absences, sign-in, configuration, marker
    and post-start builtin/) in maintainer-owned storage beyond agent write access.
-2. Claude checks placement hashes and installed/copy agy SHA-256 equality.
+2. Before the check, Claude builds the candidate
+   `implementer/builtin.agy-<version>.txt` by hand from the home's post-start
+   `builtin/` (as on 2026-10-27): regular files,
+   dotfiles included, sorted by relative path in byte order (`LC_ALL=C`), one
+   `<sha256>  ./<path>` line each, ending in newline (the format
+   `implementcheck.go` reads; 1 MiB cap, no symlinks). No tool writes it. Record its SHA-256 and keep the file with the
+   baseline, beyond agent write access: allow-hook rows can change `builtin/`.
+3. Claude checks placement hashes and installed/copy agy SHA-256 equality.
    As a **normal-user host step**, hash account shared settings immediately
    before launch and after completion; record both. Changes invalidate the run.
    This is detection only; neither tool nor dedicated user accesses that file.
@@ -75,33 +82,25 @@ Claude follows this order **before trust**, at `implement-check`'s first
    /trusted/argonreview agy-check --home /Users/argon-check --agy /trusted/agy-copy
    ```
 
-   `--calls N`: positive, default 30; `--model <name>`: nonempty, default
-   `gemini-4-argon-high`. Capture stdout/stderr/status outside transient trees.
-   The agent shares the results UID and could rewrite earlier results: immediately
-   copy output to maintainer-owned storage or post its hash on [#1890][issue].
-   After the last row executes, the check hashes the real post-update
-   `.gemini/antigravity-cli/builtin/` in this home. Its last INFO line reports
-   `INFO builtin/ listing SHA-256`, or a hashing
-   failure. Usage errors and most invalid results print none; a pin mismatch
-   after the rows still prints INFO above `RESULT INVALID`: never use it. The tool writes no trusted file.
-3. No tool writes the trusted list. Claude builds the candidate
-   `implementer/builtin.agy-<version>.txt` by hand from a real post-start
-   `builtin/` (as on 2026-10-27, on the maintainer's instruction): regular files,
-   dotfiles included, sorted by relative path in byte order (`LC_ALL=C`), one `<sha256>  ./<path>` line
-   each, ending in newline (the format `agycheck_builtin.go` hashes and
-   `implementcheck.go` reads, 1 MiB cap, no symlinks). The maintainer compares
-   that file's SHA-256 with INFO's hash; INFO covers exact bytes, so order
-   matters.
-4. After matching hashes and reading rows, the maintainer decides trust
+   `--calls N` (default 30); `--model <name>` (default
+   `gemini-4-argon-high`). Capture stdout/stderr/status outside transient trees.
+   The agent shares the results UID and could rewrite earlier results: copy
+   output to maintainer-owned storage or post its hash on [#1890][issue].
+   After the last row, the check hashes the home's real `builtin/`; its INFO
+   line reports `INFO builtin/ listing SHA-256`, or a hashing failure. Usage
+   errors and pre-run refusals print none; a pin mismatch after the rows still
+   prints INFO above `RESULT INVALID`: never use it.
+4. Compare INFO's SHA-256 with the saved candidate's: a mismatch means `builtin/`
+   changed during the run; do not trust. Only then the maintainer decides trust
    separately for each worker. Each worker home must first start the new
-   version once (its `builtin/` is rewritten on first start); the same bytes
-   then go into each worker's `implementer/` directory (copies must be
-   byte-equal), file 0400, directory 0500 (`chmod u+w` to install, then
-   restore), like the other trusted files.
+   version once (its `builtin/` is rewritten on first start); the same saved
+   bytes go into each worker's `implementer/` directory (copies byte-equal),
+   file 0400, directory 0500 (`chmod u+w` to install, then restore).
 
-Recovery repeats steps 1 to 4, then follows
-[manual recovery](argon-implement-run-recovery.md#manual-recovery); failed or
-invalid runs do not count.
+After an interrupted or failed run, first do
+[manual recovery](argon-implement-run-recovery.md#manual-recovery) steps 1 and 2
+(confirm the previous session stopped; preserve evidence) before changing files,
+then repeat steps 1 to 4, then finish recovery. Failed or invalid runs do not count.
 
 The tool revalidates marker, UID, paths, canaries and binaries before every
 start and requires matching version/SHA-256 pins before, after and across rows

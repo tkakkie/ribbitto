@@ -8,6 +8,10 @@ with nothing to learn. There is a frog on the logo.
 > complete, including dark mode and mobile layout; there is no release yet. See the
 > [roadmap](docs/roadmap.md) and the pinned Status issue.
 
+![ribbitto on desktop and phone: channels and topics with unread counts, shown with development data](docs/images/screenshot.webp)
+
+*The `general` channel with its topics, on desktop and phone.*
+
 ## What it will be
 
 What each principle means, and how changes are checked against it, is in

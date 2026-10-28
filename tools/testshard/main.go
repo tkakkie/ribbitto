@@ -2,7 +2,7 @@
 // between CI's parallel jobs. It prints package patterns or runs make
 // check-test with a shard's packages, browser selector and flags; -check
 // fails unless every package is covered and the workflow runs each shard in
-// exactly one job, with disjoint browser and non-browser execution ranges.
+// exactly one job, with disjoint browser and argonreview execution ranges.
 // It also pins the local full-run wiring so argonreview gets the same timeout.
 // The named shards hold the slowest packages; "rest" is everything else, so
 // a package added later runs in CI without editing this list or the workflow.
@@ -13,6 +13,9 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/build/constraint"
+	"go/doc"
 	"go/parser"
 	"go/token"
 	"os"
@@ -22,6 +25,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // The named shards hold the packages that take longest on CI (#992), so
@@ -29,30 +34,57 @@ import (
 // cmd and web run separately so their browser tests do not compete for CPUs;
 // argonreview needs more margin than Go's default package timeout (#1948).
 type shard struct {
-	name     string
-	packages []string
-	browser  string
-	flags    string
+	name          string
+	packages      []string
+	browser       string
+	flags         string
+	kind, pattern string
 }
 
 const browserTestName = "TestBrowser"
 const browserTestPattern = "^" + browserTestName + "$"
 const argonreviewFlags = "-p 2 -timeout 20m"
+const argonreviewPackage = "./cmd/argonreview"
+const agyCommandPattern = "^TestAgyCheckCommand"
+const containerDeadlinePattern = "^TestContainer(Deadline|Timeout|Late|Status125|Runner|Cancellation|Child|Context|Command)"
+const aggregationPattern = "^(TestAggregator|TestContainer(Summary|Aggregation))"
+
+func argonreviewUnion(specs []shard) string {
+	var patterns []string
+	for _, s := range specs {
+		if s.kind == "-run" {
+			patterns = append(patterns, s.pattern)
+		}
+	}
+	return "(" + strings.Join(patterns, "|") + ")"
+}
 
 func shards() []shard {
-	return []shard{
-		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2"},
-		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2"},
-		{"argonreview", []string{"./cmd/argonreview"}, "", argonreviewFlags},
-		{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern},
-		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2 -run " + browserTestPattern},
-		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run " + browserTestPattern},
-		{"web-3/3", []string{"./internal/web"}, "3/3", "-p 2 -run " + browserTestPattern},
-		{"realtime", []string{"./internal/realtime"}, "", "-p 2"},
+	specs := []shard{
+		{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}, "", "-p 2", "", ""},
+		{"cmd", []string{"./cmd/ribbitto"}, "", "-p 2", "", ""},
+		{"argonreview-agy-command", []string{argonreviewPackage}, "", argonreviewFlags, "-run", agyCommandPattern},
+		{"argonreview-container-deadline", []string{argonreviewPackage}, "", argonreviewFlags, "-run", containerDeadlinePattern},
+		{"argonreview-aggregation", []string{argonreviewPackage}, "", argonreviewFlags, "-run", aggregationPattern},
+		{"argonreview-rest", []string{argonreviewPackage}, "", argonreviewFlags, "-skip", ""},
+		{"web-nonbrowser", []string{"./internal/web"}, "", "-p 2 -skip " + browserTestPattern, "", ""},
+		{"web-1/3", []string{"./internal/web"}, "1/3", "-p 2 -run " + browserTestPattern, "", ""},
+		{"web-2/3", []string{"./internal/web"}, "2/3", "-p 2 -run " + browserTestPattern, "", ""},
+		{"web-3/3", []string{"./internal/web"}, "3/3", "-p 2 -run " + browserTestPattern, "", ""},
+		{"realtime", []string{"./internal/realtime"}, "", "-p 2", "", ""},
 	}
+	for i := range specs {
+		if specs[i].kind == "-skip" {
+			specs[i].pattern = argonreviewUnion(specs)
+		}
+	}
+	return specs
 }
 
 const rest = "rest"
+
+const ciNeeds = "needs: [checks, test, test-rest, vuln, web-types]"
+const ciSuccess = `printf '%s\n' "$NEEDS" | jq -e 'length == 5 and all(.[]; .result == "success")' > /dev/null`
 
 const workflow = ".github/workflows/ci.yml"
 
@@ -92,6 +124,9 @@ func run(root, name string, check, execute bool) error {
 	}
 	if check {
 		if err := covers(parts, all, specs); err != nil {
+			return err
+		}
+		if err := checkArgonreviewTests(root, specs); err != nil {
 			return err
 		}
 		if err := checkBrowserTests(root, specs); err != nil {
@@ -149,9 +184,17 @@ func run(root, name string, check, execute bool) error {
 	return nil
 }
 
+func (s shard) testFlags() string {
+	if s.kind == "" {
+		return s.flags
+	}
+	// Shell quoting keeps alternation and grouping intact through make.
+	return s.flags + " " + s.kind + " '" + s.pattern + "'"
+}
+
 func testCommand(root string, s shard) *exec.Cmd {
 	// Make expands command-line variables before the shell sees regex anchors.
-	flags := strings.ReplaceAll(s.flags, "$", "$$")
+	flags := strings.ReplaceAll(s.testFlags(), "$", "$$")
 	cmd := exec.Command("make", "check-test", "GO_TEST_PACKAGES="+strings.Join(s.packages, " "), "GO_TEST_FLAGS="+flags)
 	cmd.Dir = root
 	// Workflow GOFLAGS must not narrow or cache a shard; -check does not read it.
@@ -238,17 +281,123 @@ func parseFlags(flags string) (string, error) {
 }
 
 func (s shard) selection() (string, error) {
-	if s.name == "argonreview" {
-		if !slices.Equal(s.packages, []string{"./cmd/argonreview"}) || s.browser != "" || s.flags != argonreviewFlags {
-			return "", fmt.Errorf("argonreview must run only ./cmd/argonreview with flags %q and no browser selector", argonreviewFlags)
+	if strings.HasPrefix(s.name, "argonreview-") || slices.Contains(s.packages, argonreviewPackage) || s.kind != "" {
+		if !slices.Equal(s.packages, []string{argonreviewPackage}) || s.browser != "" || s.flags != argonreviewFlags {
+			return "", fmt.Errorf("argonreview must run only %s with flags %q and no browser selector", argonreviewPackage, argonreviewFlags)
 		}
-		return "", nil
+		if (s.kind != "-run" && s.kind != "-skip") || s.pattern == "" || strings.ContainsAny(s.pattern, "/'\n\r") {
+			return "", fmt.Errorf("shard %s: argonreview requires a top-level -run or -skip pattern", s.name)
+		}
+		if _, err := regexp.Compile(s.pattern); err != nil {
+			return "", fmt.Errorf("compiling %s: %w", s.name, err)
+		}
+		return "argonreview", nil
 	}
 	return parseFlags(s.flags)
 }
 
-// Each package runs either once in full, or in one non-browser slice plus a
-// complete set of browser selectors. Names expose selector drift in the matrix.
+// Derive the exclusion from the run slices so new tests fall into the remainder.
+func validateArgonreviewSlices(specs []shard) error {
+	remainders, pinned := 0, 0
+	for _, s := range specs {
+		if s.kind == "-run" {
+			pinned++
+			continue
+		}
+		remainders++
+		if s.pattern != argonreviewUnion(specs) {
+			return fmt.Errorf("%s: skip must be exactly the run union", s.name)
+		}
+	}
+	if remainders != 1 || pinned == 0 {
+		return fmt.Errorf("argonreview needs pinned slices and exactly one remainder")
+	}
+	return nil
+}
+
+func checkArgonreviewTests(root string, specs []shard) error {
+	if err := validateShards(specs); err != nil {
+		return err
+	}
+	files, err := filepath.Glob(filepath.Join(root, argonreviewPackage, "*_test.go"))
+	if err != nil {
+		return fmt.Errorf("listing argonreview tests: %w", err)
+	}
+	var names []string
+	for _, path := range files {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("parsing argonreview tests: %w", err)
+		}
+		if err := platformIndependent(path, file); err != nil {
+			return err
+		}
+		// Like go test, an Example runs only with an Output or Unordered output comment.
+		for _, example := range doc.Examples(file) {
+			if example.Output != "" || example.EmptyOutput {
+				names = append(names, "Example"+example.Name)
+			}
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Type.TypeParams != nil || fn.Type.Results != nil {
+				continue
+			}
+			for prefix, typ := range map[string]string{"Test": "T", "Fuzz": "F"} {
+				if !strings.HasPrefix(fn.Name.Name, prefix) {
+					continue
+				}
+				r, _ := utf8.DecodeRuneInString(strings.TrimPrefix(fn.Name.Name, prefix))
+				if unicode.IsLower(r) {
+					continue
+				}
+				params := fn.Type.Params.List
+				if len(params) != 1 || len(params[0].Names) > 1 {
+					continue
+				}
+				ptr, ok := params[0].Type.(*ast.StarExpr)
+				if !ok {
+					continue
+				}
+				// The same name-only test as cmd/go's isTestFunc, which cannot
+				// resolve import aliases either; go vet checks the real type.
+				selector, ok := ptr.X.(*ast.SelectorExpr)
+				ident, local := ptr.X.(*ast.Ident)
+				if ok && selector.Sel.Name == typ || local && ident.Name == typ {
+					names = append(names, fn.Name.Name)
+				}
+			}
+		}
+	}
+	owners, counts := map[string]string{}, map[string]int{}
+	for _, s := range specs {
+		if !slices.Contains(s.packages, argonreviewPackage) {
+			continue
+		}
+		pattern := regexp.MustCompile(s.pattern) // validateShards compiled it above.
+		for _, name := range names {
+			selected := pattern.MatchString(name)
+			if s.kind == "-skip" {
+				selected = !selected
+			}
+			if !selected {
+				continue
+			}
+			if other := owners[name]; other != "" {
+				return fmt.Errorf("%s overlaps %s on %s", s.name, other, name)
+			}
+			owners[name] = s.name
+			counts[s.name]++
+		}
+		if counts[s.name] == 0 {
+			return fmt.Errorf("%s selects no tests", s.name)
+		}
+	}
+	return nil
+}
+
+// Packages run in full, in test-name slices, or in one non-browser slice plus
+// a complete set of browser selectors. Names expose selector drift in the matrix.
 func validateShards(specs []shard) error {
 	names := map[string]bool{}
 	groups := map[string][]shard{}
@@ -256,12 +405,21 @@ func validateShards(specs []shard) error {
 		if s.name == rest || names[s.name] || len(s.packages) == 0 {
 			return fmt.Errorf("invalid or repeated shard %q", s.name)
 		}
+		if _, err := s.selection(); err != nil {
+			return fmt.Errorf("shard %s: %w", s.name, err)
+		}
 		names[s.name] = true
 		for _, p := range s.packages {
 			groups[p] = append(groups[p], s)
 		}
 	}
 	for p, group := range groups {
+		if p == argonreviewPackage {
+			if err := validateArgonreviewSlices(group); err != nil {
+				return err
+			}
+			continue
+		}
 		seen := map[int]bool{}
 		nonBrowser, total := 0, 0
 		for _, s := range group {
@@ -481,6 +639,11 @@ func scheduled(source string, specs []shard) error {
 	if n := strings.Count(source, "go -C tools run ./testshard"); n != len(steps) {
 		return fmt.Errorf("%s: found %d testshard invocations, want %d", workflow, n, len(steps))
 	}
+	for _, line := range []string{ciNeeds, ciSuccess} {
+		if runs(trimmed, []string{line}) != 1 {
+			return fmt.Errorf("%s: missing or repeated ci gate line %q", workflow, line)
+		}
+	}
 	return nil
 }
 
@@ -496,15 +659,25 @@ func runs(lines, want []string) int {
 }
 
 // Pin the branch as well as the commands: a timeout applies per test binary,
-// so folding the two local runs together would raise every package's timeout.
+// so folding the local runs together would raise every package's timeout.
 func checkMakefile(source string) error {
-	const wiring = `check-test: db-health
+	wiring := `check-test: db-health
 ifeq ($(origin GO_TEST_PACKAGES),undefined)
 	go test -race $(GO_TEST_FLAGS) $(or $(strip $(shell go list -f '{{if ne .ImportPath (print .Module.Path "/cmd/argonreview")}}{{.ImportPath}}{{end}}' ./...)),$(error no packages outside cmd/argonreview))
-	go -C tools run ./testshard -run .. argonreview
-else
+%selse
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 endif`
+	var commands string
+	for _, s := range shards() {
+		if slices.Contains(s.packages, argonreviewPackage) {
+			line := "\tgo -C tools run ./testshard -run .. " + s.name
+			if n := runs(strings.Split(source, "\n"), []string{line}); n != 1 {
+				return fmt.Errorf("Makefile: local check-test wiring appears %d times for %s, want once", n, s.name)
+			}
+			commands += line + "\n"
+		}
+	}
+	wiring = strings.Replace(wiring, "%s", commands, 1)
 	if n := runs(strings.Split(source, "\n"), strings.Split(wiring, "\n")); n != 1 {
 		return fmt.Errorf("Makefile: local check-test wiring appears %d times, want once", n)
 	}
@@ -517,6 +690,44 @@ endif`
 	}
 	if uses != 2 {
 		return fmt.Errorf("Makefile: found %d GO_TEST_PACKAGES uses, want 2 in local check-test wiring", uses)
+	}
+	// Only the slice lines above and -check may run testshard: an extra command
+	// elsewhere could bypass the pinned selection or the timeout.
+	const checkLine = "\tgo -C tools run ./testshard -check .."
+	if n := runs(strings.Split(source, "\n"), []string{checkLine}); n != 1 {
+		return fmt.Errorf("Makefile: testshard -check line appears %d times, want once", n)
+	}
+	invocations := 0
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			invocations += strings.Count(line, "./testshard")
+		}
+	}
+	if want := strings.Count(wiring, "./testshard") + 1; invocations != want {
+		return fmt.Errorf("Makefile: found %d testshard invocations, want %d (the slices and -check)", invocations, want)
+	}
+	return nil
+}
+
+// The source check counts every test in a file, so a file that go test may
+// skip on the runner's platform would make a slice look covered when it is
+// not. None exists today; refuse any rather than evaluate constraints here.
+func platformIndependent(path string, file *ast.File) error {
+	// No platform is called "testshard", so a _GOOS or _GOARCH file name suffix
+	// or a tag requirement excludes the file; "!tag" lines are caught below.
+	ctx := build.Context{GOOS: "testshard", GOARCH: "testshard", Compiler: "gc"}
+	if ok, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path)); err != nil || !ok {
+		return fmt.Errorf("%s: cannot classify a platform-specific test file for the slice check", path)
+	}
+	for _, group := range file.Comments {
+		if group.Pos() >= file.Package {
+			break
+		}
+		for _, comment := range group.List {
+			if constraint.IsGoBuild(comment.Text) || constraint.IsPlusBuild(comment.Text) {
+				return fmt.Errorf("%s: cannot classify a test file with a build constraint for the slice check", path)
+			}
+		}
 	}
 	return nil
 }

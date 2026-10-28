@@ -141,7 +141,14 @@ func TestContainerCancellationAtReturn(t *testing.T) {
 				return -1, context.Canceled
 			}}
 			report, err := runContainerExecution(parent, containerFixture(t), "test", ".", runner, t.TempDir(), grantContainerExecution(&execution))
-			if execution.ownCancel || !errors.Is(err, context.Canceled) || !execution.record.stderrNotServable || !strings.Contains(report, "Stderr is not servable") || !strings.Contains(execution.summary, "Details unavailable: the check did not complete.") {
+			wantErr := context.Canceled
+			if timing == "deadline" {
+				wantErr = context.DeadlineExceeded
+				if errors.Is(err, context.Canceled) {
+					t.Fatalf("own stop polluted deadline error: %v", err)
+				}
+			}
+			if execution.ownCancel || !errors.Is(err, wantErr) || !execution.record.stderrNotServable || !strings.Contains(report, "Stderr is not servable") || !strings.Contains(execution.summary, "Details unavailable: the check did not complete.") {
 				t.Fatalf("independent cancellation misclassified: own=%v err=%v report=%s summary=%s", execution.ownCancel, err, report, execution.summary)
 			}
 		})

@@ -529,11 +529,13 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	ownStop := output.over || result.aggregation != nil && result.aggregation.record.stop != stopNone
 	ownCancel := code < 0 && errors.Is(runErr, context.Canceled) && parent.Err() == nil && ownStop && ctx.Err() == nil
 	result.ownCancel = ownCancel
-	if ownCancel {
+	// Context-driven kills are interruptions, not Docker launch failures. The
+	// outer context supplies their error; an own stop may precede its deadline.
+	if code < 0 && runnerCtx.Err() != nil && (errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded)) {
 		runErr = nil
 	}
 	interrupted := ctx.Err() != nil || parent.Err() != nil || runnerCtx.Err() != nil && !ownStop
-	completed := runErr == nil && !interrupted
+	completed := !containerRunnerFailed(code, runErr, ownCancel) && !interrupted
 	result.code, result.runErr = code, runErr
 	if result.aggregation != nil {
 		result.runState = aggregatorRunState{completed: completed, interrupted: interrupted,
@@ -598,7 +600,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		in.runnerFailed = in.runnerFailed || err != nil && (ctx.Err() != nil || result.record == nil)
 		if result.record == nil {
 			result.record = commandRecord(&result.output)
-			result.record.stderrNotServable = result.code >= 125 && result.code <= 127 || result.runErr != nil || ctx.Err() != nil
+			result.record.stderrNotServable = in.runnerFailed || containerRunnerFailed(result.code, result.runErr, result.ownCancel) || ctx.Err() != nil
 		}
 		in.facts = recordSummaryFacts(result.record)
 		result.summary = buildContainerSummary(in)

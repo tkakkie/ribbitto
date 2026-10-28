@@ -19,12 +19,13 @@ func TestContainerRunnerChildCancellation(t *testing.T) {
 				var child context.Context
 				var stop context.CancelFunc
 				var calls []string
-				runner := fakeContainerRunner{func(ctx context.Context, args, _ []string, out, _ io.Writer) (int, error) {
+				runner := fakeContainerRunner{func(ctx context.Context, args, _ []string, out, stderr io.Writer) (int, error) {
 					calls = append(calls, args[0])
 					if args[0] == "run" {
 						child = ctx
 						stop = out.(containerStream).output.cancel
 						_, _ = io.WriteString(out, "completed command output\n")
+						_, _ = io.WriteString(stderr, "benign diagnostic\n")
 					} else if ctx.Err() != nil {
 						t.Fatal("cleanup context was cancelled")
 					}
@@ -48,6 +49,9 @@ func TestContainerRunnerChildCancellation(t *testing.T) {
 				}
 				if !strings.HasPrefix(report, "FAILED\n") || !strings.HasPrefix(execution.summary, "FAILED\n") {
 					t.Fatalf("runner child cancellation verified: report=%q summary=%q", report, execution.summary)
+				}
+				if !execution.record.stderrNotServable || recordSummaryFacts(execution.record).stderr.total != 0 {
+					t.Fatal("cancelled runner child stderr remained servable")
 				}
 				assertIncompleteSummary(t, report, execution.summary, err)
 			})

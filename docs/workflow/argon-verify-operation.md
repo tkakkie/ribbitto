@@ -29,6 +29,13 @@ host record updates; runners read the atomically replaced gate without locking.
 The next smoke set replaces stage A’s “`test-browser` is an unknown check” row:
 `test-browser` is admitted by the guard and, with `browser-mode off`, gives
 `NOT VERIFIED: browser check paused`.
+Nothing here enables or authorizes anything for the browser check.
+See [browser operation](argon-verify-browser.md),
+[gate recording](argon-verify-browser-record.md),
+[preflight and approvals](argon-verify-browser-preflight.md) and
+[weekly updates](argon-verify-browser-updates.md#weekly-check-and-expiry).
+Both workers' run/check wrappers and `container-check` must pass the same
+`--browser-mode` path: worker 1's file beside `verify-mode`; worker 2 reads it.
 
 ## Switch and run
 

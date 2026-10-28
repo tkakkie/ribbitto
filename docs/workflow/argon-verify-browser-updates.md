@@ -5,6 +5,8 @@ pinned, the launcher is unchanged, and nothing here enables the browser
 check (#1908). Building, pinning, the launcher update and `browser-mode on`
 each need the maintainer's separate approval. This page records PR A's
 recipe and update contract; it does not authorize those later steps.
+Nothing here enables or authorizes anything; the
+[preflight and approvals](argon-verify-browser-preflight.md) remain separate.
 PR A changes no runner, flags or launcher. B3a implements the masking below
 as a precondition for A2; A2 must not merge before B3a is merged.
 
@@ -131,12 +133,67 @@ build are required, in this order:
    Third, build a candidate binary from a pinned commit that includes A2.
    Its integrated preflight must verify `dpkg -L chromium` places the binary
    under the masked directory and that no non-browser check can run Chromium
-   on the real image. The launcher must not be updated
+   on the real image. Follow the full
+   [mask preflight](argon-verify-browser-preflight.md#chromium-mask-preflight),
+   including an ordinary masked check and verification that the separate
+   tmpfs mount is harmless with `--read-only`. The launcher must not be updated
    until that preflight succeeds; then update it on the maintainer's
    separate approval. The preflight and the launcher update each need that
    approval.
 
-A later Debian security fix to Chromium repeats this path, including the
-package diff review. Emergency pausing is covered by the browser-check
-pages that come with the browser check itself. The weekly check and the
-14-day rule are added to this page with the browser pages of #1908 (PR D).
+Later Debian Chromium fixes repeat this path and package diff review.
+[Costs](argon-verify-browser-record.md#update-costs).
+
+## Weekly check and expiry
+
+Tracking issue **#1910** holds the weekly records. Claude checks by hand at the
+first session each **Monday (JST)**; if none, at the next session, stating
+the delay. Handle advisories known between checks at once.
+
+1. Take installed versions from the production image's host-build record
+   (`dpkg-query -W` list and image ID), and recipe pins from `origin/main`.
+2. Read the Debian security tracker `chromium` page, current trixie-security
+   version and DSAs since the last record; note each DSA for an installed package.
+3. Read Chrome stable-channel release notes since the last record: CVE
+   severities and whether in-the-wild exploitation is stated.
+4. Classify against the immediate-pause triggers below: follow the emergency
+   procedure if any applies; start the update path the same day for another
+   applicable fix; otherwise record decision none.
+5. Compare the `dpkg-query -W` diff of any build since the last record, or
+   write "no build since <date>".
+6. Post the record on #1910 in its record format.
+
+Steps 1–3 and 5 are read-only web/file reads. The check reads public
+advisories and recorded package lists: no builds, pulls, pin changes or
+worker-home access. Updates need separate approvals.
+
+Use `Result: complete at <time>` only when **every record line** is filled
+from a successful fetch and the decision step was carried out. Any missing
+item or unreadable/unfetchable source means `Result: incomplete`: it never
+counts and does not move the deadline. State what to retry.
+
+Before `browser-mode` is first set to `on`, post the first `Result: complete`
+record on #1910 and write its time with `browser-check-record`; `on` is not
+set without both (#1910 Done-when and Owner/mechanism; #1908 Preconditions).
+
+After each complete record, Claude runs host-only
+[`browser-check-record`](argon-verify-browser-record.md#initial-and-routine-recording)
+with its time and URL: first via `--init` and the frozen wrapper, later
+without a switch path. Never record an incomplete check's time.
+
+At **14 days or more** since the last complete record, or if none exists,
+Claude writes `off`; re-enabling needs the maintainer. Check `browser-mode`
+at every session start and before any Argon run or `container-check`.
+The runner's [gate](argon-verify-browser-record.md#gate-file) enforces expiry
+at each browser call without a session: exactly 14 days expires; missing,
+malformed, unsafe or future entries fail closed. Expired refresh while `on`
+is refused. Pause, refresh and re-enable stay separate. Scheduled monitoring
+to flip the switch is a follow-up needing approval.
+
+## Security fixes and emergency pause
+
+Exploitation in the wild, Critical severity, container escape, or an
+exploitable High or above with serious impact without the sandbox triggers
+the immediate [emergency pause](argon-verify-browser.md#removal-authority-and-emergency-pause).
+Other fixes start the update path immediately; records and fixed images
+authorize no re-enabling.

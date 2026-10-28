@@ -38,6 +38,10 @@
 // implement-run supervises one implementer run with explicit verify state and its checks (#1435).
 // implement-config generates and checks the trusted implementer configuration
 // in a separate output directory without running the binary (#1433).
+// Optional --browser-mode on implement-run, implement-check, implement-config,
+// verify-mcp and container-check carries the trusted switch path. Browser admission
+// remains unwired; host-only browser-check-record provisions and refreshes its gate
+// (#1908 B2).
 package main
 
 import (
@@ -61,6 +65,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "browser-check-record" {
+		return browserRecordCommand(args[1:], stdout, stderr, newBrowserSecurity())
+	}
 	if len(args) > 0 && args[0] == "implement-run" {
 		return implementRunCommand(args[1:], stdout, stderr, implementRunDefaults())
 	}
@@ -160,7 +167,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage)
 	return 2
 }
 

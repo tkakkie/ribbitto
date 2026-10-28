@@ -27,6 +27,12 @@ or the builtin list differ from worker 1's.
 The maintainer signed in worker 2 and trusted `builtin.agy-1.4.7.txt`;
 its 21 entries match worker 1's trusted list.
 
+The optional `--browser-mode <abs path>` is available on `implement-run`,
+`implement-check`, `implement-config`, `verify-mcp` and `container-check`.
+The browser admission checks and host-only `browser-check-record` command are
+merged but not in force; the browser runner is unwired. An absent flag means
+paused. The implementer commands require verify on (config: mode on).
+
 ## Assignment
 
 Before assigning a worktree, Claude lists both workers' `guard/` for

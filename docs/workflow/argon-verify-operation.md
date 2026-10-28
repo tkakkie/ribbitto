@@ -18,6 +18,12 @@ each build needs the maintainer's approval in chat.
 
 [Verification memory budget](argon-verify-budget.md) is merged but not in force.
 
+The optional `--browser-mode <abs path>` is available on `implement-run`,
+`implement-check`, `implement-config`, `verify-mcp` and `container-check`.
+The browser admission checks and host-only `browser-check-record` command are
+merged but not in force; the browser runner is unwired. An absent flag means
+paused. The implementer commands require verify on (config: mode on).
+
 ## Switch and run
 
 The trusted `verify-mode` file in the maintainer's harness, outside any

@@ -24,7 +24,7 @@ func newImplementConfigFixture(t *testing.T, on bool) implementConfigFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := implementConfigFixture{root, implementConfig{on, filepath.Join(root, "bin", "argonreview"), filepath.Join(root, "guard"), "", "", filepath.Join(root, "output", "home")}}
+	f := implementConfigFixture{root, implementConfig{on, filepath.Join(root, "bin", "argonreview"), filepath.Join(root, "guard"), "", "", filepath.Join(root, "output", "home"), ""}}
 	for _, name := range []string{"bin", "guard", "source", "worktree", "output"} {
 		configMkdir(t, filepath.Join(root, name))
 	}
@@ -105,7 +105,7 @@ func TestImplementConfigGoldens(t *testing.T) {
 			mode = "on"
 		}
 		t.Run(mode, func(t *testing.T) {
-			h, s, m, err := implementConfigFiles(on, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree")
+			h, s, m, err := implementConfigFiles(on, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -141,7 +141,7 @@ func TestImplementConfigEndToEnd(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				m, err := implementerMCPConfig(on, f.c.binary, f.c.source, f.c.worktree)
+				m, err := implementerMCPConfig(on, f.c.binary, f.c.source, f.c.worktree, "")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -533,7 +533,7 @@ func TestImplementConfigFailure(t *testing.T) {
 							return implementerSettings(!on), nil
 						}
 						if failure == "mixed" && filepath.Base(path) == "mcp_config.json" {
-							return implementerMCPConfig(!on, f.c.binary, filepath.Join(f.root, "source"), filepath.Join(f.root, "worktree"))
+							return implementerMCPConfig(!on, f.c.binary, filepath.Join(f.root, "source"), filepath.Join(f.root, "worktree"), "")
 						}
 						return os.ReadFile(path)
 					}

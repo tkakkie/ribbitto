@@ -253,7 +253,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		return w.finish(0)
 	}
 	f := in.facts
-	isTest := in.check == "test" || in.check == "test-db"
+	isTest := in.check == "test" || in.check == "test-db" || in.check == verifyBrowserCheck
 	cut := f.cut || strings.Contains(first, "output limit exceeded")
 	minimal := first == summaryInconsistent || f.err != nil || cut
 	hasResults := f.packages.passed+f.packages.failed+f.packages.skipped > 0

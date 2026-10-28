@@ -1,7 +1,7 @@
 package main
 
 // verify-mcp is trusted control code outside agy's sandbox. Startup fixes its
-// source and worktree; the wire exposes only the runner's two check arguments.
+// source and worktree; the wire exposes only the runner's validated check arguments.
 
 import (
 	"bufio"
@@ -33,6 +33,10 @@ const (
 type verifier interface {
 	verify(context.Context, string, string) (string, error)
 }
+type browserVerifier interface {
+	verifyBrowser(context.Context, string, string) (string, error)
+}
+
 type containerVerifier struct {
 	browserMode     string
 	browserSecurity browserSecurity
@@ -576,7 +580,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					rpcError(req.id, -32602, "invalid tools/list params")
 					continue
 				}
-				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated or test-db in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
+				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated, test-db or test-browser in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
 			case "tools/call":
 				if !initialized {
 					rpcError(req.id, -32600, "initialize required")
@@ -607,7 +611,16 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					deadline = s.callDeadline
 				}
 				go func() {
-					report, err := s.verifier.verify(callCtx, args.check, args.pattern)
+					var report string
+					var err error
+					if args.check == verifyBrowserCheck {
+						report = browserPaused + "\n"
+						if v, ok := s.verifier.(browserVerifier); ok {
+							report, err = v.verifyBrowser(callCtx, args.pattern, args.run)
+						}
+					} else {
+						report, err = s.verifier.verify(callCtx, args.check, args.pattern)
+					}
 					completed <- verifyCompletion{report, err}
 				}()
 			default:

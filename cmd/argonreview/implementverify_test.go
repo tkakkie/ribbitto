@@ -86,7 +86,7 @@ func implementVerifyArgumentsCases() []struct {
 			}{key + "=" + value, `{"check":` + check + `,"package":` + pattern + `}`, false})
 		}
 	}
-	return cases
+	return append(cases, verifyBrowserArgumentsCases()...)
 }
 
 func TestImplementVerifySharedSchema(t *testing.T) {

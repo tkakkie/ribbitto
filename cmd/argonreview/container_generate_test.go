@@ -18,11 +18,11 @@ func TestContainerGenerateBoundary(t *testing.T) {
 		t.Fatal("verify names changed")
 	}
 	schema := verifyInputSchema()["properties"].(map[string]any)[verifyCheckProperty].(map[string]any)["enum"]
-	if !reflect.DeepEqual(schema, verifyCheckNames()) {
+	if !reflect.DeepEqual(schema, append(verifyCheckNames(), verifyBrowserCheck)) {
 		t.Fatal("MCP schema changed")
 	}
 	for _, check := range []string{"generate", "container-generate", "writeback"} {
-		if validateContainerCheck("tree", check, "./...") == nil {
+		if validateContainerCheck("tree", check, "./...", "") == nil {
 			t.Fatalf("check accepted %s", check)
 		}
 		args := []byte(`{"ServerName":"ribbitto-verify","ToolName":"verify","Arguments":{"check":"` + check + `","package":"./..."}}`)

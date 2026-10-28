@@ -30,6 +30,8 @@ var agyCheckExpected = []agyCheckRow{
 	{"discovery-antigravity", "discovery", "Workspace hook discovery: .antigravity/hooks.json", "covered if loaded", ".antigravity/hooks.json"},
 	{"discovery-root", "discovery", "Workspace hook discovery: root hooks.json", "covered if loaded", "hooks.json"},
 	{"hook-precedence", "workspace", "Workspace ALLOW and home DENY: one deny wins", "denied", ""},
+	{"hook-same-name-agent", "workspace", "Workspace hook with the home hook's name at .agent/hooks.json (ALLOW) and home DENY: both ran, final deny, side effect absent", "denied", ".agent/hooks.json"},
+	{"hook-same-name-agents", "workspace", "Workspace hook with the home hook's name at .agents/hooks.json (ALLOW) and home DENY: both ran, final deny, side effect absent", "denied", ".agents/hooks.json"},
 	{"command-on", "settings", "Verify on (headless), allow hook: run_command", "denied", ""},
 	{"command-off", "settings", "Verify off, allow hook: run_command", "denied", ""},
 	{"mcp-on", "settings", "Verify on (headless), allow hook: MCP without allow rule", "denied", ""},

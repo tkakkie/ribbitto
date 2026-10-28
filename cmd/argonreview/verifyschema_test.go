@@ -80,28 +80,50 @@ func TestVerifySchema(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Type != "object" || len(got.Properties) != 2 || len(got.Required) != 2 || got.AdditionalProperties {
+	if got.Type != "object" || len(got.Properties) != 3 || len(got.Required) != 2 || got.AdditionalProperties {
 		t.Fatalf("schema: %s", data)
 	}
 	if strings.Join(got.Required, ",") != "check,package" {
 		t.Fatal("required arguments changed")
 	}
 	checks := got.Properties[verifyCheckProperty]
-	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test,generated,test-db" {
-		t.Fatalf("checks: %+v", checks)
+	if checks.Type != "string" || strings.Join(checks.Enum, ",") != "build,vet,test,generated,test-db,test-browser" {
+		t.Fatalf("schema enum includes test-browser: %+v", checks)
 	}
-	for _, check := range checks.Enum {
-		if err := validateContainerCheck("tree", check, "./..."); err != nil {
+	for _, check := range verifyCheckNames() {
+		if err := validateContainerCheck("tree", check, "./...", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, check := range []string{"bench", "shell", "-x", ""} {
-		if validateContainerCheck("tree", check, "./...") == nil {
+		if validateContainerCheck("tree", check, "./...", "") == nil {
 			t.Fatal("runner accepts an unlisted check")
 		}
 	}
 	pattern := got.Properties[verifyPackageProperty]
 	if pattern.Type != "string" || pattern.Pattern != containerPattern.String() || pattern.MaxLength != 200 || verifyPackageLimit != 200 || verifyToolName != "verify" {
 		t.Fatalf("pattern: %+v", pattern)
+	}
+}
+
+func TestVerifySchemaBrowserRun(t *testing.T) {
+	p := verifyInputSchema()["properties"].(map[string]any)["run"].(map[string]any)
+	for _, predicate := range []string{"type", "maxLength", "pattern"} {
+		t.Run(predicate, func(t *testing.T) {
+			switch predicate {
+			case "type":
+				if p["type"] != "string" {
+					t.Fatal("schema run must be string")
+				}
+			case "maxLength":
+				if p["maxLength"] != 200 {
+					t.Fatal("schema run maxLength must be 200")
+				}
+			case "pattern":
+				if _, ok := p["pattern"]; ok {
+					t.Fatal("schema run must have no JSON pattern")
+				}
+			}
+		})
 	}
 }

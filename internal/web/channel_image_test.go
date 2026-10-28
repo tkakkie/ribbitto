@@ -168,7 +168,7 @@ func TestWelcomeComposition(t *testing.T) {
 }
 
 // An image error belongs to the picker, never to the name field: each radio
-// is invalid and described by the group's alert (docs/accessibility.md).
+// is invalid and described by the group's alert (docs/accessibility-forms-and-targets.md).
 func TestImagePickerError(t *testing.T) {
 	catalogues, err := i18n.New(nil)
 	if err != nil {

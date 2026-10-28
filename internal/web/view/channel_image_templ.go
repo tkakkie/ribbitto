@@ -181,7 +181,7 @@ func welcomeComposition() templ.Component {
 
 // imagePicker shares native radio controls between creation and the overview.
 // An error is the group's own: every radio is invalid and described by it,
-// following the form-error rule in docs/accessibility.md.
+// following the form-error rule in docs/accessibility-forms-and-targets.md.
 // A fieldset names the group; native inputs keep keyboard and no-script behavior.
 func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {

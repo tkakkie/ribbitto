@@ -39,7 +39,7 @@ rejects drift. Element helpers drop trailing `ID`; `DOMPrefix` becomes `Entry`,
 or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
 selectors `nameSelector`, and dynamic ids `nameID`.
 Modules still validate attribute values and external event payloads at runtime.
-The lists above remain the human-readable contract.
+The human-readable DOM contract (ids and data attributes) is described in [`web-contracts.md`](web-contracts.md); this page covers the generated one.
 
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable

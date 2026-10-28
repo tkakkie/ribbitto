@@ -545,7 +545,7 @@ func TestContainerEndToEndVerdicts(t *testing.T) {
 				if facts.leaves.passed > 0 && tc.status != 137 && !strings.Contains(report, "Leaf tests: 1 passed") {
 					t.Fatal("record lost passing leaf count")
 				}
-				if tc.status == 137 && (!strings.Contains(report, "Counts unavailable: the stream was cut.") || strings.Contains(report, "Leaf tests:")) {
+				if tc.status == 137 && (!strings.Contains(report, "Counts unavailable: the stream was cut.\n") || strings.Contains(report, "Leaf tests:")) {
 					t.Fatal("killed stream supplied a total")
 				}
 			} else if !strings.Contains(report, "--- stdout\n"+tc.output+"\n--- stderr\ngenerator diagnostic") {

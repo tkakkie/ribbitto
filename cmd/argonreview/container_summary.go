@@ -290,7 +290,11 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			w.put("Limit reached: " + f.capName)
 		}
 	} else if minimal {
-		w.put("Counts unavailable: the stream was cut.")
+		if f.streamCut {
+			w.put("Counts unavailable: the stream was cut.")
+		} else {
+			w.put("Counts unavailable: the stream is incomplete.")
+		}
 		if f.err != nil {
 			w.put(fmt.Sprintf("Stream not understood after event %d.", f.afterEvent))
 		}

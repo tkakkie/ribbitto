@@ -258,7 +258,11 @@ func (a *containerAggregator) body(minimal bool) string {
 	if r.capName != "" {
 		fmt.Fprintf(&b, "Counts unavailable: output limit exceeded; the stream was cut.\nLimit reached: %s\n", r.capName)
 	} else if !r.complete {
-		b.WriteString("Counts unavailable: the stream was cut.\n")
+		if r.stop == stopKill || r.stop == stopTruncated {
+			b.WriteString("Counts unavailable: the stream was cut.\n")
+		} else {
+			b.WriteString("Counts unavailable: the stream is incomplete.\n")
+		}
 	}
 	if r.complete {
 		fmt.Fprintf(&b, "Packages: %d passed, %d failed, %d skipped\nLeaf tests: %d passed, %d failed, %d skipped\n", r.packages.passed, r.packages.failed, r.packages.skipped, r.leaves.passed, r.leaves.failed, r.leaves.skipped)

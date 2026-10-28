@@ -15,14 +15,18 @@ func browserVerdict(run string, r *containerRecord, result aggregatorResult) str
 	if validateBrowserRun(run) != nil {
 		return "FAILED: invalid browser run"
 	}
-	if !strings.HasPrefix(result.verdict, "verified\n") {
+	b := r.browser
+	// A test-free second package gets the generic no-tests refusal first;
+	// retain the more specific browser scope refusal without hiding failures.
+	outsideWithoutTests := b != nil && b.run == run && b.namedState == "pass" && b.outsidePackage &&
+		result.verdict == "NOT VERIFIED: a targeted package has no tests, or no leaf test passed"
+	if !strings.HasPrefix(result.verdict, "verified\n") && !outsideWithoutTests {
 		return result.verdict
 	}
-	b := r.browser
 	if b == nil || b.run != run || b.namedState != "pass" {
 		return "NOT VERIFIED: the named test did not run: " + run
 	}
-	if b.outside {
+	if b.outside || b.outsidePackage {
 		return "NOT VERIFIED: a test outside the named test ran"
 	}
 	if b.leaves > browserLeafLimit {

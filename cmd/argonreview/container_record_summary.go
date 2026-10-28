@@ -11,6 +11,7 @@ import (
 func recordSummaryFacts(r *containerRecord) summaryFacts {
 	f := summaryFacts{packages: r.packages, leaves: r.leaves, allowed: r.allowed, skipped: r.skipped,
 		events: r.events, afterEvent: r.afterEvent, incomplete: !r.complete && !r.command, cut: r.capName != "", capName: r.capName,
+		streamCut: r.stop == stopKill || r.stop == stopTruncated,
 		panicLine: r.panicLine, timeoutLine: r.timeoutLine, failedTotal: r.failedLeaves, skippedTotal: r.disallowedSkips, noTests: r.noTests, failureSignal: r.failureSignal}
 	if !r.complete && !r.command {
 		f.err = fmt.Errorf("incomplete container record: %s", r.stop)

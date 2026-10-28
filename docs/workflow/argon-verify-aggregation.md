@@ -42,9 +42,9 @@ not servable to #1847: Docker statuses 125–127, runner error, cancellation or
 timeout can expose Docker-client paths. MCP keeps its existing display budgets:
 2,048 bytes for verified results, 7,000 including wrapper/error reserve for
 errors, 30 names, 8 excerpt lines of 200 bytes and 16 generated-diff lines.
-An incomplete stream lists confirmed failures as **observed, total unknown**,
-with no computed total. Only EOF with all package/test results permits totals.
-The timeout body stays #1846's fixed body.
+Incomplete streams list failures as **observed, total unknown**.
+Totals need EOF with all results. Counts: `cut` for caps, kills or truncated
+tails; `incomplete` otherwise. #1846's timeout body is fixed.
 
 `build`, `vet`, `generated` and write-back keep the command writer and its
 4 MiB combined cap. Build/vet/generated copy a 16 KiB stdout prefix into the

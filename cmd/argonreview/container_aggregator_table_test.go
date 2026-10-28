@@ -62,7 +62,7 @@ func TestAggregatorVerdictTable(t *testing.T) {
 		{name: "D4", stream: pass, code: 125, first: "FAILED", body: "Details unavailable: the check did not complete.", state: late},
 		{name: "D5", stream: fail, first: containerTimeLimitVerdict, body: "Details unavailable: the check did not complete.", state: runningDeadline},
 		{name: "E1", stream: fail, code: 137, first: "FAILED", body: "observed, total unknown"},
-		{name: "E2", stream: containerJSON("p", "start"), code: 137, first: "FAILED", body: "Counts unavailable: the stream was cut."},
+		{name: "E2", stream: containerJSON("p", "start"), code: 137, first: "FAILED", body: "Counts unavailable: the stream was cut.\n"},
 		{name: "E3", stream: fail + `{"Action":`, first: "FAILED: empty or truncated test stream", body: "observed, total unknown", state: complete},
 		{name: "E4", stream: fail, first: "FAILED", body: "observed, total unknown", state: complete},
 		{name: "E5", stream: fail + "garbage\n", first: "FAILED: malformed test stream", body: "observed, total unknown", state: complete},

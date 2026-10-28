@@ -40,6 +40,7 @@ func browserVerdictCases() []browserVerdictCase {
 		{name: "name suffix", data: containerJSON(pkg, "start", "run/"+run, "pass/"+run, "run/"+run+"-selection", "pass/"+run+"-selection", "pass"), want: outside},
 		{name: "other top level", data: containerJSON(pkg, "start", "run/"+run, "pass/"+run, "run/TestOtherBrowser", "pass/TestOtherBrowser", "pass"), want: outside},
 		{name: "second package", data: pass + containerEvents("q", run, "pass"), want: outside},
+		{name: "second package without tests", data: pass + containerJSON("q", "start", "pass"), want: outside},
 		{name: "ancestors allowed", data: containerJSON(pkg, "start", "run/TestBrowser", "run/"+run, "pass/"+run, "pass/TestBrowser", "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
 		{name: "descendants only counted", data: containerJSON(pkg, "start", "run/"+run, "run/"+run+"/child", "pass/"+run+"/child", "pass/"+run, "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
 		{name: "parallel leaf", data: containerJSON(pkg, "start", "run/"+run, "run/"+run+"/a", "pause/"+run+"/a", "cont/"+run+"/a", "pass/"+run+"/a", "pass/"+run, "pass"), want: "verified\nnamed test: " + run + " passed (1 leaf tests)"},
@@ -106,24 +107,17 @@ func browserVerdictNeverWeaker(t *testing.T, run string, code int, runErr error,
 	t.Helper()
 	base := oracleVerdict(code, runErr, data, truncated, nil)
 	got, record := browserVerdictRecordFixture(browserTestPackage, run, code, runErr, data, truncated)
-	if !strings.HasPrefix(base, "verified") && got != base {
-		// N1 caps, invalid UTF-8/raw NUL and E5 before exit/truncated-tail
-		// precedence are documented stricter rules. A later cut flag cannot
-		// replace the first malformed stop. Still require the exact refusal;
-		// the success guard below always uses the frozen oracle.
-		cap := record.capName != "" && (got == "NOT VERIFIED: output limit exceeded (output cut off)" || got == "FAILED: output limit exceeded after a confirmed failure (output cut off)")
-		earlierMalformed := record.stop.malformed() && got == "FAILED: "+record.stop.String() && (base == "FAILED: empty or truncated test stream" || truncated || code != 0 || runErr != nil || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0)
-		if !cap && !earlierMalformed {
-			t.Fatalf("base = %q; browser = %q", base, got)
-		}
-	}
-	if !strings.HasPrefix(got, "verified") {
-		return
-	}
 	runs, passes := 0, 0
+	outsidePackage := false
 	for _, line := range strings.Split(string(data), "\n") {
 		var event struct{ Action, Package, Test string }
-		if json.Unmarshal([]byte(line), &event) == nil && event.Package == browserTestPackage && event.Test == run {
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		if event.Package != "" && event.Package != browserTestPackage {
+			outsidePackage = true
+		}
+		if event.Package == browserTestPackage && event.Test == run {
 			if event.Action == "run" {
 				runs++
 			}
@@ -131,6 +125,23 @@ func browserVerdictNeverWeaker(t *testing.T, run string, code int, runErr error,
 				passes++
 			}
 		}
+	}
+	if !strings.HasPrefix(base, "verified") && got != base {
+		// N1 caps, invalid UTF-8/raw NUL and E5 before exit/truncated-tail
+		// precedence are documented stricter rules. A later cut flag cannot
+		// replace the first malformed stop. Still require the exact refusal;
+		// the success guard below always uses the frozen oracle.
+		cap := record.capName != "" && (got == "NOT VERIFIED: output limit exceeded (output cut off)" || got == "FAILED: output limit exceeded after a confirmed failure (output cut off)")
+		earlierMalformed := record.stop.malformed() && got == "FAILED: "+record.stop.String() && (base == "FAILED: empty or truncated test stream" || truncated || code != 0 || runErr != nil || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0)
+		// N6 gives a test-free second package the scope refusal instead of
+		// the generic no-tests refusal. Both must still refuse verification.
+		scopeRefusal := outsidePackage && runs == 1 && passes == 1 && base == "NOT VERIFIED: a targeted package has no tests, or no leaf test passed" && got == "NOT VERIFIED: a test outside the named test ran"
+		if !cap && !earlierMalformed && !scopeRefusal {
+			t.Fatalf("base = %q; browser = %q", base, got)
+		}
+	}
+	if !strings.HasPrefix(got, "verified") {
+		return
 	}
 	if !strings.HasPrefix(base, "verified") || runs != 1 || passes != 1 {
 		t.Fatalf("browser verified without base success and named node: base=%q, runs=%d, passes=%d", base, runs, passes)

@@ -28,6 +28,7 @@ type summaryFacts struct {
 	events, afterEvent                        int
 	err                                       error
 	cut                                       bool
+	streamCut                                 bool
 	noTests, failureSignal                    bool
 	incomplete                                bool
 	capName                                   string

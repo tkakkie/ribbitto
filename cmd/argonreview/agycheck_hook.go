@@ -66,7 +66,7 @@ func agyCheckHookTag(tag string) bool {
 		return false
 	}
 	for i, c := range []byte(tag) {
-		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || i > 0 && c == '-') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && (i == 0 || c != '-') {
 			return false
 		}
 	}

@@ -17,16 +17,19 @@ func (f budgetInventoryFunc) budgetList(ctx context.Context) ([]budgetContainer,
 }
 
 func TestBudgetReservationDeadline(t *testing.T) {
+	inBubble := func(check func(*testing.T)) func(*testing.T) {
+		return func(t *testing.T) { synctest.Test(t, check) }
+	}
 	for _, kind := range []string{"first inventory", "under lock", "late attempt", "sleep", "parent cancellation"} {
-		t.Run(kind, func(t *testing.T) {
+		t.Run(kind, inBubble(func(t *testing.T) {
 			b, _, _ := budgetSlotsFixture(t)
-			// Scale the production bounds together; the watchdog also bounds mutants
-			// that accidentally fall back to an inventory's independent deadline.
+			// Virtual time keeps scheduling load out of the deadline margin; the
+			// watchdog still bounds an inventory with an independent deadline.
 			defaults := newBudgetLocks()
-			b.locks.limit = budgetInventoryTimeout / 500
+			b.locks.limit = defaults.limit
 			b.locks.poll = b.locks.limit * 3 / 4
 			if kind == "sleep" {
-				b.locks.poll = defaults.poll
+				b.locks.poll = b.locks.limit + defaults.poll
 			}
 			if defaults.limit <= budgetInventoryTimeout || defaults.poll >= defaults.limit {
 				t.Fatal("production bounds changed; review deadline fixture")
@@ -81,8 +84,12 @@ func TestBudgetReservationDeadline(t *testing.T) {
 			result := containerExecution{budget: b}
 			start := time.Now()
 			report, err := runContainerExecution(ctx, tree, "build", "./...", runner, parent, &result)
-			if elapsed := time.Since(start); elapsed > 2*b.locks.limit {
-				t.Errorf("reservation exceeded whole bound: %v; limit %v", elapsed, b.locks.limit)
+			wantElapsed := b.locks.limit
+			if kind == "parent cancellation" {
+				wantElapsed = 0
+			}
+			if elapsed := time.Since(start); elapsed != wantElapsed {
+				t.Errorf("reservation duration: %v; want %v", elapsed, wantElapsed)
 			}
 			want, wantReads := budgetStateUnknown, 1
 			if kind == "under lock" || kind == "late attempt" {
@@ -107,7 +114,7 @@ func TestBudgetReservationDeadline(t *testing.T) {
 			assertNoContainerCopy(t, parent)
 			b.locks.limit = 0
 			budgetTake(t, b.locks, budgetBrowser, budgetSlot0, budgetSlot1, budgetSlot2)()
-		})
+		}))
 	}
 }
 

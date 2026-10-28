@@ -108,9 +108,16 @@ func TestVerifySchema(t *testing.T) {
 
 func TestVerifySchemaBrowserRun(t *testing.T) {
 	p := verifyInputSchema()["properties"].(map[string]any)["run"].(map[string]any)
-	for _, predicate := range []string{"type", "maxLength", "pattern"} {
+	for _, predicate := range []string{"type", "maxLength", "pattern", "description"} {
 		t.Run(predicate, func(t *testing.T) {
 			switch predicate {
+			case "description":
+				description, _ := p["description"].(string)
+				for _, phrase := range []string{"Required only for test-browser", "exact test name", "slash-separated subtests", "TestBrowser/quote", "No regular expressions"} {
+					if !strings.Contains(description, phrase) {
+						t.Fatalf("schema run description lacks %q: %q", phrase, description)
+					}
+				}
 			case "type":
 				if p["type"] != "string" {
 					t.Fatal("schema run must be string")

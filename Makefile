@@ -13,9 +13,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
-# CI's test jobs each pass one shard from tools/testshard; locally every
-# package runs.
-GO_TEST_PACKAGES ?= ./...
+# CI passes GO_TEST_PACKAGES through tools/testshard; unset runs every package.
 
 .PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
 
@@ -87,8 +85,15 @@ check-static: $(TEMPL)
 	$(MAKE) lint-fixtures
 	go build ./...
 
+# Go timeouts apply per package binary: isolate argonreview's longer limit
+# through testshard so local and CI runs cannot drift (#1948).
 check-test: db-health
+ifeq ($(origin GO_TEST_PACKAGES),undefined)
+	go test -race $(GO_TEST_FLAGS) $(or $(strip $(shell go list -f '{{if ne .ImportPath (print .Module.Path "/cmd/argonreview")}}{{.ImportPath}}{{end}}' ./...)),$(error no packages outside cmd/argonreview))
+	go -C tools run ./testshard -run .. argonreview
+else
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
+endif
 
 check-tools: $(TEMPL)
 	go -C tools run ./languagecheck ..

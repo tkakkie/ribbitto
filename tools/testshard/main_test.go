@@ -10,7 +10,7 @@ import (
 )
 
 func TestPartition(t *testing.T) {
-	all := []string{".", "./cmd/loadgen", "./cmd/ribbitto", "./cmd/seed", "./internal/kernel", "./internal/realtime", "./internal/realtime/realtimepg", "./internal/web", "./tools/new"}
+	all := []string{".", "./cmd/argonreview", "./cmd/loadgen", "./cmd/ribbitto", "./cmd/seed", "./internal/kernel", "./internal/realtime", "./internal/realtime/realtimepg", "./internal/web", "./tools/new"}
 	parts, err := partition(all, shards())
 	if err != nil {
 		t.Fatal(err)
@@ -18,6 +18,7 @@ func TestPartition(t *testing.T) {
 	for name, want := range map[string][]string{
 		"loadgen":        {"./cmd/loadgen", "./cmd/seed"},
 		"cmd":            {"./cmd/ribbitto"},
+		"argonreview":    {"./cmd/argonreview"},
 		"web-nonbrowser": {"./internal/web"},
 		"web-1/3":        {"./internal/web"},
 		"web-2/3":        {"./internal/web"},
@@ -96,7 +97,7 @@ func TestPick(t *testing.T) {
 
 func TestScheduled(t *testing.T) {
 	const (
-		matrix    = "        shard: [loadgen, cmd, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
+		matrix    = "        shard: [loadgen, cmd, argonreview, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
 		restStep  = "          go -C tools run ./testshard -run .. rest\n"
 		shardStep = "          go -C tools run ./testshard -run .. \"$SHARD\"\n"
 		valid     = matrix + restStep + shardStep
@@ -111,6 +112,8 @@ func TestScheduled(t *testing.T) {
 		{"non-browser shard repeated", strings.Replace(valid, "web-nonbrowser, ", "web-nonbrowser, web-nonbrowser, ", 1), "shard web-nonbrowser 2 times"},
 		{"cmd shard omitted", strings.Replace(valid, "cmd, ", "", 1), "shard cmd 0 times"},
 		{"cmd shard repeated", strings.Replace(valid, "cmd, ", "cmd, cmd, ", 1), "shard cmd 2 times"},
+		{"argonreview shard omitted", strings.Replace(valid, "argonreview, ", "", 1), "shard argonreview 0 times"},
+		{"argonreview shard repeated", strings.Replace(valid, "argonreview, ", "argonreview, argonreview, ", 1), "shard argonreview 2 times"},
 		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
 		{"no matrix", restStep + shardStep, "found 0"},
 		{"two matrices", matrix + valid, "found 2"},
@@ -135,6 +138,83 @@ func TestScheduled(t *testing.T) {
 			err := scheduled(tc.source, shards())
 			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
 				t.Fatalf("scheduled = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestArgonreviewShard(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		edit func([]shard) []shard
+		want string
+	}{
+		{"valid", func(s []shard) []shard { return s }, ""},
+		{"timeout missing", func(s []shard) []shard { s[2].flags = "-p 2"; return s }, "argonreview must run only"},
+		{"timeout altered", func(s []shard) []shard { s[2].flags = "-p 2 -timeout 30m"; return s }, "argonreview must run only"},
+		{"other shard timeout", func(s []shard) []shard { s[0].flags += " -timeout 20m"; return s }, "shard loadgen: flags"},
+		{"other package", func(s []shard) []shard { s[2].packages = []string{"./other"}; return s }, "argonreview must run only"},
+		{"browser selector", func(s []shard) []shard { s[2].browser = "1/3"; return s }, "argonreview must run only"},
+		{"package in two shards", func(s []shard) []shard { return append(s, shard{"extra", []string{"./cmd/argonreview"}, "", "-p 2"}) }, "./cmd/argonreview: whole-package range overlaps"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateShards(tc.edit(shards()))
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("validateShards = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	t.Run("package in no shard", func(t *testing.T) {
+		specs := []shard{{"argonreview", []string{"./cmd/argonreview"}, "", argonreviewFlags}}
+		err := covers(map[string][]string{"argonreview": {"./cmd/argonreview"}}, []string{"./cmd/argonreview", "./new"}, specs)
+		if err == nil || !strings.Contains(err.Error(), "./new is in no shard") {
+			t.Fatalf("covers = %v, want ./new in no shard", err)
+		}
+	})
+}
+
+func TestRepositoryWiring(t *testing.T) {
+	for _, path := range []string{workflow, "Makefile"} {
+		t.Run(path, func(t *testing.T) {
+			source, err := os.ReadFile(filepath.Join("../..", path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if path == workflow {
+				err = scheduled(string(source), shards())
+			} else {
+				err = checkMakefile(string(source))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestMakefile(t *testing.T) {
+	source, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := string(source)
+	t.Run("default packages bypass full run", func(t *testing.T) {
+		err := checkMakefile(valid + "\nGO_TEST_PACKAGES ?= ./...\n")
+		if err == nil || !strings.Contains(err.Error(), "found 3 GO_TEST_PACKAGES uses") {
+			t.Fatalf("checkMakefile = %v, want rejected default package list", err)
+		}
+	})
+	for _, tc := range []struct{ name, source string }{
+		{"missing wiring", ""},
+		{"missing runner", strings.Replace(valid, "\tgo -C tools run ./testshard -run .. argonreview\n", "", 1)},
+		{"altered exclusion", strings.Replace(valid, `"/cmd/argonreview"`, `"/cmd/other"`, 1)},
+		{"missing empty guard", strings.Replace(valid, "$(error no packages outside cmd/argonreview)", "", 1)},
+		{"altered condition", strings.Replace(valid, "ifeq ($(origin GO_TEST_PACKAGES),undefined)", "ifdef GO_TEST_PACKAGES", 1)},
+		{"altered explicit packages", strings.Replace(valid, "$(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)", "$(GO_TEST_FLAGS) ./...", 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := checkMakefile(tc.source); err == nil || !strings.Contains(err.Error(), "local check-test wiring appears 0 times") {
+				t.Fatalf("checkMakefile = %v, want missing local wiring", err)
 			}
 		})
 	}

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func budgetStartTarget() budgetContainer {
@@ -31,7 +32,8 @@ type budgetStartFixture struct {
 	calls                                           [][]string
 	inspection                                      int
 	inspectFailure, listFailure, startFailure, omit bool
-	postFailure                                     bool
+	postFailure, stopFailure                        bool
+	postContext                                     func(context.Context)
 	beforeStart                                     func()
 }
 
@@ -73,6 +75,9 @@ func newBudgetStartFixture(t *testing.T) *budgetStartFixture {
 					c = f.first
 				}
 				if f.started {
+					if f.postContext != nil {
+						f.postContext(ctx)
+					}
 					c = f.post
 				}
 				if f.inspection == 1 && f.inspectFailure || f.started && f.postFailure {
@@ -114,6 +119,10 @@ func newBudgetStartFixture(t *testing.T) *budgetStartFixture {
 		case "stop":
 			if !slices.Equal(args, []string{"stop", "--time", "2", f.first.ID}) {
 				t.Errorf("foreign cleanup: %v", args)
+			}
+			if f.stopFailure {
+				_, _ = fmt.Fprintln(stderr, "SECRET-STOP")
+				return 1, errors.New("SECRET-STOP-ERROR")
 			}
 		default:
 			t.Fatalf("forbidden mutation: %v", args)
@@ -293,6 +302,8 @@ func TestBudgetStart(t *testing.T) {
 		{"post-memory", "post-start inspection failed", func(f *budgetStartFixture) { f.post.Memory-- }, true, true},
 		{"post-swap", "post-start inspection failed", func(f *budgetStartFixture) { f.post.MemorySwap-- }, true, true},
 		{"post-error", "post-start inspection failed", func(f *budgetStartFixture) { f.postFailure = true }, true, true},
+		{"post-mismatch-stop-error", "post-start inspection failed; stop failed", func(f *budgetStartFixture) { f.post.State = "exited"; f.stopFailure = true }, true, true},
+		{"start-error-stop-error", "start failed; stop failed", func(f *budgetStartFixture) { f.startFailure = true; f.stopFailure = true }, true, true},
 		{"start-error-running", "start failed", func(f *budgetStartFixture) { f.startFailure = true }, true, true},
 		{"start-error-not-running", "post-start inspection failed", func(f *budgetStartFixture) { f.startFailure = true; f.post.State = "created" }, true, true},
 	} {
@@ -425,5 +436,48 @@ func TestBudgetStartReadOrder(t *testing.T) {
 	budgetStartAssert(t, f, []string{"--container", f.first.ID}, 0, "", [][]string{{"start", f.first.ID}})
 	if p.reads != 1 {
 		t.Errorf("process reads=%d; want 1", p.reads)
+	}
+}
+
+func TestBudgetStartPostStartContext(t *testing.T) {
+	for _, kind := range []string{"past-wait-deadline", "parent-canceled-mismatch"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newBudgetStartFixture(t)
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			f.start.devWait = time.Second
+			now := time.Now()
+			f.start.locks.now = func() time.Time { return now }
+			f.beforeStart = func() {
+				now = now.Add(2 * time.Second)
+				if kind == "parent-canceled-mismatch" {
+					cancel()
+				}
+			}
+			inspected := false
+			f.postContext = func(ctx context.Context) {
+				inspected = true
+				deadline, ok := ctx.Deadline()
+				if ctx.Err() != nil || !ok || time.Until(deadline) <= f.start.devWait || time.Until(deadline) > containerCleanupTimeout {
+					t.Errorf("post-start inspection lacks a fresh bounded context: deadline=%v err=%v", deadline, ctx.Err())
+				}
+			}
+			wantCode, wantOut, wantErr := 0, f.first.ID+"\n", ""
+			wantMutations := [][]string{{"start", f.first.ID}}
+			if kind == "parent-canceled-mismatch" {
+				f.post.State = "exited"
+				wantCode, wantOut, wantErr = 1, "", "argonreview: budget-start post-start inspection failed\n"
+				wantMutations = append(wantMutations, []string{"stop", "--time", "2", f.first.ID})
+			}
+			var out, err bytes.Buffer
+			code := f.start.command(parent, []string{"--container", f.first.ID}, &out, &err)
+			if code != wantCode || out.String() != wantOut || err.String() != wantErr || !inspected {
+				t.Errorf("post-start outcome: code=%d out=%q err=%q inspected=%v", code, out.String(), err.String(), inspected)
+			}
+			if !slices.EqualFunc(f.mutations(), wantMutations, slices.Equal[[]string]) {
+				t.Errorf("mutations=%v; want %v", f.mutations(), wantMutations)
+			}
+			budgetTake(t, f.start.locks, budgetBrowser, budgetSlot0, budgetSlot1, budgetSlot2)()
+		})
 	}
 }

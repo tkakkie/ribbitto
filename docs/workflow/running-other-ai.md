@@ -161,12 +161,12 @@ The brief also includes:
 - **Database.** Codex cannot use Docker. Only while an implementation needs
   database tests, Claude follows the [recorded-ID lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
   for `ribbitto-codex-pg`: create registered, `budget-start`, then a **30-try**
-  readiness wait on port **55433**. Start Codex only if every step exits 0;
-  reviews and database-free work need no database. End/interruption cleanup
+  readiness wait on port **55433**. Start Codex only if all applicable steps exit 0;
+  reviews and database-free work need no database and set neither value below. End/interruption cleanup
   uses the recorded ID after identity and process checks, never the name.
-  This budget lifecycle is merged, **not in force** until a separately
-  approved launcher update; production still uses `argonreview-2e3a6bf`.
-  The brief supplies `make check` with
+  Not in force until the launcher update; until then follow the page's
+  [interim steps](argon-verify-budget-start.md#before-enabling).
+  When a database is running, the brief supplies `make check` with
   `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
   and `RIBBITTO_REQUIRE_DB=1`. If port 55433 is taken, change creation and
   the test URL together. The race detector works in this profile;

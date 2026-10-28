@@ -44,8 +44,8 @@ maintainer creates the user (a system change) and installs/validates the
 profile once. If restrictions fail, keep them; stop for a case-by-case
 maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
-on its chosen `127.0.0.1` port, with disposable data and credentials, created
-exclusive and started with `budget-start`.
+on its chosen `127.0.0.1` port, with disposable data and credentials,
+started with `budget-start` once in force.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. In PR, record host measurement, SHAs, conditions (toolchain,

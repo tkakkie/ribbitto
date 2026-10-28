@@ -164,7 +164,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage)
 	return 2
 }
 

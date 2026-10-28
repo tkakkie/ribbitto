@@ -236,14 +236,21 @@ func (b budgetStart) attempt(ctx context.Context, id string, first budgetContain
 	}
 	startErr := b.runner.mutate(ctx, "start", id)
 	// Inspect even after a failed start: Docker may have started it before the
-	// transport failed. Cleanup retains authority over only this call's exact ID.
-	after, inspectErr := b.inventory.budgetInspect(ctx, id)
+	// transport failed. The wait deadline and caller cancellation must not prevent
+	// inspection or cleanup of the exact ID this call may have started.
+	inspectCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), containerCleanupTimeout)
+	after, inspectErr := b.inventory.budgetInspect(inspectCtx, id)
+	cancel()
 	if inspectErr != nil || !budgetStartSame(first, after, "running") {
-		_ = b.runner.mutate(context.Background(), "stop", "--time", "2", id)
+		if err := b.runner.mutate(context.WithoutCancel(ctx), "stop", "--time", "2", id); err != nil {
+			return "post-start inspection failed; stop failed", false
+		}
 		return "post-start inspection failed", false
 	}
 	if startErr != nil {
-		_ = b.runner.mutate(context.Background(), "stop", "--time", "2", id)
+		if err := b.runner.mutate(context.WithoutCancel(ctx), "stop", "--time", "2", id); err != nil {
+			return "start failed; stop failed", false
+		}
 		return "start failed", false
 	}
 	return "", false

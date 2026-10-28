@@ -7,6 +7,34 @@ anything. All [enabling preconditions](argon-verify-budget.md#host-lock-provisio
 combined security review and preflight of [#1908](https://github.com/tkakkie/ribbitto/issues/1908)
 still apply, including to both workers and host commands.
 
+## Before enabling
+
+Until `budget-start` is in force through the separately approved launcher
+update, Claude uses this current interim procedure for a needed Codex database:
+
+```sh
+if ! docker ps --format '{{.Names}}' | grep -qx ribbitto-codex-pg; then
+  docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
+    -e POSTGRES_PASSWORD=codex-dev-only postgres:18
+fi &&
+(
+  for i in $(seq 1 30); do
+    docker exec ribbitto-codex-pg pg_isready -U postgres >/dev/null 2>&1 && exit 0
+    sleep 1
+  done
+  echo "ribbitto-codex-pg: PostgreSQL not ready after 30 tries" >&2
+  exit 1
+)
+```
+
+Start Codex only if this exits 0. A stopped container with that name
+makes `docker run` fail; remove it with `docker rm -f ribbitto-codex-pg`,
+also used for cleanup. If port 55433 is taken, change it in both commands.
+
+Measurement step 8 of [host measurements](investigations.md#host-measurements)
+is met without `exclusive`/`budget-start` until then; all its current conditions
+still apply. All following sections apply once in force.
+
 ## Start procedure
 
 The host-only command is `argonreview budget-start --container <full 64-hex ID>`.
@@ -40,12 +68,14 @@ requires the same trusted-build check as [container-sweep](argon-verify-sweep.md
    the deadline, then refused as busy. Exclusive needs every slot free.
    Verification leftovers retain their slots; this command never sweeps them.
 5. Run `docker start <that exact ID>`, never its name.
-6. Inspect again, requiring the expected running container with unchanged
+6. Inspect again with a fresh bounded context independent of the wait deadline
+   or caller cancellation. Require the expected running container with unchanged
    identity, labels, memory and swap. Inspect even if start returned an error.
    If start returned an error, or inspection cannot establish the expected
    running container, issue only `docker stop --time 2 <that ID>`, once, and
-   refuse: the ID started by this call is never left running on failure.
-   Stop failure still refuses; never remove, kill, pause or update it.
+   refuse. A failed stop may leave it running.
+   Report `stop failed` distinctly if stopping fails; exit 1. Never remove,
+   kill, pause or update it.
 7. Release all locks and print only the validated ID plus newline on stdout.
 
 Exit 0 means started; 1 means refused or failed; 2 means usage. Refusal stdout
@@ -62,7 +92,7 @@ this procedure; the [limits](#limits) still apply.
 
 ## Stop and removal authority
 
-N3 permits only these five cases; a label alone never grants removal authority.
+N3 permits only these five tooling cases; labels alone never grant removal authority.
 
 | Case | Who | Target and ownership | Allowed when |
 |---|---|---|---|
@@ -92,8 +122,10 @@ Codex database is likewise unregistered and blocks checks.
 Create load and measurement containers with `argonreview.budget=exclusive`
 and no slot label, then start their full IDs through `budget-start`. They pause
 new verification; [measurement rules](investigations.md#host-measurements)
-still require workers to stop before measurements. Remove throwaway measurement
-containers afterwards as before. Do not use the budget as measurement approval.
+still require workers to stop before measurements. Removing the throwaway
+measurement database is Claude's own cleanup by recorded full ID under
+[investigations step 9](investigations.md#host-measurements), outside the tooling
+table above; no tool in this PR removes it. The budget is not measurement approval.
 
 ## Codex database lifecycle
 

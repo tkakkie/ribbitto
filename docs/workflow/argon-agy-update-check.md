@@ -2,48 +2,41 @@
 
 ## Status and limits
 
-Merged; no production file changes: guard, `implement-run`,
-`implement-check`, `hooks.json`, settings, wrapper, MCP server, container untouched.
-No launcher update: use a trusted binary rebuilt at merge commit, placed below,
-like a preflight. Next launcher candidate carries it; alone it is no reason
-to update. [#1890][issue] items 3 (host run) and 4 (isolation)
-need separate maintainer approvals; this page is item 2.
+Merged; no production file changes. Run a trusted binary rebuilt at the merge
+commit; no launcher update. [#1890][issue] items 3 and 4 (host run, isolation)
+need separate maintainer approvals.
 
-Version change triggers this; remote flag changes without one are **not seen**.
-Exit 0 means only “every observed row equals the known expectation of the Go
-table”, never “safe” or “trust approved”. Exact final line:
+A version change triggers this; remote flag changes alone are **not seen**.
+Exit 0 means only that rows match known expectations, not "safe" or "trust
+approved". Its final line is:
 
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
 
-Reconciliation is ordinary-agent regression checking, not tamper resistance:
-an allow-everything agent can write call-record files itself (maintainer
-accepted, 2026-10-28, [#1890][issue]). Hook records stay apart from agent output
-where possible. No production proof: its guard keeps no decision log. A match never approves version trust.
+An allow-everything agent can write call records (maintainer accepted,
+2026-10-28, [#1890][issue]). Keep them apart from agent output where possible.
+Production's guard has no decision log; reconciliation provides no production proof.
 
 ## Isolation and preparation
 
-Separate approvals: user, sudo rule, directories, permissions, binary placement,
-sign-in, run. Record access/risk on [#1890][issue]; compare
-`sandbox-exec` (independent of agy, deprecated) and a VM (strongest, costly).
-Dedicated low-privilege macOS user:
+Approve user, sudo rule, directories, permissions, binary placement, sign-in and
+run separately. Record access/risk on [#1890][issue], comparing deprecated
+`sandbox-exec` and a VM. Use a dedicated low-privilege macOS user:
 
-- Own home = throwaway home; results directory only it writes. No group/ACL
-  access to maintainer account/checkout/worker/review homes/`~/.gemini`/keychain;
-  no sudo. Claude: fixed `sudo -u` for one trusted binary, or maintainer
-  logs in as this user. No network credentials in env. HOME/`--sandbox` alone
-  cannot isolate allow-hook file tools.
-- Residual risk: agent retains this user's rights/network; kernel or agy escape
-  not excluded. Home sign-in token is exposed: a separate revocable credential.
-- Merge-commit `argonreview`: root/maintainer-owned directory 0755 (only owner
-  writes), file 0555. Record placement SHA-256; Claude checks before every run.
-  agy **copy**: same protection outside account home; installed/copy
-  SHA-256 must equal. Record/place extra runtime files similarly if needed.
+- Deny group/ACL access to the maintainer account, checkout, worker/review homes,
+  `~/.gemini` and keychain; grant no sudo. Claude uses fixed
+  `sudo -u` for one trusted binary, or the maintainer logs in as this user.
+  Keep network credentials out of env; HOME/`--sandbox` alone cannot isolate
+  file tools with an allow hook.
+- The agent retains the user's rights/network; escapes remain possible.
+  Its sign-in credential is exposed; use a separate revocable one.
+- Put `argonreview` and an agy **copy** outside the account home in
+  root/maintainer-owned 0755 directories, file mode 0555. Record hashes;
+  protect/record extra runtime files likewise if needed.
 
-Maintainer signs in once; saves baseline beyond agent write access.
-Never use worker/review/maintainer home or account settings. Isolation is strictly
-inside throwaway home, outside protected homes/checkout. Home/isolation: dedicated
-UID, 0700. Preparation writes home-root `.argonreview-agy-check.json`, same owner,
-0600. Replace examples; list all workers (`cmd/argonreview/agycheck_marker.go`):
+Keep isolation strictly inside the throwaway home, outside protected roots;
+both belong to the dedicated UID with mode 0700. Write home-root
+`.argonreview-agy-check.json` with that owner and mode 0600. List every worker
+(`cmd/argonreview/agycheck_marker.go`):
 
 ```json
 {
@@ -58,68 +51,74 @@ UID, 0700. Preparation writes home-root `.argonreview-agy-check.json`, same owne
 }
 ```
 
-Eight fields, version 1; unknown/missing/null/duplicate fields fail. Paths:
-absolute/clean/non-root, no controls, single quotes, symlinks or `settings.json` component;
-home/binaries cannot overlap protected roots. Real/effective UID must equal marker
-user's positive UID; root/mismatch/lookup failure refused. Hook shares the UID
-rule. Binaries/ancestors must be non-writable, not dedicated-owned; symlink or
-uncheckable paths refused.
-Canaries probe read/write/search denial on account/checkout/review/all worker
-roots separately; missing roots never count.
+Follow the marker code's schema/path rules. The check/hooks require its user's
+positive real/effective UID. Canaries require read/write/search denial on every
+protected root; missing roots fail.
 
 ## Fixed order and host procedure
 
-Claude runs at the first missing-list report for a new version, **before trust**
-(`implement-check`, `cmd/argonreview/implementcheck.go`):
+Claude follows this order **before trust**, at `implement-check`'s first
+"no trusted builtin/ hash list" report (`cmd/argonreview/implementcheck.go`):
 
-```text
-no trusted builtin/ hash list for agy %q: %q: %q
-```
-
-1. Under approved isolation, start the new version once in throwaway home:
-   agy rewrites `builtin/` on first start, so an earlier hash is wrong
+1. Under approved isolation, start the new version once in the throwaway home:
+   agy rewrites `builtin/`, invalidating an earlier hash
    (2026-10-27, 1.4.7 → 1.4.8, [#1700 incident][incident]).
-2. List real post-update `.gemini/antigravity-cli/builtin/`: sorted relative
-   paths, regular-file SHA-256 as `<hash>  ./<path>` plus newline. Tool builds it
-   (1 MiB cap), prints `INFO` SHA-256 or failure, not the list; writes no trusted file. Compare saved-list hash; hashing failure proves nothing.
-3. Claude checks placement hash and installed/copy equality. **Normal-user host
-   step:** hash account shared settings immediately before launch and after
-   completion; record both. Change invalidates run. Detection, not guarantee:
-   tool never reads/hashes/writes it; dedicated user gets no access. Run through
-   approved dedicated-user execution/capture procedure:
+   After sign-in and first start, before the check, the maintainer saves a clean
+   home baseline (contents, permissions, absences, sign-in, configuration, marker
+   and post-start builtin/) in maintainer-owned storage beyond agent write access.
+2. Claude checks placement hashes and installed/copy agy SHA-256 equality.
+   As a **normal-user host step**, hash account shared settings immediately
+   before launch and after completion; record both. Changes invalidate the run.
+   This is detection only; neither tool nor dedicated user accesses that file.
+   Use the approved dedicated-user execution/capture procedure:
 
    ```text
    /trusted/argonreview agy-check --home /Users/argon-check --agy /trusted/agy-copy
    ```
 
    `--calls N`: positive, default 30; `--model <name>`: nonempty, default
-   `gemini-4-argon-high`. Save stdout/stderr/status to dedicated-user-owned host
-   results outside transient trees via approved session (sudo allows only binary).
-4. Maintainer reads rows, decides trust separately per worker. Recovery uses
-   this order then worker checks; failed runs do not count.
+   `gemini-4-argon-high`. Capture stdout/stderr/status outside transient trees.
+   The agent shares the results UID and could rewrite earlier results: immediately
+   copy output to maintainer-owned storage or post its hash on [#1890][issue].
+   After the last row executes, the check hashes the real post-update
+   `.gemini/antigravity-cli/builtin/` in this home. Its last INFO line reports
+   `INFO builtin/ listing SHA-256` (rendered before the table), or a hashing
+   failure. Invalid/usage results have no INFO; the tool writes no trusted file.
+3. No tool writes the trusted list. Claude builds the candidate
+   `implementer/builtin.agy-<version>.txt` by hand from a real post-start
+   `builtin/` (as on 2026-10-27, on the maintainer's instruction): regular files,
+   dotfiles included, sorted by relative path, one `<sha256>  ./<path>` line
+   each, ending in newline (the format `agycheck_builtin.go` hashes and
+   `implementcheck.go` reads, 1 MiB cap, no symlinks). The maintainer compares
+   that file's SHA-256 with INFO's hash; INFO covers exact bytes, so order
+   matters.
+4. After matching hashes and reading rows, the maintainer decides trust
+   separately for each worker.
 
-Tool revalidates marker/UID/paths/canaries/binaries before every start, including
-`--version`. Version/SHA-256 pins before/after each row and across rows must match;
-otherwise `RESULT INVALID`, exit 1, no row counts.
-Pins are **not printed**; host records separately. Ordinary agent `-p`,
-`--sandbox`, time limit; synthetic workspace, never checkout; agent env only
-fixed PATH, HOME, fresh isolation TMPDIR.
+For update recovery, start the new version once, run the check, compare lists,
+obtain maintainer trust, then run worker recovery and `implement-check` per
+[manual recovery](argon-implement-run-recovery.md#manual-recovery); failed/invalid runs do not count.
 
-Tool restores bytes/modes or absence in throwaway home:
+The tool revalidates marker/UID/paths/canaries/binaries before every start,
+including `--version`. Version/SHA-256 pins must match before/after and across
+rows. Pins are not printed.
+agy uses `-p`, `--sandbox`, a time limit and synthetic workspace, with
+only fixed PATH, HOME and fresh isolation TMPDIR in its env.
+
+The tool restores bytes/modes or absence only for three home files
+(`cmd/argonreview/agycheck_place.go`):
 `.gemini/config/hooks.json`, `.gemini/config/mcp_config.json`,
-`.gemini/antigravity-cli/settings.json` (temporary-placement exceptions to
-isolation confinement). Removes created config directories and transient trees
-(workspace, records, logs, TMPDIR, outside probes); errors invalidate.
-Other agy home state is **not** restored. Between
-full runs host confirms no session processes, restores approved home baseline
-retaining intended post-start builtin list, clears session/brain state, checks
-marker/permissions. Stop on failed restoration; never repair protected homes.
+`.gemini/antigravity-cli/settings.json`. These are isolation-confinement exceptions.
+It removes created config directories and transient trees; errors invalidate.
+Other home restoration is a host step: between full runs, Claude/the maintainer
+confirms no session processes remain, restores the saved home contents and
+permissions including post-start builtin/, clears run-created session/brain
+state, and checks marker/permissions. Stop on failed restoration; never repair
+protected homes.
 
-Keep report/integrity/restoration evidence in host results directory; comment on
-[#1890][issue] / [#1856][record]: binary commit/hash, installed/copy equality,
-version/hash before/after, settings hashes, marker (not path), isolation/risk,
-every row; no credentials/home paths. 1.4.8 trust predates this (2026-10-27):
-its run is post-hoc.
+Record binary commit/hash, copy equality, before/after pins/settings hashes,
+marker, isolation/risk and rows on [#1890][issue] / [#1856][record], omitting
+credentials/home paths. 1.4.8 trust predates this (2026-10-27).
 
 ## Expected results (29 rows)
 
@@ -133,60 +132,65 @@ On/off means verify modes.
 | Hook/1 | Exit 0, no output; known allow | `allowed` |
 | Discovery/6 | `.agent/hooks.json`, `.agents/hooks.json`, `.gemini/config/hooks.json`, `.gemini/hooks.json`, `.antigravity/hooks.json`, root `hooks.json` | `covered if loaded` |
 | Workspace/3 | Different-name workspace ALLOW/home DENY; independent same-name ALLOW/home DENY at `.agent/hooks.json` and `.agents/hooks.json` | `denied` |
-| Settings/4 | Production settings, allow hook: `run_command` on/headless and off; MCP without allow rule on/headless; blanket `mcp(*)` off | `denied` |
+| Settings/4 | Production settings, allow hook: `run_command` on/headless and off; on/headless `danger` without allow rule; off `verify` under `mcp(*)` deny | `denied` |
 | URL/2 | `read_url`, `execute_url` (#1700) | `not exercisable` |
 | Exposure/4 | Allow hook: `manage_task` on/off; file write/read outside workspace | `allowed` |
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` answer for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls, ≥ 2 parallel batches | `counts reconcile` |
 
-Exposure records 1.4.7; changes need reading. Discovery needs intended call
-evidence, not unrelated steps, matching load/run and guard coverage if loaded.
-Only six candidates probed; extend table/scenarios/tests through review. Observed
-unlisted loads also compare with `implementRefusedNames` in
-`cmd/argonreview/implementguard.go`: unprotected load makes whole check exit 1.
+Read exposure changes against 1.4.7. `covered if loaded`: the row is ok when the
+hook ran exactly if loaded and a loaded location is covered by
+`implementRefusedNames` (`cmd/argonreview/implementguard.go`). Discovery needs
+intended-call evidence. Extend the six candidates through review. Unlisted
+protected loads pass; unprotected loads fail the whole check.
 `ERROR` alone never decides denial: check claim existence/content (missing
 executable requires no claim); MCP also checks stub start/request/response.
 Same-name rows need both hook records, final deny, no effect.
 
-[#1942](https://github.com/tkakkie/ribbitto/pull/1942) URL rules
-(`cmd/argonreview/agycheck_rows.go`, `cmd/argonreview/agycheck_url_test.go`):
+URL rules
+(`cmd/argonreview/agycheck_evidence.go`, `cmd/argonreview/agycheck_url_test.go`):
 zero tool steps and hook claims; stub absent/start-only or valid handshake
 allowed, only initialize/initialized/toolslist/ping tags. Tool/resource calls,
 unknown tags, unpaired responses, pending requests, malformed/unreadable records
 fail. Any tool step, even unrelated `ERROR`, fails.
 
-Reconciliation alternates from allow in claim-number order; Repeats = 0, both
-decisions occur, counts differ by ≤ 1. Steps = hooks = allows + denies,
-ERROR steps = denies, created files = allows, ≥ `--calls` steps, ≥ 2 parallel batches.
-Missing/contradictory/malformed records fail; no per-call correlation or tamper
-resistance.
+Reconciliation requires alternating replies from allow in claim-number order,
+both decisions, a count gap ≤ 1, and steps = hooks = allows + denies.
+ERROR steps = denies; files = allows. It requires ≥ `--calls` steps and ≥ 2
+parallel batches. Bad/missing records fail; there is no per-call correlation
+or tamper resistance.
 
 ## Failure and update checklist
 
-Exit 1: difference/invalid result; exit 2: usage. Failure: do not trust new list,
-so Argon cannot run on that version. Record row/reason; maintainer chooses
-waiting for a fixed version, guard/settings change with its own issue/approval,
-or vendor report (maintainer sends). Already-trusted versions: maintainer decides.
+Exit 1 means a row difference or an invalid run; exit 2 means usage error.
+Marker, UID, canary, placement and pin refusals print `RESULT INVALID: <reason>`
+with exit 1, no table and no INFO; they do not establish a version failure.
+Do not trust a new list on failure; record the row/reason. The maintainer decides
+the response, including for already-trusted versions.
 
-Claude owns re-runs/record, maintainer owns approvals. After agy updates,
-complete **before enabling** ([stage A](argon-workers-operation.md#updates-and-capacity),
+Claude runs/records; the maintainer approves. Complete **before enabling**
+after updates ([stage A](argon-workers-operation.md#updates-and-capacity),
 [#1700][stage]):
 
-- [ ] R6: isolated failing-hook variants re-run/recorded by this table.
-  Silent exit 0 is known ALLOW; production writes a decision before 0.
-  Wrapper/checks stay pinned; hardening optional.
-- [ ] E4: isolated R6, command/MCP settings variants re-run/recorded; table
-  covers those rows. URL tools: not exercisable, not verified denials.
-- [ ] E1: **separate host step on pinned production binary**, guard
-  stdin (four duplicate-key cases) and `verify-mcp` stdio cases re-run/recorded, including escaped/
-  outer-envelope duplicates. agy's structured interface cannot send duplicate
-  keys; its own behaviour is unobserved. No wider exception; not in agy-check.
-- [ ] E3: **separate host step on pinned production binary**, guard home-path
-  cases re-run/recorded. 1.4.7 real-path refusals replace decoys; decoy-content
-  absence unobserved. No decoy writes without approval. Not in agy-check.
-  E1/E3 rely on 1.4.7, not permanent waivers.
+- [ ] R6: re-run/record the hook rows and separately the exit 0 + allow JSON
+  control; confirm the control call ran. Silent exit 0 is known ALLOW.
+  Production writes a decision before 0; keep wrapper/checks pinned.
+- [ ] E4: complete R6 and record the four settings rows.
+  Separately run/record `command(*)` deny alone with an allow hook,
+  its no-deny execution control, on-mode allowed `verify` execution, off-mode
+  `danger` and other-server refusals, and `verify` auto-denial with no MCP rule.
+  A green table does not complete R6/E4; URL denials remain unverified.
+- [ ] E1: separately re-run/record guard stdin (four duplicate-key cases) and
+  `verify-mcp` stdio cases, including escaped/outer-envelope duplicates, on the
+  pinned production binary. agy's interface cannot send duplicate keys;
+  its behaviour remains unobserved.
+- [ ] E3: separately re-run/record guard home-path cases on the pinned production
+  binary. 1.4.7 real-path refusals replace decoys; decoy-content absence remains
+  unobserved. Decoy writes need approval.
 
-Smoke tests retain refusal set/symlink refusal; matching enables nothing.
+E1/E3 are separate checks; 1.4.7 evidence is no permanent waiver.
+
+Keep refusal-set/symlink smoke tests.
 
 [issue]: https://github.com/tkakkie/ribbitto/issues/1890
 [record]: https://github.com/tkakkie/ribbitto/issues/1856

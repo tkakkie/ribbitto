@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -95,6 +96,15 @@ func (m agyCheckMarker) canaries() []string {
 	return append([]string{m.AccountHome, m.Repository, m.ReviewHome}, m.WorkerHomes...)
 }
 
+// agyCheckProcessIdentity shares the unprivileged process condition with the hook.
+func agyCheckProcessIdentity(account *user.User, real, effective int) (int, error) {
+	uid, err := strconv.Atoi(account.Uid)
+	if err != nil || uid <= 0 || real != uid || effective != uid {
+		return 0, errors.New("process must have the same positive real, effective and account uid")
+	}
+	return uid, nil
+}
+
 func agyCheckValidate(o agyCheckOptions, d agyCheckDeps) (agyCheckMarker, error) {
 	m, err := agyCheckReadMarker(o.home, d)
 	if err != nil {
@@ -104,9 +114,9 @@ func agyCheckValidate(o agyCheckOptions, d agyCheckDeps) (agyCheckMarker, error)
 	if err != nil {
 		return m, fmt.Errorf("finding dedicated user: %w", err)
 	}
-	uid, uidErr := strconv.Atoi(account.Uid)
 	real, effective := d.ids()
-	if uidErr != nil || uid <= 0 || real != uid || effective != uid || account.Username != m.User {
+	uid, identityErr := agyCheckProcessIdentity(account, real, effective)
+	if identityErr != nil || account.Username != m.User {
 		return m, errors.New("process is not the marker's dedicated user")
 	}
 	self, err := d.executable()

@@ -67,6 +67,9 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 1 && args[0] == "agy-check" && args[1] == "hook" {
+		return agyCheckHook(args[2:], stdout, stderr, agyCheckHookDefaults(stdin))
+	}
 	if len(args) > 0 && args[0] == "browser-check-record" {
 		return browserRecordCommand(args[1:], stdout, stderr, newBrowserSecurity())
 	}
@@ -175,7 +178,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | "+strings.TrimPrefix(containerCheckUsage, "usage: argonreview ")+" | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | "+strings.TrimPrefix(containerCheckUsage, "usage: argonreview ")+" | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage)
 	return 2
 }
 

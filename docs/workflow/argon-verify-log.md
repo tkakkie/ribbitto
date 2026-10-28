@@ -64,18 +64,16 @@ by two entries marks both `ambiguous: use #N`. Unique display names are an
 exact-equality convenience, never a path. Ordinals are the guaranteed selector;
 `#` plus digits always means an ordinal. A wrong-kind ordinal is not listed.
 
-`test` serves that leaf's retained output. Package entries do not retain
-attributed output: each listed failed package serves the run's shared package
-output followed by compiler output, potentially from other packages in that
-run. `stderr` and `output` serve only the first 16 KiB. `output` requires the
-record's command classification (including writeback); test2json records have
-no output stream. No verified capture exists to read.
+`test` serves that leaf's retained output. Each failed package serves shared run
+package output then compiler output (entries keep no attributed output; it may
+include other packages). `stderr` and `output` serve the first 16 KiB of the head.
+`output` requires a command record; test2json has none. Verified captures do not exist.
 
-Omissions retain `truncated: N bytes not retained` and `not retained`. Complete
-host/index reports say `names not retained for K failures`; the MCP summary
-includes that loss in `names not shown`. Incomplete records say `observed,
-total unknown`, share the observed storage-loss notice and never claim final
-counts. A shared-record test checks these projections.
+Record notices stay verbatim: `truncated: N bytes not retained`, `not retained`.
+A 16 KiB prefix adds `first 16 KiB served; N retained bytes not served` (retained
+head and tail bytes, not record loss). Complete reports say `names not retained for
+K failures`; the MCP summary folds that into `names not shown`. Incomplete records
+say `observed, total unknown` and never claim final counts. Tests check this.
 
 ## Paging, encoding and frame
 
@@ -107,9 +105,9 @@ and indexes stay behind `| `; framing cannot prevent a model following them.
 
 ## Secret tripwire
 
-The container has fixed variables, a public CI database URL and protected
-source. Files, host diagnostics/errors, saved agy output and other workers'
-runs are never served.
+The container holds only fixed variables, the public CI-only database URL and
+a source copy without the protected files (no secrets). Files, host
+diagnostics/errors, saved agy output and other workers' runs are never served.
 
 Once at capture, scan every retained output unit and entry name for the CI
 password derived from the runner constant and token shapes `ghp_`,
@@ -134,13 +132,11 @@ by construction.
 
 ## Budgets, refusals and audit
 
-Budgets are per capture per stream. Server bytes count serialized response
-lines, including envelopes and refusals, not captured bytes. Refusals consume
-reads too. After exhaustion only fixed refusals are admitted; their mandatory
-wire costs still count, so the counter can exceed its cap without admitting
-another successful page. Captures and counters are protected by a mutex;
-record fields are immutable after sealing. Reads use completed captures and
-need no in-flight verifier state.
+Per capture: 16 `index` reads, 40 shared `test`/`package`, 8 shared `stderr`/`output`.
+Per server: 256 reads and 1 MiB of serialized response bytes (envelopes and
+refusals included, not captured bytes). Refusals count; after exhaustion mandatory
+refusals still count and may pass the cap, but no page is admitted. A mutex guards
+captures and counters; sealed records are immutable.
 
 One fixed message per refusal class lives in one table: malformed (mapped to
 the existing protocol error), no such run, not listed, ambiguous, start out of
@@ -171,7 +167,7 @@ changes need a small PR and preflight rows. No host measurement is approved.
 | `verifyLogRecordMax`, `verifyLogCaptureMax`, `verifyLogStoreBytes` | R_max; R_max + allowance; 4 × that sum | record constants plus `verifyLogDerivedAllowance` as above |
 | `verifyLogResponseBytes`, `verifyLogPageLines`, `verifyLogDataBytes` | 6,144 bytes; 80 lines; 512 bytes | 7.8 KB once inline; worst-page preflight |
 | `verifyLogPrefixBytes` | 16 KiB | measured stderr 21,495 bytes; preflight |
-| `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16; 40; 8 | 26 failing leaves; preflight read counts |
+| `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16 index; 40 shared test/package; 8 shared stderr/output | 26 failing leaves; preflight read counts |
 | `verifyLogServerReads`, `verifyLogServerBytes` | 256; 1 MiB | preflight read pattern |
 
 ## Exposure and preflight (future PR 2)

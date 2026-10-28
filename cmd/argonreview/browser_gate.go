@@ -30,6 +30,7 @@ type browserSecurity struct {
 	now           func() time.Time
 	sleep         func(time.Duration)
 	lockLimit     time.Duration
+	afterLock     func()
 	afterRead     func()
 	beforePublish func()
 }

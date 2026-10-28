@@ -85,10 +85,6 @@ func browserInitSwitch(path string, uid int) error {
 // record never takes a routine switch argument: its identity comes only from
 // the once-provisioned record, so a fresh check cannot select a different switch.
 func (b browserSecurity) record(init bool, path string, completed time.Time, reference string) error {
-	now := b.now()
-	if completed.After(now) {
-		return errors.New("completion is in the future")
-	}
 	parent, err := b.parent()
 	if err != nil {
 		return err
@@ -99,12 +95,16 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 		return err
 	}
 	defer closeFD(lock)
+	if b.afterLock != nil {
+		b.afterLock()
+	}
+	var entry browserSecurityEntry
 	if init {
 		if err := browserInitSwitch(path, b.uid); err != nil {
 			return err
 		}
 	} else {
-		entry, err := b.readAt(parent)
+		entry, err = b.readAt(parent)
 		if err != nil {
 			return err
 		}
@@ -112,6 +112,13 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 			b.afterRead()
 		}
 		path = entry.switchPath
+	}
+	// Waiting for the writer and reading its entry must precede time decisions.
+	now := b.now()
+	if completed.After(now) {
+		return errors.New("completion is in the future")
+	}
+	if !init {
 		if completed.Before(entry.completed) {
 			return errors.New("completion is older than the recorded check")
 		}
@@ -121,7 +128,7 @@ func (b browserSecurity) record(init bool, path string, completed time.Time, ref
 			return errors.New("expired check cannot be refreshed while browser-mode is on")
 		}
 	}
-	entry := browserSecurityEntry{path, completed, reference}
+	entry = browserSecurityEntry{path, completed, reference}
 	if len(entry.bytes()) > 2048 {
 		return errors.New("security check exceeds size limit")
 	}
@@ -141,6 +148,7 @@ func (b browserSecurity) lockRecord(parent int) (int, error) {
 		closeFD(fd)
 		return -1, unsafe
 	}
+	// This clock only bounds the lock wait; it makes no record-time decision.
 	deadline := b.now().Add(b.lockLimit)
 	for {
 		err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)

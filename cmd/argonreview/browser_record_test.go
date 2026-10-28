@@ -419,3 +419,62 @@ func TestBrowserCheckRecord(t *testing.T) {
 		})
 	}
 }
+
+func TestBrowserCheckRecordClockAfterLock(t *testing.T) {
+	for _, kind := range []string{"expiry-on", "expiry-off", "future", "init"} {
+		t.Run(kind, func(t *testing.T) {
+			b, path, entry := browserRecordFixture(t)
+			early := b.now()
+			late := early.Add(2 * time.Minute)
+			before, after := late, early
+			next := entry
+			next.completed = late.Add(-time.Second)
+			want := 1
+			message := "browser-check-record: completion is in the future\n"
+			if strings.HasPrefix(kind, "expiry-") {
+				entry.completed = early
+				early = entry.completed.Add(browserSecurityAge - time.Minute)
+				late = entry.completed.Add(browserSecurityAge + time.Minute)
+				before, after = early, late
+				next.completed = early.Add(-time.Second)
+				message = "browser-check-record: expired check cannot be refreshed while browser-mode is on\n"
+				if kind == "expiry-on" {
+					browserWrite(t, path, "on", 0o400)
+				} else {
+					want, message = 0, ""
+				}
+			}
+			if kind != "init" {
+				browserWrite(t, b.path, string(entry.bytes()), 0o600)
+			}
+			locked, clockAfterLock := false, false
+			b.afterLock = func() { locked = true }
+			// Lock retries also read the clock, so phase, not call count, sets time.
+			b.now = func() time.Time {
+				if locked {
+					clockAfterLock = true
+					return after
+				}
+				return before
+			}
+			log := browserRecordCall(t, b, browserRecordArgs(next, kind == "init"), want)
+			if log != message {
+				t.Fatalf("clock refusal=%q want=%q", log, message)
+			}
+			if !clockAfterLock {
+				t.Fatal("record did not sample the decision clock after locking")
+			}
+			if kind == "init" {
+				if _, err := os.Lstat(b.path); !os.IsNotExist(err) {
+					t.Fatalf("future init created gate: %v", err)
+				}
+			}
+			if want == 0 {
+				data, err := os.ReadFile(b.path)
+				if err != nil || !bytes.Equal(data, next.bytes()) {
+					t.Fatalf("refresh bytes=%q err=%v", data, err)
+				}
+			}
+		})
+	}
+}

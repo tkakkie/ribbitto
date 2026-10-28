@@ -28,7 +28,7 @@ The maintainer signed in worker 2 and trusted `builtin.agy-1.4.7.txt`;
 its 21 entries match worker 1's trusted list.
 
 The wrappers will pass `--browser-mode <abs path>` for browser checks.
-See [verify operation](argon-verify-operation.md) for flags and gate provisioning;
+See [verify operation](argon-verify-operation.md) for the flags and the `browser-check-record` command;
 this support is merged but not in force.
 
 ## Assignment

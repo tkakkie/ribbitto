@@ -33,24 +33,20 @@ func TestVerifyLogCapture(t *testing.T) {
 
 func TestVerifyLogRecordMax(t *testing.T) {
 	want := aggregatorOutputLimit + aggregatorStderrLimit + aggregatorNameLimit + aggregatorStdoutLimit + aggregatorBaseCharge + aggregatorBrowserCharge
-	if verifyLogRecordMax != want || verifyLogStoreBytes != verifyLogCaptures*want {
-		t.Fatal("record/store limit is not derived from aggregation")
+	if verifyLogRecordMax != want || verifyLogCaptureMax != want+verifyLogDerivedAllowance || verifyLogStoreBytes != verifyLogCaptures*verifyLogCaptureMax {
+		t.Fatal("record/store limit is not derived from aggregation plus the named allowance")
 	}
 	for _, delta := range []int{-1, 0, 1} {
 		t.Run(fmt.Sprint(delta), func(t *testing.T) {
 			r := verifyLogFixture("")
 			base := newVerifyLogCapture("FAILED", r).size
-			r.stdout.head = make([]byte, verifyLogRecordMax-base+delta)
+			// Deliberately synthetic: even an above-envelope capture must retain
+			// the newest failure rather than silently discard it.
+			r.stdout.head = make([]byte, verifyLogCaptureMax-base+delta)
 			s := &verifyLogStore{}
 			c := s.capture("FAILED", r)
-			if (c != nil) != (delta <= 0) {
-				t.Fatalf("record bound delta=%d capture=%v", delta, c != nil)
-			}
-			if c != nil && c.size != verifyLogRecordMax+delta {
-				t.Fatal("pinned bytes not counted")
-			}
-			if c == nil && (s.bytes != 0 || len(s.captures) != 0) {
-				t.Fatal("oversize capture retained")
+			if c == nil || c.size != verifyLogCaptureMax+delta || s.bytes != c.size {
+				t.Fatal("newest capture refused or pinned bytes not counted")
 			}
 		})
 	}
@@ -67,12 +63,12 @@ func TestVerifyLogPinnedBytes(t *testing.T) {
 	base = c.pinnedBytes()
 	r.browser = &browserRecord{importPath: "p", run: "TestBrowser", namedState: "fail", retained: 1}
 	r.browser.entries[0] = browserLeaf{"TestBrowser/sub", "fail"}
-	if c.pinnedBytes()-base != aggregatorBrowserCharge+len("pTestBrowserfailTestBrowser/subfail") {
+	if c.pinnedBytes()-base != aggregatorBrowserCharge+textCharge(len("p"))+textCharge(len("TestBrowser"))+textCharge(len("TestBrowser/sub")) {
 		t.Fatal("browser evidence was not charged")
 	}
 	base = c.pinnedBytes()
-	c.entries[0].display += "more"
-	if c.pinnedBytes()-base != len("more") {
+	c.entries[0].display += strings.Repeat("x", aggregatorAllocationQuantum)
+	if c.pinnedBytes()-base != aggregatorAllocationQuantum {
 		t.Fatal("derived names were not charged")
 	}
 }
@@ -128,6 +124,15 @@ func TestVerifyLogStoreByteEviction(t *testing.T) {
 		if s.bytes > verifyLogStoreBytes {
 			t.Fatal("store exceeded byte cap")
 		}
+	}
+	// Stay below the count cap while distinguishing oldest from newest eviction.
+	middle := newVerifyLogCapture("FAILED", verifyLogFixture("middle"))
+	middle.id = "middle"
+	old.size = verifyLogStoreBytes - nextSize - middle.size + 1
+	s.captures, s.bytes = []*verifyLogCapture{old, middle}, old.size+middle.size
+	next := s.capture("FAILED", verifyLogFixture("new"))
+	if next == nil || s.find(next.id) != next || s.find(old.id) != nil || s.find(middle.id) != middle || len(s.captures) != 2 || s.bytes != middle.size+next.size {
+		t.Fatal("byte eviction must remove oldest first and retain newest")
 	}
 }
 

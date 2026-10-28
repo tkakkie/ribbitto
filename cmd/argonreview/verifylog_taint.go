@@ -24,14 +24,28 @@ func verifyLogDetections(text string) int {
 }
 
 func verifyLogScan(text string) int {
-	// Scan complete units before any display cap. Removing newlines catches
-	// headers/tokens split across lines; ANSI/invisible removal catches disguise.
+	// Keep the raw and joined passes for disguised or fragmented shapes. The
+	// reader resets terminal parsing on every served line, so do that too.
 	joined := strings.ReplaceAll(text, "\n", "")
-	return max(verifyLogDetections(text), verifyLogDetections(joined), verifyLogDetections(verifyLogVisible(joined)))
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = verifyLogVisible(line)
+	}
+	return max(verifyLogDetections(text), verifyLogDetections(joined),
+		verifyLogDetections(verifyLogVisible(joined)), verifyLogDetections(verifyLogVisible(text)),
+		verifyLogDetections(strings.Join(lines, "")), verifyLogDetections(strings.Join(lines, "\n")))
+}
+
+func verifyLogScanSegments(segments ...string) int {
+	n := 0
+	for _, segment := range segments {
+		n = max(n, verifyLogScan(segment))
+	}
+	// A gap is not reconstructed evidence. A newline preserves terminal resets
+	// while the joined-line passes still over-detect shapes split across gaps.
+	return max(n, verifyLogScan(strings.Join(segments, "\n")))
 }
 
 func verifyLogScanOutput(o *retainedOutput) int {
-	// A head/tail gap is not reconstructed evidence, but joining it is a safe
-	// over-detection here: taint only withholds a unit, never affects a verdict.
-	return verifyLogScan(string(o.head) + string(o.tail))
+	return verifyLogScanSegments(string(o.head), string(o.tail))
 }

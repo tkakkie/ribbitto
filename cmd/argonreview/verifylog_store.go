@@ -16,7 +16,7 @@ type verifyLogStore struct {
 
 func (s *verifyLogStore) capture(first string, r *containerRecord) *verifyLogCapture {
 	c := newVerifyLogCapture(first, r)
-	if c == nil || c.size > verifyLogRecordMax {
+	if c == nil {
 		return nil
 	}
 	s.mu.Lock()
@@ -31,7 +31,7 @@ func (s *verifyLogStore) capture(first string, r *containerRecord) *verifyLogCap
 			break
 		}
 	}
-	for len(s.captures) >= verifyLogCaptures || s.bytes+c.size > verifyLogStoreBytes {
+	for len(s.captures) > 0 && (len(s.captures) >= verifyLogCaptures || s.bytes+c.size > verifyLogStoreBytes) {
 		s.bytes -= s.captures[0].size
 		s.captures[0] = nil
 		s.captures = s.captures[1:]

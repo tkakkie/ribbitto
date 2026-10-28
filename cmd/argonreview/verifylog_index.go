@@ -35,7 +35,9 @@ func verifyLogIndex(r *containerRecord) ([]verifyLogEntry, int) {
 		} else if e.kind != "test" || e.state != "fail" && e.state != "skip" {
 			continue
 		}
-		display := summaryText(name)
+		// PR 1b carries the differential test against the data-line sanitiser.
+		// Clone so the bounded display cannot pin the builder's spare capacity.
+		display := strings.Clone(summaryText(name))
 		if !withheld && verifyLogScan(display) > 0 {
 			withheld = true
 			detections++
@@ -57,7 +59,10 @@ func verifyLogIndex(r *containerRecord) ([]verifyLogEntry, int) {
 		a, b := leaves[i].entry, leaves[j].entry
 		return a.pkg+"/"+a.name < b.pkg+"/"+b.name
 	})
-	index := append(leaves, packages...)
+	// Exact capacity makes the pinned derived slice obey the entry limit.
+	index := make([]verifyLogEntry, len(leaves)+len(packages))
+	copy(index, leaves)
+	copy(index[len(leaves):], packages)
 	counts := make(map[string]int)
 	for _, e := range index {
 		counts[e.display]++

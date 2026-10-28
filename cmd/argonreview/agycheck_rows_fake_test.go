@@ -170,6 +170,11 @@ func agyCheckRowsFake(data []byte) bool {
 		}
 		output = bufio.NewReader(pipe)
 		rpc("initialize", map[string]any{"protocolVersion": "2025-06-18"})
+		if deviation != "no-initialized" {
+			if _, err := io.WriteString(input, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"); err != nil {
+				os.Exit(85)
+			}
+		}
 	}
 	runHook := func(h agyCheckFakeHook) bool {
 		state := filepath.Join(filepath.Dir(cwd), "state")

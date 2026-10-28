@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,15 @@ func TestAgyCheckStubPairing(t *testing.T) {
 					return append(r, agyCheckStubRecord{Kind: "start", Tag: "-"})
 				},
 				"number-gap": func(r []agyCheckStubRecord) []agyCheckStubRecord { return r },
+				"initialized-pending": func(r []agyCheckStubRecord) []agyCheckStubRecord {
+					return append(r, agyCheckStubRecord{Kind: "request", Tag: "initialize"}, agyCheckStubRecord{Kind: "request", Tag: "initialized"}, agyCheckStubRecord{Kind: "response", Tag: "initialize"})
+				},
+				"duplicate-initialized-pending": func(r []agyCheckStubRecord) []agyCheckStubRecord {
+					return append(r, agyCheckStubRecord{Kind: "request", Tag: "initialized"}, agyCheckStubRecord{Kind: "request", Tag: "initialize"}, agyCheckStubRecord{Kind: "request", Tag: "initialized"}, agyCheckStubRecord{Kind: "response", Tag: "initialize"})
+				},
+				"initialized-response": func(r []agyCheckStubRecord) []agyCheckStubRecord {
+					return append(r, agyCheckStubRecord{Kind: "response", Tag: "initialized"})
+				},
 			}
 			if id == "mcp-on" || id == "mcp-off" {
 				for _, tag := range []string{"verify", "danger", "call"} {
@@ -67,6 +77,9 @@ func TestAgyCheckStubPairing(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					t.Parallel()
 					row, s, e := agyCheckEvidenceFixture(t, id)
+					if id == "mcp-on" || id == "mcp-off" {
+						e.Stub = append(e.Stub, agyCheckStubRecord{len(e.Stub) + 1, "request", "initialized"})
+					}
 					if !agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4).OK {
 						t.Fatal("stub baseline differs")
 					}
@@ -80,6 +93,34 @@ func TestAgyCheckStubPairing(t *testing.T) {
 					got := agyCheckEvidenceObservation(row, s, e)
 					if got.Outcome != "invalid stub evidence" {
 						t.Fatalf("stub pairing guard lost: %s: %+v", name, got)
+					}
+				})
+			}
+			for _, tc := range []struct {
+				name      string
+				positions []int
+			}{
+				{"handshake", []int{3}},
+				{"before-first-pair", []int{1}},
+				{"between-pairs", []int{3, 6}},
+				{"after-pair", []int{5}},
+				{"duplicate", []int{3, 3}},
+				{"omitted", nil},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
+					row, s, e := agyCheckEvidenceFixture(t, id)
+					// Give denied rows a second harmless pair too, so every row
+					// exercises notifications before, between and after pairs.
+					e.Stub = append(e.Stub, agyCheckStubRecord{Kind: "request", Tag: "toolslist"}, agyCheckStubRecord{Kind: "response", Tag: "toolslist"})
+					for _, position := range tc.positions {
+						e.Stub = slices.Insert(e.Stub, position, agyCheckStubRecord{Kind: "request", Tag: "initialized"})
+					}
+					for i := range e.Stub {
+						e.Stub[i].N = i + 1
+					}
+					if got := agyCheckEvidenceObservation(row, s, e); !agyCheckClassify(got, 4).OK {
+						t.Fatalf("standalone notification evidence refused: %s: %+v", tc.name, got)
 					}
 				})
 			}

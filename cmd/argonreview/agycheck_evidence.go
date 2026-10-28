@@ -54,24 +54,28 @@ func agyCheckStubEvidence(records []agyCheckStubRecord, id string) bool {
 		if r.N != i+1 || i > 0 && r.Kind == "start" {
 			return false
 		}
+		// Denied means the tool was never invoked; the initialized handshake
+		// notification is not an invocation and has no response in the stub.
 		if target == "" && (r.Kind == "request" || r.Kind == "response") && (r.Tag == "verify" || r.Tag == "danger" || r.Tag == "call") {
 			return false
 		}
-		if target != "" {
-			switch r.Kind {
-			case "request":
-				if pending != "" {
-					return false
-				}
-				pending = r.Tag
-			case "response":
-				if pending == "" || pending != r.Tag {
-					return false
-				}
-				pending = ""
-				if r.Tag == target {
-					completed++
-				}
+		switch r.Kind {
+		case "request":
+			if pending != "" {
+				return false
+			}
+			// Optional, including duplicates, only between completed pairs.
+			if r.Tag == "initialized" {
+				continue
+			}
+			pending = r.Tag
+		case "response":
+			if r.Tag == "initialized" || pending == "" || pending != r.Tag {
+				return false
+			}
+			pending = ""
+			if r.Tag == target {
+				completed++
 			}
 		}
 	}

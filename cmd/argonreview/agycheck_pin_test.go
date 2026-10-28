@@ -193,15 +193,40 @@ func TestAgyCheckPinScrubsEnvironment(t *testing.T) {
 	path := agyCheckFakeBinary(t)
 	t.Setenv("AGY_CHECK_FORBIDDEN_ENV", "must be scrubbed")
 	home := "/fake-home"
-	data, err := json.Marshal(agyCheckFake{"agy 1.4.7", 0, home})
-	if err != nil {
-		t.Fatal(err)
-	}
-	agyCheckTestWrite(t, path+".fixture", data, 0o600)
 	ops := systemCleanup()
 	ops.scan = func(int) ([]int, error) { return nil, nil }
-	pin, err := agyCheckRecordPin(context.Background(), agyCheckOptions{home: home, agy: path}, t.TempDir(), agyCheckDefaults(), ops)
-	if err != nil || pin.Version != "1.4.7" {
-		t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
+	before := agyCheckPin{Version: "1.4.7", ExecutableSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("executable")))}
+	for _, tc := range []struct {
+		name, output, version, executable string
+		code                              int
+	}{
+		{"stable", "agy 1.4.7", "1.4.7", "executable", 0},
+		{"nonzero", "agy 1.4.7", "", "executable", 3},
+		{"unparseable", "agy unknown", "", "executable", 0},
+		{"hash-change", "agy 1.4.7", "1.4.7", "changed executable", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(agyCheckFake{tc.output, tc.code, home})
+			if err != nil {
+				t.Fatal(err)
+			}
+			agyCheckTestWrite(t, path+".fixture", data, 0o600)
+			d := agyCheckDefaults()
+			d.open = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(tc.executable)), nil }
+			pin, err := agyCheckRecordPin(context.Background(), agyCheckOptions{home: home, agy: path}, t.TempDir(), d, ops)
+			if tc.code != 0 {
+				if err == nil || !strings.Contains(err.Error(), "version command exited 3") {
+					t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
+				}
+				return
+			}
+			wantHash := fmt.Sprintf("%x", sha256.Sum256([]byte(tc.executable)))
+			if err != nil || pin.Version != tc.version || pin.ExecutableSHA256 != wantHash {
+				t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
+			}
+			if got := agyCheckEvaluate(before, pin, nil, 30, ""); (got.InvalidReason != "") != (tc.name != "stable") {
+				t.Fatalf("scrubbed pin outcome changed: %+v", got)
+			}
+		})
 	}
 }

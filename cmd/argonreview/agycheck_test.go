@@ -11,7 +11,7 @@ import (
 // Independent fixtures pin both the row set and the known outcomes.
 const agyCheckFixtureRows = `hook-decision=denied hook-exit2=denied hook-exit1=denied hook-missing=denied hook-timeout=denied hook-unparseable=denied hook-silent=allowed
 discovery-agent=covered_if_loaded discovery-agents=covered_if_loaded discovery-gemini-config=covered_if_loaded discovery-gemini=covered_if_loaded discovery-antigravity=covered_if_loaded discovery-root=covered_if_loaded
-hook-precedence=denied command-on=denied command-off=denied mcp-on=denied mcp-off=denied read-url=not_exercisable execute-url=not_exercisable
+hook-precedence=denied hook-same-name-agent=denied hook-same-name-agents=denied command-on=denied command-off=denied mcp-on=denied mcp-off=denied read-url=not_exercisable execute-url=not_exercisable
 task-on=allowed task-off=allowed list-resources=answered read-resource=answered outside-write=allowed outside-read=allowed reconciliation=counts_reconcile`
 
 func agyCheckFixtures() (agyCheckPin, []agyCheckObservation) {
@@ -26,7 +26,7 @@ func agyCheckFixtures() (agyCheckPin, []agyCheckObservation) {
 
 func TestAgyCheckExpectedTable(t *testing.T) {
 	_, fixtures := agyCheckFixtures()
-	if len(agyCheckExpected) != 27 || len(fixtures) != len(agyCheckExpected) || agyCheckDefaultCalls != 30 {
+	if len(agyCheckExpected) != 29 || len(fixtures) != len(agyCheckExpected) || agyCheckDefaultCalls != 30 {
 		t.Fatal("row set or default calls changed")
 	}
 	seen := make(map[string]bool)
@@ -296,7 +296,7 @@ func TestAgyCheckFinalLine(t *testing.T) {
 		if err := agyCheckRender(&out, r); err != nil {
 			t.Fatal(err)
 		}
-		if strings.HasSuffix(out.String(), final) != !differs || agyCheckSuccessLine+"\n" != final || (agyCheckExitCode(r) == 0) != !differs || strings.Count(out.String(), "\n") != 30-agyCheckExitCode(r) {
+		if strings.HasSuffix(out.String(), final) != !differs || agyCheckSuccessLine+"\n" != final || (agyCheckExitCode(r) == 0) != !differs || strings.Count(out.String(), "\n") != 32-agyCheckExitCode(r) {
 			t.Fatalf("unexpected report/exit: %+v; %s", r, out.String())
 		}
 	}

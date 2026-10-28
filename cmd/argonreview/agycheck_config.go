@@ -114,6 +114,42 @@ func agyCheckConfigPrecedence(binary, dir string) (map[string][]byte, error) {
 	return map[string][]byte{".agent/hooks.json": data}, nil
 }
 
+type agyCheckSameNameConfig struct {
+	ID, Location    string
+	Workspace, Home []byte
+}
+
+// Each collision is a separate scenario, with distinct claims for both hooks.
+func agyCheckConfigSameName(binary, dir string) ([]agyCheckSameNameConfig, error) {
+	if err := agyCheckConfigPaths(binary, dir); err != nil {
+		return nil, err
+	}
+	var fixtures []agyCheckSameNameConfig
+	seen := make(map[string]bool)
+	for _, row := range agyCheckExpected {
+		if row.Group != "workspace" || row.Location == "" {
+			continue
+		}
+		if !agyCheckConfigLocation(row.Location) {
+			return nil, errors.New("same-name hook location must be relative, clean and not a settings path")
+		}
+		if seen[row.Location] {
+			return nil, errors.New("duplicate same-name hook location")
+		}
+		seen[row.Location] = true
+		workspace, err := agyCheckConfigHooks(binary, dir, "allow", row.ID, false)
+		if err != nil {
+			return nil, err
+		}
+		home, err := agyCheckConfigHooks(binary, dir, "deny", row.ID+"-home", false)
+		if err != nil {
+			return nil, err
+		}
+		fixtures = append(fixtures, agyCheckSameNameConfig{row.ID, row.Location, workspace, home})
+	}
+	return fixtures, nil
+}
+
 func agyCheckConfigMCP(binary, dir string) ([]byte, error) {
 	if err := agyCheckConfigPaths(binary, dir); err != nil {
 		return nil, err

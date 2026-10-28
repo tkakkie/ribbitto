@@ -173,6 +173,9 @@ func TestAgyCheckConfigRefusals(t *testing.T) {
 			if _, err := agyCheckConfigPrecedence(paths[0], paths[1]); err == nil {
 				t.Fatalf("unsafe precedence path %q accepted", path)
 			}
+			if _, err := agyCheckConfigSameName(paths[0], paths[1]); err == nil {
+				t.Fatalf("unsafe same-name path %q accepted", path)
+			}
 		}
 	}
 	for _, mode := range []string{"", "unknown", "allow extra"} {
@@ -217,6 +220,18 @@ func TestAgyCheckConfigHookRows(t *testing.T) {
 	}
 }
 
+func agyCheckConfigAssertRefused(t *testing.T, location string) {
+	t.Helper()
+	for _, part := range strings.Split(location, "/") {
+		for _, refused := range implementRefusedNames {
+			if strings.EqualFold(part, refused) {
+				return
+			}
+		}
+	}
+	t.Fatalf("expected covered hook path is not refused: %s", location)
+}
+
 func agyCheckConfigAssertWorkspace(t *testing.T) {
 	t.Helper()
 	fixtures, err := agyCheckConfigWorkspace("/binary", "/state")
@@ -234,20 +249,162 @@ func agyCheckConfigAssertWorkspace(t *testing.T) {
 		if err != nil || !ok || !bytes.Equal(data, want) {
 			t.Fatalf("discovery fixture missing or wrong tag: %s %s %v", row.ID, data, err)
 		}
-		covered := false
-		for _, part := range strings.Split(row.Location, "/") {
-			for _, refused := range implementRefusedNames {
-				if strings.EqualFold(part, refused) {
-					covered = true
-				}
-			}
-		}
-		if row.Expected == "covered if loaded" && !covered {
-			t.Fatalf("expected covered discovery path is not refused: %s", row.Location)
+		if row.Expected == "covered if loaded" {
+			agyCheckConfigAssertRefused(t, row.Location)
 		}
 	}
 	if len(fixtures) != count {
 		t.Fatalf("discovery fixture set differs from table: %d, want %d", len(fixtures), count)
+	}
+}
+
+func agyCheckConfigHomeCommand(t *testing.T, data []byte) string {
+	t.Helper()
+	var config map[string]map[string][]struct {
+		Matcher string
+		Hooks   []struct {
+			Command string
+			Timeout int
+		}
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	events, ok := config["ribbitto-implementer-guard"]
+	if len(config) != 1 || !ok || len(events) != 1 || len(events["PreToolUse"]) != 1 {
+		t.Fatalf("same-name hook must use the home name and event: %s", data)
+	}
+	matcher := events["PreToolUse"][0]
+	if matcher.Matcher != "*" || len(matcher.Hooks) != 1 || matcher.Hooks[0].Timeout != 20 {
+		t.Fatalf("same-name matcher/hooks/timeout drift: %s", data)
+	}
+	return matcher.Hooks[0].Command
+}
+
+func agyCheckConfigAssertSameName(t *testing.T) {
+	t.Helper()
+	fixtures, err := agyCheckConfigSameName("/binary", "/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := 0
+	for _, row := range agyCheckExpected {
+		if row.Group != "workspace" || row.Location == "" {
+			continue
+		}
+		if index >= len(fixtures) {
+			t.Fatalf("same-name fixture missing: %s", row.ID)
+		}
+		fixture := fixtures[index]
+		index++
+		if fixture.ID != row.ID || fixture.Location != row.Location {
+			t.Fatalf("same-name row/location drift: %+v, want %s %s", fixture, row.ID, row.Location)
+		}
+		for _, hook := range []struct {
+			data      []byte
+			mode, tag string
+		}{{fixture.Workspace, "allow", row.ID}, {fixture.Home, "deny", row.ID + "-home"}} {
+			command := agyCheckConfigHomeCommand(t, hook.data)
+			want := "'/binary' agy-check hook " + hook.mode + " '/state' " + hook.tag
+			if command != want || !agyCheckHookTag(hook.tag) {
+				t.Fatalf("same-name mode/tag drift: %q, want %q", command, want)
+			}
+		}
+		agyCheckConfigAssertRefused(t, row.Location)
+	}
+	if len(fixtures) != index {
+		t.Fatalf("extra same-name fixtures: %d, want %d", len(fixtures), index)
+	}
+}
+
+func TestAgyCheckConfigSameName(t *testing.T) {
+	agyCheckConfigAssertSameName(t)
+	fixtures, err := agyCheckConfigSameName("/binary", "/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLocations := map[string]string{"hook-same-name-agent": ".agent/hooks.json", "hook-same-name-agents": ".agents/hooks.json"}
+	if len(fixtures) != len(wantLocations) {
+		t.Fatalf("same-name fixture count: %d, want %d", len(fixtures), len(wantLocations))
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.ID, func(t *testing.T) {
+			if fixture.Location != wantLocations[fixture.ID] {
+				t.Fatalf("same-name location swapped: %s %s", fixture.ID, fixture.Location)
+			}
+		})
+	}
+	// Collision fixtures must not change the different-name scenarios.
+	agyCheckConfigAssertWorkspace(t)
+	discovery, err := agyCheckConfigWorkspace("/trusted tool/argonreview", "/check/hook")
+	if err != nil || string(discovery[".agent/hooks.json"]) != agyCheckConfigWorkspaceGolden {
+		t.Fatalf("discovery golden drift: %s %v", discovery[".agent/hooks.json"], err)
+	}
+	precedence, err := agyCheckConfigPrecedence("/trusted tool/argonreview", "/check/hook")
+	want := strings.Replace(agyCheckConfigWorkspaceGolden, "discovery-agent", "hook-precedence", 1)
+	if err != nil || len(precedence) != 1 || string(precedence[".agent/hooks.json"]) != want {
+		t.Fatalf("precedence golden drift: %s %v", precedence[".agent/hooks.json"], err)
+	}
+}
+
+func TestAgyCheckConfigSameNameTable(t *testing.T) {
+	saved := agyCheckExpected
+	defer func() { agyCheckExpected = saved }()
+	agyCheckExpected = append(append([]agyCheckRow{}, saved...), agyCheckRow{
+		ID: "hook-same-name-added", Group: "workspace", Expected: "denied", Location: ".agents/extra/hooks.json",
+	})
+	agyCheckConfigAssertSameName(t)
+	for _, location := range []string{"../outside", "/absolute", "a/settings.json", "a'b", ".agent/hooks.json", ".agents/hooks.json"} {
+		t.Run(location, func(t *testing.T) {
+			agyCheckExpected[len(agyCheckExpected)-1].Location = location
+			if _, err := agyCheckConfigSameName("/binary", "/state"); err == nil {
+				t.Fatalf("unsafe/duplicate same-name location %q accepted", location)
+			}
+		})
+	}
+	agyCheckExpected[len(agyCheckExpected)-1].Location = ".agents/extra/hooks.json"
+	for _, id := range []string{"", "-bad", "UPPER", strings.Repeat("a", 36)} {
+		agyCheckExpected[len(agyCheckExpected)-1].ID = id
+		if _, err := agyCheckConfigSameName("/binary", "/state"); err == nil {
+			t.Fatalf("invalid workspace/home tag accepted: %q", id)
+		}
+	}
+}
+
+func TestAgyCheckConfigSameNameClaims(t *testing.T) {
+	fixtures, err := agyCheckConfigSameName("/binary", "/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.ID, func(t *testing.T) {
+			dir := agyCheckHookPrepared(t)
+			h := &agyCheckHookHarness{d: agyCheckHookFileDeps(strings.NewReader("{}"))}
+			for i, data := range [][]byte{fixture.Home, fixture.Workspace} {
+				command := agyCheckConfigHomeCommand(t, data)
+				args, ok := strings.CutPrefix(command, "'/binary' agy-check hook ")
+				mode, tag, found := strings.Cut(args, " '/state' ")
+				if !ok || !found {
+					t.Fatalf("unexpected generated command: %q", command)
+				}
+				output := "{\"decision\":\"allow\"}\n"
+				if i == 0 {
+					output = "{\"decision\":\"deny\",\"reason\":\"agy-check fixture denial\"}\n"
+				}
+				agyCheckHookRun(t, h, []string{mode, dir, tag}, 0, output, "")
+			}
+			calls := filepath.Join(dir, "calls")
+			entries, err := os.ReadDir(calls)
+			if err != nil || len(entries) != 2 {
+				t.Fatalf("both hooks must leave claims: %d records %v", len(entries), err)
+			}
+			for i, want := range []string{"deny " + fixture.ID + "-home\n", "allow " + fixture.ID + "\n"} {
+				data, err := os.ReadFile(filepath.Join(calls, entries[i].Name()))
+				if err != nil || string(data) != want {
+					t.Fatalf("claim %d: %q, want %q: %v", i+1, data, want, err)
+				}
+			}
+		})
 	}
 }
 

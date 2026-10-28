@@ -13,7 +13,7 @@ approved". Its final line is:
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
 
 An allow-everything agent can write call records (maintainer accepted,
-2026-10-28, [#1890][issue]). Keep them apart from agent output where possible.
+2026-10-28, [#1890][issue]).
 Production's guard has no decision log; reconciliation provides no production proof.
 
 ## Isolation and preparation
@@ -33,8 +33,8 @@ run separately. Record access/risk on [#1890][issue], comparing deprecated
   root/maintainer-owned 0755 directories, file mode 0555. Record hashes;
   protect/record extra runtime files likewise if needed.
 
-Keep isolation strictly inside the throwaway home, outside protected roots;
-both belong to the dedicated UID with mode 0700. Write home-root
+Home and isolation directory: dedicated UID, 0700, outside protected roots.
+Write home-root
 `.argonreview-agy-check.json` with that owner and mode 0600. List every worker
 (`cmd/argonreview/agycheck_marker.go`):
 
@@ -51,9 +51,8 @@ both belong to the dedicated UID with mode 0700. Write home-root
 }
 ```
 
-Follow the marker code's schema/path rules. The check/hooks require its user's
-positive real/effective UID. Canaries require read/write/search denial on every
-protected root; missing roots fail.
+The check and hooks require the marker user's real and effective UID; canaries
+need read/write/search denial on every protected root.
 
 ## Fixed order and host procedure
 
@@ -82,33 +81,37 @@ Claude follows this order **before trust**, at `implement-check`'s first
    copy output to maintainer-owned storage or post its hash on [#1890][issue].
    After the last row executes, the check hashes the real post-update
    `.gemini/antigravity-cli/builtin/` in this home. Its last INFO line reports
-   `INFO builtin/ listing SHA-256` (rendered before the table), or a hashing
-   failure. Invalid/usage results have no INFO; the tool writes no trusted file.
+   `INFO builtin/ listing SHA-256`, or a hashing
+   failure. Usage errors and most invalid results print none; a pin mismatch
+   after the rows still prints INFO above `RESULT INVALID`: never use it. The tool writes no trusted file.
 3. No tool writes the trusted list. Claude builds the candidate
    `implementer/builtin.agy-<version>.txt` by hand from a real post-start
    `builtin/` (as on 2026-10-27, on the maintainer's instruction): regular files,
-   dotfiles included, sorted by relative path, one `<sha256>  ./<path>` line
+   dotfiles included, sorted by relative path in byte order (`LC_ALL=C`), one `<sha256>  ./<path>` line
    each, ending in newline (the format `agycheck_builtin.go` hashes and
    `implementcheck.go` reads, 1 MiB cap, no symlinks). The maintainer compares
    that file's SHA-256 with INFO's hash; INFO covers exact bytes, so order
    matters.
 4. After matching hashes and reading rows, the maintainer decides trust
-   separately for each worker.
+   separately for each worker. Each worker home must first start the new
+   version once (its `builtin/` is rewritten on first start); the same bytes
+   then go into each worker's `implementer/` directory (copies must be
+   byte-equal), file 0400, directory 0500 (`chmod u+w` to install, then
+   restore), like the other trusted files.
 
-For update recovery, start the new version once, run the check, compare lists,
-obtain maintainer trust, then run worker recovery and `implement-check` per
-[manual recovery](argon-implement-run-recovery.md#manual-recovery); failed/invalid runs do not count.
+Recovery repeats steps 1 to 4, then follows
+[manual recovery](argon-implement-run-recovery.md#manual-recovery); failed or
+invalid runs do not count.
 
-The tool revalidates marker/UID/paths/canaries/binaries before every start,
-including `--version`. Version/SHA-256 pins must match before/after and across
-rows. Pins are not printed.
-agy uses `-p`, `--sandbox`, a time limit and synthetic workspace, with
-only fixed PATH, HOME and fresh isolation TMPDIR in its env.
+The tool revalidates marker, UID, paths, canaries and binaries before every
+start and requires matching version/SHA-256 pins before, after and across rows
+(not printed). agy runs with `-p`, `--sandbox`, a time limit, a synthetic
+workspace and only PATH, HOME and a fresh TMPDIR.
 
 The tool restores bytes/modes or absence only for three home files
 (`cmd/argonreview/agycheck_place.go`):
 `.gemini/config/hooks.json`, `.gemini/config/mcp_config.json`,
-`.gemini/antigravity-cli/settings.json`. These are isolation-confinement exceptions.
+`.gemini/antigravity-cli/settings.json`.
 It removes created config directories and transient trees; errors invalidate.
 Other home restoration is a host step: between full runs, Claude/the maintainer
 confirms no session processes remain, restores the saved home contents and

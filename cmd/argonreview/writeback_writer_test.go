@@ -2,11 +2,13 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -157,6 +159,107 @@ func TestWritebackWriterRefusals(t *testing.T) {
 			writebackNoTempsT(t, tree)
 		})
 	}
+}
+
+func TestWritebackEscapeNeverWrites(t *testing.T) {
+	tree := writebackFixture(t, "sha1")
+	repo := writebackRepoT(t, tree)
+	parent := filepath.Dir(tree)
+	write(t, filepath.Join(parent, "victim_templ.go"), "sibling sentinel")
+	write(t, filepath.Join(parent, "outside/victim_templ.go"), "directory sentinel")
+	type snapshotEntry struct {
+		mode    fs.FileMode
+		content string
+	}
+	snapshot := func(t *testing.T) map[string]snapshotEntry {
+		t.Helper()
+		got := make(map[string]snapshotEntry)
+		if err := filepath.WalkDir(parent, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(parent, p)
+			if err != nil {
+				return err
+			}
+			var data []byte
+			if !d.IsDir() {
+				data, err = os.ReadFile(p)
+				if err != nil {
+					return err
+				}
+			}
+			got[rel] = snapshotEntry{info.Mode(), string(data)}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	before := snapshot(t)
+	valid := writebackEntry{writebackX, []byte(writebackBanner + "new x")}
+	first := writebackRawArchive(writebackRawHeader(valid.name, int64(len(valid.content)), tar.TypeReg, "", ""), valid.content)
+	for _, tc := range []struct {
+		name, hostile string
+		pax, copyPath bool
+	}{
+		{"parent", "../victim_templ.go", false, true},
+		{"inner_parent", "internal/web/view/../../../victim_templ.go", false, true},
+		{"end_parent", "internal/web/view/..", false, true},
+		{"absolute", "/abs_templ.go", false, true},
+		{"backslash", "internal/web/view\\x_templ.go", false, true},
+		{"NUL", "internal/web/view/x_templ.go\x00", true, true},
+		{"invalid_UTF8", "internal/web/view/\xff_templ.go", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// PAX preserves names that USTAR would truncate or reject as a format error.
+			hostile := writebackRawArchive(writebackRawHeader(tc.hostile, int64(len(valid.content)), tar.TypeReg, "", ""), valid.content)
+			if tc.pax {
+				hostile = writebackPAXArchive("path", tc.hostile, valid.content)
+			}
+			data := append(bytes.Clone(first[:len(first)-1024]), hostile...)
+			entries, err := parseWritebackArchive(bytes.NewReader(data))
+			if err == nil || entries != nil {
+				t.Fatalf("entries escaped whole-archive refusal: %v, %v", entries, err)
+			}
+			if !maps.Equal(before, snapshot(t)) {
+				t.Fatal("archive refusal changed parent snapshot")
+			}
+			// A parser bypass must still refuse the entire set before any write.
+			report, err := writebackFiles(tree, repo.root, []writebackEntry{valid, {tc.hostile, valid.content}}, repo, nil)
+			if err == nil || !strings.Contains(report, "0 written") || !strings.Contains(report, "refused:") {
+				t.Fatalf("bypass accepted: %s, %v", report, err)
+			}
+			if tc.copyPath && !strings.Contains(err.Error(), "copy path boundary") {
+				t.Errorf("copy path boundary did not refuse: %v", err)
+			}
+			writebackContentT(t, tree, writebackX, "old x")
+			if !maps.Equal(before, snapshot(t)) {
+				t.Fatal("writer refusal changed parent snapshot")
+			}
+			writebackNoTempsT(t, parent)
+		})
+	}
+	t.Run("control", func(t *testing.T) {
+		entries, err := parseWritebackArchive(bytes.NewReader(first))
+		if err != nil {
+			t.Fatal(err)
+		}
+		report, err := writebackFiles(tree, repo.root, entries, repo, nil)
+		if err != nil || !strings.Contains(report, "1 written") {
+			t.Fatalf("control could not write: %s, %v", report, err)
+		}
+		writebackContentT(t, tree, writebackX, string(valid.content))
+		before[filepath.Join(filepath.Base(tree), writebackX)] = snapshotEntry{0o644, string(valid.content)}
+		if !maps.Equal(before, snapshot(t)) {
+			t.Fatal("control changed more than its destination")
+		}
+		writebackNoTempsT(t, parent)
+	})
 }
 
 func TestWritebackWriterSuccess(t *testing.T) {

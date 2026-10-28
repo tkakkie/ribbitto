@@ -99,11 +99,19 @@ this procedure; the [limits](#limits) still apply.
 
 Create the dev or Codex database container immediately before `budget-start`,
 never earlier: a created container already holds its labelled slots.
-If recording its ID, `budget-start` or the readiness wait fails, apply cleanup
-**at once**, with no waiting or manual leftovers: the
-[recorded-ID Codex database lifecycle](#codex-database-lifecycle) (case 5)
-for the Codex database, or the wrapper's own cleanup for the development
-database. A created container claiming a slot a verification already holds
+If recording its ID, `budget-start` or the readiness wait fails, clean up
+**at once**, with no waiting or manual leftovers.
+For the Codex database, this is case 5's interruption: no Codex process has
+started. Stop and remove only the ID `docker create` returned, after the
+[recorded-ID Codex database lifecycle](#codex-database-lifecycle) inspection
+of name, both labels and image. If recording failed, inspect that returned
+ID, never the name. If no ID was returned or it cannot be confirmed, remove
+nothing (never by name or label, never guess an ID); list and report, and
+stop for the maintainer under the lifecycle's unknown-ID rule.
+The development database wrapper is the maintainer's harness outside N3's
+tooling cases; its cleanup is the maintainer's and grants Claude and the
+tooling no removal authority.
+A created container claiming a slot a verification already holds
 makes every caller get `unavailable: a slot is claimed twice` until one of
 them ends; a transient message of that kind can come from this.
 The code is deliberately unchanged: N2 counts `created`.

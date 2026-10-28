@@ -13,8 +13,10 @@ It consumes a whole 2 GiB unit despite its smaller limit.
 
 The wrapper runs `docker compose -f compose.yml -f <override> create postgres`,
 obtains its full ID, calls `budget-start --container <ID>`, then waits for
-health. Any failure stops the procedure. The wrapper's cleanup then applies
-[at once](argon-verify-budget-start.md#create-just-before-starting).
+health. Any failure stops the procedure. The wrapper is the maintainer's harness
+outside N3's tooling cases; its cleanup is the maintainer's and happens
+[at once](argon-verify-budget-start.md#create-just-before-starting), giving
+Claude and the tooling no removal authority.
 Run it only while used; stop with
 `make db-down`. Running `make db-up` by habit recreates it unlabelled: discovery
 blocks all new verifications until the wrapper runs again. A plain `docker run`

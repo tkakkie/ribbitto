@@ -176,15 +176,15 @@ takes these steps at once, in order:
 4. Run `container-sweep` under its unchanged ownership and liveness rules.
 5. Wait until no source copy is [in use](argon-verify-sweep.md#liveness):
    `container-sweep --dry-run` must report no `skipped (in use)` copy.
-   List `argonreview.class=browser` again and repeat step 3 until no source
+   List `argonreview.class=browser` again and repeat steps 3 and 4 until no source
    copy and no browser container remains and every slot is free.
-   If it does not clear, **do not proceed to enabling**.
+   If it does not clear, **do not proceed to enabling or re-enabling**.
 6. Record the pause and cleanup and tell the maintainer.
 
 The pause procedure requires the runner to check the switch and gate again
 immediately before `docker run`; without that check, a call already copying
 when `off` was written can still start Chromium (up to the ten-minute run
-limit), which is why step 5 waits for copies and repeats step 3.
+limit), which is why step 5 waits for copies and repeats steps 3 and 4.
 
 Re-enabling always needs the maintainer. Other security fixes immediately
 start the [update path](argon-verify-browser-updates.md#update-path).

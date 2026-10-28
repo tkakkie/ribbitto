@@ -34,9 +34,11 @@ launcher update (4) and stage B enabling (5). Passing authorizes nothing else
 In the window, before the probes, record the `docker ps -a` count and time
 one reservation. Budget inventory runs `docker inspect` on every container,
 including exited ones, under a 30 s inventory ceiling inside a 120 s
-admission deadline. If the reservation takes long, or consistency cannot be
-confirmed (inventory could not be determined, or a check fails closed with
-the "could not be determined" refusal), the preflight is **NO-GO**.
+admission deadline. If the reservation, timed with no holders running,
+takes more than **10 s** (one third of the 30 s inventory ceiling; maintainer
+decision, 2026-10-28), or consistency cannot be confirmed (inventory could
+not be determined, or a check fails closed with the "could not be determined"
+refusal), the preflight is **NO-GO**.
 
 Require determinism; timing-dependent contention never passes.
 Argon reads each result inline. Keep stage A's refusal, smoke, restoration

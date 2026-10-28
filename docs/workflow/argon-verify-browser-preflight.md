@@ -29,7 +29,8 @@ Under host approvals, Claude prepares/records:
    the old unregistered `ribbitto-codex-pg`; keep the
    [recorded-ID database lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
    thereafter. Start all later host containers through `budget-start`;
-   use the [dev/exclusive procedures](argon-verify-budget-start.md#start-procedure).
+   use the [dev/exclusive procedures](argon-verify-budget-start.md#start-procedure) and
+   [dev and load containers](argon-verify-budget-dev.md).
 3. Run the old launcher's `container-sweep` first; require no leftover before
    switching. After A2, the new sweep cannot reclaim old-image
    leftovers; they fail every check closed. Never switch around them.

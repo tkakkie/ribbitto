@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -9,6 +10,91 @@ import (
 	"syscall"
 	"testing"
 )
+
+func TestAgyCheckRowFailureAttribution(t *testing.T) {
+	for _, step := range []string{"restoration", "execution"} {
+		t.Run(step, func(t *testing.T) {
+			h := agyCheckNewCommandHarness(t, "", "")
+			failure := errors.New("private failure detail")
+			injected := false
+			if step == "restoration" {
+				remove := h.x.runner.files.remove
+				settingsRemovals := 0
+				h.x.runner.files.remove = func(path string) error {
+					if path == h.settings {
+						settingsRemovals++
+						if settingsRemovals == 2 {
+							injected = true
+							return failure
+						}
+					}
+					return remove(path)
+				}
+			} else {
+				scan := h.x.ops.scan
+				h.x.ops.scan = func(pid int) ([]int, error) {
+					if h.starts == 2 {
+						injected = true
+						return nil, failure
+					}
+					return scan(pid)
+				}
+			}
+			code, report := h.run(t, 0)
+			if !injected || h.starts != 3 || code != 1 || !strings.Contains(report, step+" failed") {
+				t.Fatalf("missing %s failure: injected %v, starts %d, code %d, report %q", step, injected, h.starts, code, report)
+			}
+			if step == "restoration" && strings.Contains(report, "execution failed") {
+				t.Fatalf("restoration-only failure labelled execution failed: %q", report)
+			}
+			if report != "RESULT INVALID: row failed: "+step+" failed\n" {
+				t.Fatalf("unexpected row failure report: %q", report)
+			}
+		})
+	}
+}
+
+func TestAgyCheckRowFailureMultipleSteps(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		steps []error
+		want  string
+	}{
+		{"two", []error{agyCheckCleanup, agyCheckCollection}, "collection failed; cleanup failed"},
+		{"several", []error{agyCheckInterruption, agyCheckExecution, agyCheckCleanup, agyCheckRestoration, agyCheckCollection, agyCheckPinning, agyCheckValidation, agyCheckCleanup}, "validation failed; pin failed; collection failed; restoration failed; cleanup failed; execution failed; agy-check interrupted"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := strings.Repeat("PRIVATE_CAUSE /host/path ENV_VALUE transcript\n\x1b[31m", 2048)
+			err := agyCheckRowFailure(errors.Join(errors.Join(tc.steps...), errors.New(cause)))
+			if strings.ContainsAny(err.Error(), "\r\n") || !strings.Contains(err.Error(), "; ") {
+				t.Errorf("row error must use single-line step separators")
+			}
+			if err.Error() != "row failed: "+tc.want {
+				t.Errorf("row error changed fixed label order or content")
+			}
+			for _, step := range tc.steps {
+				if !errors.Is(err, step) {
+					t.Errorf("row error lost step %q", step)
+				}
+			}
+			var report bytes.Buffer
+			if err := agyCheckRender(&report, agyCheckResult{InvalidReason: err.Error()}); err != nil {
+				t.Fatal(err)
+			}
+			if report.Len() > 256 {
+				t.Errorf("row report is unbounded: %d bytes", report.Len())
+			}
+			if strings.Count(report.String(), "\n") != 1 || !strings.HasSuffix(report.String(), "\n") {
+				t.Error("rendered row report must occupy one line")
+			}
+			for _, sensitive := range []string{"PRIVATE_CAUSE", "/host/path", "ENV_VALUE", "transcript", "\x1b"} {
+				if strings.Contains(err.Error(), sensitive) || strings.Contains(report.String(), sensitive) {
+					t.Errorf("row error or report exposed raw cause %q", sensitive)
+				}
+			}
+		})
+	}
+}
 
 func TestAgyCheckRowFailureSteps(t *testing.T) {
 	for _, step := range []string{"validation", "pin", "collection", "restoration", "cleanup"} {

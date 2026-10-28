@@ -103,6 +103,7 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			return 1, err
 		}
 		runErr := agyCheckPlace(m, r, config, fixtures, d.files, func() (err error) {
+			defer func() { err = agyCheckFailed(agyCheckExecution, err) }()
 			logs := make([]*os.File, 0, 2)
 			defer func() {
 				for _, log := range logs {
@@ -134,7 +135,6 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			result.Transcript, err = agyCheckReadLog(logs[0])
 			return errors.Join(run.err, err)
 		})
-		runErr = agyCheckFailed(agyCheckExecution, runErr)
 		// Restoration precedes the final validation/pin. Even failed runs cannot
 		// provide usable observations unless their before/after pins agree.
 		after, pinErr := pin()

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type agyCheckStep string
@@ -27,6 +28,20 @@ func agyCheckFailed(step agyCheckStep, err error) error {
 	return errors.Join(step, err)
 }
 
+type agyCheckStepLabels []error
+
+// Error keeps multiple step labels on one report line.
+func (labels agyCheckStepLabels) Error() string {
+	text := make([]string, len(labels))
+	for i, label := range labels {
+		text[i] = label.Error()
+	}
+	return strings.Join(text, "; ")
+}
+
+// Unwrap preserves step identity without retaining raw causes.
+func (labels agyCheckStepLabels) Unwrap() []error { return labels }
+
 // Only fixed labels cross into results: wrapped errors can hold host paths,
 // environment values or transcript content, and printable text is not redaction.
 func agyCheckRowFailure(err error) error {
@@ -39,5 +54,5 @@ func agyCheckRowFailure(err error) error {
 	if len(details) == 0 {
 		details = append(details, agyCheckExecution)
 	}
-	return fmt.Errorf("row failed: %w", errors.Join(details...))
+	return fmt.Errorf("row failed: %w", agyCheckStepLabels(details))
 }

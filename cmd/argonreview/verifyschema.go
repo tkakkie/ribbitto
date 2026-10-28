@@ -71,7 +71,7 @@ func parseVerifyArguments(raw []byte) (verifyArguments, error) {
 func verifyInputSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
 		verifyCheckProperty:   map[string]any{"type": "string", "enum": append(verifyCheckNames(), verifyBrowserCheck)},
-		verifyRunProperty:     map[string]any{"type": "string", "maxLength": 200, "description": "Required only for test-browser: an exact test name, optionally followed by slash-separated subtests (for example TestBrowser/quote). No regular expressions."},
+		verifyRunProperty:     map[string]any{"type": "string", "maxLength": 200, "description": "Required for test-browser, forbidden for every other check: an exact test name, optionally followed by slash-separated subtests (for example TestBrowser/quote). No regular expressions."},
 		verifyPackageProperty: map[string]any{"type": "string", "pattern": containerPattern.String(), "maxLength": verifyPackageLimit},
 	}, "required": []string{verifyCheckProperty, verifyPackageProperty}, "additionalProperties": false}
 }

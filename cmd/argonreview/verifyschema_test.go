@@ -113,7 +113,7 @@ func TestVerifySchemaBrowserRun(t *testing.T) {
 			switch predicate {
 			case "description":
 				description, _ := p["description"].(string)
-				for _, phrase := range []string{"Required only for test-browser", "exact test name", "slash-separated subtests", "TestBrowser/quote", "No regular expressions"} {
+				for _, phrase := range []string{"Required for test-browser, forbidden for every other check", "exact test name", "slash-separated subtests", "TestBrowser/quote", "No regular expressions"} {
 					if !strings.Contains(description, phrase) {
 						t.Fatalf("schema run description lacks %q: %q", phrase, description)
 					}

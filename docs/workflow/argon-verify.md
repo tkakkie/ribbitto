@@ -6,16 +6,17 @@ Option B (2026-10-19)
 [Generator checks](argon-verify-image.md), [test-db](argon-verify-testdb.md) and the [summary](argon-verify-testdb.md#result-summary)
 are in force since 2026-10-27 (#1700 stage A): production pins `argonreview-2e3a6bf`.
 [Write-back](argon-verify-writeback.md) awaits stage B.
+[Leftover sweep](argon-verify-sweep.md).
 
 [Aggregation](argon-verify-aggregation.md) is merged but not in force until the launcher is updated.
 
 ## Status
 
 The `verify` permission is **in force since 2026-10-21**. Production uses
-Go since 2026-10-22 (Stage 2). The maintainer approved enabling in
+Go since 2026-10-22 (Stage 2). The maintainer approved it in
 chat after reading [#1433]'s record. Evidence: [step 1][step1],
 [preflight][preflight], [enabling and smoke test][smoke].
-The Start gate and review independence stay. Only during a run, feature-on
+The Start gate and review independence stay. During a run, feature-on
 settings replace the blanket `mcp(*)` deny; the home returns
 to feature-off at rest. See [operation](argon-verify-operation.md).
 
@@ -50,7 +51,7 @@ The feature switch, settings variant, guard mode and `mcp_config.json` must
 agree before and after each run; any mismatch fails closed. A changed
 settings, hooks or MCP file makes the run not count, as `denied_actions`
 does. Server identity, arguments and configuration bytes are fixed
-in #1430/#1432 code.
+in #1430/#1432.
 
 ## Trusted server
 
@@ -63,7 +64,7 @@ with a trusted binary and fixed source and worktree arguments. It serves only if
 Pre- and post-run checks include the MCP file and server.
 
 The server environment allows only `PATH`. Docker connection settings
-are constants in the runner; its source copy uses `/tmp`, ignoring `TMPDIR`.
+are runner constants; its copy uses `/tmp`, ignoring `TMPDIR`.
 `FAILED` and `NOT VERIFIED` results set `isError`.
 
 ## Verification container
@@ -148,7 +149,7 @@ feature-on settings, guard mode and MCP file. Always restore and check feature-o
 the agent directory and `brain/` as before, no remaining session state or
 session process. Record restoration.
 
-The evidence comment records every command and log, agy version, trusted
+Evidence records every command and log, agy version, trusted
 commit SHA, binary hash, image digest and guard,
 settings and MCP configuration hashes. List tools run and refused; for each
 refusal, layer (guard, settings, server or container), any side effect

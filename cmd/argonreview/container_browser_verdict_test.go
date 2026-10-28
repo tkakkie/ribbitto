@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"math/rand/v2"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 const browserTestPackage = "github.com/tkakkie/ribbitto/internal/web"
@@ -99,10 +104,18 @@ func TestBrowserVerdict(t *testing.T) {
 
 func browserVerdictNeverWeaker(t *testing.T, run string, code int, runErr error, data []byte, truncated bool) {
 	t.Helper()
-	base := testVerdictWithAllowlist(code, runErr, data, truncated, nil)
-	got := browserVerdictFixture(browserTestPackage, run, code, runErr, data, truncated)
+	base := oracleVerdict(code, runErr, data, truncated, nil)
+	got, record := browserVerdictRecordFixture(browserTestPackage, run, code, runErr, data, truncated)
 	if !strings.HasPrefix(base, "verified") && got != base {
-		t.Fatalf("base = %q; browser = %q", base, got)
+		// N1 caps, invalid UTF-8/raw NUL and E5 before exit/truncated-tail
+		// precedence are documented stricter rules. A later cut flag cannot
+		// replace the first malformed stop. Still require the exact refusal;
+		// the success guard below always uses the frozen oracle.
+		cap := record.capName != "" && (got == "NOT VERIFIED: output limit exceeded (output cut off)" || got == "FAILED: output limit exceeded after a confirmed failure (output cut off)")
+		earlierMalformed := record.stop.malformed() && got == "FAILED: "+record.stop.String() && (base == "FAILED: empty or truncated test stream" || truncated || code != 0 || runErr != nil || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0)
+		if !cap && !earlierMalformed {
+			t.Fatalf("base = %q; browser = %q", base, got)
+		}
 	}
 	if !strings.HasPrefix(got, "verified") {
 		return
@@ -121,6 +134,41 @@ func browserVerdictNeverWeaker(t *testing.T, run string, code int, runErr error,
 	}
 	if !strings.HasPrefix(base, "verified") || runs != 1 || passes != 1 {
 		t.Fatalf("browser verified without base success and named node: base=%q, runs=%d, passes=%d", base, runs, passes)
+	}
+}
+
+// Behavioural equality alone cannot catch replacing the independent oracle with
+// the implementation under test while both are correct. Pin that test boundary.
+func TestBrowserVerdictOracleBase(t *testing.T) {
+	source, err := parser.ParseFile(token.NewFileSet(), "container_browser_verdict_test.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, decl := range source.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "browserVerdictNeverWeaker" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			assignment, ok := node.(*ast.AssignStmt)
+			if !ok || len(assignment.Lhs) != 1 || len(assignment.Rhs) != 1 {
+				return true
+			}
+			name, ok := assignment.Lhs[0].(*ast.Ident)
+			if !ok || name.Name != "base" {
+				return true
+			}
+			call, ok := assignment.Rhs[0].(*ast.CallExpr)
+			if ok {
+				callee, ok := call.Fun.(*ast.Ident)
+				found = ok && callee.Name == "oracleVerdict"
+			}
+			return false
+		})
+	}
+	if !found {
+		t.Fatal("browser never-weaker base must call the independent frozen oracle")
 	}
 }
 
@@ -149,6 +197,8 @@ func FuzzBrowserVerdictNeverWeaker(f *testing.F) {
 	for _, tc := range browserVerdictCases() {
 		f.Add([]byte(tc.data), uint8(0), tc.code, tc.truncated)
 	}
+	// A malformed first line precedes a later output-cut indication.
+	f.Add([]byte("\n"), uint8(0), 0, true)
 	f.Fuzz(func(t *testing.T, data []byte, selector uint8, code int, truncated bool) {
 		runs := []string{browserTestRun, "TestBrowser/drafts-markers/sidebar-sse", "TestTopicPostBrowser"}
 		browserVerdictNeverWeaker(t, runs[int(selector)%len(runs)], code, nil, data, truncated)

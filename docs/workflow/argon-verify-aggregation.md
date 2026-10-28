@@ -1,17 +1,18 @@
 # Argon test output aggregation
 
 #1850 is merged but **not in force until the production launcher is updated**
-(#1700). Host preflight and enabling need the maintainer's separate approval.
+(#1700). Claude runs the post-merge preflight after the two-home swap is
+authorised; only enabling needs separate maintainer approval.
 [Verification](argon-verify.md), [test-db and summary](argon-verify-testdb.md),
 [browser updates](argon-verify-browser-updates.md).
 
 ## One record
 
-`test`, `test-db` and the internal `test-browser` path stream test2json into
-`containerAggregator` in `cmd/argonreview/container_aggregator.go`. One function classifies all approved checks. Each event is checked on
-arrival; stdout is never captured as a whole. Passing test output is dropped
-at its result, after checking failure markers. Both streams share a byte cap
-and a mutex. After the first stop, writers acknowledge and discard bytes
+`test`, `test-db` and `test-browser` stream test2json into
+`containerAggregator` in `cmd/argonreview/container_aggregator.go`. One function classifies checks. Events are checked on
+arrival; stdout is never captured as a whole. Passing output is dropped
+at its result, after checking failure markers. Streams share a byte cap
+and a mutex. After a stop, writers acknowledge and discard bytes
 without parsing or allocating. Cancellation stops the runner's child context;
 it cannot masquerade as parent cancellation or erase the run's own deadline.
 
@@ -138,7 +139,7 @@ Stdout cannot be authenticated within one uid and one container: a test can
 write a valid test2json line through `/proc/1/fd/1`. Structural rules check
 consistency, not proof. `verified` is Argon's own check, never a security
 control. CI, review and the [handoff checks](running-other-ai.md#handoff-of-another-ais-code)
-remain the check. A consistent forgery can pass.
+remain the check. Consistent forgery can pass.
 
 Change a limit in one small PR in `cmd/argonreview/container_limits.go`,
 with this table and constant-derived boundary tests. Include preflight rows

@@ -525,7 +525,8 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		result.aggregation = nil // Do not keep protocol maps or running output alive.
 		cleanupFailed := in.runnerFailed
 		in.runnerFailed = in.runnerFailed || state.parentCancelled || state.deadline && state.interrupted || result.code >= 125 && result.code <= 127
-		in.verdict = recordVerdict(decided.verdict, result.record)
+		decided.verdict = recordVerdict(decided.verdict, result.record)
+		in.verdict = decided.verdict
 		if in.check == "test-browser" {
 			in.verdict = browserVerdict(in.browserRun, result.record, decided)
 		}

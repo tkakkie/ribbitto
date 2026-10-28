@@ -42,6 +42,11 @@ func recordFactsFixture(check string, stdout, stderr []byte, cut bool) summaryFa
 }
 
 func browserVerdictFixture(importPath, run string, code int, err error, data []byte, cut bool) string {
+	verdict, _ := browserVerdictRecordFixture(importPath, run, code, err, data, cut)
+	return verdict
+}
+
+func browserVerdictRecordFixture(importPath, run string, code int, err error, data []byte, cut bool) (string, *containerRecord) {
 	a := newContainerAggregator(nil, nil)
 	a.retainBrowserScope(importPath, run)
 	_, _ = a.stdoutWriter().Write(data)
@@ -49,7 +54,7 @@ func browserVerdictFixture(importPath, run string, code int, err error, data []b
 		a.stop(stopCap, "total output")
 	}
 	result := a.finish(code, err, aggregatorRunState{completed: err == nil})
-	return browserVerdict(run, a.record, result)
+	return browserVerdict(run, a.record, result), a.record
 }
 
 // assertDeadlineRecord moves the old raw-stream report comparison to the

@@ -86,6 +86,11 @@ func TestContainerBrowserSummaryLimit(t *testing.T) {
 				if !strings.HasPrefix(summary, "verified\n") || !strings.Contains(summary, "named test: "+run+" passed (1 leaf tests)\n") {
 					t.Fatalf("verified browser summary must retain named-test line: %q", summary)
 				}
+				for _, counts := range []string{"Packages: 1 passed, 0 failed, 0 skipped\n", "Leaf tests: 1 passed, 0 failed, 0 skipped\n"} {
+					if !strings.Contains(summary, counts) {
+						t.Fatalf("verified browser summary must retain counts: missing=%q summary=%q", counts, summary)
+					}
+				}
 			}
 			if err != nil || len(summary) > limit {
 				t.Fatalf("browser summary exceeds byte budget: got=%d limit=%d err=%v", len(summary), limit, err)

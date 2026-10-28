@@ -19,28 +19,23 @@ const (
 ` + containerTestDBFinish
 )
 
-// Only this entry admits browser calls; CLI/MCP exposure belongs to B3b.
+// Internal entry point; CLI/MCP exposure belongs to B3b.
 func (v containerVerifier) verifyBrowser(ctx context.Context, pattern, run string) (string, error) {
 	if v.worktree == "" || strings.ContainsRune(v.worktree, 0) {
 		return "", errors.New("a worktree path is required")
 	}
-	importPath, err := browserPackageImportPath(pattern)
-	if err != nil {
-		return "", err
-	}
-	if _, err := browserRunPattern(run); err != nil {
-		return "", err
-	}
-	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, browserImportPath: importPath, admit: v.browserAdmission}
-	_, err = runContainerExecution(ctx, v.worktree, "test-browser", pattern, v.runner, v.copyParent, &result)
+	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, admit: v.browserAdmission}
+	_, err := runContainerExecution(ctx, v.worktree, "test-browser", pattern, v.runner, v.copyParent, &result)
 	return result.summary, err
 }
 
-func containerBrowserArguments(copyDir, name, pattern, run string, reservation budgetReservation) []string {
-	// verifyBrowser validated run before admission or reservation.
-	runPattern, _ := browserRunPattern(run)
+func containerBrowserArguments(copyDir, name, pattern, run string, reservation budgetReservation) ([]string, error) {
+	runPattern, err := browserRunPattern(run)
+	if err != nil {
+		return nil, err
+	}
 	args := containerBaseArguments(copyDir, name, "test-browser", reservation, true)
-	return append(args, containerBrowserScript, "sh", pattern, runPattern)
+	return append(args, containerBrowserScript, "sh", pattern, runPattern), nil
 }
 
 func (result *containerExecution) refuse(check, pattern, line string) string {

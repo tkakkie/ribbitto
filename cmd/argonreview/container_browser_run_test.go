@@ -203,7 +203,11 @@ func TestContainerBrowserArguments(t *testing.T) {
 				args := containerArguments("copy", "name", check, "./internal/web", reservation)
 				browser := check == "test-browser"
 				if browser {
-					args = containerBrowserArguments("copy", "name", "./internal/web", browserTestRun, reservation)
+					var err error
+					args, err = containerBrowserArguments("copy", "name", "./internal/web", browserTestRun, reservation)
+					if err != nil {
+						t.Fatal(err)
+					}
 				}
 				has := func(s string) bool { return slices.Contains(args, s) }
 				value := func(key string) string {
@@ -264,7 +268,11 @@ func TestContainerBrowserArguments(t *testing.T) {
 					for _, units := range []int64{1, 2, 3} {
 						reservation.memory = units * budgetUnit
 						if browser {
-							args = containerBrowserArguments("copy", "name", "./internal/web", browserTestRun, reservation)
+							var err error
+							args, err = containerBrowserArguments("copy", "name", "./internal/web", browserTestRun, reservation)
+							if err != nil {
+								t.Fatal(err)
+							}
 						} else {
 							args = containerArguments("copy", "name", check, "./internal/web", reservation)
 						}

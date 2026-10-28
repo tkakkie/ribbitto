@@ -161,7 +161,11 @@ exec go "$@"
 			want = append(want, command...)
 			args := containerArguments("/tmp/copy/tree", "argonreview-check-fixed", check, "./...", budgetReservation{label: row.label, memory: row.bytes})
 			if check == "test-browser" {
-				args = containerBrowserArguments("/tmp/copy/tree", "argonreview-check-fixed", "./internal/web", browserTestRun, budgetReservation{label: row.label, memory: row.bytes})
+				var err error
+				args, err = containerBrowserArguments("/tmp/copy/tree", "argonreview-check-fixed", "./internal/web", browserTestRun, budgetReservation{label: row.label, memory: row.bytes})
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			if got := args; !reflect.DeepEqual(got, want) {
 				t.Fatalf("args:\n%q\nwant:\n%q", got, want)

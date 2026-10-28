@@ -287,7 +287,7 @@ type containerExecution struct {
 }
 
 // Both commands share source copying, flags, limits and confirmed cleanup.
-// Callers validate their own interface before reaching this private executor.
+// Browser inputs are validated here before admission or resource acquisition.
 func runContainerExecution(parent context.Context, tree, check, pattern string, runner containerRunner, copyParent string, result *containerExecution) (report string, err error) {
 	timeout := result.timeout
 	if timeout == 0 {
@@ -297,6 +297,14 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	defer cancel()
 	request := budgetSingle
 	if check == "test-browser" {
+		importPath, err := browserPackageImportPath(pattern)
+		if err != nil {
+			return "", err
+		}
+		if _, err := browserRunPattern(result.browserRun); err != nil {
+			return "", err
+		}
+		result.browserImportPath = importPath
 		line := browserPaused
 		if result.admit != nil {
 			line = result.admit()
@@ -391,7 +399,10 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 	output.cancel = cancel
 	args := containerArguments(copyDir, name, check, pattern, reservation)
 	if check == "test-browser" {
-		args = containerBrowserArguments(copyDir, name, pattern, result.browserRun, reservation)
+		args, err = containerBrowserArguments(copyDir, name, pattern, result.browserRun, reservation)
+		if err != nil {
+			return "", err
+		}
 	}
 	code, runErr := runner.run(ctx, args, dockerEnvironment(), output.stdoutWriter(), output.stderrWriter())
 	// Record completion before cleanup: a later deadline cannot undo a finished

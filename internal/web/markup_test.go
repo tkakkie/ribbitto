@@ -27,8 +27,8 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// checkMarkup reports what breaks the rules in docs/accessibility.md. Full pages get the document checks; fragments and
-// components only the element checks.
+// checkMarkup reports what breaks the rules in docs/accessibility.md and docs/accessibility-forms-and-targets.md.
+// Full pages get the document checks; fragments and components only the element checks.
 // appName is the English and Japanese app.title, which alone names no page.
 const appName = "ribbitto"
 

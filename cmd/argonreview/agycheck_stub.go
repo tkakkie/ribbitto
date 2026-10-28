@@ -36,8 +36,9 @@ func agyCheckStub(args []string, stdout, stderr io.Writer, d agyCheckStubDeps) i
 	// follows written reply bytes. A missing response can only lose confirmation;
 	// response covers JSON-RPC errors too. B3-2 must take success from the
 	// transcript, require start first, and pair each response <tag> with the
-	// immediately preceding request <tag>. ANY request on a denied MCP row is a
-	// breach even without a response; an unpaired allowed request is a difference.
+	// immediately preceding request <tag>. ANY tool request on a denied MCP row
+	// is a breach even without a response; initialized is a standalone handshake
+	// notification. An unpaired allowed tool request is a difference.
 	record := func(kind, tag string) error { _, err := agyCheckHookClaim(args[0], kind, tag, d.hook); return err }
 	if record("start", "-") != nil {
 		return fail()

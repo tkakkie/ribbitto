@@ -91,22 +91,7 @@ func agyCheckScriptFixture(t *testing.T, path string, f agyCheckFakeScript) {
 }
 func agyCheckToolBinary(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(agyCheckRealTemp(t), "agy-check-tool")
-	in, err := os.Open(agyCheckFakeBinary(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o500)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, e := io.Copy(out, in)
-	closeErr := out.Close()
-	if e != nil || closeErr != nil {
-		t.Fatalf("copy tool: %v %v", e, closeErr)
-	}
-	return path
+	return agyCheckLinkedBinary(t, "agy-check-tool")
 }
 
 type agyCheckRunnerHarness struct {
@@ -172,6 +157,7 @@ func (h *agyCheckRunnerHarness) run(t *testing.T, collect func(agyCheckRowDirs) 
 }
 
 func TestAgyCheckRunner(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"success", "version", "hash", "pin-error", "pin-after-error", "pin-version-failure", "malformed-pin", "validate-before", "validate-main", "validate-after", "marker-change", "oversize", "timeout", "signal", "panic", "collect-error", "cleanup-error", "straggler", "straggler-failure", "reused", "long-limit"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

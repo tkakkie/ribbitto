@@ -156,7 +156,11 @@ func agyCheckTranscriptParallelBatches(steps []agyCheckTranscriptStep) (int, err
 // agyCheckTranscriptTools pins single-call assumptions independently of the
 // expected outcomes, so changing an expectation cannot invent a tool step.
 var agyCheckTranscriptTools = map[string]string{
-	"hook-decision": "write_to_file", "hook-exit2": "write_to_file", "hook-exit1": "write_to_file",
+	"discovery-agent": "write_to_file", "discovery-agents": "write_to_file",
+	"discovery-gemini-config": "write_to_file", "discovery-gemini": "write_to_file",
+	"discovery-antigravity": "write_to_file", "discovery-root": "write_to_file",
+	"reconciliation": "write_to_file",
+	"hook-decision":  "write_to_file", "hook-exit2": "write_to_file", "hook-exit1": "write_to_file",
 	"hook-missing": "write_to_file", "hook-timeout": "write_to_file", "hook-unparseable": "write_to_file",
 	"hook-silent": "write_to_file", "hook-precedence": "write_to_file",
 	"hook-same-name-agent": "write_to_file", "hook-same-name-agents": "write_to_file",

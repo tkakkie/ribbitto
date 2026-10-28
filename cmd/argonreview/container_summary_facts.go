@@ -119,7 +119,7 @@ func summaryEvent(line []byte) (containerTestEvent, error) {
 func parseSummaryFacts(check string, stdout, stderr []byte, cut bool) summaryFacts {
 	f := summaryFacts{cut: cut}
 	f.stderr.add(string(stderr), summaryExcerptLimit)
-	if check != "test" && check != "test-db" {
+	if check != "test" && check != "test-db" && check != verifyBrowserCheck {
 		if check == "build" || check == "vet" {
 			output := string(stdout)
 			f.stdout.add(output, summaryExcerptLimit)

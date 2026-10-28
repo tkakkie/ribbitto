@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"strings"
 )
 
 // Debian's wrapper executes the real binary here. Mask it for every other
@@ -19,10 +17,10 @@ const (
 ` + containerTestDBFinish
 )
 
-// Internal entry point; CLI/MCP exposure belongs to B3b.
+// Browser calls share admission, budget, execution and cleanup across callers.
 func (v containerVerifier) verifyBrowser(ctx context.Context, pattern, run string) (string, error) {
-	if v.worktree == "" || strings.ContainsRune(v.worktree, 0) {
-		return "", errors.New("a worktree path is required")
+	if err := validateContainerCheck(v.worktree, verifyBrowserCheck, pattern, run); err != nil {
+		return "", err
 	}
 	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, admit: v.browserAdmission}
 	_, err := runContainerExecution(ctx, v.worktree, "test-browser", pattern, v.runner, v.copyParent, &result)

@@ -12,6 +12,8 @@ const (
 	verifyToolName        = "verify"
 	verifyCheckProperty   = "check"
 	verifyPackageProperty = "package"
+	verifyRunProperty     = "run"
+	verifyBrowserCheck    = "test-browser"
 	verifyPackageLimit    = 200
 )
 
@@ -19,14 +21,20 @@ const (
 // exactly this boundary rather than translating it into another validator.
 func verifyCheckNames() []string { return []string{"build", "vet", "test", "generated", "test-db"} }
 
-type verifyArguments struct{ check, pattern string }
+type verifyArguments struct{ check, pattern, run string }
 
 func parseVerifyArguments(raw []byte) (verifyArguments, error) {
 	fields, err := verifyObject(raw)
 	if err != nil {
 		return verifyArguments{}, fmt.Errorf("reading verify arguments: %w", err)
 	}
-	if len(fields) != 2 {
+	var check string
+	_ = json.Unmarshal(fields[verifyCheckProperty], &check)
+	if check == verifyBrowserCheck {
+		if len(fields) != 3 {
+			return verifyArguments{}, errors.New("test-browser requires exactly check, package and run")
+		}
+	} else if len(fields) != 2 {
 		return verifyArguments{}, errors.New("verify requires exactly check and package")
 	}
 	var a verifyArguments
@@ -37,6 +45,8 @@ func parseVerifyArguments(raw []byte) (verifyArguments, error) {
 			target = &a.check
 		case verifyPackageProperty:
 			target = &a.pattern
+		case verifyRunProperty:
+			target = &a.run
 		default:
 			return a, errors.New("unknown verify argument")
 		}
@@ -47,7 +57,12 @@ func parseVerifyArguments(raw []byte) (verifyArguments, error) {
 			return a, errors.New("verify argument exceeds length limit")
 		}
 	}
-	if err := validateContainerCheck("fixed-worktree", a.check, a.pattern); err != nil {
+	if a.check != verifyBrowserCheck {
+		if _, exists := fields[verifyRunProperty]; exists {
+			return a, errors.New("run is only allowed for test-browser")
+		}
+	}
+	if err := validateContainerCheck("fixed-worktree", a.check, a.pattern, a.run); err != nil {
 		return a, fmt.Errorf("validating verify arguments: %w", err)
 	}
 	return a, nil
@@ -55,7 +70,8 @@ func parseVerifyArguments(raw []byte) (verifyArguments, error) {
 
 func verifyInputSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		verifyCheckProperty:   map[string]any{"type": "string", "enum": verifyCheckNames()},
+		verifyCheckProperty:   map[string]any{"type": "string", "enum": append(verifyCheckNames(), verifyBrowserCheck)},
+		verifyRunProperty:     map[string]any{"type": "string", "maxLength": 200},
 		verifyPackageProperty: map[string]any{"type": "string", "pattern": containerPattern.String(), "maxLength": verifyPackageLimit},
 	}, "required": []string{verifyCheckProperty, verifyPackageProperty}, "additionalProperties": false}
 }

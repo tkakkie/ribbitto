@@ -47,7 +47,7 @@ func TestContainerValidation(t *testing.T) {
 				t.Fatal("Docker reached during argument refusal")
 				return 0, nil
 			}}
-			err := validateContainerCheck("tree", "test", tc.pattern)
+			err := validateContainerCheck("tree", "test", tc.pattern, "")
 			if (err == nil) != tc.valid {
 				t.Fatalf("validation %q: %v", tc.pattern, err)
 			}
@@ -59,7 +59,7 @@ func TestContainerValidation(t *testing.T) {
 		})
 	}
 	for _, tc := range []struct{ tree, check string }{{"", "build"}, {"tree", "shell"}, {"tree", "-x"}, {"tree", ""}, {"x\x00y", "test"}} {
-		if err := validateContainerCheck(tc.tree, tc.check, "./..."); err == nil {
+		if err := validateContainerCheck(tc.tree, tc.check, "./...", ""); err == nil {
 			t.Fatalf("accepted %q %q", tc.tree, tc.check)
 		}
 	}

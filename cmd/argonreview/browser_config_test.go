@@ -246,19 +246,19 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 			t.Fatalf("published MCP missing switch: %s %v", data, err)
 		}
 	})
-	t.Run("usage-and-unwired", func(t *testing.T) {
+	t.Run("usage-and-admission", func(t *testing.T) {
 		var log bytes.Buffer
 		if code := run(nil, nil, io.Discard, &log); code != 2 {
 			t.Fatal(code)
 		}
-		if strings.Count(log.String(), "--browser-mode") != 6 || !strings.Contains(log.String(), browserRecordUsage) || !strings.Contains(verifyMCPUsage, "--browser-mode") || !strings.Contains(implementConfigUsage, "--browser-mode") || !strings.Contains(implementRunUsage, "--browser-mode") {
+		if strings.Count(log.String(), "--browser-mode") != 7 || !strings.Contains(log.String(), browserRecordUsage) || !strings.Contains(verifyMCPUsage, "--browser-mode") || !strings.Contains(implementConfigUsage, "--browser-mode") || !strings.Contains(implementRunUsage, "--browser-mode") {
 			t.Fatalf("usage missing browser flags: %s", &log)
 		}
-		if err := validateContainerCheck("/tree", "test-browser", "./internal/web"); err == nil {
-			t.Fatal("test-browser runner wired prematurely")
+		if err := validateContainerCheck("/tree", "test-browser", "./internal/web", "TestBrowser/a"); err != nil {
+			t.Fatal("valid test-browser runner refused")
 		}
-		if _, err := parseVerifyArguments([]byte(`{"check":"test-browser","package":"./internal/web","run":"TestBrowser/a"}`)); err == nil {
-			t.Fatal("browser MCP wired prematurely")
+		if _, err := parseVerifyArguments([]byte(`{"check":"test-browser","package":"./internal/web","run":"TestBrowser/a"}`)); err != nil {
+			t.Fatal("valid browser MCP refused")
 		}
 		v := newContainerVerifier("unused", "")
 		if got := v.browserAdmission(); got != browserPaused {

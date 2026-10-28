@@ -17,9 +17,11 @@
 // container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> copies Git's
 // tracked and non-ignored files without protected names or symlinks, then
 // runs a fixed Go or generated-files check in a resource-limited, no-network container.
+// container-check also accepts <worktree> test-browser <package> <run> with
+// --browser-mode; admission requires the switch on and a current security check.
 // It needs the trusted build, the local Docker socket and a provisioned
 // /var/cache/argonreview/go-mod cache; skips never verify tests (#1429).
-// Race, cgo-dependent, database and browser checks remain CI-only;
+// Race and cgo-dependent checks remain CI-only; browser checks are merged but not in force;
 // container-generate <worktree> writes validated generated output after confirmed
 // stop and post-run checks, never through MCP or the guard (#1699). Write-back
 // is not in force until #1700 stage B; generated during a run stays report-only.
@@ -41,7 +43,7 @@
 // in a separate output directory without running the binary (#1433).
 // Optional --browser-mode on implement-run, implement-check, implement-config,
 // verify-mcp and container-check carries the trusted switch path. Browser admission
-// guards the internal runner (hidden until B3b); browser-check-record is host-only.
+// requires the switch on and the 14-day gate; browser-check-record is host-only.
 package main
 
 import (
@@ -173,7 +175,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | "+strings.TrimPrefix(containerCheckUsage, "usage: argonreview ")+" | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage)
 	return 2
 }
 

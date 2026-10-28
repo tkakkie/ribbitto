@@ -82,7 +82,7 @@ installed generator binaries. Record the browser build on #1908 with:
 - `chromium --version` from the built image.
 - The full `dpkg-query -W` list and its reviewed diff against the current
   image, following the rule above.
-- The image size against the old image's **1,765,140,168 bytes**;
+- The image size against the currently pinned image's size;
   state both sizes and the difference.
 - The build time.
 - One headless `about:blank` run under the production flags, with its
@@ -120,8 +120,9 @@ build are required, in this order:
    `--tmpfs /usr/lib/chromium:ro,noexec,nosuid,nodev,size=1m` masks Debian's
    install directory. Only `test-browser` omits it.
    `TestContainerChromiumMasked` and `TestContainerArgumentsGolden` pin the
-   masking against non-browser launches in final arguments. These image-free
-   tests let B3a precede A2; both had to pass before B3a merged.
+   masking and prove a non-browser check cannot launch Chromium from its
+   final arguments. These image-free tests let B3a precede A2; both had to
+   pass before B3a merged.
 
    Second, A2 pins `containerVerifyImage` to the recorded ID, with tier A
    review and merge on the maintainer's instruction. A2 must not merge until

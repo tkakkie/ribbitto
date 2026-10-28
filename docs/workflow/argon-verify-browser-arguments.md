@@ -9,7 +9,10 @@ The `verify` schema includes `test-browser` and a string `run` property.
 With `--allow-verify`, the guard uses `parseVerifyArguments`; MCP uses the
 same parser and dispatches to `verifyBrowser`. `container-check` accepts
 `<worktree> test-browser <package> <run> [--browser-mode <abs path>]`;
-both paths reach `runContainerExecution`.
+it refuses `--browser-mode` for every other check. Both paths reach
+`runContainerExecution`. The guard checks argument shape only; the shared
+parser also applies package/run validators. It reads no switch or gate and
+never starts a container.
 
 For the `test-browser` call, require `check`, `package` and `run`.
 These are its acceptance rules; they do not authorize a call before enabling.

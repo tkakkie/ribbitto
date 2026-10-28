@@ -55,7 +55,8 @@ Both workers' run and check wrappers pass the **same absolute path** as
 file, never a separate copy. With `--verify off` (`checks.zsh` idle check or
 `verify-mode off` rollback), they never pass it: those commands refuse the
 flag, so an unconditional flag would make them refuse.
-`container-check` passes the same path for `test-browser`. The flag is on
+`container-check` accepts the same path only for `test-browser` and refuses
+it for every other check. The flag is on
 `implement-run`, `implement-check`, `implement-config`, `verify-mcp` and
 `container-check`. The implementer commands require verify on (`--mode on`
 for config). The path goes into `mcp_config.json`; `implement-check`
@@ -63,8 +64,9 @@ regenerates and compares it byte for byte, including that path.
 Paths must be absolute, clean, valid UTF-8, non-root, with no single quote
 or control character.
 
-The guard checks argument shape only through `parseVerifyArguments` and
-the shared package/run validators. The runner reads the switch and, if on,
+The guard checks argument shape only; `parseVerifyArguments` also applies
+the shared package/run validators. It reads no switch or gate and starts
+no container. The runner reads the switch and, if on,
 the gate on every call, never at server start or in the guard.
 Every `test-browser` call reads the switch before any units or source copy.
 The opened file must be regular, uid-owned, not a symlink, and not group-
@@ -84,8 +86,12 @@ Those include exclusive pause, unknown state, unsafe locks, invalid
 reservations, unlimited/unregistered containers, duplicate slots and orphans.
 Refusals start no container and create no source copy.
 
-After reservation, the runner rechecks switch/gate before copying; refusal
-releases the reservation.
+After reservation, before copying, the runner re-reads the switch and, if
+on, the gate (including path and freshness checks). It repeats this sequence
+immediately before starting the container, after copy and preparation.
+Either refusal starts no container and releases the reservation; the late
+refusal also removes the source copy. Its line survives report finalisation
+unless source cleanup fails.
 After admission: reserve, copy, run, stop/remove, remove source copy and
 close its lock, release units. Failed removal never makes a leftover's
 labelled slots free; use the [sweep](argon-verify-sweep.md).

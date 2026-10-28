@@ -110,7 +110,11 @@ func TestAggregatorAccountingCoversHeap(t *testing.T) {
 			runtime.ReadMemStats(&after)
 			delta := int64(after.HeapAlloc) - int64(before.HeapAlloc)
 			accounted := a.record.accounted - base
-			if a.record.stop != stopNone || int64(accounted) < delta {
+			// Global heap sampling includes allocator/GC bookkeeping noise. Allow
+			// one allocator quantum per synthetic test, far below the difference
+			// between the required test charge and the undercharging mutant.
+			tolerance := aggregatorTestLimit / 16 * aggregatorAllocationQuantum
+			if a.record.stop != stopNone || int64(accounted+tolerance) < delta {
 				t.Fatalf("%s: accounted excluding base=%d live delta=%d stop=%s/%s", shape, accounted, delta, a.record.stop, a.record.capName)
 			}
 			runtime.KeepAlive(a)

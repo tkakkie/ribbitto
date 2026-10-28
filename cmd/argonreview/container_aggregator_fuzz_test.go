@@ -9,6 +9,8 @@ import (
 
 // FuzzAggregator compares the independent whole-stream oracle with chunked
 // writes. Cutting writes inside UTF-8 and JSON escapes must not change evidence.
+// Approved stricter identity/field caps have explicit A2/B2 rows; missing-result
+// diagnostics use sorted packages, package result before tests in both parsers.
 func FuzzAggregator(f *testing.F) {
 	seeds := []string{
 		containerEvents("p", "TestOne", "pass"),
@@ -38,13 +40,18 @@ func FuzzAggregator(f *testing.F) {
 		if aggregatorFirst(got) == "verified" && wantFirst != "verified" {
 			t.Fatalf("weaker than oracle: got %q want %q", got.verdict, want)
 		}
+		// Named, approved differential exception: pin both exact first lines,
+		// in addition to the universal never-verified-where-oracle-refuses guard.
+		if string(data) == "garbage\n{" {
+			assertAggregatorE5CutException(t, got, want)
+		}
 		// N1 gives an already malformed line precedence over a later cut line;
 		// the frozen oracle checks the final newline before reading any event.
 		cut := len(data) == 0 || data[len(data)-1] != '\n'
 		precedenceConflict := cut && a.record.stop != stopTruncated && a.record.capName == ""
 		stricter := a.record.capName != "" || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0
 		if !stricter && precedenceConflict {
-			if !strings.HasPrefix(got.verdict, "FAILED") || !a.record.stop.malformed() {
+			if !strings.HasPrefix(got.verdict, "FAILED:") || wantFirst != "FAILED: empty or truncated test stream" || !a.record.stop.malformed() {
 				t.Fatalf("precedence exception must be a malformed FAILED: %q stop=%s", got.verdict, a.record.stop)
 			}
 		}

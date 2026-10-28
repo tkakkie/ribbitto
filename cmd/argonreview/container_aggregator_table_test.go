@@ -72,6 +72,8 @@ func TestAggregatorVerdictTable(t *testing.T) {
 		{name: "E7 exit", stream: pass, code: 125, first: "FAILED", state: complete, body: "Details unavailable: the check did not complete."},
 		{name: "F", stream: pass, first: "verified", body: "Leaf tests: 1 passed, 0 failed, 0 skipped", state: complete},
 	}
+	// Maintainer approved the extra identity-length and event-field cap rows
+	// on 2026-10-28; both retain N1 A2/B2 precedence.
 	for _, cap := range []string{"line length", "test count", "package count", "retained memory", "identity length", "event fields"} {
 		rows = append(rows, row{name: "A2 " + cap, stream: fail, stop: stopCap, cap: cap, first: failedCap, body: "Limit reached: " + cap}, row{name: "B2 " + cap, stop: stopCap, cap: cap, first: capFirst, body: "Limit reached: " + cap})
 	}
@@ -122,7 +124,24 @@ func TestAggregatorVerdictTable(t *testing.T) {
 	}
 }
 
+// assertAggregatorE5CutException pins the maintainer-approved (2026-10-28)
+// garbage-plus-cut exception: N1 E5 precedes the oracle's final-newline check.
+func assertAggregatorE5CutException(t *testing.T, got aggregatorResult, oracle string) {
+	t.Helper()
+	first, _, _ := strings.Cut(oracle, "\n")
+	if aggregatorFirst(got) != "FAILED: malformed test stream" || first != "FAILED: empty or truncated test stream" || aggregatorFirst(got) == first || !got.isError {
+		t.Fatalf("N1 E5 cut exception: aggregator=%q oracle=%q", got.verdict, oracle)
+	}
+	if !strings.HasPrefix(got.verdict, "FAILED") || !strings.HasPrefix(oracle, "FAILED") {
+		t.Fatal("N1 E5 cut exception must keep both verdicts FAILED")
+	}
+}
+
 func TestAggregatorOracle(t *testing.T) {
+	t.Run("N1 E5 earlier malformed than cut", func(t *testing.T) {
+		const stream = "garbage\n{"
+		assertAggregatorE5CutException(t, aggregatorFinish(aggregatorFixture(stream)), oracleVerdict(0, nil, []byte(stream), false, nil))
+	})
 	e := measurementSkips()[0]
 	streams := []string{
 		containerEvents("p", "TestOne", "pass"),
@@ -215,6 +234,8 @@ func TestAggregatorRequiresComplete(t *testing.T) {
 	}
 }
 
+// The approved deterministic order is sorted packages, then the package result
+// before its sorted tests (2026-10-28); the original oracle used map order.
 func TestAggregatorMissingOrder(t *testing.T) {
 	for _, tc := range []struct{ stream, want string }{
 		{containerJSON("a", "start", "run/TestZ", "run/TestA", "pass") + containerJSON("z", "start"), "FAILED: missing test result"},

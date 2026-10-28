@@ -19,6 +19,9 @@ type containerAggregator struct {
 	failureSignal, noTests         bool
 	first, last                    *aggregatorEntry
 	skipped                        []string
+	sealedState                    aggregatorRunState
+	sealedCode                     int
+	sealedErr                      error
 }
 
 type aggregatorStream struct {

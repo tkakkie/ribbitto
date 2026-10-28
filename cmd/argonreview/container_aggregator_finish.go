@@ -21,17 +21,16 @@ type aggregatorRunState struct {
 }
 
 // finish takes the runner's classification at return, not a later ctx.Err().
-// The caller owns the source-cleanup row, which precedes this decision table.
+// The first call seals the record and result; every later call returns that
+// identical result regardless of its code, error or state. The caller owns the
+// source-cleanup row, which precedes this decision table.
 func (a *containerAggregator) finish(code int, runErr error, state aggregatorRunState) aggregatorResult {
 	deadline, parentCancelled, completed := state.deadline, state.parentCancelled, state.completed
 	a.record.mu.Lock()
 	defer a.record.mu.Unlock()
 	r := a.record
 	if r.sealed {
-		return a.decide(code, runErr, state)
-	}
-	if len(a.lines[1]) > 0 {
-		a.notice(string(a.lines[1]))
+		return a.decide(a.sealedCode, a.sealedErr, a.sealedState)
 	}
 	r.complete = completed && !state.interrupted && runErr == nil && r.stop == stopNone && r.stdoutBytes > 0 && len(a.lines[0]) == 0
 	missing, missingPackage := stopNone, ""
@@ -46,13 +45,15 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 		summaryCount(&r.packages, p.entry.state)
 		passing := 0
 		for _, t := range p.tests {
+			// No verdict depends on which map entry frees its slot first.
+			r.accounted -= cap(t.slot)
+			t.slot = nil
 			if t.started && !t.parent && t.state == "pass" {
 				passing++
 			}
 		}
 		if p.entry.state == "skip" {
 			r.disallowedSkips++
-			p.entry.skipName = a.name(&a.skipped, p.entry.pkg+" (package)")
 		}
 		for _, t := range p.tests {
 			if !t.started {
@@ -63,6 +64,9 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 			}
 			if !t.parent {
 				summaryCount(&r.leaves, t.state)
+				if t.state == "fail" {
+					r.failedLeaves++
+				}
 			}
 			if t.state == "skip" {
 				allowed := t.message && allowedMeasurementSkip(a.allowlist, p.entry.pkg, t.name, t.match, t.parent, passing)
@@ -71,11 +75,8 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 					r.allowed = append(r.allowed, a.allowedName(p.entry.pkg, t.name))
 				} else {
 					r.disallowedSkips++
-					t.skipName = a.name(&a.skipped, p.entry.pkg+"/"+t.name)
 				}
 			}
-			a.record.accounted -= cap(t.slot)
-			t.slot = nil
 		}
 		// Match the oracle's sorted package walk without allocating a key slice
 		// after a stop. Within one package its missing result precedes its tests.
@@ -85,35 +86,6 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 	}
 	if missing != stopNone {
 		r.complete = false
-	}
-	// The index uses its precharged storage even after a stop. Selecting here
-	// avoids treating a parent whose child arrived later as a failing leaf.
-	r.entries = r.indexStorage[:0]
-	r.skipped = r.skipStorage[:0]
-	for n := a.first; n != nil; {
-		next := n.next
-		n.next = nil
-		if n.kind == "test" && n.parent {
-			n = next
-			continue
-		}
-		if n.kind == "test" && n.state == "fail" {
-			r.failedLeaves++
-		}
-		size := len(n.pkg) + len(n.name) + len(n.skipName)
-		if len(r.entries) == aggregatorIndexLimit || size > aggregatorNameLimit-a.indexBytes {
-			if n.state == "fail" {
-				r.namesNotRetained++
-			}
-			n = next
-			continue
-		}
-		a.indexBytes += size
-		r.entries = append(r.entries, n)
-		if n.skipName != "" {
-			r.skipped = append(r.skipped, n.skipName)
-		}
-		n = next
 	}
 	if r.stop == stopNone {
 		switch {
@@ -136,27 +108,93 @@ func (a *containerAggregator) finish(code int, runErr error, state aggregatorRun
 	if r.stop != stopNone {
 		r.complete = false
 	}
+	// The decision pass above allocates nothing. Diagnostics below may be
+	// omitted, but cannot introduce a cap or change any decision evidence.
+	if len(a.lines[1]) > 0 {
+		a.finishNotice(string(a.lines[1]))
+	}
+	for _, p := range a.packages {
+		if p.entry.state == "skip" {
+			p.entry.skipName = a.name(&a.skipped, p.entry.pkg+" (package)")
+		}
+		for _, t := range p.tests {
+			if t.started && t.state == "skip" && !t.allowed {
+				t.skipName = a.name(&a.skipped, p.entry.pkg+"/"+t.name)
+			}
+		}
+	}
+	// The index uses its precharged storage even after a stop. Selecting here
+	// avoids treating a parent whose child arrived later as a failing leaf.
+	r.entries = r.indexStorage[:0]
+	r.skipped = r.skipStorage[:0]
+	for n := a.first; n != nil; {
+		next := n.next
+		n.next = nil
+		if n.kind == "test" && n.parent {
+			n = next
+			continue
+		}
+		size := len(n.pkg) + len(n.name) + len(n.skipName)
+		if len(r.entries) == aggregatorIndexLimit || size > aggregatorNameLimit-a.indexBytes {
+			if n.state == "fail" {
+				r.namesNotRetained++
+			}
+			n = next
+			continue
+		}
+		a.indexBytes += size
+		r.entries = append(r.entries, n)
+		if n.skipName != "" {
+			r.skipped = append(r.skipped, n.skipName)
+		}
+		n = next
+	}
 	sort.Strings(r.allowed)
 	sort.Strings(r.skipped)
 	sort.Strings(a.skipped)
 	r.stderrNotServable = code >= 125 && code <= 127 || runErr != nil || deadline || parentCancelled || !completed || state.interrupted
 	r.sealed = true
-	return a.decide(code, runErr, state)
+	// Preserve classification rather than rendered text: retaining a rendered
+	// report would duplicate the diagnostic budget in the live aggregator.
+	a.sealedCode, a.sealedErr, a.sealedState = code, runErr, state
+	return a.decide(a.sealedCode, a.sealedErr, a.sealedState)
 }
 
-// name reserves both the slice slot and cloned text before retaining a name.
-func (a *containerAggregator) name(names *[]string, name string) string {
-	if a.record.stop != stopNone {
-		return ""
+// finishCharge treats final diagnostic retention as optional: all decision
+// evidence has already been counted, so a refusal must not introduce a cap.
+func (a *containerAggregator) finishCharge(n int) bool {
+	if a.record.stop != stopNone || n > aggregatorMemoryLimit-a.record.accounted {
+		return false
 	}
-	if !a.charge(textCharge(len(name))) {
-		return ""
-	}
-	if len(*names) == cap(*names) {
-		size := max(1, cap(*names)*2)
-		if !a.charge(size * aggregatorNameSlotCharge) {
-			return ""
+	return a.charge(n)
+}
+
+// finishNotice retains trailing stderr markers without changing the stop.
+func (a *containerAggregator) finishNotice(output string) {
+	for line := range strings.SplitSeq(output, "\n") {
+		for _, marker := range []struct {
+			text string
+			dest *string
+		}{{"panic:", &a.record.panicLine}, {"test timed out", &a.record.timeoutLine}} {
+			if *marker.dest == "" && strings.Contains(line, marker.text) && a.finishCharge(textCharge(len(line))) {
+				*marker.dest = strings.Clone(line)
+			}
 		}
+	}
+}
+
+// name reserves cloned text and any replacement slice together. An omitted
+// diagnostic neither changes the stop nor consumes a partial reservation.
+func (a *containerAggregator) name(names *[]string, name string) string {
+	size, charge := cap(*names), textCharge(len(name))
+	if len(*names) == size {
+		size = max(1, size*2)
+		charge += size * aggregatorNameSlotCharge
+	}
+	if !a.finishCharge(charge) {
+		return ""
+	}
+	if size != cap(*names) {
 		next := make([]string, len(*names), size)
 		copy(next, *names)
 		a.record.accounted -= cap(*names) * aggregatorNameSlotCharge
@@ -231,6 +269,9 @@ func (a *containerAggregator) body(minimal bool) string {
 		}
 		fmt.Fprintf(&b, "  | %s/%s (%s, %s)\n", aggregatorText(e.pkg), aggregatorText(e.name), e.kind, e.state)
 		writeRetainedOutput(&b, e.output)
+	}
+	if omitted := r.disallowedSkips - len(a.skipped); omitted > 0 {
+		fmt.Fprintf(&b, "%d skip names not retained\n", omitted)
 	}
 	if r.namesNotRetained > 0 {
 		fmt.Fprintf(&b, "names not retained for %d failures\n", r.namesNotRetained)

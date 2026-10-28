@@ -38,8 +38,14 @@ func (r *agyCheckPinReader) Close() error {
 }
 
 func TestMain(m *testing.M) {
+	if filepath.Base(os.Args[0]) == "agy-check-tool" {
+		os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	if filepath.Base(os.Args[0]) == "agy-check-fake" {
 		data, err := os.ReadFile(os.Args[0] + ".fixture")
+		if agyCheckScriptedFake(data) {
+			return
+		}
 		var f agyCheckFake
 		if err != nil || json.Unmarshal(data, &f) != nil || len(os.Args) != 2 || os.Args[1] != "--version" ||
 			os.Getenv("HOME") != f.Home || os.Getenv("TMPDIR") == "" || os.Getenv("AGY_CHECK_FORBIDDEN_ENV") != "" {
@@ -62,7 +68,7 @@ func agyCheckFakeBinary(t *testing.T) string {
 		t.Fatal(err)
 	}
 	defer func() { _ = in.Close() }()
-	path := filepath.Join(t.TempDir(), "agy-check-fake")
+	path := filepath.Join(agyCheckRealTemp(t), "agy-check-fake")
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o500)
 	if err != nil {
 		t.Fatal(err)

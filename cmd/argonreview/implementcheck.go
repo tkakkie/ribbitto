@@ -100,12 +100,12 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	var peers implementPeerHomes
 	flags.Var(&peers, "peer-home", "peer home")
 	home, worktree, saved, hash, agy := &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}
-	verify, source := &implementOnceFlag{}, &implementOnceFlag{}
+	verify, source, browserMode := &implementOnceFlag{}, &implementOnceFlag{}, &implementOnceFlag{}
 	for _, f := range []struct {
 		name  string
 		value *implementOnceFlag
 	}{
-		{"verify", verify}, {"trusted-source", source}, {"home", home}, {"worktree", worktree}, {"git-file", saved}, {"shared-settings-sha256", hash}, {"agy", agy},
+		{"browser-mode", browserMode}, {"verify", verify}, {"trusted-source", source}, {"home", home}, {"worktree", worktree}, {"git-file", saved}, {"shared-settings-sha256", hash}, {"agy", agy},
 	} {
 		flags.Var(f.value, f.name, f.name)
 	}
@@ -120,6 +120,9 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 		return usage("no positional arguments allowed")
 	}
 	if err := implementFeatureArguments(verify.value, source.value); err != nil {
+		return usage(err.Error())
+	}
+	if err := implementBrowserArgument(verify.value, browserMode.value, browserMode.set); err != nil {
 		return usage(err.Error())
 	}
 	if home.value == "" || worktree.value == "" || saved.value == "" || hash.value == "" {
@@ -145,7 +148,7 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 	if err := peers.validate(home.value, deps.lstat); err != nil {
 		return usage(err.Error())
 	}
-	c := &implementChecker{deps: deps, out: stdout, verify: verify.value == "on", source: source.value}
+	c := &implementChecker{deps: deps, out: stdout, verify: verify.value == "on", source: source.value, browserMode: browserMode.value}
 	for _, path := range []string{home.value, worktree.value} {
 		if err := implementRealDirectory(path, deps.lstat); err != nil {
 			c.problem("invalid directory %q: %q", path, err)
@@ -190,6 +193,7 @@ func implementCheckCommand(args []string, stdout, stderr io.Writer, deps impleme
 type implementChecker struct {
 	verify      bool
 	source      string
+	browserMode string
 	deps        implementCheckDeps
 	out         io.Writer
 	problems    int
@@ -282,7 +286,7 @@ func implementMCPContract(c *implementChecker, home, worktree string) {
 	hooks, h := c.read(filepath.Join(home, ".gemini/config/hooks.json"), 1<<20, false)
 	mcp, m := c.read(filepath.Join(home, ".gemini/config/mcp_config.json"), 1<<20, false)
 	if s && h && m {
-		if err := checkImplementerConfig(true, hooks, settings, mcp, binary, c.source, worktree, filepath.Join(home, "guard")); err != nil {
+		if err := checkImplementerConfig(true, hooks, settings, mcp, binary, c.source, worktree, filepath.Join(home, "guard"), c.browserMode); err != nil {
 			c.problem("feature-on configuration: %q", err)
 		}
 	}

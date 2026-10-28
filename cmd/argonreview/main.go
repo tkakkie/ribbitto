@@ -31,6 +31,7 @@
 // worktree (#1430).
 // container-sweep [--dry-run] reclaims abandoned verification clients, labelled
 // containers and private source copies using the trusted build (#1433).
+// budget-start --container <full 64-hex ID> starts a registered host container under budget locks.
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
 // MCP call; it is off by default and also requires matching settings and config.
@@ -38,6 +39,9 @@
 // implement-run supervises one implementer run with explicit verify state and its checks (#1435).
 // implement-config generates and checks the trusted implementer configuration
 // in a separate output directory without running the binary (#1433).
+// Optional --browser-mode on implement-run, implement-check, implement-config,
+// verify-mcp and container-check carries the trusted switch path. Browser admission
+// guards the internal runner (hidden until B3b); browser-check-record is host-only.
 package main
 
 import (
@@ -61,6 +65,12 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 1 && args[0] == "agy-check" && args[1] == "hook" {
+		return agyCheckHook(args[2:], stdout, stderr, agyCheckHookDefaults(stdin))
+	}
+	if len(args) > 0 && args[0] == "browser-check-record" {
+		return browserRecordCommand(args[1:], stdout, stderr, newBrowserSecurity())
+	}
 	if len(args) > 0 && args[0] == "agy-check" {
 		return agyCheckCommand(args[1:], stdout, stderr, agyCheckDefaults())
 	}
@@ -72,6 +82,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "verify-mcp" {
 		return verifyMCPCommand(args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "budget-start" {
+		return budgetStartCommand(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "container-sweep" {
 		return containerSweepCommand(args[1:], stdout, stderr)
@@ -163,7 +176,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> | container-generate <worktree> | container-sweep [--dry-run] | verify-mcp --trusted-source <abs path> --worktree <abs path> | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | container-check <worktree> <build|vet|test|generated|test-db> <package-pattern> [--browser-mode <abs path>] | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage)
 	return 2
 }
 

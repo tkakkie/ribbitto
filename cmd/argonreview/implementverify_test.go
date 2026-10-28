@@ -417,7 +417,7 @@ func TestImplementVerifyHooks(t *testing.T) {
 					if strings.Contains(err.Error(), invalid) && invalid != "" {
 						t.Fatal("hook error includes a path")
 					}
-					if err := checkImplementerConfig(verify, nil, implementerSettings(verify), nil, bad[0], "/trusted/source", "/trusted/worktree", bad[1]); err == nil {
+					if err := checkImplementerConfig(verify, nil, implementerSettings(verify), nil, bad[0], "/trusted/source", "/trusted/worktree", bad[1], ""); err == nil {
 						t.Fatal("consistency check swallowed invalid hook path")
 					}
 				})
@@ -446,7 +446,7 @@ func TestImplementVerifyHooks(t *testing.T) {
 
 func TestImplementVerifyMCPConfig(t *testing.T) {
 	paths := []string{"/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree"}
-	got, err := implementerMCPConfig(true, paths[0], paths[1], paths[2])
+	got, err := implementerMCPConfig(true, paths[0], paths[1], paths[2], "")
 	if err != nil || !bytes.Equal(got, implementVerifyGolden(t, "mcp-config-on.json")) {
 		t.Fatalf("on config %s, error %v", got, err)
 	}
@@ -455,14 +455,14 @@ func TestImplementVerifyMCPConfig(t *testing.T) {
 			t.Run(fmt.Sprintf("path%d=%s", i, invalid), func(t *testing.T) {
 				bad := append([]string(nil), paths...)
 				bad[i] = invalid
-				got, err := implementerMCPConfig(true, bad[0], bad[1], bad[2])
+				got, err := implementerMCPConfig(true, bad[0], bad[1], bad[2], "")
 				if err == nil || len(got) != 0 {
 					t.Fatalf("invalid path accepted: %s, %v", got, err)
 				}
-				if err := checkImplementerConfig(true, implementVerifyGolden(t, "hooks-on.json"), implementerSettings(true), nil, bad[0], bad[1], bad[2], "/trusted/guard"); err == nil {
+				if err := checkImplementerConfig(true, implementVerifyGolden(t, "hooks-on.json"), implementerSettings(true), nil, bad[0], bad[1], bad[2], "/trusted/guard", ""); err == nil {
 					t.Fatal("consistency check swallowed invalid path")
 				}
-				got, err = implementerMCPConfig(false, bad[0], bad[1], bad[2])
+				got, err = implementerMCPConfig(false, bad[0], bad[1], bad[2], "")
 				if err != nil || len(got) != 0 {
 					t.Fatalf("off config must be empty even without paths: %s, %v", got, err)
 				}
@@ -526,7 +526,7 @@ func TestImplementVerifyConsistency(t *testing.T) {
 					combinations++
 					t.Run(fmt.Sprintf("switch=%t/hooks=%s/settings=%s/mcp=%s", verify, h.name, s.name, c.name), func(t *testing.T) {
 						want := !verify && h.name == "off" && s.name == "off" && c.name == "empty" || verify && h.name == "on" && s.name == "on" && c.name == "on"
-						err := checkImplementerConfig(verify, h.data, s.data, c.data, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard")
+						err := checkImplementerConfig(verify, h.data, s.data, c.data, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard", "")
 						if (err == nil) != want {
 							t.Fatalf("accepted=%t, want %t: %v", err == nil, want, err)
 						}
@@ -548,7 +548,7 @@ func TestImplementVerifyConsistency(t *testing.T) {
 	if passes != 2 {
 		t.Fatalf("accepted %d combinations, want exactly 2", passes)
 	}
-	if err := checkImplementerConfig(false, hooksOff, off, []byte{}, "/trusted/bin/argonreview", "", "", "/trusted/guard"); err != nil {
+	if err := checkImplementerConfig(false, hooksOff, off, []byte{}, "/trusted/bin/argonreview", "", "", "/trusted/guard", ""); err != nil {
 		t.Fatalf("empty and nil MCP bytes must agree: %v", err)
 	}
 }

@@ -76,3 +76,14 @@ func implementSourceRevision(source string, info *debug.BuildInfo, ok bool, read
 	}
 	return nil
 }
+
+// implementBrowserArgument keeps browser configuration absent in feature-off homes.
+func implementBrowserArgument(state, path string, set bool) error {
+	if !set {
+		return nil
+	}
+	if state != "on" {
+		return errors.New("--browser-mode requires --verify on")
+	}
+	return browserModePath(path)
+}

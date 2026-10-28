@@ -248,7 +248,7 @@ func TestContainerBudgetEntryPoints(t *testing.T) {
 			if budget.locks.paths != locks.paths || budget.locks.uid != os.Getuid() || budget.locks.limit != 120*time.Second || budget.locks.poll != time.Second || budget.locks.now == nil || budget.locks.sleep == nil || budget.budgetHook == nil || reflect.ValueOf(budget.budgetHook).Pointer() != reflect.ValueOf(budgetOtherHook).Pointer() {
 				t.Fatal("production budget shape changed")
 			}
-			v := newContainerVerifier("worktree")
+			v := newContainerVerifier("worktree", "")
 			wired, ok := v.budget.(budgetSlots)
 			if !ok || wired.inventory.(budgetDockerInventory).runner != v.runner {
 				t.Fatal("production verifier budget missing or wrong runner")

@@ -27,27 +27,29 @@ const (
 	verifyCallLimit     = containerTimeout + 2*containerCleanupTimeout + time.Minute
 	verifyShutdownGrace = 2*containerCleanupTimeout + 5*time.Second
 	verifyMCPPath       = "/usr/bin:/bin"
-	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path>"
+	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>]"
 )
 
 type verifier interface {
 	verify(context.Context, string, string) (string, error)
 }
 type containerVerifier struct {
-	budget     containerBudget
-	worktree   string
-	runner     containerRunner
-	copyParent string
-	timeout    time.Duration
+	browserMode     string
+	browserSecurity browserSecurity
+	budget          containerBudget
+	worktree        string
+	runner          containerRunner
+	copyParent      string
+	timeout         time.Duration
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
 	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout, v.budget)
 }
 
-func newContainerVerifier(worktree string) containerVerifier {
+func newContainerVerifier(worktree, browserMode string) containerVerifier {
 	runner := dockerRunner{ownGroup: true}
-	return containerVerifier{newContainerBudget(runner), worktree, runner, containerCopyParent, containerTimeout}
+	return containerVerifier{browserMode: browserMode, budget: newContainerBudget(runner), worktree: worktree, runner: runner, copyParent: containerCopyParent, timeout: containerTimeout, browserSecurity: newBrowserSecurity()}
 }
 
 func verifyMCPCommand(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -158,9 +160,17 @@ func verifyEnvironment(environ []string) error {
 }
 
 func startVerifyMCP(ctx context.Context, args, environ []string, trust func(string) error, sweep func(io.Writer) error, v verifier, stdin io.Reader, stdout, stderr io.Writer) int {
-	if len(args) != 4 || args[0] != "--trusted-source" || args[2] != "--worktree" {
+	if (len(args) != 4 && len(args) != 6) || args[0] != "--trusted-source" || args[2] != "--worktree" {
 		_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
 		return 2
+	}
+	browserMode := ""
+	if len(args) == 6 {
+		if args[4] != "--browser-mode" || browserModePath(args[5]) != nil {
+			_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
+			return 2
+		}
+		browserMode = args[5]
 	}
 	err := verifyEnvironment(environ)
 	if err == nil {
@@ -184,7 +194,7 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 		return 1
 	}
 	if v == nil {
-		v = newContainerVerifier(args[3])
+		v = newContainerVerifier(args[3], browserMode)
 	}
 	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
 		// Recheck because the worker can replace paths after startup. This

@@ -31,6 +31,7 @@ type agyCheckDeps struct {
 	read       func(string, int64) ([]byte, error)
 	open       func(string) (io.ReadCloser, error)
 	access     func(string, uint32) error
+	execution  *agyCheckExecutionDeps
 }
 
 func agyCheckDefaults() agyCheckDeps {
@@ -81,15 +82,9 @@ func agyCheckCommand(args []string, stdout, stderr io.Writer, d agyCheckDeps) in
 		_, _ = fmt.Fprintln(stderr, "usage: argonreview "+agyCheckRunUsage)
 		return agyCheckExitCode(r)
 	}
-	// Part B must call agyCheckValidate before each agy start to re-read and
-	// re-validate the marker, canaries and executables; never reuse it across rows.
-	_, err = agyCheckValidate(o, d)
-	if err == nil {
-		// Part A deliberately cannot start even --version. Part B must connect
-		// pin readings around actual observations before enabling execution.
-		err = errors.New("row execution is not implemented yet")
+	r := agyCheckExecute(o, d)
+	if err := agyCheckRender(stdout, r); err != nil {
+		return agyCheckDiffers
 	}
-	r := agyCheckResult{InvalidReason: agyCheckPrintable(err.Error())}
-	_ = agyCheckRender(stdout, r)
 	return agyCheckExitCode(r)
 }

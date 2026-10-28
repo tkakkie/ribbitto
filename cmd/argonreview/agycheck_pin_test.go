@@ -43,6 +43,9 @@ func TestMain(m *testing.M) {
 	}
 	if filepath.Base(os.Args[0]) == "agy-check-fake" {
 		data, err := os.ReadFile(os.Args[0] + ".fixture")
+		if agyCheckRowsFake(data) {
+			return
+		}
 		if agyCheckScriptedFake(data) {
 			return
 		}
@@ -57,18 +60,24 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func agyCheckFakeBinary(t *testing.T) string {
+// Hard links share immutable test-binary bytes while retaining private fixture
+// paths and sidecars. The replacement case unlinks its path before writing.
+func agyCheckLinkedBinary(t *testing.T, name string) string {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := filepath.Join(agyCheckRealTemp(t), name)
+	if err := os.Link(self, path); err == nil {
+		return path
+	}
+	// A different filesystem cannot hard-link: fall back to a private copy.
 	in, err := os.Open(self)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = in.Close() }()
-	path := filepath.Join(agyCheckRealTemp(t), "agy-check-fake")
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o500)
 	if err != nil {
 		t.Fatal(err)
@@ -81,9 +90,13 @@ func agyCheckFakeBinary(t *testing.T) string {
 	return path
 }
 
+func agyCheckFakeBinary(t *testing.T) string {
+	t.Helper()
+	return agyCheckLinkedBinary(t, "agy-check-fake")
+}
+
 func TestAgyCheckPinRecording(t *testing.T) {
-	path := agyCheckFakeBinary(t)
-	t.Setenv("AGY_CHECK_FORBIDDEN_ENV", "must be scrubbed")
+	t.Parallel()
 	for _, tc := range []struct {
 		name, second string
 		code         int
@@ -99,6 +112,8 @@ func TestAgyCheckPinRecording(t *testing.T) {
 		{"hash open failed", "agy 1.4.7", 0, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := agyCheckFakeBinary(t)
 			isolation := t.TempDir()
 			o := agyCheckOptions{home: "/fake-home", agy: path}
 			ops := systemCleanup()
@@ -167,6 +182,50 @@ func TestAgyCheckPinRecording(t *testing.T) {
 				if err := agyCheckRender(&out, r); err != nil || agyCheckExitCode(r) != 1 || !strings.HasPrefix(out.String(), "RESULT INVALID:") {
 					t.Fatalf("invalid pin report: %q %v", out.String(), err)
 				}
+			}
+		})
+	}
+}
+
+// Environment mutation stays in a sequential test; pin fixtures only share
+// immutable executable bytes and can run concurrently with command fixtures.
+func TestAgyCheckPinScrubsEnvironment(t *testing.T) {
+	path := agyCheckFakeBinary(t)
+	t.Setenv("AGY_CHECK_FORBIDDEN_ENV", "must be scrubbed")
+	home := "/fake-home"
+	ops := systemCleanup()
+	ops.scan = func(int) ([]int, error) { return nil, nil }
+	before := agyCheckPin{Version: "1.4.7", ExecutableSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("executable")))}
+	for _, tc := range []struct {
+		name, output, version, executable string
+		code                              int
+	}{
+		{"stable", "agy 1.4.7", "1.4.7", "executable", 0},
+		{"nonzero", "agy 1.4.7", "", "executable", 3},
+		{"unparseable", "agy unknown", "", "executable", 0},
+		{"hash-change", "agy 1.4.7", "1.4.7", "changed executable", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(agyCheckFake{tc.output, tc.code, home})
+			if err != nil {
+				t.Fatal(err)
+			}
+			agyCheckTestWrite(t, path+".fixture", data, 0o600)
+			d := agyCheckDefaults()
+			d.open = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(tc.executable)), nil }
+			pin, err := agyCheckRecordPin(context.Background(), agyCheckOptions{home: home, agy: path}, t.TempDir(), d, ops)
+			if tc.code != 0 {
+				if err == nil || !strings.Contains(err.Error(), "version command exited 3") {
+					t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
+				}
+				return
+			}
+			wantHash := fmt.Sprintf("%x", sha256.Sum256([]byte(tc.executable)))
+			if err != nil || pin.Version != tc.version || pin.ExecutableSHA256 != wantHash {
+				t.Fatalf("pin environment was not scrubbed: %+v %v", pin, err)
+			}
+			if got := agyCheckEvaluate(before, pin, nil, 30, ""); (got.InvalidReason != "") != (tc.name != "stable") {
+				t.Fatalf("scrubbed pin outcome changed: %+v", got)
 			}
 		})
 	}

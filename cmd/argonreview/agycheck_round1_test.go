@@ -11,20 +11,6 @@ import (
 	"testing"
 )
 
-// Each fixture has its own name and sidecar, but shares the immutable executable.
-func agyCheckLinkedBinary(t *testing.T, name string) string {
-	t.Helper()
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(agyCheckRealTemp(t), name)
-	if err := os.Link(self, path); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 // Removing private() must not redirect its injected fault into path(), which
 // would let a second guard hide a missing metadata check in a mutation run.
 func agyCheckPrivateStat() bool {

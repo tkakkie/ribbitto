@@ -24,13 +24,13 @@ func agyCheckRunnerDefaults() agyCheckRunnerDeps {
 }
 
 type agyCheckRunResult struct {
-	Transcript []byte
-	Code       int
-	Stragglers []string
+	Before, After agyCheckPin
+	Transcript    []byte
+	Code          int
+	Stragglers    []string
 }
 
 // One invocation owns fresh directories until collect has read its evidence.
-// This primitive remains unwired: no row or command can count these bytes yet.
 // The caller must stop on ANY returned error, including cleanup/restoration.
 func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps, m agyCheckMarker, r agyCheckRowDirs, prompt string, config agyCheckConfigFiles, fixtures map[string][]byte, limit time.Duration, ops cleanupOps, collect func(agyCheckRowDirs) error) (result agyCheckRunResult, err error) {
 	result.Code = 1
@@ -82,6 +82,7 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 			return agyCheckRecordPin(ctx, o, m.Isolation, d.check, ops)
 		}
 		before, err := pin()
+		result.Before = before
 		if err != nil {
 			return 1, err
 		}
@@ -127,6 +128,7 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 		// Restoration precedes the final validation/pin. Even failed runs cannot
 		// provide usable observations unless their before/after pins agree.
 		after, pinErr := pin()
+		result.After = after
 		if reason := agyCheckPinReason(before, after); reason != "" {
 			pinErr = errors.Join(pinErr, errors.New(reason))
 		}

@@ -20,12 +20,11 @@ func agyCheckObserveDiscovery(row agyCheckRow, loadedPaths, ranLocations []strin
 	return agyCheckObservation{ID: row.ID, Loaded: slices.Contains(loadedPaths, row.Location), Ran: slices.Contains(ranLocations, row.Location)}
 }
 
-// agyCheckObserveUnlistedLoads supplies information only: a new location must
-// not silently expand the expected table or affect existing rows.
+// New locations never expand expectations; Evaluate checks guard coverage.
 func agyCheckObserveUnlistedLoads(loadedPaths []string) []string {
 	known := make(map[string]bool)
 	for _, row := range agyCheckExpected {
-		if row.Group == "discovery" {
+		if row.Group == "discovery" || row.Group == "workspace" && row.Location != "" {
 			known[row.Location] = true
 		}
 	}

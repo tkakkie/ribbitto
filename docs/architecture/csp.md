@@ -44,7 +44,7 @@ swap; `[23]..`: swap; `[45]..`: no swap, error), with
 409 and 422 entries with `swap: true, error: false` before `[45]..`. The first
 matching entry wins: composer errors replace `#message-composer-state`, branch
 errors replace `#branch-feedback`. New htmx requests inherit both rules
-([`web-layers.md`](web-layers.md)). Other status codes retain their defaults.
+([`web-htmx.md`](web-htmx.md)). Other status codes retain their defaults.
 
 Message timestamps use `message-time-v2.js`, loaded with the response nonce
 on every channel page, empty or not, because htmx does not run scripts in

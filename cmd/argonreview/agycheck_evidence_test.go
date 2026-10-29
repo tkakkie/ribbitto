@@ -109,7 +109,7 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		t.Run(row.ID+"/baseline", func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, row.ID)
 			got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4)
-			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckBatchesUnobservable) {
+			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckBatchesUnobservable+"; steps=4 hooks=4 allows=2 denies=2 errors=2 files=2 repeats=0") {
 				t.Fatalf("batches invented: %+v", got)
 			}
 			if !got.OK && row.Group != "reconciliation" {
@@ -161,10 +161,6 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		{"reconciliation-tag", "reconciliation", func(e *agyCheckEvidence) { e.Claims[0].Tag = "wrong" }},
 		{"reconciliation-extra-file", "reconciliation", func(e *agyCheckEvidence) { e.Input.CreatedFiles[0] = "unexpected" }},
 		{"reconciliation-name", "reconciliation", func(e *agyCheckEvidence) { e.Input.CreatedFiles[0] = "created-1" }},
-		{"reconciliation-batches", "reconciliation", func(e *agyCheckEvidence) {
-			// Real output cannot evidence batches.
-			e.Input.Transcript = append([]byte(nil), e.Input.Transcript...)
-		}},
 		{"reconciliation-malformed", "reconciliation", func(e *agyCheckEvidence) { e.Input.Transcript = []byte("bad\n") }},
 		{"no-step-non-url", "task-off", func(e *agyCheckEvidence) { e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestResult) }},
 		{"url-step", "read-url", func(e *agyCheckEvidence) {
@@ -205,7 +201,7 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 			tc.change(&e)
 			observation := agyCheckEvidenceObservation(row, s, e)
 			if row.Group == "reconciliation" {
-				want := map[string]string{"reconciliation-gap": "invalid reconciliation records", "reconciliation-contradiction": "contradictory reconciliation records", "reconciliation-tag": "invalid reconciliation records", "reconciliation-extra-file": "unexpected created file", "reconciliation-name": "unexpected created file", "reconciliation-batches": agyCheckBatchesUnobservable, "reconciliation-malformed": agyCheckTranscriptUnparsed}[tc.name]
+				want := map[string]string{"reconciliation-gap": "invalid reconciliation records", "reconciliation-contradiction": "contradictory reconciliation records", "reconciliation-tag": "invalid reconciliation records", "reconciliation-extra-file": "unexpected created file", "reconciliation-name": "unexpected created file", "reconciliation-malformed": agyCheckTranscriptUnparsed}[tc.name]
 				if observation.Outcome != want {
 					t.Fatalf("reconciliation reason=%q want %q", observation.Outcome, want)
 				}
@@ -218,61 +214,27 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 }
 
 func TestAgyCheckOutputBlocks(t *testing.T) {
-	for _, tc := range []struct {
-		name, path string
-		code       int
-		extra      int
-	}{
-		{"none", "", 0, 0}, {"protected", ".AGENT/extra/hooks.json", 0, 0}, {"unprotected", "elsewhere/config.json", 1, 1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			pin, obs := agyCheckFixtures()
-			// Unloaded known candidates keep their coverage independent of this
-			// test: only the extra location can change the result's exit status.
-			for i, row := range agyCheckExpected {
-				if row.Group == "discovery" {
-					obs[i].Loaded, obs[i].Ran = false, false
-				}
+	pin, obs := agyCheckFixtures()
+	r := agyCheckEvaluate(pin, pin, obs, 30, "")
+	for _, listing := range [][]byte{[]byte(strings.Repeat("a", 64) + "  ./fixture\n"), nil} {
+		r.BuiltinInfo = agyCheckBuiltinInfo(listing)
+		var out strings.Builder
+		if err := agyCheckRender(&out, r); err != nil {
+			t.Fatal(err)
+		}
+		text := out.String()
+		for _, constraint := range []string{"Ordinary-agent regression check", "not tamper resistance", "the production guard keeps no decision log", "a match never approves version trust"} {
+			if !strings.Contains(text, constraint) {
+				t.Fatalf("reconciliation constraint missing: %s", constraint)
 			}
-			paths := []string{}
-			if tc.path != "" {
-				paths = append(paths, tc.path)
-			}
-			baseline := agyCheckEvaluate(pin, pin, obs, 30, "")
-			r := agyCheckEvaluate(pin, pin, obs, 30, "", paths...)
-			if !slices.Equal(r.Rows[:29], baseline.Rows) || len(r.Rows) != 29+tc.extra || agyCheckExitCode(r) != tc.code {
-				t.Fatal("unlisted load changed table or lost failure")
-			}
-			for _, listing := range [][]byte{[]byte(strings.Repeat("a", 64) + "  ./fixture\n"), nil} {
-				r.BuiltinInfo = agyCheckBuiltinInfo(listing)
-				var out strings.Builder
-				if err := agyCheckRender(&out, r); err != nil {
-					t.Fatal(err)
-				}
-				text := out.String()
-				for _, constraint := range []string{"Ordinary-agent regression check", "not tamper resistance", "the production guard keeps no decision log", "a match never approves version trust"} {
-					if !strings.Contains(text, constraint) {
-						t.Fatalf("reconciliation constraint missing: %s", constraint)
-					}
-				}
-				if agyCheckExitCode(r) != tc.code {
-					t.Fatal("information changed exit code")
-				}
-				info, table := strings.Index(text, "INFO builtin/"), strings.Index(text, "ID ")
-				if info < 0 || table <= info {
-					t.Fatal("information must precede table and final line")
-				}
-				if tc.path != "" && (strings.Index(text, "LOADED BUT UNLISTED") != 0 || strings.Index(text, tc.path) > info) {
-					t.Fatal("unlisted block must precede information")
-				}
-				if tc.code == 0 && !strings.HasSuffix(text, agyCheckSuccessLine+"\n") {
-					t.Fatal("success line is not last")
-				}
-				if tc.code != 0 && strings.Contains(text, agyCheckSuccessLine) {
-					t.Fatal("unprotected load printed success")
-				}
-			}
-		})
+		}
+		if agyCheckExitCode(r) != 0 {
+			t.Fatal("information changed exit code")
+		}
+		info, table := strings.Index(text, "INFO builtin/"), strings.Index(text, "ID ")
+		if info < 0 || table <= info || !strings.HasSuffix(text, agyCheckSuccessLine+"\n") {
+			t.Fatal("information must precede table and final success line")
+		}
 	}
 }
 
@@ -313,7 +275,11 @@ func TestAgyCheckUnobservableNeverPasses(t *testing.T) {
 			// Even changing an expectation must not manufacture evidence.
 			row.Expected = text
 			got := agyCheckClassifyRow(row, agyCheckObservation{ID: row.ID, Outcome: text, Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, 30)
-			if got.OK || got.Observed != text {
+			want := text
+			if text == agyCheckBatchesUnobservable {
+				want += "; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0"
+			}
+			if got.OK || got.Observed != want || strings.Contains(got.Observed, "batches=") {
 				t.Fatalf("unobservable passed: %+v", got)
 			}
 		}

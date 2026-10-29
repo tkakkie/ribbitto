@@ -2,8 +2,9 @@
 
 ## Status and limits
 
-Use a trusted merge build; no production/launcher changes.
-Host run/isolation need separate maintainer approvals ([#1890][issue]).
+Merged; no production file changes. Run a trusted binary rebuilt at the merge
+commit; no launcher update. [#1890][issue] items 3 and 4 (host run, isolation)
+need separate maintainer approvals.
 
 A version change triggers this; remote flag changes alone are **not seen**.
 Exit 0 means only that rows match known expectations, not "safe" or "trust
@@ -14,6 +15,8 @@ approved". Its final line is:
 An allow-everything agent can write call records (maintainer accepted,
 2026-10-28, [#1890][issue]).
 Reconciliation is no production proof: the guard keeps no decision log.
+
+Reconciliation always differs: no exit 0; trust needs follow-up.
 
 ## Isolation and preparation
 
@@ -61,9 +64,9 @@ Claude follows this order **before trust**, at `implement-check`'s first
 1. Under approved isolation, start the new version once in the throwaway home:
    agy rewrites `builtin/`, invalidating an earlier hash
    (2026-10-27, 1.4.7 → 1.4.8, [#1700 incident][incident]).
-   Before the check, the maintainer saves a post-sign-in/start home baseline
-   (contents, permissions, absences, sign-in, config, marker, builtin/) beyond
-   agent write access.
+   After sign-in and first start, before the check, the maintainer saves a clean
+   home baseline (contents, permissions, absences, sign-in, configuration, marker
+   and post-start builtin/) in maintainer-owned storage beyond agent write access.
 2. Before the check, Claude builds the candidate
    `implementer/builtin.agy-<version>.txt` by hand from the home's post-start
    `builtin/` (as on 2026-10-27): regular files,
@@ -81,18 +84,20 @@ Claude follows this order **before trust**, at `implement-check`'s first
    /trusted/argonreview agy-check --home /Users/argon-check --agy /trusted/agy-copy
    ```
 
-   Defaults: `--calls 30`, `--model gemini-4-argon-high`. Capture stdout/stderr/
-   status outside transient trees. The agent shares the results UID: copy output
-   beyond its write access or post its hash on [#1890][issue].
+   `--calls N` (default 30); `--model <name>` (default
+   `gemini-4-argon-high`). Capture stdout/stderr/status outside transient trees.
+   The agent shares the results UID and could rewrite earlier results: copy
+   output to maintainer-owned storage or post its hash on [#1890][issue].
    After the last row, the check hashes the home's real `builtin/`; its INFO
    line reports `INFO builtin/ listing SHA-256`, or a hashing failure. Usage
    errors and pre-run refusals print none; a pin mismatch after the rows still
    prints INFO above `RESULT INVALID`: never use it.
-4. Compare INFO/candidate SHA-256: mismatch means `builtin/` changed; do not
-   trust. Then the maintainer decides trust per worker. First start the new
-   version in each worker home (rewrites `builtin/`); install byte-equal saved
-   copies in each `implementer/`, file 0400, directory 0500 (`chmod u+w` to
-   install, then restore).
+4. Compare INFO's SHA-256 with the saved candidate's: a mismatch means `builtin/`
+   changed during the run; do not trust. Only then the maintainer decides trust
+   separately for each worker. Each worker home must first start the new
+   version once (its `builtin/` is rewritten on first start); the same saved
+   bytes go into each worker's `implementer/` directory (copies byte-equal),
+   file 0400, directory 0500 (`chmod u+w` to install, then restore).
 
 After an interrupted or failed run, first do
 [manual recovery](argon-implement-run-recovery.md#manual-recovery) steps 1 and 2
@@ -109,9 +114,10 @@ The tool restores bytes/modes or absence only for three home files
 `.gemini/config/hooks.json`, `.gemini/config/mcp_config.json`,
 `.gemini/antigravity-cli/settings.json`.
 It removes created config directories and transient trees; errors invalidate.
-Between runs, Claude/the maintainer confirms no session processes remain,
-restores the home baseline including post-start builtin/, clears session/brain
-state, and checks marker/permissions. Stop on restoration failure; never repair
+Other home restoration is a host step: between full runs, Claude/the maintainer
+confirms no session processes remain, restores the saved home contents and
+permissions including post-start builtin/, clears run-created session/brain
+state, and checks marker/permissions. Stop on failed restoration; never repair
 protected homes.
 
 Record binary commit/hash, copy equality, before/after pins/settings hashes,
@@ -120,8 +126,9 @@ credentials/home paths. 1.4.8 trust predates this (2026-10-27).
 
 ## Expected results (29 rows)
 
-Table: `agyCheckExpected` (`cmd/argonreview/agycheck_table.go`); scenarios:
-`cmd/argonreview/agycheck_scenarios.go`. On/off: verify modes.
+Expectations: `agyCheckExpected` in
+`cmd/argonreview/agycheck_table.go`; scenarios: `cmd/argonreview/agycheck_scenarios.go`.
+On/off means verify modes.
 
 | Group/count | Probes | Expected |
 |---|---|---|
@@ -135,40 +142,34 @@ Table: `agyCheckExpected` (`cmd/argonreview/agycheck_table.go`); scenarios:
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` answer for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls, ≥ 2 parallel batches | `counts reconcile` |
 
-Read exposures against 1.4.7.
-`discovery-*`: an intended final call and local hook run record prove
-loaded=ran=true; coverage: `implementRefusedNames`
-(`cmd/argonreview/implementguard.go`). No record:
-`hook load not observable in the transcript`, differing.
-`hook-same-name-*`: both hook claims, final ERROR, no side effect evidence the
-row without transcript loads. Unlisted loads cannot be detected from transcripts:
-real output has no `hook_loaded`.
+Exposure vs 1.4.7. Discovery: final call/local claim prove loaded/ran;
+coverage: `implementRefusedNames`; else
+`hook load not observable in the transcript` (differs). Review/extend six
+candidates. Unlisted loads unseen. Same-name: both records, final deny,
+no effect.
 
-Format: isolated-home 1.4.x (1.4.7-era) samples; first 1.4.9 run
-2026-10-29 ([record][first-run]): `init`, `step_update`, `result`.
-Final DONE/ERROR steps count; ACTIVE-only activity fails row checks.
-Only `write_file`/`call_mcp_tool` names are verified. `run_command`, `view_file`,
-`manage_task`, `list_resources`, `read_resource`, `read_url`, `execute_url`
-are unverified; mismatches differ (`no step` in the outcome adapter).
-ERROR needs claims (none for missing executable); MCP also needs stub records.
+Only 1.4.7-era isolated-home samples verify `init`/`step_update`/`result`.
+[first-run](https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043):
+no transcripts; old parser refused all; 1.4.9 unverified pending next host run.
+DONE/ERROR count; ACTIVE-only fails. Only `write_file`/`call_mcp_tool` verified;
+mismatches differ. Check ERROR claims (none if executable missing);
+MCP: stub start/request/response.
 
-URL: zero tool activity (unfinished/unrelated included) and claims. Stub
-absent/start-only or valid initialize/initialized/toolslist/ping handshake is
-allowed. Tool/resource calls, unknown tags, unpaired/pending requests and
-malformed/unreadable records fail.
+URL: no tools/claims, even unfinished/ERROR; stub absent/start-only
+or initialize/initialized/toolslist/ping. Tool/resource calls, other tags,
+unpaired replies, pending requests, bad/unreadable records fail.
 
-`reconciliation`: counts use final steps, run records and files: alternate from
-allow; steps = hooks = allows + denies; errors = denies; files = allows;
-≥ `--calls` steps. Parallel batches (≥ 2) are unobservable; ordering/interleaving
-proves none. It reports
-`parallel batches not observable in the transcript`, always differing.
-Bad records fail; no per-call correlation or tamper resistance.
+Reconciliation: claim-order allow-first alternation; both, gap≤1;
+steps=hooks=allows+denies; ERRORs=denies; files=allows; ≥ `--calls` steps.
+≥2 parallel batches unobservable from order/interleaving:
+`parallel batches not observable in the transcript` + counts.
+Bad/missing records fail; no correlation/tamper resistance.
 
 ## Failure and update checklist
 
 Exit 1 means a row difference or an invalid run; exit 2 means usage error.
-Marker/UID/canary/placement/pin refusals print `RESULT INVALID: <reason>`,
-exit 1, no table (pre-run: no INFO); they establish no version failure.
+Marker, UID, canary, placement and pin refusals print `RESULT INVALID: <reason>`
+with exit 1 and no table (pre-run ones no INFO); they do not establish a version failure.
 Do not trust a new list on failure; record the row/reason. The maintainer decides
 the response, including for already-trusted versions.
 
@@ -200,5 +201,3 @@ Keep refusal-set/symlink smoke tests.
 [record]: https://github.com/tkakkie/ribbitto/issues/1856
 [incident]: https://github.com/tkakkie/ribbitto/issues/1700#issuecomment-6437385794
 [stage]: https://github.com/tkakkie/ribbitto/issues/1700#issuecomment-6431742979
-
-[first-run]: https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043

@@ -23,25 +23,6 @@ func agyCheckObserveDiscovery(row agyCheckRow, ranLocations []string) agyCheckOb
 	return agyCheckObservation{ID: row.ID, Loaded: true, Ran: true}
 }
 
-// New locations never expand expectations; Evaluate checks guard coverage.
-func agyCheckObserveUnlistedLoads(loadedPaths []string) []string {
-	known := make(map[string]bool)
-	for _, row := range agyCheckExpected {
-		if row.Group == "discovery" || row.Group == "workspace" && row.Location != "" {
-			known[row.Location] = true
-		}
-	}
-	var extra []string
-	for _, path := range loadedPaths {
-		if !known[path] {
-			extra = append(extra, path)
-			known[path] = true
-		}
-	}
-	slices.Sort(extra)
-	return extra
-}
-
 // agyCheckObserveCreatedPrefix is an assumed fixture convention, not proof
 // that a directory entry came from an allowed tool call.
 const agyCheckObserveCreatedPrefix = "created-"

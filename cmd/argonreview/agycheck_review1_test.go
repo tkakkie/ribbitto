@@ -178,39 +178,6 @@ func TestAgyCheckRunObservation(t *testing.T) {
 	}
 }
 
-func TestAgyCheckUnlistedPrintCap(t *testing.T) {
-	t.Parallel()
-	pin, observations := agyCheckFixtures()
-	paths := []string{".agent/00-" + strings.Repeat("界", agyCheckPrintedPathRunes+1)}
-	for i := 1; i < agyCheckPrintedLoads+2; i++ {
-		paths = append(paths, fmt.Sprintf(".agent/%02d/hooks.json", i))
-	}
-	paths = append(paths, "zzz/unprotected.json")
-	r := agyCheckEvaluate(pin, pin, observations, 30, "", paths...)
-	var out strings.Builder
-	if err := agyCheckRender(&out, r); err != nil {
-		t.Fatal(err)
-	}
-	text := out.String()
-	if agyCheckExitCode(r) != 1 || !strings.Contains(text, "unlisted-load") || strings.Contains(text, agyCheckSuccessLine) {
-		t.Fatal("hidden unprotected load lost failure")
-	}
-	if strings.Count(text, "PROTECTED by refused names:") != agyCheckPrintedLoads || strings.Contains(text, "zzz/unprotected.json") {
-		t.Fatal("unlisted path count cap lost")
-	}
-	if strings.Contains(text, strings.Repeat("界", agyCheckPrintedPathRunes)) || strings.Count(text, "... [truncated]") != 1 {
-		t.Fatal("unlisted path length cap lost")
-	}
-	if !strings.Contains(text, fmt.Sprintf("Unlisted paths: %d; omitted: 3; shortened: 1", len(paths))) {
-		t.Fatal("unlisted truncation counts lost")
-	}
-	// ExitCode must independently check all evidence, even with passing rows.
-	r.Rows = nil
-	if agyCheckExitCode(r) != 1 {
-		t.Fatal("exit decision used only printed paths")
-	}
-}
-
 func TestAgyCheckCommandSignalInvalid(t *testing.T) {
 	t.Parallel()
 	h := agyCheckNewCommandHarness(t, agyCheckExpected[0].ID, "signal")
@@ -222,19 +189,4 @@ func TestAgyCheckCommandSignalInvalid(t *testing.T) {
 		t.Fatalf("later row started after signal: starts=%d", h.starts)
 	}
 	h.restored(t)
-}
-
-func TestAgyCheckUnlistedPrintBoundary(t *testing.T) {
-	t.Parallel()
-	var r agyCheckResult
-	for i := 0; i < 20; i++ {
-		r.Unlisted = append(r.Unlisted, agyCheckLoad{Path: strings.Repeat("a", 256), Protected: true})
-	}
-	var out strings.Builder
-	if err := agyCheckRender(&out, r); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Count(out.String(), strings.Repeat("a", 256)) != 20 || strings.Contains(out.String(), "[truncated]") || !strings.Contains(out.String(), "Unlisted paths: 20; omitted: 0; shortened: 0") {
-		t.Fatal("unlisted print boundary changed")
-	}
 }

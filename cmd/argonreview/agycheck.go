@@ -40,13 +40,7 @@ type agyCheckResultRow struct {
 type agyCheckResult struct {
 	InvalidReason, UsageError string
 	Rows                      []agyCheckResultRow
-	Unlisted                  []agyCheckLoad
 	BuiltinInfo               string
-}
-
-type agyCheckLoad struct {
-	Path      string
-	Protected bool
 }
 
 func agyCheckLoadProtected(path string) bool {
@@ -92,7 +86,11 @@ func agyCheckClassify(observation agyCheckObservation, minimum int) agyCheckResu
 
 func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) agyCheckResultRow {
 	r := agyCheckResultRow{agyCheckRow: row, Observed: o.Outcome}
-	if o.Outcome == agyCheckLoadUnobservable || o.Outcome == agyCheckBatchesUnobservable {
+	if o.Outcome == agyCheckBatchesUnobservable {
+		r.Observed += "; " + agyCheckSummaryText(o.Summary)
+		return r
+	}
+	if o.Outcome == agyCheckLoadUnobservable {
 		return r
 	}
 	if o.Outcome != "" && o.Outcome != row.Expected &&
@@ -108,8 +106,7 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
 	case "counts reconcile":
 		s := o.Summary
-		r.Observed = fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d batches=%d repeats=%d",
-			s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.ParallelBatches, s.Repeats)
+		r.Observed = agyCheckSummaryText(s)
 		// Either starting reply is possible; alternation needs both and a gap <= 1.
 		r.OK = minimum > 0 && s.ToolSteps >= minimum && s.ParallelBatches >= 2 &&
 			s.Allows > 0 && s.Denies > 0 && s.Allows-s.Denies >= -1 && s.Allows-s.Denies <= 1 &&
@@ -121,7 +118,12 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 	return r
 }
 
-func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string, loadedPaths ...string) agyCheckResult {
+func agyCheckSummaryText(s agyCheckSummary) string {
+	return fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d repeats=%d",
+		s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.Repeats)
+}
+
+func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string) agyCheckResult {
 	r := agyCheckResult{UsageError: usageError}
 	if usageError != "" {
 		return r
@@ -158,13 +160,6 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 			r.Rows = append(r.Rows, agyCheckClassify(o, minimum))
 		}
 	}
-	for _, path := range agyCheckObserveUnlistedLoads(loadedPaths) {
-		protected := agyCheckLoadProtected(path)
-		r.Unlisted = append(r.Unlisted, agyCheckLoad{path, protected})
-		if !protected {
-			r.Rows = append(r.Rows, agyCheckResultRow{agyCheckRow: agyCheckRow{ID: "unlisted-load", Expected: "protected", Description: "Loaded workspace hook outside the known table"}, Observed: "unprotected load"})
-		}
-	}
 	return r
 }
 
@@ -176,11 +171,6 @@ func agyCheckExitCode(r agyCheckResult) int {
 	}
 	if r.InvalidReason != "" {
 		return agyCheckDiffers
-	}
-	for _, load := range r.Unlisted {
-		if !load.Protected {
-			return agyCheckDiffers
-		}
 	}
 	for _, row := range r.Rows {
 		if !row.OK {
@@ -199,34 +189,8 @@ func agyCheckPrintable(value string) string {
 	}, value)
 }
 
-// Bound agent-controlled diagnostics without limiting the evidence used to decide.
-const (
-	agyCheckPrintedLoads     = 20
-	agyCheckPrintedPathRunes = 256
-)
-
 func agyCheckRender(w io.Writer, r agyCheckResult) error {
 	var out strings.Builder
-	if len(r.Unlisted) > 0 {
-		fmt.Fprintln(&out, "LOADED BUT UNLISTED WORKSPACE HOOKS")
-		shown := min(len(r.Unlisted), agyCheckPrintedLoads)
-		shortened := 0
-		for _, load := range r.Unlisted[:shown] {
-			protection := "UNPROTECTED: check differs"
-			if load.Protected {
-				protection = "PROTECTED by refused names"
-			}
-			path := []rune(agyCheckPrintable(load.Path))
-			if len(path) > agyCheckPrintedPathRunes {
-				path = path[:agyCheckPrintedPathRunes]
-				shortened++
-				fmt.Fprintf(&out, "%s: %s... [truncated]\n", protection, string(path))
-			} else {
-				fmt.Fprintf(&out, "%s: %s\n", protection, string(path))
-			}
-		}
-		fmt.Fprintf(&out, "Unlisted paths: %d; omitted: %d; shortened: %d\n", len(r.Unlisted), len(r.Unlisted)-shown, shortened)
-	}
 	if r.BuiltinInfo != "" {
 		fmt.Fprintln(&out, r.BuiltinInfo)
 	}

@@ -5,13 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"unicode"
 )
 
-// agyCheckTranscriptParse follows isolated-home agy 1.4.x (1.4.7-era) samples;
-// the first 1.4.9 host run was 2026-10-29 (#1890 comment 6484470043).
-// init/step_update/result and write_file/call_mcp_tool are verified. Other
-// tool names, parallel steps and hook-load events remain unverified. Opaque
+// agyCheckTranscriptParse follows only the 1.4.7-era isolated-home samples.
+// init/step_update/result and write_file/call_mcp_tool are verified there.
+// The first 1.4.9 host run (2026-10-29) kept no transcripts:
+// https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043
+// It only showed the old parser refused everything; 1.4.9's format remains
+// unverified until the next host run. Other tool names, parallel steps and
+// hook-load events remain unverified. Opaque
 // fields, including result status and tool errors, never become report text.
 // Unicode is checked before decoding; malformed events discard every fact.
 func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
@@ -30,7 +35,7 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 		invalid := func() (agyCheckTranscriptResult, error) {
 			return agyCheckTranscriptResult{}, fmt.Errorf("invalid transcript event at line %d", i+1)
 		}
-		if !implementGuardUnicode(line) || distinctKeys(line) != nil {
+		if !implementGuardUnicode(line) || !agyCheckTranscriptValidate(line) {
 			return invalid()
 		}
 		fields, ok := agyCheckTranscriptObject(line)
@@ -106,38 +111,69 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 	return result, nil
 }
 
-// agyCheckTranscriptObject applies the same key policy at each consumed object.
-func agyCheckTranscriptObject(raw []byte) (map[string]json.RawMessage, bool) {
-	var fields map[string]json.RawMessage
-	if distinctKeys(raw) != nil || json.Unmarshal(raw, &fields) != nil {
-		return nil, false
+// Bound all containers, including opaque parameters, before copying consumed fields.
+const agyCheckTranscriptMaxDepth = 16
+const agyCheckTranscriptMaxKeys = 256
+
+// agyCheckTranscriptValidate walks each line once; object key sets are scoped
+// to their level so opaque payloads cannot force repeated subtree scans.
+func agyCheckTranscriptValidate(raw []byte) bool {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	first, err := decoder.Token()
+	if err != nil || first != json.Delim('{') || !agyCheckTranscriptValue(decoder, first, 1) {
+		return false
 	}
-	for _, value := range fields {
-		if !agyCheckTranscriptNested(value) {
-			return nil, false
-		}
-	}
-	return fields, true
+	_, err = decoder.Token()
+	return err == io.EOF
 }
 
-func agyCheckTranscriptNested(raw []byte) bool {
-	raw = bytes.TrimSpace(raw)
-	switch raw[0] {
-	case '{':
-		_, ok := agyCheckTranscriptObject(raw)
-		return ok
-	case '[':
-		var items []json.RawMessage
-		if json.Unmarshal(raw, &items) != nil {
-			return false
-		}
-		for _, item := range items {
-			if !agyCheckTranscriptNested(item) {
+func agyCheckTranscriptValue(decoder *json.Decoder, token json.Token, depth int) bool {
+	delim, container := token.(json.Delim)
+	if !container {
+		return true
+	}
+	if depth > agyCheckTranscriptMaxDepth {
+		return false
+	}
+	keys := make(map[string]bool)
+	for decoder.More() {
+		if delim == '{' {
+			key, err := decoder.Token()
+			name, ok := key.(string)
+			if err != nil || !ok || len(keys) >= agyCheckTranscriptMaxKeys {
 				return false
 			}
+			// Canonicalise the full simple-fold cycle to preserve EqualFold's
+			// Unicode policy (including long s and final sigma) with a set.
+			folded := strings.Map(func(r rune) rune {
+				least := r
+				for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
+					least = min(least, next)
+				}
+				return least
+			}, name)
+			if keys[folded] {
+				return false
+			}
+			keys[folded] = true
+		}
+		value, err := decoder.Token()
+		if err != nil || !agyCheckTranscriptValue(decoder, value, depth+1) {
+			return false
 		}
 	}
-	return true
+	end, err := decoder.Token()
+	return err == nil && (delim == '{' && end == json.Delim('}') || delim == '[' && end == json.Delim(']'))
+}
+
+// agyCheckTranscriptObject decodes only consumed objects after line validation.
+func agyCheckTranscriptObject(raw []byte) (map[string]json.RawMessage, bool) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return nil, false
+	}
+	return fields, true
 }
 
 // agyCheckTranscriptUnparsed prevents parser details becoming report text.

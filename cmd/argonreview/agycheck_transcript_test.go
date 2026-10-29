@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const agyCheckTestInit = "{\"event\":\"init\",\"conversation_id\":\"d11e3b12-740e-440d-85a5-d50e2d939177\",\"init\":{\"model\":\"gemini-4-argon-high\",\"permission_mode\":\"request-review\",\"cwd\":\"...\",\"tools\":[\"...\"]}}\n"
@@ -36,6 +37,8 @@ func agyCheckTranscriptFailures() []struct{ name, data string } {
 		{"unpaired surrogate", wrap(`{"event":"step_update","text":"\ud800"}` + "\n")},
 		{"empty line", wrap("\n")},
 		{"two finals", wrap(step + step)},
+		{"ERROR then DONE", wrap(step + agyCheckTestStep(2, marker, "DONE"))},
+		{"DONE then ERROR", wrap(agyCheckTestStep(2, marker, "DONE") + step)},
 		{"ACTIVE after final", wrap(step + agyCheckTestStep(2, marker, "ACTIVE"))},
 		{"repeated ACTIVE", wrap(agyCheckTestStep(2, marker, "ACTIVE") + agyCheckTestStep(2, marker, "ACTIVE"))},
 		{"changed tool", wrap(agyCheckTestStep(2, "other", "ACTIVE") + step)},
@@ -63,7 +66,7 @@ func agyCheckTranscriptFailures() []struct{ name, data string } {
 		old := map[string]string{`"step_index"`: `"step_index":2`, `"state"`: `"state":"ERROR"`, `"step_type"`: `"step_type":"tool"`}[field]
 		cases = append(cases, struct{ name, data string }{pair[0], wrap(strings.Replace(step, old, pair[1], 1))})
 	}
-	for _, info := range []string{`null`, `1`, `"text"`, `{}`, `{"name":null}`, `{"name":1}`, `{"name":"other"}`, `{"name":"` + marker + `","NAME":"` + marker + `"}`, `{"error":null}`, `{"error":1}`, `{"error":{}}`, `{"error":{"message":null}}`, `{"error":{"message":1}}`, `{"error":{"message":"a","MESSAGE":"b"}}`, `{"parameters":{"Path":"a","PATH":"b"}}`} {
+	for _, info := range []string{`null`, `1`, `"text"`, `{}`, `{"name":null}`, `{"name":1}`, `{"name":"other"}`, `{"name":"` + marker + `","NAME":"` + marker + `"}`, `{"error":null}`, `{"error":1}`, `{"error":{}}`, `{"error":{"message":null}}`, `{"error":{"message":1}}`, `{"error":{"message":"a","MESSAGE":"b"}}`, `{"parameters":{"Path":"a","PATH":"b"}}`, `{"parameters":[{"s":1,"\u017f":2}]}`, `{"parameters":[{"σ":1,"ς":2}]}`} {
 		if info == `{}` {
 			continue
 		} // tool_info itself is optional and may be empty.
@@ -114,6 +117,75 @@ func TestAgyCheckTranscriptLineLimit(t *testing.T) {
 		if len(got.Steps) != 0 || got.Unfinished != 0 {
 			t.Fatal("invented facts")
 		}
+	}
+}
+
+// Parameters are agent-controlled; limits include containers in opaque fields.
+func TestAgyCheckTranscriptDepthLimit(t *testing.T) {
+	for _, container := range []string{"object", "array"} {
+		for _, depth := range []int{16, 17} {
+			t.Run(fmt.Sprintf("%s/depth-%d", container, depth), func(t *testing.T) {
+				payload := `"opaque"`
+				// The event, step_update and tool_info already occupy three levels.
+				for i := 0; i < depth-3; i++ {
+					if container == "object" {
+						payload = `{"a":` + payload + `}`
+					} else {
+						payload = `[` + payload + `]`
+					}
+				}
+				data := agyCheckTestParameters(payload)
+				got, err := agyCheckTranscriptParse([]byte(data))
+				if (err == nil) != (depth == 16) || (err != nil && len(got.Steps) != 0) {
+					t.Fatalf("depth %d: %+v %v", depth, got, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAgyCheckTranscriptKeyLimit(t *testing.T) {
+	for _, location := range []string{"top", "parameters"} {
+		for _, count := range []int{256, 257} {
+			t.Run(fmt.Sprintf("%s/keys-%d", location, count), func(t *testing.T) {
+				fields := []string{`"event":"init"`}
+				if location == "parameters" {
+					fields = nil
+				}
+				for i := len(fields); i < count; i++ {
+					fields = append(fields, fmt.Sprintf(`"key%d":0`, i))
+				}
+				object := "{" + strings.Join(fields, ",") + "}"
+				data := object + "\n" + agyCheckTestResult
+				if location == "parameters" {
+					data = agyCheckTestParameters(object)
+				}
+				got, err := agyCheckTranscriptParse([]byte(data))
+				if (err == nil) != (count == 256) || (err != nil && len(got.Steps) != 0) {
+					t.Fatalf("keys %d: %+v %v", count, got, err)
+				}
+			})
+		}
+	}
+}
+
+func agyCheckTestParameters(payload string) string {
+	return agyCheckTestInit + `{"event":"step_update","step_update":{"step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_file","tool_info":{"parameters":` + payload + "}}}\n" + agyCheckTestResult
+}
+
+func TestAgyCheckTranscriptDeepPayload(t *testing.T) {
+	payload := strings.Repeat(`{"a":`, 9000) + `"` + strings.Repeat("x", 256<<10) + `"` + strings.Repeat("}", 9000)
+	data := []byte(agyCheckTestParameters(payload))
+	if len(data) > agyCheckTranscriptMaxBytes {
+		t.Fatal("fixture exceeds byte bound")
+	}
+	start := time.Now()
+	got, err := agyCheckTranscriptParse(data)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("deep payload took %v to refuse", elapsed)
+	}
+	if err == nil || len(got.Steps) != 0 || got.Unfinished != 0 {
+		t.Fatalf("deep payload accepted or partial facts retained: %+v %v", got, err)
 	}
 }
 

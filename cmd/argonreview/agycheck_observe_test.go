@@ -301,7 +301,7 @@ func agyCheckObserveAssertDifference(t *testing.T, inputs map[string]agyCheckObs
 				t.Fatalf("observed=%q OK=%t; want %q false", row.Observed, row.OK, observed)
 			}
 		} else if row.ID == "reconciliation" {
-			if row.OK || row.Observed != agyCheckBatchesUnobservable {
+			if row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0" {
 				t.Fatalf("batches invented: %+v", row)
 			}
 		} else if !row.OK {
@@ -334,7 +334,7 @@ func TestAgyCheckObserveAll(t *testing.T) {
 		t.Fatalf("report row count drift: %q", out)
 	}
 	for _, row := range r.Rows {
-		if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable) {
+		if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
 			t.Fatalf("batches invented: %+v", row)
 		}
 		if !row.OK && row.ID != "reconciliation" {
@@ -381,7 +381,7 @@ func TestAgyCheckObserveUnknownRows(t *testing.T) {
 			}
 			for i, row := range r.Rows {
 				if i < len(agyCheckExpected) {
-					if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable) {
+					if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
 						t.Fatalf("batches invented: %+v", row)
 					}
 					if !row.OK && row.ID != "reconciliation" {
@@ -573,25 +573,6 @@ func TestAgyCheckObserveDiscovery(t *testing.T) {
 	}
 }
 
-// TestAgyCheckObserveUnlistedLoads pins exact membership, sorting and duplicate
-// removal without allowing extra locations to become result rows.
-func TestAgyCheckObserveUnlistedLoads(t *testing.T) {
-	inputs := []string{"z/new", ".agent/hooks.json", "a/new", "z/new", "hooks.json", "Hooks.json", "a/new"}
-	want := []string{"Hooks.json", "a/new", "z/new"}
-	if got := agyCheckObserveUnlistedLoads(inputs); !slices.Equal(got, want) {
-		t.Fatalf("extra loads=%v want %v", got, want)
-	}
-	if !slices.Equal(inputs, []string{"z/new", ".agent/hooks.json", "a/new", "z/new", "hooks.json", "Hooks.json", "a/new"}) {
-		t.Fatal("input loads were mutated")
-	}
-	r, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
-	_ = agyCheckObserveUnlistedLoads(inputs)
-	afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
-	if agyCheckExitCode(r) != 1 || agyCheckExitCode(afterR) != 1 || before != after {
-		t.Fatal("unlisted information altered result")
-	}
-}
-
 // TestAgyCheckObserveSummary pins exact counts rather than only the core's OK.
 func TestAgyCheckObserveSummary(t *testing.T) {
 	in := agyCheckObserveFixtures(t)["reconciliation"]
@@ -652,18 +633,18 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 		name, want string
 		change     func(*agyCheckObserveInput)
 	}{
-		{"invocations", "steps=30 hooks=29 allows=15 denies=14 errors=15 files=15 batches=0 repeats=0", func(in *agyCheckObserveInput) { in.Replies = in.Replies[:29] }},
-		{"errors", "steps=30 hooks=30 allows=15 denies=15 errors=14 files=15 batches=0 repeats=0", func(in *agyCheckObserveInput) {
+		{"invocations", "steps=30 hooks=29 allows=15 denies=14 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) { in.Replies = in.Replies[:29] }},
+		{"errors", "steps=30 hooks=30 allows=15 denies=15 errors=14 files=15 repeats=0", func(in *agyCheckObserveInput) {
 			in.Transcript = []byte(strings.Replace(string(in.Transcript), "ERROR", "DONE", 1))
 		}},
-		{"files", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=14 batches=0 repeats=0", func(in *agyCheckObserveInput) { in.CreatedFiles = in.CreatedFiles[:14] }},
-		{"parallel unobservable", agyCheckBatchesUnobservable, func(in *agyCheckObserveInput) {}},
-		{"below minimum", "steps=29 hooks=30 allows=15 denies=15 errors=15 files=15 batches=0 repeats=0", func(in *agyCheckObserveInput) {
+		{"files", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=14 repeats=0", func(in *agyCheckObserveInput) { in.CreatedFiles = in.CreatedFiles[:14] }},
+		{"parallel unobservable", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) {}},
+		{"below minimum", "steps=29 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) {
 			lines := strings.SplitAfter(string(in.Transcript), "\n")
 			in.Transcript = []byte(strings.Join(append(lines[:29], lines[30:]...), ""))
 		}},
 		{"unknown reply", "unparsed transcript", func(in *agyCheckObserveInput) { in.Replies[0] = "UNTRUSTED_TRANSCRIPT_MARKER" }},
-		{"non alternating", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 batches=0 repeats=28", func(in *agyCheckObserveInput) {
+		{"non alternating", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=28", func(in *agyCheckObserveInput) {
 			in.Replies = append(strings.Fields(strings.Repeat("allow ", 15)), strings.Fields(strings.Repeat("deny ", 15))...)
 		}},
 		{"duplicate file", "unparsed transcript", func(in *agyCheckObserveInput) { in.CreatedFiles[1] = in.CreatedFiles[0] }},
@@ -681,11 +662,11 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 			}
 			if strings.HasPrefix(tc.want, "steps=") {
 				summary := got.Summary
-				actual := fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d batches=%d repeats=%d", summary.ToolSteps, summary.HookInvocations, summary.Allows, summary.Denies, summary.Errors, summary.FilesCreated, summary.ParallelBatches, summary.Repeats)
+				actual := fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d repeats=%d", summary.ToolSteps, summary.HookInvocations, summary.Allows, summary.Denies, summary.Errors, summary.FilesCreated, summary.Repeats)
 				if actual != tc.want {
 					t.Fatalf("counts=%s want %s", actual, tc.want)
 				}
-				tc.want = agyCheckBatchesUnobservable
+				tc.want = agyCheckBatchesUnobservable + "; " + tc.want
 			}
 			agyCheckObserveAssertDifference(t, inputs, "reconciliation", tc.want)
 		})

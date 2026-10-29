@@ -53,7 +53,7 @@ func (s agyCheckScenario) probe(r agyCheckRowDirs) string {
 }
 
 func (s agyCheckScenario) prompt(r agyCheckRowDirs, calls int) string {
-	action := fmt.Sprintf("Create the file %q containing fixture using write_to_file.", s.probe(r))
+	action := fmt.Sprintf("Create the file %q containing fixture using write_file.", s.probe(r))
 	switch s.tool() {
 	case "run_command":
 		action = fmt.Sprintf("Use run_command to run exactly: printf fixture > '%s'", s.probe(r))
@@ -75,7 +75,7 @@ func (s agyCheckScenario) prompt(r agyCheckRowDirs, calls int) string {
 		action = fmt.Sprintf("Use view_file to read %q.", s.probe(r))
 	}
 	if s.ID == "reconciliation" {
-		return fmt.Sprintf("Scenario: %s\nTool: %s\nCalls: %d\nMake at least %d write_to_file calls in at least two parallel batches, creating files named created-NN (01 onwards) only in %q, each containing fixture. Do not retry refused calls or use any other tool.\n", s.ID, s.tool(), calls, calls, r.Workspace)
+		return fmt.Sprintf("Scenario: %s\nTool: %s\nCalls: %d\nMake at least %d write_file calls in at least two parallel batches, creating files named created-NN (01 onwards) only in %q, each containing fixture. Do not retry refused calls or use any other tool.\n", s.ID, s.tool(), calls, calls, r.Workspace)
 	}
 	return fmt.Sprintf("Scenario: %s\nTool: %s\nTarget: %s\nMake exactly one call to %s. %s Do not retry or use any other tool if refused. Use no other tool.\n", s.ID, s.tool(), s.probe(r), s.tool(), action)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 )
 
@@ -117,7 +116,7 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		return fail(agyCheckTranscriptUnparsed)
 	}
 	if row.ID == "read-url" || row.ID == "execute-url" {
-		if len(parsed.Steps) != 0 {
+		if len(parsed.Steps) != 0 || parsed.Unfinished != 0 {
 			return fail("unexpected tool activity")
 		}
 		if len(e.Claims) != 0 {
@@ -142,6 +141,9 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 				return fail("contradictory reconciliation records")
 			}
 		}
+		if parsed.Unfinished != 0 {
+			return fail("unexpected tool")
+		}
 		for _, step := range parsed.Steps {
 			if step.Tool != s.tool() {
 				return fail("unexpected tool")
@@ -160,20 +162,16 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		e.Input.Replies = replies
 		return agyCheckObserveRow(row, e.Input)
 	}
-	if len(parsed.Steps) != 1 || parsed.Steps[0].Tool != s.tool() {
+	if parsed.Unfinished != 0 || len(parsed.Steps) != 1 || parsed.Steps[0].Tool != s.tool() {
 		return fail("no single intended step")
 	}
 	if row.Group == "discovery" {
-		loaded := slices.Contains(parsed.LoadedPaths, row.Location)
 		ran := agyCheckOneClaim(e.Claims, row.ID, "allow")
 		if len(e.Claims) > 0 && !ran {
 			return fail("invalid discovery claim")
 		}
-		if loaded != ran {
-			return fail("inconsistent discovery evidence")
-		}
-		if !ran && parsed.Steps[0].State != "DONE" {
-			return fail("discovery call did not complete without hook")
+		if !ran {
+			return fail(agyCheckLoadUnobservable)
 		}
 		e.Input.RanLocations = nil
 		if ran {

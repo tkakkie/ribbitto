@@ -16,8 +16,11 @@ type agyCheckObserveInput struct {
 }
 
 // agyCheckObserveDiscovery leaves coverage to the core's guard-owned list.
-func agyCheckObserveDiscovery(row agyCheckRow, loadedPaths, ranLocations []string) agyCheckObservation {
-	return agyCheckObservation{ID: row.ID, Loaded: slices.Contains(loadedPaths, row.Location), Ran: slices.Contains(ranLocations, row.Location)}
+func agyCheckObserveDiscovery(row agyCheckRow, ranLocations []string) agyCheckObservation {
+	if !slices.Contains(ranLocations, row.Location) {
+		return agyCheckObservation{ID: row.ID, Outcome: agyCheckLoadUnobservable}
+	}
+	return agyCheckObservation{ID: row.ID, Loaded: true, Ran: true}
 }
 
 // New locations never expand expectations; Evaluate checks guard coverage.
@@ -79,11 +82,6 @@ func agyCheckObserveSummary(steps []agyCheckTranscriptStep, replies, createdFile
 		}
 		seen[name] = true
 	}
-	var err error
-	s.ParallelBatches, err = agyCheckTranscriptParallelBatches(steps)
-	if err != nil {
-		return agyCheckSummary{}, err
-	}
 	return s, nil
 }
 
@@ -94,6 +92,9 @@ func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObserv
 	transcript, err := agyCheckTranscriptParse(in.Transcript)
 	if err != nil {
 		return failed
+	}
+	if transcript.Unfinished != 0 {
+		return agyCheckObservation{ID: row.ID, Outcome: "unfinished tool activity"}
 	}
 	switch row.Group {
 	case "hook", "workspace", "settings", "exposure":
@@ -106,13 +107,13 @@ func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObserv
 		if len(transcript.Steps) == 0 {
 			return agyCheckObservation{ID: row.ID, Outcome: agyCheckObserveNoStep}
 		}
-		return agyCheckObserveDiscovery(row, transcript.LoadedPaths, in.RanLocations)
+		return agyCheckObserveDiscovery(row, in.RanLocations)
 	case "reconciliation":
 		summary, err := agyCheckObserveSummary(transcript.Steps, in.Replies, in.CreatedFiles)
 		if err != nil {
 			return failed
 		}
-		return agyCheckObservation{ID: row.ID, Summary: summary}
+		return agyCheckObservation{ID: row.ID, Outcome: agyCheckBatchesUnobservable, Summary: summary}
 	default:
 		return failed
 	}

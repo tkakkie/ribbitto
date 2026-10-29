@@ -20,7 +20,7 @@ func agyCheckEvidenceFixture(t *testing.T, id string) (agyCheckRow, agyCheckScen
 	if row.Group == "hook" && s.Mode != "silent" || row.Group == "workspace" || row.Group == "settings" {
 		state = "ERROR"
 	}
-	var events []map[string]any
+	events := []map[string]any{{"event": "init"}}
 	if row.Group == "reconciliation" {
 		// Transcript order intentionally differs from claim order. Repeats belong
 		// to the independent claims, never to the order DONE/ERROR is reported.
@@ -28,14 +28,15 @@ func agyCheckEvidenceFixture(t *testing.T, id string) (agyCheckRow, agyCheckScen
 			e.Claims = append(e.Claims, agyCheckClaim{i + 1, word, id})
 		}
 		for i, st := range []string{"DONE", "DONE", "ERROR", "ERROR"} {
-			events = append(events, map[string]any{"event": "tool_step", "tool": s.tool(), "state": st, "batch": fmt.Sprint(i / 2)})
+			events = append(events, map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": i, "step_type": "tool", "tool_name": s.tool(), "state": st}})
 		}
 		e.Input.CreatedFiles = []string{"created-01", "created-03"}
 	} else if row.Group == "discovery" {
-		// Use an unloaded candidate so unrelated evidence alone cannot pass.
-		events = append(events, map[string]any{"event": "tool_step", "tool": s.tool(), "state": "DONE"})
+		// A run record proves loading at this candidate.
+		e.Claims = []agyCheckClaim{{1, "allow", id}}
+		events = append(events, map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": 0, "step_type": "tool", "tool_name": s.tool(), "state": "DONE"}})
 	} else if id != "read-url" && id != "execute-url" {
-		events = append(events, map[string]any{"event": "tool_step", "tool": s.tool(), "state": state})
+		events = append(events, map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": 0, "step_type": "tool", "tool_name": s.tool(), "state": state}})
 		if row.Group == "workspace" {
 			e.Claims = []agyCheckClaim{{1, "allow", id}, {2, "deny", id + "-home"}}
 		} else if s.Mode != agyCheckMissingHook {
@@ -56,7 +57,7 @@ func agyCheckEvidenceFixture(t *testing.T, id string) (agyCheckRow, agyCheckScen
 			}
 		}
 	}
-	events = append(events, map[string]any{"event": "result"})
+	events = append(events, map[string]any{"event": "result", "result": map[string]any{}})
 	for _, event := range events {
 		b, _ := json.Marshal(event)
 		e.Input.Transcript = append(e.Input.Transcript, append(b, '\n')...)
@@ -92,7 +93,11 @@ func TestAgyCheckClaimOrder(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, id)
 			slices.Reverse(e.Claims)
-			if got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4); !got.OK {
+			observation := agyCheckEvidenceObservation(row, s, e)
+			if row.Group == "reconciliation" && (observation.Outcome != agyCheckBatchesUnobservable || observation.Summary.HookInvocations != 4 || observation.Summary.Repeats != 0) {
+				t.Fatalf("claim-number order lost: %+v", observation)
+			}
+			if got := agyCheckClassify(observation, 4); !got.OK && row.Group != "reconciliation" {
 				t.Fatalf("claim-number order lost: %+v", got)
 			}
 		})
@@ -104,7 +109,10 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		t.Run(row.ID+"/baseline", func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, row.ID)
 			got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4)
-			if !got.OK {
+			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckBatchesUnobservable) {
+				t.Fatalf("batches invented: %+v", got)
+			}
+			if !got.OK && row.Group != "reconciliation" {
 				t.Fatalf("valid evidence differs: %+v", got)
 			}
 		})
@@ -134,10 +142,10 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		{"exposure-tag", "outside-read", func(e *agyCheckEvidence) { e.Claims[0].Tag = "wrong" }},
 		{"outside-probe", "outside-write", func(e *agyCheckEvidence) { e.Probe = false }},
 		{"discovery-unrelated", "discovery-root", func(e *agyCheckEvidence) {
-			e.Input.Transcript = []byte(strings.ReplaceAll(string(e.Input.Transcript), "write_to_file", "view_file"))
+			e.Input.Transcript = []byte(strings.ReplaceAll(string(e.Input.Transcript), "write_file", "view_file"))
 		}},
 		{"discovery-loaded-no-claim", "discovery-agent", func(e *agyCheckEvidence) {
-			e.Input.Transcript = append([]byte("{\"event\":\"hook_loaded\",\"path\":\".agent/hooks.json\"}\n"), e.Input.Transcript...)
+			e.Claims = nil
 		}},
 		{"discovery-wrong-tag", "discovery-root", func(e *agyCheckEvidence) { e.Claims = []agyCheckClaim{{1, "allow", "wrong"}} }},
 		{"reconciliation-gap", "reconciliation", func(e *agyCheckEvidence) { e.Claims[3].N = 9 }},
@@ -154,12 +162,13 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		{"reconciliation-extra-file", "reconciliation", func(e *agyCheckEvidence) { e.Input.CreatedFiles[0] = "unexpected" }},
 		{"reconciliation-name", "reconciliation", func(e *agyCheckEvidence) { e.Input.CreatedFiles[0] = "created-1" }},
 		{"reconciliation-batches", "reconciliation", func(e *agyCheckEvidence) {
-			e.Input.Transcript = []byte(strings.ReplaceAll(string(e.Input.Transcript), `"batch":"1"`, `"batch":"0"`))
+			// Real output cannot evidence batches.
+			e.Input.Transcript = append([]byte(nil), e.Input.Transcript...)
 		}},
 		{"reconciliation-malformed", "reconciliation", func(e *agyCheckEvidence) { e.Input.Transcript = []byte("bad\n") }},
-		{"no-step-non-url", "task-off", func(e *agyCheckEvidence) { e.Input.Transcript = []byte("{\"event\":\"result\"}\n") }},
+		{"no-step-non-url", "task-off", func(e *agyCheckEvidence) { e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestResult) }},
 		{"url-step", "read-url", func(e *agyCheckEvidence) {
-			e.Input.Transcript = append([]byte("{\"event\":\"tool_step\",\"tool\":\"read_url\",\"state\":\"ERROR\"}\n"), e.Input.Transcript...)
+			e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestStep(0, "read_url", "ERROR") + agyCheckTestResult)
 		}},
 	}
 	for _, id := range []string{"hook-precedence", "hook-same-name-agent", "hook-same-name-agents"} {
@@ -190,11 +199,18 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, tc.id)
-			if !agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4).OK {
+			if !agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4).OK && row.Group != "reconciliation" {
 				t.Fatal("baseline differs")
 			}
 			tc.change(&e)
-			if got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4); got.OK {
+			observation := agyCheckEvidenceObservation(row, s, e)
+			if row.Group == "reconciliation" {
+				want := map[string]string{"reconciliation-gap": "invalid reconciliation records", "reconciliation-contradiction": "contradictory reconciliation records", "reconciliation-tag": "invalid reconciliation records", "reconciliation-extra-file": "unexpected created file", "reconciliation-name": "unexpected created file", "reconciliation-batches": agyCheckBatchesUnobservable, "reconciliation-malformed": agyCheckTranscriptUnparsed}[tc.name]
+				if observation.Outcome != want {
+					t.Fatalf("reconciliation reason=%q want %q", observation.Outcome, want)
+				}
+			}
+			if got := agyCheckClassify(observation, 4); got.OK {
 				t.Fatalf("changed evidence accepted: %+v", got)
 			}
 		})
@@ -257,5 +273,49 @@ func TestAgyCheckOutputBlocks(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Unfinished tool activity must remain visible even beside a valid intended result.
+func TestAgyCheckUnfinishedActivity(t *testing.T) {
+	for _, id := range []string{"read-url", "execute-url", "hook-decision", "hook-same-name-agent", "discovery-agent", "reconciliation"} {
+		for _, only := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/only-%t", id, only), func(t *testing.T) {
+				row, s, e := agyCheckEvidenceFixture(t, id)
+				transcript := string(e.Input.Transcript)
+				if only {
+					transcript = agyCheckTestInit + agyCheckTestResult
+				}
+				transcript = strings.Replace(transcript, agyCheckTestResult, agyCheckTestStep(999, "unrelated", "ACTIVE")+agyCheckTestResult, 1)
+				e.Input.Transcript = []byte(transcript)
+				want := "no single intended step"
+				switch id {
+				case "read-url", "execute-url":
+					want = "unexpected tool activity"
+				case "reconciliation":
+					want = "unexpected tool"
+				}
+				got := agyCheckEvidenceObservation(row, s, e)
+				if got.Outcome != want || agyCheckClassify(got, 4).OK {
+					t.Fatalf("unfinished activity hidden: %+v", got)
+				}
+				if got := agyCheckObserveRow(row, e.Input); got.Outcome != "unfinished tool activity" || agyCheckClassify(got, 4).OK {
+					t.Fatalf("adapter hid activity: %+v", got)
+				}
+			})
+		}
+	}
+}
+
+func TestAgyCheckUnobservableNeverPasses(t *testing.T) {
+	for _, row := range agyCheckExpected {
+		for _, text := range []string{agyCheckLoadUnobservable, agyCheckBatchesUnobservable} {
+			// Even changing an expectation must not manufacture evidence.
+			row.Expected = text
+			got := agyCheckClassifyRow(row, agyCheckObservation{ID: row.ID, Outcome: text, Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, 30)
+			if got.OK || got.Observed != text {
+				t.Fatalf("unobservable passed: %+v", got)
+			}
+		}
 	}
 }

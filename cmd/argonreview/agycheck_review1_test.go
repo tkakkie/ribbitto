@@ -139,16 +139,16 @@ func TestAgyCheckDiscoveryCompletion(t *testing.T) {
 					t.Fatal("discovery baseline differs")
 				}
 				e.Input.Transcript = []byte(strings.ReplaceAll(string(e.Input.Transcript), "DONE", state))
+				e.Claims = nil
 				if ran {
 					e.Claims = []agyCheckClaim{{1, "allow", row.ID}}
-					e.Input.Transcript = append([]byte(fmt.Sprintf("{\"event\":\"hook_loaded\",\"path\":%q}\n", row.Location)), e.Input.Transcript...)
 				}
 				got := agyCheckEvidenceObservation(row, s, e)
-				want := state == "DONE" || ran
+				want := ran
 				if agyCheckClassify(got, 4).OK != want {
 					t.Fatalf("discovery completion requirement lost: %+v", got)
 				}
-				if !want && got.Outcome != "discovery call did not complete without hook" {
+				if !want && got.Outcome != agyCheckLoadUnobservable {
 					t.Fatalf("discovery failure diagnostic lost: %+v", got)
 				}
 			})

@@ -72,6 +72,7 @@ func agyCheckRowsFake(data []byte) bool {
 		deviation = f.Deviation
 	}
 	emit := func(v any) { b, _ := json.Marshal(v); fmt.Println(string(b)) }
+	emit(map[string]any{"event": "init"})
 	var hooks []agyCheckFakeHook
 	load := func(path string) []agyCheckFakeHook {
 		b, err := os.ReadFile(path)
@@ -98,18 +99,13 @@ func agyCheckRowsFake(data []byte) bool {
 	for _, location := range []string{".agent/hooks.json", ".agents/hooks.json", ".gemini/config/hooks.json", ".gemini/hooks.json", ".antigravity/hooks.json", "hooks.json"} {
 		found := load(filepath.Join(cwd, location))
 		if len(found) > 0 && (location == ".agent/hooks.json" || location == ".agents/hooks.json") {
-			if deviation != "flip" {
-				emit(map[string]any{"event": "hook_loaded", "path": location})
-			}
 			hooks = append(hooks, found...)
 		}
 	}
 	hooks = append(hooks, load(filepath.Join(f.Home, ".gemini/config/hooks.json"))...)
 	switch deviation {
-	case "protected-load":
-		emit(map[string]any{"event": "hook_loaded", "path": ".agent/new/config.json"})
-	case "unprotected-load":
-		emit(map[string]any{"event": "hook_loaded", "path": "new/config.json"})
+	case "protected-load", "unprotected-load":
+		// Loads have no stream event, including these extra locations.
 	case "signal":
 		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
 	case "timeout":
@@ -212,7 +208,7 @@ func agyCheckRowsFake(data []byte) bool {
 		var reply struct{ Decision string }
 		return json.Unmarshal(out.Bytes(), &reply) == nil && reply.Decision == "allow"
 	}
-	call := func(n int, batch string) map[string]any {
+	call := func(n int) map[string]any {
 		allowed := true
 		for i, h := range hooks {
 			if deviation == "no-claim" || deviation == "one-workspace-claim" && i == 1 {
@@ -253,7 +249,7 @@ func agyCheckRowsFake(data []byte) bool {
 				os.Exit(98)
 			}
 			switch tool {
-			case "write_to_file", "run_command":
+			case "write_file", "run_command":
 				if os.WriteFile(path, []byte("fixture"), 0o600) != nil {
 					os.Exit(96)
 				}
@@ -267,7 +263,7 @@ func agyCheckRowsFake(data []byte) bool {
 		if allowed {
 			state = "DONE"
 		}
-		return map[string]any{"event": "tool_step", "tool": tool, "state": state, "batch": batch}
+		return map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": n, "step_type": "tool", "tool_name": tool, "state": state}}
 	}
 	if id == "reconciliation" {
 		var count int
@@ -283,7 +279,7 @@ func agyCheckRowsFake(data []byte) bool {
 			steps := make([]map[string]any, last-first+1)
 			var wg sync.WaitGroup
 			for n := first; n <= last; n++ {
-				wg.Go(func() { steps[n-first] = call(n, fmt.Sprint(batch)) })
+				wg.Go(func() { steps[n-first] = call(n) })
 			}
 			wg.Wait()
 			for _, step := range steps {
@@ -291,20 +287,21 @@ func agyCheckRowsFake(data []byte) bool {
 			}
 		}
 	} else if tool != "read_url" && tool != "execute_url" || deviation == "flip" {
-		step := call(1, "")
+		step := call(1)
 		if tool == "list_resources" || tool == "read_resource" {
-			if server != nil && step["state"] == "DONE" {
+			if server != nil && step["step_update"].(map[string]any)["state"] == "DONE" {
 				if tool == "list_resources" {
 					rpc("resources/list", map[string]any{})
 				} else {
 					rpc("resources/read", map[string]any{"uri": agyCheckStubURI})
 				}
 			} else if server == nil {
-				step["state"] = "ERROR"
+				step["step_update"].(map[string]any)["state"] = "ERROR"
 			}
 		}
 		emit(step)
 		if deviation == "retry" {
+			step["step_update"].(map[string]any)["step_index"] = 2
 			emit(step)
 		}
 	}
@@ -331,11 +328,11 @@ func agyCheckRowsFake(data []byte) bool {
 			_ = os.Remove(filepath.Join(stub, entries[len(entries)-1].Name()))
 		}
 	}
-	emit(map[string]any{"event": "message", "content": "fixture finished"})
+	emit(map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": 10000, "state": "DONE", "step_type": "agent_response"}})
 	if deviation == "nonzero-no-result" {
 		os.Exit(7)
 	}
-	emit(map[string]any{"event": "result"})
+	emit(map[string]any{"event": "result", "result": map[string]any{}})
 	if deviation == "nonzero-result" {
 		os.Exit(7)
 	}

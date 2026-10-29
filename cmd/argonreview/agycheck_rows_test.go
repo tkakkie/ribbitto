@@ -171,7 +171,7 @@ func (h *agyCheckCommandHarness) restored(t *testing.T) {
 
 // Predicate deviations need one real row's collection and effects. The other
 // rows use the same passing observations as the report unit tests; full command
-// coverage remains in match, larger-calls, timeout, unlisted loads and lifecycle cases.
+// coverage remains in match, larger-calls, timeout, unobservable loads and lifecycle cases.
 func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	t.Helper()
 	row := agyCheckObserveFindRow(t, id)
@@ -196,6 +196,8 @@ func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	return agyCheckExitCode(result), out.String()
 }
 
+// Synthetic fake agents exercise the runner and actual hook subprocesses;
+// their overlaps are never evidence of agy behaviour.
 func TestAgyCheckCommandEndToEnd(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -284,6 +286,9 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				differences := 1
 				if full {
 					differences = 5
+					if tc.name == "match" {
+						differences = 4
+					}
 					if tc.name == "timeout" {
 						differences++
 					}
@@ -303,9 +308,26 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 					}
 				} else {
 					for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation"} {
+
+						if id == "reconciliation" && tc.name == "match" {
+							found := false
+							for _, line := range strings.Split(out, "\n") {
+								if strings.HasPrefix(line, id+" ") {
+									found = !strings.Contains(line, "differs") && strings.Contains(line, "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0")
+								}
+							}
+							if !found {
+								t.Fatalf("synthetic hook evidence did not reconcile: %s", out)
+							}
+							continue
+						}
 						found := false
 						for _, line := range strings.Split(out, "\n") {
-							if strings.HasPrefix(line, id+" ") && strings.Contains(line, "not observable in the transcript") && strings.Contains(line, "differs") {
+							diagnostic := "not observable in the transcript"
+							if id == "reconciliation" {
+								diagnostic = "wrong hook event count"
+							}
+							if strings.HasPrefix(line, id+" ") && strings.Contains(line, diagnostic) && strings.Contains(line, "differs") {
 								found = true
 							}
 						}

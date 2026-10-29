@@ -26,6 +26,8 @@ func agyCheckEvidenceFixture(t *testing.T, id string) (agyCheckRow, agyCheckScen
 		// to the independent claims, never to the order DONE/ERROR is reported.
 		for i, word := range []string{"allow", "deny", "allow", "deny"} {
 			e.Claims = append(e.Claims, agyCheckClaim{i + 1, word, id})
+			// Synthetic sequential invocations must never establish parallelism.
+			e.Events = append(e.Events, agyCheckHookEvent{2*i + 1, i + 1, "start", word, id}, agyCheckHookEvent{2*i + 2, i + 1, "end", "", ""})
 		}
 		for i, st := range []string{"DONE", "DONE", "ERROR", "ERROR"} {
 			events = append(events, map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": i, "step_type": "tool", "tool_name": s.tool(), "state": st}})
@@ -94,7 +96,7 @@ func TestAgyCheckClaimOrder(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, id)
 			slices.Reverse(e.Claims)
 			observation := agyCheckEvidenceObservation(row, s, e)
-			if row.Group == "reconciliation" && (observation.Outcome != agyCheckBatchesUnobservable || observation.Summary.HookInvocations != 4 || observation.Summary.Repeats != 0) {
+			if row.Group == "reconciliation" && (observation.Outcome != agyCheckNoOverlap || observation.Summary.HookInvocations != 4 || observation.Summary.Repeats != 0) {
 				t.Fatalf("claim-number order lost: %+v", observation)
 			}
 			if got := agyCheckClassify(observation, 4); !got.OK && row.Group != "reconciliation" {
@@ -109,7 +111,7 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		t.Run(row.ID+"/baseline", func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, row.ID)
 			got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4)
-			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckBatchesUnobservable+"; steps=4 hooks=4 allows=2 denies=2 errors=2 files=2 repeats=0") {
+			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckNoOverlap) {
 				t.Fatalf("batches invented: %+v", got)
 			}
 			if !got.OK && row.Group != "reconciliation" {

@@ -52,6 +52,7 @@ func agyCheckHookHarnessNew(t *testing.T) *agyCheckHookHarness {
 		agyCheckHookTestDir:              {os.ModeDir | 0o700, 501},
 		agyCheckHookTestDir + "/" + agyCheckHookSentinel: {0o600, 501},
 		agyCheckHookTestDir + "/calls":                   {os.ModeDir | 0o700, 501},
+		agyCheckHookTestDir + "/events":                  {os.ModeDir | 0o700, 501},
 	}, files: make(map[string]*agyCheckHookFile)}
 	guard := func(path string) {
 		t.Helper()
@@ -73,7 +74,7 @@ func agyCheckHookHarnessNew(t *testing.T) *agyCheckHookHarness {
 		},
 		mkdir: func(path string, mode os.FileMode) error {
 			guard(path)
-			if path != agyCheckHookTestDir+"/calls" || mode != 0o700 {
+			if (path != agyCheckHookTestDir+"/calls" && path != agyCheckHookTestDir+"/events") || mode != 0o700 {
 				t.Fatalf("unsafe mkdir: %s %v", path, mode)
 			}
 			return os.ErrExist
@@ -125,12 +126,20 @@ func TestAgyCheckHookModes(t *testing.T) {
 			h := agyCheckHookHarnessNew(t)
 			agyCheckHookRun(t, h, []string{tc.mode, agyCheckHookTestDir, "location-1"}, tc.code, tc.out, tc.stderr)
 			file := h.files[agyCheckHookTestDir+"/calls/000001"]
-			if len(h.files) != 1 || file == nil || !file.closed || file.String() != tc.word+" location-1\n" {
+			wantRecords := 1
+			if tc.mode == "alternate" {
+				wantRecords = 3
+			}
+			if len(h.files) != wantRecords || file == nil || !file.closed || file.String() != tc.word+" location-1\n" {
 				t.Fatalf("missing closed call record: %+v", h.files)
 			}
 			if tc.mode == "hang" {
 				if h.wait != 60*time.Second || h.wait <= time.Duration(agyCheckHookTimeout)*time.Second {
 					t.Fatalf("hang must outwait timeout: %s", h.wait)
+				}
+			} else if tc.mode == "alternate" {
+				if h.wait != 1500*time.Millisecond {
+					t.Fatal("alternate hold missing")
 				}
 			} else if h.wait != 0 {
 				t.Fatal("unexpected sleep")
@@ -450,6 +459,7 @@ func agyCheckHookFileDeps(stdin io.Reader) agyCheckHookDeps {
 	return d
 }
 
+// Synthetic concurrency exercises exclusive records, never agy scheduling.
 func TestAgyCheckHookConcurrent(t *testing.T) {
 	dir := agyCheckHookPrepared(t)
 	const workers, calls = 8, 7

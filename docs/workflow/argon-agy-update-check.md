@@ -5,8 +5,8 @@
 Trusted binary rebuilt at merge; production/launcher unchanged. [#1890][issue]
 items 3/4 (host run, isolation) need separate maintainer approvals.
 
-Version-triggered; remote flags unseen. Discovery no longer
-blocks exit 0. Real 1.4.9 needs reconciliation overlap AND all other rows
+Version-triggered; remote flags unseen. Discovery rows can pass
+with negative evidence. Real 1.4.9 needs reconciliation overlap AND all other rows
 matching (unverified); synthetic exit 0 proves wiring only. Exit 0 only means rows matched in that run:
 
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
@@ -86,7 +86,7 @@ Claude follows this order **before trust**, at `implement-check`'s first
    refusals: no INFO; post-row pin mismatch prints INFO above `RESULT INVALID`:
    never use it.
 4. Compare INFO/candidate SHA-256: mismatch means changed `builtin/`; do not
-   trust. Then the maintainer decides trust per worker. First start the new
+   trust. Only then the maintainer decides trust per worker. First start the new
    version once in each worker home (rewrites `builtin/`); install identical saved
    bytes in each `implementer/`: file 0400, directory 0500 (`chmod u+w` to install,
    then restore).
@@ -131,16 +131,16 @@ probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls, ≥ 2 parallel batches | `counts reconcile` |
 
-Discovery: loaded = one DONE step + single local allow claim; coverage:
+Discovery: loaded = a step + single local allow claim; coverage:
 `implementRefusedNames`. “Not loaded” satisfies the row: exactly one intended
-DONE step, zero claims, and a deny claim on a hook or workspace row with an
-ERROR step in the same run. Other step counts/states,
+DONE step, zero claims, and a deny claim (hook or workspace row, ERROR
+step) in the same run. Other step counts/states,
 wrong-tag/duplicate/malformed records, no deny shown or single-row runs differ:
-`hook load not observable in the transcript`. It proves this hook
-did not run in that call; the mechanism worked elsewhere in the run. It cannot
-find locations outside the six candidates. The real stream has no load event:
-silence is negative evidence from tool records, not a load report or trust
-decision; allow-everything agents can forge records.
+`hook load not observable in the transcript`. It shows only no
+claim from that call plus a deny claim elsewhere: the location was not
+observed loading. It cannot find locations outside the six candidates.
+The real stream has no load event: silence is tool-record evidence, not a
+load report or trust decision; allow-everything agents can forge records.
 Same-name: both records, deny, no effect.
 
 Verified only: 1.4.7 events, `write_file`/`call_mcp_tool`;

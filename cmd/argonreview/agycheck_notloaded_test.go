@@ -102,14 +102,15 @@ func TestAgyCheckEvaluateDiscoveryNotLoaded(t *testing.T) {
 				}
 			case "sequential", "malformed-records", "duplicate-records":
 				_, _, e = agyCheckSyntheticParallel(t, 2, 2)
-				if name == "sequential" {
+				switch name {
+				case "sequential":
 					e.Events = nil
 					for i, c := range e.Claims {
 						e.Events = append(e.Events, agyCheckHookEvent{2*i + 1, c.N, "start", c.Word, c.Tag}, agyCheckHookEvent{2*i + 2, c.N, "end", "", ""})
 					}
-				} else if name == "malformed-records" {
+				case "malformed-records":
 					e.Claims[0].N = 99
-				} else {
+				default:
 					e.Claims = append(e.Claims, e.Claims[0])
 				}
 			}

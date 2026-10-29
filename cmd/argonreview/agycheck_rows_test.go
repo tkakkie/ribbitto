@@ -171,7 +171,7 @@ func (h *agyCheckCommandHarness) restored(t *testing.T) {
 
 // Predicate deviations need one real row's collection and effects. The other
 // rows use the same passing observations as the report unit tests; full command
-// coverage remains in match, larger-calls, timeout, unobservable loads and lifecycle cases.
+// coverage remains in match, larger-calls, timeout, negative discovery evidence and lifecycle cases.
 func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	t.Helper()
 	row := agyCheckObserveFindRow(t, id)
@@ -204,7 +204,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		name, row, deviation string
 		calls, code          int
 	}{
-		{"match", "", "real-hooks", 0, 1}, {"larger-calls", "", "", 42, 1},
+		{"match", "", "real-hooks", 0, 0}, {"larger-calls", "", "", 42, 1},
 		{"flipped", "hook-silent", "flip", 0, 1},
 		{"deny-other-cause", "hook-decision", "no-claim", 0, 1},
 		{"hook-never-ran", "task-on", "no-claim", 0, 1},
@@ -285,10 +285,6 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			if tc.code == 1 {
 				differences := 1
 				if full {
-					differences = 5
-					if tc.name == "match" {
-						differences = 4
-					}
 					if tc.name == "timeout" {
 						differences++
 					}
@@ -306,35 +302,30 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 					if !named {
 						t.Fatalf("named row did not differ: %s", out)
 					}
-				} else {
-					for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation"} {
-
-						if id == "reconciliation" && tc.name == "match" {
-							found := false
-							for _, line := range strings.Split(out, "\n") {
-								if strings.HasPrefix(line, id+" ") {
-									found = !strings.Contains(line, "differs") && strings.Contains(line, "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0")
-								}
-							}
-							if !found {
-								t.Fatalf("synthetic hook evidence did not reconcile: %s", out)
-							}
+				}
+			}
+			if full {
+				for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation"} {
+					found := false
+					for _, line := range strings.Split(out, "\n") {
+						if !strings.HasPrefix(line, id+" ") {
 							continue
 						}
-						found := false
-						for _, line := range strings.Split(out, "\n") {
-							diagnostic := "not observable in the transcript"
-							if id == "reconciliation" {
-								diagnostic = "wrong hook event count"
-							}
-							if strings.HasPrefix(line, id+" ") && strings.Contains(line, diagnostic) && strings.Contains(line, "differs") {
-								found = true
-							}
-						}
-						if !found {
-							t.Fatalf("missing unobservable row %s: %s", id, out)
+						switch {
+						case id != "reconciliation":
+							found = !strings.Contains(line, "differs") && strings.Contains(line, "; not loaded: one DONE step, no claim, deny shown working in this run")
+						case tc.name == "match":
+							found = !strings.Contains(line, "differs") && strings.Contains(line, "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0")
+						default:
+							found = strings.Contains(line, "wrong hook event count") && strings.Contains(line, "differs")
 						}
 					}
+					if !found {
+						t.Fatalf("unexpected synthetic row %s: %s", id, out)
+					}
+				}
+				if tc.name == "match" && !strings.Contains(out, "Rows: 29; differing: 0\n") {
+					t.Fatalf("synthetic match differs: %s", out)
 				}
 			}
 			if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {

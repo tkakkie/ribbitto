@@ -14,6 +14,8 @@ import (
 type agyCheckObservation struct {
 	ID, Outcome string
 	Loaded, Ran bool
+	NotLoaded   bool
+	DenyShown   bool
 	Summary     agyCheckSummary
 }
 
@@ -103,6 +105,9 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 	case "covered if loaded":
 		covered := agyCheckLoadProtected(row.Location)
 		r.Observed = fmt.Sprintf("loaded=%t ran=%t covered=%t", o.Loaded, o.Ran, covered)
+		if o.NotLoaded {
+			r.Observed += "; not loaded: one DONE step, no claim, deny shown working in this run"
+		}
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
 	case "counts reconcile":
 		s := o.Summary
@@ -142,8 +147,13 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 		counts[o.ID]++
 		byID[o.ID] = o
 	}
+	mechanism := agyCheckDenyMechanism(counts, byID)
 	for _, row := range agyCheckExpected {
-		classified := agyCheckClassify(byID[row.ID], minimum)
+		o := byID[row.ID]
+		if row.Group == "discovery" && counts[row.ID] == 1 && o.NotLoaded && o.Outcome == agyCheckLoadUnobservable && mechanism {
+			o = agyCheckObservation{ID: row.ID, NotLoaded: true}
+		}
+		classified := agyCheckClassify(o, minimum)
 		switch counts[row.ID] {
 		case 0:
 			classified = agyCheckResultRow{agyCheckRow: row, Observed: "missing row"}

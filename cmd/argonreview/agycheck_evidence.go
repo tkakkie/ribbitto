@@ -177,7 +177,9 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 			return fail("invalid discovery claim")
 		}
 		if !ran {
-			return fail(agyCheckLoadUnobservable)
+			o := fail(agyCheckLoadUnobservable)
+			o.NotLoaded = agyCheckNotLoaded(parsed, s, e)
+			return o
 		}
 		e.Input.RanLocations = nil
 		if ran {
@@ -211,5 +213,5 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 			return fail("unexpected side effect")
 		}
 	}
-	return agyCheckObserveRow(row, e.Input)
+	return agyCheckWithDenyShown(row, agyCheckObserveRow(row, e.Input), e.Claims)
 }

@@ -107,7 +107,12 @@ func (f agyCheckFiles) cleanup(root, path string) error {
 		if err != nil {
 			return err
 		}
-		if len(entries) > agyCheckHookCallCap {
+		// Alternate hooks leave two events per call.
+		cap := agyCheckHookCallCap
+		if filepath.Base(path) == "events" {
+			cap *= 2
+		}
+		if len(entries) > cap {
 			return errors.New("cleanup entry limit exceeded")
 		}
 		for _, entry := range entries {

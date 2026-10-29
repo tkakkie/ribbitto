@@ -8,6 +8,7 @@ import (
 type agyCheckEvidence struct {
 	Input  agyCheckObserveInput
 	Claims []agyCheckClaim
+	Events []agyCheckHookEvent
 	Stub   []agyCheckStubRecord
 	Probe  bool
 }
@@ -107,8 +108,8 @@ func agyCheckStubEvidence(records []agyCheckStubRecord, id string) bool {
 	return target == "" || completed == 1
 }
 
-// These predicates only downgrade the adapter's result. Agent output cannot
-// supply claims or directory evidence, even when its ERROR/DONE looks right.
+// Local records supplement transcript counts; transcript text alone cannot
+// supply hook overlap or directory evidence.
 func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheckEvidence) agyCheckObservation {
 	fail := func(reason string) agyCheckObservation { return agyCheckObservation{ID: row.ID, Outcome: reason} }
 	parsed, err := agyCheckTranscriptParse(e.Input.Transcript)
@@ -151,8 +152,8 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		}
 		// File names are agent-chosen; claims follow hook invocation order across
 		// parallel batches, and denied calls leave gaps. Count equality plus
-		// name/type checks is an ordinary-agent regression check. Real correlation
-		// needs the hook to record the tool target path: an out-of-scope contract change.
+		// name/type checks do not correlate individual tool targets. That needs
+		// a hook target-path contract, outside this response-group check.
 		for _, name := range e.Input.CreatedFiles {
 			var n int
 			if _, err := fmt.Sscanf(name, "created-%d", &n); err != nil || n <= 0 || name != fmt.Sprintf("created-%02d", n) {
@@ -160,7 +161,12 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 			}
 		}
 		e.Input.Replies = replies
-		return agyCheckObserveRow(row, e.Input)
+		observation := agyCheckObserveRow(row, e.Input)
+		if observation.Outcome != agyCheckBatchesUnobservable {
+			return observation
+		}
+		observation.Summary.ParallelBatches, observation.Outcome = agyCheckParallel(parsed.Groups, e.Claims, e.Events)
+		return observation
 	}
 	if parsed.Unfinished != 0 || len(parsed.Steps) != 1 || parsed.Steps[0].Tool != s.tool() {
 		return fail("no single intended step")

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -103,6 +104,24 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 			}
 		}
 	}
+	// Completion events can arrive out of order; response boundaries use step_index.
+	indices := make([]int, 0, len(seen))
+	for index := range seen {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+	group := 0
+	for _, index := range indices {
+		step := seen[index]
+		if step.kind == "agent_response" {
+			result.Groups = append(result.Groups, group)
+			group = 0
+		}
+		if step.kind == "tool" && step.state != "ACTIVE" {
+			group++
+		}
+	}
+	result.Groups = append(result.Groups, group)
 	for _, step := range seen {
 		if step.kind == "tool" && step.state == "ACTIVE" {
 			result.Unfinished++
@@ -136,7 +155,10 @@ func agyCheckTranscriptValue(decoder *json.Decoder, token json.Token, depth int)
 	if depth > agyCheckTranscriptMaxDepth {
 		return false
 	}
-	keys := make(map[string]bool)
+	var keys map[string]bool
+	if delim == '{' {
+		keys = make(map[string]bool)
+	}
 	for decoder.More() {
 		if delim == '{' {
 			key, err := decoder.Token()
@@ -198,6 +220,7 @@ type agyCheckTranscriptStep struct{ Tool, State string }
 
 type agyCheckTranscriptResult struct {
 	Steps      []agyCheckTranscriptStep
+	Groups     []int
 	Unfinished int
 }
 

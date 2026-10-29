@@ -19,6 +19,7 @@ const (
 	agyCheckHookTimeout  = 20
 	agyCheckHookWait     = 60 * time.Second
 	agyCheckHookCallCap  = 10000
+	agyCheckHookHold     = 1500 * time.Millisecond
 	agyCheckHookReason   = "agy-check fixture denial"
 )
 
@@ -130,7 +131,7 @@ func agyCheckHookState(dir string, d agyCheckHookDeps) error {
 	// must equal the process uid; agyCheckValidate binds the username to the
 	// marker before every agy start (B3). This deliberate preparation prevents
 	// accidental production use. Calls stay separate from agent output where
-	// possible: the hook writes calls/ records, never agent prompts. Missing,
+	// possible: the hook writes calls/ and events/ records, never prompts. Missing,
 	// contradictory or malformed records are differences in B3, never normal.
 	// Reconciliation checks ordinary-agent regressions, not adversarial tampering:
 	// an allow-everything agent can write records itself. A match never
@@ -149,48 +150,48 @@ func agyCheckHookWrite(w io.Writer, data []byte) error {
 	return nil
 }
 
-func agyCheckHookClaim(dir, mode, tag string, d agyCheckHookDeps) (string, error) {
-	calls := filepath.Join(dir, "calls")
-	if err := d.mkdir(calls, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return "", fmt.Errorf("creating hook calls directory: %w", err)
+// Exclusive creation supplies a global order without comparing process clocks.
+func agyCheckHookRecord(dir, sub string, cap int, content func(int) string, d agyCheckHookDeps) (int, error) {
+	records := filepath.Join(dir, sub)
+	if err := d.mkdir(records, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return 0, fmt.Errorf("creating hook records directory: %w", err)
 	}
 	uid, _ := d.uid()
-	if err := agyCheckHookPrivate(calls, true, uid, d); err != nil {
-		return "", err
+	if err := agyCheckHookPrivate(records, true, uid, d); err != nil {
+		return 0, err
 	}
-	if tag == "" {
-		tag = "-"
-	}
-	// Hook-written calls/ records stay separate from agent output where possible,
-	// never supplied by agent prompts. B3 treats missing, contradictory or
-	// malformed records as differences. This is an ordinary-agent regression
-	// check: an allow-everything agent can write records itself, so a matching
-	// result never auto-approves trust of a new version.
-	for n := 1; n <= agyCheckHookCallCap; n++ {
-		file, err := d.create(filepath.Join(calls, fmt.Sprintf("%06d", n)), os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
+	for n := 1; n <= cap; n++ {
+		file, err := d.create(filepath.Join(records, fmt.Sprintf("%06d", n)), os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
 		if err != nil {
-			return "", fmt.Errorf("claiming hook call: %w", err)
+			return 0, fmt.Errorf("claiming hook record: %w", err)
 		}
-		word := mode
+		writeErr := agyCheckHookWrite(file, []byte(content(n)))
+		if err := errors.Join(writeErr, file.Close()); err != nil {
+			return 0, fmt.Errorf("recording hook call: %w", err)
+		}
+		return n, nil
+	}
+	return 0, errors.New("hook record limit exceeded")
+}
+
+func agyCheckHookClaim(dir, mode, tag string, d agyCheckHookDeps) (int, string, error) {
+	if tag == "" {
+		tag = "-"
+	}
+	word := mode
+	n, err := agyCheckHookRecord(dir, "calls", agyCheckHookCallCap, func(n int) string {
 		if mode == "alternate" {
 			word = "deny"
 			if n%2 == 1 {
 				word = "allow"
 			}
 		}
-		// Exclusive creation makes parity independent of process scheduling.
-		// Close before output or sleep so reconciliation sees every invocation.
-		writeErr := agyCheckHookWrite(file, []byte(word+" "+tag+"\n"))
-		closeErr := file.Close()
-		if err := errors.Join(writeErr, closeErr); err != nil {
-			return "", fmt.Errorf("recording hook call: %w", err)
-		}
-		return word, nil
-	}
-	return "", errors.New("hook call limit exceeded")
+		return word + " " + tag + "\n"
+	}, d)
+	return n, word, err
 }
 
 func agyCheckHook(args []string, stdout, stderr io.Writer, d agyCheckHookDeps) int {
@@ -223,16 +224,33 @@ func agyCheckHook(args []string, stdout, stderr io.Writer, d agyCheckHookDeps) i
 	if err := agyCheckHookState(args[1], d); err != nil {
 		return refuse(err)
 	}
-	word, err := agyCheckHookClaim(args[1], mode.name, tag, d)
+	n, word, err := agyCheckHookClaim(args[1], mode.name, tag, d)
 	if err != nil {
 		return refuse(err)
 	}
+	if mode.name == "alternate" {
+		eventTag := tag
+		if eventTag == "" {
+			eventTag = "-"
+		}
+		if _, err := agyCheckHookRecord(args[1], "events", 2*agyCheckHookCallCap, func(int) string { return fmt.Sprintf("start %d %s %s\n", n, word, eventTag) }, d); err != nil {
+			return refuse(err)
+		}
+		d.sleep(agyCheckHookHold)
+	}
+
 	// Record before reading: never-closing or failing stdin must still leave a
 	// claim for the runner, since agy sees a refused hook as a deny. Consume the
 	// guard's bounded input; bytes beyond the bound are ignored.
 	if _, err := io.Copy(io.Discard, io.LimitReader(d.stdin, maxGuardInput+1)); err != nil {
 		return refuse(fmt.Errorf("reading hook input: %w", err))
 	}
+	if mode.name == "alternate" {
+		if _, err := agyCheckHookRecord(args[1], "events", 2*agyCheckHookCallCap, func(int) string { return fmt.Sprintf("end %d\n", n) }, d); err != nil {
+			return refuse(err)
+		}
+	}
+
 	decision := mode.decision
 	if mode.name == "alternate" {
 		decision = word

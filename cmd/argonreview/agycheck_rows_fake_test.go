@@ -263,7 +263,15 @@ func agyCheckRowsFake(data []byte) bool {
 		if allowed {
 			state = "DONE"
 		}
-		return map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": n, "step_type": "tool", "tool_name": tool, "state": state}}
+		index := n
+		if id == "reconciliation" {
+			var count int
+			_, _ = fmt.Sscanf(field("Calls"), "%d", &count)
+			if n > max(count, 4)/2 {
+				index++
+			}
+		}
+		return map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": index, "step_type": "tool", "tool_name": tool, "state": state}}
 	}
 	if id == "reconciliation" {
 		var count int
@@ -285,6 +293,7 @@ func agyCheckRowsFake(data []byte) bool {
 			for _, step := range steps {
 				emit(step)
 			}
+			emit(map[string]any{"event": "step_update", "step_update": map[string]any{"step_index": last + batch + 1, "state": "DONE", "step_type": "agent_response"}})
 		}
 	} else if tool != "read_url" && tool != "execute_url" || deviation == "flip" {
 		step := call(1)
@@ -340,8 +349,8 @@ func agyCheckRowsFake(data []byte) bool {
 	return true
 }
 
-// This model deliberately uses only the generated command vocabulary. The full
-// match run retains real denial and concurrent reconciliation hook subprocesses;
+// This synthetic model is never evidence of agy's behaviour. The full match
+// run exercises actual denial and concurrent reconciliation hook subprocesses;
 // TestAgyCheckGeneratedProcesses also exercises generated hook/stub commands.
 func agyCheckModelHook(command, state string) bool {
 	if command == "'"+filepath.Join(state, "hook-missing")+"'" {

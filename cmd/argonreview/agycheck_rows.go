@@ -120,9 +120,16 @@ func agyCheckCollect(isolation string, r agyCheckRowDirs, s agyCheckScenario, f 
 	claims, claimErr := agyCheckReadClaims(isolation, r.State, f)
 	records, stubErr := agyCheckReadStubRecords(isolation, r.Stub, f)
 	e.Claims, e.Stub = claims, records
+	var eventErr error
+	if s.ID == "reconciliation" {
+		e.Events, eventErr = agyCheckReadEvents(isolation, r.State, f)
+	}
 	diagnostic := ""
 	if claimErr != nil || stubErr != nil {
 		diagnostic = "invalid call records"
+	}
+	if eventErr != nil {
+		diagnostic = "invalid hook events"
 	}
 	if diagnostic != "" {
 		return e, diagnostic, nil

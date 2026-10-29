@@ -20,19 +20,16 @@ type agyCheckStubRecord struct {
 	Kind, Tag string
 }
 
-// Records are an ordinary-agent regression check, not tamper resistance: an
-// allow-everything agent could write them itself. Missing, contradictory or
-// malformed evidence is an error; a match never approves trust of a version.
 // The explicit isolation argument prevents callers from reading state elsewhere.
-func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]agyCheckClaim, error) {
-	bad := func() ([]agyCheckClaim, error) { return nil, errors.New(agyCheckPrintable("invalid call records")) }
+func agyCheckReadRecords(isolation, dir, sub string, cap int, f agyCheckFiles) ([][]byte, error) {
+	bad := func() ([][]byte, error) { return nil, errors.New(agyCheckPrintable("invalid call records")) }
 	if err := f.path(isolation, dir); err != nil {
 		return bad()
 	}
 	if err := f.private(dir, true); err != nil {
 		return bad()
 	}
-	calls := filepath.Join(dir, "calls")
+	calls := filepath.Join(dir, sub)
 	if err := f.path(dir, calls); err != nil {
 		return bad()
 	}
@@ -44,11 +41,11 @@ func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]
 		return bad()
 	}
 	entries, err := f.entries(calls)
-	if err != nil || len(entries) > agyCheckHookCallCap {
+	if err != nil || len(entries) > cap {
 		return bad()
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	var claims []agyCheckClaim
+	var records [][]byte
 	for i, entry := range entries {
 		if entry.Name() != fmt.Sprintf("%06d", i+1) {
 			return bad()
@@ -61,6 +58,22 @@ func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]
 		if err != nil || len(data) > agyCheckClaimBytes || !strings.HasSuffix(string(data), "\n") {
 			return bad()
 		}
+		records = append(records, data)
+	}
+	return records, nil
+}
+
+// Records are an ordinary-agent regression check, not tamper resistance: an
+// allow-everything agent could write them itself. Missing, contradictory or
+// malformed evidence is an error; a match never approves trust of a version.
+func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]agyCheckClaim, error) {
+	records, err := agyCheckReadRecords(isolation, dir, "calls", agyCheckHookCallCap, f)
+	if err != nil {
+		return nil, err
+	}
+	bad := func() ([]agyCheckClaim, error) { return nil, errors.New("invalid call records") }
+	var claims []agyCheckClaim
+	for i, data := range records {
 		word, tag, ok := strings.Cut(strings.TrimSuffix(string(data), "\n"), " ")
 		if !ok || tag != "-" && !agyCheckHookTag(tag) {
 			return bad()

@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -52,6 +54,7 @@ func agyCheckHookHarnessNew(t *testing.T) *agyCheckHookHarness {
 		agyCheckHookTestDir:              {os.ModeDir | 0o700, 501},
 		agyCheckHookTestDir + "/" + agyCheckHookSentinel: {0o600, 501},
 		agyCheckHookTestDir + "/calls":                   {os.ModeDir | 0o700, 501},
+		agyCheckHookTestDir + "/events":                  {os.ModeDir | 0o700, 501},
 	}, files: make(map[string]*agyCheckHookFile)}
 	guard := func(path string) {
 		t.Helper()
@@ -73,7 +76,7 @@ func agyCheckHookHarnessNew(t *testing.T) *agyCheckHookHarness {
 		},
 		mkdir: func(path string, mode os.FileMode) error {
 			guard(path)
-			if path != agyCheckHookTestDir+"/calls" || mode != 0o700 {
+			if (path != agyCheckHookTestDir+"/calls" && path != agyCheckHookTestDir+"/events") || mode != 0o700 {
 				t.Fatalf("unsafe mkdir: %s %v", path, mode)
 			}
 			return os.ErrExist
@@ -125,12 +128,20 @@ func TestAgyCheckHookModes(t *testing.T) {
 			h := agyCheckHookHarnessNew(t)
 			agyCheckHookRun(t, h, []string{tc.mode, agyCheckHookTestDir, "location-1"}, tc.code, tc.out, tc.stderr)
 			file := h.files[agyCheckHookTestDir+"/calls/000001"]
-			if len(h.files) != 1 || file == nil || !file.closed || file.String() != tc.word+" location-1\n" {
+			wantRecords := 1
+			if tc.mode == "alternate" {
+				wantRecords = 3
+			}
+			if len(h.files) != wantRecords || file == nil || !file.closed || file.String() != tc.word+" location-1\n" {
 				t.Fatalf("missing closed call record: %+v", h.files)
 			}
 			if tc.mode == "hang" {
 				if h.wait != 60*time.Second || h.wait <= time.Duration(agyCheckHookTimeout)*time.Second {
 					t.Fatalf("hang must outwait timeout: %s", h.wait)
+				}
+			} else if tc.mode == "alternate" {
+				if h.wait != 1500*time.Millisecond {
+					t.Fatal("alternate hold missing")
 				}
 			} else if h.wait != 0 {
 				t.Fatal("unexpected sleep")
@@ -450,6 +461,7 @@ func agyCheckHookFileDeps(stdin io.Reader) agyCheckHookDeps {
 	return d
 }
 
+// Synthetic concurrency exercises exclusive records, never agy scheduling.
 func TestAgyCheckHookConcurrent(t *testing.T) {
 	dir := agyCheckHookPrepared(t)
 	const workers, calls = 8, 7
@@ -468,6 +480,8 @@ func TestAgyCheckHookConcurrent(t *testing.T) {
 			// A refusal before create must release the other workers without a timer.
 			defer arrival.Do(arrived.Done)
 			d := agyCheckHookFileDeps(strings.NewReader("{}"))
+			// Yield during the synthetic hold without waiting for wall-clock time.
+			d.sleep = func(time.Duration) { runtime.Gosched() }
 			create := d.create
 			first := true
 			d.create = func(path string, flags int, mode os.FileMode) (io.WriteCloser, error) {
@@ -502,6 +516,7 @@ func TestAgyCheckHookConcurrent(t *testing.T) {
 		t.Fatalf("claim gaps/duplicates: %d records, want %d", len(entries), workers*calls)
 	}
 	allows, denies := 0, 0
+	var records []string
 	for n, entry := range entries {
 		n++
 		if entry.Name() != fmt.Sprintf("%06d", n) {
@@ -521,6 +536,7 @@ func TestAgyCheckHookConcurrent(t *testing.T) {
 		if string(data) != word+" -\n" {
 			t.Fatalf("claim %d parity: %q, want %s", n, data, word)
 		}
+		records = append(records, string(data))
 		info, err := entry.Info()
 		if err != nil || info.Mode() != 0o600 {
 			t.Fatalf("call mode: %v %v", info, err)
@@ -528,6 +544,50 @@ func TestAgyCheckHookConcurrent(t *testing.T) {
 	}
 	if allows-denies < -1 || allows-denies > 1 {
 		t.Fatalf("unbalanced alternation: %d %d", allows, denies)
+	}
+	entries, err = os.ReadDir(filepath.Join(dir, "events"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2*workers*calls {
+		t.Fatalf("event gaps/duplicates: %d records, want %d", len(entries), 2*workers*calls)
+	}
+	starts, ends := make([]int, len(records)), make([]int, len(records))
+	for i, entry := range entries {
+		if entry.Name() != fmt.Sprintf("%06d", i+1) {
+			t.Fatalf("event sequence has gap: %s at %d", entry.Name(), i+1)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, "events", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields := strings.Fields(string(data))
+		if len(fields) < 2 {
+			t.Fatalf("malformed event: %q", data)
+		}
+		n, err := strconv.Atoi(fields[1])
+		if err != nil || n < 1 || n > len(records) {
+			t.Fatalf("unknown event call: %q", data)
+		}
+		switch fields[0] {
+		case "start":
+			if starts[n-1] != 0 || string(data) != fmt.Sprintf("start %d %s", n, records[n-1]) {
+				t.Fatalf("duplicate or mismatched start: %q", data)
+			}
+			starts[n-1] = i + 1
+		case "end":
+			if ends[n-1] != 0 || starts[n-1] == 0 || string(data) != fmt.Sprintf("end %d\n", n) {
+				t.Fatalf("duplicate, premature or malformed end: %q", data)
+			}
+			ends[n-1] = i + 1
+		default:
+			t.Fatalf("unknown event kind: %q", data)
+		}
+	}
+	for i := range records {
+		if starts[i] == 0 || ends[i] <= starts[i] {
+			t.Fatalf("call %d missing ordered start/end: %d %d", i+1, starts[i], ends[i])
+		}
 	}
 }
 

@@ -39,7 +39,7 @@ func agyCheckStub(args []string, stdout, stderr io.Writer, d agyCheckStubDeps) i
 	// immediately preceding request <tag>. ANY tool request on a denied MCP row
 	// is a breach even without a response; initialized is a standalone handshake
 	// notification. An unpaired allowed tool request is a difference.
-	record := func(kind, tag string) error { _, err := agyCheckHookClaim(args[0], kind, tag, d.hook); return err }
+	record := func(kind, tag string) error { _, _, err := agyCheckHookClaim(args[0], kind, tag, d.hook); return err }
 	if record("start", "-") != nil {
 		return fail()
 	}

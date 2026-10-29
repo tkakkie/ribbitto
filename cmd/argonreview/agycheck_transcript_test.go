@@ -1,140 +1,90 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
+
+const agyCheckTestInit = "{\"event\":\"init\",\"conversation_id\":\"d11e3b12-740e-440d-85a5-d50e2d939177\",\"init\":{\"model\":\"gemini-4-argon-high\",\"permission_mode\":\"request-review\",\"cwd\":\"...\",\"tools\":[\"...\"]}}\n"
+const agyCheckTestResult = "{\"event\":\"result\",\"result\":{}}\n"
+
+func agyCheckTestStep(index int, tool, state string) string {
+	return fmt.Sprintf("{\"event\":\"step_update\",\"step_update\":{\"step_index\":%d,\"state\":%q,\"step_type\":\"tool\",\"tool_name\":%q}}\n", index, state, tool)
+}
 
 // agyCheckTranscriptFailures plants content that must never reach diagnostics.
 func agyCheckTranscriptFailures() []struct{ name, data string } {
 	const marker = "UNTRUSTED_TRANSCRIPT_MARKER"
-	const end = "{\"event\":\"result\"}\n"
-	step := "{\"event\":\"tool_step\",\"tool\":\"" + marker + "\",\"state\":\"ERROR\"}\n"
-	return []struct{ name, data string }{
-		{"empty", ""}, {"oversized", strings.Repeat(" ", agyCheckTranscriptMaxBytes) + end},
-		{"too many lines", strings.Repeat("{\"event\":\"message\"}\n", agyCheckTranscriptMaxLines) + end},
-		{"missing result", step}, {"result not last", end + step}, {"two results", end + end},
-		{"truncated", step + strings.TrimSuffix(end, "\n")},
-		{"duplicate keys", "{\"event\":\"message\",\"EVENT\":\"" + marker + "\"}\n" + end},
-		{"duplicate tool", "{\"event\":\"tool_step\",\"tool\":\"" + marker + "\",\"TOOL\":\"other\",\"state\":\"ERROR\"}\n" + end},
-		{"unknown event", "{\"event\":\"" + marker + "\"}\n" + end}, {"non JSON", marker + "\n" + end},
-		{"not object", "[\"" + marker + "\"]\n" + end},
-		{"trailing JSON", "{\"event\":\"message\"} {}\n" + end},
-		{"invalid UTF8", "{\"event\":\"message\",\"text\":\"\xff\"}\n" + end},
-		{"unpaired surrogate", "{\"event\":\"message\",\"text\":\"\\ud800\"}\n" + end},
-		{"empty line", "\n" + end}, {"event missing", "{\"text\":\"" + marker + "\"}\n" + end},
-		{"event number", "{\"event\":1}\n" + end}, {"event null", "{\"event\":null}\n" + end},
-		{"event object", "{\"event\":{}}\n" + end},
-		{"event empty", "{\"event\":\"\"}\n" + end}, {"event case", "{\"Event\":\"message\"}\n" + end},
-		{"tool missing", "{\"event\":\"tool_step\",\"state\":\"ERROR\"}\n" + end},
-		{"tool number", "{\"event\":\"tool_step\",\"tool\":1,\"state\":\"ERROR\"}\n" + end},
-		{"tool null", "{\"event\":\"tool_step\",\"tool\":null,\"state\":\"ERROR\"}\n" + end},
-		{"tool object", "{\"event\":\"tool_step\",\"tool\":{},\"state\":\"ERROR\"}\n" + end},
-		{"tool empty", "{\"event\":\"tool_step\",\"tool\":\"\",\"state\":\"ERROR\"}\n" + end},
-		{"unknown state", strings.Replace(step, "ERROR", marker, 1) + end},
-		{"done case", strings.Replace(step, "ERROR", "done", 1) + end},
-		{"error case", strings.Replace(step, "ERROR", "error", 1) + end},
-		{"state missing", "{\"event\":\"tool_step\",\"tool\":\"" + marker + "\"}\n" + end},
-		{"state null", strings.Replace(step, `"ERROR"`, "null", 1) + end},
-		{"state number", strings.Replace(step, `"ERROR"`, "1", 1) + end},
-		{"state object", strings.Replace(step, `"ERROR"`, "{}", 1) + end},
-		{"batch number", strings.Replace(step, "}", `,"batch":1}`, 1) + end},
-		{"batch null", strings.Replace(step, "}", `,"batch":null}`, 1) + end},
-		{"batch object", strings.Replace(step, "}", `,"batch":{}}`, 1) + end},
-		{"path missing", "{\"event\":\"hook_loaded\"}\n" + end},
-		{"path number", "{\"event\":\"hook_loaded\",\"path\":1}\n" + end},
-		{"path null", "{\"event\":\"hook_loaded\",\"path\":null}\n" + end},
-		{"path object", "{\"event\":\"hook_loaded\",\"path\":{}}\n" + end},
-		{"absolute path", "{\"event\":\"hook_loaded\",\"path\":\"/" + marker + "\"}\n" + end},
-		{"parent path", "{\"event\":\"hook_loaded\",\"path\":\"../" + marker + "\"}\n" + end},
-		{"backslash path", "{\"event\":\"hook_loaded\",\"path\":\"a\\\\" + marker + "\"}\n" + end},
-		{"empty path", "{\"event\":\"hook_loaded\",\"path\":\"\"}\n" + end},
-		{"dot path", "{\"event\":\"hook_loaded\",\"path\":\"./" + marker + "\"}\n" + end},
-		{"empty component", "{\"event\":\"hook_loaded\",\"path\":\"a//" + marker + "\"}\n" + end},
-		{"nul path", "{\"event\":\"hook_loaded\",\"path\":\"a\\u0000" + marker + "\"}\n" + end},
-		{"noncontiguous batch", strings.Replace(step, "}", `,"batch":"a"}`, 1) + step + strings.Replace(step, "}", `,"batch":"a"}`, 1) + end},
+	step := agyCheckTestStep(2, marker, "ERROR")
+	wrap := func(line string) string {
+		return agyCheckTestInit + agyCheckTestStep(100, "write_file", "DONE") + agyCheckTestStep(101, "write_file", "ACTIVE") + line + agyCheckTestResult
 	}
-}
-
-// TestAgyCheckTranscriptLineLimit isolates line bounds from byte and event bounds.
-func TestAgyCheckTranscriptLineLimit(t *testing.T) {
-	const message = "{\"event\":\"message\"}\n"
-	const end = "{\"event\":\"result\"}\n"
-	for _, tc := range []struct {
-		name  string
-		lines int
-		want  string
-	}{
-		{"boundary", agyCheckTranscriptMaxLines, ""},
-		{"flood", agyCheckTranscriptMaxLines + 1, "transcript line limit exceeded"},
+	cases := []struct{ name, data string }{
+		{"empty", ""}, {"oversized", strings.Repeat(" ", agyCheckTranscriptMaxBytes) + agyCheckTestResult},
+		{"too many lines", strings.Repeat("\n", agyCheckTranscriptMaxLines+1)},
+		{"missing init", step + agyCheckTestResult}, {"duplicate init", wrap(agyCheckTestInit)},
+		{"missing result", agyCheckTestInit + step}, {"result not last", wrap(agyCheckTestResult + step)},
+		{"two results", wrap(agyCheckTestResult)}, {"truncated", strings.TrimSuffix(wrap(step), "\n")},
+		{"duplicate keys", wrap(`{"event":"step_update","EVENT":"` + marker + `"}` + "\n")},
+		{"unknown event", wrap(`{"event":"` + marker + `"}` + "\n")},
+		{"tool_step", wrap(`{"event":"tool_step","tool":"write_file","state":"DONE"}` + "\n")},
+		{"hook_loaded", wrap(`{"event":"hook_loaded","path":"hooks.json"}` + "\n")},
+		{"non JSON", wrap(marker + "\n")}, {"not object", wrap(`["` + marker + `"]` + "\n")},
+		{"trailing JSON", wrap(strings.TrimSuffix(step, "\n") + " {}\n")},
+		{"invalid UTF8", wrap("{\"event\":\"step_update\",\"text\":\"\xff\"}\n")},
+		{"unpaired surrogate", wrap(`{"event":"step_update","text":"\ud800"}` + "\n")},
+		{"empty line", wrap("\n")},
+		{"two finals", wrap(step + step)},
+		{"ERROR then DONE", wrap(step + agyCheckTestStep(2, marker, "DONE"))},
+		{"DONE then ERROR", wrap(agyCheckTestStep(2, marker, "DONE") + step)},
+		{"ACTIVE after final", wrap(step + agyCheckTestStep(2, marker, "ACTIVE"))},
+		{"repeated ACTIVE", wrap(agyCheckTestStep(2, marker, "ACTIVE") + agyCheckTestStep(2, marker, "ACTIVE"))},
+		{"changed tool", wrap(agyCheckTestStep(2, "other", "ACTIVE") + step)},
+		{"changed type", wrap(strings.Replace(agyCheckTestStep(2, marker, "ACTIVE"), `"tool"`, `"user_input"`, 1) + step)},
+	}
+	for _, field := range []string{"event", "step_index", "state", "step_type", "tool_name"} {
+		for _, value := range []string{"null", "{}", "1", `""`} {
+			// Integer 1 is a valid index; other fields require strings.
+			if field == "step_index" && value == "1" {
+				continue
+			}
+			old := map[string]string{"event": `"step_update"`, "step_index": "2", "state": `"ERROR"`, "step_type": `"tool"`, "tool_name": `"` + marker + `"`}[field]
+			cases = append(cases, struct{ name, data string }{field + "/" + value, wrap(strings.Replace(step, `"`+field+`":`+old, `"`+field+`":`+value, 1))})
+		}
+		old := map[string]string{"event": `"event":"step_update",`, "step_index": `"step_index":2,`, "state": `"state":"ERROR",`, "step_type": `"step_type":"tool",`, "tool_name": `,"tool_name":"` + marker + `"`}[field]
+		cases = append(cases, struct{ name, data string }{field + " missing", wrap(strings.Replace(step, old, "", 1))})
+	}
+	for _, pair := range [][2]string{
+		{"negative index", `"step_index":-1`}, {"fractional index", `"step_index":2.5`}, {"string index", `"step_index":"2"`},
+		{"overflow index", `"step_index":9999999999999999999999999`},
+		{"bad state", `"state":"done"`}, {"bad type", `"step_type":"other"`},
+		{"nested duplicate", `"state":"ERROR","STATE":"DONE"`},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			data := strings.Repeat(message, tc.lines-1) + end
-			if len(data) >= agyCheckTranscriptMaxBytes || strings.Count(data, "\n") != tc.lines {
-				t.Fatal("fixture must isolate the line limit below the byte limit")
-			}
-			got, err := agyCheckTranscriptParse([]byte(data))
-			if tc.want == "" {
-				if err != nil || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
-					t.Fatalf("line boundary rejected or invented facts: %+v %v", got, err)
-				}
-			} else if err == nil || err.Error() != tc.want || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
-				t.Fatalf("line flood must fail with fixed diagnostic and no facts: %+v %v", got, err)
-			}
-		})
+		field, _, _ := strings.Cut(pair[1], ":")
+		old := map[string]string{`"step_index"`: `"step_index":2`, `"state"`: `"state":"ERROR"`, `"step_type"`: `"step_type":"tool"`}[field]
+		cases = append(cases, struct{ name, data string }{pair[0], wrap(strings.Replace(step, old, pair[1], 1))})
 	}
+	for _, info := range []string{`null`, `1`, `"text"`, `{}`, `{"name":null}`, `{"name":1}`, `{"name":"other"}`, `{"name":"` + marker + `","NAME":"` + marker + `"}`, `{"error":null}`, `{"error":1}`, `{"error":{}}`, `{"error":{"message":null}}`, `{"error":{"message":1}}`, `{"error":{"message":"a","MESSAGE":"b"}}`, `{"parameters":{"Path":"a","PATH":"b"}}`, `{"parameters":[{"s":1,"\u017f":2}]}`, `{"parameters":[{"σ":1,"ς":2}]}`} {
+		if info == `{}` {
+			continue
+		} // tool_info itself is optional and may be empty.
+		line := strings.TrimSuffix(step, "}}\n") + `,"tool_info":` + info + "}}\n"
+		cases = append(cases, struct{ name, data string }{"tool_info/" + info, wrap(line)})
+	}
+	cases = append(cases, struct{ name, data string }{"duplicate result", agyCheckTestInit + "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\",\"STATUS\":\"FAILURE\"}}\n"})
+	for _, value := range []string{"null", "1", `"text"`} {
+		cases = append(cases, struct{ name, data string }{"step object/" + value, wrap("{\"event\":\"step_update\",\"step_update\":" + value + "}\n")}, struct{ name, data string }{"result object/" + value, agyCheckTestInit + "{\"event\":\"result\",\"result\":" + value + "}\n"})
+	}
+	return cases
 }
 
-// TestAgyCheckTranscriptPaths keeps unsafe report text from retaining any facts.
-func TestAgyCheckTranscriptPaths(t *testing.T) {
-	const marker = "UNTRUSTED_TRANSCRIPT_MARKER"
-	const prefix = "{\"event\":\"hook_loaded\",\"path\":\"hooks.json\"}\n" +
-		"{\"event\":\"tool_step\",\"tool\":\"view_file\",\"state\":\"DONE\"}\n"
-	for _, tc := range []struct {
-		name, path string
-		invalid    bool
-	}{
-		{"newline", "\n" + marker, true},
-		{"carriage return", "\r" + marker, true},
-		{"tab", "\t" + marker, true},
-		{"escape", "\x1b" + marker, true},
-		{"control one", "\x01" + marker, true},
-		{"delete", "\x7f" + marker, true},
-		{"later component", "hooks/" + marker + "\n.json", true},
-		{"ordinary", ".agent/hooks.json", false},
-		// Spaces and printable non-ASCII bytes cannot inject ASCII report controls;
-		// rejecting them would unnecessarily exclude otherwise valid workspace names.
-		{"spaces", "my hooks/hooks file.json", false},
-		{"non ASCII", "フック/設定.json", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			path, err := json.Marshal(tc.path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			data := prefix + "{\"event\":\"hook_loaded\",\"path\":" + string(path) + "}\n{\"event\":\"result\"}\n"
-			got, err := agyCheckTranscriptParse([]byte(data))
-			if tc.invalid {
-				if err == nil || err.Error() != "invalid transcript event at line 3" || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
-					t.Fatalf("unsafe path must fail with fixed diagnostic and no facts: %+v %v", got, err)
-				}
-				return
-			}
-			if err != nil || fmt.Sprint(got.Steps) != "[{view_file DONE }]" || len(got.LoadedPaths) != 2 || got.LoadedPaths[0] != "hooks.json" || got.LoadedPaths[1] != tc.path {
-				t.Fatalf("valid path lost ordered facts: %+v %v", got, err)
-			}
-		})
-	}
-}
-
-// TestAgyCheckTranscriptReject pins failures independently of the dispatcher.
 func TestAgyCheckTranscriptReject(t *testing.T) {
 	for _, tc := range agyCheckTranscriptFailures() {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := agyCheckTranscriptParse([]byte(tc.data))
-			if err == nil || len(got.Steps) != 0 || len(got.LoadedPaths) != 0 {
+			if err == nil || len(got.Steps) != 0 || got.Unfinished != 0 {
 				t.Fatalf("invalid transcript accepted or partial facts retained: %+v %v", got, err)
 			}
 			if strings.Contains(err.Error(), "UNTRUSTED_TRANSCRIPT_MARKER") {
@@ -144,45 +94,127 @@ func TestAgyCheckTranscriptReject(t *testing.T) {
 	}
 }
 
-// TestAgyCheckTranscriptParse pins order and permits denied results, since
-// applying review.go's success judgment here would reject the intended denies.
-func TestAgyCheckTranscriptParse(t *testing.T) {
-	data := []byte(`{"event":"message","text":"opaque"}
-{"event":"thinking"}
-{"event":"hook_loaded","path":".agent/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR","batch":"a"}
-{"event":"tool_step","tool":"view_file","state":"DONE","batch":"a"}
-{"event":"hook_loaded","path":"hooks.json"}
-{"event":"tool_step","tool":"view_file","state":"DONE","batch":""}
-{"event":"result","result":{"status":"FAILURE","denied_actions":["expected"]}}
-`)
-	got, err := agyCheckTranscriptParse(data)
-	if err != nil || fmt.Sprint(got.Steps) != "[{write_to_file ERROR a} {view_file DONE a} {view_file DONE }]" || strings.Join(got.LoadedPaths, ",") != ".agent/hooks.json,hooks.json" {
-		t.Fatalf("ordered facts: %+v %v", got, err)
+func TestAgyCheckTranscriptLineLimit(t *testing.T) {
+	for _, n := range []int{agyCheckTranscriptMaxLines, agyCheckTranscriptMaxLines + 1} {
+		data := agyCheckTestInit
+		var body strings.Builder
+		body.WriteString(data)
+		for i := 0; i < n-2; i++ {
+			fmt.Fprintf(&body, "{\"event\":\"step_update\",\"step_update\":{\"step_index\":%d,\"state\":\"DONE\",\"step_type\":\"agent_response\"}}\n", i)
+		}
+		data = body.String() + agyCheckTestResult
+		if len(data) >= agyCheckTranscriptMaxBytes {
+			t.Fatal("fixture exceeds byte bound")
+		}
+		got, err := agyCheckTranscriptParse([]byte(data))
+		if n == agyCheckTranscriptMaxLines {
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else if err == nil || err.Error() != "transcript line limit exceeded" {
+			t.Fatal(err)
+		}
+		if len(got.Steps) != 0 || got.Unfinished != 0 {
+			t.Fatal("invented facts")
+		}
 	}
 }
 
-// TestAgyCheckTranscriptBatches distinguishes concurrency evidence from labels.
-func TestAgyCheckTranscriptBatches(t *testing.T) {
-	for _, tc := range []struct {
-		ids     string
-		want    int
-		invalid bool
-	}{
-		{"", 0, false}, {"a", 0, false}, {"a a", 1, false}, {"a a b b", 2, false},
-		{"a a - b b", 2, false}, {"a - a", 0, true}, {"a b a", 0, true},
-	} {
-		t.Run(tc.ids, func(t *testing.T) {
-			var steps []agyCheckTranscriptStep
-			for _, id := range strings.Fields(tc.ids) {
-				if id == "-" {
-					id = ""
+// Parameters are agent-controlled; limits include containers in opaque fields.
+func TestAgyCheckTranscriptDepthLimit(t *testing.T) {
+	for _, container := range []string{"object", "array"} {
+		for _, depth := range []int{16, 17} {
+			t.Run(fmt.Sprintf("%s/depth-%d", container, depth), func(t *testing.T) {
+				payload := `"opaque"`
+				// The event, step_update and tool_info already occupy three levels.
+				for i := 0; i < depth-3; i++ {
+					if container == "object" {
+						payload = `{"a":` + payload + `}`
+					} else {
+						payload = `[` + payload + `]`
+					}
 				}
-				steps = append(steps, agyCheckTranscriptStep{Batch: id})
-			}
-			got, err := agyCheckTranscriptParallelBatches(steps)
-			if got != tc.want || (err != nil) != tc.invalid {
-				t.Fatalf("batches=%d error=%v; want %d invalid=%t", got, err, tc.want, tc.invalid)
+				data := agyCheckTestParameters(payload)
+				got, err := agyCheckTranscriptParse([]byte(data))
+				if (err == nil) != (depth == 16) || (err != nil && len(got.Steps) != 0) {
+					t.Fatalf("depth %d: %+v %v", depth, got, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAgyCheckTranscriptKeyLimit(t *testing.T) {
+	for _, location := range []string{"top", "parameters"} {
+		for _, count := range []int{256, 257} {
+			t.Run(fmt.Sprintf("%s/keys-%d", location, count), func(t *testing.T) {
+				fields := []string{`"event":"init"`}
+				if location == "parameters" {
+					fields = nil
+				}
+				for i := len(fields); i < count; i++ {
+					fields = append(fields, fmt.Sprintf(`"key%d":0`, i))
+				}
+				object := "{" + strings.Join(fields, ",") + "}"
+				data := object + "\n" + agyCheckTestResult
+				if location == "parameters" {
+					data = agyCheckTestParameters(object)
+				}
+				got, err := agyCheckTranscriptParse([]byte(data))
+				if (err == nil) != (count == 256) || (err != nil && len(got.Steps) != 0) {
+					t.Fatalf("keys %d: %+v %v", count, got, err)
+				}
+			})
+		}
+	}
+}
+
+func agyCheckTestParameters(payload string) string {
+	return agyCheckTestInit + `{"event":"step_update","step_update":{"step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_file","tool_info":{"parameters":` + payload + "}}}\n" + agyCheckTestResult
+}
+
+func TestAgyCheckTranscriptDeepPayload(t *testing.T) {
+	payload := strings.Repeat(`{"a":`, 9000) + `"` + strings.Repeat("x", 256<<10) + `"` + strings.Repeat("}", 9000)
+	data := []byte(agyCheckTestParameters(payload))
+	if len(data) > agyCheckTranscriptMaxBytes {
+		t.Fatal("fixture exceeds byte bound")
+	}
+	start := time.Now()
+	got, err := agyCheckTranscriptParse(data)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("deep payload took %v to refuse", elapsed)
+	}
+	if err == nil || len(got.Steps) != 0 || got.Unfinished != 0 {
+		t.Fatalf("deep payload accepted or partial facts retained: %+v %v", got, err)
+	}
+}
+
+// Sanitised complete shapes from #1972; errors and result text are opaque.
+const agyCheckRealLines = `{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":1,"state":"DONE","step_type":"agent_response","duration_seconds":6.8,"usage":{"input_tokens":8213,"output_tokens":306,"thinking_tokens":267,"cache_read_tokens":0,"total_tokens":8519}}}
+{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"write_file","tool_info":{"name":"write_file","parameters":{"Path":"..."}}}}
+{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_file","duration_seconds":6.4,"tool_info":{"name":"write_file","parameters":{"Path":"..."}}}}
+{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":3,"state":"ERROR","step_type":"tool","tool_name":"write_file","duration_seconds":6.1,"tool_info":{"name":"write_file","parameters":{"Path":"..."},"error":{"type":"TOOL_ERROR","message":"JSON hook \"<name>\" failed: command failed: exit status 2, stderr: <text>"}}}}
+{"event":"step_update","step_update":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","step_index":4,"state":"ERROR","step_type":"tool","tool_name":"call_mcp_tool","tool_info":{"name":"call_mcp_tool","parameters":{"ServerName":"<server>","ToolName":"<tool>"},"error":{"type":"TOOL_ERROR","message":"permission check failed for mcp \"<server>/<tool>\": user denied permission for mcp(<server>/<tool>)"}}}}
+{"event":"result","result":{"conversation_id":"d11e3b12-740e-440d-85a5-d50e2d939177","status":"SUCCESS","response":"","duration_seconds":19.2,"num_turns":1,"usage":{"total_tokens":11031},"denied_actions":[{"action":"mcp","display_name":"CallMcpTool"}]}}
+`
+
+func TestAgyCheckTranscriptParse(t *testing.T) {
+	lines := strings.SplitAfter(agyCheckRealLines, "\n")
+	for _, tc := range []struct {
+		name, data, want string
+		unfinished       int
+	}{
+		{"full", agyCheckRealLines, "[{write_file DONE} {write_file ERROR} {call_mcp_tool ERROR}]", 0},
+		{"hook failure", lines[4] + agyCheckTestResult, "[{write_file ERROR}]", 0},
+		{"MCP denial", lines[5] + agyCheckTestResult, "[{call_mcp_tool ERROR}]", 0},
+		{"ACTIVE only", lines[2] + agyCheckTestResult, "[]", 1},
+		{"final order", agyCheckTestStep(2, "write_file", "ACTIVE") + agyCheckTestStep(3, "call_mcp_tool", "ERROR") + agyCheckTestStep(2, "write_file", "DONE") + agyCheckTestResult, "[{call_mcp_tool ERROR} {write_file DONE}]", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := agyCheckTranscriptParse([]byte(agyCheckTestInit + tc.data))
+			if err != nil || fmt.Sprint(got.Steps) != tc.want || got.Unfinished != tc.unfinished {
+				t.Fatalf("facts: %+v %v", got, err)
 			}
 		})
 	}
@@ -194,7 +226,7 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 	if len(agyCheckTranscriptTools) != 29 {
 		t.Fatal("tool mapping must cover exactly 29 rows")
 	}
-	for _, pair := range strings.Fields(`hook-decision=write_to_file hook-exit2=write_to_file hook-exit1=write_to_file hook-missing=write_to_file hook-timeout=write_to_file hook-unparseable=write_to_file hook-silent=write_to_file hook-precedence=write_to_file hook-same-name-agent=write_to_file hook-same-name-agents=write_to_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_to_file outside-read=view_file`) {
+	for _, pair := range strings.Fields(`hook-decision=write_file hook-exit2=write_file hook-exit1=write_file hook-missing=write_file hook-timeout=write_file hook-unparseable=write_file hook-silent=write_file hook-precedence=write_file hook-same-name-agent=write_file hook-same-name-agents=write_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_file outside-read=view_file`) {
 		id, tool, _ := strings.Cut(pair, "=")
 		if agyCheckTranscriptTools[id] != tool {
 			t.Fatalf("tool name for %s: %q want %q", id, agyCheckTranscriptTools[id], tool)
@@ -207,7 +239,7 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 			t.Fatalf("tool coverage: %+v", row)
 		}
 		if row.Group == "discovery" || row.Group == "reconciliation" {
-			if tool != "write_to_file" {
+			if tool != "write_file" {
 				t.Fatalf("file scenario tool changed: %s", row.ID)
 			}
 		}
@@ -226,11 +258,11 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 				steps []agyCheckTranscriptStep
 				want  string
 			}{
-				{nil, absent}, {[]agyCheckTranscriptStep{{"other", "ERROR", ""}}, absent},
-				{[]agyCheckTranscriptStep{{tool, "ERROR", ""}}, "denied"},
-				{[]agyCheckTranscriptStep{{tool, "DONE", ""}}, done},
-				{[]agyCheckTranscriptStep{{tool, "ERROR", ""}, {tool, "DONE", ""}}, "multiple steps"},
-				{[]agyCheckTranscriptStep{{tool, "unknown", ""}}, "unparsed transcript"},
+				{nil, absent}, {[]agyCheckTranscriptStep{{"other", "ERROR"}}, absent},
+				{[]agyCheckTranscriptStep{{tool, "ERROR"}}, "denied"},
+				{[]agyCheckTranscriptStep{{tool, "DONE"}}, done},
+				{[]agyCheckTranscriptStep{{tool, "ERROR"}, {tool, "DONE"}}, "multiple steps"},
+				{[]agyCheckTranscriptStep{{tool, "unknown"}}, "unparsed transcript"},
 			} {
 				if got := agyCheckTranscriptOutcome(row, tc.steps); got != tc.want {
 					t.Fatalf("outcome=%q want %q", got, tc.want)

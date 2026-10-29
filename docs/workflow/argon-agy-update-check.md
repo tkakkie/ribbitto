@@ -16,6 +16,8 @@ An allow-everything agent can write call records (maintainer accepted,
 2026-10-28, [#1890][issue]).
 Reconciliation is no production proof: the guard keeps no decision log.
 
+Reconciliation always differs: no exit 0; trust needs follow-up.
+
 ## Isolation and preparation
 
 Approve user, sudo rule, directories, permissions, binary placement, sign-in and
@@ -140,27 +142,28 @@ On/off means verify modes.
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` answer for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls, ≥ 2 parallel batches | `counts reconcile` |
 
-Read exposure changes against 1.4.7. `covered if loaded`: the row is ok when the
-hook ran exactly if loaded and a loaded location is covered by
-`implementRefusedNames` (`cmd/argonreview/implementguard.go`). Discovery needs
-intended-call evidence. Extend the six candidates through review. Unlisted
-protected loads pass; unprotected loads fail the whole check.
-`ERROR` alone never decides denial: check claim existence/content (missing
-executable requires no claim); MCP also checks stub start/request/response.
-Same-name rows need both hook records, final deny, no effect.
+Exposure vs 1.4.7. Discovery: final call/local claim prove loaded/ran;
+coverage: `implementRefusedNames`; else
+`hook load not observable in the transcript` (differs). Review/extend six
+candidates. Unlisted loads unseen. Same-name: both records, final deny,
+no effect.
 
-URL rules
-(`cmd/argonreview/agycheck_evidence.go`, `cmd/argonreview/agycheck_url_test.go`):
-zero tool steps and hook claims; stub absent/start-only or valid handshake
-allowed, only initialize/initialized/toolslist/ping tags. Tool/resource calls,
-unknown tags, unpaired responses, pending requests, malformed/unreadable records
-fail. Any tool step, even unrelated `ERROR`, fails.
+Only 1.4.7-era isolated-home samples verify `init`/`step_update`/`result`.
+[first-run](https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043):
+no transcripts; old parser refused all; 1.4.9 unverified pending next host run.
+DONE/ERROR count; ACTIVE-only fails. Only `write_file`/`call_mcp_tool` verified;
+mismatches differ. Check ERROR claims (none if executable missing);
+MCP: stub start/request/response.
 
-Reconciliation requires alternating replies from allow in claim-number order,
-both decisions, a count gap ≤ 1, and steps = hooks = allows + denies.
-ERROR steps = denies; files = allows. It requires ≥ `--calls` steps and ≥ 2
-parallel batches. Bad/missing records fail; there is no per-call correlation
-or tamper resistance.
+URL: no tools/claims, even unfinished/ERROR; stub absent/start-only
+or initialize/initialized/toolslist/ping. Tool/resource calls, other tags,
+unpaired replies, pending requests, bad/unreadable records fail.
+
+Reconciliation: claim-order allow-first alternation; both, gap≤1;
+steps=hooks=allows+denies; ERRORs=denies; files=allows; ≥ `--calls` steps.
+≥2 parallel batches unobservable from order/interleaving:
+`parallel batches not observable in the transcript` + counts.
+Bad/missing records fail; no correlation/tamper resistance.
 
 ## Failure and update checklist
 

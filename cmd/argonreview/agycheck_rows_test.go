@@ -22,6 +22,7 @@ type agyCheckCommandHarness struct {
 	agy, tool, settings       string
 	validations, starts, pins int
 	writes                    []string
+	toolSteps                 int
 }
 
 func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCommandHarness {
@@ -101,6 +102,17 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 	h.x.runner.files.open = func(path string, flags int, mode os.FileMode) (*os.File, error) {
 		h.writes = append(h.writes, path)
 		return fileOpen(path, flags, mode)
+	}
+	read := h.x.runner.files.read
+	h.x.runner.files.read = func(path string, cap int64) ([]byte, error) {
+		data, err := read(path, cap)
+		if filepath.Base(path) == "out.jsonl" && err == nil {
+			parsed, parseErr := agyCheckTranscriptParse(data)
+			if parseErr == nil {
+				h.toolSteps = max(h.toolSteps, len(parsed.Steps))
+			}
+		}
+		return data, err
 	}
 	h.d.execution = &h.x
 	return h
@@ -190,7 +202,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		name, row, deviation string
 		calls, code          int
 	}{
-		{"match", "", "real-hooks", 0, 0}, {"larger-calls", "", "", 42, 0},
+		{"match", "", "real-hooks", 0, 1}, {"larger-calls", "", "", 42, 1},
 		{"flipped", "hook-silent", "flip", 0, 1},
 		{"deny-other-cause", "hook-decision", "no-claim", 0, 1},
 		{"hook-never-ran", "task-on", "no-claim", 0, 1},
@@ -208,7 +220,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		{"gap", "reconciliation", "gap", 0, 1},
 		{"contradiction", "reconciliation", "contradictory", 0, 1},
 		{"extra-file", "reconciliation", "extra-file", 0, 1},
-		{"protected", "task-on", "protected-load", 0, 0},
+		{"protected", "task-on", "protected-load", 0, 1},
 		{"unprotected", "task-on", "unprotected-load", 0, 1},
 		{"unparsed", "hook-silent", "unparsed", 0, 1},
 		{"nonzero-with-result", "hook-exit1", "nonzero-result", 0, 0},
@@ -267,32 +279,45 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			if tc.code == 0 && !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
 				t.Fatal("verbatim success final line missing")
 			}
+			full := tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected"
 			if tc.code == 1 {
-				if !strings.Contains(out, "differing: 1\n") {
-					t.Fatalf("single deviation changed other rows: %s", out)
-				}
-				if strings.Contains(out, agyCheckSuccessLine) {
-					t.Fatal("difference printed success")
-				}
-				differing := false
-				for _, line := range strings.Split(out, "\n") {
-					if strings.HasPrefix(line, tc.row+" ") && strings.Contains(line, "differs") {
-						differing = true
+				differences := 1
+				if full {
+					differences = 5
+					if tc.name == "timeout" {
+						differences++
 					}
 				}
-				if tc.deviation == "unprotected-load" {
-					differing = strings.Contains(out, "unlisted-load")
+				if !strings.Contains(out, fmt.Sprintf("differing: %d\n", differences)) || strings.Contains(out, agyCheckSuccessLine) {
+					t.Fatalf("wrong differences: %s", out)
 				}
-				if !differing {
-					t.Fatalf("named row did not differ: %s", out)
+				if !full {
+					named := false
+					for _, line := range strings.Split(out, "\n") {
+						if strings.HasPrefix(line, tc.row+" ") && strings.Contains(line, "differs") {
+							named = true
+						}
+					}
+					if !named {
+						t.Fatalf("named row did not differ: %s", out)
+					}
+				} else {
+					for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation"} {
+						found := false
+						for _, line := range strings.Split(out, "\n") {
+							if strings.HasPrefix(line, id+" ") && strings.Contains(line, "not observable in the transcript") && strings.Contains(line, "differs") {
+								found = true
+							}
+						}
+						if !found {
+							t.Fatalf("missing unobservable row %s: %s", id, out)
+						}
+					}
 				}
 			}
 			if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {
-				if !strings.Contains(out, "INFO builtin/") {
-					t.Fatal("builtin information missing")
-				}
-				if !strings.HasPrefix(out, "LOADED BUT UNLISTED") || strings.Index(out, "INFO builtin/") > strings.Index(out, "ID ") {
-					t.Fatal("extra blocks in wrong order")
+				if strings.Contains(out, "LOADED BUT UNLISTED") || !strings.Contains(out, "INFO builtin/") {
+					t.Fatalf("invented load evidence: %s", out)
 				}
 			}
 			validations, starts, pins := 3, 3, 2
@@ -306,7 +331,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			if tc.calls > 0 {
 				wantCalls = tc.calls
 			}
-			if tc.row != "reconciliation" && !strings.Contains(out, fmt.Sprintf("steps=%d hooks=%d", wantCalls, wantCalls)) {
+			if full && h.toolSteps != wantCalls {
 				t.Fatal("--calls not honoured")
 			}
 			h.restored(t)

@@ -40,7 +40,6 @@ func agyCheckExecute(o agyCheckOptions, d agyCheckDeps) agyCheckResult {
 type agyCheckRowResults struct {
 	before, after agyCheckPin
 	observations  []agyCheckObservation
-	loads         []string
 }
 
 // Both full-command and single-row checks use this collection and override path.
@@ -66,10 +65,6 @@ func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMa
 		e, diagnostic, err := agyCheckCollect(m.Isolation, r, s, x.runner.files)
 		if err != nil {
 			return err
-		}
-		parsed, parseErr := agyCheckTranscriptParse(e.Input.Transcript)
-		if parseErr == nil {
-			results.loads = append(results.loads, parsed.LoadedPaths...)
 		}
 		if diagnostic != "" {
 			observation.Outcome = diagnostic
@@ -106,7 +101,7 @@ func agyCheckRunObservation(row agyCheckRow, observation agyCheckObservation, ru
 }
 
 func agyCheckAssemble(m agyCheckMarker, f agyCheckFiles, results agyCheckRowResults, calls int) agyCheckResult {
-	result := agyCheckEvaluate(results.before, results.after, results.observations, calls, "", results.loads...)
+	result := agyCheckEvaluate(results.before, results.after, results.observations, calls, "")
 	listing, err := agyCheckBuiltinListing(m.Home, f)
 	if err != nil {
 		listing = nil

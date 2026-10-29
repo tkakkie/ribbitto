@@ -21,7 +21,7 @@ func TestAgyCheckURLRowEvidence(t *testing.T) {
 			{name: "no-stub", stub: []string{}, want: "not exercisable"},
 			{name: "start-only", stub: []string{"start -"}, want: "not exercisable"},
 			{name: "view_file", tool: "view_file", want: "unexpected tool activity"},
-			{name: "write_to_file", tool: "write_to_file", want: "unexpected tool activity"},
+			{name: "write_file", tool: "write_file", want: "unexpected tool activity"},
 			{name: "manage_task", tool: "manage_task", want: "unexpected tool activity"},
 			{name: "url-tool", tool: s.tool(), want: "unexpected tool activity"},
 			{name: "unreadable-claims", unreadable: "state", want: "invalid call records"},
@@ -50,7 +50,7 @@ func TestAgyCheckURLRowEvidence(t *testing.T) {
 			t.Run(id+"/"+tc.name, func(t *testing.T) {
 				t.Parallel()
 				m, r, f := agyCheckTestRow(t)
-				transcript := []byte("{\"event\":\"message\"}\n{\"event\":\"result\"}\n")
+				transcript := []byte(agyCheckTestInit + agyCheckTestResult)
 				out := filepath.Join(r.Row, "out.jsonl")
 				writeStub := func(lines []string) {
 					t.Helper()
@@ -80,8 +80,8 @@ func TestAgyCheckURLRowEvidence(t *testing.T) {
 					t.Fatalf("URL baseline differs: %+v", baseline)
 				}
 				if tc.tool != "" {
-					step := fmt.Sprintf("{\"event\":\"tool_step\",\"tool\":%q,\"state\":\"ERROR\"}\n", tc.tool)
-					agyCheckTestWrite(t, out, append([]byte(step), transcript...), 0o600)
+					step := agyCheckTestInit + agyCheckTestStep(0, tc.tool, "ERROR") + agyCheckTestResult
+					agyCheckTestWrite(t, out, []byte(step), 0o600)
 				}
 				if tc.claim != "" {
 					leaf := tc.leaf

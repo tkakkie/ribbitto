@@ -9,127 +9,121 @@ import (
 	"testing"
 )
 
-// agyCheckObserveFixtures are ASSUMED, unverified against real agy. Explicit
+// agyCheckObserveFixtures use the real stream-json envelope. Explicit
 // JSONL makes each row's evidence reviewable without a runner or generated files.
 // Same-name scenarios follow B1b's generator at call time.
 func agyCheckObserveFixtures(t *testing.T) map[string]agyCheckObserveInput {
 	t.Helper()
 	transcripts := map[string]string{
-		"hook-decision": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-decision": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-exit2": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-exit2": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-exit1": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-exit1": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-missing": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-missing": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-timeout": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-timeout": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-unparseable": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-unparseable": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-silent": `{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"result"}
+		"hook-silent": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-agent": `{"event":"hook_loaded","path":".agent/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-agent": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-agents": `{"event":"hook_loaded","path":".agents/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-agents": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-gemini-config": `{"event":"hook_loaded","path":".gemini/config/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-gemini-config": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-gemini": `{"event":"hook_loaded","path":".gemini/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-gemini": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-antigravity": `{"event":"hook_loaded","path":".antigravity/hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-antigravity": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"discovery-root": `{"event":"hook_loaded","path":"hooks.json"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"discovery-root": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"hook-precedence": `{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"hook-precedence": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"command-on": `{"event":"tool_step","tool":"run_command","state":"ERROR"}
-{"event":"result"}
+		"command-on": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"run_command"}}
+{"event":"result","result":{}}
 `,
-		"command-off": `{"event":"tool_step","tool":"run_command","state":"ERROR"}
-{"event":"result"}
+		"command-off": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"run_command"}}
+{"event":"result","result":{}}
 `,
-		"mcp-on": `{"event":"tool_step","tool":"call_mcp_tool","state":"ERROR"}
-{"event":"result"}
+		"mcp-on": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"call_mcp_tool"}}
+{"event":"result","result":{}}
 `,
-		"mcp-off": `{"event":"tool_step","tool":"call_mcp_tool","state":"ERROR"}
-{"event":"result"}
+		"mcp-off": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"call_mcp_tool"}}
+{"event":"result","result":{}}
 `,
-		"read-url": `{"event":"message"}
-{"event":"result"}
+		"read-url": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"agent_response"}}
+{"event":"result","result":{}}
 `,
-		"execute-url": `{"event":"message"}
-{"event":"result"}
+		"execute-url": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"agent_response"}}
+{"event":"result","result":{}}
 `,
-		"task-on": `{"event":"tool_step","tool":"manage_task","state":"DONE"}
-{"event":"result"}
+		"task-on": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"manage_task"}}
+{"event":"result","result":{}}
 `,
-		"task-off": `{"event":"tool_step","tool":"manage_task","state":"DONE"}
-{"event":"result"}
+		"task-off": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"manage_task"}}
+{"event":"result","result":{}}
 `,
-		"list-resources": `{"event":"tool_step","tool":"list_resources","state":"DONE"}
-{"event":"result"}
+		"list-resources": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"list_resources"}}
+{"event":"result","result":{}}
 `,
-		"read-resource": `{"event":"tool_step","tool":"read_resource","state":"DONE"}
-{"event":"result"}
+		"read-resource": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"read_resource"}}
+{"event":"result","result":{}}
 `,
-		"outside-write": `{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"result"}
+		"outside-write": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
-		"outside-read": `{"event":"tool_step","tool":"view_file","state":"DONE"}
-{"event":"result"}
+		"outside-read": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"view_file"}}
+{"event":"result","result":{}}
 `,
-		"reconciliation": `{"event":"tool_step","tool":"write_to_file","state":"DONE","batch":"first"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR","batch":"first"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE","batch":"second"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR","batch":"second"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"tool_step","tool":"write_to_file","state":"DONE"}
-{"event":"tool_step","tool":"write_to_file","state":"ERROR"}
-{"event":"result"}
+		"reconciliation": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":1,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":3,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":4,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":5,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":6,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":7,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":8,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":9,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":10,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":11,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":12,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":13,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":14,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":15,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":16,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":17,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":18,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":19,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":20,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":21,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":22,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":23,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":24,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":25,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":26,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":27,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":28,"state":"DONE","step_type":"tool","tool_name":"write_file"}}
+{"event":"step_update","step_update":{"step_index":29,"state":"ERROR","step_type":"tool","tool_name":"write_file"}}
+{"event":"result","result":{}}
 `,
 	}
 	for _, fixture := range agyCheckObserveSameName(t) {
@@ -137,7 +131,7 @@ func agyCheckObserveFixtures(t *testing.T) map[string]agyCheckObserveInput {
 	}
 	inputs := make(map[string]agyCheckObserveInput)
 	for id, transcript := range transcripts {
-		inputs[id] = agyCheckObserveInput{Transcript: []byte(transcript)}
+		inputs[id] = agyCheckObserveInput{Transcript: []byte(agyCheckTestInit + transcript)}
 	}
 	for _, row := range agyCheckExpected {
 		in := inputs[row.ID]
@@ -207,7 +201,7 @@ func TestAgyCheckObserveSameNameFixtures(t *testing.T) {
 			if bytes.Equal(fixture.Home, fixture.Workspace) || !bytes.Contains(fixture.Home, name) || !bytes.Contains(fixture.Workspace, name) {
 				t.Fatal("same-name home/workspace bytes must differ and name the same hook")
 			}
-			if tool, ok := agyCheckTranscriptTools[fixture.ID]; !ok || tool != "write_to_file" {
+			if tool, ok := agyCheckTranscriptTools[fixture.ID]; !ok || tool != "write_file" {
 				t.Fatal("same-name tool mapping missing or changed")
 			}
 			in, ok := inputs[fixture.ID]
@@ -221,8 +215,8 @@ func TestAgyCheckObserveSameNameFixtures(t *testing.T) {
 // TestAgyCheckObserveSameNameDispatch requires workspace outcome semantics even
 // though these rows have locations, unlike the original precedence row.
 func TestAgyCheckObserveSameNameDispatch(t *testing.T) {
-	const step = "{\"event\":\"tool_step\",\"tool\":\"write_to_file\",\"state\":\"ERROR\"}\n"
-	const result = "{\"event\":\"result\"}\n"
+	step := agyCheckTestStep(1, "write_file", "ERROR")
+	const result = agyCheckTestResult
 	for _, fixture := range agyCheckObserveSameName(t) {
 		row := agyCheckObserveFindRow(t, fixture.ID)
 		for _, tc := range []struct {
@@ -232,11 +226,11 @@ func TestAgyCheckObserveSameNameDispatch(t *testing.T) {
 			{"error", step + result, "denied", true},
 			{"done", strings.Replace(step, "ERROR", "DONE", 1) + result, "allowed", false},
 			{"no step", result, "no step", false},
-			{"two steps", step + step + result, "multiple steps", false},
+			{"two steps", step + agyCheckTestStep(2, "write_file", "ERROR") + result, "multiple steps", false},
 			{"unparsed", "UNTRUSTED_TRANSCRIPT_MARKER\n", "unparsed transcript", false},
 		} {
 			t.Run(fixture.ID+"/"+tc.name, func(t *testing.T) {
-				got := agyCheckObserveRow(row, agyCheckObserveInput{Transcript: []byte(tc.transcript)})
+				got := agyCheckObserveRow(row, agyCheckObserveInput{Transcript: []byte(agyCheckTestInit + tc.transcript)})
 				classified := agyCheckClassify(got, agyCheckDefaultCalls)
 				if got != (agyCheckObservation{ID: fixture.ID, Outcome: tc.outcome}) || classified.OK != tc.ok || classified.Observed != tc.outcome {
 					t.Fatalf("same-name workspace observation=%+v classified=%+v want %s OK=%t", got, classified, tc.outcome, tc.ok)
@@ -255,7 +249,6 @@ func TestAgyCheckObserveSameNameIgnoresRecords(t *testing.T) {
 		row := agyCheckObserveFindRow(t, fixture.ID)
 		in := inputs[fixture.ID]
 		// Loaded/Ran are discovery facts; same-name rows judge the tool outcome.
-		in.Transcript = fmt.Appendf(nil, "{\"event\":\"hook_loaded\",\"path\":%q}\n%s", fixture.Location, in.Transcript)
 		want := agyCheckObservation{ID: fixture.ID, Outcome: "denied"}
 		for _, tc := range []struct {
 			name         string
@@ -307,6 +300,10 @@ func agyCheckObserveAssertDifference(t *testing.T, inputs map[string]agyCheckObs
 			if row.OK || row.Observed != observed {
 				t.Fatalf("observed=%q OK=%t; want %q false", row.Observed, row.OK, observed)
 			}
+		} else if row.ID == "reconciliation" {
+			if row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0" {
+				t.Fatalf("batches invented: %+v", row)
+			}
 		} else if !row.OK {
 			t.Fatalf("unrelated row differs: %+v", row)
 		}
@@ -332,16 +329,19 @@ func TestAgyCheckObserveAll(t *testing.T) {
 		}
 	}
 	r, out := agyCheckObserveEvaluate(t, inputs)
-	if len(r.Rows) != len(agyCheckExpected) || strings.Count(out, "\n") != len(agyCheckExpected)+3 ||
-		!strings.Contains(out, fmt.Sprintf("Rows: %d; differing: 0\n", len(agyCheckExpected))) {
+	if len(r.Rows) != len(agyCheckExpected) || strings.Count(out, "\n") != len(agyCheckExpected)+2 ||
+		!strings.Contains(out, fmt.Sprintf("Rows: %d; differing: 1\n", len(agyCheckExpected))) {
 		t.Fatalf("report row count drift: %q", out)
 	}
 	for _, row := range r.Rows {
-		if !row.OK {
+		if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
+			t.Fatalf("batches invented: %+v", row)
+		}
+		if !row.OK && row.ID != "reconciliation" {
 			t.Fatalf("assumed fixture differs: %+v", row)
 		}
 	}
-	if agyCheckExitCode(r) != 0 || !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
+	if agyCheckExitCode(r) != 1 || strings.Contains(out, agyCheckSuccessLine) {
 		t.Fatalf("passing fixtures lost success: %q", out)
 	}
 	for _, row := range agyCheckExpected {
@@ -381,7 +381,10 @@ func TestAgyCheckObserveUnknownRows(t *testing.T) {
 			}
 			for i, row := range r.Rows {
 				if i < len(agyCheckExpected) {
-					if !row.OK {
+					if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
+						t.Fatalf("batches invented: %+v", row)
+					}
+					if !row.OK && row.ID != "reconciliation" {
 						t.Fatalf("unrelated row differs: %+v", row)
 					}
 				} else if row.ID != want[i].ID || row.OK || row.Observed != "unknown row" {
@@ -417,33 +420,28 @@ func TestAgyCheckObserveDiscoverySteps(t *testing.T) {
 		} {
 			t.Run(row.ID+"/"+tc.name, func(t *testing.T) {
 				inputs := agyCheckObserveFixtures(t)
-				var in agyCheckObserveInput
+				in := agyCheckObserveInput{Transcript: []byte(agyCheckTestInit)}
 				if tc.loaded {
-					in.Transcript = fmt.Appendf(in.Transcript, "{\"event\":\"hook_loaded\",\"path\":%q}\n", row.Location)
 					in.RanLocations = []string{row.Location}
 				}
 				if tc.step {
-					in.Transcript = append(in.Transcript, "{\"event\":\"tool_step\",\"tool\":\"write_to_file\",\"state\":\"ERROR\"}\n"...)
+					in.Transcript = append(in.Transcript, agyCheckTestStep(1, "write_file", "ERROR")...)
 				}
-				in.Transcript = append(in.Transcript, "{\"event\":\"result\"}\n"...)
+				in.Transcript = append(in.Transcript, agyCheckTestResult...)
 				inputs[row.ID] = in
+				want := ""
 				if !tc.step {
-					if got := agyCheckObserveRow(row, in); got != (agyCheckObservation{ID: row.ID, Outcome: "no step"}) {
-						t.Fatalf("absent step observation=%+v want no step without partial facts", got)
-					}
-					// ObserveAll and Evaluate must preserve the fixed outcome as a difference.
-					agyCheckObserveAssertDifference(t, inputs, row.ID, "no step")
-					return
+					want = "no step"
+				} else if !tc.loaded {
+					want = agyCheckLoadUnobservable
 				}
-				r, out := agyCheckObserveEvaluate(t, inputs)
-				for _, got := range r.Rows {
-					if !got.OK {
-						t.Fatalf("discovery with step differs: %+v", got)
-					}
+				got := agyCheckObserveRow(row, in)
+				if want != "" {
+					agyCheckObserveAssertDifference(t, inputs, row.ID, want)
+				} else if !agyCheckClassify(got, 30).OK {
+					t.Fatalf("run record lost: %+v", got)
 				}
-				if agyCheckExitCode(r) != 0 || !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
-					t.Fatalf("discovery with step lost success: %q", out)
-				}
+
 			})
 		}
 	}
@@ -468,10 +466,11 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 			t.Run(row.ID+"/"+change, func(t *testing.T) {
 				inputs := agyCheckObserveFixtures(t)
 				in := inputs[row.ID]
-				line, _, _ := strings.Cut(string(in.Transcript), "\n")
+				_, rest, _ := strings.Cut(string(in.Transcript), "\n")
+				line, _, _ := strings.Cut(rest, "\n")
 				url := row.ID == "read-url" || row.ID == "execute-url"
 				if url {
-					line = fmt.Sprintf(`{"event":"tool_step","tool":%q,"state":"ERROR"}`, tool)
+					line = strings.TrimSuffix(agyCheckTestStep(0, tool, "ERROR"), "\n")
 				}
 				want := "multiple steps"
 				switch change {
@@ -486,12 +485,12 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 						line = strings.Replace(line, "DONE", "ERROR", 1)
 						want = "denied"
 					}
-					in.Transcript = []byte(line + "\n{\"event\":\"result\"}\n")
+					in.Transcript = []byte(agyCheckTestInit + line + "\n" + agyCheckTestResult)
 				case "drop":
-					in.Transcript = []byte("{\"event\":\"result\"}\n")
+					in.Transcript = []byte(agyCheckTestInit + agyCheckTestResult)
 					want = "no step"
 				case "duplicate":
-					in.Transcript = []byte(line + "\n" + line + "\n{\"event\":\"result\"}\n")
+					in.Transcript = []byte(agyCheckTestInit + line + "\n" + strings.Replace(line, `"step_index":0`, `"step_index":1`, 1) + "\n" + agyCheckTestResult)
 				}
 				inputs[row.ID] = in
 				if url && change == "drop" {
@@ -555,56 +554,22 @@ func TestAgyCheckObserveUnknownGroup(t *testing.T) {
 	}
 }
 
-// TestAgyCheckObserveDiscovery keeps loaded and ran independent, including
-// near misses that must not acquire coverage by sharing part of a path.
+// TestAgyCheckObserveDiscovery requires an exact run-record location.
 func TestAgyCheckObserveDiscovery(t *testing.T) {
 	row := agyCheckExpected[7]
-	for _, tc := range []struct {
-		name                    string
-		loaded, ran             []string
-		wantLoaded, wantRan, ok bool
-	}{
-		{"neither", nil, nil, false, false, true},
-		{"both", []string{row.Location}, []string{row.Location}, true, true, true},
-		{"loaded only", []string{row.Location}, nil, true, false, false},
-		{"ran only", nil, []string{row.Location}, false, true, false},
-		{"prefix", []string{row.Location + ".extra"}, nil, false, false, true},
-		{"suffix", []string{"prefix/" + row.Location}, nil, false, false, true},
-		{"case", []string{strings.ToUpper(row.Location)}, nil, false, false, true},
-		{"ran near miss", nil, []string{row.Location + ".extra"}, false, false, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := agyCheckObserveDiscovery(row, tc.loaded, tc.ran)
-			classified := agyCheckClassify(got, 30)
-			if got.ID != row.ID || got.Outcome != "" || got.Loaded != tc.wantLoaded || got.Ran != tc.wantRan || classified.OK != tc.ok {
-				t.Fatalf("discovery=%+v classified=%+v", got, classified)
-			}
-		})
+	for _, location := range []string{"", row.Location, row.Location + ".extra", "prefix/" + row.Location, strings.ToUpper(row.Location)} {
+		got := agyCheckObserveDiscovery(row, []string{location})
+		match := location == row.Location
+		if got.Loaded != match || got.Ran != match || agyCheckClassify(got, 30).OK != match {
+			t.Fatalf("run evidence: %+v", got)
+		}
+		if !match && got.Outcome != agyCheckLoadUnobservable {
+			t.Fatal(got)
+		}
 	}
 	synthetic := agyCheckRow{ID: "synthetic", Group: "discovery", Expected: "covered if loaded", Location: "ordinary/location"}
-	got := agyCheckObserveDiscovery(synthetic, []string{synthetic.Location}, []string{synthetic.Location})
-	r := agyCheckClassifyRow(synthetic, got, 30)
-	if r.OK || r.Observed != "loaded=true ran=true covered=false" {
-		t.Fatalf("uncovered load accepted: %+v", r)
-	}
-}
-
-// TestAgyCheckObserveUnlistedLoads pins exact membership, sorting and duplicate
-// removal without allowing extra locations to become result rows.
-func TestAgyCheckObserveUnlistedLoads(t *testing.T) {
-	inputs := []string{"z/new", ".agent/hooks.json", "a/new", "z/new", "hooks.json", "Hooks.json", "a/new"}
-	want := []string{"Hooks.json", "a/new", "z/new"}
-	if got := agyCheckObserveUnlistedLoads(inputs); !slices.Equal(got, want) {
-		t.Fatalf("extra loads=%v want %v", got, want)
-	}
-	if !slices.Equal(inputs, []string{"z/new", ".agent/hooks.json", "a/new", "z/new", "hooks.json", "Hooks.json", "a/new"}) {
-		t.Fatal("input loads were mutated")
-	}
-	r, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
-	_ = agyCheckObserveUnlistedLoads(inputs)
-	afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
-	if agyCheckExitCode(r) != 0 || agyCheckExitCode(afterR) != 0 || before != after {
-		t.Fatal("unlisted information altered result")
+	if got := agyCheckClassifyRow(synthetic, agyCheckObserveDiscovery(synthetic, []string{synthetic.Location}), 30); got.OK || got.Observed != "loaded=true ran=true covered=false" {
+		t.Fatal(got)
 	}
 }
 
@@ -628,7 +593,7 @@ func TestAgyCheckObserveSummary(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := agyCheckObserveSummary(transcript.Steps, tc.replies, in.CreatedFiles)
-			want := agyCheckSummary{30, len(tc.replies), 0, 0, 15, 15, 2, tc.repeats}
+			want := agyCheckSummary{30, len(tc.replies), 0, 0, 15, 15, 0, tc.repeats}
 			for _, reply := range tc.replies {
 				if reply == "allow" {
 					want.Allows++
@@ -651,7 +616,6 @@ func TestAgyCheckObserveSummary(t *testing.T) {
 		{"duplicate file", nil, nil, []string{"created-a", "created-a"}},
 		{"unprefixed file", nil, nil, []string{"UNTRUSTED_TRANSCRIPT_MARKER"}},
 		{"slash file", nil, nil, []string{"created-a/b"}},
-		{"disjoint batch", []agyCheckTranscriptStep{{State: "DONE", Batch: "a"}, {State: "DONE", Batch: "b"}, {State: "DONE", Batch: "a"}}, nil, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := agyCheckObserveSummary(tc.steps, tc.replies, tc.files)
@@ -669,23 +633,18 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 		name, want string
 		change     func(*agyCheckObserveInput)
 	}{
-		{"invocations", "steps=30 hooks=29 allows=15 denies=14 errors=15 files=15 batches=2 repeats=0", func(in *agyCheckObserveInput) { in.Replies = in.Replies[:29] }},
-		{"errors", "steps=30 hooks=30 allows=15 denies=15 errors=14 files=15 batches=2 repeats=0", func(in *agyCheckObserveInput) {
+		{"invocations", "steps=30 hooks=29 allows=15 denies=14 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) { in.Replies = in.Replies[:29] }},
+		{"errors", "steps=30 hooks=30 allows=15 denies=15 errors=14 files=15 repeats=0", func(in *agyCheckObserveInput) {
 			in.Transcript = []byte(strings.Replace(string(in.Transcript), "ERROR", "DONE", 1))
 		}},
-		{"files", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=14 batches=2 repeats=0", func(in *agyCheckObserveInput) { in.CreatedFiles = in.CreatedFiles[:14] }},
-		{"one parallel", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 batches=1 repeats=0", func(in *agyCheckObserveInput) {
-			in.Transcript = []byte(strings.ReplaceAll(string(in.Transcript), `,"batch":"second"`, ""))
-		}},
-		{"single batch step", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 batches=1 repeats=0", func(in *agyCheckObserveInput) {
-			in.Transcript = []byte(strings.Replace(string(in.Transcript), `,"batch":"second"`, "", 1))
-		}},
-		{"below minimum", "steps=29 hooks=30 allows=15 denies=15 errors=15 files=15 batches=2 repeats=0", func(in *agyCheckObserveInput) {
+		{"files", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=14 repeats=0", func(in *agyCheckObserveInput) { in.CreatedFiles = in.CreatedFiles[:14] }},
+		{"parallel unobservable", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) {}},
+		{"below minimum", "steps=29 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0", func(in *agyCheckObserveInput) {
 			lines := strings.SplitAfter(string(in.Transcript), "\n")
-			in.Transcript = []byte(strings.Join(append(lines[:28], lines[29:]...), ""))
+			in.Transcript = []byte(strings.Join(append(lines[:29], lines[30:]...), ""))
 		}},
 		{"unknown reply", "unparsed transcript", func(in *agyCheckObserveInput) { in.Replies[0] = "UNTRUSTED_TRANSCRIPT_MARKER" }},
-		{"non alternating", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 batches=2 repeats=28", func(in *agyCheckObserveInput) {
+		{"non alternating", "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=28", func(in *agyCheckObserveInput) {
 			in.Replies = append(strings.Fields(strings.Repeat("allow ", 15)), strings.Fields(strings.Repeat("deny ", 15))...)
 		}},
 		{"duplicate file", "unparsed transcript", func(in *agyCheckObserveInput) { in.CreatedFiles[1] = in.CreatedFiles[0] }},
@@ -700,6 +659,14 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 			got := agyCheckObserveRow(agyCheckObserveFindRow(t, "reconciliation"), in)
 			if tc.want == "unparsed transcript" && got != (agyCheckObservation{ID: "reconciliation", Outcome: "unparsed transcript"}) {
 				t.Fatalf("summary failure retained facts or echoed content: %+v", got)
+			}
+			if strings.HasPrefix(tc.want, "steps=") {
+				summary := got.Summary
+				actual := fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d repeats=%d", summary.ToolSteps, summary.HookInvocations, summary.Allows, summary.Denies, summary.Errors, summary.FilesCreated, summary.Repeats)
+				if actual != tc.want {
+					t.Fatalf("counts=%s want %s", actual, tc.want)
+				}
+				tc.want = agyCheckBatchesUnobservable + "; " + tc.want
 			}
 			agyCheckObserveAssertDifference(t, inputs, "reconciliation", tc.want)
 		})
@@ -733,7 +700,7 @@ func TestAgyCheckBuiltinInfo(t *testing.T) {
 			beforeR, before := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
 			_ = agyCheckBuiltinInfo([]byte(tc.listing))
 			afterR, after := agyCheckObserveEvaluate(t, agyCheckObserveFixtures(t))
-			if agyCheckExitCode(beforeR) != 0 || agyCheckExitCode(afterR) != 0 || before != after || strings.Contains(after, "INFO builtin/") {
+			if agyCheckExitCode(beforeR) != 1 || agyCheckExitCode(afterR) != 1 || before != after || strings.Contains(after, "INFO builtin/") {
 				t.Fatal("builtin information altered exit code or report")
 			}
 		})

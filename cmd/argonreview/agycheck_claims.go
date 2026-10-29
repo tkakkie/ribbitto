@@ -20,9 +20,6 @@ type agyCheckStubRecord struct {
 	Kind, Tag string
 }
 
-// Records are an ordinary-agent regression check, not tamper resistance: an
-// allow-everything agent could write them itself. Missing, contradictory or
-// malformed evidence is an error; a match never approves trust of a version.
 // The explicit isolation argument prevents callers from reading state elsewhere.
 func agyCheckReadRecords(isolation, dir, sub string, cap int, f agyCheckFiles) ([][]byte, error) {
 	bad := func() ([][]byte, error) { return nil, errors.New(agyCheckPrintable("invalid call records")) }
@@ -66,6 +63,9 @@ func agyCheckReadRecords(isolation, dir, sub string, cap int, f agyCheckFiles) (
 	return records, nil
 }
 
+// Records are an ordinary-agent regression check, not tamper resistance: an
+// allow-everything agent could write them itself. Missing, contradictory or
+// malformed evidence is an error; a match never approves trust of a version.
 func agyCheckDecodeClaims(isolation, dir string, stub bool, f agyCheckFiles) ([]agyCheckClaim, error) {
 	records, err := agyCheckReadRecords(isolation, dir, "calls", agyCheckHookCallCap, f)
 	if err != nil {

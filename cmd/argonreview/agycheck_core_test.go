@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -475,6 +476,57 @@ func TestAgyCheckCleanupFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestAgyCheckCleanupEntryLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name, dir string
+		entries   int
+		refuse    bool
+	}{
+		{"calls at cap", "calls", agyCheckHookCallCap, false},
+		{"events above call cap", "events", agyCheckHookCallCap + 1, false},
+		{"events at doubled cap", "events", 2 * agyCheckHookCallCap, false},
+		{"events above doubled cap", "events", 2*agyCheckHookCallCap + 1, true},
+		{"calls above cap", "calls", agyCheckHookCallCap + 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := agyCheckHookHarnessNew(t)
+			dir := filepath.Join(agyCheckHookTestDir, tc.dir)
+			entries := make([]os.DirEntry, tc.entries)
+			for i := range entries {
+				path := filepath.Join(dir, fmt.Sprintf("%06d", i+1))
+				info := agyCheckInfo{0o600, 501}
+				h.info[path] = info
+				entries[i] = fs.FileInfoToDirEntry(agyCheckNamedInfo{FileInfo: info, name: filepath.Base(path)})
+			}
+			removed := 0
+			f := agyCheckFiles{lstat: h.d.lstat,
+				entries: func(path string) ([]os.DirEntry, error) {
+					if path != dir {
+						t.Fatalf("unexpected directory read: %s", path)
+					}
+					return entries, nil
+				},
+				remove: func(path string) error { delete(h.info, path); removed++; return nil },
+			}
+			err := f.cleanup(agyCheckHookTestDir, dir)
+			if tc.refuse {
+				if err == nil || err.Error() != "cleanup entry limit exceeded" || removed != 0 {
+					t.Fatalf("over-cap cleanup: err=%v removed=%d", err, removed)
+				}
+			} else if err != nil || removed != tc.entries+1 {
+				t.Fatalf("within-cap cleanup: err=%v removed=%d want=%d", err, removed, tc.entries+1)
+			}
+		})
+	}
+}
+
+type agyCheckNamedInfo struct {
+	os.FileInfo
+	name string
+}
+
+func (i agyCheckNamedInfo) Name() string { return i.name }
 
 func TestAgyCheckStubDecoder(t *testing.T) {
 	isolation := agyCheckRealTemp(t)

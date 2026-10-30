@@ -11,13 +11,10 @@ import (
 	"unicode"
 )
 
-// agyCheckTranscriptParse follows only the 1.4.7-era isolated-home samples.
-// init/step_update/result and write_file/call_mcp_tool are verified there.
-// The first 1.4.9 host run (2026-10-29) kept no transcripts:
-// https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043
-// It only showed the old parser refused everything; 1.4.9's format remains
-// unverified until the next host run. Other tool names, parallel steps and
-// hook-load events remain unverified. Opaque
+// agyCheckTranscriptParse follows 1.4.7 samples and two hand captures of
+// 1.4.9's stream format (2026-10-30, #1978), accepting streamed agent_response
+// updates. Hook-load events, exact deny error text and other tool names remain
+// unverified; 1.4.9 still needs a host run of the check. Opaque
 // fields, including result status and tool errors, never become report text.
 // Unicode is checked before decoding; malformed events discard every fact.
 func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
@@ -95,7 +92,7 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 					}
 				}
 			}
-			if prior, exists := seen[index]; exists && (prior.state != "ACTIVE" || state == "ACTIVE" || prior.kind != kind || prior.tool != tool) {
+			if prior, exists := seen[index]; exists && (prior.state != "ACTIVE" || (state == "ACTIVE" && kind != "agent_response") || prior.kind != kind || prior.tool != tool) {
 				return invalid()
 			}
 			seen[index] = progress{kind, tool, state}

@@ -308,6 +308,10 @@ func agyCheckRowsFake(data []byte) bool {
 				step["step_update"].(map[string]any)["state"] = "ERROR"
 			}
 		}
+		if deviation == "streamed-response" {
+			fmt.Print(strings.TrimPrefix(agyCheckTestStream(31, true), agyCheckTestInit))
+			os.Exit(0)
+		}
 		emit(step)
 		if deviation == "retry" {
 			step["step_update"].(map[string]any)["step_index"] = 2

@@ -225,6 +225,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		{"protected", "task-on", "protected-load", 0, 1},
 		{"unprotected", "task-on", "unprotected-load", 0, 1},
 		{"unparsed", "hook-silent", "unparsed", 0, 1},
+		{"streamed-response", "hook-decision", "streamed-response", 0, 0},
 		{"nonzero-with-result", "hook-exit1", "nonzero-result", 0, 0},
 		{"nonzero-without-result", "hook-exit1", "nonzero-no-result", 0, 1},
 		{"timeout", "hook-silent", "timeout", 0, 1},
@@ -274,6 +275,21 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			}[tc.name]
 			if wantDiagnostic != "" && !strings.Contains(out, wantDiagnostic) {
 				t.Fatalf("row diagnostic changed: want %q in %s", wantDiagnostic, out)
+			}
+			if tc.name == "streamed-response" {
+				matched := 0
+				for _, line := range strings.Split(out, "\n") {
+					if !strings.HasPrefix(line, tc.row+" ") {
+						continue
+					}
+					matched++
+					if !strings.HasPrefix(strings.Join(strings.Fields(line), " "), tc.row+" denied denied ok ") {
+						t.Fatalf("streamed row did not classify as denied: %s", line)
+					}
+				}
+				if matched == 0 {
+					t.Fatalf("no output line for streamed row %s: %s", tc.row, out)
+				}
 			}
 			if tc.name == "resource-denied" && !strings.Contains(out, "invalid stub evidence") {
 				t.Fatalf("denied resource executed RPC: %s", out)

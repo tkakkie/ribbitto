@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,46 @@ const agyCheckTestResult = "{\"event\":\"result\",\"result\":{}}\n"
 
 func agyCheckTestStep(index int, tool, state string) string {
 	return fmt.Sprintf("{\"event\":\"step_update\",\"step_update\":{\"step_index\":%d,\"state\":%q,\"step_type\":\"tool\",\"tool_name\":%q}}\n", index, state, tool)
+}
+
+func agyCheckTestResponse(index int, kind, state string) string {
+	return fmt.Sprintf("{\"event\":\"step_update\",\"step_update\":{\"step_index\":%d,\"state\":%q,\"step_type\":%q,\"text_delta\":\"x\",\"duration_seconds\":1,\"usage\":{\"output_tokens\":1}}}\n", index, state, kind)
+}
+
+// Synthetic #1978 capture shape; no captured model text or deny wording.
+func agyCheckTestStream(count int, complete bool) string {
+	data := agyCheckTestInit + agyCheckTestResponse(0, "user_input", "DONE") + agyCheckTestResponse(1, "agent_response", "DONE")
+	for _, state := range []string{"ACTIVE", "ERROR"} {
+		info := `,"tool_info":{"name":"write_file","parameters":{"Path":"..."}`
+		if state == "ERROR" {
+			info += `,"error":{"type":"TOOL_ERROR","message":"x"}`
+		}
+		data += strings.TrimSuffix(agyCheckTestStep(2, "write_file", state), "}}\n") + info + "}}}\n"
+	}
+	data += strings.Repeat(agyCheckTestResponse(3, "agent_response", "ACTIVE"), count)
+	if complete {
+		data += agyCheckTestResponse(3, "agent_response", "DONE")
+	}
+	return data + "{\"event\":\"result\",\"result\":{\"status\":\"SUCCESS\"}}\n"
+}
+
+func TestAgyCheckTranscriptStreaming(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		want       agyCheckTranscriptResult
+	}{
+		{"13 deltas", agyCheckTestStream(13, true), agyCheckTranscriptResult{Steps: []agyCheckTranscriptStep{{"write_file", "ERROR"}}, Groups: []int{0, 1, 0}}},
+		{"31 deltas", agyCheckTestStream(31, true), agyCheckTranscriptResult{Steps: []agyCheckTranscriptStep{{"write_file", "ERROR"}}, Groups: []int{0, 1, 0}}},
+		{"response left ACTIVE", agyCheckTestStream(13, false), agyCheckTranscriptResult{Steps: []agyCheckTranscriptStep{{"write_file", "ERROR"}}, Groups: []int{0, 1, 0}}},
+		{"between tools", strings.Replace(agyCheckTestStream(31, true), `{"event":"result"`, agyCheckTestStep(4, "write_file", "DONE")+agyCheckTestStep(5, "write_file", "ACTIVE")+`{"event":"result"`, 1), agyCheckTranscriptResult{Steps: []agyCheckTranscriptStep{{"write_file", "ERROR"}, {"write_file", "DONE"}}, Groups: []int{0, 1, 1}, Unfinished: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := agyCheckTranscriptParse([]byte(tc.data))
+			if err != nil || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("facts=%+v want %+v: %v", got, tc.want, err)
+			}
+		})
+	}
 }
 
 // agyCheckTranscriptFailures plants content that must never reach diagnostics.
@@ -43,6 +84,23 @@ func agyCheckTranscriptFailures() []struct{ name, data string } {
 		{"repeated ACTIVE", wrap(agyCheckTestStep(2, marker, "ACTIVE") + agyCheckTestStep(2, marker, "ACTIVE"))},
 		{"changed tool", wrap(agyCheckTestStep(2, "other", "ACTIVE") + step)},
 		{"changed type", wrap(strings.Replace(agyCheckTestStep(2, marker, "ACTIVE"), `"tool"`, `"user_input"`, 1) + step)},
+	}
+	active := agyCheckTestResponse(3, "agent_response", "ACTIVE")
+	stream := strings.Repeat(active, 13)
+	done := agyCheckTestResponse(3, "agent_response", "DONE")
+	failure := agyCheckTestResponse(3, "agent_response", "ERROR")
+	for _, tc := range []struct{ name, data string }{
+		{"agent ACTIVE after DONE", stream + done + active},
+		{"agent ACTIVE after ERROR", stream + failure + active},
+		{"agent DONE then DONE", stream + done + done},
+		{"agent DONE then ERROR", stream + done + failure},
+		{"stream agent to tool", stream + agyCheckTestStep(3, marker, "DONE")},
+		{"stream tool to agent", agyCheckTestStep(3, marker, "ACTIVE") + stream + done},
+		{"stream agent to user", stream + agyCheckTestResponse(3, "user_input", "DONE")},
+		{"stream user to agent", agyCheckTestResponse(3, "user_input", "ACTIVE") + stream + done},
+		{"user repeated ACTIVE", strings.Repeat(agyCheckTestResponse(3, "user_input", "ACTIVE"), 2)},
+	} {
+		cases = append(cases, struct{ name, data string }{tc.name, wrap(tc.data)})
 	}
 	for _, field := range []string{"event", "step_index", "state", "step_type", "tool_name"} {
 		for _, value := range []string{"null", "{}", "1", `""`} {
@@ -84,7 +142,7 @@ func TestAgyCheckTranscriptReject(t *testing.T) {
 	for _, tc := range agyCheckTranscriptFailures() {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := agyCheckTranscriptParse([]byte(tc.data))
-			if err == nil || len(got.Steps) != 0 || got.Unfinished != 0 {
+			if err == nil || !reflect.DeepEqual(got, agyCheckTranscriptResult{}) {
 				t.Fatalf("invalid transcript accepted or partial facts retained: %+v %v", got, err)
 			}
 			if strings.Contains(err.Error(), "UNTRUSTED_TRANSCRIPT_MARKER") {

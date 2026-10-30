@@ -28,6 +28,28 @@ func summaryName(name string) string {
 	return summaryText(summaryMaskName(name))
 }
 
+// summaryMaskLines also catches shapes spanning diagnostic boundaries when the
+// original identity boundaries are unavailable. Unlocated matches withhold all.
+func summaryMaskLines(lines []string) []string {
+	masked := append([]string(nil), lines...)
+	matched := false
+	for i := range lines {
+		end := min(i+2, len(lines))
+		if verifyLogScan(strings.Join(lines[i:end], "\n")) > 0 {
+			for j := i; j < end; j++ {
+				masked[j] = "[name withheld]"
+			}
+			matched = true
+		}
+	}
+	if !matched && verifyLogScan(strings.Join(lines, "\n")) > 0 {
+		for i := range masked {
+			masked[i] = "[name withheld]"
+		}
+	}
+	return masked
+}
+
 // summaryText removes terminal commands and invisible direction changes before
 // capping bytes. It accepts one source line; even embedded newlines cannot
 // escape the indent supplied by the caller.

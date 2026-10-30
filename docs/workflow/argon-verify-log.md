@@ -2,7 +2,9 @@
 
 ## Status
 
-PR 1's core is merged; PR 2a's name masking is implemented, not in force.
+PR 1's core is merged.
+Name masking is in the code and active in summaries after the next launcher
+update; capture, `--logs` and the tool are not.
 Based on #1847's final design at d4095b3. The core is unexposed in verify-mcp,
 the guard and settings. Exposure, launcher update and enabling need separate
 maintainer approvals. CI stays the check.
@@ -18,10 +20,13 @@ path. `verify` and its schema do not change.
 
 ## Capture and retention
 
-See the [aggregation record](argon-verify-aggregation.md) for capture retention.
-Name masking applies in every summary mode, including logs off.
-The remaining PR 2a work adds `--logs`, a stored run's ID line and index-derived
-ordinals; no caller enables capture yet.
+The store keeps the last 4 captures, evicting oldest first by count or bytes,
+and stores only `FAILED` or `NOT VERIFIED` results. Each capture pins the sealed
+[record](argon-verify-aggregation.md) (which defines R_max) and adds a random
+128-bit ID, ordinals, displays and taint counts. The byte bound is
+4 × (R_max + `verifyLogDerivedAllowance`, the derived-data bytes).
+No stderr is served after a runner-level failure (exit 125–127, runner error,
+cancellation or timeout), even though the host record retains it.
 
 ## Selectors and index
 
@@ -115,9 +120,7 @@ together with newline boundaries; their maximum taints the package stream.
 Only detection counts survive.
 A matching name displays `[name withheld]` in the index and every summary mode,
 even with logs off; indexed names stay selectable only by ordinal.
-Summaries scan names before truncation or splitting skipped-name diagnostics.
-Container lines in summaries are sanitised and indented with `  | `; only
-trusted lines start at column zero.
+Summary container lines are sanitised and indented with `  | `.
 
 A tainted unit is refused whole at every start; stepping past a header or
 prefix cannot expose its body. No match is returned or audited. Splits that
@@ -158,7 +161,7 @@ changes need a small PR and preflight rows. No host measurement is approved.
 | Constants | Provisional | Basis / confirmation |
 |---|---|---|
 | `verifyLogCaptures` | 4 | session read pattern; revisit after two weeks on |
-| `verifyLogRecordMax`, `verifyLogCaptureMax`, `verifyLogStoreBytes` | R_max; R_max + allowance; 4 × that sum | record constants plus `verifyLogDerivedAllowance` for bounded index, display and scan metadata |
+| `verifyLogRecordMax`, `verifyLogCaptureMax`, `verifyLogStoreBytes` | R_max; R_max + allowance; 4 × that sum | record constants plus `verifyLogDerivedAllowance`: displays, index and map storage, identity rounding, marker lines, browser identities, trusted allowed names |
 | `verifyLogResponseBytes`, `verifyLogPageLines`, `verifyLogDataBytes` | 6,144 bytes; 80 lines; 512 bytes | 7.8 KB once inline; worst-page preflight |
 | `verifyLogPrefixBytes` | 16 KiB | measured stderr 21,495 bytes; preflight |
 | `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16 index; 40 shared test/package; 8 shared stderr/output | 26 failing leaves; preflight read counts |

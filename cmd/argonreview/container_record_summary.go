@@ -21,11 +21,11 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 	}
 	f.stdout = retainedSummaryLines(r.stdout)
 	f.compiler = retainedSummaryLines(r.compiler)
-	for _, part := range [][]byte{r.packageOutput.head, r.packageOutput.tail} {
-		for line := range strings.SplitSeq(string(part), "\n") {
-			if strings.Contains(line, "FAIL") || strings.Contains(line, "[build failed]") {
-				f.packageFailures.add(summaryMaskName(line), summaryExcerptLimit)
-			}
+	lines := append(strings.Split(string(r.packageOutput.head), "\n"), strings.Split(string(r.packageOutput.tail), "\n")...)
+	masked := summaryMaskLines(lines)
+	for i, line := range lines {
+		if strings.Contains(line, "FAIL") || strings.Contains(line, "[build failed]") {
+			f.packageFailures.add(masked[i], summaryExcerptLimit)
 		}
 	}
 	for _, e := range r.entries {

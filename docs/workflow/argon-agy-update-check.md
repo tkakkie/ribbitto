@@ -30,7 +30,7 @@ run separately. Record access/risk on [#1890][issue]; compare deprecated
   Its sign-in credential is exposed; use a separate revocable one.
 - Put `argonreview` and an agy **copy** outside the account home in
   root/maintainer-owned 0755 directories, file mode 0555. Record hashes;
-  protect/record extra runtime files if needed.
+  protect/record extra runtime files likewise if needed.
 
 Home/isolation: dedicated UID, 0700, outside protected roots. Home-root
 `.argonreview-agy-check.json`: same owner, 0600; all workers
@@ -54,7 +54,7 @@ need read/write/search denial on every protected root.
 
 ## Fixed order and host procedure
 
-Claude follows **before trust**, at `implement-check`'s first
+Claude follows this order **before trust**, at `implement-check`'s first
 "no trusted builtin/ hash list" (`cmd/argonreview/implementcheck.go`):
 
 1. Under approved isolation, start the new version once in the throwaway home:
@@ -63,7 +63,7 @@ Claude follows **before trust**, at `implement-check`'s first
    After sign-in/first start, before checking, the maintainer saves a clean
    home baseline (contents, permissions, absences, sign-in, config, marker, post-start
    builtin/) in maintainer-owned storage beyond agent writes.
-2. Claude hand-builds `implementer/builtin.agy-<version>.txt`
+2. Before checking, Claude hand-builds `implementer/builtin.agy-<version>.txt`
    from post-start home `builtin/` (as 2026-10-27): regular files/dotfiles, paths
    relative, byte-sorted (`LC_ALL=C`), `<sha256>  ./<path>` per line, final newline
    (`implementcheck.go` format; 1 MiB cap, no symlinks). No tool writes it.
@@ -87,12 +87,12 @@ Claude follows **before trust**, at `implement-check`'s first
    never use it.
 4. Compare INFO/candidate SHA-256: mismatch means changed `builtin/`; do not
    trust. Only then the maintainer decides trust per worker. First start the new
-   version in each worker home (rewrites `builtin/`); install identical saved
+   version once in each worker home (rewrites `builtin/`); install identical saved
    bytes in each `implementer/`: file 0400, directory 0500 (`chmod u+w` to install,
    then restore).
 
 After failure/interruption, do [manual recovery](argon-implement-run-recovery.md#manual-recovery)
-1–2 (confirm session stopped; preserve evidence) before edits,
+1–2 (confirm session stopped; preserve evidence) before changing files,
 repeat steps 1–4, then finish recovery. Failed/invalid runs do not count.
 
 Before each start, revalidate marker, UID, paths, canaries, binaries;
@@ -136,20 +136,20 @@ Discovery: loaded = a step + one local allow claim; coverage:
 DONE step, zero claims, and a deny claim (hook or workspace row, ERROR
 step) in the same run. Other counts/states,
 wrong-tag/duplicate/malformed records, no deny or single-row runs differ:
-`hook load not observable in the transcript`. This shows no observed load,
-using only that call's silence and the deny elsewhere.
+`hook load not observable in the transcript`. It shows only that call's silence
+and the deny elsewhere.
 It cannot find locations outside the six candidates.
 The real stream has no load event: silence is tool-record evidence, not a
 load report or trust decision.
 Same-name: both records, deny, no effect.
 
 Observed: 1.4.7 events, `write_file`/`call_mcp_tool`; two 1.4.9 hand captures
-(2026-10-30, #1978; no model text kept) show the stream format:
+(2026-10-30, #1978) show the stream format:
 init, step_update (`agent_response`: many ACTIVE then one DONE;
-`write_file` ERROR with `tool_info.error`), result. “Parallel” file creations
-in one step ran sequentially, as in 1.4.7.
-Unverified: hook-load events, exact deny error text, other tool names and a
-host check run on 1.4.9 ([first-run](https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043)).
+`write_file` ERROR with `tool_info.error`), result. “Parallel” requests
+ran one after another, as in 1.4.7.
+Unverified: hook-load events, exact deny error text, other tool names, a 1.4.9
+host run ([first-run](https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043)).
 DONE/ERROR count; tool ACTIVE-only fails. Missing executable: no claim.
 
 URL: no tools/claims, even unfinished/ERROR. Stub: absent/start-only or only
@@ -176,10 +176,10 @@ correlation/tamper resistance.
 
 Exit 1: differs/invalid; 2: usage. Marker/UID/canary/placement/pin
 refusals: `RESULT INVALID: <reason>`, exit 1, no table (pre-run: no INFO),
-not version failure. Record row/reason; do not trust a new list.
+not version failure. Record failed row/reason; do not trust a new list.
 Maintainer decides even for trusted versions.
 
-Claude runs/records; maintainer approves. Complete **before enabling** ([stage A](argon-workers-operation.md#updates-and-capacity),
+Claude runs/records; maintainer approves. Complete **before enabling** updates ([stage A](argon-workers-operation.md#updates-and-capacity),
 [#1700][stage]):
 
 - [ ] R6: re-run/record hook rows and separate exit 0 + allow JSON control; confirm
@@ -197,7 +197,7 @@ Claude runs/records; maintainer approves. Complete **before enabling** ([stage A
   binary. 1.4.7 real-path refusals replace decoys; decoy-content absence remains
   unobserved. Decoy writes need approval.
 
-E1/E3 separate; 1.4.7 waives neither. Keep refusal-set/symlink smoke tests.
+E1/E3 separate; 1.4.7: no lasting waiver. Keep refusal-set/symlink smoke tests.
 
 [issue]: https://github.com/tkakkie/ribbitto/issues/1890
 [record]: https://github.com/tkakkie/ribbitto/issues/1856

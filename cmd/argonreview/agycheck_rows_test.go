@@ -277,10 +277,18 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				t.Fatalf("row diagnostic changed: want %q in %s", wantDiagnostic, out)
 			}
 			if tc.name == "streamed-response" {
+				matched := 0
 				for _, line := range strings.Split(out, "\n") {
-					if strings.HasPrefix(line, tc.row+" ") && !strings.HasPrefix(strings.Join(strings.Fields(line), " "), tc.row+" denied denied ok ") {
+					if !strings.HasPrefix(line, tc.row+" ") {
+						continue
+					}
+					matched++
+					if !strings.HasPrefix(strings.Join(strings.Fields(line), " "), tc.row+" denied denied ok ") {
 						t.Fatalf("streamed row did not classify as denied: %s", line)
 					}
+				}
+				if matched == 0 {
+					t.Fatalf("no output line for streamed row %s: %s", tc.row, out)
 				}
 			}
 			if tc.name == "resource-denied" && !strings.Contains(out, "invalid stub evidence") {

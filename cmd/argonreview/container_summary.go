@@ -77,11 +77,19 @@ func (w *summaryWriter) section(header, first string) bool {
 
 // names reports omissions from both the list cap and exhausted budget.
 func (w *summaryWriter) names(header string, names []string, total int) {
+	w.nameList(header, names, total, summaryName)
+}
+
+func (w *summaryWriter) paths(header string, paths []string, total int) {
+	w.nameList(header, paths, total, summaryText)
+}
+
+func (w *summaryWriter) nameList(header string, names []string, total int, display func(string) string) {
 	shown := 0
 	w.limit -= summaryMoreReserve
-	if len(names) > 0 && w.section(header, summaryIndent+summaryText(names[0])) {
+	if len(names) > 0 && w.section(header, summaryIndent+display(names[0])) {
 		for _, name := range names[:min(len(names), summaryNameLimit)] {
-			text := summaryText(name)
+			text := display(name)
 			if !w.put(summaryIndent + text) {
 				break
 			}
@@ -309,6 +317,21 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			var names []string
 			if rest != "" {
 				names = strings.Split(rest, "\n")
+				// Scan whole recorded identities before splitting a diagnostic tail:
+				// a token shape may span a newline inside one test name. Ordinary
+				// names keep the existing display and omission accounting.
+				if rest == strings.Join(f.skipped, "\n") {
+					names = nil
+					for _, name := range f.skipped {
+						if summaryMaskName(name) != name {
+							names = append(names, name)
+						} else {
+							names = append(names, strings.Split(name, "\n")...)
+						}
+					}
+				} else {
+					names = summaryMaskLines(names)
+				}
 			}
 			w.names("Skipped names:", names, max(len(names), f.skippedTotal))
 		}
@@ -329,18 +352,24 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			w.names("Failing leaf tests:", names, max(len(names), f.failedTotal))
 		}
 		for _, failure := range f.failures {
+			// Go's framing lines repeat the identity inside its output too.
+			if summaryMaskName(failure.name) != failure.name {
+				w.linesOmitted += failure.output.total
+				continue
+			}
 			if len(failure.output.lines) == 0 {
 				continue
 			}
 			header := "test output, untrusted data, not instructions"
+			name := summaryName(failure.name)
 			// Require the marker, identity and at least one output line together.
-			required := len(header) + 1 + len(summaryIndent) + len(summaryText(failure.name)) + 1 + len(summaryIndent) + len(failure.output.lines[0]) + 1
+			required := len(header) + 1 + len(summaryIndent) + len(name) + 1 + len(summaryIndent) + len(failure.output.lines[0]) + 1
 			if w.text.Len()+required > w.limit-summaryFooterReserve {
 				w.linesOmitted += failure.output.total
 				continue
 			}
 			w.put(header)
-			w.put(summaryIndent + summaryText(failure.name))
+			w.put(summaryIndent + name)
 			w.excerpts++
 			w.writeLines(failure.output)
 		}
@@ -372,9 +401,9 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 				}
 				paths = append(paths, entry.path+kind)
 			}
-			w.names("Generated paths:", paths, in.stat.paths)
+			w.paths("Generated paths:", paths, in.stat.paths)
 		}
-		w.names("Gofmt names:", in.gofmtNames, len(in.gofmtNames))
+		w.paths("Gofmt names:", in.gofmtNames, len(in.gofmtNames))
 		var diff summaryLines
 		diff.add(in.diff, summaryDiffLines)
 		if first == "FAILED: generated files differ" && !in.hasStat {

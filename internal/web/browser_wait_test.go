@@ -141,6 +141,4 @@ func testWaitNavigationBrowser(t *testing.T, browser *rod.Browser) {
 	if plainHits < 1 {
 		t.Fatalf("the race is made deterministic: plain Wait fails; got hits=%d/5 outcomes=%q", plainHits, plainOutcomes)
 	}
-	// TEMPORARY: removed before the final head (#1987)
-	t.Errorf("TEMPORARY EVIDENCE #1987: plain hits=%d/5 outcomes=%q helper ok=5/5", plainHits, plainOutcomes)
 }

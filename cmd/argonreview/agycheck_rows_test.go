@@ -267,6 +267,11 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				// ordinary modeled rows and their real stub to exit under race.
 				h.x.limit = 5 * time.Second
 			}
+			if tc.name == "sequential" {
+				// Four real hook subprocesses run one after another (1.5 s hold each)
+				// plus startup under -race on a loaded runner exceeded the default 10 s.
+				h.x.limit = 2 * time.Minute
+			}
 			var code int
 			var out string
 			if full {

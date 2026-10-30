@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -26,26 +25,7 @@ type agyCheckCommandHarness struct {
 	toolSteps                 int
 }
 
-type agyCheckDiagReadCloser struct { // DIAG(#1980) temporary: removed before the final head
-	io.ReadCloser                      // DIAG(#1980) temporary: removed before the final head
-	diag          func(string, ...any) // DIAG(#1980) temporary: removed before the final head
-	bytes         int64                // DIAG(#1980) temporary: removed before the final head
-} // DIAG(#1980) temporary: removed before the final head
-func (r *agyCheckDiagReadCloser) Read(p []byte) (int, error) { // DIAG(#1980) temporary: removed before the final head
-	n, err := r.ReadCloser.Read(p) // DIAG(#1980) temporary: removed before the final head
-	r.bytes += int64(n)            // DIAG(#1980) temporary: removed before the final head
-	return n, err                  // DIAG(#1980) temporary: removed before the final head
-} // DIAG(#1980) temporary: removed before the final head
-func (r *agyCheckDiagReadCloser) Close() error { // DIAG(#1980) temporary: removed before the final head
-	err := r.ReadCloser.Close()                         // DIAG(#1980) temporary: removed before the final head
-	r.diag("open closed bytes=%d err=%v", r.bytes, err) // DIAG(#1980) temporary: removed before the final head
-	return err                                          // DIAG(#1980) temporary: removed before the final head
-} // DIAG(#1980) temporary: removed before the final head
 func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCommandHarness {
-	t0 := time.Now()                           // DIAG(#1980) temporary: removed before the final head
-	diag := func(format string, args ...any) { // DIAG(#1980) temporary: removed before the final head
-		t.Logf("DIAG ev %s +%dms "+format, append([]any{t.Name(), time.Since(t0).Milliseconds()}, args...)...) // DIAG(#1980) temporary: removed before the final head
-	} // DIAG(#1980) temporary: removed before the final head
 	t.Helper()
 	home := agyCheckRealTemp(t)
 	isolation := filepath.Join(home, "isolation")
@@ -134,42 +114,7 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 		}
 		return data, err
 	}
-	validate := h.x.runner.validate                                                         // DIAG(#1980) temporary: removed before the final head
-	h.x.runner.validate = func(o agyCheckOptions, d agyCheckDeps) (agyCheckMarker, error) { // DIAG(#1980) temporary: removed before the final head
-		diag("validate begin")           // DIAG(#1980) temporary: removed before the final head
-		m, err := validate(o, d)         // DIAG(#1980) temporary: removed before the final head
-		diag("validate end err=%v", err) // DIAG(#1980) temporary: removed before the final head
-		return m, err                    // DIAG(#1980) temporary: removed before the final head
-	} // DIAG(#1980) temporary: removed before the final head
-	countedOpen := h.d.open                               // DIAG(#1980) temporary: removed before the final head
-	h.d.open = func(path string) (io.ReadCloser, error) { // DIAG(#1980) temporary: removed before the final head
-		diag("open begin %s", filepath.Base(path)) // DIAG(#1980) temporary: removed before the final head
-		r, err := countedOpen(path)                // DIAG(#1980) temporary: removed before the final head
-		if err != nil {                            // DIAG(#1980) temporary: removed before the final head
-			return r, err // DIAG(#1980) temporary: removed before the final head
-		} // DIAG(#1980) temporary: removed before the final head
-		return &agyCheckDiagReadCloser{ReadCloser: r, diag: diag}, err // DIAG(#1980) temporary: removed before the final head
-	} // DIAG(#1980) temporary: removed before the final head
-	countedWait := h.x.ops.wait                                             // DIAG(#1980) temporary: removed before the final head
-	firstWait := map[int]time.Time{}                                        // DIAG(#1980) temporary: removed before the final head
-	h.x.ops.wait = func(pid int, status *syscall.WaitStatus) (int, error) { // DIAG(#1980) temporary: removed before the final head
-		if _, ok := firstWait[pid]; !ok { // DIAG(#1980) temporary: removed before the final head
-			firstWait[pid] = time.Now()    // DIAG(#1980) temporary: removed before the final head
-			diag("wait first pid=%d", pid) // DIAG(#1980) temporary: removed before the final head
-		} // DIAG(#1980) temporary: removed before the final head
-		exitedPID, err := countedWait(pid, status) // DIAG(#1980) temporary: removed before the final head
-		if exitedPID != 0 {                        // DIAG(#1980) temporary: removed before the final head
-			diag("wait exited pid=%d after %dms err=%v", exitedPID, time.Since(firstWait[pid]).Milliseconds(), err) // DIAG(#1980) temporary: removed before the final head
-		} // DIAG(#1980) temporary: removed before the final head
-		return exitedPID, err // DIAG(#1980) temporary: removed before the final head
-	} // DIAG(#1980) temporary: removed before the final head
-	countedFileOpen := h.x.runner.files.open                                                   // DIAG(#1980) temporary: removed before the final head
-	h.x.runner.files.open = func(path string, flags int, mode os.FileMode) (*os.File, error) { // DIAG(#1980) temporary: removed before the final head
-		diag("files.open %s", filepath.Base(path)) // DIAG(#1980) temporary: removed before the final head
-		return countedFileOpen(path, flags, mode)  // DIAG(#1980) temporary: removed before the final head
-	} // DIAG(#1980) temporary: removed before the final head
 	h.d.execution = &h.x
-	t.Logf("DIAG harness-setup %s %s gomaxprocs=%d", t.Name(), time.Since(t0), runtime.GOMAXPROCS(0)) // DIAG(#1980) temporary: removed before the final head
 	return h
 }
 func (h *agyCheckCommandHarness) run(t *testing.T, calls int) (int, string) {

@@ -46,7 +46,7 @@ func (labels agyCheckStepLabels) Unwrap() []error { return labels }
 // environment values or transcript content, and printable text is not redaction.
 func agyCheckRowFailure(err error) error {
 	var details []error
-	for _, step := range []agyCheckStep{agyCheckValidation, agyCheckPinning, agyCheckCollection, agyCheckRestoration, agyCheckCleanup, agyCheckExecution, agyCheckInterruption} {
+	for _, step := range []agyCheckStep{agyCheckValidation, agyCheckPinning, agyCheckCollection, agyCheckKeeping, agyCheckRestoration, agyCheckCleanup, agyCheckExecution, agyCheckInterruption} {
 		if errors.Is(err, step) {
 			details = append(details, step)
 		}

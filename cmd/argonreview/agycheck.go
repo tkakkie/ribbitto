@@ -43,6 +43,7 @@ type agyCheckResult struct {
 	InvalidReason, UsageError string
 	Rows                      []agyCheckResultRow
 	BuiltinInfo               string
+	KeptRows                  []string
 }
 
 func agyCheckLoadProtected(path string) bool {
@@ -224,6 +225,9 @@ func agyCheckRender(w io.Writer, r agyCheckResult) error {
 		if agyCheckExitCode(r) == agyCheckSuccess {
 			out.WriteString(agyCheckSuccessLine + "\n")
 		}
+	}
+	if r.KeptRows != nil {
+		fmt.Fprintln(&out, "kept transcripts: "+agyCheckKeptText(r.KeptRows))
 	}
 	table := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	n, err := io.WriteString(table, out.String())

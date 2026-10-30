@@ -210,3 +210,19 @@ func agyCheckReadLog(file *os.File) ([]byte, error) {
 	}
 	return data, err
 }
+
+// Retention truncates oversized logs instead of accepting them as evidence.
+func (f agyCheckFiles) readPrefixInside(root, path string, cap int64) (data []byte, err error) {
+	if err := f.path(root, path); err != nil {
+		return nil, err
+	}
+	if err := f.private(path, false); err != nil {
+		return nil, err
+	}
+	in, err := f.open(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, in.Close()) }()
+	return io.ReadAll(io.LimitReader(in, cap))
+}

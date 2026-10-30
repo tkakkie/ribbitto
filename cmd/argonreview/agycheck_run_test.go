@@ -47,7 +47,7 @@ func agyCheckNewHarness(t *testing.T) *agyCheckHarness {
 	t.Helper()
 	h := &agyCheckHarness{
 		m:    agyCheckMarker{1, "dedicated", "/check/home", "/check/home/isolation", "/protected/account", "/protected/repository", []string{"/protected/worker", "/protected/worker-two"}, "/protected/review"},
-		o:    agyCheckOptions{"/check/home", "/trusted-agy/agy", agyCheckModel, 30},
+		o:    agyCheckOptions{"/check/home", "/trusted-agy/agy", agyCheckModel, 30, false},
 		info: map[string]agyCheckInfo{}, statErr: map[string]error{}, probe: map[string]map[uint32]error{},
 		user: user.User{Uid: "501", Username: "dedicated"}, real: 501, euid: 501,
 	}

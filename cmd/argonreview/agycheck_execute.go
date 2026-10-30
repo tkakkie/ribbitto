@@ -30,9 +30,9 @@ type agyCheckRunResult struct {
 	Stragglers    []string
 }
 
-// One invocation owns fresh directories until collect has read its evidence.
+// One invocation owns fresh directories through collection and optional retention.
 // The caller must stop on ANY returned error, including cleanup/restoration.
-func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps, m agyCheckMarker, r agyCheckRowDirs, prompt string, config agyCheckConfigFiles, fixtures map[string][]byte, limit time.Duration, ops cleanupOps, collect func(agyCheckRowDirs) error) (result agyCheckRunResult, err error) {
+func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps, m agyCheckMarker, r agyCheckRowDirs, prompt string, config agyCheckConfigFiles, fixtures map[string][]byte, limit time.Duration, ops cleanupOps, collect func(agyCheckRowDirs) error, retain func(agyCheckRowDirs, agyCheckRunResult) error) (result agyCheckRunResult, err error) {
 	result.Code = 1
 	// Validate the entire layout before assuming ownership for cleanup.
 	if err := r.validate(m.Isolation, d.files); err != nil {
@@ -144,6 +144,9 @@ func agyCheckRunAgy(ctx context.Context, o agyCheckOptions, d agyCheckRunnerDeps
 		}
 		if collect != nil {
 			runErr = errors.Join(runErr, agyCheckFailed(agyCheckCollection, collect(r)))
+		}
+		if retain != nil {
+			runErr = errors.Join(runErr, agyCheckFailed(agyCheckKeeping, retain(r, result)))
 		}
 		return result.Code, errors.Join(runErr, pinErr)
 	})

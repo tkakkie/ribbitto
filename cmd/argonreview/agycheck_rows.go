@@ -24,6 +24,11 @@ func agyCheckExecute(o agyCheckOptions, d agyCheckDeps) agyCheckResult {
 	if err != nil {
 		return agyCheckResult{InvalidReason: agyCheckPrintable(err.Error())}
 	}
+	if o.keepTranscripts {
+		if err := agyCheckKeepReady(m.Isolation, x.runner.files); err != nil {
+			return agyCheckResult{InvalidReason: "kept transcripts directory must be missing or empty, private and uid-owned"}
+		}
+	}
 	binary, err := d.executable()
 	if err != nil {
 		return agyCheckResult{InvalidReason: "finding check executable"}
@@ -31,15 +36,17 @@ func agyCheckExecute(o agyCheckOptions, d agyCheckDeps) agyCheckResult {
 	var results agyCheckRowResults
 	for _, row := range agyCheckExpected {
 		if err := agyCheckExecuteRow(o, x, m, binary, row, &results); err != nil {
-			return agyCheckResult{InvalidReason: err.Error()}
+			return agyCheckResult{InvalidReason: err.Error(), KeptRows: results.kept}
 		}
 	}
-	return agyCheckAssemble(m, x.runner.files, results, o.calls)
+	result := agyCheckAssemble(m, x.runner.files, results, o.calls)
+	return agyCheckFinishKeep(o, m.Isolation, x.runner.files, results.kept, result)
 }
 
 type agyCheckRowResults struct {
 	before, after agyCheckPin
 	observations  []agyCheckObservation
+	kept          []string
 }
 
 // Both full-command and single-row checks use this collection and override path.
@@ -72,7 +79,7 @@ func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMa
 		}
 		observation = agyCheckEvidenceObservation(row, s, e)
 		return nil
-	})
+	}, agyCheckRetainer(o, m.Isolation, x.runner.files, row, &observation, results))
 	if err != nil {
 		return agyCheckRowFailure(err)
 	}

@@ -153,7 +153,7 @@ func agyCheckNewRunner(t *testing.T) *agyCheckRunnerHarness {
 func (h *agyCheckRunnerHarness) run(t *testing.T, collect func(agyCheckRowDirs) error) (agyCheckRunResult, error) {
 	t.Helper()
 	agyCheckScriptFixture(t, h.o.agy, h.script)
-	return agyCheckRunAgy(context.Background(), h.o, h.d, h.m, h.r, h.script.Prompt, h.config, map[string][]byte{".agent/hooks.json": []byte("workspace")}, h.limit, h.ops, collect)
+	return agyCheckRunAgy(context.Background(), h.o, h.d, h.m, h.r, h.script.Prompt, h.config, map[string][]byte{".agent/hooks.json": []byte("workspace")}, h.limit, h.ops, collect, nil)
 }
 
 func TestAgyCheckRunner(t *testing.T) {

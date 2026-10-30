@@ -12,7 +12,7 @@ import (
 	"syscall"
 )
 
-const agyCheckRunUsage = "agy-check --home <absolute throwaway home> --agy <absolute executable> [--calls N] [--model <name>]"
+const agyCheckRunUsage = "agy-check --home <absolute throwaway home> --agy <absolute executable> [--calls N] [--model <name>] [--keep-transcripts]"
 
 // Keep the reviewer's model as the default so the eventual observations use
 // the same model as production; operators can explicitly select another.
@@ -21,6 +21,7 @@ const agyCheckModel = argonModel
 type agyCheckOptions struct {
 	home, agy, model string
 	calls            int
+	keepTranscripts  bool
 }
 
 type agyCheckDeps struct {
@@ -48,6 +49,8 @@ func agyCheckArguments(args []string) (agyCheckOptions, error) {
 	f := flag.NewFlagSet("agy-check", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	var home, agy, calls, model implementOnceFlag
+	var keep agyCheckKeepFlag
+	f.Var(&keep, "keep-transcripts", "keep transcripts of differing rows")
 	for name, value := range map[string]*implementOnceFlag{"home": &home, "agy": &agy, "calls": &calls, "model": &model} {
 		f.Var(value, name, name)
 	}
@@ -57,7 +60,7 @@ func agyCheckArguments(args []string) (agyCheckOptions, error) {
 	if f.NArg() != 0 || !agyCheckCleanPath(home.value) || !agyCheckCleanPath(agy.value) || agyCheckSettingsPath(home.value) || agyCheckSettingsPath(agy.value) {
 		return o, errors.New("home and agy must be absolute clean non-root paths; no positional arguments")
 	}
-	o.home, o.agy = home.value, agy.value
+	o.home, o.agy, o.keepTranscripts = home.value, agy.value, keep.set
 	if calls.set {
 		var err error
 		o.calls, err = strconv.Atoi(calls.value)
@@ -83,6 +86,9 @@ func agyCheckCommand(args []string, stdout, stderr io.Writer, d agyCheckDeps) in
 		return agyCheckExitCode(r)
 	}
 	r := agyCheckExecute(o, d)
+	if o.keepTranscripts && r.KeptRows == nil {
+		r.KeptRows = []string{}
+	}
 	if err := agyCheckRender(stdout, r); err != nil {
 		return agyCheckDiffers
 	}

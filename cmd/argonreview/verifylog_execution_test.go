@@ -19,19 +19,19 @@ type logExecutionVerifier struct {
 }
 
 func (v *logExecutionVerifier) verify(ctx context.Context, c, p string) (string, error) {
-	summary, _, err := v.verifyRecorded(ctx, c, p, "")
+	summary, _, _, err := v.verifyRecorded(ctx, c, p, "")
 	return summary, err
 }
-func (v *logExecutionVerifier) verifyRecorded(ctx context.Context, c, p, r string) (string, *containerRecord, error) {
+func (v *logExecutionVerifier) verifyRecorded(ctx context.Context, c, p, r string) (string, *containerRecord, bool, error) {
 	v.execution.browserRun = r
 	var err error
 	v.host, err = runContainerExecution(ctx, v.tree, c, p, v.runner, v.copies, &v.execution)
-	return v.execution.summary, v.execution.record, err
+	return v.execution.summary, v.execution.record, v.execution.runnerFailed, err
 }
 
 func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 	for _, check := range []string{"test", "build"} {
-		for _, outcome := range []string{"failed", "skipped", "verified", "timeout", "cancelled", "runner error", "exit 125", "source cleanup", "container cleanup"} {
+		for _, outcome := range []string{"failed", "skipped", "verified", "timeout", "cancelled", "runner error", "exit 125", "exit 126", "exit 127", "source cleanup", "container cleanup"} {
 			if check == "build" && outcome == "skipped" {
 				continue
 			}
@@ -76,6 +76,10 @@ func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 							return 0, errors.New("runner failed")
 						case "exit 125":
 							return 125, nil
+						case "exit 126":
+							return 126, nil
+						case "exit 127":
+							return 127, nil
 						case "source cleanup":
 							for _, arg := range args {
 								if !strings.HasSuffix(arg, ",dst=/work,readonly") {
@@ -116,6 +120,9 @@ func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 					minimal := outcome != "verified" && outcome != "failed" && outcome != "skipped"
 					if strings.Contains(text, "Details unavailable:") != minimal {
 						t.Fatalf("minimal body: %q", text)
+					}
+					if execution.runnerFailed != minimal {
+						t.Fatalf("runner failure flag = %v, want %v", execution.runnerFailed, minimal)
 					}
 					if minimal {
 						if (logs || outcome != "source cleanup" && outcome != "container cleanup") && !v.execution.record.stderrNotServable {
@@ -207,13 +214,16 @@ func TestVerifyLogCleanupCapture(t *testing.T) {
 				if tc.check == "test" && (execution.record.stderrNotServable || strings.Contains(host, "Stderr is not servable")) {
 					t.Fatal("cleanup changed execution-level stderr")
 				}
+				if !execution.runnerFailed {
+					t.Fatal("cleanup failure lost runner failure flag")
+				}
 				before := execution.record.stderrNotServable
 				_, _ = verifyResult(execution.summary, err, false, false)
 				if execution.record.stderrNotServable != before {
 					t.Fatal("logs-off wrapper changed execution-level stderr")
 				}
 				store := &verifyLogStore{}
-				text, bad := verifyRecordedResult(execution.summary, err, false, false, store, execution.record)
+				text, bad := verifyRecordedResult(execution.summary, err, false, false, execution.runnerFailed, store, execution.record)
 				assertLogCapture(t, store, text, execution.record, true)
 				if !bad || !strings.Contains(text, "Details unavailable: the check did not complete.") {
 					t.Fatalf("cleanup lost minimal failure body: %q", text)
@@ -237,8 +247,8 @@ func TestVerifyLogContainerVerifierRecord(t *testing.T) {
 				pattern, run = "./internal/web", "TestOneBrowser"
 				v.runner = summaryRunner(containerEvents("github.com/tkakkie/ribbitto/internal/web", run, "fail"), "diagnostic", 1)
 			}
-			summary, r, err := v.verifyRecorded(context.Background(), check, pattern, run)
-			if err != nil || r == nil || !r.sealed || summary == "" {
+			summary, r, runnerFailed, err := v.verifyRecorded(context.Background(), check, pattern, run)
+			if err != nil || r == nil || !r.sealed || summary == "" || runnerFailed {
 				t.Fatalf("record path: %q, %v, %v", summary, r, err)
 			}
 			if check == verifyBrowserCheck {
@@ -263,9 +273,9 @@ func TestVerifyLogContainerVerifierRecord(t *testing.T) {
 			case "copy":
 				v.worktree = filepath.Join(t.TempDir(), "missing")
 			}
-			summary, r, err := v.verifyRecorded(context.Background(), check, pattern, run)
+			summary, r, runnerFailed, err := v.verifyRecorded(context.Background(), check, pattern, run)
 			store := &verifyLogStore{}
-			text, _ := verifyRecordedResult(summary, err, false, false, store, r)
+			text, _ := verifyRecordedResult(summary, err, false, false, runnerFailed, store, r)
 			if r != nil {
 				t.Fatal("pre-record outcome returned a record")
 			}
@@ -283,6 +293,6 @@ func TestVerifyLogRefusalCleanupNoRecord(t *testing.T) {
 		t.Fatal("pre-start refusal became a recorded run")
 	}
 	store := &verifyLogStore{}
-	text, _ := verifyRecordedResult(result.summary, err, false, false, store, result.record)
+	text, _ := verifyRecordedResult(result.summary, err, false, false, result.runnerFailed, store, result.record)
 	assertLogCapture(t, store, text, nil, false)
 }

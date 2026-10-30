@@ -342,6 +342,7 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 		_, rest, _ := strings.Cut(in.verdict, "\n")
 		if strings.HasSuffix(first, " skipped") && (rest != "" || f.skippedTotal > 0) {
 			var names []string
+			ordinals := f.ordinals["Skipped names:"]
 			if rest != "" {
 				names = strings.Split(rest, "\n")
 				// Scan whole recorded identities before splitting a diagnostic tail:
@@ -358,9 +359,10 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 					}
 				} else {
 					names = summaryMaskLines(names)
+					ordinals = nil
 				}
 			}
-			w.ordinalNames("Skipped names:", names, max(len(names), f.skippedTotal), f.ordinals["Skipped names:"])
+			w.ordinalNames("Skipped names:", names, max(len(names), f.skippedTotal), ordinals)
 		}
 	}
 	failed := strings.HasPrefix(first, "FAILED")

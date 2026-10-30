@@ -29,12 +29,12 @@ the sole addition to D5 timeout, E7 runner-error/exit-125 and source-cleanup
 minimal-body goldens. Its bytes reduce the wrapper diagnostic reserve within
 7,000 bytes; the final cut preserves the ID line.
 
-The per-process store keeps the last 4, evicting oldest first by count or bytes.
-Each capture pins the sealed record (which defines R_max) and adds a random
+The process store keeps the last 4, evicting oldest first by count or bytes.
+Each capture pins the sealed record (defining R_max) and adds a random
 128-bit ID, ordinals, displays and taint counts. The byte bound is
 4 × (R_max + `verifyLogDerivedAllowance`, the derived-data bytes).
-The server denies captured stderr after runner failure, cancellation, timeout
-or cleanup failure. Execution finalization and host report bytes stay unchanged.
+Stderr is unservable after a runner-level failure (exit 125-127, runner error,
+cancellation, timeout or cleanup failure). Host report bytes stay unchanged.
 
 ## Selectors and index
 
@@ -139,8 +139,8 @@ tripwire; the container holds no secrets by construction.
 Per capture: 16 `index` reads, 40 shared `test`/`package`, 8 shared `stderr`/`output`.
 Per server: 256 reads, 1 MiB serialized bytes including envelopes/refusals,
 excluding captured bytes. Refusals count even after exhaustion and may exceed
-the cap; no further page is admitted. A mutex guards captures/counters. Records
-are immutable once finalized, before capture.
+the cap; no further page is admitted. A mutex guards captures/counters. A sealed record is
+immutable once captured; capture alone may first set stderr non-servable.
 
 One fixed message per refusal class lives in one table: malformed (mapped to
 the existing protocol error), no such run, not listed, ambiguous, start out of

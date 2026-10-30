@@ -35,6 +35,35 @@ func logOrdinalStream() string {
 	return stream.String()
 }
 
+func TestVerifyLogSkippedFallbackOrdinals(t *testing.T) {
+	for _, matching := range []bool{false, true} {
+		t.Run(fmt.Sprintf("matching=%v", matching), func(t *testing.T) {
+			names := []string{"p/TestOne", "p/TestTwo"}
+			in := summaryInput{
+				check: "test", pattern: ".", scope: containerCheckScope("test"),
+				verdict: "NOT VERIFIED: 2 skipped\n" + strings.Join(names, "\n"),
+				facts:   summaryFacts{skipped: names, skippedTotal: 2, ordinals: map[string][]int{"Skipped names:": {3, 7}}},
+			}
+			if !matching {
+				in.facts.skipped = []string{"p/TestDifferent", "p/TestOther"}
+			}
+			text := buildContainerSummary(in)
+			for i, name := range names {
+				want := summaryIndent + name + "\n"
+				if matching {
+					want = summaryIndent + fmt.Sprintf("#%d %s\n", in.facts.ordinals["Skipped names:"][i], name)
+				}
+				if !strings.Contains(text, want) {
+					t.Fatalf("missing skipped name %q: %s", want, text)
+				}
+			}
+			if !matching && strings.Contains(text, "#") {
+				t.Fatalf("fallback attached unrelated ordinals: %s", text)
+			}
+		})
+	}
+}
+
 func TestVerifyLogSummaryOrdinals(t *testing.T) {
 	for _, mode := range []string{"complete", "incomplete", "skips"} {
 		for _, logs := range []bool{false, true} {

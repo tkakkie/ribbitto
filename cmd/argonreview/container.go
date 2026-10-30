@@ -369,6 +369,7 @@ type containerExecution struct {
 	finishAggregation             func(*containerAggregator, int, error, aggregatorRunState) aggregatorResult
 	code                          int
 	summary                       string
+	runnerFailed                  bool
 	logs                          bool
 	refused                       bool
 	ownCancel                     bool
@@ -608,6 +609,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 		if result.record != nil {
 			in.facts = recordSummaryFactsWithOrdinals(result.record, result.logs)
 		}
+		result.runnerFailed = in.runnerFailed || summaryRunnerFailure(first)
 		result.summary = buildContainerSummary(in)
 	}
 	if in.check != "generated" && in.check != "writeback" {

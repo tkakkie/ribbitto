@@ -16,13 +16,13 @@ import (
 
 type logRecordingVerifier struct {
 	legacy   fakeVerifier
-	recorded func(context.Context, string, string, string) (string, *containerRecord, error)
+	recorded func(context.Context, string, string, string) (string, *containerRecord, bool, error)
 }
 
 func (v logRecordingVerifier) verify(ctx context.Context, c, p string) (string, error) {
 	return v.legacy.verify(ctx, c, p)
 }
-func (v logRecordingVerifier) verifyRecorded(ctx context.Context, c, p, r string) (string, *containerRecord, error) {
+func (v logRecordingVerifier) verifyRecorded(ctx context.Context, c, p, r string) (string, *containerRecord, bool, error) {
 	return v.recorded(ctx, c, p, r)
 }
 
@@ -109,9 +109,9 @@ func assertLogCapture(t *testing.T, store *verifyLogStore, text string, r *conta
 
 func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 	for _, tc := range []struct {
-		name, report, first                           string
-		err                                           error
-		timeout, cancel, noRecord, unsealed, verified bool
+		name, report, first                                         string
+		err                                                         error
+		timeout, cancel, noRecord, unsealed, verified, runnerFailed bool
 	}{
 		{name: "failed", report: "FAILED\ndetail", first: "FAILED"},
 		{name: "not verified", report: "NOT VERIFIED: skipped\ndetail", first: "NOT VERIFIED: skipped"},
@@ -121,7 +121,7 @@ func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 		{name: "runner error after success", report: "verified\ndetail", first: "FAILED: the check returned an error", err: errors.New("runner error")},
 		{name: "could not run", report: "", first: "NOT VERIFIED: the check could not run", err: errors.New("runner error")},
 		{name: "fixed verdict", report: "FAILED: source cleanup failed\ndetail", first: "FAILED: source cleanup failed"},
-		{name: "minimal body", report: "FAILED\nCheck: test .\nScope: test\nDetails unavailable: the check did not complete.\n", first: "FAILED"},
+		{name: "minimal body", report: "FAILED\nCheck: test .\nScope: test\nDetails unavailable: the check did not complete.\n", first: "FAILED", runnerFailed: true},
 		{name: "no record", report: "NOT VERIFIED: budget refused", first: "NOT VERIFIED: budget refused", noRecord: true},
 		{name: "unsealed", report: "FAILED", first: "FAILED", unsealed: true},
 	} {
@@ -145,9 +145,9 @@ func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 					return tc.report, tc.err
 				}
 				v.legacy = func(ctx context.Context, _, _ string) (string, error) { return run(ctx) }
-				v.recorded = func(ctx context.Context, _, _, _ string) (string, *containerRecord, error) {
+				v.recorded = func(ctx context.Context, _, _, _ string) (string, *containerRecord, bool, error) {
 					report, err := run(ctx)
-					return report, r, err
+					return report, r, tc.runnerFailed, err
 				}
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -172,7 +172,7 @@ func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 					t.Fatalf("final verdict: %q, bad=%v", text, bad)
 				}
 				assertLogCapture(t, store, text, r, logs && !tc.verified && !tc.noRecord && !tc.unsealed)
-				if logs && r != nil && r.sealed && (tc.timeout || tc.cancel || tc.err != nil || tc.name == "fixed verdict" || tc.name == "minimal body") && !r.stderrNotServable {
+				if logs && r != nil && r.sealed && (tc.timeout || tc.cancel || tc.err != nil || tc.name == "fixed verdict" || tc.runnerFailed) && !r.stderrNotServable {
 					t.Fatal("final wrapper failure left stderr servable")
 				}
 				if !logs {
@@ -199,7 +199,7 @@ func TestVerifyLogResultBudget(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &verifyLogStore{}
 			r := verifyLogFixture("")
-			text, bad := verifyRecordedResult(tc.report, tc.err, false, false, store, r)
+			text, bad := verifyRecordedResult(tc.report, tc.err, false, false, false, store, r)
 			assertLogCapture(t, store, text, r, true)
 			if !bad || len(text) > verifyResultLimit || !utf8.ValidString(text) {
 				t.Fatalf("invalid bounded result: %d bytes", len(text))
@@ -211,5 +211,22 @@ func TestVerifyLogResultBudget(t *testing.T) {
 				t.Fatal("summary footer lost")
 			}
 		})
+	}
+}
+
+func TestVerifyLogReportTextDoesNotDenyStderr(t *testing.T) {
+	const report = "FAILED\nTest output:\nDetails unavailable: the check did not complete.\n"
+	r := verifyLogFixture("failure\n")
+	v := logRecordingVerifier{recorded: func(context.Context, string, string, string) (string, *containerRecord, bool, error) {
+		return report, r, false, nil
+	}}
+	store := &verifyLogStore{}
+	text, bad := logMCPCall(t, verifyMCPServer{verifier: v, logs: store}, context.Background(), mcpCall, nil)
+	assertLogCapture(t, store, text, r, true)
+	if !bad || !strings.Contains(text, "\nDetails unavailable: the check did not complete.\n") {
+		t.Fatalf("missing failed summary or literal output: %q", text)
+	}
+	if _, _, class := store.captures[0].unit(verifyLogArguments{stream: "stderr"}); class != verifyLogOK {
+		t.Fatalf("report text denied servable stderr: %s", class)
 	}
 }

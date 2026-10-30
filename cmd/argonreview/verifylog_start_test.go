@@ -51,11 +51,11 @@ func TestVerifyLogMCPArguments(t *testing.T) {
 						}
 						return "FAILED\nold summary", nil
 					},
-					recorded: func(context.Context, string, string, string) (string, *containerRecord, error) {
+					recorded: func(context.Context, string, string, string) (string, *containerRecord, bool, error) {
 						if !logs {
 							t.Error("logs-off used recording interface")
 						}
-						return "FAILED\nold summary", verifyLogFixture("failure"), nil
+						return "FAILED\nold summary", verifyLogFixture("failure"), false, nil
 					},
 				}
 				text, bad := logMCPRun(t, context.Background(), mcpCall, nil, func(ctx context.Context, in io.Reader, out, log io.Writer) int {

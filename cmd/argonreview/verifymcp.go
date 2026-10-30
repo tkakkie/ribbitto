@@ -40,7 +40,7 @@ type browserVerifier interface {
 // recordingVerifier keeps pre-record refusals and preparation errors capture-free.
 // The server alone may retain a sealed record after deciding its final verdict.
 type recordingVerifier interface {
-	verifyRecorded(context.Context, string, string, string) (string, *containerRecord, error)
+	verifyRecorded(context.Context, string, string, string) (string, *containerRecord, bool, error)
 }
 
 type containerVerifier struct {
@@ -55,20 +55,20 @@ type containerVerifier struct {
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	summary, _, err := v.verifyRecorded(ctx, check, pattern, "")
+	summary, _, _, err := v.verifyRecorded(ctx, check, pattern, "")
 	return summary, err
 }
 
-func (v containerVerifier) verifyRecorded(ctx context.Context, check, pattern, run string) (string, *containerRecord, error) {
+func (v containerVerifier) verifyRecorded(ctx context.Context, check, pattern, run string) (string, *containerRecord, bool, error) {
 	if err := validateContainerCheck(v.worktree, check, pattern, run); err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, logs: v.logs}
 	if check == verifyBrowserCheck {
 		result.admit = v.browserAdmission
 	}
 	_, err := runContainerExecution(ctx, v.worktree, check, pattern, v.runner, v.copyParent, &result)
-	return result.summary, result.record, err
+	return result.summary, result.record, result.runnerFailed, err
 }
 
 func newContainerVerifier(worktree, browserMode string) containerVerifier {
@@ -248,13 +248,13 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 }
 
 func verifyResult(report string, runErr error, timedOut, cancelled bool) (string, bool) {
-	return verifyRecordedResult(report, runErr, timedOut, cancelled, nil, nil)
+	return verifyRecordedResult(report, runErr, timedOut, cancelled, false, nil, nil)
 }
 
 const verifyLogRunPrefix = "Log run: "
 const verifyLogRunLineBytes = len(verifyLogRunPrefix) + verifyLogIDBytes*2 + 1
 
-func verifyRecordedResult(report string, runErr error, timedOut, cancelled bool, store *verifyLogStore, record *containerRecord) (string, bool) {
+func verifyRecordedResult(report string, runErr error, timedOut, cancelled, runnerFailed bool, store *verifyLogStore, record *containerRecord) (string, bool) {
 	// The runner has an earlier deadline of its own, including source copying.
 	timedOut = timedOut || errors.Is(runErr, context.DeadlineExceeded)
 	cancelled = !timedOut && (cancelled || errors.Is(runErr, context.Canceled))
@@ -283,7 +283,7 @@ func verifyRecordedResult(report string, runErr error, timedOut, cancelled bool,
 		first, rest, newline := strings.Cut(report, "\n")
 		// Cleanup and wrapper failures can arrive after record finalization.
 		// Deny captured stderr before publishing, leaving execution alone.
-		if record != nil && (timedOut || cancelled || runErr != nil || summaryRunnerFailure(first) || strings.Contains(report, "\nDetails unavailable: the check did not complete.\n")) {
+		if record != nil && (timedOut || cancelled || runErr != nil || runnerFailed || summaryRunnerFailure(first)) {
 			record.mu.Lock()
 			if record.sealed {
 				record.stderrNotServable = true
@@ -472,9 +472,10 @@ type verifyMCPServer struct {
 	callDeadline <-chan struct{}
 }
 type verifyCompletion struct {
-	report string
-	record *containerRecord
-	err    error
+	report       string
+	record       *containerRecord
+	runnerFailed bool
+	err          error
 }
 type verifyFlight struct {
 	id       json.RawMessage
@@ -568,7 +569,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 		case result := <-done:
 			timedOut := flight.timedOut || errors.Is(flight.ctx.Err(), context.DeadlineExceeded)
 			cancelled := !timedOut && (flight.ctx.Err() != nil || errors.Is(result.err, context.Canceled))
-			text, bad := verifyRecordedResult(result.report, result.err, timedOut, cancelled, s.logs, result.record)
+			text, bad := verifyRecordedResult(result.report, result.err, timedOut, cancelled, result.runnerFailed, s.logs, result.record)
 			first, _, _ := strings.Cut(text, "\n")
 			_, _ = fmt.Fprintf(stderr, "verify %s %s: %s\n", flight.args.check, flight.args.pattern, first)
 			id := flight.id
@@ -681,8 +682,9 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					var report string
 					var err error
 					var record *containerRecord
+					var runnerFailed bool
 					if v, ok := s.verifier.(recordingVerifier); ok && s.logs != nil {
-						report, record, err = v.verifyRecorded(callCtx, args.check, args.pattern, args.run)
+						report, record, runnerFailed, err = v.verifyRecorded(callCtx, args.check, args.pattern, args.run)
 					} else if args.check == verifyBrowserCheck {
 						report = browserPaused + "\n"
 						if v, ok := s.verifier.(browserVerifier); ok {
@@ -691,7 +693,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					} else {
 						report, err = s.verifier.verify(callCtx, args.check, args.pattern)
 					}
-					completed <- verifyCompletion{report: report, record: record, err: err}
+					completed <- verifyCompletion{report: report, record: record, runnerFailed: runnerFailed, err: err}
 				}()
 			default:
 				rpcError(req.id, -32601, "method not found")

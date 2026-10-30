@@ -19,7 +19,7 @@ const (
 
 // Browser calls share admission, budget, execution and cleanup across callers.
 func (v containerVerifier) verifyBrowser(ctx context.Context, pattern, run string) (string, error) {
-	summary, _, err := v.verifyRecorded(ctx, verifyBrowserCheck, pattern, run)
+	summary, _, _, err := v.verifyRecorded(ctx, verifyBrowserCheck, pattern, run)
 	return summary, err
 }
 

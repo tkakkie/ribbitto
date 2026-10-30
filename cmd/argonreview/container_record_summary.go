@@ -21,6 +21,11 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 	}
 	f.stdout = retainedSummaryLines(r.stdout)
 	f.compiler = retainedSummaryLines(r.compiler)
+	compiler := summaryMaskLines(f.compiler.lines)
+	for i, line := range f.compiler.lines {
+		f.compiler.shortened[i] = f.compiler.shortened[i] || compiler[i] != line
+	}
+	f.compiler.lines = compiler
 	lines := append(strings.Split(string(r.packageOutput.head), "\n"), strings.Split(string(r.packageOutput.tail), "\n")...)
 	masked := summaryMaskLines(lines)
 	for i, line := range lines {

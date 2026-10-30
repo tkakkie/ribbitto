@@ -20,8 +20,9 @@ path. `verify` and its schema do not change.
 
 ## Capture and retention
 
-The store keeps the last 4 captures, evicting oldest first by count or bytes,
-and stores only `FAILED` or `NOT VERIFIED` results. Each capture pins the sealed
+Every valid `FAILED`/`NOT VERIFIED` capture is stored; verified is not.
+The store keeps the last 4, evicting oldest first by count or bytes.
+Each capture pins the sealed
 [record](argon-verify-aggregation.md) (which defines R_max) and adds a random
 128-bit ID, ordinals, displays and taint counts. The byte bound is
 4 × (R_max + `verifyLogDerivedAllowance`, the derived-data bytes).
@@ -120,7 +121,9 @@ together with newline boundaries; their maximum taints the package stream.
 Only detection counts survive.
 A matching name displays `[name withheld]` in the index and every summary mode,
 even with logs off; indexed names stay selectable only by ordinal.
-Summary container lines are sanitised and indented with `  | `.
+Withheld names omit their excerpts; compiler/package lines are masked by window.
+Summary container lines are sanitised and indented with `  | `; only trusted lines
+start at column zero.
 
 A tainted unit is refused whole at every start; stepping past a header or
 prefix cannot expose its body. No match is returned or audited. Splits that

@@ -352,6 +352,11 @@ func buildContainerSummaryWithLimits(in summaryInput, verifiedLimit, errorLimit 
 			w.names("Failing leaf tests:", names, max(len(names), f.failedTotal))
 		}
 		for _, failure := range f.failures {
+			// Go's framing lines repeat the identity inside its output too.
+			if summaryMaskName(failure.name) != failure.name {
+				w.linesOmitted += failure.output.total
+				continue
+			}
 			if len(failure.output.lines) == 0 {
 				continue
 			}

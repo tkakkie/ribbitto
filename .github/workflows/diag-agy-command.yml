@@ -24,15 +24,9 @@ jobs:
           - name: slice-default
             selector: ^TestAgyCheckCommand
             parallel: ""
-          - name: slice-p8
+          - name: slice-p1
             selector: ^TestAgyCheckCommand
-            parallel: "8"
-          - name: slice-p16
-            selector: ^TestAgyCheckCommand
-            parallel: "16"
-          - name: slice-p40
-            selector: ^TestAgyCheckCommand
-            parallel: "40"
+            parallel: "1"
           - name: t-endtoend
             selector: ^TestAgyCheckCommandEndToEnd$
             parallel: ""

@@ -694,7 +694,7 @@ func TestVerifyMCPProductionEnvironment(t *testing.T) {
 	var log bytes.Buffer
 	done := make(chan int, 1)
 	go func() {
-		done <- (verifyMCPServer{verifier: containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, parent, containerTimeout}}).serve(context.Background(), in, recv, &log)
+		done <- (verifyMCPServer{verifier: containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, parent, containerTimeout, false}}).serve(context.Background(), in, recv, &log)
 		_ = recv.Close()
 	}()
 	reader := bufio.NewReader(out)

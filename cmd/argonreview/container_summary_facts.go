@@ -13,8 +13,9 @@ type summaryCounts struct{ passed, failed, skipped int }
 
 // summaryFailure keeps raw identities for sorting, never for direct printing.
 type summaryFailure struct {
-	name   string
-	output summaryLines
+	name    string
+	output  summaryLines
+	ordinal int
 }
 
 // summaryFacts is evidence only. A partial parse must never supply success or
@@ -35,6 +36,7 @@ type summaryFacts struct {
 	failedTotal, skippedTotal                 int
 	namesNotRetained                          int
 	observed                                  []string
+	ordinals                                  map[string][]int
 }
 
 // summaryEvent checks duplicate keys with a small field cap before using Go's

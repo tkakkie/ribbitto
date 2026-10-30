@@ -6,8 +6,7 @@ import (
 	"sync"
 )
 
-// verifyLogStore belongs to one server process. PR 1 has no callers outside
-// tests; logs-off callers retain nothing by simply not calling capture.
+// verifyLogStore belongs to one server process; logs-off callers keep it nil.
 type verifyLogStore struct {
 	mu                   sync.Mutex
 	captures             []*verifyLogCapture

@@ -9,6 +9,10 @@ import (
 // recordSummaryFacts is a bounded presentation projection, never a second
 // protocol interpretation. Only the record's completeness can authorise totals.
 func recordSummaryFacts(r *containerRecord) summaryFacts {
+	return recordSummaryFactsWithOrdinals(r, false)
+}
+
+func recordSummaryFactsWithOrdinals(r *containerRecord, ordinals bool) summaryFacts {
 	f := summaryFacts{packages: r.packages, leaves: r.leaves, allowed: r.allowed, skipped: r.skipped,
 		namesNotRetained: r.namesNotRetained, events: r.events, afterEvent: r.afterEvent, incomplete: !r.complete && !r.command, cut: r.capName != "", capName: r.capName,
 		streamCut: r.stop == stopKill || r.stop == stopTruncated,
@@ -55,22 +59,66 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 		f.packageFailures.add(line, summaryExcerptLimit)
 	}
 	f.packageFailures.total = noticeTotal
+	// Derive ordinals from exactly the capture's index, using entry identity.
+	// Carry numbers with each entry so equal raw names or labels cannot collide.
+	var numbers map[*aggregatorEntry]int
+	if ordinals {
+		numbers = make(map[*aggregatorEntry]int)
+		index, _ := verifyLogIndex(r)
+		for i, item := range index {
+			numbers[item.entry] = i + 1
+		}
+		f.ordinals = make(map[string][]int)
+	}
+	var skipped []*aggregatorEntry
 	for _, e := range r.entries {
+		if ordinals && e.skipName != "" {
+			skipped = append(skipped, e)
+		}
 		if e.state != "fail" {
 			continue
 		}
-		f.observed = append(f.observed, e.pkg+"/"+e.name+" ("+e.kind+")")
+		observed := e.pkg + "/" + e.name + " (" + e.kind + ")"
+		f.observed = append(f.observed, observed)
+		if ordinals {
+			f.ordinals["Failures (observed, total unknown):"] = append(f.ordinals["Failures (observed, total unknown):"], numbers[e])
+		}
 		if e.kind == "test" {
-			f.failures = append(f.failures, summaryFailure{e.pkg + "/" + e.name, retainedSummaryLines(e.output)})
+			name := e.pkg + "/" + e.name
+			f.failures = append(f.failures, summaryFailure{name: name, output: retainedSummaryLines(e.output), ordinal: numbers[e]})
 		} else if e.name == "" {
 			name := e.pkg + ": package failed"
 			if e.buildFailed {
 				name = e.pkg + " [build failed]"
 			}
-			f.packageFailures.add(summaryMaskName(name), summaryExcerptLimit)
+			before := len(f.packageFailures.lines)
+			masked := summaryMaskName(name)
+			display := masked
+			if ordinals {
+				display = summaryText(masked)
+			}
+			f.packageFailures.add(display, summaryExcerptLimit)
+			if ordinals && len(f.packageFailures.lines) > before {
+				f.packageFailures.shortened[before] = f.packageFailures.shortened[before] || display != masked
+				for len(f.packageFailures.ordinals) < before {
+					f.packageFailures.ordinals = append(f.packageFailures.ordinals, 0)
+				}
+				f.packageFailures.ordinals = append(f.packageFailures.ordinals, numbers[e])
+			}
 		}
 	}
 	sort.Slice(f.failures, func(i, j int) bool { return f.failures[i].name < f.failures[j].name })
+	if ordinals {
+		for _, failure := range f.failures {
+			f.ordinals["Failing leaf tests:"] = append(f.ordinals["Failing leaf tests:"], failure.ordinal)
+		}
+		// Match r.skipped's raw order, carrying index-derived numbers alongside
+		// identities. Even identical raw displays retain separate ordinals.
+		sort.SliceStable(skipped, func(i, j int) bool { return skipped[i].skipName < skipped[j].skipName })
+		for _, e := range skipped {
+			f.ordinals["Skipped names:"] = append(f.ordinals["Skipped names:"], numbers[e])
+		}
+	}
 	return f
 }
 

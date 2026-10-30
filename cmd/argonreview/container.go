@@ -369,6 +369,7 @@ type containerExecution struct {
 	finishAggregation             func(*containerAggregator, int, error, aggregatorRunState) aggregatorResult
 	code                          int
 	summary                       string
+	logs                          bool
 	refused                       bool
 	ownCancel                     bool
 }
@@ -549,10 +550,12 @@ func runContainerExecution(parent context.Context, tree, check, pattern string, 
 func (result *containerExecution) finishReport(ctx context.Context, report string, err error, in summaryInput) (string, error) {
 	// A pre-start refusal already has matching host and MCP presentations;
 	// the unused aggregator must not replace it with an empty-stream verdict.
-	if result.refused && !in.runnerFailed {
+	if result.refused {
 		result.aggregation = nil
 		result.parent, result.runnerContext, result.output.cancel = nil, nil, nil
-		return report, err
+		if !in.runnerFailed {
+			return report, err
+		}
 	}
 	if result.aggregation != nil {
 		a := result.aggregation
@@ -598,11 +601,16 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 			in.verdict = first
 		}
 		in.runnerFailed = in.runnerFailed || err != nil && (ctx.Err() != nil || result.record == nil)
-		if result.record == nil {
+		if result.record == nil && result.runnerContext != nil {
 			result.record = commandRecord(&result.output)
 			result.record.stderrNotServable = in.runnerFailed || containerRunnerFailed(result.code, result.runErr, result.ownCancel) || ctx.Err() != nil
 		}
-		in.facts = recordSummaryFacts(result.record)
+		// Cleanup and fixed wrapper verdicts are decided after sealing. Set this
+		// before any capture, without changing the logs-off host presentation.
+		if result.record != nil {
+			result.record.stderrNotServable = result.record.stderrNotServable || in.runnerFailed || summaryRunnerFailure(first)
+			in.facts = recordSummaryFactsWithOrdinals(result.record, result.logs)
+		}
 		result.summary = buildContainerSummary(in)
 	}
 	if in.check != "generated" && in.check != "writeback" {

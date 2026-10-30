@@ -6,12 +6,11 @@ Trusted binary rebuilt at merge; production/launcher unchanged. [#1890][issue]
 items 3/4 (host run, isolation) need separate maintainer approvals.
 
 Version-triggered; remote flags unseen. Discovery can pass with negative
-evidence. Real 1.4.9 needs reconciliation overlap AND all other rows matching
-(unverified); synthetic exit 0 proves wiring only:
+evidence. All 30 rows must match (1.4.9 unverified); synthetic exit 0 proves wiring:
 
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
 
-Reconciliation: ordinary-agent overlap regression, not production proof.
+Accounting/scheduling check: ordinary-agent regression, not production proof.
 Allow-everything agents can forge records (maintainer accepted 2026-10-28,
 [#1890][issue]).
 
@@ -114,7 +113,7 @@ Record binary commit/hash, copy equality, before/after pins/settings hashes,
 marker, isolation/risk and rows on [#1890][issue] / [#1856][record]; omit
 credentials/home paths. 1.4.8 trust predates this (2026-10-27).
 
-## Expected results (29 rows)
+## Expected results (30 rows)
 
 Expectations: `cmd/argonreview/agycheck_table.go`;
 probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
@@ -127,50 +126,47 @@ probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
 | Workspace/3 | Workspace ALLOW/home DENY, different name and same name at `.agent/hooks.json`/`.agents/hooks.json` | `denied` |
 | Settings/4 | Allow hook: `run_command` on/headless and off; `danger` on/headless without allow rule; `verify` off under `mcp(*)` deny | `denied` |
 | URL/2 | `read_url`, `execute_url` (#1700) | `not exercisable` |
-| Exposure/4 | Allow hook: `manage_task` on/off; file write/read outside workspace | `allowed` |
+| Exposure/1 | Allow hook: `manage_task` on (1.4.9 refuses; 1.4.7 ran it) | `denied` |
+| Exposure/3 | Allow hook: `manage_task` off; file write/read outside workspace | `allowed` |
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` for stub | `answered` |
-| Reconciliation/1 | Alternating allow/deny, ≥ calls, ≥ 2 parallel batches | `counts reconcile` |
+| Reconciliation/1 | Alternating allow/deny, ≥ calls; counts below | `counts reconcile` |
+| Parallel/1 | Same run: no overlapping hook invocations | `sequential` |
 
 Discovery: loaded = a step + one local allow claim; coverage:
-`implementRefusedNames`. “Not loaded” satisfies the row: exactly one intended
-DONE step, zero claims, and a deny claim (hook or workspace row, ERROR
-step) in the same run. Other counts/states,
-wrong-tag/duplicate/malformed records, no deny or single-row runs differ:
-`hook load not observable in the transcript`. It shows only that call's silence
-and the deny elsewhere.
-It cannot find locations outside the six candidates.
-The real stream has no load event: silence is tool-record evidence, not a
-load report or trust decision.
-Same-name: both records, deny, no effect.
+`implementRefusedNames`. “Not loaded” requires one intended DONE step, zero
+claims and a deny claim (hook/workspace row, ERROR step) in the same run.
+Other counts/states, wrong-tag/duplicate/malformed records, no deny or single-row
+runs differ: `hook load not observable in the transcript`. This proves only
+that call's silence and the deny elsewhere, not locations beyond the six
+candidates. No load event; silence is tool-record evidence,
+not a load report or trust decision. Same-name: both records, deny, no effect.
 
 Observed: 1.4.7 events, `write_file`/`call_mcp_tool`; two 1.4.9 hand captures
-(2026-10-30, #1978) show the stream format:
-init, step_update (`agent_response`: many ACTIVE then one DONE;
-`write_file` ERROR with `tool_info.error`), result. “Parallel” requests
-ran one after another, as in 1.4.7.
-Unverified: hook-load events, exact deny error text, other tool names, a 1.4.9
-host run ([first-run](https://github.com/tkakkie/ribbitto/issues/1890#issuecomment-6484470043)).
-DONE/ERROR count; tool ACTIVE-only fails. Missing executable: no claim.
+(2026-10-30, #1978): init, step_update (`agent_response`: ACTIVE then DONE;
+`write_file` ERROR with `tool_info.error`), result. Both versions ran requested
+parallel calls one after another. Hook-load events, deny error text and other
+tool names unverified. DONE/ERROR count; ACTIVE-only tools fail.
+Missing executable: no claim.
 
 URL: no tools/claims, even unfinished/ERROR. Stub: absent/start-only or only
 initialize/initialized/toolslist/ping. Other tags, tool/resource calls,
 unpaired replies, pending requests, bad/unreadable records fail.
 
 Reconciliation: allow-first alternation, both, gap≤1; ≥ `--calls` steps;
-steps=hooks=allows+denies, ERRORs=denies, files=allows.
+steps=hooks=allows+denies, ERRORs=denies, files=allows; no repeated replies.
+Observed always shows steps, hooks, allows, denies, errors, files and repeats.
+`parallel-batches` uses the same invocation.
 Only `alternate` writes exclusive contiguous `events/NNNNNN`:
 `start <call-number> <word> <tag>`, fixed 1.5 s hold, `end <call-number>`,
 then replies. Other timing stays; timeout: no end. Sequential 30 calls add
 45 s; hook timeout 20 s, row limit 10 min.
 
-Response groups: final tools by `step_index` between `agent_response`
-steps/transcript ends. Assign start-ordered calls by size; totals match,
-max end < min next start. Overlap uses event indices, never clocks.
-A group with ≥2 overlapping calls is one batch, even with 4 + 2 components;
-≥2 groups must qualify. Sequential hooks: `no overlapping hook invocations`.
-No runner-launched hooks/retries or lowered requirements. Bad/incomplete
-records or correlation differ; counts alone never pass. No tool-target
-correlation/tamper resistance.
+Response groups: final tools by `step_index` between `agent_response` steps or
+transcript ends. Assign start-ordered calls by size; totals match,
+max end < min next start. Overlap uses indices, never clocks. A group with
+≥2 overlapping calls is one batch, even with 4 + 2 components; any batch differs
+from `sequential`. Invalid records, correlation, counts or run failures fail both
+rows. No runner-launched hooks/retries or tool-target correlation/tamper resistance.
 
 ## Failure and update checklist
 

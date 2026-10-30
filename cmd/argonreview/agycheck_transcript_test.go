@@ -282,7 +282,7 @@ func TestAgyCheckTranscriptParse(t *testing.T) {
 // core table, including both non-exercisable URL rows and silent exit 0.
 func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 	if len(agyCheckTranscriptTools) != 29 {
-		t.Fatal("tool mapping must cover exactly 29 rows")
+		t.Fatal("tool mapping must cover exactly 29 scenarios (30 rows)")
 	}
 	for _, pair := range strings.Fields(`hook-decision=write_file hook-exit2=write_file hook-exit1=write_file hook-missing=write_file hook-timeout=write_file hook-unparseable=write_file hook-silent=write_file hook-precedence=write_file hook-same-name-agent=write_file hook-same-name-agents=write_file command-on=run_command command-off=run_command mcp-on=call_mcp_tool mcp-off=call_mcp_tool read-url=read_url execute-url=execute_url task-on=manage_task task-off=manage_task list-resources=list_resources read-resource=read_resource outside-write=write_file outside-read=view_file`) {
 		id, tool, _ := strings.Cut(pair, "=")
@@ -292,6 +292,9 @@ func TestAgyCheckTranscriptOutcomes(t *testing.T) {
 	}
 	count := 0
 	for _, row := range agyCheckExpected {
+		if row.ID == "parallel-batches" {
+			continue
+		} // Same transcript as reconciliation.
 		tool, exists := agyCheckTranscriptTools[row.ID]
 		if !exists || tool == "" {
 			t.Fatalf("tool coverage: %+v", row)

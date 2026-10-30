@@ -219,6 +219,9 @@ func agyCheckRowsFake(data []byte) bool {
 				allowed = false
 			}
 		}
+		if id == "task-on" {
+			allowed = false
+		}
 		if tool == "run_command" && slices.Contains(permissions.Permissions.Deny, "command(*)") {
 			allowed = false
 		}
@@ -353,7 +356,7 @@ func agyCheckRowsFake(data []byte) bool {
 	return true
 }
 
-// This synthetic model is never evidence of agy's behaviour. The full match
+// This synthetic model is never evidence of agy's behaviour. The full overlap
 // run exercises actual denial and concurrent reconciliation hook subprocesses;
 // TestAgyCheckGeneratedProcesses also exercises generated hook/stub commands.
 func agyCheckModelHook(command, state string) bool {

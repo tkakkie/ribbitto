@@ -12,21 +12,21 @@ import (
 const agyCheckFixtureRows = `hook-decision=denied hook-exit2=denied hook-exit1=denied hook-missing=denied hook-timeout=denied hook-unparseable=denied hook-silent=allowed
 discovery-agent=covered_if_loaded discovery-agents=covered_if_loaded discovery-gemini-config=covered_if_loaded discovery-gemini=covered_if_loaded discovery-antigravity=covered_if_loaded discovery-root=covered_if_loaded
 hook-precedence=denied hook-same-name-agent=denied hook-same-name-agents=denied command-on=denied command-off=denied mcp-on=denied mcp-off=denied read-url=not_exercisable execute-url=not_exercisable
-task-on=allowed task-off=allowed list-resources=answered read-resource=answered outside-write=allowed outside-read=allowed reconciliation=counts_reconcile`
+task-on=denied task-off=allowed list-resources=answered read-resource=answered outside-write=allowed outside-read=allowed reconciliation=counts_reconcile parallel-batches=sequential`
 
 func agyCheckFixtures() (agyCheckPin, []agyCheckObservation) {
 	var observations []agyCheckObservation
 	for _, pair := range strings.Fields(agyCheckFixtureRows) {
 		id, outcome, _ := strings.Cut(pair, "=")
 		observations = append(observations, agyCheckObservation{ID: id, Outcome: strings.ReplaceAll(outcome, "_", " "),
-			Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}})
+			Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 0, 0}})
 	}
 	return agyCheckPin{"1.4.7", strings.Repeat("a", 64)}, observations
 }
 
 func TestAgyCheckExpectedTable(t *testing.T) {
 	_, fixtures := agyCheckFixtures()
-	if len(agyCheckExpected) != 29 || len(fixtures) != len(agyCheckExpected) || agyCheckDefaultCalls != 30 {
+	if len(agyCheckExpected) != 30 || len(fixtures) != len(agyCheckExpected) || agyCheckDefaultCalls != 30 {
 		t.Fatal("row set or default calls changed")
 	}
 	seen := make(map[string]bool)
@@ -37,7 +37,7 @@ func TestAgyCheckExpectedTable(t *testing.T) {
 		}
 		seen[row.ID] = true
 		switch row.Expected {
-		case "allowed", "denied", "answered", "not exercisable", "covered if loaded", "counts reconcile":
+		case "allowed", "denied", "answered", "not exercisable", "covered if loaded", "counts reconcile", "sequential":
 		default:
 			t.Fatalf("unrecognised expectation: %s", row.Expected)
 		}
@@ -148,12 +148,15 @@ func TestAgyCheckReconciliation(t *testing.T) {
 		{"override", agyCheckSummary{40, 40, 20, 20, 20, 20, 2, 0}, 40, true},
 		{"too few", agyCheckSummary{28, 28, 14, 14, 14, 14, 2, 0}, agyCheckDefaultCalls, false},
 		{"override too few", agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}, 40, false},
-		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1, 0}, agyCheckDefaultCalls, false},
+		{"parallel", agyCheckSummary{30, 30, 15, 15, 15, 15, 1, 0}, agyCheckDefaultCalls, true},
+		{"sequential", agyCheckSummary{30, 30, 15, 15, 15, 15, 0, 0}, agyCheckDefaultCalls, true},
 		{"steps", agyCheckSummary{31, 30, 15, 15, 15, 15, 2, 0}, agyCheckDefaultCalls, false},
 		{"hooks", agyCheckSummary{30, 31, 15, 15, 15, 15, 2, 0}, agyCheckDefaultCalls, false},
 		{"errors", agyCheckSummary{30, 30, 15, 15, 14, 15, 2, 0}, agyCheckDefaultCalls, false},
 		{"files", agyCheckSummary{30, 30, 15, 15, 15, 14, 2, 0}, agyCheckDefaultCalls, false},
 		{"total", agyCheckSummary{30, 30, 14, 15, 15, 14, 2, 0}, agyCheckDefaultCalls, false},
+		{"reverse alternation", agyCheckSummary{30, 30, 13, 17, 17, 13, 0, 0}, 30, false},
+		{"zero minimum", agyCheckSummary{30, 30, 15, 15, 15, 15, 0, 0}, 0, false},
 		{"alternation", agyCheckSummary{30, 30, 17, 13, 13, 17, 2, 0}, agyCheckDefaultCalls, false},
 		{"repeats", agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 28}, agyCheckDefaultCalls, false},
 		{"negative", agyCheckSummary{30, 30, -1, 31, 31, -1, 2, 0}, agyCheckDefaultCalls, false},
@@ -181,7 +184,7 @@ func TestAgyCheckReconciliationContradictingOutcome(t *testing.T) {
 			if r.OK != wantOK {
 				t.Errorf("outcome %q: %+v", outcome, r)
 			}
-			if !wantOK && r.Observed != outcome {
+			if r.Observed != "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0" {
 				t.Errorf("outcome %q replaced by %q", outcome, r.Observed)
 			}
 		})
@@ -269,11 +272,18 @@ func TestAgyCheckMissingAndDuplicateRows(t *testing.T) {
 		name string
 		rows []agyCheckObservation
 	}{{"missing", fixtures[1:]}, {"duplicate", append(append([]agyCheckObservation{}, fixtures...), fixtures[0])}, {"empty", nil},
+		{"missing reconciliation", fixtures[:len(fixtures)-2]},
+		{"duplicate reconciliation", append(append([]agyCheckObservation{}, fixtures...), fixtures[len(fixtures)-2])},
 		{"unknown", append(append([]agyCheckObservation{}, fixtures...), agyCheckObservation{ID: "unknown"})}} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := agyCheckEvaluate(pin, pin, tc.rows, agyCheckDefaultCalls, "")
 			if tc.name == "missing" && (len(r.Rows) == 0 || r.Rows[0].ID != fixtures[0].ID || r.Rows[0].Observed != "missing row" || r.Rows[0].OK) {
 				t.Fatalf("missing row not identified: %+v", r)
+			}
+			for _, row := range r.Rows {
+				if row.ID == "reconciliation" && !strings.HasPrefix(row.Observed, "steps=") {
+					t.Fatalf("accounting counts hidden: %+v", row)
+				}
 			}
 			var out strings.Builder
 			if err := agyCheckRender(&out, r); err != nil || agyCheckExitCode(r) != 1 || strings.Contains(out.String(), agyCheckSuccessLine) || !strings.Contains(out.String(), "differs") {
@@ -296,7 +306,7 @@ func TestAgyCheckFinalLine(t *testing.T) {
 		if err := agyCheckRender(&out, r); err != nil {
 			t.Fatal(err)
 		}
-		if strings.HasSuffix(out.String(), final) != !differs || agyCheckSuccessLine+"\n" != final || (agyCheckExitCode(r) == 0) != !differs || strings.Count(out.String(), "\n") != 32-agyCheckExitCode(r) {
+		if strings.HasSuffix(out.String(), final) != !differs || agyCheckSuccessLine+"\n" != final || (agyCheckExitCode(r) == 0) != !differs || strings.Count(out.String(), "\n") != 33-agyCheckExitCode(r) {
 			t.Fatalf("unexpected report/exit: %+v; %s", r, out.String())
 		}
 	}

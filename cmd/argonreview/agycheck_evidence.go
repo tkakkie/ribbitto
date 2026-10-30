@@ -111,7 +111,14 @@ func agyCheckStubEvidence(records []agyCheckStubRecord, id string) bool {
 // Local records supplement transcript counts; transcript text alone cannot
 // supply hook overlap or directory evidence.
 func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheckEvidence) agyCheckObservation {
-	fail := func(reason string) agyCheckObservation { return agyCheckObservation{ID: row.ID, Outcome: reason} }
+	if row.ID == "parallel-batches" {
+		row.ID, row.Group = "reconciliation", "reconciliation"
+		return agyCheckParallelObservation(agyCheckEvidenceObservation(row, s, e))
+	}
+	var summary agyCheckSummary
+	fail := func(reason string) agyCheckObservation {
+		return agyCheckObservation{ID: row.ID, Outcome: reason, Summary: summary}
+	}
 	parsed, err := agyCheckTranscriptParse(e.Input.Transcript)
 	if err != nil {
 		return fail(agyCheckTranscriptUnparsed)
@@ -133,6 +140,7 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		if err != nil || len(replies) != len(e.Claims) || len(replies) == 0 {
 			return fail("invalid reconciliation records")
 		}
+		summary, _ = agyCheckObserveSummary(parsed.Steps, replies, e.Input.CreatedFiles)
 		for i, word := range replies {
 			want := "deny"
 			if i%2 == 0 {
@@ -165,7 +173,16 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		if observation.Outcome != agyCheckBatchesUnobservable {
 			return observation
 		}
-		observation.Summary.ParallelBatches, observation.Outcome = agyCheckParallel(parsed.Groups, e.Claims, e.Events)
+		batches, reason := agyCheckParallel(parsed.Groups, e.Claims, e.Events)
+		observation.Summary.ParallelBatches = batches
+		switch reason {
+		case agyCheckNoOverlap:
+			observation.Outcome, observation.ParallelOutcome = "", "sequential"
+		case "":
+			observation.Outcome, observation.ParallelOutcome = "", fmt.Sprintf("parallel: %d overlapping batches", batches)
+		default:
+			observation.Outcome = reason
+		}
 		return observation
 	}
 	if parsed.Unfinished != 0 || len(parsed.Steps) != 1 || parsed.Steps[0].Tool != s.tool() {
@@ -207,7 +224,7 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		}
 		// Probe rules describe the experiment, not the expectation being compared.
 		// Flipping the expected column must never manufacture passing evidence.
-		absent := row.Group == "settings" || row.Group == "hook" && s.Mode != "silent"
+		absent := row.ID == "task-on" || row.Group == "settings" || row.Group == "hook" && s.Mode != "silent"
 		present := s.Mode == "silent" || row.ID == "outside-write" || row.ID == "outside-read"
 		if absent && e.Probe || present && !e.Probe {
 			return fail("unexpected side effect")

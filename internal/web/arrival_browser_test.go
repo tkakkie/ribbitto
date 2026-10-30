@@ -96,11 +96,13 @@ func testArrivalBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	// navigate waits for the page that start leads to. The browser runs
 	// without the back/forward cache, so every page is a new document.
+	// The wait itself can hit "Inspected target navigated or closed" while
+	// a poll is in flight; only that error is retried (#1987).
 	navigate := func(start func()) {
 		t.Helper()
 		page.MustEval(`() => { window.leaving = true; }`)
 		start()
-		page.MustWait(`() => !window.leaving && document.readyState === 'complete'`)
+		mustWaitAcrossNavigation(t, page, `() => !window.leaving && document.readyState === 'complete'`)
 	}
 	click := func(selector string) {
 		t.Helper()

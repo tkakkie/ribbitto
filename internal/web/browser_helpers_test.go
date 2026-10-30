@@ -31,7 +31,8 @@ func browserTestCallSite() (string, int) {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.File, "_test.go") && !strings.Contains(frame.Function, ".failAtTestLine.") {
+		if strings.HasSuffix(frame.File, "_test.go") && !strings.Contains(frame.Function, ".failAtTestLine.") &&
+			!strings.HasSuffix(frame.Function, ".mustWaitAcrossNavigation") {
 			return filepath.Base(frame.File), frame.Line
 		}
 		if !more {

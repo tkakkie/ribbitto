@@ -176,7 +176,7 @@ func TestAgyCheckReconciliation(t *testing.T) {
 }
 
 func TestAgyCheckReconciliationContradictingOutcome(t *testing.T) {
-	for _, outcome := range []string{"error", "allowed", "unknown", "denied", "answered", "not exercisable", "covered if loaded", "counts reconcile", ""} {
+	for _, outcome := range []string{"error", "allowed", "unknown", "denied", "answered", "not exercisable", "covered if loaded", "unparsed transcript", "run timeout", "invalid hook events", "counts reconcile", ""} {
 		t.Run(outcome, func(t *testing.T) {
 			r := agyCheckClassify(agyCheckObservation{ID: "reconciliation", Outcome: outcome,
 				Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, agyCheckDefaultCalls)
@@ -184,9 +184,45 @@ func TestAgyCheckReconciliationContradictingOutcome(t *testing.T) {
 			if r.OK != wantOK {
 				t.Errorf("outcome %q: %+v", outcome, r)
 			}
-			if r.Observed != "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0" {
+			wantObserved := "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0"
+			if !wantOK {
+				wantObserved += "; " + outcome
+			}
+			if r.Observed != wantObserved {
 				t.Errorf("outcome %q replaced by %q", outcome, r.Observed)
 			}
+		})
+	}
+}
+
+func TestAgyCheckReconciliationMissingDuplicate(t *testing.T) {
+	for _, reason := range []string{"missing row", "duplicate row"} {
+		t.Run(reason, func(t *testing.T) {
+			pin, observations := agyCheckFixtures()
+			for i, o := range observations {
+				if o.ID == "reconciliation" {
+					if reason == "missing row" {
+						observations = append(observations[:i], observations[i+1:]...)
+					} else {
+						observations = append(observations, o)
+					}
+					break
+				}
+			}
+			counts := "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0"
+			if reason == "missing row" {
+				counts = "steps=0 hooks=0 allows=0 denies=0 errors=0 files=0 repeats=0"
+			}
+			result := agyCheckEvaluate(pin, pin, observations, agyCheckDefaultCalls, "")
+			for _, row := range result.Rows {
+				if row.ID == "reconciliation" {
+					if row.OK || row.Observed != counts+"; "+reason {
+						t.Fatalf("lost counts or refusal: %+v", row)
+					}
+					return
+				}
+			}
+			t.Fatal("reconciliation row missing from report")
 		})
 	}
 }

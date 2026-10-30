@@ -223,6 +223,22 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 	}
 }
 
+func TestAgyCheckTaskProbe(t *testing.T) {
+	for _, id := range []string{"task-on", "task-off"} {
+		t.Run(id, func(t *testing.T) {
+			row, s, e := agyCheckEvidenceFixture(t, id)
+			if got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4); !got.OK {
+				t.Fatalf("absent probe must match: %+v", got)
+			}
+			e.Probe = true
+			got := agyCheckEvidenceObservation(row, s, e)
+			if got.Outcome != "unexpected side effect" || agyCheckClassify(got, 4).OK {
+				t.Fatalf("manage_task probe accepted: %+v", got)
+			}
+		})
+	}
+}
+
 func TestAgyCheckOutputBlocks(t *testing.T) {
 	pin, obs := agyCheckFixtures()
 	r := agyCheckEvaluate(pin, pin, obs, 30, "")
@@ -287,7 +303,7 @@ func TestAgyCheckUnobservableNeverPasses(t *testing.T) {
 			got := agyCheckClassifyRow(row, agyCheckObservation{ID: row.ID, Outcome: text, Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, 30)
 			want := text
 			if row.ID == "reconciliation" {
-				want = "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0"
+				want = "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0; " + text
 			}
 			if got.OK || got.Observed != want || strings.Contains(got.Observed, "batches=") {
 				t.Fatalf("unobservable passed: %+v", got)

@@ -5,12 +5,12 @@
 Trusted binary rebuilt at merge; production/launcher unchanged. [#1890][issue]
 items 3/4 (host run, isolation) need separate maintainer approvals.
 
-Version-triggered; remote flags unseen. Discovery can pass with negative
-evidence. All 30 rows must match (1.4.9 unverified); synthetic exit 0 proves wiring:
+Version-triggered; remote flags unseen. Negative evidence can pass discovery.
+All 30 rows must match (1.4.9 unverified); fake-agent exit 0 proves wiring only:
 
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
 
-Accounting/scheduling check: ordinary-agent regression, not production proof.
+Accounting/scheduling: ordinary-agent regression, not production proof.
 Allow-everything agents can forge records (maintainer accepted 2026-10-28,
 [#1890][issue]).
 
@@ -154,7 +154,7 @@ unpaired replies, pending requests, bad/unreadable records fail.
 
 Reconciliation: allow-first alternation, both, gap≤1; ≥ `--calls` steps;
 steps=hooks=allows+denies, ERRORs=denies, files=allows; no repeated replies.
-Observed always shows steps, hooks, allows, denies, errors, files and repeats.
+Observed always shows all counts above, repeats and any refusal reason.
 `parallel-batches` uses the same invocation.
 Only `alternate` writes exclusive contiguous `events/NNNNNN`:
 `start <call-number> <word> <tag>`, fixed 1.5 s hold, `end <call-number>`,

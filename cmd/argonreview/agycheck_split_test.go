@@ -38,7 +38,11 @@ func TestAgyCheckSplitEvidence(t *testing.T) {
 			tc.change(&e)
 			o := agyCheckEvidenceObservation(row, s, e)
 			a, p := agyCheckClassify(o, 4), agyCheckClassify(agyCheckParallelObservation(o), 4)
-			if a.OK != tc.accounting || p.OK != tc.sequential || a.Observed != agyCheckSummaryText(o.Summary) || p.Observed != tc.reason {
+			wantAccounting := agyCheckSummaryText(o.Summary)
+			if o.Outcome != "" {
+				wantAccounting += "; " + tc.reason
+			}
+			if a.OK != tc.accounting || p.OK != tc.sequential || a.Observed != wantAccounting || p.Observed != tc.reason {
 				t.Fatalf("accounting=%+v parallel=%+v", a, p)
 			}
 			if tc.name == "repeat" && (o.Summary.Repeats != 2 || o.Summary.Allows != 3) {

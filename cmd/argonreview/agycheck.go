@@ -90,7 +90,7 @@ func agyCheckClassify(observation agyCheckObservation, minimum int) agyCheckResu
 func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) agyCheckResultRow {
 	r := agyCheckResultRow{agyCheckRow: row, Observed: o.Outcome}
 	if row.ID == "reconciliation" {
-		r.Observed = agyCheckSummaryText(o.Summary)
+		r.Observed = agyCheckReconciliationText(o.Summary, o.Outcome)
 		r.OK = row.Expected == "counts reconcile" && (o.Outcome == "" || o.Outcome == "counts reconcile") && agyCheckCountsReconcile(o.Summary, minimum)
 		return r
 	}
@@ -148,6 +148,14 @@ func agyCheckSummaryText(s agyCheckSummary) string {
 		s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.Repeats)
 }
 
+func agyCheckReconciliationText(s agyCheckSummary, outcome string) string {
+	text := agyCheckSummaryText(s)
+	if outcome != "" && outcome != "counts reconcile" {
+		text += "; " + outcome
+	}
+	return text
+}
+
 func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string) agyCheckResult {
 	r := agyCheckResult{UsageError: usageError}
 	if usageError != "" {
@@ -181,8 +189,8 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 		default:
 			classified = agyCheckResultRow{agyCheckRow: row, Observed: "duplicate row"}
 		}
-		if row.ID == "reconciliation" {
-			classified.Observed = agyCheckSummaryText(o.Summary)
+		if row.ID == "reconciliation" && counts[row.ID] != 1 {
+			classified.Observed = agyCheckReconciliationText(o.Summary, classified.Observed)
 		}
 		r.Rows = append(r.Rows, classified)
 		delete(byID, row.ID)

@@ -290,7 +290,11 @@ func agyCheckRowsFake(data []byte) bool {
 			steps := make([]map[string]any, last-first+1)
 			var wg sync.WaitGroup
 			for n := first; n <= last; n++ {
-				wg.Go(func() { steps[n-first] = call(n) })
+				if deviation == "real-hooks-sequential" {
+					steps[n-first] = call(n)
+				} else {
+					wg.Go(func() { steps[n-first] = call(n) })
+				}
 			}
 			wg.Wait()
 			for _, step := range steps {
@@ -357,7 +361,7 @@ func agyCheckRowsFake(data []byte) bool {
 }
 
 // This synthetic model is never evidence of agy's behaviour. The full overlap
-// run exercises actual denial and concurrent reconciliation hook subprocesses;
+// and sequential runs exercise actual denial and reconciliation hook subprocesses;
 // TestAgyCheckGeneratedProcesses also exercises generated hook/stub commands.
 func agyCheckModelHook(command, state string) bool {
 	if command == "'"+filepath.Join(state, "hook-missing")+"'" {

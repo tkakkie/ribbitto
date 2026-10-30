@@ -179,7 +179,11 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		case agyCheckNoOverlap:
 			observation.Outcome, observation.ParallelOutcome = "", "sequential"
 		case "":
-			observation.Outcome, observation.ParallelOutcome = "", fmt.Sprintf("parallel: %d overlapping batches", batches)
+			noun := "batches"
+			if batches == 1 {
+				noun = "batch"
+			}
+			observation.Outcome, observation.ParallelOutcome = "", fmt.Sprintf("parallel: %d overlapping %s", batches, noun)
 		default:
 			observation.Outcome = reason
 		}
@@ -224,7 +228,7 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		}
 		// Probe rules describe the experiment, not the expectation being compared.
 		// Flipping the expected column must never manufacture passing evidence.
-		absent := row.ID == "task-on" || row.Group == "settings" || row.Group == "hook" && s.Mode != "silent"
+		absent := s.tool() == "manage_task" || row.Group == "settings" || row.Group == "hook" && s.Mode != "silent"
 		present := s.Mode == "silent" || row.ID == "outside-write" || row.ID == "outside-read"
 		if absent && e.Probe || present && !e.Probe {
 			return fail("unexpected side effect")

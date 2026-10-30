@@ -132,7 +132,7 @@ func TestAgyCheckSyntheticOneGroupOneBatch(t *testing.T) {
 				offset += size
 			}
 			got := agyCheckEvidenceObservation(row, s, e)
-			if got.Outcome != "" || got.ParallelOutcome != "parallel: 1 overlapping batches" || got.Summary.ParallelBatches != 1 || !agyCheckClassify(got, 6).OK {
+			if got.Outcome != "" || got.ParallelOutcome != "parallel: 1 overlapping batch" || got.Summary.ParallelBatches != 1 || !agyCheckClassify(got, 6).OK {
 				t.Fatalf("single dispatch split: %+v", got)
 			}
 		})

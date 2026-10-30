@@ -69,6 +69,10 @@ func agyCheckObserveSummary(steps []agyCheckTranscriptStep, replies, createdFile
 // agyCheckObserveRow discards every partial fact on error so an empty discovery
 // observation cannot accidentally count as an unloaded, passing location.
 func agyCheckObserveRow(row agyCheckRow, in agyCheckObserveInput) agyCheckObservation {
+	if row.ID == "parallel-batches" {
+		row.ID, row.Group = "reconciliation", "reconciliation"
+		return agyCheckParallelObservation(agyCheckObserveRow(row, in))
+	}
 	failed := agyCheckObservation{ID: row.ID, Outcome: agyCheckTranscriptUnparsed}
 	transcript, err := agyCheckTranscriptParse(in.Transcript)
 	if err != nil {

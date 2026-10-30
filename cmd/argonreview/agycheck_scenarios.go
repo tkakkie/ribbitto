@@ -29,6 +29,9 @@ var agyCheckScenarios = []agyCheckScenario{
 }
 
 func agyCheckScenarioFor(id string) (agyCheckScenario, error) {
+	if id == "parallel-batches" {
+		id = "reconciliation"
+	}
 	for _, s := range agyCheckScenarios {
 		if s.ID == id {
 			if mode, ok := agyCheckHookRows[id]; ok {

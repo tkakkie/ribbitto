@@ -131,8 +131,8 @@ first: at most 2,048 for verified non-errors; 7,000 for errors, including a
 Generated totals precede paths and survive their cap. Unparsed generated diffs
 get a trusted diagnostic; omitted excerpts are counted.
 
-Container lines are sanitised and indented with `  | `; only trusted lines
-start at column zero. The decided first line stays, except success with
+[Name masking and sanitisation](argon-verify-log.md#secret-tripwire) apply in every mode.
+The decided first line stays, except success with
 incomplete facts or a leaf-count/allowed-skip mismatch downgrades MCP alone to
 `NOT VERIFIED: summary inconsistent with verdict`.
 MCP drops verified build/vet stderr and stderr marked not servable; the host

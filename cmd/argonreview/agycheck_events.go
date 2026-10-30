@@ -112,8 +112,5 @@ func agyCheckParallel(groups []int, claims []agyCheckClaim, events []agyCheckHoo
 	if batches == 0 {
 		return 0, agyCheckNoOverlap
 	}
-	if batches < 2 {
-		return batches, "fewer than two parallel batches"
-	}
 	return batches, ""
 }

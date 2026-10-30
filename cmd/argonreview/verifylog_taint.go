@@ -27,13 +27,23 @@ func verifyLogScan(text string) int {
 	// Keep the raw and joined passes for disguised or fragmented shapes. The
 	// reader resets terminal parsing on every served line, so do that too.
 	joined := strings.ReplaceAll(text, "\n", "")
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		lines[i] = verifyLogVisible(line)
+	// Reuse buffers across lines: retained output can contain a million short
+	// lines, and scanning must not allocate once for each one.
+	var visible, visibleJoined strings.Builder
+	visible.Grow(len(text))
+	visibleJoined.Grow(len(text))
+	for line := range strings.SplitSeq(text, "\n") {
+		verifyLogText(line, func(r rune, _ int) {
+			if !verifyLogInvisible(r) {
+				visible.WriteRune(r)
+				visibleJoined.WriteRune(r)
+			}
+		})
+		visible.WriteByte('\n')
 	}
 	return max(verifyLogDetections(text), verifyLogDetections(joined),
 		verifyLogDetections(verifyLogVisible(joined)), verifyLogDetections(verifyLogVisible(text)),
-		verifyLogDetections(strings.Join(lines, "")), verifyLogDetections(strings.Join(lines, "\n")))
+		verifyLogDetections(visibleJoined.String()), verifyLogDetections(strings.TrimSuffix(visible.String(), "\n")))
 }
 
 func verifyLogScanSegments(segments ...string) int {

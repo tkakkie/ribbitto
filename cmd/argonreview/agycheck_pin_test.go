@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -39,9 +40,11 @@ func (r *agyCheckPinReader) Close() error {
 
 func TestMain(m *testing.M) {
 	if filepath.Base(os.Args[0]) == "agy-check-tool" {
+		agyCheckFastRaceExit()
 		os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 	}
 	if filepath.Base(os.Args[0]) == "agy-check-fake" {
+		agyCheckFastRaceExit()
 		data, err := os.ReadFile(os.Args[0] + ".fixture")
 		if agyCheckRowsFake(data) {
 			return
@@ -58,6 +61,27 @@ func TestMain(m *testing.M) {
 		os.Exit(f.Code)
 	}
 	os.Exit(m.Run())
+}
+
+// The race runtime's 1 s atexit sleep affects 87 helpers per full check (#1980).
+// GORACE is read only at startup, so re-exec and restore the environment before
+// any helper code inspects it or starts children.
+func agyCheckFastRaceExit() {
+	if value, set := os.LookupEnv("GORACE"); set {
+		if value == "atexit_sleep_ms=0" {
+			_ = os.Unsetenv("GORACE")
+		}
+		return
+	}
+	path := os.Args[0]
+	if !strings.Contains(path, "/") {
+		var err error
+		path, err = os.Executable()
+		if err != nil {
+			return
+		}
+	}
+	_ = syscall.Exec(path, os.Args, append(os.Environ(), "GORACE=atexit_sleep_ms=0"))
 }
 
 // Hard links share immutable test-binary bytes while retaining private fixture

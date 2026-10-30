@@ -24,7 +24,7 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 	for _, part := range [][]byte{r.packageOutput.head, r.packageOutput.tail} {
 		for line := range strings.SplitSeq(string(part), "\n") {
 			if strings.Contains(line, "FAIL") || strings.Contains(line, "[build failed]") {
-				f.packageFailures.add(line, summaryExcerptLimit)
+				f.packageFailures.add(summaryMaskName(line), summaryExcerptLimit)
 			}
 		}
 	}
@@ -40,7 +40,7 @@ func recordSummaryFacts(r *containerRecord) summaryFacts {
 			if e.buildFailed {
 				name = e.pkg + " [build failed]"
 			}
-			f.packageFailures.add(name, summaryExcerptLimit)
+			f.packageFailures.add(summaryMaskName(name), summaryExcerptLimit)
 		}
 	}
 	sort.Slice(f.failures, func(i, j int) bool { return f.failures[i].name < f.failures[j].name })

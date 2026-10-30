@@ -15,6 +15,19 @@ const (
 	summaryIndent = "  | "
 )
 
+// summaryMaskName scans the whole identity with the tripwire's joined and
+// sanitised passes. Truncation and newline splitting must not hide a match.
+func summaryMaskName(name string) string {
+	if verifyLogScan(name) > 0 {
+		return "[name withheld]"
+	}
+	return name
+}
+
+func summaryName(name string) string {
+	return summaryText(summaryMaskName(name))
+}
+
 // summaryText removes terminal commands and invisible direction changes before
 // capping bytes. It accepts one source line; even embedded newlines cannot
 // escape the indent supplied by the caller.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Merged (pull requests for #1913's PR 1), not exposed, not in force.
+PR 1's core is merged; PR 2a's name masking is implemented, not in force.
 Based on #1847's final design at d4095b3. The core is unexposed in verify-mcp,
 the guard and settings. Exposure, launcher update and enabling need separate
 maintainer approvals. CI stays the check.
@@ -18,18 +18,10 @@ path. `verify` and its schema do not change.
 
 ## Capture and retention
 
-The [aggregation record](argon-verify-aggregation.md) owns retention. A capture
-pins it sealed, without copying output, and adds a random 128-bit ID, ordinals,
-displays and taint counts. The store keeps the last 4, evicting oldest by count
-or bytes. Every valid `FAILED`/`NOT VERIFIED` capture is stored; verified is not.
-The byte bound is 4 × (R_max + `verifyLogDerivedAllowance`), explicitly exceeding
-the original 4 × R_max. The allowance derives from #1850 and `summaryLineLimit`:
-displays, index/map storage, identity rounding, marker lines, browser identities
-and trusted allowed names. Output is charged by capacity, bounded by aggregation's
-grow/keep/budget. The base covers entries once; skipped names alias entry names,
-sealed slots are released, and static kind/state/match strings add no allocation.
-No stderr is served after a runner-level failure (exit 125–127, runner error,
-cancellation or timeout), even though the host record retains it.
+See the [aggregation record](argon-verify-aggregation.md) for capture retention.
+Name masking applies in every summary mode, including logs off.
+The remaining PR 2a work adds `--logs`, a stored run's ID line and index-derived
+ordinals; no caller enables capture yet.
 
 ## Selectors and index
 
@@ -121,9 +113,11 @@ segments, including segments joined with a newline for conservative boundary
 over-detection. Package output and compiler output are scanned separately and
 together with newline boundaries; their maximum taints the package stream.
 Only detection counts survive.
-A matching name displays `[name withheld]` and stays selectable only by
-ordinal; future PR 2 uses the same mask in every summary mode. Existing
-summaries are untouched by PR 1.
+A matching name displays `[name withheld]` in the index and every summary mode,
+even with logs off; indexed names stay selectable only by ordinal.
+Summaries scan names before truncation or splitting skipped-name diagnostics.
+Container lines in summaries are sanitised and indented with `  | `; only
+trusted lines start at column zero.
 
 A tainted unit is refused whole at every start; stepping past a header or
 prefix cannot expose its body. No match is returned or audited. Splits that
@@ -164,7 +158,7 @@ changes need a small PR and preflight rows. No host measurement is approved.
 | Constants | Provisional | Basis / confirmation |
 |---|---|---|
 | `verifyLogCaptures` | 4 | session read pattern; revisit after two weeks on |
-| `verifyLogRecordMax`, `verifyLogCaptureMax`, `verifyLogStoreBytes` | R_max; R_max + allowance; 4 × that sum | record constants plus `verifyLogDerivedAllowance` as above |
+| `verifyLogRecordMax`, `verifyLogCaptureMax`, `verifyLogStoreBytes` | R_max; R_max + allowance; 4 × that sum | record constants plus `verifyLogDerivedAllowance` for bounded index, display and scan metadata |
 | `verifyLogResponseBytes`, `verifyLogPageLines`, `verifyLogDataBytes` | 6,144 bytes; 80 lines; 512 bytes | 7.8 KB once inline; worst-page preflight |
 | `verifyLogPrefixBytes` | 16 KiB | measured stderr 21,495 bytes; preflight |
 | `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16 index; 40 shared test/package; 8 shared stderr/output | 26 failing leaves; preflight read counts |

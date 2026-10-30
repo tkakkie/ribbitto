@@ -605,10 +605,7 @@ func (result *containerExecution) finishReport(ctx context.Context, report strin
 			result.record = commandRecord(&result.output)
 			result.record.stderrNotServable = in.runnerFailed || containerRunnerFailed(result.code, result.runErr, result.ownCancel) || ctx.Err() != nil
 		}
-		// Cleanup and fixed wrapper verdicts are decided after sealing. Set this
-		// before any capture, without changing the logs-off host presentation.
 		if result.record != nil {
-			result.record.stderrNotServable = result.record.stderrNotServable || in.runnerFailed || summaryRunnerFailure(first)
 			in.facts = recordSummaryFactsWithOrdinals(result.record, result.logs)
 		}
 		result.summary = buildContainerSummary(in)

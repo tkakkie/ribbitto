@@ -120,6 +120,8 @@ func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 		{name: "cancelled", report: "verified\ndetail", first: "NOT VERIFIED: cancelled", cancel: true},
 		{name: "runner error after success", report: "verified\ndetail", first: "FAILED: the check returned an error", err: errors.New("runner error")},
 		{name: "could not run", report: "", first: "NOT VERIFIED: the check could not run", err: errors.New("runner error")},
+		{name: "fixed verdict", report: "FAILED: source cleanup failed\ndetail", first: "FAILED: source cleanup failed"},
+		{name: "minimal body", report: "FAILED\nCheck: test .\nScope: test\nDetails unavailable: the check did not complete.\n", first: "FAILED"},
 		{name: "no record", report: "NOT VERIFIED: budget refused", first: "NOT VERIFIED: budget refused", noRecord: true},
 		{name: "unsealed", report: "FAILED", first: "FAILED", unsealed: true},
 	} {
@@ -170,7 +172,7 @@ func TestVerifyLogMCPFinalVerdict(t *testing.T) {
 					t.Fatalf("final verdict: %q, bad=%v", text, bad)
 				}
 				assertLogCapture(t, store, text, r, logs && !tc.verified && !tc.noRecord && !tc.unsealed)
-				if logs && r != nil && r.sealed && (tc.timeout || tc.cancel || tc.err != nil) && !r.stderrNotServable {
+				if logs && r != nil && r.sealed && (tc.timeout || tc.cancel || tc.err != nil || tc.name == "fixed verdict" || tc.name == "minimal body") && !r.stderrNotServable {
 					t.Fatal("final wrapper failure left stderr servable")
 				}
 				if !logs {

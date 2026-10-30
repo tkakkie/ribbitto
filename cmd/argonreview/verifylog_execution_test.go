@@ -52,9 +52,10 @@ func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 							return 0, nil
 						}
 						state := "pass"
-						if outcome == "failed" {
+						switch outcome {
+						case "failed":
 							state = "fail"
-						} else if outcome == "skipped" {
+						case "skipped":
 							state = "skip"
 						}
 						if check == "test" {
@@ -117,7 +118,7 @@ func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 						t.Fatalf("minimal body: %q", text)
 					}
 					if minimal {
-						if !v.execution.record.stderrNotServable {
+						if (logs || outcome != "source cleanup" && outcome != "container cleanup") && !v.execution.record.stderrNotServable {
 							t.Fatal("runner failure retained servable stderr")
 						}
 						if logs {
@@ -148,6 +149,79 @@ func TestVerifyLogExecutionFinalVerdict(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestVerifyLogCleanupCapture(t *testing.T) {
+	for _, tc := range []struct{ check, stop string }{
+		{"test", "none"}, {"test", "malformed"}, {"test", "failed-cap"},
+		{"build", "none"}, {"build", "output-cap"},
+	} {
+		for _, cleanup := range []string{"source", "container"} {
+			t.Run(tc.check+"/"+tc.stop+"/"+cleanup, func(t *testing.T) {
+				execution := containerExecution{logs: true, budget: grantContainerBudget()}
+				runner := fakeContainerRunner{func(ctx context.Context, args, _ []string, out, stderr io.Writer) (int, error) {
+					if args[0] != "run" {
+						if args[0] == "rm" && cleanup == "container" {
+							return 1, errors.New("removal failed")
+						}
+						return 0, nil
+					}
+					if cleanup == "source" {
+						for _, arg := range args {
+							if !strings.HasSuffix(arg, ",dst=/work,readonly") {
+								continue
+							}
+							dir := strings.TrimSuffix(strings.TrimPrefix(arg, "type=bind,src="), ",dst=/work,readonly")
+							if err := os.Chmod(dir, 0o500); err != nil {
+								t.Error(err)
+							}
+							t.Cleanup(func() { _ = os.Chmod(dir, 0o700); _ = os.RemoveAll(filepath.Dir(dir)) })
+						}
+					}
+					_, _ = io.WriteString(stderr, "benign diagnostic\n")
+					switch tc.stop {
+					case "none":
+						if tc.check == "test" {
+							_, _ = io.WriteString(out, containerEvents("p", "TestOne", "pass"))
+						}
+						return 0, nil
+					case "malformed":
+						_, _ = io.WriteString(out, "garbage\n")
+					case "failed-cap":
+						_, _ = io.WriteString(out, containerJSON("p", "start", "run/TestBad", "fail/TestBad"))
+						wireCap(t, execution.aggregation, out, "total output")
+					case "output-cap":
+						_, _ = io.WriteString(out, strings.Repeat("x", containerOutputLimit+1))
+					}
+					if ctx.Err() != context.Canceled {
+						t.Error("own stop did not cancel runner")
+					}
+					return -1, context.Canceled
+				}}
+				host, err := runContainerExecution(context.Background(), containerFixture(t), tc.check, ".", runner, t.TempDir(), &execution)
+				if err == nil || !strings.Contains(err.Error(), "remov") || execution.ownCancel != (tc.stop != "none") {
+					t.Fatalf("cleanup/own stop fixture: own=%v err=%v", execution.ownCancel, err)
+				}
+				if tc.check == "test" && (execution.record.stderrNotServable || strings.Contains(host, "Stderr is not servable")) {
+					t.Fatal("cleanup changed execution-level stderr")
+				}
+				before := execution.record.stderrNotServable
+				_, _ = verifyResult(execution.summary, err, false, false)
+				if execution.record.stderrNotServable != before {
+					t.Fatal("logs-off wrapper changed execution-level stderr")
+				}
+				store := &verifyLogStore{}
+				text, bad := verifyRecordedResult(execution.summary, err, false, false, store, execution.record)
+				assertLogCapture(t, store, text, execution.record, true)
+				if !bad || !strings.Contains(text, "Details unavailable: the check did not complete.") {
+					t.Fatalf("cleanup lost minimal failure body: %q", text)
+				}
+				if _, _, class := store.captures[0].unit(verifyLogArguments{stream: "stderr"}); class != verifyLogStderrDenied {
+					t.Fatal("cleanup capture served stderr")
+				}
+			})
 		}
 	}
 }

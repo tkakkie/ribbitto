@@ -280,16 +280,16 @@ func verifyRecordedResult(report string, runErr error, timedOut, cancelled bool,
 	prefixBytes := len(report) - initialBytes
 	logBytes := 0
 	if store != nil && bad {
-		// The MCP deadline can win after finishReport has returned a record.
-		// Finalize this flag before publishing it to any capture reader.
-		if record != nil && (timedOut || cancelled || runErr != nil) {
+		first, rest, newline := strings.Cut(report, "\n")
+		// Cleanup and wrapper failures can arrive after record finalization.
+		// Deny captured stderr before publishing, leaving execution alone.
+		if record != nil && (timedOut || cancelled || runErr != nil || summaryRunnerFailure(first) || strings.Contains(report, "\nDetails unavailable: the check did not complete.\n")) {
 			record.mu.Lock()
 			if record.sealed {
 				record.stderrNotServable = true
 			}
 			record.mu.Unlock()
 		}
-		first, rest, newline := strings.Cut(report, "\n")
 		if capture := store.capture(first, record); capture != nil {
 			report = first + "\n" + verifyLogRunPrefix + capture.id + "\n"
 			if newline {

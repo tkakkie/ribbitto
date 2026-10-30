@@ -33,8 +33,8 @@ The per-process store keeps the last 4, evicting oldest first by count or bytes.
 Each capture pins the sealed record (which defines R_max) and adds a random
 128-bit ID, ordinals, displays and taint counts. The byte bound is
 4 × (R_max + `verifyLogDerivedAllowance`, the derived-data bytes).
-Stderr is unservable after runner failure, cancellation, timeout or cleanup
-failure, including conditions decided after sealing; host report bytes stay.
+The server denies captured stderr after runner failure, cancellation, timeout
+or cleanup failure. Execution finalization and host report bytes stay unchanged.
 
 ## Selectors and index
 

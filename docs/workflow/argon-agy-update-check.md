@@ -16,19 +16,19 @@ Allow-everything agents can forge records (maintainer accepted 2026-10-28,
 
 ## Isolation and preparation
 
-Separately approve user, sudo rule, paths/modes, binaries, sign-in and run.
-Record access/risk on [#1890][issue]; compare deprecated `sandbox-exec` and VM.
+Approve user, sudo rule, paths/modes, binaries, sign-in and run separately;
+record access/risk on [#1890][issue], compare deprecated `sandbox-exec`/VM.
 Dedicated low-privilege macOS user:
 
-- Deny group/ACL access to maintainer account, checkout, worker/review homes,
-  `~/.gemini`, keychain; no sudo. Claude uses fixed `sudo -u` for one trusted
-  binary, or maintainer logs in as this user. No network credentials in env;
+- Deny group/ACL access to maintainer account/checkout/worker/review homes,
+  `~/.gemini`/keychain; no sudo. Claude uses fixed `sudo -u` for one trusted
+  binary or maintainer logs in as that user. No network credentials in env;
   HOME/`--sandbox` cannot isolate allow-hook file tools.
-- Agent retains user rights/network; escapes possible.
-  Sign-in credential is exposed: use a separate revocable one.
-- Put `argonreview` and an agy **copy** outside the account home in
-  root/maintainer-owned 0755 directories, files 0555. Hash them;
-  protect/record extra runtime files likewise.
+- User rights/network remain; escapes possible.
+  Use a separate revocable sign-in credential: exposed.
+- Put `argonreview` and agy **copy** outside account home:
+  root/maintainer-owned directories 0755, files 0555. Hash them;
+  protect/record runtime files likewise.
 
 Home/isolation: dedicated UID, 0700, outside protected roots. Root
 `.argonreview-agy-check.json`: same owner, 0600; all workers
@@ -47,72 +47,75 @@ Home/isolation: dedicated UID, 0700, outside protected roots. Root
 }
 ```
 
-Check/hooks require marker user's real/effective UID; canaries require
-read/write/search denial on all protected roots.
+Check/hooks need marker user's real/effective UID; canaries check denial of
+read/write/search on all protected roots.
 
 ## Fixed order and host procedure
 
-Claude follows this order **before trust**, on `implement-check`'s first
-"no trusted builtin/ hash list" (`cmd/argonreview/implementcheck.go`):
+**Before trust**, at `implement-check`'s first "no trusted builtin/ hash list"
+(`cmd/argonreview/implementcheck.go`), Claude:
 
-1. Under approved isolation, start the version once in the throwaway home:
+1. In approved isolation, start once in the throwaway home:
    agy rewrites `builtin/`, invalidating old hashes
    (2026-10-27, 1.4.7 → 1.4.8, [#1700 incident][incident]).
-   After sign-in/first start, before checking, maintainer saves a clean baseline
-   (contents, modes, absences, sign-in, config, marker, post-start builtin/)
-   in maintainer-owned storage beyond agent writes.
-2. Claude hand-builds `implementer/builtin.agy-<version>.txt` before checking
-   from post-start home `builtin/`: regular files/dotfiles, relative paths,
+   Before checking, maintainer saves clean post-sign-in/first-start baseline
+   (contents, modes, absences, sign-in, config, marker, builtin/)
+   beyond agent writes in maintainer-owned storage.
+2. Hand-build `implementer/builtin.agy-<version>.txt`
+   from post-start `builtin/`: regular files/dotfiles, relative paths,
    byte-sorted (`LC_ALL=C`), `<sha256>  ./<path>` per line, final newline
    (`implementcheck.go`; 1 MiB cap, no symlinks). No tool writes it.
    Hash/save beyond agent writes with baseline: allow hooks can change it.
-3. Claude checks placement hashes and installed/copy agy SHA-256 equality.
-   **Normal-user host:** hash/save account shared settings immediately before/after.
-   Changes invalidate. Detection only; tool/dedicated user cannot access it.
-   Approved dedicated-user run/capture:
+3. Check placement hashes and installed/copy agy SHA-256 equality.
+   **Normal-user host:** hash/save account shared settings immediately before/after;
+   changes invalidate. Detection only: inaccessible to tool/dedicated user.
+   Approved dedicated-user run:
 
    ```text
    /trusted/argonreview agy-check --home /Users/argon-check --agy /trusted/agy-copy
    ```
 
    `--calls N` (default 30); `--model <name>` (default `gemini-4-argon-high`);
-   `--keep-transcripts` (default off). Save stdout/stderr/status outside transient trees.
-   Agent UID can rewrite results; copy output to maintainer-owned storage
-   or post hash on [#1890][issue]. After rows, home `builtin/` is hashed:
-   `INFO builtin/ listing SHA-256` or failure; usage/pre-run refusals: no INFO;
-   post-row pin mismatch: INFO above `RESULT INVALID`; never use it.
-4. Compare INFO/candidate SHA-256: mismatch means changed `builtin/`; no trust.
-   Maintainer then decides trust per worker. Start once per worker home (rewrites
-   `builtin/`); install saved identical bytes in each `implementer/`: file 0400,
-   directory 0500 (`chmod u+w` to install, then restore).
+   `--keep-transcripts` (default off). Agent UID can rewrite results: save
+   stdout/stderr/status beyond transient trees in maintainer-owned storage
+   or post hash on [#1890][issue]. After rows, hash `builtin/`:
+   `INFO builtin/ listing SHA-256` or failure; no INFO on usage/pre-run refusal;
+   post-row pin mismatch: INFO above `RESULT INVALID`, unusable.
+4. Compare INFO/candidate SHA-256: mismatch = changed `builtin/`, no trust.
+   Only then the maintainer decides trust per worker. Start once per worker home
+   (rewrites `builtin/`); install identical saved bytes in each `implementer/`: file 0400,
+   directory 0500 (`chmod u+w` to install; restore).
 
-After failure/interruption, [manual recovery](argon-implement-run-recovery.md#manual-recovery)
-1–2 (session stopped; evidence saved) precedes file changes. Repeat 1–4, then
-finish recovery. Failed/invalid runs do not count.
+Failure/interruption: [manual recovery](argon-implement-run-recovery.md#manual-recovery)
+1–2 (session stopped; evidence saved) precedes file changes. Repeat 1–4, finish
+recovery; failed/invalid runs do not count.
 
-Each start revalidates marker/UID/paths/canaries/binaries; unprinted version/hash
+Each start rechecks marker/UID/paths/canaries/binaries; unprinted version/hash
 pins match before/after/across rows. agy: `-p`, `--sandbox`, time limit, synthetic
 workspace, only PATH/HOME/fresh TMPDIR.
 
-Tool restores bytes/modes or absence for three home files only
+Tool restores only bytes/modes/absence of
 (`cmd/argonreview/agycheck_place.go`):
 `.gemini/config/hooks.json`, `.gemini/config/mcp_config.json`,
 `.gemini/antigravity-cli/settings.json`.
-Created config directories/transient trees removed; errors invalidate.
+Created config dirs/transient trees removed; errors invalidate.
 Between runs, Claude/maintainer on host confirms sessions stopped, restores
-home baseline and post-start builtin/, clears run-created session/brain state,
+baseline (including post-start builtin/), clears new session/brain state,
 checks marker/modes. Stop on failure; never repair protected homes.
 
 With the flag, non-empty `<isolation>/kept` stops the run. Non-ok rows keep
-`out.jsonl` (4 MiB) and `err.txt` (first 64 KiB) in `<isolation>/kept/<row>/`:
-files 0600, directories 0700, dedicated-user owned; never read back or reported.
-One report line lists only kept IDs (or `none`). Agent-controlled text: maintainer
-copies out with `sudo`, outside the repository, then DELETES `<isolation>/kept`
-himself. Claude reads copies as data only.
+`out.jsonl` (4 MiB), `err.txt` (first 64 KiB) in `<isolation>/kept/<id>/`:
+files 0600, dirs 0700, dedicated UID; never read back or reported. One report
+line lists only kept IDs (or `none`). Agent-controlled: after confirming no dedicated-user
+process remains, maintainer copies listed files one by one AS that user to storage
+he owns outside the repository, never a root `cp -r`/`tar`:
+`sudo -u <user> cat <isolation>/kept/<id>/out.jsonl > <dir>/<id>.out.jsonl`,
+likewise `err.txt`. He DELETES `<isolation>/kept` likewise. Claude reads
+copies as data only.
 
-Record commit/binary hash, copy equality, before/after pins/settings hashes,
+Record commit/binary hash, copy equality, before/after pin/settings hashes,
 marker, isolation/risk, rows on [#1890][issue] / [#1856][record]; no
-credentials/home paths. 1.4.8 trusted 2026-10-27.
+credentials/home paths. 1.4.8 trust predates this (2026-10-27).
 
 ## Expected results (30 rows)
 
@@ -171,7 +174,7 @@ rows. No runner-launched hooks/retries or tool-target correlation/tamper resista
 
 ## Failure and update checklist
 
-Exit 1: differs/invalid; 2: usage. Marker/UID/canary/placement/pin refusals:
+Exit 1: differs/invalid; 2: usage. Marker/UID/canary/placement/pin/kept refusals:
 `RESULT INVALID: <reason>`, exit 1, no table (pre-run: no INFO), not version
 failure. Record row/reason; no new list trust. Maintainer always decides.
 

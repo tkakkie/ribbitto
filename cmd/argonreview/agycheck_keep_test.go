@@ -334,12 +334,15 @@ func TestAgyCheckKeepOutput(t *testing.T) {
 	}
 }
 
-// This digest was also checked with the original ad58156 sources. The default
-// synthetic fake differs only at reconciliation (it has no hook event records).
+// Frozen from the merged, unmodified 89af1b2 sources with retention off.
+// The fake has no hook events, so both observations from reconciliation differ.
 func TestAgyCheckKeepOffReport(t *testing.T) {
 	h := agyCheckNewCommandHarness(t, "", "")
 	baselineCode, out := h.run(t, 30)
-	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(out))); got != "07f478a678c8fbc96fc2cc62022e1d9f7a69b28efe4212f3668ff4fde36b453b" {
+	if !strings.Contains(out, "Rows: 30; differing: 2\n") {
+		t.Fatalf("merged report row count changed: %s", out)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(out))); got != "790ced44fe584e3ca9e3cd4eb0903280925a33d09a91220a9ecadfc3d842bd62" {
 		t.Fatalf("complete flag-off report changed: %s", got)
 	}
 	h.restored(t)

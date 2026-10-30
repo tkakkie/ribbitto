@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -26,6 +27,7 @@ type agyCheckCommandHarness struct {
 }
 
 func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCommandHarness {
+	start := time.Now() // DIAG(#1980) temporary: removed before the final head
 	t.Helper()
 	home := agyCheckRealTemp(t)
 	isolation := filepath.Join(home, "isolation")
@@ -115,6 +117,7 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 		return data, err
 	}
 	h.d.execution = &h.x
+	t.Logf("DIAG harness-setup %s %s gomaxprocs=%d", t.Name(), time.Since(start), runtime.GOMAXPROCS(0)) // DIAG(#1980) temporary: removed before the final head
 	return h
 }
 func (h *agyCheckCommandHarness) run(t *testing.T, calls int) (int, string) {

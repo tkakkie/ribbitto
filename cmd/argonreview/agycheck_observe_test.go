@@ -75,7 +75,7 @@ func agyCheckObserveFixtures(t *testing.T) map[string]agyCheckObserveInput {
 		"execute-url": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"agent_response"}}
 {"event":"result","result":{}}
 `,
-		"task-on": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"manage_task"}}
+		"task-on": `{"event":"step_update","step_update":{"step_index":0,"state":"ERROR","step_type":"tool","tool_name":"manage_task"}}
 {"event":"result","result":{}}
 `,
 		"task-off": `{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"tool","tool_name":"manage_task"}}
@@ -152,6 +152,10 @@ func agyCheckObserveFixtures(t *testing.T) map[string]agyCheckObserveInput {
 		}
 		inputs[row.ID] = in
 	}
+	parallel := inputs["reconciliation"]
+	parallel.Replies = append([]string(nil), parallel.Replies...)
+	parallel.CreatedFiles = append([]string(nil), parallel.CreatedFiles...)
+	inputs["parallel-batches"] = parallel
 	return inputs
 }
 
@@ -297,12 +301,26 @@ func agyCheckObserveAssertDifference(t *testing.T, inputs map[string]agyCheckObs
 		}
 		if row.ID == id {
 			found = true
+			if id == "reconciliation" {
+				if strings.HasPrefix(observed, "steps=") {
+					observed += "; " + agyCheckBatchesUnobservable
+				} else {
+					if observed != "missing input" && agyCheckObserveRow(agyCheckObserveFindRow(t, id), inputs[id]).Outcome != observed {
+						t.Fatal("accounting refusal reason lost")
+					}
+					observed = "steps=0 hooks=0 allows=0 denies=0 errors=0 files=0 repeats=0; " + observed
+				}
+			}
 			if row.OK || row.Observed != observed {
 				t.Fatalf("observed=%q OK=%t; want %q false", row.Observed, row.OK, observed)
 			}
 		} else if row.ID == "reconciliation" {
-			if row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0" {
+			if row.OK || row.Observed != "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0; "+agyCheckBatchesUnobservable {
 				t.Fatalf("batches invented: %+v", row)
+			}
+		} else if row.ID == "parallel-batches" {
+			if row.OK || row.Observed != agyCheckBatchesUnobservable {
+				t.Fatalf("adapter invented overlap evidence: %+v", row)
 			}
 		} else if !row.OK {
 			t.Fatalf("unrelated row differs: %+v", row)
@@ -317,7 +335,7 @@ func agyCheckObserveAssertDifference(t *testing.T, inputs map[string]agyCheckObs
 func TestAgyCheckObserveAll(t *testing.T) {
 	inputs := agyCheckObserveFixtures(t)
 	observations := agyCheckObserveAll(inputs)
-	if len(agyCheckExpected) != 29 {
+	if len(agyCheckExpected) != 30 {
 		t.Fatal("expected row count changed")
 	}
 	if len(inputs) != len(agyCheckExpected) || len(observations) != len(agyCheckExpected) {
@@ -330,14 +348,14 @@ func TestAgyCheckObserveAll(t *testing.T) {
 	}
 	r, out := agyCheckObserveEvaluate(t, inputs)
 	if len(r.Rows) != len(agyCheckExpected) || strings.Count(out, "\n") != len(agyCheckExpected)+2 ||
-		!strings.Contains(out, fmt.Sprintf("Rows: %d; differing: 1\n", len(agyCheckExpected))) {
+		!strings.Contains(out, fmt.Sprintf("Rows: %d; differing: 2\n", len(agyCheckExpected))) {
 		t.Fatalf("report row count drift: %q", out)
 	}
 	for _, row := range r.Rows {
-		if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
+		if row.ID == "reconciliation" && (row.OK || row.Observed != "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0; "+agyCheckBatchesUnobservable) {
 			t.Fatalf("batches invented: %+v", row)
 		}
-		if !row.OK && row.ID != "reconciliation" {
+		if !row.OK && row.ID != "reconciliation" && row.ID != "parallel-batches" {
 			t.Fatalf("assumed fixture differs: %+v", row)
 		}
 	}
@@ -381,10 +399,10 @@ func TestAgyCheckObserveUnknownRows(t *testing.T) {
 			}
 			for i, row := range r.Rows {
 				if i < len(agyCheckExpected) {
-					if row.ID == "reconciliation" && (row.OK || row.Observed != agyCheckBatchesUnobservable+"; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") {
+					if row.ID == "reconciliation" && (row.OK || row.Observed != "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0; "+agyCheckBatchesUnobservable) {
 						t.Fatalf("batches invented: %+v", row)
 					}
-					if !row.OK && row.ID != "reconciliation" {
+					if !row.OK && row.ID != "reconciliation" && row.ID != "parallel-batches" {
 						t.Fatalf("unrelated row differs: %+v", row)
 					}
 				} else if row.ID != want[i].ID || row.OK || row.Observed != "unknown row" {
@@ -454,7 +472,7 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 	for _, row := range agyCheckExpected {
 		// Discovery and reconciliation now have tool mappings for scenario
 		// generation; their adapter predicates have separate tests below.
-		if row.Group == "discovery" || row.Group == "reconciliation" {
+		if row.Group == "discovery" || row.Group == "reconciliation" || row.Group == "parallel" {
 			continue
 		}
 		tool, single := agyCheckTranscriptTools[row.ID]
@@ -666,7 +684,7 @@ func TestAgyCheckObserveReconciliationChanges(t *testing.T) {
 				if actual != tc.want {
 					t.Fatalf("counts=%s want %s", actual, tc.want)
 				}
-				tc.want = agyCheckBatchesUnobservable + "; " + tc.want
+				// Accounting always renders counts, including on refusal.
 			}
 			agyCheckObserveAssertDifference(t, inputs, "reconciliation", tc.want)
 		})

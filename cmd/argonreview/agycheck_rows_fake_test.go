@@ -219,6 +219,9 @@ func agyCheckRowsFake(data []byte) bool {
 				allowed = false
 			}
 		}
+		if id == "task-on" {
+			allowed = false
+		}
 		if tool == "run_command" && slices.Contains(permissions.Permissions.Deny, "command(*)") {
 			allowed = false
 		}
@@ -287,7 +290,11 @@ func agyCheckRowsFake(data []byte) bool {
 			steps := make([]map[string]any, last-first+1)
 			var wg sync.WaitGroup
 			for n := first; n <= last; n++ {
-				wg.Go(func() { steps[n-first] = call(n) })
+				if deviation == "real-hooks-sequential" {
+					steps[n-first] = call(n)
+				} else {
+					wg.Go(func() { steps[n-first] = call(n) })
+				}
 			}
 			wg.Wait()
 			for _, step := range steps {
@@ -353,8 +360,8 @@ func agyCheckRowsFake(data []byte) bool {
 	return true
 }
 
-// This synthetic model is never evidence of agy's behaviour. The full match
-// run exercises actual denial and concurrent reconciliation hook subprocesses;
+// This synthetic model is never evidence of agy's behaviour. The full overlap
+// and sequential runs exercise actual denial and reconciliation hook subprocesses;
 // TestAgyCheckGeneratedProcesses also exercises generated hook/stub commands.
 func agyCheckModelHook(command, state string) bool {
 	if command == "'"+filepath.Join(state, "hook-missing")+"'" {

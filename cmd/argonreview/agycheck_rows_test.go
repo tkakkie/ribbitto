@@ -23,6 +23,7 @@ type agyCheckCommandHarness struct {
 	validations, starts, pins int
 	writes                    []string
 	toolSteps                 int
+	reconciliationEvents      []agyCheckHookEvent
 }
 
 func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCommandHarness {
@@ -40,7 +41,7 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 	h.m = agyCheckMarker{1, account.Username, home, isolation, "/protected/account", "/protected/repository", []string{"/protected/worker"}, "/protected/review"}
 	b, _ := json.Marshal(h.m)
 	agyCheckTestWrite(t, filepath.Join(home, agyCheckMarkerName), b, 0o600)
-	b, _ = json.Marshal(agyCheckRowFake{Rows: true, RealHooks: deviation == "real-hooks", Home: home, Isolation: isolation, Row: row, Deviation: deviation})
+	b, _ = json.Marshal(agyCheckRowFake{Rows: true, RealHooks: deviation == "real-hooks" || deviation == "real-hooks-sequential", Home: home, Isolation: isolation, Row: row, Deviation: deviation})
 	agyCheckTestWrite(t, h.agy+".fixture", b, 0o600)
 	h.settings = filepath.Join(home, ".gemini/antigravity-cli/settings.json")
 	agyCheckTestWrite(t, h.settings, []byte("original marked-home settings\n"), 0o600)
@@ -110,6 +111,12 @@ func agyCheckNewCommandHarness(t *testing.T, row, deviation string) *agyCheckCom
 			parsed, parseErr := agyCheckTranscriptParse(data)
 			if parseErr == nil {
 				h.toolSteps = max(h.toolSteps, len(parsed.Steps))
+				if deviation == "real-hooks-sequential" && len(parsed.Steps) > 1 {
+					h.reconciliationEvents, parseErr = agyCheckReadEvents(h.m.Isolation, filepath.Join(filepath.Dir(path), "state"), h.x.runner.files)
+					if parseErr != nil {
+						t.Fatal(parseErr)
+					}
+				}
 			}
 		}
 		return data, err
@@ -171,7 +178,7 @@ func (h *agyCheckCommandHarness) restored(t *testing.T) {
 
 // Predicate deviations need one real row's collection and effects. The other
 // rows use the same passing observations as the report unit tests; full command
-// coverage remains in match, larger-calls, timeout, negative discovery evidence and lifecycle cases.
+// coverage remains in sequential, overlapping, larger-calls, timeout, negative discovery evidence and lifecycle cases.
 func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	t.Helper()
 	row := agyCheckObserveFindRow(t, id)
@@ -181,10 +188,17 @@ func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 	if err := agyCheckExecuteRow(o, h.x, h.m, h.tool, row, &results); err != nil {
 		t.Fatalf("row execution failed: %v", err)
 	}
+	if id == "reconciliation" || id == "parallel-batches" {
+		if len(results.observations) != 2 || results.observations[0].ID != "reconciliation" || results.observations[1].ID != "parallel-batches" {
+			t.Fatalf("split must append both observations: %+v", results.observations)
+		}
+	}
 	_, observations := agyCheckFixtures()
 	for i := range observations {
-		if observations[i].ID == id {
-			observations[i] = results.observations[0]
+		for _, observation := range results.observations {
+			if observations[i].ID == observation.ID {
+				observations[i] = observation
+			}
 		}
 	}
 	results.observations = observations
@@ -197,14 +211,15 @@ func (h *agyCheckCommandHarness) runRow(t *testing.T, id string) (int, string) {
 }
 
 // Synthetic fake agents exercise the runner and actual hook subprocesses;
-// their overlaps are never evidence of agy behaviour.
+// their scheduling is never evidence of agy behaviour.
 func TestAgyCheckCommandEndToEnd(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name, row, deviation string
 		calls, code          int
 	}{
-		{"match", "", "real-hooks", 0, 0}, {"larger-calls", "", "", 42, 1},
+		{"sequential", "reconciliation", "real-hooks-sequential", 4, 0},
+		{"overlapping", "", "real-hooks", 0, 1}, {"larger-calls", "", "", 42, 1},
 		{"flipped", "hook-silent", "flip", 0, 1},
 		{"deny-other-cause", "hook-decision", "no-claim", 0, 1},
 		{"hook-never-ran", "task-on", "no-claim", 0, 1},
@@ -234,6 +249,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			h := agyCheckNewCommandHarness(t, tc.row, tc.deviation)
+			full := tc.row == "" || tc.name == "sequential" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected"
 			if tc.name == "straggler" {
 				scans := 0
 				h.x.ops.scan = func(int) ([]int, error) {
@@ -251,9 +267,14 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				// ordinary modeled rows and their real stub to exit under race.
 				h.x.limit = 5 * time.Second
 			}
+			if tc.name == "sequential" {
+				// Four real hook subprocesses run one after another (1.5 s hold each)
+				// plus startup under -race on a loaded runner exceeded the default 10 s.
+				h.x.limit = 2 * time.Minute
+			}
 			var code int
 			var out string
-			if tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected" {
+			if full {
 				code, out = h.run(t, tc.calls)
 			} else {
 				code, out = h.runRow(t, tc.row)
@@ -261,7 +282,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			if code != tc.code {
 				t.Fatalf("command exit=%d want %d:\n%s", code, tc.code, out)
 			}
-			if strings.Contains(out, "RESULT INVALID") || !strings.Contains(out, "Rows: 29;") && tc.deviation != "unprotected-load" {
+			if strings.Contains(out, "RESULT INVALID") || !strings.Contains(out, "Rows: 30;") && tc.deviation != "unprotected-load" {
 				t.Fatalf("row run did not produce a valid table: %s", out)
 			}
 			wantDiagnostic := map[string]string{
@@ -297,10 +318,32 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 			if tc.code == 0 && !strings.HasSuffix(out, agyCheckSuccessLine+"\n") {
 				t.Fatal("verbatim success final line missing")
 			}
-			full := tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected"
+			if tc.name == "sequential" {
+				if !strings.Contains(out, "Rows: 30; differing: 0\n") || len(h.reconciliationEvents) != 2*tc.calls {
+					t.Fatalf("sequential run missing success or hook events: %s; %+v", out, h.reconciliationEvents)
+				}
+				for i, event := range h.reconciliationEvents {
+					want := agyCheckHookEvent{Index: i + 1, Call: i/2 + 1, Kind: "end"}
+					if i%2 == 0 {
+						want.Kind, want.Word, want.Tag = "start", "allow", "reconciliation"
+						if want.Call%2 == 0 {
+							want.Word = "deny"
+						}
+					}
+					if event != want {
+						t.Fatalf("hook events must alternate start/end without overlap: got %+v want %+v", event, want)
+					}
+				}
+			}
 			if tc.code == 1 {
 				differences := 1
+				if tc.row == "reconciliation" {
+					differences++
+				}
 				if full {
+					if tc.name != "overlapping" {
+						differences++
+					}
 					if tc.name == "timeout" {
 						differences++
 					}
@@ -321,27 +364,39 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				}
 			}
 			if full {
-				for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation"} {
+				for _, id := range []string{"discovery-gemini-config", "discovery-gemini", "discovery-antigravity", "discovery-root", "reconciliation", "parallel-batches"} {
 					found := false
 					for _, line := range strings.Split(out, "\n") {
 						if !strings.HasPrefix(line, id+" ") {
 							continue
 						}
 						switch {
+						case id == "parallel-batches":
+							if tc.name == "sequential" {
+								found = strings.HasPrefix(strings.Join(strings.Fields(line), " "), "parallel-batches sequential sequential ok ")
+								break
+							}
+							reason := "wrong hook event count"
+							if tc.name == "overlapping" {
+								reason = "parallel: 2 overlapping batches"
+							}
+							found = strings.Contains(line, reason) && strings.Contains(line, "differs")
 						case id != "reconciliation":
 							found = !strings.Contains(line, "differs") && strings.Contains(line, "; not loaded: one DONE step, no claim, deny shown working in this run")
-						case tc.name == "match":
+						case tc.name == "overlapping":
 							found = !strings.Contains(line, "differs") && strings.Contains(line, "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0")
+						case tc.name == "sequential":
+							found = strings.HasPrefix(strings.Join(strings.Fields(line), " "), "reconciliation counts reconcile steps=4 hooks=4 allows=2 denies=2 errors=2 files=2 repeats=0 ok ")
 						default:
-							found = strings.Contains(line, "wrong hook event count") && strings.Contains(line, "differs")
+							found = strings.Contains(line, "steps=") && strings.Contains(line, "differs")
 						}
 					}
 					if !found {
 						t.Fatalf("unexpected synthetic row %s: %s", id, out)
 					}
 				}
-				if tc.name == "match" && !strings.Contains(out, "Rows: 29; differing: 0\n") {
-					t.Fatalf("synthetic match differs: %s", out)
+				if tc.name == "overlapping" && !strings.Contains(out, "Rows: 30; differing: 1\n") {
+					t.Fatalf("synthetic overlap result changed: %s", out)
 				}
 			}
 			if tc.deviation == "protected-load" || tc.deviation == "unprotected-load" {
@@ -350,7 +405,7 @@ func TestAgyCheckCommandEndToEnd(t *testing.T) {
 				}
 			}
 			validations, starts, pins := 3, 3, 2
-			if tc.row == "" || tc.name == "timeout" || tc.name == "protected" || tc.name == "unprotected" {
+			if full {
 				validations, starts, pins = 88, 87, 58
 			}
 			if h.validations != validations || h.starts != starts || h.pins != pins {
@@ -496,6 +551,19 @@ func TestAgyCheckCommandInvalidLifecycle(t *testing.T) {
 			if name != "restore" && name != "cleanup" {
 				h.restored(t)
 			}
+		})
+	}
+}
+
+func TestAgyCheckSplitSingleRun(t *testing.T) {
+	for _, id := range []string{"reconciliation", "parallel-batches"} {
+		t.Run(id, func(t *testing.T) {
+			h := agyCheckNewCommandHarness(t, "reconciliation", "real-hooks")
+			code, out := h.runRow(t, id)
+			if code != 1 || h.starts != 3 || h.pins != 2 || !strings.Contains(out, "parallel: 2 overlapping batches") || !strings.Contains(out, "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0") || !strings.Contains(out, "differing: 1") {
+				t.Fatalf("split must use one invocation: starts=%d pins=%d\n%s", h.starts, h.pins, out)
+			}
+			h.restored(t)
 		})
 	}
 }

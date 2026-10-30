@@ -12,11 +12,12 @@ import (
 // Observations are supplied facts, never inferred from a hook's exit status.
 // In particular, silent exit 0 is a known allow, not a deny.
 type agyCheckObservation struct {
-	ID, Outcome string
-	Loaded, Ran bool
-	NotLoaded   bool
-	DenyShown   bool
-	Summary     agyCheckSummary
+	ID, Outcome     string
+	ParallelOutcome string
+	Loaded, Ran     bool
+	NotLoaded       bool
+	DenyShown       bool
+	Summary         agyCheckSummary
 }
 
 // Reconciliation checks ordinary-agent regressions, not tamper resistance: an
@@ -88,8 +89,19 @@ func agyCheckClassify(observation agyCheckObservation, minimum int) agyCheckResu
 
 func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) agyCheckResultRow {
 	r := agyCheckResultRow{agyCheckRow: row, Observed: o.Outcome}
+	if row.ID == "reconciliation" {
+		r.Observed = agyCheckReconciliationText(o.Summary, o.Outcome)
+		r.OK = row.Expected == "counts reconcile" && (o.Outcome == "" || o.Outcome == "counts reconcile") && agyCheckCountsReconcile(o.Summary, minimum)
+		return r
+	}
+	if row.ID == "parallel-batches" {
+		if o.Outcome == "sequential" && !agyCheckCountsReconcile(o.Summary, minimum) {
+			r.Observed = agyCheckSummaryText(o.Summary)
+		}
+		r.OK = row.Expected == "sequential" && o.Outcome == "sequential" && agyCheckCountsReconcile(o.Summary, minimum)
+		return r
+	}
 	if o.Outcome == agyCheckBatchesUnobservable {
-		r.Observed += "; " + agyCheckSummaryText(o.Summary)
 		return r
 	}
 	if o.Outcome == agyCheckLoadUnobservable {
@@ -109,23 +121,39 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 			r.Observed += "; not loaded: one DONE step, no claim, deny shown working in this run"
 		}
 		r.OK = row.Location != "" && o.Loaded == o.Ran && (!o.Loaded || covered)
-	case "counts reconcile":
-		s := o.Summary
-		r.Observed = agyCheckSummaryText(s)
-		// Either starting reply is possible; alternation needs both and a gap <= 1.
-		r.OK = minimum > 0 && s.ToolSteps >= minimum && s.ParallelBatches >= 2 &&
-			s.Allows > 0 && s.Denies > 0 && s.Allows-s.Denies >= -1 && s.Allows-s.Denies <= 1 &&
-			s.Allows <= s.HookInvocations && s.Denies == s.HookInvocations-s.Allows &&
-			s.ToolSteps == s.HookInvocations && s.Errors == s.Denies && s.FilesCreated == s.Allows && s.Repeats == 0
 	default:
 		r.Observed = "unknown expectation: " + row.Expected
 	}
 	return r
 }
 
+// Counts are independent of the expected column and the observed scheduling.
+func agyCheckCountsReconcile(s agyCheckSummary, minimum int) bool {
+	return minimum > 0 && s.ToolSteps >= minimum &&
+		s.Allows > 0 && s.Denies > 0 && s.Allows-s.Denies >= -1 && s.Allows-s.Denies <= 1 &&
+		s.Allows <= s.HookInvocations && s.Denies == s.HookInvocations-s.Allows &&
+		s.ToolSteps == s.HookInvocations && s.Errors == s.Denies && s.FilesCreated == s.Allows && s.Repeats == 0
+}
+
+func agyCheckParallelObservation(o agyCheckObservation) agyCheckObservation {
+	o.ID = "parallel-batches"
+	if o.Outcome == "" {
+		o.Outcome = o.ParallelOutcome
+	}
+	return o
+}
+
 func agyCheckSummaryText(s agyCheckSummary) string {
 	return fmt.Sprintf("steps=%d hooks=%d allows=%d denies=%d errors=%d files=%d repeats=%d",
 		s.ToolSteps, s.HookInvocations, s.Allows, s.Denies, s.Errors, s.FilesCreated, s.Repeats)
+}
+
+func agyCheckReconciliationText(s agyCheckSummary, outcome string) string {
+	text := agyCheckSummaryText(s)
+	if outcome != "" && outcome != "counts reconcile" {
+		text += "; " + outcome
+	}
+	return text
 }
 
 func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservation, minimum int, usageError string) agyCheckResult {
@@ -160,6 +188,9 @@ func agyCheckEvaluate(before, after agyCheckPin, observations []agyCheckObservat
 		case 1:
 		default:
 			classified = agyCheckResultRow{agyCheckRow: row, Observed: "duplicate row"}
+		}
+		if row.ID == "reconciliation" && counts[row.ID] != 1 {
+			classified.Observed = agyCheckReconciliationText(o.Summary, classified.Observed)
 		}
 		r.Rows = append(r.Rows, classified)
 		delete(byID, row.ID)

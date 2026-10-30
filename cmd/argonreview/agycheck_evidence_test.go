@@ -15,9 +15,13 @@ func agyCheckEvidenceFixture(t *testing.T, id string) (agyCheckRow, agyCheckScen
 	if err != nil {
 		t.Fatal(err)
 	}
+	if id == "parallel-batches" {
+		_, _, e := agyCheckEvidenceFixture(t, "reconciliation")
+		return row, s, e
+	}
 	e := agyCheckEvidence{}
 	state := "DONE"
-	if row.Group == "hook" && s.Mode != "silent" || row.Group == "workspace" || row.Group == "settings" {
+	if id == "task-on" || row.Group == "hook" && s.Mode != "silent" || row.Group == "workspace" || row.Group == "settings" {
 		state = "ERROR"
 	}
 	events := []map[string]any{{"event": "init"}}
@@ -76,6 +80,13 @@ func TestAgyCheckScenarios(t *testing.T) {
 		t.Fatal("scenario count differs")
 	}
 	for _, row := range agyCheckExpected {
+		if row.ID == "parallel-batches" {
+			s, err := agyCheckScenarioFor(row.ID)
+			if err != nil || s.ID != "reconciliation" {
+				t.Fatal("split row must share scenario")
+			}
+			continue
+		}
 		if seen[row.ID] != 1 {
 			t.Fatalf("scenario missing or duplicated: %s", row.ID)
 		}
@@ -96,10 +107,10 @@ func TestAgyCheckClaimOrder(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, id)
 			slices.Reverse(e.Claims)
 			observation := agyCheckEvidenceObservation(row, s, e)
-			if row.Group == "reconciliation" && (observation.Outcome != agyCheckNoOverlap || observation.Summary.HookInvocations != 4 || observation.Summary.Repeats != 0) {
+			if row.Group == "reconciliation" && (observation.Outcome != "" || observation.ParallelOutcome != "sequential" || observation.Summary.HookInvocations != 4 || observation.Summary.Repeats != 0) {
 				t.Fatalf("claim-number order lost: %+v", observation)
 			}
-			if got := agyCheckClassify(observation, 4); !got.OK && row.Group != "reconciliation" {
+			if got := agyCheckClassify(observation, 4); !got.OK {
 				t.Fatalf("claim-number order lost: %+v", got)
 			}
 		})
@@ -111,10 +122,7 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 		t.Run(row.ID+"/baseline", func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, row.ID)
 			got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4)
-			if row.Group == "reconciliation" && (got.OK || got.Observed != agyCheckNoOverlap) {
-				t.Fatalf("batches invented: %+v", got)
-			}
-			if !got.OK && row.Group != "reconciliation" {
+			if !got.OK {
 				t.Fatalf("valid evidence differs: %+v", got)
 			}
 		})
@@ -215,6 +223,22 @@ func TestAgyCheckRowEvidence(t *testing.T) {
 	}
 }
 
+func TestAgyCheckTaskProbe(t *testing.T) {
+	for _, id := range []string{"task-on", "task-off"} {
+		t.Run(id, func(t *testing.T) {
+			row, s, e := agyCheckEvidenceFixture(t, id)
+			if got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4); !got.OK {
+				t.Fatalf("absent probe must match: %+v", got)
+			}
+			e.Probe = true
+			got := agyCheckEvidenceObservation(row, s, e)
+			if got.Outcome != "unexpected side effect" || agyCheckClassify(got, 4).OK {
+				t.Fatalf("manage_task probe accepted: %+v", got)
+			}
+		})
+	}
+}
+
 func TestAgyCheckOutputBlocks(t *testing.T) {
 	pin, obs := agyCheckFixtures()
 	r := agyCheckEvaluate(pin, pin, obs, 30, "")
@@ -278,8 +302,8 @@ func TestAgyCheckUnobservableNeverPasses(t *testing.T) {
 			row.Expected = text
 			got := agyCheckClassifyRow(row, agyCheckObservation{ID: row.ID, Outcome: text, Loaded: true, Ran: true, Summary: agyCheckSummary{30, 30, 15, 15, 15, 15, 2, 0}}, 30)
 			want := text
-			if text == agyCheckBatchesUnobservable {
-				want += "; steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0"
+			if row.ID == "reconciliation" {
+				want = "steps=30 hooks=30 allows=15 denies=15 errors=15 files=15 repeats=0; " + text
 			}
 			if got.OK || got.Observed != want || strings.Contains(got.Observed, "batches=") {
 				t.Fatalf("unobservable passed: %+v", got)

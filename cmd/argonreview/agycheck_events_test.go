@@ -76,6 +76,7 @@ func TestAgyCheckSyntheticParallelEvidence(t *testing.T) {
 		{"unknown-call", "unknown hook call number", func(e *agyCheckEvidence) { e.Events[0].Call = 99 }},
 		{"index-gap", "non-contiguous hook events", func(e *agyCheckEvidence) { e.Events[0].Index = 9 }},
 		{"wrong-count", "wrong hook event count", func(e *agyCheckEvidence) { e.Events = append(e.Events, e.Events[0]) }},
+		{"kind", "invalid hook event", func(e *agyCheckEvidence) { e.Events[0].Kind = "other" }},
 		{"word", "hook calls and events disagree", func(e *agyCheckEvidence) { e.Events[0].Word = "deny" }},
 		{"tag", "hook calls and events disagree", func(e *agyCheckEvidence) { e.Events[0].Tag = "other" }},
 		{"parity", "contradictory reconciliation records", func(e *agyCheckEvidence) { e.Claims[0].Word = "deny"; e.Events[0].Word = "deny" }},
@@ -100,8 +101,12 @@ func TestAgyCheckSyntheticParallelEvidence(t *testing.T) {
 			row, s, e := agyCheckSyntheticParallel(t, 2, 2)
 			tc.change(&e)
 			got := agyCheckEvidenceObservation(row, s, e)
-			if got.Outcome != tc.want || agyCheckClassify(got, 4).OK != (tc.want == "") {
+			if got.Outcome != strings.ReplaceAll(tc.want, agyCheckNoOverlap, "") || agyCheckClassify(got, 4).OK != (tc.want == "" || tc.want == agyCheckNoOverlap) {
 				t.Fatalf("synthetic observation=%+v want %q", got, tc.want)
+			}
+			parallel := agyCheckClassify(agyCheckParallelObservation(got), 4)
+			if parallel.OK != (tc.want == agyCheckNoOverlap) || tc.want != "" && tc.want != agyCheckNoOverlap && parallel.Observed != tc.want {
+				t.Fatalf("parallel validation lost: %+v", parallel)
 			}
 			if tc.want == "" && got.Summary.ParallelBatches != 2 {
 				t.Fatalf("batches=%d", got.Summary.ParallelBatches)
@@ -127,7 +132,7 @@ func TestAgyCheckSyntheticOneGroupOneBatch(t *testing.T) {
 				offset += size
 			}
 			got := agyCheckEvidenceObservation(row, s, e)
-			if got.Outcome != "fewer than two parallel batches" || got.Summary.ParallelBatches != 1 || agyCheckClassify(got, 6).OK {
+			if got.Outcome != "" || got.ParallelOutcome != "parallel: 1 overlapping batch" || got.Summary.ParallelBatches != 1 || !agyCheckClassify(got, 6).OK {
 				t.Fatalf("single dispatch split: %+v", got)
 			}
 		})

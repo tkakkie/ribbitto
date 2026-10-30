@@ -13,8 +13,8 @@ type agyCheckRow struct {
 	Location                         string
 }
 
-// agyCheckExpected is the single source for the future page's expected values.
-// Exposure rows record 1.4.7 behaviour to be read, not necessarily a failure.
+// agyCheckExpected is the single source for the page's expected values.
+// Exposure rows record version behaviour to be read, not necessarily a failure.
 var agyCheckExpected = []agyCheckRow{
 	{"hook-decision", "hook", "Production hook (20 s timeout): exit 0 with deny decision", "denied", ""},
 	{"hook-exit2", "hook", "Production hook (20 s timeout): exit 2 with deny decision", "denied", ""},
@@ -38,11 +38,12 @@ var agyCheckExpected = []agyCheckRow{
 	{"mcp-off", "settings", "Verify off, allow hook: mcp(*)", "denied", ""},
 	{"read-url", "settings", "read_url (#1700)", "not exercisable", ""},
 	{"execute-url", "settings", "execute_url (#1700)", "not exercisable", ""},
-	{"task-on", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, verify on, manage_task runs", "allowed", ""},
+	{"task-on", "exposure", "1.4.9 refuses manage_task with verify on; 1.4.7 ran it", "denied", ""},
 	{"task-off", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, verify off, manage_task runs", "allowed", ""},
 	{"list-resources", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, list_resources answers for stub", "answered", ""},
 	{"read-resource", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, read_resource answers for stub", "answered", ""},
 	{"outside-write", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, file write outside workspace", "allowed", ""},
 	{"outside-read", "exposure", "1.4.7 to be read, not necessarily a failure: allow hook, file read outside workspace", "allowed", ""},
-	{"reconciliation", "reconciliation", "Ordinary-agent regression check, not tamper resistance or proof for production (the production guard keeps no decision log); a match never approves version trust; alternating allow/deny, at least two parallel batches", "counts reconcile", ""},
+	{"reconciliation", "reconciliation", "Ordinary-agent regression check, not tamper resistance or proof for production (the production guard keeps no decision log); a match never approves version trust; alternating allow/deny", "counts reconcile", ""},
+	{"parallel-batches", "parallel", "Same run as reconciliation: no overlapping hook invocations (1.4.7 and 1.4.9 ran requested parallel calls one after another)", "sequential", ""},
 }

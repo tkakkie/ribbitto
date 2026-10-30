@@ -30,6 +30,9 @@ func agyCheckExecute(o agyCheckOptions, d agyCheckDeps) agyCheckResult {
 	}
 	var results agyCheckRowResults
 	for _, row := range agyCheckExpected {
+		if row.ID == "parallel-batches" {
+			continue // Reconciliation appends both observations from one invocation.
+		}
 		if err := agyCheckExecuteRow(o, x, m, binary, row, &results); err != nil {
 			return agyCheckResult{InvalidReason: err.Error()}
 		}
@@ -44,6 +47,13 @@ type agyCheckRowResults struct {
 
 // Both full-command and single-row checks use this collection and override path.
 func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMarker, binary string, row agyCheckRow, results *agyCheckRowResults) error {
+	if row.ID == "parallel-batches" {
+		for _, candidate := range agyCheckExpected {
+			if candidate.ID == "reconciliation" {
+				row = candidate
+			}
+		}
+	}
 	s, err := agyCheckScenarioFor(row.ID)
 	if err != nil {
 		return errors.New("missing scenario")
@@ -87,6 +97,9 @@ func agyCheckExecuteRow(o agyCheckOptions, x agyCheckExecutionDeps, m agyCheckMa
 	// A nonzero exit can contain expected tool denials, but never repairs a
 	// missing/malformed result; parsing already discards every partial fact.
 	results.observations = append(results.observations, observation)
+	if row.ID == "reconciliation" {
+		results.observations = append(results.observations, agyCheckParallelObservation(observation))
+	}
 	return nil
 }
 

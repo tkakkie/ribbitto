@@ -29,7 +29,8 @@ func isTargetNavigated(err error) bool {
 // #1251 covered only calls that start a navigation. Repeating Wait lets Evaluate
 // discard its cached window on the subsequent context-not-found error.
 // The predicate and arguments run unchanged: only this one error is retried,
-// at most five times, never a wrong answer or a timeout, so no check is loosened.
+// with 5 retries in total per wait call (the count is not reset within the call),
+// never a wrong answer or a timeout, so no check is loosened.
 func waitAcrossNavigation(page *rod.Page, predicate string, args ...any) error {
 	for retries := 0; ; retries++ {
 		err := page.Wait(rod.Eval(predicate, args...))
@@ -76,7 +77,16 @@ func TestIsTargetNavigated(t *testing.T) {
 func testWaitNavigationBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
+	started := make(chan struct{}, 16)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/poll-started" {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		n, err := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/p/"))
 		if err != nil || !strings.HasPrefix(r.URL.Path, "/p/") {
 			http.NotFound(w, r)
@@ -89,7 +99,7 @@ func testWaitNavigationBrowser(t *testing.T, browser *rod.Browser) {
 	page := browser.MustPage().Context(ctx)
 	defer page.MustClose()
 	page.MustActivate()
-	const busy = `(n) => { const end = Date.now() + 400; while (Date.now() < end) {} return document.body.dataset.page === n }`
+	const busy = `(n) => { navigator.sendBeacon('/poll-started'); const end = Date.now() + 400; while (Date.now() < end) {} return document.body.dataset.page === n }`
 	var plainOutcomes []string
 	plainHits := 0
 	for i := range 5 {
@@ -102,6 +112,14 @@ func testWaitNavigationBrowser(t *testing.T, browser *rod.Browser) {
 			if err := page.WaitLoad(); err != nil {
 				t.Fatalf("round %d %s initial load: %v", i+1, mode, err)
 			}
+		drainStarted:
+			for {
+				select {
+				case <-started:
+				default:
+					break drainStarted
+				}
+			}
 			done := make(chan error, 1)
 			go func() {
 				if mode == "plain" {
@@ -110,8 +128,15 @@ func testWaitNavigationBrowser(t *testing.T, browser *rod.Browser) {
 					done <- waitAcrossNavigation(page, busy, next)
 				}
 			}()
-			// Keep the poll busy in the old document while Go starts navigation.
-			time.Sleep(100 * time.Millisecond)
+			// A fixed delay can lose the race under CI load; the beacon signals
+			// an in-flight poll without needing help from the busy page.
+			select {
+			case <-started:
+			case <-time.After(10 * time.Second):
+				t.Fatalf("round %d %s: the poll never announced it was in flight", i+1, mode)
+			case <-ctx.Done():
+				t.Fatalf("round %d %s: the poll never announced it was in flight", i+1, mode)
+			}
 			if _, err := (proto.PageNavigate{URL: server.URL + "/p/" + next}).Call(page); err != nil {
 				t.Fatalf("round %d %s replacement navigation: %v", i+1, mode, err)
 			}

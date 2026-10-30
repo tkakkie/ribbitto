@@ -24,26 +24,26 @@ jobs:
           - name: slice-default
             selector: ^TestAgyCheckCommand
             parallel: ""
-          - name: slice-p1
+          - name: slice-p8
             selector: ^TestAgyCheckCommand
-            parallel: "1"
-          - name: slice-p2
+            parallel: "8"
+          - name: slice-p16
             selector: ^TestAgyCheckCommand
-            parallel: "2"
+            parallel: "16"
+          - name: slice-p40
+            selector: ^TestAgyCheckCommand
+            parallel: "40"
           - name: t-endtoend
             selector: ^TestAgyCheckCommandEndToEnd$
             parallel: ""
-          - name: t-lifecycle
-            selector: ^TestAgyCheckCommandInvalidLifecycle$
+          - name: one-flipped
+            selector: ^TestAgyCheckCommandEndToEnd$/^flipped$
             parallel: ""
-          - name: t-signal
-            selector: ^TestAgyCheckCommandSignalInvalid$
+          - name: one-match
+            selector: ^TestAgyCheckCommandEndToEnd$/^match$
             parallel: ""
-          - name: t-failsclosed
-            selector: ^TestAgyCheckCommandFailsClosed$
-            parallel: ""
-          - name: t-revalidates
-            selector: ^TestAgyCheckCommandRevalidatesMarker$
+          - name: one-pin-before
+            selector: ^TestAgyCheckCommandInvalidLifecycle$/^pin-before$
             parallel: ""
     defaults:
       run:

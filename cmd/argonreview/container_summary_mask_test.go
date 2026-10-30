@@ -1,12 +1,134 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestSummaryPackageCompilerSplitNameMask(t *testing.T) {
+	for _, shape := range []string{"ghp_placeholder", "github_pat_placeholder", "AKIAplaceholder", "-----BEGIN PLACEHOLDER-----"} {
+		for _, matching := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/%v", shape, matching), func(t *testing.T) {
+				prefix, suffix := shape[:2], shape[2:]
+				if !matching {
+					suffix = "ordinary"
+				}
+				pkg, compiler := "FAIL "+prefix, suffix+"\n"
+				r := &containerRecord{complete: true, packageOutput: retainedOutput{head: []byte(pkg), total: len(pkg)}, compiler: retainedOutput{head: []byte(compiler), total: len(compiler)}}
+				facts := recordSummaryFacts(r)
+				wantPkg, wantCompiler := pkg, suffix
+				if matching {
+					wantPkg, wantCompiler = "[name withheld]", "[name withheld]"
+				}
+				want := summaryFacts{}
+				want.packageFailures.add(wantPkg, summaryExcerptLimit)
+				want.compiler.add(wantCompiler, summaryExcerptLimit)
+				want.compiler.shortened[0] = matching
+				in := summaryInput{check: "test", verdict: "FAILED", facts: facts}
+				got := buildContainerSummary(in)
+				in.facts = want
+				if expected := buildContainerSummary(in); got != expected {
+					t.Fatalf("package/compiler boundary: got %q want %q", got, expected)
+				}
+			})
+		}
+	}
+}
+
+func TestSummaryPackageNoticeAllocations(t *testing.T) {
+	const notices = "FAIL ordinary\n"
+	var previous float64
+	for _, size := range []int{aggregatorOutputLimit / 128, aggregatorOutputLimit} {
+		output := strings.Repeat(notices, summaryExcerptLimit)
+		output += strings.Repeat("x\n", (size-len(output))/2)
+		r := &containerRecord{complete: true, packageOutput: retainedOutput{head: []byte(output), total: len(output)}}
+		baseline := summaryFacts{}
+		for range summaryExcerptLimit {
+			baseline.packageFailures.add(strings.TrimSuffix(notices, "\n"), summaryExcerptLimit)
+		}
+		in := summaryInput{check: "test", verdict: "FAILED", facts: baseline}
+		want := buildContainerSummary(in)
+		var facts summaryFacts
+		allocs := testing.AllocsPerRun(3, func() { facts = recordSummaryFacts(r) })
+		in.facts = facts
+		if got := buildContainerSummary(in); got != want {
+			t.Fatalf("ordinary output changed at %d bytes: got %q want %q", size, got, want)
+		}
+		// The gate has a fixed number of passes; only the display cap may add
+		// per-line work. Doubling down on short lines must not add allocations.
+		if allocs > 32*summaryExcerptLimit || previous != 0 && allocs > previous+summaryExcerptLimit {
+			t.Fatalf("allocations scale with retained lines: bytes=%d allocations=%.0f previous=%.0f", size, allocs, previous)
+		}
+		t.Logf("bytes=%d allocations=%.0f", size, allocs)
+		previous = allocs
+	}
+}
+
+func TestSummaryPackageNoticeHiddenMatch(t *testing.T) {
+	const noticeTotal = summaryExcerptLimit + 3
+	output := strings.Repeat("FAIL ordinary\n", noticeTotal) + strings.Repeat("x\n", 100) + "ghp_placeholder\n"
+	r := &containerRecord{complete: true, packageOutput: retainedOutput{head: []byte(output), total: len(output)}, compiler: retainedOutput{head: []byte("ordinary\n"), total: len("ordinary\n")}}
+	facts := recordSummaryFacts(r)
+	if facts.packageFailures.total != noticeTotal || len(facts.packageFailures.lines) != summaryExcerptLimit || facts.compiler.total != 1 {
+		t.Fatalf("hidden match changed counts: %+v", facts)
+	}
+	for _, line := range append(facts.packageFailures.lines, facts.compiler.lines...) {
+		if line != "[name withheld]" {
+			t.Fatalf("unlocated hidden match must conservatively withhold the displayed sequence: %q", line)
+		}
+	}
+}
+
+func TestSummaryCommandOutputVerbatim(t *testing.T) {
+	const diagnostic = "# p/ghp_placeholder\n"
+	in := summaryFixture("build", "FAILED", diagnostic, diagnostic)
+	got := buildContainerSummary(in)
+	for _, header := range []string{"Command output:", "Standard error:"} {
+		if !strings.Contains(got, header+"\n"+summaryIndent+diagnostic) {
+			t.Fatalf("command diagnostics changed: %q", got)
+		}
+	}
+	if strings.Contains(got, "[name withheld]") {
+		t.Fatalf("command output is outside recorded-name masking: %q", got)
+	}
+}
+
+func TestContainerBrowserSummaryRunVerbatim(t *testing.T) {
+	const run = "TestBrowser/ghp_placeholder"
+	for _, verified := range []bool{false, true} {
+		t.Run(fmt.Sprint(verified), func(t *testing.T) {
+			var reports []string
+			for _, name := range []string{"TestBrowser/ordinary", run} {
+				v := browserRunFixture(t)
+				stream := containerEvents(browserTestPackage, name, "pass")
+				if !verified {
+					stream = containerEvents(browserTestPackage, "TestOtherBrowser", "pass")
+				}
+				v.runner = summaryRunner(stream, "", 0)
+				report, err := v.verifyBrowser(context.Background(), "./internal/web", name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				reports = append(reports, report)
+			}
+			want := strings.ReplaceAll(reports[0], "TestBrowser/ordinary", run)
+			first := "NOT VERIFIED: the named test did not run: " + run + "\n"
+			if verified {
+				first = "verified\n"
+				if !strings.Contains(reports[1], "named test: "+run+" passed (1 leaf tests)\n") {
+					t.Fatalf("named-test verdict changed: %q", reports[1])
+				}
+			}
+			if reports[1] != want || !strings.HasPrefix(reports[1], first) || !strings.Contains(reports[1], "Check: test-browser ./internal/web "+run+"\n") {
+				t.Fatalf("agent-supplied browser run changed: got %q want %q", reports[1], want)
+			}
+		})
+	}
+}
 
 func TestSummaryNameMaskMatchesIndex(t *testing.T) {
 	for _, name := range []string{

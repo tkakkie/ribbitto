@@ -119,9 +119,10 @@ segments, including segments joined with a newline for conservative boundary
 over-detection. Package output and compiler output are scanned separately and
 together with newline boundaries; their maximum taints the package stream.
 Only detection counts survive.
-A matching name displays `[name withheld]` in the index and every summary mode,
-even with logs off; indexed names stay selectable only by ordinal.
-Withheld names omit their excerpts; compiler/package lines are masked by window.
+Matching names display `[name withheld]` in every summary and the index,
+including logs off; index selection uses ordinals.
+Excerpts are omitted; package/compiler masks use bounded windows.
+Masking covers recorded names and excerpt, package-notice and compiler lines repeating withheld names; command output, stderr and agent-supplied arguments (pattern, browser run) stay verbatim.
 Summary container lines are sanitised and indented with `  | `; only trusted lines
 start at column zero.
 

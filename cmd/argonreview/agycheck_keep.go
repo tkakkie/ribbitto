@@ -47,19 +47,23 @@ func agyCheckKeepReady(root string, f agyCheckFiles) error {
 	return err
 }
 
-func agyCheckKeepRow(root, source, id string, f agyCheckFiles) error {
+func agyCheckKeepRow(root, source, id string, f agyCheckFiles) (present bool, err error) {
 	for _, path := range []string{filepath.Join(root, "kept"), filepath.Join(root, "kept", id)} {
 		if err := f.path(root, path); err != nil {
-			return err
+			return present, err
 		}
 		if err := f.private(filepath.Dir(path), true); err != nil {
-			return err
+			return present, err
 		}
 		if err := f.mkdir(path, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
+			return present, err
+		}
+		// Once the row directory exists, even an incomplete copy must be listed.
+		if path == filepath.Join(root, "kept", id) {
+			present = true
 		}
 		if err := f.private(path, true); err != nil {
-			return err
+			return present, err
 		}
 	}
 	for _, file := range []struct {
@@ -68,17 +72,17 @@ func agyCheckKeepRow(root, source, id string, f agyCheckFiles) error {
 	}{{"out.jsonl", agyCheckTranscriptMaxBytes}, {"err.txt", 64 << 10}} {
 		data, err := f.readPrefixInside(root, filepath.Join(source, file.name), file.cap)
 		if err != nil {
-			return err
+			return present, err
 		}
 		path := filepath.Join(root, "kept", id, file.name)
 		if err := f.write(root, path, data, true, 0o600); err != nil {
-			return err
+			return present, err
 		}
 		if err := f.private(path, false); err != nil {
-			return err
+			return present, err
 		}
 	}
-	return nil
+	return present, nil
 }
 
 func agyCheckRetainer(o agyCheckOptions, root string, f agyCheckFiles, row agyCheckRow, observation *agyCheckObservation, results *agyCheckRowResults) func(agyCheckRowDirs, agyCheckRunResult) error {
@@ -90,11 +94,11 @@ func agyCheckRetainer(o agyCheckOptions, root string, f agyCheckFiles, row agyCh
 		if agyCheckKeepObservationOK(final, o.calls) {
 			return nil
 		}
-		if err := agyCheckKeepRow(root, r.Row, row.ID, f); err != nil {
-			return err
+		present, err := agyCheckKeepRow(root, r.Row, row.ID, f)
+		if present {
+			results.kept = append(results.kept, row.ID)
 		}
-		results.kept = append(results.kept, row.ID)
-		return nil
+		return err
 	}
 }
 
@@ -124,7 +128,10 @@ func agyCheckFinishKeep(o agyCheckOptions, root string, f agyCheckFiles, kept []
 		}
 		if found && ok {
 			if err := f.cleanup(root, filepath.Join(root, "kept", id)); err != nil {
-				result.InvalidReason = string(agyCheckKeeping)
+				result.KeptRows = append(result.KeptRows, id)
+				if result.InvalidReason == "" {
+					result.InvalidReason = string(agyCheckKeeping)
+				}
 			}
 		} else {
 			result.KeptRows = append(result.KeptRows, id)

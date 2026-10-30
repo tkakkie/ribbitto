@@ -51,7 +51,7 @@ func TestAgyCheckKeepFiles(t *testing.T) {
 				}
 				return open(p, flags, mode)
 			}
-			if err := agyCheckKeepRow(m.Isolation, r.Row, "hook-silent", f); err != nil {
+			if _, err := agyCheckKeepRow(m.Isolation, r.Row, "hook-silent", f); err != nil {
 				t.Fatal(err)
 			}
 			for rel, cap := range map[string]int{"": 0, "hook-silent": 0, "hook-silent/out.jsonl": agyCheckTranscriptMaxBytes, "hook-silent/err.txt": 64 << 10} {
@@ -120,7 +120,7 @@ func TestAgyCheckKeepRefusals(t *testing.T) {
 					return open(p, flags, mode)
 				}
 			}
-			if err := agyCheckKeepRow(m.Isolation, r.Row, "hook-silent", f); err == nil {
+			if _, err := agyCheckKeepRow(m.Isolation, r.Row, "hook-silent", f); err == nil {
 				t.Fatal("unsafe retention accepted")
 			}
 		})
@@ -403,7 +403,7 @@ func TestAgyCheckKeepCleanupFailure(t *testing.T) {
 	for _, name := range []string{"out.jsonl", "err.txt"} {
 		agyCheckTestWrite(t, filepath.Join(r.Row, name), []byte(agyCheckKeepMarker), 0o600)
 	}
-	if err := agyCheckKeepRow(m.Isolation, r.Row, "discovery-root", f); err != nil {
+	if _, err := agyCheckKeepRow(m.Isolation, r.Row, "discovery-root", f); err != nil {
 		t.Fatal(err)
 	}
 	f.remove = func(string) error { return errors.New(agyCheckKeepMarker) }

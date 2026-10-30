@@ -181,9 +181,19 @@ func TestAgyCheckKeepFinalMetadata(t *testing.T) {
 func TestAgyCheckKeepMidRunFailure(t *testing.T) {
 	h := agyCheckNewCommandHarness(t, "hook-decision", "flip")
 	validate := h.x.runner.validate
+	failed := false
+	stat := h.x.runner.files.lstat
+	h.x.runner.files.lstat = func(path string) (os.FileInfo, error) {
+		// A mid-run return lists kept IDs without the completed-run recheck.
+		if failed && path == filepath.Join(h.m.Isolation, "kept") {
+			t.Fatal("mid-run failure ran final metadata recheck")
+		}
+		return stat(path)
+	}
 	h.x.runner.validate = func(o agyCheckOptions, d agyCheckDeps) (agyCheckMarker, error) {
 		// Row A completes its three validations; row B fails before starting.
 		if h.validations == 4 {
+			failed = true
 			return agyCheckMarker{}, os.ErrPermission
 		}
 		return validate(o, d)

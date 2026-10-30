@@ -64,7 +64,7 @@ func TestAgyCheckKeepSplit(t *testing.T) {
 				for _, name := range []string{"out.jsonl", "err.txt"} {
 					agyCheckTestWrite(t, filepath.Join(r.Row, name), []byte(agyCheckKeepMarker), 0o600)
 				}
-				if err := agyCheckKeepRow(m.Isolation, r.Row, "reconciliation", f); err != nil {
+				if _, err := agyCheckKeepRow(m.Isolation, r.Row, "reconciliation", f); err != nil {
 					t.Fatal(err)
 				}
 				h.m.Isolation, h.d.files = m.Isolation, f

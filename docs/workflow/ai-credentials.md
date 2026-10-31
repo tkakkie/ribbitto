@@ -38,14 +38,16 @@ GH_TOKEN=$(cat "$tok"); export GH_TOKEN
 unset GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN
 export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=2
 export GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=
-export GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1="!\"$HOME/.ribbitto-ai/credential-helper.sh\" \"$name\""
+export RIBBITTO_AI_HELPER="$HOME/.ribbitto-ai/credential-helper.sh" RIBBITTO_AI_NAME="$name"
+export GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1='!"$RIBBITTO_AI_HELPER" "$RIBBITTO_AI_NAME"'
 exec "$@"
 ```
 
-Claude uses the same pair: `GH_TOKEN="$(cat ~/.ribbitto-ai/claude.token)" gh …`
-and `git -c credential.helper= -c "credential.helper=!\"$HOME/.ribbitto-ai/credential-helper.sh\" claude" push …`.
-Git runs a helper string through a shell, so the path stays quoted: a `HOME` with
-a space works.
+Claude uses the same launcher: `run-as.sh claude gh …` and `run-as.sh claude git push …`.
+Git runs a helper string through a shell, so the helper path and the AI name
+are exported once and the single-quoted string only names the variables: the
+path stays data, whatever characters `HOME` holds, and it survives a later
+change of `HOME` (the test used a path with `$`, `"` and spaces).
 
 ## Argon (Antigravity)
 

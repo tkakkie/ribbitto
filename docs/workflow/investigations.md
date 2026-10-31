@@ -14,7 +14,7 @@ Performance measurements on the host need the maintainer's approval
 (maintainer, 2026-10-18, #1308).
 All conditions apply:
 
-1. Cross-review (Claude or Codex), Copilot and adversarial review approve
+1. Cross-review, Copilot and adversarial review approve
 with measurement pending; CI passes at that head before `ai-reviewed`.
 Measure after that label. Before asking for merge, the orchestrator
 checks results against the issue's *Done when*.

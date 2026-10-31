@@ -34,7 +34,7 @@ labels: []
 
 ## Implementer
 
-<!-- Codex, Argon or Claude, proposed by the author; the maintainer confirms
+<!-- Leave empty for the default in docs/workflow/README.md, or name Codex, Argon or Claude with a reason; the maintainer confirms
      it when adding `ready`.
      Outside contributors can leave this empty. -->
 

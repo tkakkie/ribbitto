@@ -44,7 +44,7 @@ Copilot reviews each pull request **once** (not a
 `.github/instructions/code-review.instructions.md`. It is used only for this
 review, as an advisory reviewer. The orchestrating AI requests it by hand on
 the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after
-the other AI approves and the branch has the current `main`. The `main`
+the cross-reviewer approves and the branch has the current `main`. The `main`
 ruleset does not request it on ready, and drafts and new pushes do not
 trigger it. A repeat review is requested only when the maintainer asks.
 Balanced is not used: it can only be chosen by hand in the *Reviewers* panel,
@@ -115,7 +115,7 @@ rules in `AGENTS.md` and `docs/domain/invariants.md`; being documentation does n
 When in doubt, review. A past review without findings is never a reason to
 skip one. Its findings are advisory.
 
-- **When:** after the other AI approves and its findings are fixed, the
+- **When:** after the cross-reviewer approves and its findings are fixed, the
   branch has the current `main`, and Copilot's review and any follow-up check
   have passed; on that head, while the pull request is a draft, immediately
   before `ai-reviewed`. It does not run alongside the first cross-review.
@@ -136,5 +136,8 @@ skip one. Its findings are advisory.
   the commits, the diff and the earlier findings. Post
   `**Adversarial review — <AI>** (at <SHA>)`. The template's *Adversarial*
   field names the AI and the reviewed SHA, `pending`, or `not required` with
-  the reason. The other AI checks the requirement against what the diff
-  does, not only the paths it touches.
+  the reason.
+- **Who reviews, and the requirement check:** the third-AI reviewer is an AI
+  eligible under [review independence](README.md#principles), decided from
+  the pull request's actual commits. It checks the requirement against what
+  the diff does, not only the paths it touches.

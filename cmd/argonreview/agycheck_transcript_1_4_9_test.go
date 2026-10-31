@@ -151,8 +151,8 @@ func TestAgyCheck149TaskOn(t *testing.T) {
 	for _, state := range []string{"DONE", "ERROR"} {
 		t.Run(state, func(t *testing.T) {
 			row, s, e := agyCheckEvidenceFixture(t, "task-on")
-			if row.Expected != "denied" || !strings.Contains(row.Description, "1.4.9 observed denied once and allowed once") || strings.Contains(row.Description, "refuses") {
-				t.Fatalf("unstable observation must retain stricter expectation: %+v", row)
+			if row.Expected != "either" || !strings.Contains(row.Description, "1.4.9 denied once and allowed twice across runs 3-5 (unstable)") || !strings.Contains(row.Description, "complete evidence") {
+				t.Fatalf("unstable observation must accept either with evidence: %+v", row)
 			}
 			e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestStep(0, "manage_task", state) + agyCheckTestResult)
 			got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4)
@@ -160,7 +160,7 @@ func TestAgyCheck149TaskOn(t *testing.T) {
 			if state == "ERROR" {
 				want = "denied"
 			}
-			if got.OK != (state == "ERROR") || got.Observed != want {
+			if !got.OK || got.Observed != want {
 				t.Fatalf("unstable outcome classification: %+v", got)
 			}
 		})

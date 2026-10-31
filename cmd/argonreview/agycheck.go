@@ -113,6 +113,8 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 		return r
 	}
 	switch row.Expected {
+	case agyCheckEither:
+		r.OK = row.ID == agyCheckEitherRowID && (o.Outcome == "allowed" || o.Outcome == "denied")
 	case "allowed", "denied", "answered", "not exercisable":
 		r.OK = o.Outcome == row.Expected
 	case "covered if loaded":

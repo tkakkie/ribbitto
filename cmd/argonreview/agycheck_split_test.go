@@ -68,25 +68,56 @@ func TestAgyCheckSplitEvidence(t *testing.T) {
 	}
 }
 
-func TestAgyCheckTaskOnDenied(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		change func(*agyCheckEvidence)
-		ok     bool
-	}{
-		{"denied", func(*agyCheckEvidence) {}, true},
-		{"allowed", func(e *agyCheckEvidence) {
-			e.Input.Transcript = []byte(strings.Replace(string(e.Input.Transcript), "ERROR", "DONE", 1))
-		}, false},
-		{"probe", func(e *agyCheckEvidence) { e.Probe = true }, false},
-		{"missing-claim", func(e *agyCheckEvidence) { e.Claims = nil }, false},
-		{"deny-claim", func(e *agyCheckEvidence) { e.Claims[0].Word = "deny" }, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			row, s, e := agyCheckEvidenceFixture(t, "task-on")
-			tc.change(&e)
-			if got := agyCheckClassify(agyCheckEvidenceObservation(row, s, e), 4); got.OK != tc.ok {
-				t.Fatalf("%+v", got)
+func TestAgyCheckTaskOnEither(t *testing.T) {
+	for _, state := range []string{"DONE", "ERROR"} {
+		t.Run(state, func(t *testing.T) {
+			outcome := "allowed"
+			if state == "ERROR" {
+				outcome = "denied"
+			}
+			for _, tc := range []struct {
+				name, reason string
+				change       func(*agyCheckEvidence)
+			}{
+				{"complete", outcome, func(*agyCheckEvidence) {}},
+				{"no-step", "no single intended step", func(e *agyCheckEvidence) {
+					e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestResult)
+				}},
+				{"multiple-steps", "no single intended step", func(e *agyCheckEvidence) {
+					e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestStep(0, "manage_task", state) + agyCheckTestStep(1, "manage_task", state) + agyCheckTestResult)
+				}},
+				{"wrong-tool", "no single intended step", func(e *agyCheckEvidence) {
+					e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestStep(0, "write_file", state) + agyCheckTestResult)
+				}},
+				{"malformed", agyCheckTranscriptUnparsed, func(e *agyCheckEvidence) { e.Input.Transcript = []byte("{\n") }},
+				{"missing-claim", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims = nil }},
+				{"deny-claim", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims[0].Word = "deny" }},
+				{"silent-claim", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims[0].Word = "silent" }},
+				{"wrong-tag", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims[0].Tag = "task-off" }},
+				{"duplicate-claim", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims = append(e.Claims, e.Claims[0]) }},
+				{"extra-claim", "invalid hook claim", func(e *agyCheckEvidence) { e.Claims = append(e.Claims, agyCheckClaim{2, "allow", "task-on"}) }},
+				{"probe", "unexpected side effect", func(e *agyCheckEvidence) { e.Probe = true }},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					row, s, e := agyCheckEvidenceFixture(t, "task-on")
+					e.Input.Transcript = []byte(agyCheckTestInit + agyCheckTestStep(0, "manage_task", state) + agyCheckTestResult)
+					tc.change(&e)
+					observation := agyCheckEvidenceObservation(row, s, e)
+					got := agyCheckClassify(observation, 4)
+					if observation.Outcome != tc.reason || got.Observed != tc.reason || got.OK != (tc.name == "complete") {
+						t.Fatalf("evidence=%+v classification=%+v", observation, got)
+					}
+					if tc.name == "complete" {
+						var out strings.Builder
+						if err := agyCheckRender(&out, agyCheckResult{Rows: []agyCheckResultRow{got}}); err != nil {
+							t.Fatal(err)
+						}
+						line := strings.Join(strings.Fields(strings.Split(out.String(), "\n")[1]), " ")
+						if !strings.HasPrefix(line, "task-on either "+outcome+" ok ") {
+							t.Fatalf("report lost real outcome: %s", line)
+						}
+					}
+				})
 			}
 		})
 	}

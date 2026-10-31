@@ -32,11 +32,22 @@ func TestAgyCheckExpectedTable(t *testing.T) {
 	seen := make(map[string]bool)
 	locations := strings.Fields(".agent/hooks.json .agents/hooks.json .gemini/config/hooks.json .gemini/hooks.json .antigravity/hooks.json hooks.json")
 	for i, row := range agyCheckExpected {
-		if seen[row.ID] || row.ID != fixtures[i].ID || row.Expected != fixtures[i].Outcome || row.Group == "" || row.Description == "" {
+		want := fixtures[i].Outcome
+		if row.ID == "task-on" {
+			want = "either"
+			if fixtures[i].Outcome != "allowed" && fixtures[i].Outcome != "denied" {
+				t.Fatal("task-on fixture must observe a real outcome")
+			}
+		}
+		if seen[row.ID] || row.ID != fixtures[i].ID || row.Expected != want || row.Group == "" || row.Description == "" {
 			t.Fatalf("row %d drifted: %+v", i, row)
 		}
 		seen[row.ID] = true
 		switch row.Expected {
+		case "either":
+			if row.ID != "task-on" {
+				t.Fatalf("either leaked to %s", row.ID)
+			}
 		case "allowed", "denied", "answered", "not exercisable", "covered if loaded", "counts reconcile", "sequential":
 		default:
 			t.Fatalf("unrecognised expectation: %s", row.Expected)
@@ -71,13 +82,17 @@ func TestAgyCheckClassification(t *testing.T) {
 			if r := agyCheckClassify(o, agyCheckDefaultCalls); !r.OK {
 				t.Fatalf("fixture differs: %+v", r)
 			}
-			for _, outcome := range []string{"allowed", "denied", "answered", "not exercisable", "", "unknown"} {
+			for _, outcome := range []string{"allowed", "denied", "answered", "not exercisable", "", "unknown", "no step", "multiple steps", "unexpected side effect", "invalid hook claim", agyCheckTranscriptUnparsed} {
 				if (o.Outcome == "covered if loaded" || o.Outcome == "counts reconcile") && outcome != "not exercisable" {
 					continue
 				}
 				changed := o
 				changed.Outcome = outcome
-				if r := agyCheckClassify(changed, agyCheckDefaultCalls); r.OK != (outcome == o.Outcome) {
+				wantOK := outcome == o.Outcome
+				if o.ID == "task-on" {
+					wantOK = outcome == "allowed" || outcome == "denied"
+				}
+				if r := agyCheckClassify(changed, agyCheckDefaultCalls); r.OK != wantOK || o.ID == "task-on" && r.Observed != outcome {
 					t.Fatalf("outcome %q: %+v", outcome, r)
 				}
 			}
@@ -86,6 +101,21 @@ func TestAgyCheckClassification(t *testing.T) {
 	if agyCheckClassify(agyCheckObservation{ID: "unknown"}, agyCheckDefaultCalls).OK ||
 		agyCheckClassifyRow(agyCheckRow{Expected: "unknown"}, agyCheckObservation{Outcome: "unknown"}, agyCheckDefaultCalls).OK {
 		t.Fatal("unknown row/expectation matched")
+	}
+}
+
+func TestAgyCheckEitherRestricted(t *testing.T) {
+	for _, id := range []string{"task-off", "hook-silent", "outside-read", "hook-decision"} {
+		t.Run(id, func(t *testing.T) {
+			row := agyCheckObserveFindRow(t, id)
+			row.Expected = "either"
+			for _, outcome := range []string{"allowed", "denied", "", "unknown", "answered", "not exercisable", "either"} {
+				got := agyCheckClassifyRow(row, agyCheckObservation{ID: id, Outcome: outcome}, 30)
+				if got.OK || got.Observed != outcome {
+					t.Fatalf("either leaked for %q: %+v", outcome, got)
+				}
+			}
+		})
 	}
 }
 

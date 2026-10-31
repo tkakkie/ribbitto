@@ -13,6 +13,7 @@ decides. Who reviews and how many rounds are in the README and
   findings; the reviewer reads the rest with `gh` and its own token.
 - A background run counts as started only after its log header shows the
   expected `workdir:` and `model:`; an earlier exit is a failed start (#359).
+- Never give a reviewer the Status issue (#1), and never have it fetch it.
 - Post the report with `gh issue comment` or `gh pr comment`. Do not rely on
   GitHub's `@codex review`: it looks only at the most severe problems.
 - A tool that will not run is reported, never re-signed, patched or
@@ -30,6 +31,10 @@ decides. Who reviews and how many rounds are in the README and
 - CodeQL runs from `.github/workflows/codeql.yml` on pushes to `main` and
   weekly, not on pull requests; read its alerts on `main` in the
   repository's Security tab.
+
+- Scratch files go outside the worktree, or are deleted before checks such as
+  `go test ./...`; git-ignored paths such as `bin/` are no exception, because
+  builds and tests use them.
 
 ## Requesting Copilot
 

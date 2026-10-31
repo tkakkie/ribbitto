@@ -75,13 +75,11 @@ Verdict: approve | changes requested
 ```
 
 "Approve" with no findings is a valid review. Only `[blocking]` findings
-hold things up. For each Claude-written issue review, the orchestrator
-notes in its review comment whether Argon counted or fell back to Codex.
-Argon also runs the kept `copilot-check.md` prompt through the README
-recipe on Claude's and Codex's pull requests; a failed or non-counting run falls back to the AI that did not
-write the change (Codex for Claude's, Claude for Codex's), as in
-[Copilot follow-up](delivery.md#copilot-follow-up-check). Adversarial follow-up
-checks and closure verification keep their existing reviewers.
+hold things up. Copilot follow-up checks use the kept `copilot-check.md`
+prompt, run by an AI that did not write the change
+([delivery](delivery.md#copilot-follow-up-check)); a failed or non-counting
+run is retried as the README says. Adversarial follow-up checks and closure
+verification keep their existing reviewers.
 
 ## Closure verification
 

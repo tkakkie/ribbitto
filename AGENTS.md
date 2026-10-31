@@ -30,7 +30,7 @@ covers measurement approval and caps.
   exception follows [decision 43](docs/decisions/43-typescript-with-a-go-driven-build.md).
 - `make web-install` — installs the locked checker; `make check-web` checks
   TypeScript and `make test-web` runs the client unit tests (both in
-  `make check`). Follow [Codex Node setup](docs/workflow/codex-node.md).
+  `make check`). Follow [the web toolchain](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any edge change.
 - `make check` also checks documents: links and `#anchors`, repository

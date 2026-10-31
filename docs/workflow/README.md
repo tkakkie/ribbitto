@@ -134,7 +134,8 @@ Headless runs wait for input forever: **close stdin and set a time limit**
 - **Argon** (Antigravity), from the worktree:
 
   ```sh
-  limit 3600 ~/.ribbitto-ai/run-as.sh antigravity env HOME=$HOME/dev/ribbitto/agy-home PATH=/usr/local/argon-agy:$PATH /usr/local/argon-agy/agy -p "$(cat prompt.md)" --model gemini-4-argon-high --print-timeout 3000s --output-format text < /dev/null
+  n=$(git config user.name); e=$(git config user.email)
+  limit 3600 ~/.ribbitto-ai/run-as.sh antigravity env HOME="$HOME/dev/ribbitto/agy-home" PATH=/usr/local/argon-agy:$PATH GIT_AUTHOR_NAME="$n" GIT_AUTHOR_EMAIL="$e" GIT_COMMITTER_NAME="$n" GIT_COMMITTER_EMAIL="$e" /usr/local/argon-agy/agy -p "$(cat prompt.md)" --model gemini-4-argon-high --print-timeout 3000s --output-format text < /dev/null
   ```
 
   The root-owned pinned `agy` and its own signed-in home, whose

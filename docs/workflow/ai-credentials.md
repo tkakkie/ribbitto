@@ -1,4 +1,4 @@
-# AI credentials and launchers
+[ -s "$tok" ] || { echo "run-as: no token, or an empty token file, for $name" >&2; exit 2; }# AI credentials and launchers
 
 How each AI gets its own GitHub token and how Codex and Argon are started
 (rules: [README](README.md#tokens)). Tested on 2026-10-31; the redacted
@@ -9,7 +9,7 @@ evidence is on #2002.
 `~/.ribbitto-ai/` (mode 700), outside every repository: `claude.token`,
 `codex.token`, `antigravity.token` (mode 600) and two scripts (mode 700).
 The maintainer creates the tokens and saves each without showing it to an AI
-(`read -rs "t?token: "; (umask 077; printf '%s' "$t" > <name>.token); unset t`).
+(zsh: `read -rs "t?token: "; (umask 077; printf '%s' "$t" > <name>.token); unset t`).
 
 `credential-helper.sh`: answers only for `https://github.com`, and finds the token
 directory from its own path, so it works under any `HOME`.
@@ -56,7 +56,7 @@ change of `HOME` (the test used a path with `$`, `"` and spaces).
   it updates itself; the tested pin sits in a root-owned directory the AI user
   cannot write to. Check its hash before and after a run.
 - A dedicated home, `~/dev/ribbitto/agy-home`, signed in by the maintainer
-  (`HOME=$HOME/dev/ribbitto/agy-home /usr/local/argon-agy/agy`, interactive).
+  (`HOME="$HOME/dev/ribbitto/agy-home" /usr/local/argon-agy/agy`, interactive).
   Never use the maintainer's own `~/.gemini`.
 - `settings.json` of that home:
 
@@ -65,14 +65,16 @@ change of `HOME` (the test used a path with `$`, `"` and spaces).
    "trustedWorkspaces": ["<HOME>/dev/ribbitto/wt"]}
   ```
 
+  Replace `<HOME>` with the absolute path of the home directory: `agy` does
+  not expand it, and an unmatched path leaves the worktree untrusted.
   Without the allow rules a command is auto-denied in headless mode.
   `--mode auto` is not available for the account. `--dangerously-skip-permissions`
   was not used: Claude Code's automatic safety check refuses to run it.
   `agy` runs the hook commands of a trusted workspace's `.agents/hooks.json`,
   so the trusted path is the worktree folder, not the whole home.
 - Start `run-as.sh` before `HOME` is replaced, and pass `GIT_AUTHOR_NAME`,
-  `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` when
-  that home has no `.gitconfig`.
+  `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` (the
+  README command does) because that home has no `.gitconfig`.
 
 ## Checks that show no fallback
 

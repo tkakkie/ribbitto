@@ -334,7 +334,7 @@ func TestAgyCheckKeepOutput(t *testing.T) {
 	}
 }
 
-// Frozen from the merged, unmodified 89af1b2 sources with retention off.
+// Frozen from 89af1b2 with retention off; descriptions updated for #1990.
 // The fake has no hook events, so both observations from reconciliation differ.
 func TestAgyCheckKeepOffReport(t *testing.T) {
 	h := agyCheckNewCommandHarness(t, "", "")
@@ -342,7 +342,7 @@ func TestAgyCheckKeepOffReport(t *testing.T) {
 	if !strings.Contains(out, "Rows: 30; differing: 2\n") {
 		t.Fatalf("merged report row count changed: %s", out)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(out))); got != "790ced44fe584e3ca9e3cd4eb0903280925a33d09a91220a9ecadfc3d842bd62" {
+	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(out))); got != "fbfdfc9c6cb29cd8b12dc4446d6302174dae083e010d2bfb2a0fbf52cb142ae7" {
 		t.Fatalf("complete flag-off report changed: %s", got)
 	}
 	h.restored(t)

@@ -126,7 +126,7 @@ probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
 | Workspace/3 | Workspace ALLOW/home DENY, different name and same name at `.agent/hooks.json`/`.agents/hooks.json` | `denied` |
 | Settings/4 | Allow hook: `run_command` on/headless and off; `danger` on/headless without allow rule; `verify` off under `mcp(*)` deny | `denied` |
 | URL/2 | `read_url`, `execute_url` (#1700) | `not exercisable` |
-| Exposure/1 | Allow hook: `manage_task` on (1.4.9 refuses; 1.4.7 ran it) | `denied` |
+| Exposure/1 | Allow hook: `manage_task` on (1.4.7 ran it; 1.4.9 seen denied and allowed) | `denied` |
 | Exposure/3 | Allow hook: `manage_task` off; file write/read outside workspace | `allowed` |
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls; counts below | `counts reconcile` |
@@ -141,11 +141,12 @@ that call's silence and the deny elsewhere, not locations beyond the six
 candidates. No load event; silence is tool-record evidence,
 not a load report or trust decision. Same-name: both records, deny, no effect.
 
-Observed: 1.4.7 events, `write_file`/`call_mcp_tool`; two 1.4.9 hand captures
-(2026-10-30, #1978): init, step_update (`agent_response`: ACTIVE then DONE;
-`write_file` ERROR with `tool_info.error`), result. Both versions ran requested
-parallel calls one after another. Hook-load events, deny error text and other
-tool names unverified. DONE/ERROR count; ACTIVE-only tools fail.
+Observed: 1.4.7 events, `write_file`/`call_mcp_tool`; 1.4.9 (#1978,
+#1990): init, step_update (`agent_response` ACTIVE→DONE; `write_file` ERROR
+with `tool_info.error`; tool DONE typed `unknown`), result;
+outside read: `read_file`. Both ran requested parallel calls
+sequentially. Hook-load events, deny text and other names unverified.
+DONE/ERROR count; ACTIVE-only tools fail.
 Missing executable: no claim.
 
 URL: no tools/claims, even unfinished/ERROR. Stub: absent/start-only or only
@@ -154,7 +155,7 @@ unpaired replies, pending requests, bad/unreadable records fail.
 
 Reconciliation: allow-first alternation, both, gap≤1; ≥ `--calls` steps;
 steps=hooks=allows+denies, ERRORs=denies, files=allows; no repeated replies.
-Observed always shows all counts above, repeats and any refusal reason.
+Observed shows counts, repeats and refusal reason.
 `parallel-batches` uses the same invocation.
 Only `alternate` writes exclusive contiguous `events/NNNNNN`:
 `start <call-number> <word> <tag>`, fixed 1.5 s hold, `end <call-number>`,

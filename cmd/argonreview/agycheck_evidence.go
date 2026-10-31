@@ -189,7 +189,7 @@ func agyCheckEvidenceObservation(row agyCheckRow, s agyCheckScenario, e agyCheck
 		}
 		return observation
 	}
-	if parsed.Unfinished != 0 || len(parsed.Steps) != 1 || parsed.Steps[0].Tool != s.tool() {
+	if parsed.Unfinished != 0 || len(parsed.Steps) != 1 || !agyCheckToolAccepted(s.ID, parsed.Steps[0].Tool) {
 		return fail("no single intended step")
 	}
 	if row.Group == "discovery" {

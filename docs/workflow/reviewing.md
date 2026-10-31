@@ -3,13 +3,11 @@
 ## Review independence and rounds
 
 **Who reviews:** following [review independence](README.md#principles),
-Claude-written issues →
-Argon through the trusted `argonreview issue` subcommand
-([invocation](running-argon.md#the-trusted-invocation)), falling back to
-Codex when the run does not count; other Claude work → Codex;
+Claude-written issues → Argon through the [README recipe](README.md#roles-and-running-the-ais),
+falling back to Codex when the run does not count; other Claude work → Codex;
 Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
-there → Codex ([Argon's pull requests](argon-pull-requests.md)). Copilot
-follow-up checks use [Argon and an independent fallback](copilot.md#copilot-follow-up-check).
+there → Codex. Copilot follow-up checks use
+[Argon and an independent fallback](copilot.md#copilot-follow-up-check).
 Claude's own work is its issues, the fixes it writes during a review, and
 an issue the maintainer named Claude to implement.
 
@@ -31,13 +29,8 @@ issue revisions have no SHA.
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
-- *Risk* is right (see below) and *Implementer* is set; Argon only for an
-  [eligible issue](argon-implementer.md#which-issues), with its expected
-  tier checked (in doubt, the higher tier; a possible tier A means not
-  Argon).
-  Claude's issue review (this section) and the maintainer also check the
-  [default](argon-intake.md#default-assignment): within approved steps, an
-  eligible issue names Argon unless it records why not.
+- *Risk* is right (see below) and *Implementer* is set by the maintainer
+  under the [README's roles](README.md#roles-and-running-the-ais).
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
@@ -62,8 +55,8 @@ issue revisions have no SHA.
   *Verified by*, one deliberate defect in the code under test that breaks
   the behaviour the test guards and fails its assertion (not a crash or a
   compile error), and that the test passes again once it is reverted
-  (#360). For Argon's code, Claude records it on CI
-  ([mutation evidence](argon-pull-requests.md#mutation-evidence)).
+  (#360). Evidence may come from local checks or CI; record the deliberate
+  defect and its failing assertion, then revert it.
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 - For each exception in `docs/language-exceptions.txt`, verify that its
@@ -84,8 +77,8 @@ Verdict: approve | changes requested
 "Approve" with no findings is a valid review. Only `[blocking]` findings
 hold things up. For each Claude-written issue review, the orchestrator
 notes in its review comment whether Argon counted or fell back to Codex.
-Argon also runs `argonreview copilot-check` on Claude's and Codex's pull
-requests; a failed or non-counting run falls back to the AI that did not
+Argon also runs the kept `copilot-check.md` prompt through the README
+recipe on Claude's and Codex's pull requests; a failed or non-counting run falls back to the AI that did not
 write the change (Codex for Claude's, Claude for Codex's), as in
 [Copilot follow-up](copilot.md#copilot-follow-up-check). Adversarial follow-up
 checks and closure verification keep their existing reviewers.
@@ -133,7 +126,7 @@ reach the re-review without either AI checking it:
    scripted or manual reproduction, a mutation showing the guard matters,
    or the exact text change. Effort or time is never such a reason.
 2. The AI that did not write the fix (Claude ↔ Codex; Codex on an Argon
-   pull request, [who reviews](argon-pull-requests.md#who-reviews)) checks
+   pull request, following [review independence](README.md#principles)) checks
    that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
    it (where the
@@ -183,7 +176,7 @@ A change is **high** risk if it touches any of: `internal/org/**`,
 entry points `internal/web/org.go`, `internal/web/signin.go`,
 `internal/web/signup.go` and `internal/web/setup.go`,
 `internal/realtime/**`, `db/migrations/**`, `db/queries/**`,
-`.github/**`, `cmd/argonreview/**`, `tools/**`, `Makefile`, `.golangci.yml`,
+`.github/**`, `tools/**`, `Makefile`, `.golangci.yml`,
 `sqlc.yaml`, `go.mod`, `go.sum`, `docs/workflow/**`, or any `AGENTS.md`
 or `CLAUDE.md`. Everything else is **normal**. The author states the risk
 in the template; the reviewer checks it. Which adversarial review runs is

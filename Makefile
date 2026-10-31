@@ -85,18 +85,8 @@ check-static: $(TEMPL)
 	$(MAKE) lint-fixtures
 	go build ./...
 
-# Go timeouts apply per package binary: isolate argonreview's longer limit
-# through testshard so local and CI runs cannot drift (#1948).
 check-test: db-health
-ifeq ($(origin GO_TEST_PACKAGES),undefined)
-	go test -race $(GO_TEST_FLAGS) $(or $(strip $(shell go list -f '{{if ne .ImportPath (print .Module.Path "/cmd/argonreview")}}{{.ImportPath}}{{end}}' ./...)),$(error no packages outside cmd/argonreview))
-	go -C tools run ./testshard -run .. argonreview-agy-command
-	go -C tools run ./testshard -run .. argonreview-container-deadline
-	go -C tools run ./testshard -run .. argonreview-aggregation
-	go -C tools run ./testshard -run .. argonreview-rest
-else
-	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
-endif
+	go test -race $(GO_TEST_FLAGS) $(or $(GO_TEST_PACKAGES),./...)
 
 check-tools: $(TEMPL)
 	go -C tools run ./languagecheck ..
@@ -111,6 +101,7 @@ check-tools: $(TEMPL)
 	go -C tools run ./testshard -check ..
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
+	go -C tools run ./measurementskip ..
 
 # A quick subset of make check to run before pushing a follow-up commit
 # (#848): generated files and CSS are current, the API and dependency

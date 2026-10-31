@@ -79,7 +79,7 @@ Directory entries below are direct-only unless stated otherwise:
   [Approval record](https://github.com/tkakkie/ribbitto/issues/1908#issuecomment-6447910120)
   (#1908, 2026-10-28). The recipe pins,
   `containerChromiumVersion` and update path are in
-  [browser updates](../workflow/argon-verify-browser-updates.md).
+  browser updates (formerly docs/workflow/argon-verify-browser-updates.md).
   No `.dockerignore`, compose or CI change, or script file.
   Every `FROM` uses an `@sha256:` digest; every download uses an exact version
   with a SHA-256 written in the recipe and checked in the same step; Go tools

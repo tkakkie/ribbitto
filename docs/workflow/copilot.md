@@ -32,13 +32,14 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
    pull request was marked ready, convert it back to a draft first.)
 2. On Claude's and Codex's pull requests, Argon checks that the whole diff
    since the approved SHA contains only those changes and each is right:
-   `argonreview copilot-check <pr> <approved-sha>` from the
-   [trusted build](running-argon.md#the-trusted-invocation). If the run fails
+   use `.github/prompts/copilot-check.md` through the
+   [README recipe](README.md#roles-and-running-the-ais), supplying the PR,
+   approved and head SHAs, earlier findings and their diff in the prompt text. If the run fails
    or does not count, fall back to the AI that did not write the follow-up:
    Codex for Claude's change, Claude for Codex's. No AI checks its own change.
    Record whether Argon counted or fell back. On an Argon pull request,
-   Codex still checks Claude's change from CI and a diff on stdin, never in
-   Argon's tree ([who does what](argon-implementer.md#who-does-what)). It reports:
+   Codex checks Claude's change under the same
+   [review independence rule](README.md#principles). It reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex|Argon>** (at <SHA>)

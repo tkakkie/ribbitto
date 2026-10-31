@@ -161,13 +161,4 @@ Routine Codex Node use starts at #1415's merge, after #1410, under the
 exception ended with its last PR; it is not routine authorization.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
 
-Verify, in force since 2026-10-21, stays
-under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
-(#1696) are in force since 2026-10-27 (#1700 stage A): production pins launcher
-`argonreview-2e3a6bf`. The prelude regenerates
-templ, sqlc and Tailwind before Go build/vet/test; `generated` checks output
-and formatting in a copy.
-TypeScript checking stays outside verify.
-#1415 cannot widen verify or those permissions.
-
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

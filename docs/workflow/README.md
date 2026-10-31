@@ -3,12 +3,9 @@
 How work moves from idea to `main` in ribbitto. **One set of rules applies
 to every AI — Claude, Codex and Argon.**
 Safety comes from GitHub (branch protection, CI) and from review, not from
-per-AI sandboxes. `AGENTS.md` covers coding. This file supersedes the older
-rules about who may do what, which AI runs and reviews which work,
-sandboxes, handoff, the Argon launcher and verification, and the review
-tiers; where one of those files conflicts with it, this file wins until the
-follow-ups of #2002 delete them. The rules below that are marked "kept"
-restate product-quality rules from the older files and stay in force.
+per-AI sandboxes. `AGENTS.md` covers coding. This file governs the workflow;
+where an older workflow file conflicts, this file wins. Product-quality
+checklists remain in use.
 
 ## Principles
 
@@ -142,8 +139,9 @@ Headless runs wait for input forever: **close stdin and set a time limit**
   `settings.json` allows `command(*)` and `write_file(*)` and trusts only
   `~/dev/ribbitto/wt`. `--mode auto` is not available for the account.
   Setup: [credentials](ai-credentials.md).
-- **Reviews** use the same commands, with a review prompt that points to
-  [reviewing](reviewing.md).
+- **Reviews** use the same commands with the kept `.github/prompts/`
+  prompts and [context supplied by the orchestrator](ai-credentials.md#review-context).
+  See [reviewing](reviewing.md).
 
 ## Reviews (issues and pull requests)
 
@@ -151,6 +149,9 @@ Headless runs wait for input forever: **close stdin and set a time limit**
   completed with an approving verdict that covers the issue text or the
   head to be delivered; every finding gets a disposition. If findings still
   block after two rounds, ask the maintainer. (Kept.)
+- A failed, timed-out or empty run never counts. Record the failure; retry
+  a timeout, outage, exhausted quota or empty run once, then ask the
+  maintainer. Keep the report tied to its exact commits and findings.
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. (Kept.)
 
@@ -211,10 +212,9 @@ Check every finding against the files before fixing it.
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process`, `bug` | template | Workflow improvement; broken behaviour. |
 
-## Older files in this folder
+## Supporting files
 
-The other files here ([reviewing](reviewing.md), [pull requests](pull-requests.md),
-[investigations](investigations.md), the Argon files and the rest) are older;
-where they conflict with this file, this file wins. Do not extend
-`cmd/argonreview` or the Argon verification: #2002 deletes them. The review
-checklists in `reviewing.md` stay in use.
+[Reviewing](reviewing.md), [pull requests](pull-requests.md),
+[investigations](investigations.md) and [credentials](ai-credentials.md)
+supply checklists and operational detail. No verification harness or sandbox
+is built or extended (#2002).

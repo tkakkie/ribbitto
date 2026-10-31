@@ -61,19 +61,21 @@ Pull requests only; after Copilot's one review; not a review round. A change
 made to answer Copilot would otherwise reach the maintainer unreviewed. If
 answering needs a change:
 
-1. Apply only the changes that answer Copilot; the pull request stays a
-   draft. (If the maintainer asks for another Copilot review after the pull
+1. Apply only the changes that answer findings of this round (Copilot's, and
+   those of the parallel reviews fixed on the same head); the pull request
+   stays a draft. (If the maintainer asks for another Copilot review after the pull
    request was marked ready, convert it back to a draft first.)
 2. An AI that did not write the change checks that the whole diff since the
-   approved SHA contains only those changes and each is right, using
+   baseline SHA (the head Copilot reviewed) contains only those changes and
+   each is right, using
    `.github/prompts/copilot-check.md` through the README recipe with the pull
-   request, the approved and head SHAs, Copilot's findings and the diff. A
+   request, the baseline and head SHAs, the findings and the diff. A
    failed or non-counting run is retried once as the README says; record who
    ran it. It reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex|Argon>** (at <SHA>)
-   Compared: <approved SHA>..<SHA>
+   Compared: <baseline SHA>..<SHA>
    - ✅ | ❌ Copilot comment — how it was checked
    ```
 

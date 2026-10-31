@@ -4,7 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -266,7 +271,7 @@ func TestSummarySkippedParentSplitNameMask(t *testing.T) {
 			got := buildContainerSummary(in)
 			assertSummary(t, in, got)
 			withoutOrdinary := strings.ReplaceAll(got, "p/Test_b", "")
-			if strings.Contains(withoutOrdinary, "Test_") || verifyLogScan(got) != 0 || strings.Contains(got, "p_placeholder") || !strings.Contains(got, "Skipped names:\n"+summaryIndent+"[name withheld]\n") {
+			if strings.Contains(withoutOrdinary, "Test_") || verifyLogScan(got) != 0 || strings.Contains(got, "p_placeholder") || !strings.Contains(got, "Skipped names:\n"+summaryIndent+"[name withheld]\n") || strings.Count(name, "\n") == 1 && !strings.Contains(got, "p/Test_b") {
 				t.Fatalf("unindexed skipped parent exposed split identity: %q", got)
 			}
 		})
@@ -394,6 +399,11 @@ func TestSummaryMaskLinesHardening(t *testing.T) {
 		shown []string
 	}{
 		{"located single line", []string{"ghp_dummy", "ordinary"}, []string{"ordinary"}},
+		{"ordinary neighbour kept", []string{"ghp_dummy", "ordinary"}, []string{"ordinary"}},
+		{"located line ends in split GHP prefix", []string{"ghp_dummy gh", "p_SECRET_TOKEN"}, nil},
+		{"located line ends in split AKIA prefix", []string{"ghp_dummy AK", "IA_SECRET_KEY"}, nil},
+		{"located line starts after split prefix on previous line", []string{"gh", "p_SECRET_TOKEN ghp_dummy"}, nil},
+		{"located line in middle", []string{"ordinary", "ghp_dummy gh", "p_SECRET_TOKEN", "ordinary2"}, []string{"ordinary", "ordinary2"}},
 		{"overlapping pairs", []string{"gh", "p_gh", "p_SECRET_TOKEN"}, nil},
 		{"pair alone", []string{"gh", "p_SECRET_TOKEN", "ordinary"}, []string{"ordinary"}},
 		{"PEM block", []string{"-----BEGIN PRIVATE KEY-----", "body-one", "body-two", "body-three", "-----END PRIVATE KEY-----"}, nil},
@@ -570,5 +580,145 @@ func TestSummaryMaskVerdictUnchanged(t *testing.T) {
 				first = got
 			}
 		})
+	}
+}
+
+func TestSummaryShapeCount(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		want       int
+	}{
+		{"zero", "ordinary", 0},
+		{"one", "ghp_dummy", 1},
+		{"two same kind", "ghp_dummy ghp_other", 2},
+		{"two kinds", "ghp_dummy AKIA_dummy", 2},
+		{"newline removed", "gh\np_dummy", 1},
+		{"ANSI and zero width", "gh\x1b[31mp_\u200bdummy", 1},
+		{"per line terminal reset", "gh\x1b]\np_dummy", 1},
+		{"located and split", "ghp_dummy gh\np_SECRET_TOKEN", 2},
+		{"block marker", "-----BE\u200bGIN PRIVATE KEY-----", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := summaryShapeCount(tc.text); got != tc.want {
+				t.Fatalf("shape count = %d; want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSummaryShapesMatchTripwire(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "verifylog_taint.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var literals []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "verifyLogDetections" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			slice, ok := literal.Type.(*ast.ArrayType)
+			if !ok || slice.Len != nil {
+				return true
+			}
+			element, ok := slice.Elt.(*ast.Ident)
+			if !ok || element.Name != "string" {
+				return true
+			}
+			for _, item := range literal.Elts {
+				value, ok := item.(*ast.BasicLit)
+				if !ok || value.Kind != token.STRING {
+					t.Fatal("tripwire shape must be a string literal")
+				}
+				shape, err := strconv.Unquote(value.Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				literals = append(literals, shape)
+			}
+			return false
+		})
+	}
+	if len(literals) == 0 {
+		t.Fatal("tripwire shape slice not found")
+	}
+	_, database, _ := strings.Cut(containerTestDatabaseURL, "=")
+	u, err := url.Parse(database)
+	if err != nil || u.User == nil {
+		t.Fatal("CI database URL must have user info")
+	}
+	password, ok := u.User.Password()
+	if !ok || password == "" || verifyLogDetections(password) == 0 {
+		t.Fatal("CI password must be nonempty and detected")
+	}
+	if !slices.Equal(summaryShapes(), append(literals, password)) {
+		t.Fatal("summary shapes differ from tripwire literals and derived CI password")
+	}
+	if summaryShapeCount(password) != 1 || summaryShapeCount(password+" "+password) != 2 {
+		t.Fatal("summary must count derived CI password occurrences")
+	}
+}
+
+func TestSummaryLocatedNeighbourForms(t *testing.T) {
+	for _, shape := range []struct{ name, prefix, suffix string }{
+		{"GHP", "gh", "p_SECRET_TOKEN_VALUE"},
+		{"AKIA", "AK", "IA_SECRET_KEY"},
+	} {
+		for _, form := range []string{"notice", "compiler", "skipped name"} {
+			t.Run(shape.name+"/"+form, func(t *testing.T) {
+				r := &containerRecord{complete: true}
+				in := summaryInput{check: "test", verdict: "FAILED"}
+				switch form {
+				case "notice":
+					output := "FAIL ghp_dummy " + shape.prefix + "\n" + shape.suffix + " FAIL\n"
+					r.packageOutput = retainedOutput{head: []byte(output), total: len(output)}
+				case "compiler":
+					output := "compiler: ghp_dummy " + shape.prefix + "\n" + shape.suffix + "\n"
+					r.compiler = retainedOutput{head: []byte(output), total: len(output)}
+				case "skipped name":
+					name := "Test_ghp_dummy " + shape.prefix + "\n" + shape.suffix
+					a := newContainerAggregator(nil, nil)
+					aggregatorWrite(a, containerJSON("p", "start", "run/"+name, "run/"+name+"/child", "pass/"+name+"/child", "skip/"+name, "pass"))
+					result := aggregatorFinish(a)
+					if !strings.Contains(result.verdict, name) || len(a.record.skipped) != 0 || !a.record.complete {
+						t.Fatal("fixture must use the unindexed skipped-parent verdict tail")
+					}
+					r, in.verdict = a.record, result.verdict
+				}
+				in.facts = recordSummaryFacts(r)
+				got := buildContainerSummary(in)
+				assertSummary(t, in, got)
+				if strings.Contains(got, "p_SECRET_TOKEN") || strings.Contains(got, "IA_SECRET_KEY") || verifyLogScan(got) != 0 || !strings.Contains(got, summaryWithheld) {
+					t.Fatalf("located neighbour exposed a continuation: %q", got)
+				}
+			})
+		}
+	}
+}
+
+func TestSummaryPackageEmptyOSCOrdinal(t *testing.T) {
+	r := &containerRecord{complete: true, entries: []*aggregatorEntry{
+		{pkg: "\x1b]\n#2 p", kind: "package", state: "fail"},
+		{pkg: "ordinary", kind: "package", state: "fail"},
+	}}
+	facts := recordSummaryFactsWithOrdinals(r, true)
+	lines := facts.packageFailures
+	if lines.total != 2 || !slices.Equal(lines.lines, []string{"", "ordinary: package failed"}) ||
+		!slices.Equal(lines.ordinals, []int{1, 2}) || !slices.Equal(lines.shortened, []bool{true, false}) {
+		t.Fatalf("empty OSC name must retain exactly one line and ordinal per entry: %+v", lines)
+	}
+	report := buildContainerSummary(summaryInput{check: "test", verdict: "FAILED", facts: facts})
+	if !strings.Contains(report, "Package failures:\n"+summaryIndent+"#1 \n"+summaryIndent+"#2 ordinary: package failed\n") || strings.Contains(report, "#2 p") {
+		t.Fatalf("empty OSC name forged an ordinal entry: %q", report)
+	}
+	var capped summaryLines
+	capped.addEmpty(0)
+	if capped.total != 1 || len(capped.lines) != 0 || len(capped.shortened) != 0 {
+		t.Fatalf("empty identity must respect the excerpt limit: %+v", capped)
 	}
 }

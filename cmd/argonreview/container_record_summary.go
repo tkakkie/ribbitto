@@ -114,11 +114,12 @@ func recordSummaryFactsWithOrdinals(r *containerRecord, ordinals bool) summaryFa
 			display := masked
 			if ordinals {
 				display = summaryText(masked)
-				if display == "" {
-					display = masked
-				}
 			}
-			f.packageFailures.add(display, summaryExcerptLimit)
+			if ordinals && display == "" {
+				f.packageFailures.addEmpty(summaryExcerptLimit)
+			} else {
+				f.packageFailures.add(display, summaryExcerptLimit)
+			}
 			for i := before; i < len(f.packageFailures.lines); i++ {
 				f.packageFailures.shortened[i] = f.packageFailures.shortened[i] || masked != name || display != masked
 			}

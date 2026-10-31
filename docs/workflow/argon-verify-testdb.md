@@ -131,7 +131,7 @@ first: at most 2,048 for verified non-errors; 7,000 for errors, including a
 Generated totals precede paths and survive their cap. Unparsed generated diffs
 get a trusted diagnostic; omitted excerpts are counted.
 
-[Name masking and sanitisation](argon-verify-log.md#secret-tripwire) are merged, not in force.
+[Name masking](argon-verify-log.md#secret-tripwire) is merged, not in force.
 The decided first line stays, except success with
 incomplete facts or a leaf-count/allowed-skip mismatch downgrades MCP alone to
 `NOT VERIFIED: summary inconsistent with verdict`.

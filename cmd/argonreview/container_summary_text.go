@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"strings"
 	"unicode/utf8"
 )
@@ -39,8 +40,9 @@ func summaryMaskLines(lines []string) []string {
 		}
 		return masked
 	}
-	// Locate single lines first so they cannot consume a neighbour that carries
-	// a different split shape. Track identities independently of display text.
+	// Locate single lines first so an ordinary neighbour stays visible. A pair
+	// with a located line must still hide a neighbour completing another shape;
+	// kind counts alone cannot distinguish repeated occurrences of that shape.
 	hidden := make([]bool, len(lines))
 	for i, line := range lines {
 		if verifyLogScan(line) > 0 {
@@ -49,7 +51,15 @@ func summaryMaskLines(lines []string) []string {
 	}
 	located := append([]bool(nil), hidden...)
 	for i := 0; i+1 < len(lines); i++ {
-		if !located[i] && !located[i+1] && verifyLogScan(lines[i]+"\n"+lines[i+1]) > 0 {
+		pair := lines[i] + "\n" + lines[i+1]
+		if located[i] || located[i+1] {
+			if (!hidden[i] || !hidden[i+1]) && summaryShapeCount(pair) > summaryShapeCount(lines[i])+summaryShapeCount(lines[i+1]) {
+				masked[i], masked[i+1] = summaryWithheld, summaryWithheld
+				hidden[i], hidden[i+1] = true, true
+			}
+			continue
+		}
+		if verifyLogScan(pair) > 0 {
 			masked[i], masked[i+1] = summaryWithheld, summaryWithheld
 			hidden[i], hidden[i+1] = true, true
 		}
@@ -69,16 +79,49 @@ func summaryMaskLines(lines []string) []string {
 	return masked
 }
 
-// summaryBlockMarker mirrors the tripwire's whole-section passes. A marker
-// alone cannot locate the block's end, so its entire section must be withheld.
+// summaryBlockMarker cannot locate the block's end, so its entire section
+// must be withheld even when the marker is disguised across source lines.
 func summaryBlockMarker(text string) bool {
-	const marker = "-----BEGIN "
-	joined := strings.ReplaceAll(text, "\n", "")
-	for _, pass := range []string{text, joined, verifyLogVisible(text), verifyLogVisible(joined)} {
-		if strings.Contains(pass, marker) {
+	for _, pass := range summaryScanPasses(text) {
+		if strings.Contains(pass, "-----BEGIN ") {
 			return true
 		}
 	}
+	return false
+}
+
+// summaryShapes mirrors the tripwire's shapes; a drift test pins the literals
+// and CI password derivation without changing the frozen scanner.
+func summaryShapes() []string {
+	shapes := []string{"ghp_", "github_pat_", "AKIA", "-----BEGIN "}
+	_, database, _ := strings.Cut(containerTestDatabaseURL, "=")
+	if u, err := url.Parse(database); err == nil && u.User != nil {
+		if password, ok := u.User.Password(); ok && password != "" {
+			shapes = append(shapes, password)
+		}
+	}
+	return shapes
+}
+
+// summaryShapeCount counts occurrences rather than kinds so a located shape
+// cannot conceal another occurrence completed by an adjacent line.
+func summaryShapeCount(text string) int {
+	n := 0
+	shapes := summaryShapes()
+	for _, pass := range summaryScanPasses(text) {
+		count := 0
+		for _, shape := range shapes {
+			count += strings.Count(pass, shape)
+		}
+		n = max(n, count)
+	}
+	return n
+}
+
+// summaryScanPasses mirrors the scanner's six forms, including terminal
+// parsing reset independently on each line, without a display byte cap.
+func summaryScanPasses(text string) []string {
+	joined := strings.ReplaceAll(text, "\n", "")
 	var visible, visibleJoined strings.Builder
 	for line := range strings.SplitSeq(text, "\n") {
 		verifyLogText(line, func(r rune, _ int) {
@@ -89,7 +132,8 @@ func summaryBlockMarker(text string) bool {
 		})
 		visible.WriteByte('\n')
 	}
-	return strings.Contains(visible.String(), marker) || strings.Contains(visibleJoined.String(), marker)
+	return []string{text, joined, verifyLogVisible(joined), verifyLogVisible(text),
+		visibleJoined.String(), strings.TrimSuffix(visible.String(), "\n")}
 }
 
 // summaryText removes terminal commands and invisible direction changes before
@@ -164,6 +208,16 @@ type summaryLines struct {
 func (l *summaryLines) add(s string, limit int) {
 	l.fragment(s, limit)
 	l.end(limit)
+}
+
+// addEmpty preserves one identity and its ordinal when sanitisation consumes
+// the whole name; parsing the raw name again could invent extra source lines.
+func (l *summaryLines) addEmpty(limit int) {
+	l.total++
+	if len(l.lines) < limit {
+		l.lines = append(l.lines, "")
+		l.shortened = append(l.shortened, true)
+	}
 }
 
 // fragment joins test2json output fragments before identifying source lines,

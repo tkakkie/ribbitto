@@ -182,6 +182,6 @@ worker 1's, never a copy. Wrappers pass `--logs <value>` only with `--verify on`
 [Switch details](argon-verify-log-tool.md#switch) link the harness rules.
 
 #1913 item 5 still needs a trusted rebuild and separately authorised two-home
-swap. Probe paging, refusals, worker isolation, hostile output, regression,
+swap. Probe paging, refusals, worker isolation, hostile/secret output, regression,
 switch mismatches and audit. Measure reads for the templ-rename failure's
 26 leaves. No host measurement is approved.

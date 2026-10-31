@@ -29,6 +29,9 @@ func implementVerifyCheck(t *testing.T, dir, input string, allow bool) {
 	got := implementGuardLogsRegression(t, dir, input)
 	code, out, stderr := got.code, got.out, got.diagnostic
 	want := "call_mcp_tool is not allowed in the implementer trial"
+	if !json.Valid([]byte(input)) {
+		want = "guard error: unreadable hook input"
+	}
 	if allow {
 		want = ""
 	}

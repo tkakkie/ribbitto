@@ -32,9 +32,10 @@ command tool. On-mode MCP admits `verify` through two agreeing layers; the
   wrong types, over-long values, flags, absolute paths, `..` and disallowed
   path-like values. Check names and package patterns are fixed in code;
   no caller selects a command, worktree or image.
-- With logs off, on-mode settings replace `mcp(*)` deny with narrow
+- Feature-on settings (logs off) replace only blanket `mcp(*)` deny with narrow
   `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
   existing bytes, including command and URL denies.
+  The review launcher's settings and guard stay unchanged.
 
 In [preflight][preflight], the guard refused every invalid call first;
 the settings and server layers were not probed separately.
@@ -55,9 +56,8 @@ hooks or MCP bytes make the run not count, as
 
 Outside `agy`'s sandbox, the MCP server is trusted computing base code with
 minimal credentials, Docker and host rights, and no arbitrary-command
-interface. `argonreview verify-mcp` offers one tool (`verify`) with logs off,
-additionally `verify-log` only with `verify-log-mode` on. It runs only
-`container-check`.
+interface. `argonreview verify-mcp` has only `verify` (logs off),
+adds `verify-log` only with `verify-log-mode` on, and runs only `container-check`.
 
 `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
 with a trusted binary and fixed source and worktree arguments. It serves only if its build matches the trusted revision in that source.

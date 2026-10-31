@@ -125,6 +125,17 @@ func implementLogInput(raw string) string {
 
 func TestImplementGuardLogsRegression(t *testing.T) {
 	_, dir := implementGuardFixture(t)
+	accepted, rejected := verifyArgumentsCases()
+	for _, rows := range []struct {
+		raw   []string
+		allow bool
+	}{{accepted, true}, {rejected, false}} {
+		for _, raw := range rows.raw {
+			t.Run(raw, func(t *testing.T) {
+				implementVerifyCheck(t, dir, implementVerifyInput(raw), rows.allow)
+			})
+		}
+	}
 	for _, check := range append(verifyCheckNames(), verifyBrowserCheck) {
 		t.Run(check, func(t *testing.T) {
 			args := map[string]string{"check": check, "package": "./..."}

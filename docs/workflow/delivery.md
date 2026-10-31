@@ -18,13 +18,14 @@ decides. Who reviews and how many rounds are in the README and
   GitHub's `@codex review`: it looks only at the most severe problems.
 - A tool that will not run is reported, never re-signed, patched or
   replaced to make it run.
-- Before a pull request body is published, this prints nothing, or each
+- Before a pull request body is published, run this on the file passed to
+  `gh pr create --body-file` (here `body.md`); it prints nothing, or each
   match is reviewed: real credentials are redacted, harmless mentions (a
   placeholder, the word in prose) may stay. It joins backslash-continued
   lines and flags any URL with user information (#358):
 
   ```sh
-  sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta PR_BODY.md |
+  sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta body.md |
     grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
   ```
 

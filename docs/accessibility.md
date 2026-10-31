@@ -19,24 +19,7 @@ fail until covered by a rendered case.
   `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists
   (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for
   layout.
-- **Forms are labelled.** ✓ Every text input, `<select>` and `<textarea>` has
-  a `<label>` (wrapping or `for`/`id`); hidden inputs need none.
-  Field labels contain only the field name; errors sit outside the label,
-  linked from the input with `aria-describedby`, and use `role="alert"`
-  after a submit. Setup and sign-up use the shared `textField` component:
-  ✓ invalid inputs have `aria-invalid="true"` and an error description;
-  valid inputs omit both attributes. Sign-in uses `textField` with empty
-  field errors and keeps one form-level alert. A radio group's error (the
-  channel image picker) is its own alert: every radio in the group has
-  `aria-invalid="true"` and is described by it. Enhanced failures fill
-  `#message-send-alert` (`role="alert"`, outside swaps) with localised
-  not-sent, unconfirmed or recovered text. Pending failures
-  use an empty polite status; queued/sending states are silent.
-  Retry/Edit/Remove describe their unique body. With composer text, Edit is
-  disabled; `aria-describedby` also names its visible localised explanation.
-  Edit focuses the restored text's end. At 10 items,
-  a localised capacity alert retains the draft, `aria-invalid` and
-  `aria-describedby`.
+- **Forms and tap targets:** see [`accessibility-forms-and-targets.md`](accessibility-forms-and-targets.md).
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.
@@ -47,20 +30,6 @@ fail until covered by a rendered case.
   dialog's heading, an error summary, the account menu's first line) or
   `0` on a scrollable region with `role="region"` and an `aria-label`.
   Focus is always visible (the focus token); nothing removes the outline.
-- **Tap targets** at phone width are at least 44 × 44 px, stricter than
-  AA's 24 px (2.5.8), which desktop keeps: links, buttons, form controls,
-  `<summary>` and labels that act as a control's target. The exceptions
-  are links inside running text (message and help text) and a control's
-  caption label while the control itself is a 44 × 44 px target
-  ([`ui.md`](ui.md#layout-principles), #966, #974). Welcome text fields and
-  buttons have a 48 px minimum height below `desk`, and every text input,
-  textarea and select has at least 16 px text there (#973, #1120). `TestBrowser/width-audit`
-  (`internal/web/width_audit_browser_test.go`) checks these targets, control
-  reachability, and document and scroll-container horizontal overflow on
-  every page at phone, landscape and breakpoint widths (#974). A target
-  label is a checkbox's or radio's label, which stands in for the small
-  native widget; another control's caption is exempt only while that
-  control is itself a 44 × 44 px target.
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and
@@ -104,17 +73,6 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
-The move form (`#branch-form`) shows only while a message is checked (#923),
-through CSS `:has()` alone, so it behaves the same without JavaScript. Until
-then it is `display: none`: out of the tab order and the accessibility tree.
-Checking a message never moves focus; the form appears next in the tab order
-after the list, over the composer's area, which turns invisible but keeps its
-space, so the list neither resizes nor scrolls. A plain failed submit, which
-checks nothing, keeps the form and its alert in the column above the composer;
-a browser without `:has()` shows both, as before. Below the
-[short height](ui-components.md#short-heights) the form follows the list in
-the column instead, and the composer is hidden.
-
 The account menu or sheet (`#account-menu`) and the create popover
 (`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
 #1159) are non-modal native popovers. Tab/Shift-Tab leaving closes it
@@ -132,14 +90,6 @@ rather than sign-out, so a repeated Enter or Space acts on nothing and the
 menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
 
-Keyboard/screen-reader quoting: menu → Quote → Quote only part → labelled editor
-→ send, without scripts/selection. Swaps focus Remove (Tab → Quote only part),
-part editor, or body on removal; 422/409 keep focus/caret.
-[Focus/autofocus rules](architecture/web-composer.md#composer).
-Chip actions have 44 px targets. "Quote selection" follows the body,
-hidden from focus/accessibility unless selection stays in one body; its target
-is 44 × 44 px below `desk`. Pressing preserves selection.
-
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
 (`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.
 The close link and `side-panel-v3.js`'s Escape return to the conversation.
@@ -149,7 +99,7 @@ crosses the load in `sessionStorage`. Session-bound device drafts return after
 panel navigation without input, typing or focus changes.
 
 Below 1200 px the panel covers the conversation as a modal dialog, sharing
-the overlay/phone sheet model (#972, [side panels](ui-components.md#side-panels)).
+the overlay/phone sheet model (#972, [side panels](ui-panels-and-motion.md#side-panels)).
 The script sets `role="dialog"`, `aria-modal="true"` and makes the rest of the
 page inert (app bar, sidebar or list, conversation), blocking focus and pointers;
 focus left behind moves to the heading. Tab from the last stop, and Shift-Tab

@@ -51,7 +51,7 @@ func resetReload(t *testing.T, page *rod.Page) {
 		t.Fatal("reset scheduled more than one timer")
 	}
 	page.MustEval(`() => window.fireReset()`)
-	page.MustWait(`() => window.name==='2' && !!window.source`)
+	mustWaitAcrossNavigation(t, page, `() => window.name==='2' && !!window.source`)
 }
 
 func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {

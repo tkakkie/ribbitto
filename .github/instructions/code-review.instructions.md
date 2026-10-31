@@ -5,9 +5,8 @@ excludeAgent: "cloud-agent"
 
 # Copilot code review — ribbitto
 
-You are an **additional, advisory reviewer**. Claude or Codex, whichever
-did not implement it, reviews every pull request separately (Claude for
-Argon's), and CI (gofmt, golangci-lint with depguard, tests,
+You are an **additional, advisory reviewer**. Another AI, chosen from who actually
+changed the pull request, reviews every pull request separately, and CI (gofmt, golangci-lint with depguard, tests,
 generated-file checks) already enforces style and layering.
 
 ## Prioritise

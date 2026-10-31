@@ -17,7 +17,7 @@ After input and textarea resizing, the script scrolls a focused,
 collapsed caret at the end to the bottom using the updated layout; other
 caret positions and selections keep native scrolling. Below `short:` the cap
 is three lines and the conversation still scrolls as a whole
-([short heights](ui-components.md#short-heights)).
+([short heights](ui-panels-and-motion.md#short-heights)).
 
 The script sets `--composer-viewport-h` / `--composer-viewport-top` on
 `#organization-stream`, which carries `h-conversation-viewport` and contains

@@ -1,4 +1,0 @@
-{"args": {"Arguments": {"target": "unread"}, "ServerName": "q2", "ToolName": "verify", "toolAction": "Calling MCP tool verify", "toolSummary": "Call MCP tool verify (unread)"}, "name": "call_mcp_tool"}
-{"args": {"Arguments": {}, "ServerName": "q2", "ToolName": "danger", "toolAction": "Calling MCP tool danger", "toolSummary": "Call MCP tool danger"}, "name": "call_mcp_tool"}
-{"args": {"Arguments": {"target": "other"}, "ServerName": "q2", "ToolName": "verify", "toolAction": "Calling MCP tool verify", "toolSummary": "Call MCP tool verify (other)"}, "name": "call_mcp_tool"}
-{"args": {"Action": "list", "toolAction": "Listing background tasks", "toolSummary": "List background tasks"}, "name": "manage_task"}

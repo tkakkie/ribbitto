@@ -69,11 +69,13 @@ Each test job has its own PostgreSQL service. `tools/testshard` owns
 packages, browser selectors and Go test flags; `-run` passes these directly to
 `make check-test`. Browser slices cover every selector of one total and run
 only `TestBrowser`; one non-browser slice runs `-skip ^TestBrowser$`.
-`-check` verifies the matrix and exact runner commands, rejecting independent
-package lists or flags. `-run` sets `GOFLAGS=-count=1` for every shard, whatever
-the workflow sets, because setup-go restores Go's test result cache; the
+`-check` verifies the matrix, exact runner commands and local Makefile wiring,
+rejecting independent package lists or flags. `-run` sets `GOFLAGS=-count=1`
+for every shard, whatever the workflow sets, because setup-go restores Go's test result cache; the
 workflow's `GOFLAGS` line is redundant. Web runs as `web-nonbrowser`, `web-1/3`,
-`web-2/3` and `web-3/3`; cmd remains unsharded.
+`web-2/3` and `web-3/3`; `cmd` runs `cmd/ribbitto` as a whole package.
+Local `make check-test` runs every package with the same default timeout;
+CI's package coverage and browser selection remain checked by `-check`.
 Selectors use `RIBBITTO_BROWSER_SHARD=k/n`; empty or unset runs all scenarios,
 and malformed or empty shards fail.
 Registration filters full scenario names: the six slowest are pinned in

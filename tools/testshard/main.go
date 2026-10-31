@@ -2,7 +2,8 @@
 // between CI's parallel jobs. It prints package patterns or runs make
 // check-test with a shard's packages, browser selector and flags; -check
 // fails unless every package is covered and the workflow runs each shard in
-// exactly one job, with disjoint browser and non-browser execution ranges.
+// exactly one job, with disjoint browser execution ranges.
+// It also pins the local full-run wiring so no package is silently skipped.
 // The named shards hold the slowest packages; "rest" is everything else, so
 // a package added later runs in CI without editing this list or the workflow.
 // make check runs -check.
@@ -49,6 +50,9 @@ func shards() []shard {
 }
 
 const rest = "rest"
+
+const ciNeeds = "needs: [checks, test, test-rest, vuln, web-types]"
+const ciSuccess = `printf '%s\n' "$NEEDS" | jq -e 'length == 5 and all(.[]; .result == "success")' > /dev/null`
 
 const workflow = ".github/workflows/ci.yml"
 
@@ -97,7 +101,14 @@ func run(root, name string, check, execute bool) error {
 		if err != nil {
 			return fmt.Errorf("reading the workflow: %w", err)
 		}
-		return scheduled(string(source), specs)
+		if err := scheduled(string(source), specs); err != nil {
+			return err
+		}
+		source, err = os.ReadFile(filepath.Join(root, "Makefile"))
+		if err != nil {
+			return fmt.Errorf("reading the Makefile: %w", err)
+		}
+		return checkMakefile(string(source))
 	}
 	packages, err := pick(parts, name)
 	if err != nil {
@@ -157,7 +168,7 @@ func checkBrowserTests(root string, specs []shard) error {
 		return err
 	}
 	for _, s := range specs {
-		selection, err := parseFlags(s.flags)
+		selection, err := s.selection()
 		if err != nil {
 			return fmt.Errorf("shard %s: %w", s.name, err)
 		}
@@ -226,14 +237,21 @@ func parseFlags(flags string) (string, error) {
 	return args[2], nil
 }
 
-// Each package runs either once in full, or in one non-browser slice plus a
-// complete set of browser selectors. Names expose selector drift in the matrix.
+func (s shard) selection() (string, error) {
+	return parseFlags(s.flags)
+}
+
+// Packages run in full or in one non-browser slice plus
+// a complete set of browser selectors. Names expose selector drift in the matrix.
 func validateShards(specs []shard) error {
 	names := map[string]bool{}
 	groups := map[string][]shard{}
 	for _, s := range specs {
 		if s.name == rest || names[s.name] || len(s.packages) == 0 {
 			return fmt.Errorf("invalid or repeated shard %q", s.name)
+		}
+		if _, err := s.selection(); err != nil {
+			return fmt.Errorf("shard %s: %w", s.name, err)
 		}
 		names[s.name] = true
 		for _, p := range s.packages {
@@ -244,7 +262,7 @@ func validateShards(specs []shard) error {
 		seen := map[int]bool{}
 		nonBrowser, total := 0, 0
 		for _, s := range group {
-			selection, err := parseFlags(s.flags)
+			selection, err := s.selection()
 			if err != nil {
 				return fmt.Errorf("shard %s: %w", s.name, err)
 			}
@@ -460,6 +478,11 @@ func scheduled(source string, specs []shard) error {
 	if n := strings.Count(source, "go -C tools run ./testshard"); n != len(steps) {
 		return fmt.Errorf("%s: found %d testshard invocations, want %d", workflow, n, len(steps))
 	}
+	for _, line := range []string{ciNeeds, ciSuccess} {
+		if runs(trimmed, []string{line}) != 1 {
+			return fmt.Errorf("%s: missing or repeated ci gate line %q", workflow, line)
+		}
+	}
 	return nil
 }
 
@@ -472,4 +495,38 @@ func runs(lines, want []string) int {
 		}
 	}
 	return n
+}
+
+// Pin full local coverage and explicit CI selection together.
+func checkMakefile(source string) error {
+	wiring := `check-test: db-health
+	go test -race $(GO_TEST_FLAGS) $(or $(GO_TEST_PACKAGES),./...)`
+	if n := runs(strings.Split(source, "\n"), strings.Split(wiring, "\n")); n != 1 {
+		return fmt.Errorf("Makefile: local check-test wiring appears %d times, want once", n)
+	}
+	// A default package variable would silently narrow the full local run.
+	uses := 0
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			uses += strings.Count(line, "GO_TEST_PACKAGES")
+		}
+	}
+	if uses != 1 {
+		return fmt.Errorf("Makefile: found %d GO_TEST_PACKAGES uses, want 1 in local check-test wiring", uses)
+	}
+	// Only -check runs testshard locally; CI selects shards through the runner.
+	const checkLine = "\tgo -C tools run ./testshard -check .."
+	if n := runs(strings.Split(source, "\n"), []string{checkLine}); n != 1 {
+		return fmt.Errorf("Makefile: testshard -check line appears %d times, want once", n)
+	}
+	invocations := 0
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			invocations += strings.Count(line, "./testshard")
+		}
+	}
+	if want := 1; invocations != want {
+		return fmt.Errorf("Makefile: found %d testshard invocations, want %d (-check)", invocations, want)
+	}
+	return nil
 }

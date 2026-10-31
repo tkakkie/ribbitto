@@ -120,9 +120,10 @@ skip one. Its findings are advisory.
 
 - **When:** in parallel with the cross-review and Copilot, on the same head
   SHA, while the pull request is a draft and has the current `main`. Each
-  report names the SHA it reviewed. A push during the review makes older
-  reports non-final for the new head. Findings are merged, fixed and checked
-  before the maintainer is asked, and `ai-reviewed` is set only when every
+  report names the SHA it reviewed. A substantive push during the review (a
+  typo or meaning-preserving rewording is not one) makes older reports
+  non-final for the new head. Each finding gets a disposition and applied
+  fixes are checked before the maintainer is asked, and `ai-reviewed` is set only when every
   required review covers the head to be delivered.
 - **Counts only when it completes:** a report on the pull request at its
   head commit, each finding with a disposition (fixed, a follow-up issue, or

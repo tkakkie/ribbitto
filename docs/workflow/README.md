@@ -12,10 +12,9 @@ checklists remain in use.
 1. **Product first.** Work on AI tooling needs a product reason.
 2. **Every issue and every pull request an AI writes is reviewed by an AI
    that did not write it** before the maintainer is asked.
-   An AI that changed any part of a pull request, a fix included, counts as
-   an author of that part. The third-AI review is done by an AI that neither
-   implemented nor changed it nor did the first review; if none exists, ask
-   the maintainer.
+   An AI that changed any part of a pull request, a fix included, is an author
+   of it. The third-AI reviewer neither implemented, changed nor first-reviewed
+   it; if none exists, ask the maintainer.
 3. **The maintainer decides at two gates:** approving an issue (`ready`)
    and merging a pull request
    ([decision 11](../decisions/11-the-maintainer-decides-merges-an-ai-may-execute-them.md)).
@@ -164,8 +163,9 @@ Pull request:
 2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required, and Copilot (once, unless docs-only; [delivery](delivery.md)).
-   Each report names its SHA; a push makes older ones non-final. Findings are
-   merged, fixed and checked before the maintainer is asked. Before every
+   Each report names its SHA; a substantive push makes older ones non-final. Each
+   finding gets a disposition and applied fixes are checked before the
+   maintainer is asked. Before every
    follow-up push, run `make prepush`; before approval, check the pull request against the current `main`. A
    merge of `main` that resolves conflicts is reported in a comment (files
    and how); if it does more than combine both sides, it is reviewed.

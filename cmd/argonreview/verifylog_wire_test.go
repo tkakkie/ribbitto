@@ -366,6 +366,53 @@ func TestVerifyLogWireStrictArguments(t *testing.T) {
 	logWireWant(t, lines[0], verifyLogOK)
 }
 
+func TestVerifyLogWireCrossToolDuplicateNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, params string
+		logCall      bool
+	}{
+		{"verify then verify-log", `{"name":"verify","arguments":{"check":"test","package":"./..."},"name":"verify-log"}`, true},
+		{"verify-log then verify", `{"name":"verify-log","arguments":{},"name":"verify"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			v := logRecordingVerifier{
+				legacy: func(context.Context, string, string) (string, error) {
+					calls.Add(1)
+					return "verified", nil
+				},
+				recorded: func(context.Context, string, string, string) (string, *containerRecord, bool, error) {
+					calls.Add(1)
+					return "verified", nil, false, nil
+				},
+			}
+			s := verifyMCPServer{logs: &verifyLogStore{}, verifier: v, checkWorktree: func() error {
+				t.Error("duplicate-name call checked worktree")
+				return nil
+			}}
+			request := logWireRequest(tc.params, verifyLogMaxID())
+			lines, audit := logWireBatch(t, s, request)
+			want := string(verifyLogRefuse(verifyLogMaxID(), verifyLogMalformed).line)
+			if tc.logCall {
+				if strings.Count(audit, "\n") != 1 || !strings.Contains(audit, "class=malformed") {
+					t.Fatalf("malformed audit: %q", audit)
+				}
+			} else {
+				s.logs = nil
+				baseline, baselineAudit := logWireBatch(t, s, request)
+				want = baseline[0]
+				r := readMCPResponses(t, want)[0]
+				if r.Error == nil || r.Error.Code != -32600 || string(r.ID) != "null" || audit != "" || baselineAudit != "" {
+					t.Fatalf("envelope reply/audit: %s %q %q", want, audit, baselineAudit)
+				}
+			}
+			if lines[0] != want || calls.Load() != 0 {
+				t.Fatalf("duplicate-name reply: %s want %s; verifier calls %d", lines[0], want, calls.Load())
+			}
+		})
+	}
+}
+
 func TestVerifyLogWireEnvelope(t *testing.T) {
 	call := logWireCall([]byte(`{"run":"x","run":"x"}`))
 	for _, malformed := range []string{
@@ -483,9 +530,10 @@ func TestVerifyLogWireServerReadBudget(t *testing.T) {
 	served := 0
 	for i, line := range lines {
 		want := verifyLogNoRun
-		if i == 0 {
+		switch i {
+		case 0:
 			want = verifyLogMalformed
-		} else if i == verifyLogServerReads {
+		case verifyLogServerReads:
 			want = verifyLogBudget
 		}
 		logWireWant(t, line, want)

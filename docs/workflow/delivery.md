@@ -104,8 +104,8 @@ Copilot included.
 ## Third-AI review
 
 The README says which pull requests get one (`high` risk, or touching
-concurrency, caches, real-time delivery, ordered transactions,
-authentication, authorisation, organisation scoping, or a check that is
+concurrency, caches or background work, real-time delivery, ordered
+transactions, authentication, authorisation, organisation scoping, or a check that is
 removed, skipped or loosened). The same review is required for a change to
 the rules that guard those areas and to the AI and CI tooling:
 `.github/prompts/**`, `.github/instructions/**`, `.github/workflows/**`, the

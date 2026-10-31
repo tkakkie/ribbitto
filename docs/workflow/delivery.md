@@ -109,10 +109,9 @@ authentication, authorisation, organisation scoping, or a check that is
 removed, skipped or loosened). The same review is required for a change to
 the rules that guard those areas and to the AI and CI tooling:
 `.github/prompts/**`, `.github/instructions/**`, `.github/workflows/**`, the
-review-gate documents (`docs/workflow/README.md`, `delivery.md`,
-`reviewing.md`, `investigations.md`, `.github/pull_request_template.md`) and
-the security and scoping rules in `AGENTS.md` and
-`docs/domain/invariants.md`; being documentation does not exempt a change.
+review-gate documents (everything under `docs/workflow/`,
+`.github/pull_request_template.md`, `CLAUDE.md`) and the security and scoping
+rules in `AGENTS.md` and `docs/domain/invariants.md`; being documentation does not exempt a change.
 When in doubt, review. A past review without findings is never a reason to
 skip one. Its findings are advisory.
 
@@ -129,9 +128,13 @@ skip one. Its findings are advisory.
   diff at the new head. An earlier report covers a later head only when
   every later commit is outside them. A pull request already marked ready
   goes back to a draft until the review completes.
+  A fix for a finding of this review first passes the follow-up check in
+  [reviewing](reviewing.md#adversarial-follow-up-check), or Copilot's in
+  [Copilot follow-up check](#copilot-follow-up-check), before the re-review.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md`, the prompt naming the pull request,
   the commits, the diff and the earlier findings. Post
   `**Adversarial review — <AI>** (at <SHA>)`. The template's *Adversarial*
   field names the AI and the reviewed SHA, `pending`, or `not required` with
-  the reason.
+  the reason. The other AI checks the requirement against what the diff
+  does, not only the paths it touches.

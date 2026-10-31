@@ -7,7 +7,7 @@ Claude-written issues → Argon through the [README recipe](README.md#roles-and-
 falling back to Codex when the run does not count; other Claude work → Codex;
 Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
 there → Codex. Copilot follow-up checks use
-[Argon and an independent fallback](copilot.md#copilot-follow-up-check).
+[an AI that did not write the change](delivery.md#copilot-follow-up-check).
 Claude's own work is its issues, the fixes it writes during a review, and
 an issue the maintainer named Claude to implement.
 
@@ -80,7 +80,7 @@ notes in its review comment whether Argon counted or fell back to Codex.
 Argon also runs the kept `copilot-check.md` prompt through the README
 recipe on Claude's and Codex's pull requests; a failed or non-counting run falls back to the AI that did not
 write the change (Codex for Claude's, Claude for Codex's), as in
-[Copilot follow-up](copilot.md#copilot-follow-up-check). Adversarial follow-up
+[Copilot follow-up](delivery.md#copilot-follow-up-check). Adversarial follow-up
 checks and closure verification keep their existing reviewers.
 
 ## Closure verification
@@ -96,8 +96,7 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 2. The implementer applies exactly those fixes and nothing else.
 3. The reviewer checks that the whole diff since the round-2 SHA contains
    only the named fixes, then re-runs the failing check or live test for
-   each finding — not the rest of the PR — under the
-   [handoff rule](running-other-ai.md#handoff-of-another-ais-code), and reports:
+   each finding — not the rest of the PR — and reports:
 
    ```
    **Closure verification — <Claude|Codex>** (at <SHA>)
@@ -105,12 +104,12 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → the remaining [pull request lifecycle](pull-requests.md#lifecycle-of-a-pull-request)
+4. All pass → the remaining [pull request lifecycle](README.md#lifecycle)
    after cross-review approval. Any other change in the diff, a failed
    check, a new blocking finding or anything needing a decision → ask the
    maintainer.
 
-**Copilot follow-up check:** in [`copilot.md`](copilot.md).
+**Copilot follow-up check:** in [`delivery.md`](delivery.md#copilot-follow-up-check).
 
 ## Adversarial follow-up check
 
@@ -129,10 +128,7 @@ reach the re-review without either AI checking it:
    pull request, following [review independence](README.md#principles)) checks
    that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
-   it (where the
-   [handoff rule](running-other-ai.md#handoff-of-another-ais-code) keeps
-   it from running the test, it reads a
-   run without the fix in CI or in the implementer's own sandbox) — or
+   it (by running it, or by reading a run without the fix in CI) — or
    that the recorded reason holds and the alternative verification
    was done; a reason it does not accept is ❌. It reports:
 
@@ -155,8 +151,7 @@ reach the re-review without either AI checking it:
 for a failing check, a merge of `main` — run `make prepush`
 ([Checks](../../README.md#checks)) and push only if it passes: it regenerates
 files and checks the manifests, document sizes and lint, keeping each exit
-status. Ad-hoc command chains have hidden a failure before (#848). The
-[handoff exception](running-other-ai.md#handoff-of-another-ais-code) applies.
+status. Ad-hoc command chains have hidden a failure before (#848).
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
@@ -167,7 +162,7 @@ item) does more than combine, even when every line came from one side. Either wa
 request's own commits since the last adversarially reviewed head, not only
 the resolution.
 
-Which pull requests skip Copilot: [docs-only pull requests](copilot.md#docs-only-pull-requests).
+Which pull requests skip Copilot: [docs-only pull requests](delivery.md#docs-only-pull-requests).
 
 ## Risk
 

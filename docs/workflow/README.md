@@ -164,7 +164,9 @@ Pull request:
 
 1. The implementer works in its worktree and `make check` passes.
 2. Draft pull request with "Closes #N"; CI goes green.
-3. Reviews as above. Before every follow-up push, run `make prepush`;
+3. Reviews as above. Copilot reviews once, unless docs-only (Lite, requested by hand on
+   the draft, advisory); a change answering it gets a follow-up check by
+   an AI that did not write it, still a draft ([delivery](delivery.md)). Before every follow-up push, run `make prepush`;
    before approval, check the pull request against the current `main`. A
    merge of `main` that resolves conflicts is reported in a comment (files
    and how); if it does more than combine both sides, it is reviewed.
@@ -201,8 +203,8 @@ check the result against *Done when*.
 
 ## Occasional audit
 
-Optional, maintainer-run: an AI hunts contradictions with [`.github/prompts/audit.md`](../../.github/prompts/audit.md).
-Check every finding against the files before fixing it.
+Optional: an AI hunts contradictions with [`audit.md`](../../.github/prompts/audit.md);
+check each finding against the files before fixing it.
 
 ## Labels
 
@@ -210,11 +212,10 @@ Check every finding against the files before fixing it.
 |---|---|---|
 | `ai-reviewed` | the orchestrating AI, after an approving review | The review is done; a pull request is marked ready with it. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
-| `process`, `bug` | template | Workflow improvement; broken behaviour. |
 
 ## Supporting files
 
-[Reviewing](reviewing.md), [pull requests](pull-requests.md),
+[Reviewing](reviewing.md), [delivery](delivery.md),
 [investigations](investigations.md) and [credentials](ai-credentials.md)
-supply checklists and operational detail. No verification harness or sandbox
+supply checklists. No verification harness or sandbox
 is built or extended (#2002).

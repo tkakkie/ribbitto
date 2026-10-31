@@ -44,8 +44,8 @@ except B's narrow carve-out; a change there that keeps both is tier B
     tooling: the trusted prompts and
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
-    the review gates (`docs/workflow/README.md`, `pull-requests.md`, `reviewing.md`,
-    `copilot.md`, `running-other-ai.md`, `investigations.md`, this
+    the review gates (`docs/workflow/README.md`, `delivery.md`, `reviewing.md`,
+    `investigations.md`, this
     whole file, and `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
@@ -106,8 +106,8 @@ the diff does, not only the paths it touches.
 **When it runs:** the initial review runs after the other AI approves and
 its findings are fixed, after the branch has merged the current `main` or
 it is confirmed that no merge is needed, and after
-[Copilot](copilot.md#requesting-copilot) has reviewed and any change answering
-it has passed the [Copilot follow-up check](copilot.md#copilot-follow-up-check):
+[Copilot](delivery.md#requesting-copilot) has reviewed and any change answering
+it has passed the [Copilot follow-up check](delivery.md#copilot-follow-up-check):
 on that head, while the
 pull request is still a draft, immediately before `ai-reviewed`. GitHub
 cannot merge a draft, so this holds the merge until the review completes.
@@ -125,11 +125,11 @@ recomputed over its whole diff at the new head and never lowered. Argon
 reviews again (Codex for an Argon pull request). A tier C pull request
 lifted to B or A gets its first review, compared against the base when no reviewed head exists, and Copilot's
 review before it if it had skipped Copilot under the
-[docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
+[docs-only rule](delivery.md#docs-only-pull-requests); one Argon implemented
 gets Codex's at B and at A leaves Argon for the maintainer to decide, under
 [review independence](README.md#principles)
 ([review independence](README.md#principles)). Fixes first get the
-follow-up check in [reviewing](reviewing.md) or [Copilot](copilot.md).
+follow-up check in [reviewing](reviewing.md) or [Copilot](delivery.md).
 
 A pull request already marked ready is converted back to a draft until that
 review completes. An earlier report covers a later head only when every

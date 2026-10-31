@@ -64,8 +64,7 @@ the directory of the version-checked Node without resolving Node symlinks. CI pr
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Report missing or mismatched runtimes. Any AI may run the pinned Node
-and npm like any other command ([workflow rules](../workflow/README.md), #2002);
-[Codex Node setup and probe](../workflow/codex-node.md) is older detail.
+and npm like any other command ([workflow rules](../workflow/README.md), #2002).
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
@@ -156,9 +155,8 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
 
-Routine Codex Node use starts at #1415's merge, after #1410, under the
-[setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
-exception ended with its last PR; it is not routine authorization.
+Routine Node use starts at #1415's merge, after #1410; the one-time #1410
+exception ended with its last PR.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
 
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

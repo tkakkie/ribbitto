@@ -16,6 +16,84 @@ import (
 	"testing"
 )
 
+// Logs-on goldens stay independent of the generators without new data files (decision 42).
+const logsHooksGolden = `{
+  "ribbitto-implementer-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "command": "'/trusted/bin/argonreview' implement-guard '/trusted/guard' --allow-verify --logs",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
+`
+
+const logsSettingsGolden = `{
+  "permissions": {
+    "allow": [
+      "write_file(*)",
+      "mcp(ribbitto-verify/verify)",
+      "mcp(ribbitto-verify/verify-log)"
+    ],
+    "deny": [
+      "command(*)",
+      "read_url(*)",
+      "execute_url(*)"
+    ]
+  }
+}
+`
+
+const logsMCPGolden = `{
+  "mcpServers": {
+    "ribbitto-verify": {
+      "args": [
+        "-i",
+        "PATH=/usr/bin:/bin",
+        "/trusted/bin/argonreview",
+        "verify-mcp",
+        "--trusted-source",
+        "/trusted/source",
+        "--worktree",
+        "/trusted/worktree",
+        "--logs"
+      ],
+      "command": "/usr/bin/env",
+      "disabled": false
+    }
+  }
+}
+`
+
+const logsBrowserMCPGolden = `{
+  "mcpServers": {
+    "ribbitto-verify": {
+      "args": [
+        "-i",
+        "PATH=/usr/bin:/bin",
+        "/trusted/bin/argonreview",
+        "verify-mcp",
+        "--trusted-source",
+        "/trusted/source",
+        "--worktree",
+        "/trusted/worktree",
+        "--browser-mode",
+        "/trusted/browser-mode",
+        "--logs"
+      ],
+      "command": "/usr/bin/env",
+      "disabled": false
+    }
+  }
+}
+`
+
 type implementGuardObservation struct {
 	code            int
 	out, diagnostic string
@@ -186,16 +264,17 @@ func TestImplementConfigLogsBytes(t *testing.T) {
 			if args[len(args)-1] != "--logs" {
 				t.Fatalf("logs is not trailing: %v", args)
 			}
+			wantLogsM := logsMCPGolden
+			if browser != "" {
+				wantLogsM = logsBrowserMCPGolden
+			}
 			for _, row := range []struct {
 				name string
 				got  []byte
-			}{{"hooks", onH}, {"settings", onS}, {"mcp-config", onM}} {
-				name := row.name + "-logs-on.json"
-				if browser != "" && row.name == "mcp-config" {
-					name = "mcp-config-browser-logs-on.json"
-				}
-				if !bytes.Equal(row.got, implementVerifyGolden(t, name)) {
-					t.Fatalf("golden %s differs: %s", name, row.got)
+				want string
+			}{{"hooks", onH, logsHooksGolden}, {"settings", onS, logsSettingsGolden}, {"mcp-config", onM, wantLogsM}} {
+				if !bytes.Equal(row.got, []byte(row.want)) {
+					t.Fatalf("golden %s differs: %s", row.name, row.got)
 				}
 			}
 			if !bytes.Equal(offH, implementVerifyGolden(t, "hooks-on.json")) || !bytes.Equal(offS, implementVerifyGolden(t, "settings-on.json")) {

@@ -58,12 +58,14 @@ warm-up posts. Another session's absolute values alone never decide.
 ### Build routes
 
 Host measurements need no Node. After #1411/#1820, Go asset generation
-must precede compilation in a writable copy of the verified checkout, in the
-same isolated build (same trusted checkouts/flags, no Node on `PATH`).
-These commands cannot yet build SHAs needing generation.
+precedes compilation in a writable copy of the verified checkout, in the same
+isolated build (same trusted checkouts/flags, no Node on `PATH`). They
+cannot yet build SHAs needing generation.
 
-Approved operator: trusted git/Go; `image`: trusted Docker Go image digest
-([current value](measurement-go-image.md#measurement-go-image)).
+Approved operator: trusted git/Go; `image`:
+`golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261`
+(`golang:1.27.3`, approved on [#1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never by
+tag; replace it, with approval, when go.mod's `go` outgrows it.
 Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
 head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 

@@ -100,3 +100,38 @@ stays. The pull request body states that the docs-only rule applied. If
 Copilot reviews anyway, its comments are handled as above. A pull request
 that stops meeting a condition returns to the normal chain from that point,
 Copilot included.
+
+## Third-AI review
+
+The README says which pull requests get one (`high` risk, or touching
+concurrency, caches, real-time delivery, ordered transactions,
+authentication, authorisation, organisation scoping, or a check that is
+removed, skipped or loosened). The same review is required for a change to
+the rules that guard those areas and to the AI and CI tooling:
+`.github/prompts/**`, `.github/instructions/**`, `.github/workflows/**`, the
+review-gate documents (`docs/workflow/README.md`, `delivery.md`,
+`reviewing.md`, `investigations.md`, `.github/pull_request_template.md`) and
+the security and scoping rules in `AGENTS.md` and
+`docs/domain/invariants.md`; being documentation does not exempt a change.
+When in doubt, review. A past review without findings is never a reason to
+skip one. Its findings are advisory.
+
+- **When:** after the other AI approves and its findings are fixed, the
+  branch has the current `main`, and Copilot's review and any follow-up check
+  have passed; on that head, while the pull request is a draft, immediately
+  before `ai-reviewed`. It does not run alongside the first cross-review.
+- **Counts only when it completes:** a report on the pull request at its
+  head commit, each finding with a disposition (fixed, a follow-up issue, or
+  declined with the reason). A failed, timed-out or empty run never counts:
+  record it on the pull request, retry once, then the maintainer decides.
+- **After a later push** (a fix, a Copilot follow-up, a merge of `main`)
+  whose diff touches those areas, review again over the pull request's whole
+  diff at the new head. An earlier report covers a later head only when
+  every later commit is outside them. A pull request already marked ready
+  goes back to a draft until the review completes.
+- **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
+  with `.github/prompts/adversarial.md`, the prompt naming the pull request,
+  the commits, the diff and the earlier findings. Post
+  `**Adversarial review — <AI>** (at <SHA>)`. The template's *Adversarial*
+  field names the AI and the reviewed SHA, `pending`, or `not required` with
+  the reason.

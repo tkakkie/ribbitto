@@ -182,7 +182,7 @@ Pull request:
   transactions, authentication, authorisation or organisation scoping, or
   that removes, skips or loosens a check `make check` or CI runs. "Touches"
   includes behaviour-preserving moves, refactors and new tests in those
-  areas. This replaces the adversarial tiers A and B with one sentence.
+  areas. Details: [delivery](delivery.md#third-ai-review).
 - `normal` risk: the maintainer reads the summary and "Look here".
 - One issue fits one pull request of about 400 changed lines.
 

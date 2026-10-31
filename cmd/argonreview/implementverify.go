@@ -17,6 +17,20 @@ const verifyServerName = "ribbitto-verify"
 const maxVerifyMetadataBytes = 1024
 
 func implementVerifyCall(input, args []byte) error {
+	return implementMCPCall(input, args, verifyToolName, func(raw []byte) error {
+		_, err := parseVerifyArguments(raw)
+		return err
+	})
+}
+
+func implementVerifyLogCall(input, args []byte) error {
+	return implementMCPCall(input, args, verifyLogToolName, func(raw []byte) error {
+		_, err := parseVerifyLogArguments(raw)
+		return err
+	})
+}
+
+func implementMCPCall(input, args []byte, expectedTool string, parse func([]byte) error) error {
 	// Check the whole input before decoding fields: even an unused nested object
 	// must not hide duplicate keys, including escaped spellings of the same key.
 	if _, err := verifyObject(input); err != nil {
@@ -45,11 +59,11 @@ func implementVerifyCall(input, args []byte) error {
 	}
 	var server, tool string
 	if json.Unmarshal(fields["ServerName"], &server) != nil || server != verifyServerName ||
-		json.Unmarshal(fields["ToolName"], &tool) != nil || tool != verifyToolName {
+		json.Unmarshal(fields["ToolName"], &tool) != nil || tool != expectedTool {
 		return errors.New("MCP server or tool does not match")
 	}
 	// Share the server's strict parser, not a second interpretation of its schema.
-	if _, err := parseVerifyArguments(fields["Arguments"]); err != nil {
+	if err := parse(fields["Arguments"]); err != nil {
 		return fmt.Errorf("validating MCP Arguments: %w", err)
 	}
 	return nil
@@ -58,7 +72,11 @@ func implementVerifyCall(input, args []byte) error {
 // implementerHooks generates the Go command form of the implementer's hooks.json.
 // The goldens use placeholder paths and the same template; with the production
 // paths the off golden is byte-identical to the production file.
-func implementerHooks(verify bool, binary, dir string) ([]byte, error) {
+func implementerHooks(verify, verifyLogs bool, binary, dir string) ([]byte, error) {
+	if verifyLogs && !verify {
+		return nil, errors.New("logs requires verify on")
+	}
+
 	// sh -c interprets this command, so quote both paths and refuse text that
 	// could break out of the quotes or produce a different command line.
 	for _, path := range []string{binary, dir} {
@@ -69,6 +87,9 @@ func implementerHooks(verify bool, binary, dir string) ([]byte, error) {
 	command := "'" + binary + "' implement-guard '" + dir + "'"
 	if verify {
 		command += " --allow-verify"
+	}
+	if verifyLogs {
+		command += " --logs"
 	}
 	type hook struct {
 		Command string `json:"command"`
@@ -87,11 +108,18 @@ func implementerHooks(verify bool, binary, dir string) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-func implementerSettings(verify bool) []byte {
+func implementerSettings(verify, verifyLogs bool) ([]byte, error) {
+	if verifyLogs && !verify {
+		return nil, errors.New("logs requires verify on")
+	}
+
 	allow := []string{"write_file(*)"}
 	deny := []string{"command(*)", "read_url(*)", "execute_url(*)"}
 	if verify {
 		allow = append(allow, "mcp("+verifyServerName+"/"+verifyToolName+")")
+		if verifyLogs {
+			allow = append(allow, "mcp("+verifyServerName+"/"+verifyLogToolName+")")
+		}
 	} else {
 		deny = append(deny, "mcp(*)")
 	}
@@ -104,10 +132,14 @@ func implementerSettings(verify bool) []byte {
 	settings.Permissions.Allow, settings.Permissions.Deny = allow, deny
 	// Only strings and slices are marshaled, so encoding cannot fail.
 	data, _ := json.MarshalIndent(settings, "", "  ")
-	return append(data, '\n')
+	return append(data, '\n'), nil
 }
 
-func implementerMCPConfig(verify bool, binary, source, worktree, browserMode string) ([]byte, error) {
+func implementerMCPConfig(verify, verifyLogs bool, binary, source, worktree, browserMode string) ([]byte, error) {
+	if verifyLogs && !verify {
+		return nil, errors.New("logs requires verify on")
+	}
+
 	if browserMode != "" {
 		if !verify {
 			return nil, errors.New("browser-mode requires verify on")
@@ -128,6 +160,9 @@ func implementerMCPConfig(verify bool, binary, source, worktree, browserMode str
 	if browserMode != "" {
 		args = append(args, "--browser-mode", browserMode)
 	}
+	if verifyLogs {
+		args = append(args, "--logs")
+	}
 	// Maps give agy's sorted keys, with its indentation and trailing newline.
 	config := map[string]any{"mcpServers": map[string]any{verifyServerName: map[string]any{
 		"args":    args,
@@ -141,22 +176,26 @@ func implementerMCPConfig(verify bool, binary, source, worktree, browserMode str
 }
 
 // checkImplementerConfig is for implement-check (#1434) and preflight (#1433)
-// before and after each run. verify is their one trusted switch; hooks.json is
-// the one place the guard mode is read from. All file bytes are observed state.
+// before and after each run. Verify and logs are trusted switches; hooks.json
+// supplies guard admission. All file bytes are observed state.
 // The launchers must also reject changed hooks/settings/MCP files and
 // denied_actions; those checks live outside here.
-func checkImplementerConfig(verify bool, hooks, settings, mcpConfig []byte, binary, source, worktree, guardDir, browserMode string) error {
-	expectedHooks, err := implementerHooks(verify, binary, guardDir)
+func checkImplementerConfig(verify, verifyLogs bool, hooks, settings, mcpConfig []byte, binary, source, worktree, guardDir, browserMode string) error {
+	expectedHooks, err := implementerHooks(verify, verifyLogs, binary, guardDir)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(hooks, expectedHooks) {
 		return errors.New("implementer hooks do not match verify switch")
 	}
-	if !bytes.Equal(settings, implementerSettings(verify)) {
+	expectedSettings, err := implementerSettings(verify, verifyLogs)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(settings, expectedSettings) {
 		return errors.New("implementer settings do not match verify switch")
 	}
-	expected, err := implementerMCPConfig(verify, binary, source, worktree, browserMode)
+	expected, err := implementerMCPConfig(verify, verifyLogs, binary, source, worktree, browserMode)
 	if err != nil {
 		return err
 	}

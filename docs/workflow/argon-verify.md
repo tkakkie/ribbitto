@@ -23,47 +23,47 @@ to feature-off at rest. See [operation](argon-verify-operation.md).
 ## Tool permissions
 
 Argon keeps no arbitrary shell, `run_command` or other
-command tool. On-mode MCP admits one fixed `verify` tool through two agreeing
-layers:
+command tool. On-mode MCP admits `verify` through two agreeing layers; the
+[log switch](argon-verify-log-tool.md#switch) adds `verify-log`, merged off:
 
 - The guard allows `call_mcp_tool` only for the exact configured server,
-  tool `verify` and strictly validated `Arguments`, sharing one Go schema
-  with the server. Refuse extra, missing, unknown or duplicate keys, `null`,
+  tool and strictly validated `Arguments`, sharing the server parser.
+  For `verify`, refuse extra, missing, unknown or duplicate keys, `null`,
   wrong types, over-long values, flags, absolute paths, `..` and disallowed
   path-like values. Check names and package patterns are fixed in code;
   no caller selects a command, worktree or image.
-- Feature-on settings replace only blanket `mcp(*)` deny with narrow
+- Feature-on settings (logs off) replace only blanket `mcp(*)` deny with narrow
   `mcp(<server>/verify)` allow. Feature-off settings are byte-identical to
-  today's, including all command and URL denies.
+  existing bytes, including command and URL denies.
   The review launcher's settings and guard stay unchanged.
 
 In [preflight][preflight], the guard refused every invalid call first;
 the settings and server layers were not probed separately.
 
-With MCP configured, the custom agent's `tools` list is no barrier:
+With MCP, the agent's `tools` list is no barrier:
 `call_mcp_tool`, `list_resources`, `read_resource` and `manage_task` remain
-(spike part 2). The guard allows seven file tools plus the one validated
-call; every other tool, including the three resource/task tools, stays
+(spike part 2). The guard allows seven file tools plus validated MCP
+calls; every other tool, including the three resource/task tools, stays
 denied. Headless mode auto-denied the spike's guard-approved call;
 settings must allow it.
 
 The feature switch, settings variant, guard mode and `mcp_config.json` must
-agree before and after each run; any mismatch fails closed. A changed
-settings, hooks or MCP file makes the run not count, as `denied_actions`
-does. Server identity, arguments and configuration bytes are fixed
-in #1430/#1432.
+agree before and after each run; mismatches fail closed. Changed settings,
+hooks or MCP bytes make the run not count, as
+`denied_actions` does. Identity, arguments and config bytes are fixed in #1430/#1432.
 
 ## Trusted server
 
 Outside `agy`'s sandbox, the MCP server is trusted computing base code with
 minimal credentials, Docker and host rights, and no arbitrary-command
-interface. `argonreview verify-mcp` offers one tool and only runs `container-check`.
+interface. `argonreview verify-mcp` has only `verify` (logs off),
+adds `verify-log` only with `verify-log-mode` on, and runs only `container-check`.
 
-A fixed `mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
+`mcp_config.json` starts it through `/usr/bin/env -i PATH=/usr/bin:/bin`
 with a trusted binary and fixed source and worktree arguments. It serves only if its build matches the trusted revision in that source.
-Pre- and post-run checks include the MCP file and server.
+Checks include MCP config and server.
 
-The server environment allows only `PATH`. Docker connection settings
+Environment: only `PATH`. Docker connection settings
 are runner constants; its copy uses `/tmp`, ignoring `TMPDIR`.
 `FAILED` and `NOT VERIFIED` results set `isError`.
 

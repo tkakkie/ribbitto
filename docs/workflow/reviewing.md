@@ -138,7 +138,7 @@ reach the re-review without either AI checking it:
    ```
 
 3. All pass → the re-review the
-   [completion rule](adversarial-review.md#completion) names, at the
+   [third-AI review rules](delivery.md#third-ai-review) names, at the
    checked SHA; a push before it starts this check again. Any other change,
    a failed check, or a fix needing a design or specification decision →
    ask the maintainer.
@@ -154,9 +154,8 @@ status. Ad-hoc command chains have hidden a failure before (#848).
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review. A combination that
-changes lock or transaction order or the delivery contract (tier A's first
-item) does more than combine, even when every line came from one side. Either way, follow the
-[completion rule](adversarial-review.md#completion), counting this pull
+changes lock or transaction order or the delivery contract (the third-AI review list) does more than combine, even when every line came from one side. Either way, follow the
+[third-AI review rules](delivery.md#third-ai-review), counting this pull
 request's own commits since the last adversarially reviewed head, not only
 the resolution.
 
@@ -174,4 +173,4 @@ entry points `internal/web/org.go`, `internal/web/signin.go`,
 or `CLAUDE.md`. Everything else is **normal**. The author states the risk
 in the template; the reviewer checks it. Which adversarial review runs is
 decided separately, by what the change alters
-([`adversarial-review.md`](adversarial-review.md#which-review-runs)).
+([third-AI review](delivery.md#third-ai-review)).

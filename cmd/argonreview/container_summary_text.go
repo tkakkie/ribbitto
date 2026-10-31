@@ -15,6 +15,46 @@ const (
 	summaryIndent = "  | "
 )
 
+// summaryMaskName scans the whole identity with the tripwire's joined and
+// sanitised passes. Truncation and newline splitting must not hide a match.
+func summaryMaskName(name string) string {
+	if verifyLogScan(name) > 0 {
+		return "[name withheld]"
+	}
+	return name
+}
+
+func summaryName(name string) string {
+	return summaryText(summaryMaskName(name))
+}
+
+// summaryMaskLines also catches shapes spanning diagnostic boundaries when the
+// original identity boundaries are unavailable. Unlocated matches withhold all.
+func summaryMaskLines(lines []string) []string {
+	masked := append([]string(nil), lines...)
+	for i := range lines {
+		end := min(i+2, len(lines))
+		if verifyLogScan(strings.Join(lines[i:end], "\n")) > 0 {
+			for j := i; j < end; j++ {
+				masked[j] = "[name withheld]"
+			}
+		}
+	}
+	// A located match must not hide a different shape spanning more lines.
+	var unmasked []string
+	for i, line := range lines {
+		if masked[i] == line {
+			unmasked = append(unmasked, line)
+		}
+	}
+	if verifyLogScan(strings.Join(unmasked, "\n")) > 0 {
+		for i := range masked {
+			masked[i] = "[name withheld]"
+		}
+	}
+	return masked
+}
+
 // summaryText removes terminal commands and invisible direction changes before
 // capping bytes. It accepts one source line; even embedded newlines cannot
 // escape the indent supplied by the caller.
@@ -77,6 +117,7 @@ type summaryLines struct {
 	lines                     []string
 	total                     int
 	shortened                 []bool
+	ordinals                  []int
 	partial                   string
 	partialActive, partialCut bool
 }

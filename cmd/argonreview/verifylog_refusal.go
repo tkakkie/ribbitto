@@ -19,7 +19,7 @@ const (
 // One fixed message per refusal class. No caller can insert untrusted input.
 func verifyLogRefusals() map[verifyLogClass]string {
 	return map[verifyLogClass]string{
-		verifyLogMalformed:    "malformed verify-log arguments",
+		verifyLogMalformed:    "invalid verify arguments",
 		verifyLogNoRun:        "no such run in this session",
 		verifyLogNotListed:    "not listed",
 		verifyLogAmbiguous:    "ambiguous: use #N",

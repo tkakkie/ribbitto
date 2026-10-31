@@ -2,16 +2,16 @@
 
 ## Status
 
-Capture, trailing `verify-mcp --logs`, run IDs and summary ordinals exist,
-off by default and unexposed. Name masking applies in every mode.
-Tool, guard/settings wiring and harness switch remain future work.
-Per #1847, launcher update and enabling need separate maintainer approvals.
-CI stays the check.
+Capture, run IDs, summary ordinals and the [tool](argon-verify-log-tool.md)
+are merged, served only with `verify-mcp --logs`, off by default and unexposed.
+Name masking applies in every mode. The guard, `hooks.json`, settings, harness
+switch and wrappers do not admit it yet (2c); Argon cannot reach it in production.
+Launcher update and enabling need separate approvals. CI is the check.
 
 ## Purpose and limits
 
 `agy` hides large MCP results behind forbidden file references or truncated
-error heads. The planned `verify-log` reads retained failure output when the
+error heads. The `verify-log` tool reads retained failure output when the
 [summary](argon-verify-testdb.md) is insufficient, in the same server. Read-only:
 no container, file or path. `verify` and its schema stay unchanged.
 
@@ -139,28 +139,27 @@ tripwire; the container holds no secrets by construction.
 Per capture: 16 `index` reads, 40 shared `test`/`package`, 8 shared `stderr`/`output`.
 Per server: 256 reads, 1 MiB serialized bytes including envelopes/refusals,
 excluding captured bytes. Refusals count even after exhaustion and may exceed
-the cap; no further page is admitted. A mutex guards captures/counters. A sealed record is
-immutable once captured; capture alone may first set stderr non-servable.
+the cap; no further page is admitted. Captures/counters share a mutex. Records
+stay immutable after capture; capture may first set stderr non-servable.
 
 One fixed message per refusal class lives in one table: malformed (mapped to
-the existing protocol error), no such run, not listed, ambiguous, start out of
-range, stream not allowed, stderr not servable after runner failure, tainted
+`-32602 "invalid verify arguments"` protocol error), no such run, not listed,
+ambiguous, start out of range, stream not allowed, stderr not servable after runner failure, tainted
 unit, spent budget and response too large. Unknown, evicted, other-worker and
 verified runs all say `no such run in this session`. Direct reader calls with
 malformed IDs share that message; malformed wire syntax is the protocol error.
 No refusal echoes input. No error reveals a secret match.
 
 Each read audit line has at most eight hex ID digits, fixed stream, range,
-wire bytes, class and detection counts; no name, match or content. Read routing
-and server-loop audit writes remain unexposed.
+wire bytes, class and detection counts; no name, match or content. The
+[server loop](argon-verify-log-tool.md#serving-and-audit) writes it once per read.
 
 ## Regression rule and provisional numbers
 
-Exposure must derive regression fixtures from its merge base: verify/schema,
-guard decisions and off-mode settings stay unchanged with logs on/off. Derive
-checks and guard rows; do not copy check lists or property counts. Both parsers
-refuse the other's arguments. Core tests pin parser separation and the reader's
-closed import/call boundary; server tests pin capture and tools/list behavior.
+[Tool regression tests](argon-verify-log-tool.md#regression-evidence) pin the
+base verify/schema, parser separation and the closed reader boundary. Remaining
+exposure must derive guard decisions and off-mode settings from its merge base;
+checks and guard rows are derived, never copied.
 
 `cmd/argonreview/verifylog_limits.go` values need measurement before enabling;
 changes need a small PR and preflight rows. No host measurement is approved.
@@ -174,14 +173,14 @@ changes need a small PR and preflight rows. No host measurement is approved.
 | `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16 index; 40 shared test/package; 8 shared stderr/output | 26 failing leaves; preflight read counts |
 | `verifyLogServerReads`, `verifyLogServerBytes` | 256; 1 MiB | preflight read pattern |
 
-## Exposure and preflight (future PR 2)
+## Exposure and preflight (remaining PR 2c)
 
-A trusted logs switch requires verify on and matching generated/byte-checked
+A trusted logs switch requires verify on and generated/byte-checked
 hooks, MCP config and on-mode settings. Off: not listed, guard and settings
 refuse; on: exactly the additional verify-log permission. A mismatch refuses
-preflight. These generators remain unimplemented.
+preflight. Generators await 2c.
 
 #1913's #1700 host preflight needs a trusted rebuild and separately authorised
-two-home swap. Probe paging, refusals, two workers, hostile/secret output,
+two-home swap. Probe paging, refusals, worker isolation, hostile/secret output,
 regression, switch mismatches and audit. Measure reads for the templ-rename
 failure's 26 leaves. Launcher update and verify-log-mode on need separate approval.

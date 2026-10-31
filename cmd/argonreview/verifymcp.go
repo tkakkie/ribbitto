@@ -547,6 +547,20 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 			shutdown(1)
 		}
 	}
+	writeRaw := func(line []byte) {
+		if outputFailed {
+			return
+		}
+		n, err := stdout.Write(line)
+		if err == nil && n != len(line) {
+			err = io.ErrShortWrite
+		}
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "writing MCP response: %v\n", err)
+			outputFailed = true
+			shutdown(1)
+		}
+	}
 	rpcError := func(id json.RawMessage, number int, message string) {
 		respond(id, nil, &verifyRPCError{number, message})
 	}
@@ -598,6 +612,11 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 				continue
 			}
 			req, rpcErr := parseVerifyRequest(line.data)
+			if rpcErr != nil && s.logs != nil {
+				if recovered, ok := verifyLogRecoverRequest(line.data); ok {
+					req, rpcErr = recovered, nil
+				}
+			}
 			if rpcErr != nil {
 				respond(nil, nil, rpcErr)
 				continue
@@ -648,10 +667,20 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					rpcError(req.id, -32602, "invalid tools/list params")
 					continue
 				}
-				respond(req.id, map[string]any{"tools": []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated, test-db or test-browser in the verification container.", "inputSchema": verifyInputSchema()}}}, nil)
+				tools := []map[string]any{{"name": verifyToolName, "description": "Run build, vet, test, generated, test-db or test-browser in the verification container.", "inputSchema": verifyInputSchema()}}
+				if s.logs != nil {
+					tools = append(tools, verifyLogTool())
+				}
+				respond(req.id, map[string]any{"tools": tools}, nil)
 			case "tools/call":
 				if !initialized {
 					rpcError(req.id, -32600, "initialize required")
+					continue
+				}
+				if s.logs != nil && verifyLogCallNamed(req.params) {
+					reply, audit := s.logs.verifyLogCall(req.params, req.id)
+					_, _ = io.WriteString(stderr, audit)
+					writeRaw(reply.line)
 					continue
 				}
 				args, err := parseVerifyCall(req.params)

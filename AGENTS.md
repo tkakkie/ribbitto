@@ -12,19 +12,15 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 ## Workflow
 
-Start at your workflow entry point:
-[Codex implementer](docs/workflow/README.md#implementer-codex),
-[Argon implementer](docs/workflow/README.md#implementer-argon),
-[reviewer](docs/workflow/README.md#reviewer), or
-[orchestrator/handoff](docs/workflow/README.md#orchestrator-and-handoff).
+One set of rules applies to every AI: start at
+[`docs/workflow/README.md`](docs/workflow/README.md).
 [Investigations](docs/workflow/investigations.md#investigations-and-the-performance-target)
 covers measurement approval and caps.
 
 ## Commands
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
-  tests (race detector on); must pass before you open a pull request
-  ([handoff exception](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
+  tests (race detector on); must pass before you open a pull request.
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.
@@ -138,6 +134,5 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
   `RIBBITTO_SIGNUP=on`) and what was checked in a browser. Screenshots are
   needed only when the look itself is the point or the maintainer asks
   for them; whoever can upload them attaches them.
-- Do not push to `main`. Follow the
-  [merge approval rule](docs/workflow/pull-requests.md#lifecycle-of-a-pull-request).
-- Headless runs follow [running the other AI](docs/workflow/running-other-ai.md#headless-reviews).
+- Do not push to `main`. Merge only on the maintainer's explicit instruction,
+  as [the workflow README](docs/workflow/README.md#what-no-ai-does) says.

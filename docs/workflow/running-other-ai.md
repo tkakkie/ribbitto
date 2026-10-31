@@ -143,7 +143,7 @@ start (#359).
 ### Implementation brief
 
 Brief: issue and review comments, size class, starting files/packages,
-and the [Codex implementer entry](README.md#implementer-codex).
+and the [roles section](README.md#roles-and-running-the-ais).
 Starting points; read the change's dependencies.
 
 `small`: expected adversarial tier C and either documentation only or an

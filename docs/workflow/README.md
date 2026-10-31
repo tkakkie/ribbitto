@@ -70,57 +70,46 @@ bypass list; checked as in the order below):
   what a changed workflow tests.
 - **Credentials and settings.** See [tokens](#tokens).
 
-## Before an AI uses a new right
+## Enabling an AI's rights
 
-In this order. Until steps 1-3 are confirmed and recorded, only Claude acts,
-as today. Then only the validation operations of step 4 are allowed (a
-command, an authenticated access check, a push to a test branch). Ordinary
-work starts after step 4 succeeds.
+Done for all three AIs on 2026-10-31 (#2002); repeat it for a new AI or token.
+In this order; until step 4 is shown, only Claude acts.
 
 1. The `main` ruleset is active: no direct push, a pull request and `ci`
-   required, an empty bypass list, and the required check limited to GitHub
-   Actions as its source if GitHub offers that. If it does not, record that
-   and the residual risk.
-2. The maintainer's own GitHub credential is out of the environment the
-   AIs run in: the `gh auth` login, keychain entries and credential
-   helpers. Whether an authenticated browser session is reachable by the
-   browser-capable AIs is verified at implementation; any access that
-   remains is recorded as a risk, not treated as removed.
-3. Each AI has its own token (see [tokens](#tokens)). Token creation and
-   environment changes are the maintainer's actions; the AI lists the
-   steps and does not perform them.
-4. Authentication is shown: for each AI, which credential `gh` uses and
-   which `git push` uses (`GH_TOKEN` alone does not make `git push` use the
-   token), with no fallback to another AI's or the maintainer's
-   credential. Codex and Argon each run headless once: a command,
-   authenticated repository access and a push to a test branch, which is
-   then deleted. Record the commands and results with tokens, passwords
-   and authorisation headers redacted; never print them. Keep the tested Git
-   recipe in this README: HTTPS, the credential helper, and what happens
-   when the AI's token is absent.
+   required, an empty bypass list, the required check's source limited to
+   GitHub Actions.
+2. The maintainer's own GitHub credential is out of the AIs' environment:
+   `gh auth logout`, the `github.com` keychain item erased, the SSH key
+   deleted from the account. A signed-in browser session may still be
+   reachable by browser-capable AIs; the maintainer uses another profile or
+   the phone for settings, and that exposure stays a stated risk.
+3. Each AI has its own token (below). Creating tokens and changing the
+   environment are the maintainer's actions; an AI lists the steps and does
+   not do them.
+4. Shown, not assumed: plain `gh` and `git push` fail (no fallback), and
+   each AI run headless once uses only its own token to run a command, read
+   the repository and push a test branch, deleted afterwards. Record the
+   commands and redacted results on #2002; never print a token or header.
 
 ## Tokens
 
-- **One fine-grained personal access token per AI, Claude included**, for
-  `tkakkie/ribbitto` only, with Contents, Pull requests, Issues and
-  Workflows read/write and no Administration. Each AI uses its own as
-  `GH_TOKEN`.
-- **What tokens give:** independent revocation and an intended assignment of
-  tokens to AIs. **What they do not give:** isolation, or proof of which AI
-  acted, since any AI may be able to use another's token. Whether GitHub's
-  audit log shows token-level events here is verified at implementation.
-  All three AIs run on the maintainer's Mac under the same macOS user, with separate `HOME`s
-  at most, and may run any command. Each can therefore read the others'
-  tokens and sign-ins, and the maintainer's own `gh` login if that user
-  has one.
-- **Revoking one token does not stop one AI.** To stop an AI, stop its
-  process. If any token may have leaked, revoke every token on that
-  machine.
-- The maintainer's own GitHub authority can change settings, the ruleset and
-  merges. The CLI credentials must be out of the macOS user the AIs run
-  under before the new rights are used (see above). A signed-in browser
-  session may still be reachable by browser-capable AIs; that is verified
-  at implementation and, if true, stays a stated risk.
+- **One fine-grained token per AI** (`claude-ribbitto`, `codex-ribbitto`,
+  `antigravity-ribbitto`) for `tkakkie/ribbitto` only: Contents, Pull
+  requests, Issues and Workflows read/write, no Administration, with an
+  expiry. Kept as `~/.ribbitto-ai/<claude|codex|antigravity>.token` (mode
+  600), outside every repository.
+- **Tested recipe** (scripts and checks: [credentials](ai-credentials.md)):
+  start an AI with `run-as.sh <name> <command…>`. It exports that token as
+  `GH_TOKEN` and, through `GIT_CONFIG_COUNT`, clears the inherited
+  `credential.helper` (`osxkeychain`) and adds one that answers only for
+  `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
+  `git push` use it. Without the AI's token file the launcher stops, and a
+  plain `gh` or `git push` fails: nothing else holds a credential.
+- **What tokens give:** independent revocation and an intended assignment,
+  not isolation and not proof of which AI acted: all three run as one macOS
+  user and can read each other's token files. Whether GitHub's audit log
+  shows token-level events is not verified. To stop an AI, stop its process;
+  if a token may have leaked, revoke all three.
 
 ## Roles and running the AIs
 
@@ -133,13 +122,21 @@ Headless runs wait for input forever: **close stdin and set a time limit**
 (`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`).
 
 - **Codex**, from the worktree:
-  `limit 3600 codex exec --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null`
-- **Argon**, from the worktree: `agy -p` with commands allowed, its own
-  `HOME` (for its sign-in) and its own token, under `limit`. The flags
-  that allow commands headless are not yet verified; step 4 above records
-  them here.
-- **Git authentication recipe:** not yet verified; step 4 records it here
-  (HTTPS, the credential helper, and what happens without the AI's token).
+
+  ```sh
+  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
+  ```
+
+- **Argon** (Antigravity), from the worktree:
+
+  ```sh
+  limit 3600 ~/.ribbitto-ai/run-as.sh antigravity env HOME=$HOME/dev/ribbitto/agy-home PATH=/usr/local/argon-agy:$PATH /usr/local/argon-agy/agy -p "$(cat prompt.md)" --model gemini-4-argon-high --print-timeout 3000s --output-format text < /dev/null
+  ```
+
+  The root-owned pinned `agy` and its own signed-in home, whose
+  `settings.json` allows `command(*)` and `write_file(*)` and trusts only
+  `~/dev/ribbitto/wt`. `--mode auto` is not available for the account.
+  Setup: [credentials](ai-credentials.md).
 - **Reviews** use the same commands, with a review prompt that points to
   [reviewing](reviewing.md).
 

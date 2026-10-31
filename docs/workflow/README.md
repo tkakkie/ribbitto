@@ -109,8 +109,9 @@ and show step 4 before ordinary work.
 3. Argon, for everything else, `high` risk included. `high` is a risk class,
    not an assignment: its review conditions hold whoever implements.
 
-The orchestrator may change the implementer for a concrete reason, such as
-stalled work, and says why in the issue. A fix goes back to the original
+When the maintainer did not name one, the orchestrator may change the
+implementer for a concrete reason, such as stalled work, and says why in the
+issue; changing a named one goes back to the maintainer. A fix goes back to the original
 implementer. Claude writes issues and briefs, starts the others and explains
 pull requests to the maintainer in Japanese in the chat.
 

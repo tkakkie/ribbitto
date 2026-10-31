@@ -7,10 +7,10 @@ the actual history ([review independence](README.md#principles)): for an
 issue, an AI other than its writer; for a pull request, an AI other than the
 implementer and anyone who pushed to it. Copilot follow-up checks use
 [an AI that did not write the change](delivery.md#copilot-follow-up-check).
-A run that does not count is retried once as the README says. If independence
+A failed, timed-out or empty run is handled as the README says. If independence
 cannot be kept, ask the maintainer.
 
-**How many rounds:** at most **two** reviews by the other AI per issue or
+**How many rounds:** at most **two** reviews, by AIs eligible under *Who reviews*, per issue or
 pull request, counting re-reviews together.
 Copilot and the adversarial review do not count. If round two still has
 blocking findings, a pull request may go through *closure verification* (below) when it qualifies; in every other

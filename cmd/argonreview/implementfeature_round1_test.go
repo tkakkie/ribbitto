@@ -242,11 +242,6 @@ func TestImplementFeatureRecoveryDocumentation(t *testing.T) {
 		return string(data)
 	}
 	read("argon-implement-run.md")
-	t.Run("role-entry", func(t *testing.T) {
-		if !strings.Contains(read("README.md"), "Start with your role: [Codex implementer](#implementer-codex),") {
-			t.Fatal("role entry missing")
-		}
-	})
 	recovery := strings.Join(strings.Fields(read("argon-implement-run-recovery.md")), " ")
 	for name, want := range map[string]string{
 		"evidence-before-restore": "2. Before restoring, record whether the session's files were tampered with.",

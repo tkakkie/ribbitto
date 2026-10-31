@@ -138,3 +138,5 @@ skip one. Its findings are advisory.
   field names the AI and the reviewed SHA, `pending`, or `not required` with
   the reason. The other AI checks the requirement against what the diff
   does, not only the paths it touches.
+  The reviewer is chosen under [review independence](README.md#principles)
+  from the pull request's actual commits.

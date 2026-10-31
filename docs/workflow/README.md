@@ -12,6 +12,10 @@ checklists remain in use.
 1. **Product first.** Work on AI tooling needs a product reason.
 2. **Every issue and every pull request an AI writes is reviewed by an AI
    that did not write it** before the maintainer is asked.
+   An AI that changed any part of a pull request, a fix included, counts as
+   an author of that part. The third-AI review is done by an AI that neither
+   implemented nor changed it nor did the first review; if none exists, ask
+   the maintainer.
 3. **The maintainer decides at two gates:** approving an issue (`ready`)
    and merging a pull request
    ([decision 11](../decisions/11-the-maintainer-decides-merges-an-ai-may-execute-them.md)).
@@ -96,10 +100,19 @@ and show step 4 before ordinary work.
 
 ## Roles and running the AIs
 
-The maintainer names the implementer when adding `ready`: Codex or Argon,
-or Claude when named for that issue. Claude
-writes issues, briefs and starts the others and explains pull requests to
-the maintainer in Japanese in the chat.
+**Choosing the implementer**, in this order:
+
+1. The maintainer's choice, named when adding `ready`.
+2. Codex, for the core areas: authentication, authorisation, organisation
+   scoping, sessions, real-time delivery, concurrency, caches, ordered
+   transactions, migrations and queries.
+3. Argon, for everything else, `high` risk included. `high` is a risk class,
+   not an assignment: its review conditions hold whoever implements.
+
+The orchestrator may change the implementer for a concrete reason, such as
+stalled work, and says why in the issue. A fix goes back to the original
+implementer. Claude writes issues and briefs, starts the others and explains
+pull requests to the maintainer in Japanese in the chat.
 
 Headless runs wait for input forever: **close stdin and set a time limit**
 (`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`).

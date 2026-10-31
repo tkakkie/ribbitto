@@ -2,17 +2,16 @@
 
 ## Review independence and rounds
 
-**Who reviews:** following [review independence](README.md#principles),
-Claude-written issues → Argon through the [README recipe](README.md#roles-and-running-the-ais),
-falling back to Codex when the run does not count; other Claude work → Codex;
-Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
-there → Codex. Copilot follow-up checks use
+**Who reviews:** an AI that neither wrote nor changed the work, decided from
+the actual history ([review independence](README.md#principles)): for an
+issue, an AI other than its writer; for a pull request, an AI other than the
+implementer and anyone who pushed to it. Copilot follow-up checks use
 [an AI that did not write the change](delivery.md#copilot-follow-up-check).
-Claude's own work is its issues, the fixes it writes during a review, and
-an issue the maintainer named Claude to implement.
+A run that does not count is retried once as the README says. If independence
+cannot be kept, ask the maintainer.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
-pull request, counting re-reviews and Argon and fallback Codex together.
+pull request, counting re-reviews together.
 Copilot and the adversarial review do not count. If round two still has
 blocking findings, a pull request may go through *closure verification* (below) when it qualifies; in every other
 case, stop and ask the maintainer.
@@ -29,8 +28,8 @@ issue revisions have no SHA.
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
-- *Risk* is right (see below) and *Implementer* is set by the maintainer
-  under the [README's roles](README.md#roles-and-running-the-ais).
+- *Risk* is right (see below) and any *Implementer* the maintainer names is stated; otherwise the
+  [README default](README.md#roles-and-running-the-ais) applies.
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
@@ -97,7 +96,7 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    each finding — not the rest of the PR — and reports:
 
    ```
-   **Closure verification — <Claude|Codex>** (at <SHA>)
+   **Closure verification — <Claude|Codex|Argon>** (at <SHA>)
    Compared: <round-2 SHA>..<SHA>
    - ✅ | ❌ finding — how it was checked
    ```
@@ -122,8 +121,7 @@ reach the re-review without either AI checking it:
    gate) record instead why, and the alternative verification done: a
    scripted or manual reproduction, a mutation showing the guard matters,
    or the exact text change. Effort or time is never such a reason.
-2. The AI that did not write the fix (Claude ↔ Codex; Codex on an Argon
-   pull request, following [review independence](README.md#principles)) checks
+2. The AI that did not write the fix (following [review independence](README.md#principles)) checks
    that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
    it (by running it, or by reading a run without the fix in CI) — or
@@ -131,7 +129,7 @@ reach the re-review without either AI checking it:
    was done; a reason it does not accept is ❌. It reports:
 
    ```
-   **Adversarial follow-up check — <Claude|Codex>** (at <SHA>)
+   **Adversarial follow-up check — <Claude|Codex|Argon>** (at <SHA>)
    Compared: <reviewed SHA>..<SHA>
    - ✅ | ❌ finding — the fix, and the test that fails without it
      (or: no test — the reason, and the alternative verification)

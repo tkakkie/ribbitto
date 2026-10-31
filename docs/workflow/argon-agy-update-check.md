@@ -20,15 +20,15 @@ Approve user, sudo rule, directories, permissions, binary placement, sign-in,
 run separately. Record access/risk on [#1890][issue]; compare deprecated
 `sandbox-exec` and a VM. Use a dedicated low-privilege macOS user:
 
-- Deny group/ACL access to the maintainer account, checkout, worker/review homes,
+- Deny group/ACL access to maintainer account, checkout, worker/review homes,
   `~/.gemini` and keychain; no sudo. Claude uses fixed
-  `sudo -u` for one trusted binary, or the maintainer logs in as this user.
+  `sudo -u` for one trusted binary, or maintainer logs in as this user.
   Keep network credentials out of env; HOME/`--sandbox` alone cannot isolate
   file tools with an allow hook.
-- The agent retains the user's rights/network; escapes remain possible.
+- Agent retains the user's rights/network; escapes remain possible.
   Its sign-in credential is exposed; use a separate revocable one.
-- Put `argonreview` and an agy **copy** outside the account home in
-  root/maintainer-owned 0755 directories, file mode 0555. Record hashes;
+- Put `argonreview` and agy **copy** outside account home in
+  root/maintainer-owned 0755 directories, files 0555. Record hashes;
   protect/record extra runtime files likewise if needed.
 
 Home/isolation: dedicated UID, 0700, outside protected roots. Home-root
@@ -48,7 +48,7 @@ Home/isolation: dedicated UID, 0700, outside protected roots. Home-root
 }
 ```
 
-Check/hooks require the marker user's real/effective UID; canaries
+Check/hooks require marker user's real/effective UID; canaries
 need read/write/search denial on every protected root.
 
 ## Fixed order and host procedure
@@ -56,10 +56,10 @@ need read/write/search denial on every protected root.
 Claude follows this order **before trust**, at `implement-check`'s first
 "no trusted builtin/ hash list" (`cmd/argonreview/implementcheck.go`):
 
-1. Under approved isolation, start the new version once in the throwaway home:
+1. Under approved isolation, start the new version once in throwaway home:
    agy rewrites `builtin/`, invalidating earlier hashes
    (2026-10-27, 1.4.7 → 1.4.8, [#1700 incident][incident]).
-   After sign-in/first start, before checking, the maintainer saves a clean
+   After sign-in/first start, before checking, maintainer saves a clean
    home baseline (contents, permissions, absences, sign-in, config, marker, post-start
    builtin/) in maintainer-owned storage beyond agent writes.
 2. Before checking, Claude hand-builds `implementer/builtin.agy-<version>.txt`
@@ -69,8 +69,7 @@ Claude follows this order **before trust**, at `implement-check`'s first
    Record SHA-256; store with baseline beyond agent writes: allow-hook rows can
    change `builtin/`.
 3. Claude checks placement hashes and installed/copy agy SHA-256 equality.
-   **Normal-user host:** hash account shared settings immediately before/
-   after; save both. Changes invalidate. Detection only: neither tool nor
+   **Normal-user host:** hash account shared settings immediately before/after; save both. Changes invalidate. Detection only: neither tool nor
    dedicated user accesses it. Approved dedicated-user execution/capture:
 
    ```text
@@ -78,7 +77,8 @@ Claude follows this order **before trust**, at `implement-check`'s first
    ```
 
    `--calls N` (default 30); `--model <name>` (default
-   `gemini-4-argon-high`). Save stdout/stderr/status outside transient trees.
+   `gemini-4-argon-high`); [`--keep-transcripts`](argon-agy-keep.md).
+   Save stdout/stderr/status outside transient trees.
    The agent UID can rewrite results. Copy output to
    maintainer-owned storage or post its hash on [#1890][issue]. After rows, home `builtin/`
    is hashed: `INFO builtin/ listing SHA-256` or failure. Usage errors/pre-run
@@ -104,7 +104,7 @@ Tool restores bytes/modes or absence for three home files only
 `.gemini/config/hooks.json`, `.gemini/config/mcp_config.json`,
 `.gemini/antigravity-cli/settings.json`.
 Created config directories/transient trees removed; errors invalidate.
-Between full runs, Claude/the maintainer on the host
+Between full runs, Claude/maintainer on host
 confirms no session processes remain, restores saved home contents/permissions
 and post-start builtin/, clears run-created session/brain state, checks
 marker/permissions. Stop on restoration failure; never repair protected homes.

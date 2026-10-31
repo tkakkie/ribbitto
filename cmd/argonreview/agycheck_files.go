@@ -13,19 +13,45 @@ import (
 // checks deliberately retain the hook's check/create race, not a tamper-proof
 // boundary against the dedicated user or an allow-everything agent.
 type agyCheckFiles struct {
-	lstat   func(string) (os.FileInfo, error)
-	read    func(string, int64) ([]byte, error)
-	entries func(string) ([]os.DirEntry, error)
-	mkdir   func(string, os.FileMode) error
-	temp    func(string, string) (string, error)
-	open    func(string, int, os.FileMode) (*os.File, error)
-	remove  func(string) error
-	uid     int
+	lstat    func(string) (os.FileInfo, error)
+	read     func(string, int64) ([]byte, error)
+	entries  func(string) ([]os.DirEntry, error)
+	entriesN func(string, int) ([]os.DirEntry, error)
+	mkdir    func(string, os.FileMode) error
+	temp     func(string, string) (string, error)
+	open     func(string, int, os.FileMode) (*os.File, error)
+	remove   func(string) error
+	uid      int
 }
 
 func agyCheckFilesDefaults() agyCheckFiles {
 	return agyCheckFiles{os.Lstat, func(p string, n int64) ([]byte, error) { return implementRead(p, n, false) },
-		os.ReadDir, os.Mkdir, os.MkdirTemp, os.OpenFile, os.Remove, os.Getuid()}
+		os.ReadDir, agyCheckReadDirN, os.Mkdir, os.MkdirTemp, os.OpenFile, os.Remove, os.Getuid()}
+}
+
+func agyCheckReadDirN(path string, n int) (entries []os.DirEntry, err error) {
+	dir, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_DIRECTORY, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, dir.Close()) }()
+	entries, err = dir.ReadDir(n)
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return entries, err
+}
+
+func (f agyCheckFiles) keptEntries(path string, limit int) ([]os.DirEntry, error) {
+	// Read only one overflow entry, even if the dedicated user floods the tree.
+	entries, err := f.entriesN(path, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) > limit {
+		return nil, errors.New("kept entry limit exceeded")
+	}
+	return entries, nil
 }
 
 // Walk from / before reaching the leaf, including for an absent target. Only
@@ -103,7 +129,18 @@ func (f agyCheckFiles) cleanup(root, path string) error {
 		return err
 	}
 	if info.IsDir() {
-		entries, err := f.entries(path)
+		var entries []os.DirEntry
+		kept := filepath.Join(root, "kept")
+		switch {
+		case path == kept:
+			entries, err = f.keptEntries(path, len(agyCheckExpected))
+		case filepath.Dir(path) == kept:
+			entries, err = f.keptEntries(path, 2)
+		case implementRunInside(kept, path):
+			return errors.New("unexpected retained directory")
+		default:
+			entries, err = f.entries(path)
+		}
 		if err != nil {
 			return err
 		}
@@ -209,4 +246,37 @@ func agyCheckReadLog(file *os.File) ([]byte, error) {
 		return nil, errors.New("transcript exceeds 4 MiB")
 	}
 	return data, err
+}
+
+// Retention truncates oversized logs instead of accepting them as evidence.
+func (f agyCheckFiles) readPrefixInside(root, path string, cap int64) (data []byte, err error) {
+	if err := f.path(root, path); err != nil {
+		return nil, err
+	}
+	if err := f.private(path, false); err != nil {
+		return nil, err
+	}
+	// The path can become a FIFO after private's lstat; do not block before fstat.
+	in, err := f.open(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, in.Close()) }()
+	info, err := in.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !agyCheckPrefixMetadata(info, f.uid) {
+		return nil, errors.New("transcript must be a private uid-owned regular file with one link")
+	}
+	return io.ReadAll(io.LimitReader(in, cap))
+}
+
+func agyCheckPrefixMetadata(info os.FileInfo, uid int) bool {
+	if !info.Mode().IsRegular() {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat != nil && int(stat.Uid) == uid &&
+		info.Mode()&^os.ModeType == 0o600 && stat.Nlink == 1
 }

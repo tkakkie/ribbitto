@@ -1,10 +1,11 @@
-# Documentation audit (Antigravity)
+# Documentation audit
 
-The maintainer pastes this prompt into `agy`, interactively; no script runs
-it. When and how: *Occasional audit* in
+An AI runs this prompt through the README recipe, or the maintainer pastes
+it into an interactive session. When and how: *Occasional audit* in
 [`docs/workflow/README.md`](../../docs/workflow/README.md#occasional-audit).
-Fill in `<ABSOLUTE PATH OF THE CHECKOUT>` and `<COMMIT>`, then paste
-everything below the line.
+Whoever runs it replaces `<ABSOLUTE PATH OF THE CHECKOUT>` and `<COMMIT>`
+with the checkout path and the commit to audit, then passes everything
+below the line.
 
 ---
 

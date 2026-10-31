@@ -19,12 +19,8 @@ const (
 
 // Browser calls share admission, budget, execution and cleanup across callers.
 func (v containerVerifier) verifyBrowser(ctx context.Context, pattern, run string) (string, error) {
-	if err := validateContainerCheck(v.worktree, verifyBrowserCheck, pattern, run); err != nil {
-		return "", err
-	}
-	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, admit: v.browserAdmission}
-	_, err := runContainerExecution(ctx, v.worktree, "test-browser", pattern, v.runner, v.copyParent, &result)
-	return result.summary, err
+	summary, _, _, err := v.verifyRecorded(ctx, verifyBrowserCheck, pattern, run)
+	return summary, err
 }
 
 func containerBrowserArguments(copyDir, name, pattern, run string, reservation budgetReservation) ([]string, error) {

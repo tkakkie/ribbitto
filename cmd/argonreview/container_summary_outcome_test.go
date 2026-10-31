@@ -62,7 +62,7 @@ func TestContainerSummaryExecutionFailure(t *testing.T) {
 					}}
 					tree, parent := containerFixture(t), t.TempDir()
 					if mcp {
-						summary, err := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, parent, containerTimeout}).verify(ctx, check, "./...")
+						summary, err := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, parent, containerTimeout, false}).verify(ctx, check, "./...")
 						return "", summary, err
 					}
 					var execution containerExecution
@@ -137,7 +137,7 @@ func TestContainerSummaryLateNonverifiedContext(t *testing.T) {
 
 func TestContainerSummaryMalformedGeneratedDiff(t *testing.T) {
 	const raw = "malformed diff content\n+unvalidated addition\n"
-	v := containerVerifier{"", browserSecurity{}, grantContainerBudget(), containerFixture(t), summaryRunner(raw, "", generatedDiffer), t.TempDir(), containerTimeout}
+	v := containerVerifier{"", browserSecurity{}, grantContainerBudget(), containerFixture(t), summaryRunner(raw, "", generatedDiffer), t.TempDir(), containerTimeout, false}
 	report, hostErr := runContainerCheck(context.Background(), v.worktree, "generated", "./...", v.runner, v.copyParent, grantContainerBudget())
 	summary, err := v.verify(context.Background(), "generated", "./...")
 	text, bad := verifyResult(summary, err, false, false)
@@ -304,7 +304,7 @@ func TestContainerLateDeadlineGeneratedOutput(t *testing.T) {
 				if report != want || !errors.Is(err, context.DeadlineExceeded) {
 					t.Fatalf("late deadline generated report %q, want %q; error %v", report, want, err)
 				}
-				summary, mcpErr := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, 2 * time.Second}).verify(context.Background(), "generated", "./...")
+				summary, mcpErr := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, 2 * time.Second, false}).verify(context.Background(), "generated", "./...")
 				if summary != execution.summary || !errors.Is(mcpErr, context.DeadlineExceeded) {
 					t.Fatalf("late deadline host/MCP mismatch: %q, %v", summary, mcpErr)
 				}
@@ -369,7 +369,7 @@ func TestContainerDeadlineRemovalFailure(t *testing.T) {
 				t.Fatalf("deadline with unconfirmed removal: %q, %v", report, err)
 			}
 			assertIncompleteSummary(t, report, execution.summary, err)
-			summary, mcpErr := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, 2 * time.Second}).verify(context.Background(), check, "./...")
+			summary, mcpErr := (containerVerifier{"", browserSecurity{}, grantContainerBudget(), tree, runner, copies, 2 * time.Second, false}).verify(context.Background(), check, "./...")
 			if summary != execution.summary || !errors.Is(mcpErr, context.DeadlineExceeded) {
 				t.Fatalf("removal failure host/MCP mismatch: %q, %v", summary, mcpErr)
 			}

@@ -117,6 +117,7 @@ type summaryLines struct {
 	lines                     []string
 	total                     int
 	shortened                 []bool
+	ordinals                  []int
 	partial                   string
 	partialActive, partialCut bool
 }

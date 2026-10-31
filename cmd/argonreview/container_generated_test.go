@@ -251,7 +251,7 @@ func TestGeneratedReportCaps(t *testing.T) {
 	if len(report) >= containerReportLimit || len(out) > generatedDiffLimit+30 || !strings.Contains(out, "[diff cut off]") {
 		t.Fatalf("report too large: %d, diff %d", len(report), len(out))
 	}
-	v := containerVerifier{"", browserSecurity{}, grantContainerBudget(), containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir(), containerTimeout}
+	v := containerVerifier{"", browserSecurity{}, grantContainerBudget(), containerFixture(t), summaryRunner(diff.String(), "", 25), t.TempDir(), containerTimeout, false}
 	summary, err := v.verify(context.Background(), "generated", "./...")
 	if len(summary) > summaryErrorBudget {
 		t.Fatalf("summary size = %d, want <= %d", len(summary), summaryErrorBudget)

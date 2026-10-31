@@ -27,7 +27,7 @@ const (
 	verifyCallLimit     = containerTimeout + 2*containerCleanupTimeout + time.Minute
 	verifyShutdownGrace = 2*containerCleanupTimeout + 5*time.Second
 	verifyMCPPath       = "/usr/bin:/bin"
-	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>]"
+	verifyMCPUsage      = "usage: argonreview verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] [--logs]"
 )
 
 type verifier interface {
@@ -35,6 +35,12 @@ type verifier interface {
 }
 type browserVerifier interface {
 	verifyBrowser(context.Context, string, string) (string, error)
+}
+
+// recordingVerifier keeps pre-record refusals and preparation errors capture-free.
+// The server alone may retain a sealed record after deciding its final verdict.
+type recordingVerifier interface {
+	verifyRecorded(context.Context, string, string, string) (string, *containerRecord, bool, error)
 }
 
 type containerVerifier struct {
@@ -45,10 +51,24 @@ type containerVerifier struct {
 	runner          containerRunner
 	copyParent      string
 	timeout         time.Duration
+	logs            bool
 }
 
 func (v containerVerifier) verify(ctx context.Context, check, pattern string) (string, error) {
-	return runContainerSummary(ctx, v.worktree, check, pattern, v.runner, v.copyParent, v.timeout, v.budget)
+	summary, _, _, err := v.verifyRecorded(ctx, check, pattern, "")
+	return summary, err
+}
+
+func (v containerVerifier) verifyRecorded(ctx context.Context, check, pattern, run string) (string, *containerRecord, bool, error) {
+	if err := validateContainerCheck(v.worktree, check, pattern, run); err != nil {
+		return "", nil, false, err
+	}
+	result := containerExecution{timeout: v.timeout, budget: v.budget, browserRun: run, logs: v.logs}
+	if check == verifyBrowserCheck {
+		result.admit = v.browserAdmission
+	}
+	_, err := runContainerExecution(ctx, v.worktree, check, pattern, v.runner, v.copyParent, &result)
+	return result.summary, result.record, result.runnerFailed, err
 }
 
 func newContainerVerifier(worktree, browserMode string) containerVerifier {
@@ -164,6 +184,16 @@ func verifyEnvironment(environ []string) error {
 }
 
 func startVerifyMCP(ctx context.Context, args, environ []string, trust func(string) error, sweep func(io.Writer) error, v verifier, stdin io.Reader, stdout, stderr io.Writer) int {
+	logs := len(args) > 0 && args[len(args)-1] == "--logs"
+	if logs {
+		args = args[:len(args)-1]
+	}
+	for _, arg := range args {
+		if arg == "--logs" {
+			_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
+			return 2
+		}
+	}
 	if (len(args) != 4 && len(args) != 6) || args[0] != "--trusted-source" || args[2] != "--worktree" {
 		_, _ = fmt.Fprintln(stderr, verifyMCPUsage)
 		return 2
@@ -197,10 +227,16 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 		_, _ = fmt.Fprintf(stderr, "argonreview verify-mcp: %v\n", err)
 		return 1
 	}
-	if v == nil {
-		v = newContainerVerifier(args[3], browserMode)
+	var store *verifyLogStore
+	if logs {
+		store = &verifyLogStore{}
 	}
-	return (verifyMCPServer{verifier: v, checkWorktree: func() error {
+	if v == nil {
+		real := newContainerVerifier(args[3], browserMode)
+		real.logs = logs
+		v = real
+	}
+	return (verifyMCPServer{verifier: v, logs: store, checkWorktree: func() error {
 		// Recheck because the worker can replace paths after startup. This
 		// narrows, but cannot eliminate, a swap before the runner's copy;
 		// the runner's own checks still apply.
@@ -212,6 +248,13 @@ func startVerifyMCP(ctx context.Context, args, environ []string, trust func(stri
 }
 
 func verifyResult(report string, runErr error, timedOut, cancelled bool) (string, bool) {
+	return verifyRecordedResult(report, runErr, timedOut, cancelled, false, nil, nil)
+}
+
+const verifyLogRunPrefix = "Log run: "
+const verifyLogRunLineBytes = len(verifyLogRunPrefix) + verifyLogIDBytes*2 + 1
+
+func verifyRecordedResult(report string, runErr error, timedOut, cancelled, runnerFailed bool, store *verifyLogStore, record *containerRecord) (string, bool) {
 	// The runner has an earlier deadline of its own, including source copying.
 	timedOut = timedOut || errors.Is(runErr, context.DeadlineExceeded)
 	cancelled = !timedOut && (cancelled || errors.Is(runErr, context.Canceled))
@@ -232,11 +275,33 @@ func verifyResult(report string, runErr error, timedOut, cancelled bool) (string
 	default:
 		report = "NOT VERIFIED: the check could not run\n" + report
 	}
+	// Capture only after every wrapper override; summary-time success can still
+	// become FAILED here. A nil store leaves logs-off runs entirely unretained.
+	prefixBytes := len(report) - initialBytes
+	logBytes := 0
+	if store != nil && bad {
+		first, rest, newline := strings.Cut(report, "\n")
+		// Cleanup and wrapper failures can arrive after record finalization.
+		// Deny captured stderr before publishing, leaving execution alone.
+		if record != nil && (timedOut || cancelled || runErr != nil || runnerFailed || summaryRunnerFailure(first)) {
+			record.mu.Lock()
+			if record.sealed {
+				record.stderrNotServable = true
+			}
+			record.mu.Unlock()
+		}
+		if capture := store.capture(first, record); capture != nil {
+			report = first + "\n" + verifyLogRunPrefix + capture.id + "\n"
+			if newline {
+				report += rest
+			}
+			logBytes = verifyLogRunLineBytes
+		}
+	}
 	if runErr != nil {
 		// The prefix and diagnostic share the summary core's fixed reserve.
-		prefixBytes := len(report) - initialBytes
 		detail := strings.ToValidUTF8(runErr.Error(), "�")
-		report += "\n" + cutGeneratedText(detail, summaryReserve-prefixBytes-1)
+		report += "\n" + cutGeneratedText(detail, summaryReserve-prefixBytes-logBytes-1)
 	}
 	report = strings.ToValidUTF8(report, "�")
 	if len(report) > verifyResultLimit {
@@ -399,6 +464,7 @@ func parseVerifyCall(raw []byte) (verifyArguments, error) {
 }
 
 type verifyMCPServer struct {
+	logs             *verifyLogStore
 	verifier         verifier
 	checkWorktree    func() error
 	callLimit, grace time.Duration
@@ -406,8 +472,10 @@ type verifyMCPServer struct {
 	callDeadline <-chan struct{}
 }
 type verifyCompletion struct {
-	report string
-	err    error
+	report       string
+	record       *containerRecord
+	runnerFailed bool
+	err          error
 }
 type verifyFlight struct {
 	id       json.RawMessage
@@ -501,7 +569,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 		case result := <-done:
 			timedOut := flight.timedOut || errors.Is(flight.ctx.Err(), context.DeadlineExceeded)
 			cancelled := !timedOut && (flight.ctx.Err() != nil || errors.Is(result.err, context.Canceled))
-			text, bad := verifyResult(result.report, result.err, timedOut, cancelled)
+			text, bad := verifyRecordedResult(result.report, result.err, timedOut, cancelled, result.runnerFailed, s.logs, result.record)
 			first, _, _ := strings.Cut(text, "\n")
 			_, _ = fmt.Fprintf(stderr, "verify %s %s: %s\n", flight.args.check, flight.args.pattern, first)
 			id := flight.id
@@ -613,7 +681,11 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 				go func() {
 					var report string
 					var err error
-					if args.check == verifyBrowserCheck {
+					var record *containerRecord
+					var runnerFailed bool
+					if v, ok := s.verifier.(recordingVerifier); ok && s.logs != nil {
+						report, record, runnerFailed, err = v.verifyRecorded(callCtx, args.check, args.pattern, args.run)
+					} else if args.check == verifyBrowserCheck {
 						report = browserPaused + "\n"
 						if v, ok := s.verifier.(browserVerifier); ok {
 							report, err = v.verifyBrowser(callCtx, args.pattern, args.run)
@@ -621,7 +693,7 @@ func (s verifyMCPServer) serve(ctx context.Context, stdin io.Reader, stdout, std
 					} else {
 						report, err = s.verifier.verify(callCtx, args.check, args.pattern)
 					}
-					completed <- verifyCompletion{report, err}
+					completed <- verifyCompletion{report: report, record: record, runnerFailed: runnerFailed, err: err}
 				}()
 			default:
 				rpcError(req.id, -32601, "method not found")

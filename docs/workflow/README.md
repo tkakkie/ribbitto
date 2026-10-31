@@ -165,7 +165,7 @@ Pull request:
    before approval, check the pull request against the current `main`. A
    merge of `main` that resolves conflicts is reported in a comment (files
    and how); if it does more than combine both sides, it is reviewed.
-   (Kept.)
+  
 4. `ai-reviewed`, and the pull request is marked ready for review.
 5. Claude explains it in the chat.
 6. The maintainer decides the merge.
@@ -185,7 +185,8 @@ Pull request:
 
 Measurements need the maintainer's preapproval and keep the caps in
 [investigations](investigations.md). Kept: record SHAs, conditions, commands
-and results; alternate base and head under matched conditions in one session.
+and results; alternate base and head under matched conditions in one session;
+check the result against *Done when*.
 
 ## Keeping state
 
@@ -197,8 +198,7 @@ and results; alternate base and head under matched conditions in one session.
 
 ## Occasional audit
 
-Optional, maintainer-run: an AI looks for contradictions between documents
-and code with [`.github/prompts/audit.md`](../../.github/prompts/audit.md).
+Optional, maintainer-run: an AI hunts contradictions with [`.github/prompts/audit.md`](../../.github/prompts/audit.md).
 Check every finding against the files before fixing it.
 
 ## Labels
@@ -207,7 +207,7 @@ Check every finding against the files before fixing it.
 |---|---|---|
 | `ai-reviewed` | the orchestrating AI, after an approving review | The review is done; a pull request is marked ready with it. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
-| `process`, `bug` | template | Workflow improvement; something is broken. |
+| `process`, `bug` | template | Workflow improvement; broken behaviour. |
 
 ## Older files in this folder
 

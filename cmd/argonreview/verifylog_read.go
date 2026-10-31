@@ -119,7 +119,7 @@ func verifyLogBudgetGroup(stream string) int {
 
 // readRaw returns exactly the encoded line to write. Budgets count that line,
 // including refused requests and the protocol envelope, never captured bytes.
-// PR 2 owns writing it and emitting its one audit line.
+// The server loop writes it unchanged and emits its one audit line.
 func (s *verifyLogStore) readRaw(raw []byte, id json.RawMessage) (verifyLogReply, string) {
 	a, err := parseVerifyLogArguments(raw)
 	class := verifyLogOK

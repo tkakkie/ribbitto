@@ -60,6 +60,7 @@ func verifyLogText(s string, visit func(rune, int)) {
 
 func verifyLogVisible(s string) string {
 	var b strings.Builder
+	b.Grow(len(s))
 	verifyLogText(s, func(r rune, _ int) {
 		if !verifyLogInvisible(r) {
 			b.WriteRune(r)

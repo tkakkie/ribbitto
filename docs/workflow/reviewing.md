@@ -10,6 +10,13 @@ implementer and anyone who pushed to it. Copilot follow-up checks use
 A failed, timed-out or empty run is handled as the README says. If independence
 cannot be kept, ask the maintainer.
 
+**Who changed it** is read from the orchestration record: the issue or pull
+request body and comments (process notes included), the review reports, the
+branch prefix (`claude/`, `codex/`, `argon/`) and commit trailers where
+present. GitHub's Author, Committer and token name are not evidence: every AI
+acts as the same account. If it cannot be told who wrote or changed the work,
+do not guess a reviewer: ask the maintainer.
+
 **How many rounds:** at most **two** reviews, by AIs eligible under *Who reviews*, per issue or
 pull request, counting re-reviews together.
 Copilot and the adversarial review do not count. If round two still has

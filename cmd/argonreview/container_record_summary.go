@@ -26,27 +26,42 @@ func recordSummaryFactsWithOrdinals(r *containerRecord, ordinals bool) summaryFa
 	f.stdout = retainedSummaryLines(r.stdout)
 	f.compiler = retainedSummaryLines(r.compiler)
 	var notices []string
+	var noticeMasked []bool
 	noticeTotal := 0
+	// Detection counts describe kinds, not occurrences. Any lost source can
+	// hide a second occurrence whose continuation survives display selection.
+	omitted := r.packageOutput.total > len(r.packageOutput.head)+len(r.packageOutput.tail) || r.packageOutput.notRetained ||
+		r.compiler.total > len(r.compiler.head)+len(r.compiler.tail) || r.compiler.notRetained || f.compiler.total > len(f.compiler.lines)
+	for _, shortened := range f.compiler.shortened {
+		omitted = omitted || shortened
+	}
 	for _, part := range [][]byte{r.packageOutput.head, r.packageOutput.tail} {
 		for line := range strings.SplitSeq(string(part), "\n") {
 			if strings.Contains(line, "FAIL") || strings.Contains(line, "[build failed]") {
 				noticeTotal++
+				omitted = omitted || len(line) > summaryLineLimit
 				if len(notices) < summaryExcerptLimit {
 					notices = append(notices, line)
 				}
+			} else if line != "" {
+				omitted = true
 			}
 		}
 	}
+	omitted = omitted || noticeTotal > len(notices)
 	// Match capture's segment boundaries, but locate masks only in the bounded
 	// display. A hidden match cannot justify printing an unlocated fragment.
 	if detections := verifyLogScanSegments(string(r.packageOutput.head), string(r.packageOutput.tail), string(r.compiler.head), string(r.compiler.tail)); detections > 0 {
 		lines := append(notices, f.compiler.lines...)
 		masked := summaryMaskLines(lines)
 		// A located shape must not hide another kind lost during selection.
-		if verifyLogScan(strings.Join(lines, "\n")) < detections {
+		if omitted || verifyLogScan(strings.Join(lines, "\n")) < detections {
 			for i := range masked {
-				masked[i] = "[name withheld]"
+				masked[i] = summaryWithheld
 			}
+		}
+		for i, line := range notices {
+			noticeMasked = append(noticeMasked, masked[i] != line)
 		}
 		notices = masked[:len(notices)]
 		compiler := masked[len(notices):]
@@ -55,8 +70,11 @@ func recordSummaryFactsWithOrdinals(r *containerRecord, ordinals bool) summaryFa
 		}
 		f.compiler.lines = compiler
 	}
-	for _, line := range notices {
+	for i, line := range notices {
 		f.packageFailures.add(line, summaryExcerptLimit)
+		if i < len(noticeMasked) {
+			f.packageFailures.shortened[i] = f.packageFailures.shortened[i] || noticeMasked[i]
+		}
 	}
 	f.packageFailures.total = noticeTotal
 	// Derive ordinals from exactly the capture's index, using entry identity.
@@ -96,10 +114,15 @@ func recordSummaryFactsWithOrdinals(r *containerRecord, ordinals bool) summaryFa
 			display := masked
 			if ordinals {
 				display = summaryText(masked)
+				if display == "" {
+					display = masked
+				}
 			}
 			f.packageFailures.add(display, summaryExcerptLimit)
+			for i := before; i < len(f.packageFailures.lines); i++ {
+				f.packageFailures.shortened[i] = f.packageFailures.shortened[i] || masked != name || display != masked
+			}
 			if ordinals && len(f.packageFailures.lines) > before {
-				f.packageFailures.shortened[before] = f.packageFailures.shortened[before] || display != masked
 				for len(f.packageFailures.ordinals) < before {
 					f.packageFailures.ordinals = append(f.packageFailures.ordinals, 0)
 				}

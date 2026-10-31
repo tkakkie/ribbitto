@@ -108,7 +108,7 @@ The container holds fixed variables, the public CI-only database URL and source
 without protected files (no secrets). Files, host diagnostics/errors, saved agy
 output and other workers' runs are never served.
 
-Once at capture, scan every retained output unit and entry name for the CI
+At capture, scan retained output units and entry names for the CI
 password derived from the runner constant and token shapes `ghp_`,
 `github_pat_`, `AKIA` and PEM headers. Scan head and tail segments separately,
 without a page or prefix cap. Keep raw, newline-removed and sanitised-joined
@@ -119,10 +119,10 @@ served by `summaryText`. Take the maximum detection count across passes and
 segments, including segments joined with a newline for conservative boundary
 over-detection. Package output and compiler output are scanned separately and
 together with newline boundaries; their maximum taints the package stream.
-Only counts survive.
+Keep only counts.
 Matching names show `[name withheld]` in every summary (including logs off)
-and the index; select by ordinal.
-Excerpts are omitted; package/compiler masks use bounded windows.
+and index; select by ordinal.
+Excerpts are omitted; uncertain package/compiler matches withhold both sections.
 Mask recorded names and their repeats in excerpts/package notices/compiler lines.
 Command output, stderr and caller arguments (pattern/browser run) stay verbatim.
 Summary container lines are sanitised and indented with `  | `; only trusted lines

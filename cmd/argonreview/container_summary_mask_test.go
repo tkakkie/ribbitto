@@ -28,6 +28,7 @@ func TestSummaryPackageCompilerSplitNameMask(t *testing.T) {
 				want.packageFailures.add(wantPkg, summaryExcerptLimit)
 				want.compiler.add(wantCompiler, summaryExcerptLimit)
 				want.compiler.shortened[0] = matching
+				want.packageFailures.shortened[0] = matching
 				in := summaryInput{check: "test", verdict: "FAILED", facts: facts}
 				got := buildContainerSummary(in)
 				in.facts = want
@@ -264,7 +265,8 @@ func TestSummarySkippedParentSplitNameMask(t *testing.T) {
 			in := summaryInput{check: "test", verdict: result.verdict, facts: recordSummaryFacts(a.record)}
 			got := buildContainerSummary(in)
 			assertSummary(t, in, got)
-			if strings.Contains(got, "Test_") || strings.Contains(got, "p_placeholder") || !strings.Contains(got, "Skipped names:\n"+summaryIndent+"[name withheld]\n") {
+			withoutOrdinary := strings.ReplaceAll(got, "p/Test_b", "")
+			if strings.Contains(withoutOrdinary, "Test_") || verifyLogScan(got) != 0 || strings.Contains(got, "p_placeholder") || !strings.Contains(got, "Skipped names:\n"+summaryIndent+"[name withheld]\n") {
 				t.Fatalf("unindexed skipped parent exposed split identity: %q", got)
 			}
 		})
@@ -341,16 +343,27 @@ func TestSummaryCompilerNameMask(t *testing.T) {
 }
 
 func TestSummaryCompilerNameMaskAccounting(t *testing.T) {
-	output := "# ghp_placeholder\nordinary\nordinary\x1b[31m\n" + strings.Repeat("ordinary\n", summaryExcerptLimit)
-	r := &containerRecord{compiler: retainedOutput{head: []byte(output), total: len(output)}}
-	got := recordSummaryFacts(r).compiler
-	if got.total != summaryExcerptLimit+3 || len(got.lines) != summaryExcerptLimit || got.lines[0] != "[name withheld]" || got.lines[1] != "[name withheld]" || got.lines[2] != "ordinary" {
-		t.Fatalf("compiler masking changed retained line counts: %+v", got)
-	}
-	w := summaryWriter{limit: summaryErrorBudget}
-	w.lines("Compiler output:", got)
-	if summary := w.finish(0); !strings.Contains(summary, "; 3 lines not shown; 3 lines shortened.") {
-		t.Fatalf("compiler masking lost omission or shortening counts: %q", summary)
+	for _, tc := range []struct {
+		name, output              string
+		total, omitted, shortened int
+		want                      []string
+	}{
+		{"no omission", "# ghp_placeholder\nordinary\nordinary\n", 3, 0, 1, []string{"[name withheld]", "ordinary", "ordinary"}},
+		{"sanitised", "# ghp_placeholder\nordinary\nordinary\x1b[31m\n", 3, 0, 3, []string{"[name withheld]", "[name withheld]", "[name withheld]"}},
+		{"excerpt limit", "# ghp_placeholder\nordinary\nordinary\x1b[31m\n" + strings.Repeat("ordinary\n", summaryExcerptLimit), summaryExcerptLimit + 3, 3, summaryExcerptLimit, slices.Repeat([]string{"[name withheld]"}, summaryExcerptLimit)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &containerRecord{compiler: retainedOutput{head: []byte(tc.output), total: len(tc.output)}}
+			got := recordSummaryFacts(r).compiler
+			if got.total != tc.total || !slices.Equal(got.lines, tc.want) {
+				t.Fatalf("compiler masking changed retained line counts: %+v", got)
+			}
+			w := summaryWriter{limit: summaryErrorBudget}
+			w.lines("Compiler output:", got)
+			if summary := w.finish(0); !strings.Contains(summary, fmt.Sprintf("; %d lines not shown; %d lines shortened.", tc.omitted, tc.shortened)) {
+				t.Fatalf("compiler masking lost omission or shortening counts: %q", summary)
+			}
+		})
 	}
 }
 
@@ -369,6 +382,192 @@ func TestSummaryPackageNoticeSplitNameMask(t *testing.T) {
 			got := recordSummaryFacts(r).packageFailures
 			if !slices.Equal(got.lines, tc.want) || got.total != len(tc.want) {
 				t.Fatalf("package notices: %+v; want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSummaryMaskLinesHardening(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		shown []string
+	}{
+		{"located single line", []string{"ghp_dummy", "ordinary"}, []string{"ordinary"}},
+		{"overlapping pairs", []string{"gh", "p_gh", "p_SECRET_TOKEN"}, nil},
+		{"pair alone", []string{"gh", "p_SECRET_TOKEN", "ordinary"}, []string{"ordinary"}},
+		{"PEM block", []string{"-----BEGIN PRIVATE KEY-----", "body-one", "body-two", "body-three", "-----END PRIVATE KEY-----"}, nil},
+		{"located then split AKIA", []string{"ghp_dummy", "AK", "", "IA_SECRET_KEY"}, nil},
+		{"located then split ghp", []string{"ghp_dummy", "gh", "", "p_SECRET_TOKEN"}, nil},
+		{"split marker", []string{"-----BE", "GIN PRIVATE KEY-----", "body-one"}, nil},
+		{"ANSI marker", []string{"-----BE\x1b[31mGIN PRIVATE KEY-----", "body-one"}, nil},
+		{"zero width marker", []string{"-----BE\u200bGIN PRIVATE KEY-----", "body-one"}, nil},
+		{"per line terminal reset marker", []string{"-----BE\x1b]", "GIN PRIVATE KEY-----", "body-one"}, nil},
+		{"unclosed block", []string{"-----BEGIN PRIVATE KEY-----", "body-one", "ordinary"}, nil},
+		{"ordinary", []string{"ordinary", "", "[name withheld]", "continued"}, []string{"ordinary", "", "continued"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := slices.Clone(tc.lines)
+			masked := summaryMaskLines(tc.lines)
+			var surviving []string
+			for _, line := range masked {
+				if line != summaryWithheld {
+					surviving = append(surviving, line)
+				}
+			}
+			if !slices.Equal(surviving, tc.shown) || !slices.Equal(tc.lines, original) || len(masked) != len(tc.lines) {
+				t.Fatalf("mask changed boundaries or surviving lines: %q; want %q", masked, tc.shown)
+			}
+			if verifyLogScan(strings.Join(surviving, "\n")) != 0 {
+				t.Fatalf("surviving lines still detect: %q", surviving)
+			}
+			source := strings.Join(tc.lines, "\n") + "\n"
+			facts := recordSummaryFacts(&containerRecord{complete: true, compiler: retainedOutput{head: []byte(source), total: len(source)}})
+			report := buildContainerSummary(summaryInput{check: "test", verdict: "FAILED", facts: facts})
+			if verifyLogScan(strings.Join(facts.compiler.lines, "\n")) != 0 {
+				t.Fatalf("record projection left a detectable shape: %q", facts.compiler.lines)
+			}
+			for _, fragment := range []string{"IA_SECRET_KEY", "p_SECRET_TOKEN", "body-one", "body-two", "body-three"} {
+				if strings.Contains(strings.Join(masked, "\n"), fragment) || strings.Contains(report, fragment) {
+					t.Fatalf("masked lines or report exposed %q: %q", fragment, report)
+				}
+			}
+		})
+	}
+}
+
+func TestSummaryMaskOmittedSection(t *testing.T) {
+	retained := func(text string) retainedOutput { return retainedOutput{head: []byte(text), total: len(text)} }
+	for _, tc := range []struct {
+		name               string
+		packages, compiler retainedOutput
+	}{
+		{"notice filtering same kind", retained("FAIL\tpkg/ghp_dummy\nnon-notice ghp\n_SECRET_TOKEN_VALUE FAIL\n"), retained("ordinary\n")},
+		{"compiler byte cap same kind", retained("FAIL ordinary\n"), retained("compiler: ghp_dummy\ncompiler: ok\n" + strings.Repeat("x", 210) + "ghp\n_SECRET_TOKEN_VALUE\n")},
+		{"notice byte cap", retained("FAIL ghp_dummy\nFAIL " + strings.Repeat("x", 210) + "\n"), retained("ordinary\n")},
+		{"notice excerpt limit", retained("FAIL ghp_dummy\n" + strings.Repeat("FAIL ordinary\n", summaryExcerptLimit)), retained("ordinary\n")},
+		{"compiler excerpt limit", retained("FAIL ordinary\n"), retained("ghp_dummy\n" + strings.Repeat("ordinary\n", summaryExcerptLimit))},
+		{"compiler sanitising", retained("FAIL ordinary\n"), retained("ghp_dummy\nordinary\x1b[31m\n")},
+		{"package head tail gap", retainedOutput{head: []byte("FAIL ghp_dummy\n"), tail: []byte("FAIL ordinary\n"), total: 100}, retained("ordinary\n")},
+		{"compiler head tail gap", retained("FAIL ordinary\n"), retainedOutput{head: []byte("ghp_dummy\n"), tail: []byte("ordinary\n"), total: 100}},
+		{"package not retained", retainedOutput{head: []byte("FAIL ghp_dummy\nFAIL ordinary\n"), notRetained: true}, retained("ordinary\n")},
+		{"compiler not retained", retained("FAIL ordinary\n"), retainedOutput{head: []byte("ghp_dummy\nordinary\n"), notRetained: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &containerRecord{complete: true, packageOutput: tc.packages, compiler: tc.compiler}
+			facts := recordSummaryFacts(r)
+			lines := append(slices.Clone(facts.packageFailures.lines), facts.compiler.lines...)
+			for _, line := range lines {
+				if line != summaryWithheld {
+					t.Fatalf("omission left an unlocated continuation: %q", lines)
+				}
+			}
+			if len(lines) == 0 || verifyLogScan(strings.Join(lines, "\n")) != 0 {
+				t.Fatalf("fixture must retain safe masked lines: %q", lines)
+			}
+			report := buildContainerSummary(summaryInput{check: "test", verdict: "FAILED", facts: facts})
+			for _, fragment := range []string{"_SECRET_TOKEN_VALUE", "ghp_dummy", "compiler: ok", "ordinary"} {
+				if strings.Contains(report, fragment) {
+					t.Fatalf("summary exposed %q: %q", fragment, report)
+				}
+			}
+		})
+	}
+}
+
+func TestSummaryPackageMaskAccounting(t *testing.T) {
+	for _, tc := range []struct {
+		name, pkg, notice string
+		shortened         bool
+	}{
+		{"unclosed OSC", "\x1b]", "", true},
+		{"masked package", "ghp_dummy", "", true},
+		{"masked notice", "", "FAIL ghp_dummy\n", true},
+		{"package byte cap", strings.Repeat("x", 210), "", true},
+		{"notice byte cap", "", "FAIL " + strings.Repeat("x", 210) + "\n", true},
+		{"ordinary", "ordinary", "", false},
+	} {
+		for _, ordinals := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/ordinals=%v", tc.name, ordinals), func(t *testing.T) {
+				r := &containerRecord{complete: true, packageOutput: retainedOutput{head: []byte(tc.notice), total: len(tc.notice)}}
+				if tc.pkg != "" {
+					r.entries = []*aggregatorEntry{{pkg: tc.pkg, kind: "package", state: "fail"}}
+				}
+				facts := recordSummaryFactsWithOrdinals(r, ordinals)
+				lines := facts.packageFailures
+				if lines.total != 1 || len(lines.lines) != 1 || len(lines.shortened) != 1 || lines.shortened[0] != tc.shortened {
+					t.Fatalf("package accounting: %+v", lines)
+				}
+				if ordinals && tc.pkg != "" && !slices.Equal(lines.ordinals, []int{1}) {
+					t.Fatalf("package ordinal lost: %+v", lines)
+				}
+				report := buildContainerSummary(summaryInput{check: "test", verdict: "FAILED", facts: facts})
+				if verifyLogScan(strings.Join(lines.lines, "\n")) != 0 {
+					t.Fatalf("surviving package lines still detect: %q", lines.lines)
+				}
+				want := 0
+				if tc.shortened {
+					want = 1
+				}
+				if !strings.Contains(report, "Package failures:\n") || !strings.Contains(report, fmt.Sprintf("0 lines not shown; %d lines shortened.", want)) {
+					t.Fatalf("report lost package line accounting: %q", report)
+				}
+				if tc.name == "unclosed OSC" {
+					line := summaryIndent
+					if ordinals {
+						line += "#1 "
+					}
+					if lines.lines[0] != "" || !strings.Contains(report, "Package failures:\n"+line+"\n") {
+						t.Fatalf("empty sanitised package line lost: %q", report)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSummaryMaskOrdinaryGolden(t *testing.T) {
+	for _, tc := range []struct{ name, output, displayed, footer string }{
+		{"complete", "ordinary\ncontinued\n", "  | ordinary\n  | continued\n", "0 lines not shown; 0 lines shortened."},
+		{"excerpt limit", strings.Repeat("ordinary\n", summaryExcerptLimit+1), strings.Repeat("  | ordinary\n", summaryExcerptLimit), "1 lines not shown; 0 lines shortened."},
+		{"sanitised", "ordinary\x1b[31m\n", "  | ordinary\n", "0 lines not shown; 1 lines shortened."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &containerRecord{complete: true, compiler: retainedOutput{head: []byte(tc.output), total: len(tc.output)}}
+			in := summaryInput{check: "test", verdict: "FAILED", facts: recordSummaryFacts(r)}
+			want := "FAILED\nCheck: test \nScope: \n" + summaryTrust + "\nCompiler output:\n" + tc.displayed +
+				"Omitted: excerpts shown for 0 of 0 failing tests; 0 names not shown; " + tc.footer + "\n"
+			if got := buildContainerSummary(in); got != want {
+				t.Fatalf("ordinary bytes changed: got %q want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestSummaryMaskVerdictUnchanged(t *testing.T) {
+	for _, tc := range []struct{ name, verdict, stream string }{
+		{"failed", "FAILED", containerEvents("p", "TestBad", "fail")},
+		{"not verified", "NOT VERIFIED: no tests", containerJSON("p", "start", "pass")},
+		{"would be verified", "verified\n1 passing leaf tests", containerEvents("p", "TestGood", "pass")},
+		{"failing record cannot verify", "verified\n1 passing leaf tests", containerEvents("p", "TestBad", "fail")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var first string
+			for _, output := range []string{"ordinary\n", "ghp_dummy\nAK\n\nIA_SECRET_KEY\n"} {
+				in := summaryFixture("test", tc.verdict, tc.stream, "")
+				in.facts.compiler = summaryLines{}
+				for _, line := range summaryMaskLines(strings.Split(strings.TrimSuffix(output, "\n"), "\n")) {
+					in.facts.compiler.add(line+"\n", summaryExcerptLimit)
+				}
+				report := buildContainerSummary(in)
+				got, _, _ := strings.Cut(report, "\n")
+				if first != "" && got != first {
+					t.Fatalf("mask changed verdict: %q to %q", first, got)
+				}
+				if tc.name != "would be verified" && got == "verified" {
+					t.Fatalf("mask authorised failing or unverified record: %q", report)
+				}
+				first = got
 			}
 		})
 	}

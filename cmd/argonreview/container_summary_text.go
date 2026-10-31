@@ -8,6 +8,7 @@ import (
 const (
 	// summaryLineLimit keeps one hostile diagnostic from consuming the report.
 	summaryLineLimit = 200
+	summaryWithheld  = "[name withheld]"
 	// summarySourceLineLimit bounds a fragmented raw line before sanitising;
 	// terminal sequences must not permit unlimited pending text per test.
 	summarySourceLineLimit = 4096
@@ -19,7 +20,7 @@ const (
 // sanitised passes. Truncation and newline splitting must not hide a match.
 func summaryMaskName(name string) string {
 	if verifyLogScan(name) > 0 {
-		return "[name withheld]"
+		return summaryWithheld
 	}
 	return name
 }
@@ -32,27 +33,63 @@ func summaryName(name string) string {
 // original identity boundaries are unavailable. Unlocated matches withhold all.
 func summaryMaskLines(lines []string) []string {
 	masked := append([]string(nil), lines...)
-	for i := range lines {
-		end := min(i+2, len(lines))
-		if verifyLogScan(strings.Join(lines[i:end], "\n")) > 0 {
-			for j := i; j < end; j++ {
-				masked[j] = "[name withheld]"
-			}
-		}
-	}
-	// A located match must not hide a different shape spanning more lines.
-	var unmasked []string
-	for i, line := range lines {
-		if masked[i] == line {
-			unmasked = append(unmasked, line)
-		}
-	}
-	if verifyLogScan(strings.Join(unmasked, "\n")) > 0 {
+	if summaryBlockMarker(strings.Join(lines, "\n")) {
 		for i := range masked {
-			masked[i] = "[name withheld]"
+			masked[i] = summaryWithheld
+		}
+		return masked
+	}
+	// Locate single lines first so they cannot consume a neighbour that carries
+	// a different split shape. Track identities independently of display text.
+	hidden := make([]bool, len(lines))
+	for i, line := range lines {
+		if verifyLogScan(line) > 0 {
+			masked[i], hidden[i] = summaryWithheld, true
+		}
+	}
+	located := append([]bool(nil), hidden...)
+	for i := 0; i+1 < len(lines); i++ {
+		if !located[i] && !located[i+1] && verifyLogScan(lines[i]+"\n"+lines[i+1]) > 0 {
+			masked[i], masked[i+1] = summaryWithheld, summaryWithheld
+			hidden[i], hidden[i+1] = true, true
+		}
+	}
+	// Removed lines can expose another match across the surviving boundaries.
+	var surviving []string
+	for i, line := range lines {
+		if !hidden[i] {
+			surviving = append(surviving, line)
+		}
+	}
+	if verifyLogScan(strings.Join(surviving, "\n")) > 0 {
+		for i := range masked {
+			masked[i] = summaryWithheld
 		}
 	}
 	return masked
+}
+
+// summaryBlockMarker mirrors the tripwire's whole-section passes. A marker
+// alone cannot locate the block's end, so its entire section must be withheld.
+func summaryBlockMarker(text string) bool {
+	const marker = "-----BEGIN "
+	joined := strings.ReplaceAll(text, "\n", "")
+	for _, pass := range []string{text, joined, verifyLogVisible(text), verifyLogVisible(joined)} {
+		if strings.Contains(pass, marker) {
+			return true
+		}
+	}
+	var visible, visibleJoined strings.Builder
+	for line := range strings.SplitSeq(text, "\n") {
+		verifyLogText(line, func(r rune, _ int) {
+			if !verifyLogInvisible(r) {
+				visible.WriteRune(r)
+				visibleJoined.WriteRune(r)
+			}
+		})
+		visible.WriteByte('\n')
+	}
+	return strings.Contains(visible.String(), marker) || strings.Contains(visibleJoined.String(), marker)
 }
 
 // summaryText removes terminal commands and invisible direction changes before

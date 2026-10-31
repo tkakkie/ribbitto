@@ -131,7 +131,7 @@ first: at most 2,048 for verified non-errors; 7,000 for errors, including a
 Generated totals precede paths and survive their cap. Unparsed generated diffs
 get a trusted diagnostic; omitted excerpts are counted.
 
-[Name masking and sanitisation](argon-verify-log.md#secret-tripwire) apply in every mode.
+[Name masking and sanitisation](argon-verify-log.md#secret-tripwire) are merged, not in force.
 The decided first line stays, except success with
 incomplete facts or a leaf-count/allowed-skip mismatch downgrades MCP alone to
 `NOT VERIFIED: summary inconsistent with verdict`.
@@ -159,7 +159,7 @@ the body and the servability of stderr differ.
 #1857's timeout label is merged but **not in force until the pinned launcher
 is updated (#1700)**. Enabling needs separate approval after Claude repeats
 host preflight from the trusted merge build. The run limit stays 10 minutes,
-including source preparation; MCP's call limit is unchanged. Host and MCP
+including source preparation; MCP's limit is unchanged. Host and MCP
 share the decided line; MCP's wrapper supplies it for empty pre-container reports.
 
 | Situation | First line |

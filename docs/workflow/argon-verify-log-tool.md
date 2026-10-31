@@ -30,10 +30,11 @@ duplicate-key, metadata and server checks with `verify`; each parser refuses the
 other tool's arguments. Off denies even a valid log call with the unknown-tool
 reason. Dispatch refuses `--logs` without `--allow-verify`.
 
-`verify-log-mode` is the host wrappers' input, not a path read by Go. It follows
-[the browser harness permissions and shared-file rules](argon-verify-browser.md#switch-and-admission-order):
-both wrappers read worker 1's file beside `verify-mode`, never a worker 2 copy,
-and pass its value only with verify on. No host wrapper or file is installed here.
+Host wrappers read `verify-log-mode` only at run start; writing `off` does not
+revoke `verify-log` in a running session. Go never reads it. Under the
+[harness rules](argon-verify-browser.md#switch-and-admission-order), both wrappers
+read worker 1's file beside `verify-mode`, never worker 2's, passing its value
+only with verify on. No wrapper or file is installed.
 
 `TestImplementGuardLogsAdmission`, `TestImplementConfigLogsRequiresVerify`,
 `TestImplementConfigLogsParsing`, `TestImplementConfigLogsBytes`,

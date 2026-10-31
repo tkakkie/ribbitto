@@ -164,6 +164,14 @@ changes lock or transaction order or the delivery contract (the third-AI review 
 request's own commits since the last adversarially reviewed head, not only
 the resolution.
 
+**A typo, or a rewording that changes no meaning,** may be pushed without
+a follow-up check, and does not invalidate a review. These are not that, and
+get the check (and a re-review where they invalidate one): a change to code
+behaviour, to a test or CI condition, to safety (authentication,
+authorisation, organisation scoping), to the meaning of a workflow or
+specification, or anything else that bears on a review decision. A nit need
+not be fixed, and is not pushed on its own.
+
 Which pull requests skip Copilot: [docs-only pull requests](delivery.md#docs-only-pull-requests).
 
 ## Risk

@@ -43,8 +43,9 @@ Copilot reviews each pull request **once** (not a
 [docs-only](#docs-only-pull-requests) one), at **Lite**, guided by
 `.github/instructions/code-review.instructions.md`. It is used only for this
 review, as an advisory reviewer. The orchestrating AI requests it by hand on
-the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after
-the cross-reviewer approves and the branch has the current `main`. The `main`
+the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), in
+parallel with the other reviews, on the same head, once the branch has the
+current `main`. The `main`
 ruleset does not request it on ready, and drafts and new pushes do not
 trigger it. A repeat review is requested only when the maintainer asks.
 Balanced is not used: it can only be chosen by hand in the *Reviewers* panel,
@@ -60,19 +61,21 @@ Pull requests only; after Copilot's one review; not a review round. A change
 made to answer Copilot would otherwise reach the maintainer unreviewed. If
 answering needs a change:
 
-1. Apply only the changes that answer Copilot; the pull request stays a
-   draft. (If the maintainer asks for another Copilot review after the pull
+1. Apply only the changes that answer findings of this round (Copilot's, and
+   those of the parallel reviews fixed on the same head); the pull request
+   stays a draft. (If the maintainer asks for another Copilot review after the pull
    request was marked ready, convert it back to a draft first.)
 2. An AI that did not write the change checks that the whole diff since the
-   approved SHA contains only those changes and each is right, using
+   baseline SHA (the head Copilot reviewed) contains only those changes and
+   each is right, using
    `.github/prompts/copilot-check.md` through the README recipe with the pull
-   request, the approved and head SHAs, Copilot's findings and the diff. A
+   request, the baseline and head SHAs, the findings and the diff. A
    failed or non-counting run is retried once as the README says; record who
    ran it. It reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex|Argon>** (at <SHA>)
-   Compared: <approved SHA>..<SHA>
+   Compared: <baseline SHA>..<SHA>
    - ✅ | ❌ Copilot comment — how it was checked
    ```
 
@@ -115,10 +118,13 @@ rules in `AGENTS.md` and `docs/domain/invariants.md`; being documentation does n
 When in doubt, review. A past review without findings is never a reason to
 skip one. Its findings are advisory.
 
-- **When:** after the cross-reviewer approves and its findings are fixed, the
-  branch has the current `main`, and Copilot's review and any follow-up check
-  have passed; on that head, while the pull request is a draft, immediately
-  before `ai-reviewed`. It does not run alongside the first cross-review.
+- **When:** in parallel with the cross-review and Copilot, on the same head
+  SHA, while the pull request is a draft and has the current `main`. Each
+  report names the SHA it reviewed. A substantive push during the review (a
+  typo or meaning-preserving rewording is not one) makes older reports
+  non-final for the new head. Each finding gets a disposition and applied
+  fixes are checked before the maintainer is asked, and `ai-reviewed` is set only when every
+  required review covers the head to be delivered.
 - **Counts only when it completes:** a report on the pull request at its
   head commit, each finding with a disposition (fixed, a follow-up issue, or
   declined with the reason). A failed, timed-out or empty run never counts:

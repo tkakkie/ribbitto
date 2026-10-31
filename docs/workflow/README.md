@@ -12,10 +12,9 @@ checklists remain in use.
 1. **Product first.** Work on AI tooling needs a product reason.
 2. **Every issue and every pull request an AI writes is reviewed by an AI
    that did not write it** before the maintainer is asked.
-   An AI that changed any part of a pull request, a fix included, counts as
-   an author of that part. The third-AI review is done by an AI that neither
-   implemented nor changed it nor did the first review; if none exists, ask
-   the maintainer.
+   An AI that changed any part of a pull request, a fix included, is an author
+   of it. The third-AI reviewer neither implemented, changed nor first-reviewed
+   it; if none exists, ask the maintainer.
 3. **The maintainer decides at two gates:** approving an issue (`ready`)
    and merging a pull request
    ([decision 11](../decisions/11-the-maintainer-decides-merges-an-ai-may-execute-them.md)).
@@ -112,8 +111,9 @@ and show step 4 before ordinary work.
 When the maintainer did not name one, the orchestrator may change the
 implementer for a concrete reason, such as stalled work, and says why in the
 issue; changing a named one goes back to the maintainer. A fix goes back to the original
-implementer. Claude writes issues and briefs, starts the others and explains
-pull requests to the maintainer in Japanese in the chat.
+implementer; Auto-fix runs only on one's own pull requests. Claude writes
+issues and briefs, starts the others and explains pull requests to the
+maintainer in Japanese in the chat.
 
 Headless runs wait for input forever: **close stdin and set a time limit**
 (`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`).
@@ -149,7 +149,8 @@ Headless runs wait for input forever: **close stdin and set a time limit**
   a timeout, outage, exhausted quota or empty run once, then ask the
   maintainer. Keep the report tied to its exact commits and findings.
 - A substantive change after a review, including a fix for a finding, is
-  checked by an AI that did not write it. (Kept.)
+  checked by an AI that did not write it. A typo or a rewording that changes
+  no meaning is not ([what counts](reviewing.md#follow-up-pushes)). (Kept.)
 
 ## Lifecycle
 
@@ -160,10 +161,12 @@ Pull request:
 
 1. The implementer works in its worktree and `make check` passes.
 2. Draft pull request with "Closes #N"; CI goes green.
-3. Reviews as above. Copilot reviews once, unless docs-only (Lite, requested by hand on
-   the draft, advisory); a change answering it gets a follow-up check by
-   an AI that did not write it, still a draft ([delivery](delivery.md)). Before every follow-up push, run `make prepush`;
-   before approval, check the pull request against the current `main`. A
+3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
+   AI where required, and Copilot (once, unless docs-only; [delivery](delivery.md)).
+   Each report names its SHA; a substantive push makes older ones non-final. Each
+   finding gets a disposition and applied fixes are checked before the
+   maintainer is asked. Before every
+   follow-up push, run `make prepush`; before approval, check the pull request against the current `main`. A
    merge of `main` that resolves conflicts is reported in a comment (files
    and how); if it does more than combine both sides, it is reviewed.
 
@@ -197,21 +200,18 @@ check the result against *Done when*.
   · likely cause · (optional) idea. No secrets or personal data.
 - **Roadmap:** `docs/roadmap.md`, updated when the plan changes.
 
-## Occasional audit
-
-Optional: an AI hunts contradictions with [`audit.md`](../../.github/prompts/audit.md);
-check each finding against the files before fixing it.
 
 ## Labels
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after an approving review | The review is done; a pull request is marked ready with it. |
+| `ai-reviewed` | the orchestrating AI | Issue: AI review done, awaiting `ready`. Pull request: required reviews and CI done at its head, awaiting the maintainer; removed if a later change leaves anything unconfirmed, set again once confirmed. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 
 ## Supporting files
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
 [investigations](investigations.md) and [credentials](ai-credentials.md)
-supply checklists. No verification harness or sandbox
+supply checklists. Optional: an AI hunts contradictions with
+[`audit.md`](../../.github/prompts/audit.md); check each finding first. No verification harness or sandbox
 is built or extended (#2002).

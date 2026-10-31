@@ -108,7 +108,7 @@ reusable name. The removed verification budget is not a prerequisite;
 
 The README recipe runs `issue-review.md`, `adversarial.md`, `copilot-check.md`
 or `audit.md` from `.github/prompts/`. The orchestrator passes the PR or
-issue number, relevant full commits (including the approved SHA for a
+issue number, relevant full commits (including the baseline SHA for a
 follow-up), review round and earlier findings in the prompt text after the
 review instructions. Include the issue/PR snapshot, diff and CI evidence
 needed for that task. Audit context includes the expected checkout and

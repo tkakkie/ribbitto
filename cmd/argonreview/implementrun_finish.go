@@ -335,6 +335,7 @@ func (r *implementRun) checkState(state string, out io.Writer) int {
 	args := []string{"--home", r.home, "--worktree", r.tree, "--git-file", r.saved, "--shared-settings-sha256", r.hash, "--agy", r.agy, "--verify", state}
 	if state == "on" {
 		args = append(args, "--trusted-source", r.source)
+		args = append(args, "--logs", map[bool]string{false: "off", true: "on"}[r.verifyLogs])
 		if r.browserMode != "" {
 			args = append(args, "--browser-mode", r.browserMode)
 		}

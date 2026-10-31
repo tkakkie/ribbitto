@@ -38,7 +38,7 @@ const browserMCPGolden = `{
 func TestImplementConfigBrowserMode(t *testing.T) {
 	t.Run("goldens", func(t *testing.T) {
 		for _, path := range []string{"", "/trusted/browser-mode"} {
-			data, err := implementerMCPConfig(true, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", path)
+			data, err := implementerMCPConfig(true, false, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", path)
 			want := implementVerifyGolden(t, "mcp-config-on.json")
 			if path != "" {
 				want = []byte(browserMCPGolden)
@@ -46,12 +46,12 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 			if err != nil || !bytes.Equal(data, want) {
 				t.Fatalf("MCP golden path=%q differs: %s %v", path, data, err)
 			}
-			h, s, m, err := implementConfigFiles(true, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree", path)
+			h, s, m, err := implementConfigFiles(true, false, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree", path)
 			if err != nil || !bytes.Equal(m, want) || !bytes.Equal(h, implementVerifyGolden(t, "hooks-on.json")) || !bytes.Equal(s, implementVerifyGolden(t, "settings-on.json")) {
 				t.Fatalf("config golden differs: %v", err)
 			}
 		}
-		if data, err := implementerMCPConfig(false, "", "", "", ""); err != nil || len(data) != 0 {
+		if data, err := implementerMCPConfig(false, false, "", "", "", ""); err != nil || len(data) != 0 {
 			t.Fatalf("off bytes=%q err=%v", data, err)
 		}
 	})
@@ -66,11 +66,11 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 			case "extra":
 				expected = ""
 			}
-			h, s, m, err := implementConfigFiles(true, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree", observed)
+			h, s, m, err := implementConfigFiles(true, false, "/trusted/bin/argonreview", "/trusted/guard", "/trusted/source", "/trusted/worktree", observed)
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = checkImplementerConfig(true, h, s, m, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard", expected)
+			err = checkImplementerConfig(true, false, h, s, m, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard", expected)
 			if (err == nil) != (kind == "valid") {
 				t.Fatalf("browser path comparison %s: %v", kind, err)
 			}
@@ -190,7 +190,7 @@ func TestImplementConfigBrowserMode(t *testing.T) {
 			case "extra":
 				expected = ""
 			}
-			m, err := implementerMCPConfig(true, "/trusted/argonreview", r.source, r.tree, observed)
+			m, err := implementerMCPConfig(true, false, "/trusted/argonreview", r.source, r.tree, observed)
 			if err != nil {
 				t.Fatal(err)
 			}

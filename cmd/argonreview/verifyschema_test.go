@@ -6,18 +6,15 @@ import (
 	"testing"
 )
 
-func TestVerifyArguments(t *testing.T) {
-	for _, raw := range []string{
+// Share every schema row with the logs-on/off guard regression.
+func verifyArgumentsCases() (accepted, rejected []string) {
+	accepted = []string{
 		`{"check":"test-db","package":"./internal/org/orgpg"}`, `{"check":"generated","package":"./..."}`, `{"check":"test","package":"./..."}`, `{"check":"build","package":"."}`,
 		`{"check":"vet","package":"./cmd/argonreview"}`, `{"check":"test","package":"./internal/web/..."}`,
 		`{"check":"te\u0073t","pack\u0061ge":"./..."}`,
 		`{"check":"test","package":"./` + strings.Repeat("a", 198) + `"}`,
-	} {
-		if _, err := parseVerifyArguments([]byte(raw)); err != nil {
-			t.Errorf("%s: %v", raw, err)
-		}
 	}
-	for _, raw := range []string{
+	rejected = []string{
 		`{"check":"test-db","package":"-x"}`, `{"check":"test-db","package":"/tmp/x"}`, `{"check":"test-db","package":".."}`,
 		`{"check":"test-db","package":"./...","extra":1}`, `{"check":"test-db","package":null}`,
 		`{"check":null,"package":"./internal/org/orgpg"}`,
@@ -30,30 +27,33 @@ func TestVerifyArguments(t *testing.T) {
 		`{"check":"test","package":".","extra":"x"}`, `{"check":"test","check":"build","package":"."}`,
 		`{"check":"test","ch\u0065ck":"build","package":"."}`, `{"check":"test","package":".","package":"./..."}`,
 		`{"check":"test","package":"."} {}`, `{"check":"` + strings.Repeat("x", 201) + `","package":"."}`,
-	} {
+	}
+	for _, check := range []string{"bench", "shell", "-x", ""} {
+		raw, _ := json.Marshal(map[string]string{"check": check, "package": "."})
+		rejected = append(rejected, string(raw))
+	}
+	for _, pattern := range []string{"-x", "/absolute", "../x", "./a/../b", "./..", "./a//b", "./a b", "./a\nb", "./a\x00b", "./a/", "all", "./.../x", "./a;true", "./a\\b", "./é", "./" + strings.Repeat("a", 199), ""} {
+		raw, _ := json.Marshal(map[string]string{"check": "test", "package": pattern})
+		rejected = append(rejected, string(raw))
+	}
+	// Escaped characters are validated after decoding, including escapes for unsafe values.
+	rejected = append(rejected, `{"check":"test","package":"\u002dflag"}`, `{"check":"test","package":"./a\u002f../b"}`, `{"check":"test","package":"./\u00e9"}`)
+	return accepted, rejected
+}
+
+func TestVerifyArguments(t *testing.T) {
+	accepted, rejected := verifyArgumentsCases()
+	for _, raw := range accepted {
+		if _, err := parseVerifyArguments([]byte(raw)); err != nil {
+			t.Errorf("%s: %v", raw, err)
+		}
+	}
+	for _, raw := range rejected {
 		t.Run(raw, func(t *testing.T) {
 			if _, err := parseVerifyArguments([]byte(raw)); err == nil {
 				t.Fatal("accepted invalid arguments")
 			}
 		})
-	}
-	for _, check := range []string{"bench", "shell", "-x", ""} {
-		raw, _ := json.Marshal(map[string]string{"check": check, "package": "."})
-		if _, err := parseVerifyArguments(raw); err == nil {
-			t.Errorf("accepted check %q", check)
-		}
-	}
-	for _, pattern := range []string{"-x", "/absolute", "../x", "./a/../b", "./..", "./a//b", "./a b", "./a\nb", "./a\x00b", "./a/", "all", "./.../x", "./a;true", "./a\\b", "./é", "./" + strings.Repeat("a", 199), ""} {
-		raw, _ := json.Marshal(map[string]string{"check": "test", "package": pattern})
-		if _, err := parseVerifyArguments(raw); err == nil {
-			t.Errorf("accepted pattern %q", pattern)
-		}
-	}
-	// Escaped characters are validated after decoding, including escapes for unsafe values.
-	for _, raw := range []string{`{"check":"test","package":"\u002dflag"}`, `{"check":"test","package":"./a\u002f../b"}`, `{"check":"test","package":"./\u00e9"}`} {
-		if _, err := parseVerifyArguments([]byte(raw)); err == nil {
-			t.Errorf("accepted %s", raw)
-		}
 	}
 }
 

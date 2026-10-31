@@ -155,7 +155,7 @@ func TestImplementCheckTrustAndUsage(t *testing.T) {
 			t.Fatalf("routing: %d %s", code, &stderr)
 		}
 		stderr.Reset()
-		if code := run(nil, nil, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "implement-check --verify off|on [--trusted-source <abs>] --home") {
+		if code := run(nil, nil, &out, &stderr); code != 2 || !strings.Contains(stderr.String(), "implement-check --verify off|on [--logs on|off] [--trusted-source <abs>] --home") {
 			t.Fatalf("usage: %d %s", code, &stderr)
 		}
 	})

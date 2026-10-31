@@ -87,3 +87,17 @@ func implementBrowserArgument(state, path string, set bool) error {
 	}
 	return browserModePath(path)
 }
+
+// implementLogsArgument keeps log permissions absent in feature-off homes.
+func implementLogsArgument(state, value string, set bool) error {
+	if !set {
+		return nil
+	}
+	if state != "on" {
+		return errors.New("--logs requires --verify on")
+	}
+	if value != "on" && value != "off" {
+		return errors.New("--logs must be off or on")
+	}
+	return nil
+}

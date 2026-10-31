@@ -17,7 +17,7 @@ func TestImplementRunHomeUnderAccount(t *testing.T) {
 	}
 	x.f.home = home
 	x.set("home", home)
-	hooks, err := implementerHooks(false, "/trusted/argonreview", filepath.Join(home, "guard"))
+	hooks, err := implementerHooks(false, false, "/trusted/argonreview", filepath.Join(home, "guard"))
 	if err != nil {
 		t.Fatal(err)
 	}

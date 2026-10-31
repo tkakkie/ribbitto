@@ -78,7 +78,7 @@ func TestAgyCheckConfigHooks(t *testing.T) {
 			t.Fatalf("mode generation drift: %s %s %v", mode.name, data, err)
 		}
 	}
-	production, err := implementerHooks(false, "/trusted tool/argonreview", "/check/hook")
+	production, err := implementerHooks(false, false, "/trusted tool/argonreview", "/check/hook")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestAgyCheckConfigBundle(t *testing.T) {
 		if string(files.Hooks) != agyCheckConfigHomeGolden {
 			t.Fatalf("home hooks differ from golden: %s", files.Hooks)
 		}
-		if !bytes.Equal(files.Settings, implementerSettings(verify)) {
+		if !bytes.Equal(files.Settings, implementVerifySettings(t, verify, false)) {
 			t.Fatalf("settings differ from production (verify=%t): %s", verify, files.Settings)
 		}
 		if string(files.MCP) != agyCheckConfigMCPGolden {

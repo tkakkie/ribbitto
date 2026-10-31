@@ -2,11 +2,9 @@
 
 ## Status
 
-Capture, run IDs, summary ordinals and the [tool](argon-verify-log-tool.md)
-are merged, served only with `verify-mcp --logs`, off by default and unexposed.
-Name masking applies in every mode. The guard, `hooks.json`, settings, harness
-switch and wrappers do not admit it yet (2c); Argon cannot reach it in production.
-Launcher update and enabling need separate approvals. CI is the check.
+The tool, capture and [three-file switch](argon-verify-log-tool.md#switch) are
+merged off. Enabling needs the maintainer's separate approvals: launcher update,
+then `verify-log-mode on`. Host preflight (#1913 item 5) remains. CI is the check.
 
 ## Purpose and limits
 
@@ -29,7 +27,7 @@ the sole addition to D5 timeout, E7 runner-error/exit-125 and source-cleanup
 minimal-body goldens. Its bytes reduce the wrapper diagnostic reserve within
 7,000 bytes; the final cut preserves the ID line.
 
-The process store keeps the last 4, evicting oldest first by count or bytes.
+The store keeps the last 4, evicting oldest by count or bytes.
 Each capture pins the sealed record (defining R_max) and adds a random
 128-bit ID, ordinals, displays and taint counts. The byte bound is
 4 × (R_max + `verifyLogDerivedAllowance`, the derived-data bytes).
@@ -38,7 +36,7 @@ cancellation, timeout or cleanup failure). Host report bytes stay unchanged.
 
 ## Selectors and index
 
-`parseVerifyLogArguments` is stateless, for the future guard to share.
+The guard shares `parseVerifyLogArguments`.
 Strict JSON shares `verifyObject` duplicate-key checks: only these keys, all
 strings; no unknown, case-folded, duplicate, extra or null values.
 
@@ -157,9 +155,8 @@ wire bytes, class and detection counts; no name, match or content. The
 ## Regression rule and provisional numbers
 
 [Tool regression tests](argon-verify-log-tool.md#regression-evidence) pin the
-base verify/schema, parser separation and the closed reader boundary. Remaining
-exposure must derive guard decisions and off-mode settings from its merge base;
-checks and guard rows are derived, never copied.
+base verify/schema, parser separation and the closed reader boundary. Switch
+regressions derive guard rows and off-mode bytes from shared fixtures and goldens.
 
 `cmd/argonreview/verifylog_limits.go` values need measurement before enabling;
 changes need a small PR and preflight rows. No host measurement is approved.
@@ -173,14 +170,18 @@ changes need a small PR and preflight rows. No host measurement is approved.
 | `verifyLogIndexReads`, `verifyLogEntryReads`, `verifyLogAuxReads` | 16 index; 40 shared test/package; 8 shared stderr/output | 26 failing leaves; preflight read counts |
 | `verifyLogServerReads`, `verifyLogServerBytes` | 256; 1 MiB | preflight read pattern |
 
-## Exposure and preflight (remaining PR 2c)
+## Exposure and preflight
 
-A trusted logs switch requires verify on and generated/byte-checked
-hooks, MCP config and on-mode settings. Off: not listed, guard and settings
-refuse; on: exactly the additional verify-log permission. A mismatch refuses
-preflight. Generators await 2c.
+`--logs on|off` requires verify on. Hooks, MCP config and settings bake in the
+boolean; `checkImplementerConfig` byte-checks all three. Off: not listed, guard
+and settings deny. On adds only the `verify-log` permission; mismatches refuse.
 
-#1913's #1700 host preflight needs a trusted rebuild and separately authorised
-two-home swap. Probe paging, refusals, worker isolation, hostile/secret output,
-regression, switch mismatches and audit. Measure reads for the templ-rename
-failure's 26 leaves. Launcher update and verify-log-mode on need separate approval.
+Harness file `verify-log-mode` sits beside `verify-mode` in worker 1's
+`implementer/`: file 0400, directory 0500. Both wrappers read it; worker 2 uses
+worker 1's, never a copy. Wrappers pass `--logs <value>` only with `--verify on`.
+[Switch details](argon-verify-log-tool.md#switch) link the harness rules.
+
+#1913 item 5 still needs a trusted rebuild and separately authorised two-home
+swap. Probe paging, refusals, worker isolation, hostile/secret output, regression,
+switch mismatches and audit. Measure reads for the templ-rename failure's
+26 leaves. No host measurement is approved.

@@ -134,12 +134,12 @@ func newImplementRun(t *testing.T) *implementRunFixture {
 	t.Helper()
 	f := implementCheckFixture(t)
 	x := &implementRunFixture{f: f, fake: filepath.Join(f.root, "fake"), logs: filepath.Join(f.root, "logs")}
-	hooks, err := implementerHooks(false, "/trusted/argonreview", filepath.Join(f.home, "guard"))
+	hooks, err := implementerHooks(false, false, "/trusted/argonreview", filepath.Join(f.home, "guard"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"implementer/settings.json", ".gemini/antigravity-cli/settings.json"} {
-		write(t, filepath.Join(f.home, path), string(implementerSettings(false)))
+		write(t, filepath.Join(f.home, path), string(implementVerifySettings(t, false, false)))
 	}
 	for _, path := range []string{"implementer/hooks.json", ".gemini/config/hooks.json"} {
 		write(t, filepath.Join(f.home, path), string(hooks))

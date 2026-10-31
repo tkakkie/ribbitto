@@ -11,19 +11,28 @@ import (
 	"testing"
 )
 
+func implementVerifySettings(t *testing.T, verify, verifyLogs bool) []byte {
+	t.Helper()
+	data, err := implementerSettings(verify, verifyLogs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func implementVerifyInput(arguments string) string {
 	return `{"toolCall":{"name":"call_mcp_tool","args":{"ServerName":"ribbitto-verify","ToolName":"verify","Arguments":` + arguments + `}}}`
 }
 
 func implementVerifyCheck(t *testing.T, dir, input string, allow bool) {
 	t.Helper()
-	var out, stderr bytes.Buffer
-	code := run([]string{"implement-guard", dir, "--allow-verify"}, strings.NewReader(input), &out, &stderr)
+	got := implementGuardLogsRegression(t, dir, input)
+	code, out, stderr := got.code, got.out, got.diagnostic
 	want := "call_mcp_tool is not allowed in the implementer trial"
 	if allow {
 		want = ""
 	}
-	implementGuardResult(t, code, out.String(), stderr.String(), want)
+	implementGuardResult(t, code, out, stderr, want)
 }
 
 // This table is shared by the guard and server tests, with explicit expected
@@ -107,6 +116,21 @@ func TestImplementVerifyGuard(t *testing.T) {
 	valid := implementVerifyInput(`{"check":"test","package":"./cmd/argonreview"}`)
 	implementVerifyCheck(t, dir, valid, true)
 	implementGuardCheck(t, dir, valid, "call_mcp_tool is not allowed in the implementer trial")
+	for _, tc := range implementVerifyInvalidCalls(valid) {
+		t.Run(tc.name, func(t *testing.T) { implementVerifyCheck(t, dir, tc.input, false) })
+	}
+	for _, tool := range []string{"manage_task", "list_resources", "read_resource", "run_command", "danger"} {
+		t.Run(tool, func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			input := strings.Replace(valid, `"name":"call_mcp_tool"`, fmt.Sprintf(`"name":%q`, tool), 1)
+			code := run([]string{"implement-guard", dir, "--allow-verify"}, strings.NewReader(input), &out, &stderr)
+			implementGuardResult(t, code, out.String(), stderr.String(), tool+" is not allowed in the implementer trial")
+		})
+	}
+}
+
+// Shared #1433/#1700 invalid envelopes retain the existing explicit expectations.
+func implementVerifyInvalidCalls(valid string) []struct{ name, input string } {
 	cases := []struct{ name, input string }{
 		{"danger", strings.Replace(valid, `"ToolName":"verify"`, `"ToolName":"danger"`, 1)},
 		{"other server", strings.Replace(valid, `"ribbitto-verify"`, `"other"`, 1)},
@@ -140,17 +164,7 @@ func TestImplementVerifyGuard(t *testing.T) {
 				strings.Replace(valid, fmt.Sprintf(`%q:%q`, field, value), fmt.Sprintf(`%q:`, field)+raw, 1)})
 		}
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) { implementVerifyCheck(t, dir, tc.input, false) })
-	}
-	for _, tool := range []string{"manage_task", "list_resources", "read_resource", "run_command", "danger"} {
-		t.Run(tool, func(t *testing.T) {
-			var out, stderr bytes.Buffer
-			input := strings.Replace(valid, `"name":"call_mcp_tool"`, fmt.Sprintf(`"name":%q`, tool), 1)
-			code := run([]string{"implement-guard", dir, "--allow-verify"}, strings.NewReader(input), &out, &stderr)
-			implementGuardResult(t, code, out.String(), stderr.String(), tool+" is not allowed in the implementer trial")
-		})
-	}
+	return cases
 }
 
 // The recording contains toolCall itself, not the hook's stdin envelope.
@@ -332,6 +346,7 @@ func TestImplementVerifyRecorded(t *testing.T) {
 				t.Fatal(err)
 			}
 			args := json.RawMessage(strings.ReplaceAll(string(tc.Args), "<W>", string(quoted[1:len(quoted)-1])))
+			implementGuardLogsRegression(t, dir, implementGuardInput(t, tc.Tool, args))
 			var out, stderr bytes.Buffer
 			code := run([]string{"implement-guard", dir, "--allow-verify"}, strings.NewReader(implementGuardInput(t, tc.Tool, args)), &out, &stderr)
 			implementGuardResult(t, code, out.String(), stderr.String(), strings.ReplaceAll(tc.Reason, "<W>", root))
@@ -362,7 +377,7 @@ func TestImplementVerifySettings(t *testing.T) {
 			if on {
 				name = "settings-on.json"
 			}
-			got := implementerSettings(on)
+			got := implementVerifySettings(t, on, false)
 			if !bytes.Equal(got, implementVerifyGolden(t, name)) {
 				t.Fatalf("settings differ from %s: %s", name, got)
 			}
@@ -401,7 +416,7 @@ func TestImplementVerifyHooks(t *testing.T) {
 		if verify {
 			name = "hooks-on.json"
 		}
-		got, err := implementerHooks(verify, paths[0], paths[1])
+		got, err := implementerHooks(verify, false, paths[0], paths[1])
 		if err != nil || !bytes.Equal(got, implementVerifyGolden(t, name)) {
 			t.Fatalf("hooks differ from %s: %s, %v", name, got, err)
 		}
@@ -410,14 +425,14 @@ func TestImplementVerifyHooks(t *testing.T) {
 				t.Run(fmt.Sprintf("verify=%t/path%d=%q", verify, i, invalid), func(t *testing.T) {
 					bad := append([]string(nil), paths...)
 					bad[i] = invalid
-					got, err := implementerHooks(verify, bad[0], bad[1])
+					got, err := implementerHooks(verify, false, bad[0], bad[1])
 					if err == nil || len(got) != 0 {
 						t.Fatalf("invalid hook path accepted: %s, %v", got, err)
 					}
 					if strings.Contains(err.Error(), invalid) && invalid != "" {
 						t.Fatal("hook error includes a path")
 					}
-					if err := checkImplementerConfig(verify, nil, implementerSettings(verify), nil, bad[0], "/trusted/source", "/trusted/worktree", bad[1], ""); err == nil {
+					if err := checkImplementerConfig(verify, false, nil, implementVerifySettings(t, verify, false), nil, bad[0], "/trusted/source", "/trusted/worktree", bad[1], ""); err == nil {
 						t.Fatal("consistency check swallowed invalid hook path")
 					}
 				})
@@ -426,7 +441,7 @@ func TestImplementVerifyHooks(t *testing.T) {
 	}
 	// These paths are valid shell arguments only when quoted as whole strings.
 	for _, path := range []string{"/trusted/a b", "/trusted/$(touch x);`echo x`", "/trusted/a\tb"} {
-		got, err := implementerHooks(false, path, path)
+		got, err := implementerHooks(false, false, path, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -446,7 +461,7 @@ func TestImplementVerifyHooks(t *testing.T) {
 
 func TestImplementVerifyMCPConfig(t *testing.T) {
 	paths := []string{"/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree"}
-	got, err := implementerMCPConfig(true, paths[0], paths[1], paths[2], "")
+	got, err := implementerMCPConfig(true, false, paths[0], paths[1], paths[2], "")
 	if err != nil || !bytes.Equal(got, implementVerifyGolden(t, "mcp-config-on.json")) {
 		t.Fatalf("on config %s, error %v", got, err)
 	}
@@ -455,14 +470,14 @@ func TestImplementVerifyMCPConfig(t *testing.T) {
 			t.Run(fmt.Sprintf("path%d=%s", i, invalid), func(t *testing.T) {
 				bad := append([]string(nil), paths...)
 				bad[i] = invalid
-				got, err := implementerMCPConfig(true, bad[0], bad[1], bad[2], "")
+				got, err := implementerMCPConfig(true, false, bad[0], bad[1], bad[2], "")
 				if err == nil || len(got) != 0 {
 					t.Fatalf("invalid path accepted: %s, %v", got, err)
 				}
-				if err := checkImplementerConfig(true, implementVerifyGolden(t, "hooks-on.json"), implementerSettings(true), nil, bad[0], bad[1], bad[2], "/trusted/guard", ""); err == nil {
+				if err := checkImplementerConfig(true, false, implementVerifyGolden(t, "hooks-on.json"), implementVerifySettings(t, true, false), nil, bad[0], bad[1], bad[2], "/trusted/guard", ""); err == nil {
 					t.Fatal("consistency check swallowed invalid path")
 				}
-				got, err = implementerMCPConfig(false, bad[0], bad[1], bad[2], "")
+				got, err = implementerMCPConfig(false, false, bad[0], bad[1], bad[2], "")
 				if err != nil || len(got) != 0 {
 					t.Fatalf("off config must be empty even without paths: %s, %v", got, err)
 				}
@@ -526,7 +541,7 @@ func TestImplementVerifyConsistency(t *testing.T) {
 					combinations++
 					t.Run(fmt.Sprintf("switch=%t/hooks=%s/settings=%s/mcp=%s", verify, h.name, s.name, c.name), func(t *testing.T) {
 						want := !verify && h.name == "off" && s.name == "off" && c.name == "empty" || verify && h.name == "on" && s.name == "on" && c.name == "on"
-						err := checkImplementerConfig(verify, h.data, s.data, c.data, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard", "")
+						err := checkImplementerConfig(verify, false, h.data, s.data, c.data, "/trusted/bin/argonreview", "/trusted/source", "/trusted/worktree", "/trusted/guard", "")
 						if (err == nil) != want {
 							t.Fatalf("accepted=%t, want %t: %v", err == nil, want, err)
 						}
@@ -548,7 +563,7 @@ func TestImplementVerifyConsistency(t *testing.T) {
 	if passes != 2 {
 		t.Fatalf("accepted %d combinations, want exactly 2", passes)
 	}
-	if err := checkImplementerConfig(false, hooksOff, off, []byte{}, "/trusted/bin/argonreview", "", "", "/trusted/guard", ""); err != nil {
+	if err := checkImplementerConfig(false, false, hooksOff, off, []byte{}, "/trusted/bin/argonreview", "", "", "/trusted/guard", ""); err != nil {
 		t.Fatalf("empty and nil MCP bytes must agree: %v", err)
 	}
 }
@@ -564,7 +579,7 @@ func TestImplementVerifyUsage(t *testing.T) {
 		{"implement-guard", "--allow-verify", dir, "--allow-verify"},
 	} {
 		var out, stderr bytes.Buffer
-		if code := run(args, strings.NewReader(valid), &out, &stderr); code != 2 || out.Len() != 0 || !strings.Contains(stderr.String(), "| implement-guard <dir> [--allow-verify]") {
+		if code := run(args, strings.NewReader(valid), &out, &stderr); code != 2 || out.Len() != 0 || !strings.Contains(stderr.String(), "| implement-guard <dir> [--allow-verify [--logs]]") {
 			t.Fatalf("%v: exit %d, stdout %q, stderr %q", args, code, out.String(), stderr.String())
 		}
 	}

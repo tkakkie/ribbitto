@@ -1,0 +1,15 @@
+{
+  "ribbitto-implementer-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "command": "'/trusted/bin/argonreview' implement-guard '/trusted/guard' --allow-verify --logs",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

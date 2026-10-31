@@ -31,17 +31,20 @@
 // verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
 // MCP tool, verify, over stdio; it runs the container check on the fixed
 // worktree (#1430). Optional trailing --logs retains failed records and serves
-// verify-log; production guard/settings wiring does not yet admit reads.
+// verify-log; matching guard/settings wiring is required, merged off.
 // container-sweep [--dry-run] reclaims abandoned verification clients, labelled
 // containers and private source copies using the trusted build (#1433).
 // budget-start --container <full 64-hex ID> starts a registered host container under budget locks.
 // implement-guard <dir> enforces the implementer's file boundary without a build
 // check. Optional --allow-verify admits only the fixed, strictly validated verify
-// MCP call; it is off by default and also requires matching settings and config.
+// MCP call; --logs additionally admits verify-log. Both require matching settings
+// and config and are off by default.
 // implement-check checks the implementer's home and worktree from a trusted build.
 // implement-run supervises one implementer run with explicit verify state and its checks (#1435).
 // implement-config generates and checks the trusted implementer configuration
 // in a separate output directory without running the binary (#1433).
+// Optional --logs on|off on implement-run, implement-check and implement-config
+// requires verify on; absent means off.
 // Optional --browser-mode on implement-run, implement-check, implement-config,
 // verify-mcp and container-check carries the trusted switch path. Browser admission
 // requires the switch on and the 14-day gate; browser-check-record is host-only.
@@ -108,7 +111,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return implementGuard(args[1], stdin, stdout, stderr)
 	}
 	if len(args) == 3 && args[0] == "implement-guard" && !strings.HasPrefix(args[1], "-") && args[2] == "--allow-verify" {
-		return implementGuardMode(args[1], true, stdin, stdout, stderr, filepath.WalkDir, os.Lstat)
+		return implementGuardMode(args[1], true, false, stdin, stdout, stderr, filepath.WalkDir, os.Lstat)
+	}
+	if len(args) == 4 && args[0] == "implement-guard" && !strings.HasPrefix(args[1], "-") && args[2] == "--allow-verify" && args[3] == "--logs" {
+		return implementGuardMode(args[1], true, true, stdin, stdout, stderr, filepath.WalkDir, os.Lstat)
 	}
 	round := 1
 	approved := ""
@@ -182,7 +188,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify] | "+strings.TrimPrefix(containerCheckUsage, "usage: argonreview ")+" | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] [--logs] | implement-check --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage+" | "+agyCheckStubUsage)
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | issue <number> [round: 1|2] | copilot-check <pr-number> <approved-sha> | probe <repository> <prompt-file> | guard | implement-guard <dir> [--allow-verify [--logs]] | "+strings.TrimPrefix(containerCheckUsage, "usage: argonreview ")+" | container-generate <worktree> | container-sweep [--dry-run] | budget-start --container <full 64-hex ID> | verify-mcp --trusted-source <abs path> --worktree <abs path> [--browser-mode <abs path>] [--logs] | implement-check --verify off|on [--logs on|off] [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <saved .git file> --shared-settings-sha256 <hex> [--agy <path>] [--peer-home <abs>]... [--browser-mode <abs path>] | "+browserRecordUsage+" | "+implementRunUsage+" | "+implementConfigUsage+" | "+agyCheckRunUsage+" | "+agyCheckHookUsage+" | "+agyCheckStubUsage)
 	return 2
 }
 

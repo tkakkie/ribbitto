@@ -223,7 +223,7 @@ func TestImplementFeatureUsageOrder(t *testing.T) {
 		t.Fatal("usage exit", code)
 	}
 	for _, name := range []string{"implement-check", "implement-run"} {
-		if !strings.Contains(out.String(), name+" --verify off|on [--trusted-source <abs>] --home <dir>") {
+		if !strings.Contains(out.String(), name+" --verify off|on [--logs on|off] [--trusted-source <abs>] --home <dir>") {
 			t.Fatal("inconsistent verify position", out.String())
 		}
 	}

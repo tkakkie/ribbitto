@@ -173,7 +173,10 @@ func agyCheckConfig(verify bool, mode, binary, hookDir, stubDir string) (agyChec
 	if err != nil {
 		return files, err
 	}
-	files.Settings = implementerSettings(verify)
+	files.Settings, err = implementerSettings(verify, false)
+	if err != nil {
+		return files, err
+	}
 	files.MCP, err = agyCheckConfigMCP(binary, stubDir)
 	return files, err
 }

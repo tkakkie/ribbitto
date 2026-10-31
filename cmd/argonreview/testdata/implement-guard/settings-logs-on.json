@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "write_file(*)",
+      "mcp(ribbitto-verify/verify)",
+      "mcp(ribbitto-verify/verify-log)"
+    ],
+    "deny": [
+      "command(*)",
+      "read_url(*)",
+      "execute_url(*)"
+    ]
+  }
+}

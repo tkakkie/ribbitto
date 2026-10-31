@@ -46,13 +46,13 @@ func implementGuard(dir string, stdin io.Reader, stdout, stderr io.Writer) int {
 func implementGuardWithFS(dir string, stdin io.Reader, stdout, stderr io.Writer,
 	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
 ) int {
-	return implementGuardMode(dir, false, stdin, stdout, stderr, walk, lstat)
+	return implementGuardMode(dir, false, false, stdin, stdout, stderr, walk, lstat)
 }
 
-func implementGuardMode(dir string, verify bool, stdin io.Reader, stdout, stderr io.Writer,
+func implementGuardMode(dir string, verify, verifyLogs bool, stdin io.Reader, stdout, stderr io.Writer,
 	walk func(string, fs.WalkDirFunc) error, lstat func(string) (fs.FileInfo, error),
 ) int {
-	reason := implementGuardReason(dir, verify, stdin, walk, lstat)
+	reason := implementGuardReason(dir, verify, verifyLogs, stdin, walk, lstat)
 	decision := struct {
 		Decision string `json:"decision"`
 		Reason   string `json:"reason,omitempty"`
@@ -83,7 +83,7 @@ func implementGuardMode(dir string, verify bool, stdin io.Reader, stdout, stderr
 	return 0
 }
 
-func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
+func implementGuardReason(dir string, verify, verifyLogs bool, stdin io.Reader, walk func(string, fs.WalkDirFunc) error,
 	lstat func(string) (fs.FileInfo, error),
 ) string {
 	data, err := os.ReadFile(filepath.Join(dir, "implementer-worktree"))
@@ -120,7 +120,7 @@ func implementGuardReason(dir string, verify bool, stdin io.Reader, walk func(st
 	if !implementGuardJSONLimits(input) {
 		return "guard error: JSON exceeds safe parsing limits"
 	}
-	paths, reason := implementGuardPaths(input, verify)
+	paths, reason := implementGuardPaths(input, verify, verifyLogs)
 	if reason != "" {
 		return reason
 	}
@@ -161,7 +161,7 @@ func implementWorktreeSymlinks(root string, walk func(string, fs.WalkDirFunc) er
 	return ""
 }
 
-func implementGuardPaths(input []byte, verify bool) ([]string, string) {
+func implementGuardPaths(input []byte, verify, verifyLogs bool) ([]string, string) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(input, &envelope); err != nil {
 		return nil, "guard error: unreadable hook input"
@@ -174,7 +174,7 @@ func implementGuardPaths(input []byte, verify bool) ([]string, string) {
 	if err := json.Unmarshal(call["name"], &name); err != nil || bytes.Equal(call["name"], []byte("null")) {
 		return nil, "tool name is not a string"
 	}
-	if verify && name == "call_mcp_tool" && implementVerifyCall(input, call["args"]) == nil {
+	if verify && name == "call_mcp_tool" && (implementVerifyCall(input, call["args"]) == nil || verifyLogs && implementVerifyLogCall(input, call["args"]) == nil) {
 		return nil, ""
 	}
 	switch name {

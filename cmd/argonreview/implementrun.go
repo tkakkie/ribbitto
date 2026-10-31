@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 )
 
-const implementRunUsage = "implement-run --verify off|on [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>] [--peer-home <abs>]... [--browser-mode <abs>]"
+const implementRunUsage = "implement-run --verify off|on [--logs on|off] [--trusted-source <abs>] --home <dir> --worktree <dir> --git-file <file> --prompt-file <file> --log-dir <dir> --shared-settings-sha256 <hex> [--agy <path>] [--model <name>] [--timeout <duration>] [--peer-home <abs>]... [--browser-mode <abs>]"
 
 // Operations are injected at the same boundary as implement-check. The step
 // hook only injects failures in tests; production always performs each step.
@@ -49,6 +49,7 @@ func implementRunDefaults() implementRunDeps {
 }
 
 type implementRun struct {
+	verifyLogs                                        bool
 	peers                                             implementPeerHomes
 	home, tree, saved, prompt, logs, hash, agy, model string
 	verify, source, browserMode                       string
@@ -111,7 +112,7 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 	flags.SetOutput(out)
 	var peers implementPeerHomes
 	flags.Var(&peers, "peer-home", "peer home")
-	names := []string{"home", "worktree", "git-file", "prompt-file", "log-dir", "shared-settings-sha256", "agy", "model", "timeout", "verify", "trusted-source", "browser-mode"}
+	names := []string{"home", "worktree", "git-file", "prompt-file", "log-dir", "shared-settings-sha256", "agy", "model", "timeout", "verify", "trusted-source", "browser-mode", "logs"}
 	values := make([]implementOnceFlag, len(names))
 	for i, name := range names {
 		flags.Var(&values[i], name, name)
@@ -126,6 +127,9 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 		return nil, err
 	}
 	if err := implementBrowserArgument(values[9].value, values[11].value, values[11].set); err != nil {
+		return nil, err
+	}
+	if err := implementLogsArgument(values[9].value, values[12].value, values[12].set); err != nil {
 		return nil, err
 	}
 	for i := range 6 {
@@ -157,7 +161,7 @@ func implementRunArguments(args []string, out io.Writer, deps implementRunDeps) 
 	}
 	return &implementRun{peers: peers, home: values[0].value, tree: values[1].value, saved: values[2].value,
 		prompt: values[3].value, logs: values[4].value, hash: strings.ToLower(values[5].value),
-		agy: values[6].value, model: values[7].value, limit: limit, deps: deps, verify: values[9].value, source: values[10].value, browserMode: values[11].value}, nil
+		agy: values[6].value, model: values[7].value, limit: limit, deps: deps, verify: values[9].value, verifyLogs: values[12].value == "on", source: values[10].value, browserMode: values[11].value}, nil
 }
 
 func (r *implementRun) validate() error {
@@ -242,12 +246,15 @@ func (r *implementRun) validate() error {
 	if err != nil {
 		return err
 	}
-	r.hooks, err = implementerHooks(false, binary, filepath.Join(r.home, "guard"))
+	r.hooks, err = implementerHooks(false, false, binary, filepath.Join(r.home, "guard"))
 	if err != nil {
 		return err
 	}
-	r.settings = implementerSettings(false)
-	r.mcp, err = implementerMCPConfig(false, binary, "", r.tree, "")
+	r.settings, err = implementerSettings(false, false)
+	if err != nil {
+		return err
+	}
+	r.mcp, err = implementerMCPConfig(false, false, binary, "", r.tree, "")
 	if err != nil {
 		return err
 	}
@@ -284,7 +291,7 @@ func (r *implementRun) validate() error {
 		if err := implementFeatureSource(r.home, r.tree, r.source, r.deps.sourceTrust); err != nil {
 			return err
 		}
-		r.hooks, r.settings, r.mcp, err = implementConfigFiles(true, binary, filepath.Join(r.home, "guard"), r.source, r.tree, r.browserMode)
+		r.hooks, r.settings, r.mcp, err = implementConfigFiles(true, r.verifyLogs, binary, filepath.Join(r.home, "guard"), r.source, r.tree, r.browserMode)
 		if err != nil {
 			return err
 		}

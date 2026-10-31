@@ -99,11 +99,11 @@ configuration rather than the prompt.
   `tools`; `grep_search`, `find_by_name`, `list_dir` need this. MCP's
   `call_mcp_tool`, `list_resources`, `read_resource`
   and `manage_task` escape that list (#1427 spike part 2); the guard restricts them.
-  MCP is unconfigured at rest and with verify-mode off; between runs the
-  home holds feature-off files and an empty MCP file. On-mode MCP offers
-  only `verify`.
+  At rest and with verify-mode off, MCP is unconfigured; the
+  home holds off-mode files and empty MCP config. On mode has `verify`
+  and, with logs on, `verify-log`.
   Claude copies the trusted home definition to `.gemini/config/agents/`
-  per run, checked byte-for-byte and removed.
+  per run, byte-checked and removed.
 - **A fail-closed tool allowlist.** Denies cannot name `search_web`,
   subagents, `generate_image` or `schedule`; a trusted guard, apart from the
   review guard (`cmd/argonreview/guard.go`), allows exactly the seven file tools:

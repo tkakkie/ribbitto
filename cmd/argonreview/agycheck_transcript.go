@@ -11,10 +11,9 @@ import (
 	"unicode"
 )
 
-// agyCheckTranscriptParse follows 1.4.7 samples and two hand captures of
-// 1.4.9's stream format (2026-10-30, #1978), accepting streamed agent_response
-// updates. Hook-load events, exact deny error text and other tool names remain
-// unverified; 1.4.9 still needs a host run of the check. Opaque
+// agyCheckTranscriptParse follows 1.4.7 samples and 1.4.9 captures (#1978,
+// #1990), accepting streamed agent_response updates and unknown-typed tool
+// completions. Hook-load events and exact deny error text remain unverified. Opaque
 // fields, including result status and tool errors, never become report text.
 // Unicode is checked before decoding; malformed events discard every fact.
 func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
@@ -60,7 +59,7 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 			}
 			state, stateOK := agyCheckTranscriptString(step, "state")
 			kind, kindOK := agyCheckTranscriptString(step, "step_type")
-			if !stateOK || (state != "ACTIVE" && state != "DONE" && state != "ERROR") || !kindOK || (kind != "user_input" && kind != "agent_response" && kind != "tool") {
+			if !stateOK || (state != "ACTIVE" && state != "DONE" && state != "ERROR") || !kindOK || (kind != "user_input" && kind != "agent_response" && kind != "tool" && kind != "unknown") {
 				return invalid()
 			}
 			tool := ""
@@ -70,6 +69,16 @@ func agyCheckTranscriptParse(data []byte) (agyCheckTranscriptResult, error) {
 				if !toolOK || tool == "" {
 					return invalid()
 				}
+			}
+			if kind == "unknown" {
+				// 1.4.9 omits tool identity on some DONE updates (#1990).
+				prior := seen[index]
+				_, hasName := step["tool_name"]
+				_, hasInfo := step["tool_info"]
+				if state != "DONE" || prior.kind != "tool" || hasName || hasInfo {
+					return invalid()
+				}
+				kind, tool = prior.kind, prior.tool
 			}
 			if raw, exists := step["tool_info"]; exists {
 				info, ok := agyCheckTranscriptObject(raw)
@@ -251,7 +260,8 @@ func agyCheckTranscriptPath(path string) bool {
 
 // agyCheckTranscriptTools pins single-call assumptions independently of the
 // expected outcomes, so changing an expectation cannot invent a tool step.
-// Only write_file and call_mcp_tool are verified; other names are unverified.
+// Previously only write_file and call_mcp_tool were verified; read_file was
+// observed for outside-read in 1.4.9 (#1990).
 var agyCheckTranscriptTools = map[string]string{
 	"discovery-agent": "write_file", "discovery-agents": "write_file",
 	"discovery-gemini-config": "write_file", "discovery-gemini": "write_file",
@@ -269,15 +279,21 @@ var agyCheckTranscriptTools = map[string]string{
 	"outside-write": "write_file", "outside-read": "view_file",
 }
 
+var agyCheckTranscriptToolAlternatives = map[string]string{"outside-read": "read_file"}
+
+func agyCheckToolAccepted(rowID, tool string) bool {
+	return tool != "" && (agyCheckTranscriptTools[rowID] == tool || agyCheckTranscriptToolAlternatives[rowID] == tool)
+}
+
 // agyCheckTranscriptOutcome never copies tool text into the core's report.
 func agyCheckTranscriptOutcome(row agyCheckRow, steps []agyCheckTranscriptStep) string {
-	tool, known := agyCheckTranscriptTools[row.ID]
+	_, known := agyCheckTranscriptTools[row.ID]
 	if !known {
 		return "unknown row"
 	}
 	count, state := 0, ""
 	for _, step := range steps {
-		if step.Tool == tool {
+		if agyCheckToolAccepted(row.ID, step.Tool) {
 			count++
 			state = step.State
 		}

@@ -11,14 +11,16 @@ evidence is on #2002.
 The maintainer creates the tokens and saves each without showing it to an AI
 (`read -rs "t?token: "; (umask 077; printf '%s' "$t" > <name>.token); unset t`).
 
-`credential-helper.sh`: answers only for `github.com`, and finds the token
+`credential-helper.sh`: answers only for `https://github.com`, and finds the token
 directory from its own path, so it works under any `HOME`.
 
 ```sh
 #!/bin/sh
 [ "$2" = get ] || exit 0
-host=$(sed -n 's/^host=//p')
-[ "$host" = github.com ] || exit 0
+input=$(cat)
+protocol=$(printf '%s\n' "$input" | sed -n 's/^protocol=//p')
+host=$(printf '%s\n' "$input" | sed -n 's/^host=//p')
+[ "$protocol" = https ] && [ "$host" = github.com ] || exit 0
 dir=$(cd "$(dirname "$0")" && pwd)
 printf 'username=x-access-token\npassword=%s\n' "$(cat "$dir/$1.token")"
 ```
@@ -36,19 +38,21 @@ GH_TOKEN=$(cat "$tok"); export GH_TOKEN
 unset GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN
 export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=2
 export GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=
-export GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1="!$HOME/.ribbitto-ai/credential-helper.sh $name"
+export GIT_CONFIG_KEY_1=credential.helper GIT_CONFIG_VALUE_1="!\"$HOME/.ribbitto-ai/credential-helper.sh\" \"$name\""
 exec "$@"
 ```
 
 Claude uses the same pair: `GH_TOKEN="$(cat ~/.ribbitto-ai/claude.token)" gh …`
-and `git -c credential.helper= -c "credential.helper=!$HOME/.ribbitto-ai/credential-helper.sh claude" push …`.
+and `git -c credential.helper= -c "credential.helper=!\"$HOME/.ribbitto-ai/credential-helper.sh\" claude" push …`.
+Git runs a helper string through a shell, so the path stays quoted: a `HOME` with
+a space works.
 
 ## Argon (Antigravity)
 
 - Use the root-owned pin `/usr/local/argon-agy/agy` by absolute path with its
   directory first in `PATH`: `agy` replaces the file it was started from when
-  it updates itself, and only a root-owned directory is safe from that. Check
-  its hash before and after a run.
+  it updates itself; the tested pin sits in a root-owned directory the AI user
+  cannot write to. Check its hash before and after a run.
 - A dedicated home, `~/dev/ribbitto/agy-home`, signed in by the maintainer
   (`HOME=$HOME/dev/ribbitto/agy-home /usr/local/argon-agy/agy`, interactive).
   Never use the maintainer's own `~/.gemini`.

@@ -73,7 +73,9 @@ bypass list; checked as in the order below):
 ## Enabling an AI's rights
 
 Done for all three AIs on 2026-10-31 (#2002); repeat it for a new AI or token.
-In this order; until step 4 is shown, only Claude acts.
+In this order. Until steps 1-3 are confirmed and recorded, only Claude acts;
+then only step 4's validation operations are allowed, and ordinary work
+starts after step 4 succeeds.
 
 1. The `main` ruleset is active: no direct push, a pull request and `ci`
    required, an empty bypass list, the required check's source limited to
@@ -86,9 +88,10 @@ In this order; until step 4 is shown, only Claude acts.
 3. Each AI has its own token (below). Creating tokens and changing the
    environment are the maintainer's actions; an AI lists the steps and does
    not do them.
-4. Shown, not assumed: plain `gh` and `git push` fail (no fallback), and
-   each AI run headless once uses only its own token to run a command, read
-   the repository and push a test branch, deleted afterwards. Record the
+4. Shown, not assumed: plain `gh` and `git push` fail (no fallback), and each
+   AI uses only its own token to run a command, read the repository and push
+   a test branch, deleted afterwards (Codex and Argon run headless; Claude
+   shows it with its own commands). Record the
    commands and redacted results on #2002; never print a token or header.
 
 ## Tokens
@@ -104,7 +107,8 @@ In this order; until step 4 is shown, only Claude acts.
   `credential.helper` (`osxkeychain`) and adds one that answers only for
   `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
   `git push` use it. Without the AI's token file the launcher stops, and a
-  plain `gh` or `git push` fails: nothing else holds a credential.
+  plain `gh` or `git push` fails: no other CLI credential is left (browser
+  sessions and other sign-ins are not verified; see step 2).
 - **What tokens give:** independent revocation and an intended assignment,
   not isolation and not proof of which AI acted: all three run as one macOS
   user and can read each other's token files. Whether GitHub's audit log

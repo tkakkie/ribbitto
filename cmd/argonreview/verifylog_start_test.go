@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -81,9 +82,22 @@ func TestVerifyLogMCPToolsListUnchanged(t *testing.T) {
 			t.Fatal(code)
 		}
 		lines := strings.Split(out.String(), "\n")
-		if previous != "" && lines[1] != previous {
-			t.Fatal("tools/list bytes depend on logs")
+		line := lines[1]
+		if store != nil {
+			// PR 2b adds exactly one entry; every other byte remains pinned.
+			tool, err := json.Marshal(verifyLogTool())
+			if err != nil {
+				t.Fatal(err)
+			}
+			addition := "," + string(tool)
+			if strings.Count(line, addition) != 1 || !strings.Contains(line, addition+"]") {
+				t.Fatal("logs-on listing lacks exactly the appended log tool")
+			}
+			line = strings.Replace(line, addition, "", 1)
 		}
-		previous = lines[1]
+		if previous != "" && line != previous {
+			t.Fatal("tools/list bytes beyond the log entry depend on logs")
+		}
+		previous = line
 	}
 }

@@ -30,8 +30,8 @@
 // tool.
 // verify-mcp --trusted-source <abs path> --worktree <abs path> serves one
 // MCP tool, verify, over stdio; it runs the container check on the fixed
-// worktree (#1430). Optional trailing --logs retains failed records; no log tool
-// is exposed.
+// worktree (#1430). Optional trailing --logs retains failed records and serves
+// verify-log; production guard/settings wiring does not yet admit reads.
 // container-sweep [--dry-run] reclaims abandoned verification clients, labelled
 // containers and private source copies using the trusted build (#1433).
 // budget-start --container <full 64-hex ID> starts a registered host container under budget locks.

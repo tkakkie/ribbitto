@@ -49,7 +49,7 @@ func TestVerifyLogReadImportBoundary(t *testing.T) {
 				return true
 			}
 			pure := map[string]bool{"len": true, "cap": true, "min": true, "max": true, "make": true, "append": true, "copy": true, "string": true, "rune": true,
-				"summaryText": true, "textCharge": true, "verifyObject": true, "validVerifyID": true, "boolVerifyLog": true, "visit": true, "frame": true}
+				"summaryText": true, "textCharge": true, "verifyObject": true, "parseVerifyRequest": true, "validVerifyID": true, "boolVerifyLog": true, "visit": true, "frame": true}
 			if !pure[id.Name] && !strings.HasPrefix(id.Name, "verifyLog") && !strings.HasPrefix(id.Name, "newVerifyLog") && id.Name != "parseVerifyLogArguments" {
 				t.Errorf("unexpected direct call in %s: %s", name, id.Name)
 			}

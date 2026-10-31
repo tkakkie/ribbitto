@@ -28,11 +28,8 @@ labels: ["bug"]
 
 ## Implementer
 
-<!-- Codex or Argon, proposed by the author; the maintainer confirms it
-     when adding `ready`. Argon only for an eligible issue (normal risk,
-     expected tier B or C), with its expected tier
-     (docs/workflow/argon-implementer.md#which-issues).
-     Claude only if the maintainer names Claude for this issue.
+<!-- Codex, Argon or Claude, proposed by the author; the maintainer confirms
+     it when adding `ready`.
      Outside contributors can leave this empty. -->
 
 ## Notes

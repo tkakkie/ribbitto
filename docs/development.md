@@ -82,9 +82,7 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` must pass before a pull request; for another AI's code,
-green draft CI must pass before review instead
-([handoff](workflow/running-other-ai.md#handoff-of-another-ais-code)).
+`make check` must pass before a pull request.
 It runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
 `check-static` and `check-tools` in `checks`, each `testshard` shard
 in a parallel `test` matrix job, `rest` in `test-rest`,

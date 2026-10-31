@@ -63,15 +63,14 @@ bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
 the directory of the version-checked Node without resolving Node symlinks. CI provisions the release
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
-the run. Codex downloads no Node and expands no network profile; report missing
-or mismatched runtimes. [Codex Node setup and probe](../workflow/codex-node.md)
-record trusted provisioning and sandbox-local writes. Argon's command
-prohibition and verify boundary remain unchanged.
+the run. Report missing or mismatched runtimes. Any AI may run the pinned Node
+and npm like any other command ([workflow rules](../workflow/README.md), #2002);
+[Codex Node setup and probe](../workflow/codex-node.md) is older detail.
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
-pinned Node; keep install/cache writes inside the implementer's sandbox,
+pinned Node; keep install/cache writes in the worktree,
 with the npm cache in `bin/.cache/npm`. No
 npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
@@ -161,9 +160,8 @@ Routine Codex Node use starts at #1415's merge, after #1410, under the
 [setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
 exception ended with its last PR; it is not routine authorization.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
-Handoff follows the [standing prohibition](../workflow/running-other-ai.md#handoff-of-another-ais-code).
 
-Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
+Verify, in force since 2026-10-21, stays
 under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
 (#1696) are in force since 2026-10-27 (#1700 stage A): production pins launcher
 `argonreview-2e3a6bf`. The prelude regenerates

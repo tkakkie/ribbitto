@@ -54,7 +54,7 @@ Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
 verification, testshard and CodeQL generate first. Embed patterns require
 generation; ignored `dist` is never committed. CI checks generation/embedding/build
 without Node on `PATH`. Future Docker/release workflows must generate before
-compiling and package that output (none exists; Argon's verify image is separate).
+compiling and package that output (none exists).
 Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
@@ -71,15 +71,13 @@ bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
 the directory of the version-checked Node without resolving Node symlinks. CI provisions the release
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
-the run. Codex downloads no Node and expands no network profile; report missing
-or mismatched runtimes. [Codex Node setup and probe](../workflow/codex-node.md)
-record trusted provisioning and sandbox-local writes. Argon's command
-prohibition and verify boundary remain unchanged.
+the run. Report missing or mismatched runtimes. Any AI may run the pinned Node
+and npm like any other command ([workflow rules](../workflow/README.md), #2002).
 
 The root `package.json` pins `typescript` exactly to `7.0.2`, with a
 committed `package-lock.json` including optional platform dependencies.
 Install only with `npm ci --ignore-scripts` from the reviewed lockfile using
-pinned Node; keep install/cache writes inside the implementer's sandbox,
+pinned Node; keep install/cache writes in the worktree,
 with the npm cache in `bin/.cache/npm`. No
 npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
@@ -165,19 +163,8 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
 
-Routine Codex Node use starts at #1415's merge, after #1410, under the
-[setup and sandbox rules](../workflow/codex-node.md). The one-time #1410
-exception ended with its last PR; it is not routine authorization.
+Routine Node use starts at #1415's merge, after #1410; the one-time #1410
+exception ended with its last PR.
 The wrapper's `node --version` probe in `make check` is not routine Node use.
-Handoff follows the [standing prohibition](../workflow/running-other-ai.md#handoff-of-another-ais-code).
-
-Argon gains no Node/npm commands. Verify, in force since 2026-10-21, stays
-under its existing gates. The [regeneration and generated checks](../workflow/argon-verify-image.md)
-(#1696) are merged but not in force until #1700: production still pins launcher
-`argonreview-7f607ca` and the old image. Once #1700 lands, the prelude will regenerate
-templ, sqlc and Tailwind before Go build/vet/test; `generated` will check output
-and formatting in a copy.
-TypeScript checking stays outside verify.
-#1415 cannot widen verify or those permissions.
 
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

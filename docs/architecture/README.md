@@ -48,17 +48,20 @@ Read the file for the area you change:
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
+| [`web-htmx.md`](web-htmx.md) | htmx requests and swaps, composer and quote fragments, SSE stream targets, read forms and `htmx-config` |
 | [`web-css-first.md`](web-css-first.md) | the criterion for using HTML or CSS instead of a script, review findings, and current examples |
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, the idempotency key, drafts and the send key |
 | [`web-composer-pending.md`](web-composer-pending.md) | pending own posts and the Remove hold |
 | [`web-javascript-unread.md`](web-javascript-unread.md) | stream checkpoints, visible reads and sidebar badge scripts |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
+| [`web-contracts-generated.md`](web-contracts-generated.md) | the generated DOM contract (`internal/web/view/contracts.go`, `web/src/contracts.gen.ts` and `tools/contractliterals`) |
 | [`web-conventions.md`](web-conventions.md) | *planned* (decision 43): front-end module layout, pure logic versus DOM code, typed state, script registry, shared helpers and generated DOM contracts |
 | [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
 | [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1411) |
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
+| [`web-layers-browser-tests.md`](web-layers-browser-tests.md) | shared go-rod browser tests and the M3 web-layer audit |
 | [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),

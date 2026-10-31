@@ -41,6 +41,8 @@ func rules() []rule {
 		{"web/static/brand/*.svg", "brand SVG"},
 		{"web/static/channel-images-v1/*.svg", "channel SVG"},
 		{"docs/**/*.md", "documentation"},
+		{"docs/images/*.png", "documentation image"},
+		{"docs/images/*.webp", "documentation image"},
 		{".github/ISSUE_TEMPLATE/*.md", "issue templates"},
 		{".github/instructions/*.md", "review instructions"},
 		{".github/prompts/*.md", "review prompts"},
@@ -68,19 +70,11 @@ func rules() []rule {
 		{"docs/size-exceptions.txt", "document exceptions"},
 		{exceptionsFile, "language exceptions"},
 		{"tools/scopecheck/allowlist.txt", "query check configuration"},
-		{"cmd/argonreview/verifyimage/Dockerfile", "verify image recipe"},
 	}
 }
 
 func testdataRules() []rule {
 	return []rule{
-		{"cmd/argonreview/testdata/implement-guard/cases.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/hooks-off.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/hooks-on.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/settings-off.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/settings-on.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/mcp-config-on.json", "test data (JSON)"},
-		{"cmd/argonreview/testdata/implement-guard/real-agy-calls.jsonl", "test data (JSONL)"},
 		{"internal/web/testdata/browser-shard-totals.txt", "browser test configuration"},
 		{"internal/conversation/testdata/fuzz/Fuzz*/*", fuzzKind},
 		{"internal/identity/testdata/fuzz/Fuzz*/*", fuzzKind},

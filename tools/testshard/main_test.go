@@ -99,12 +99,14 @@ func TestScheduled(t *testing.T) {
 		matrix    = "        shard: [loadgen, cmd, web-nonbrowser, web-1/3, web-2/3, web-3/3, realtime]\n"
 		restStep  = "          go -C tools run ./testshard -run .. rest\n"
 		shardStep = "          go -C tools run ./testshard -run .. \"$SHARD\"\n"
-		valid     = matrix + restStep + shardStep
+		valid     = matrix + restStep + shardStep + ciNeeds + "\n" + ciSuccess + "\n"
 	)
 	for _, tc := range []struct {
 		name, source, want string
 	}{
 		{"every shard once", valid, ""},
+		{"ci dependency missing", strings.Replace(valid, "test-rest, vuln", "vuln", 1), "ci gate"},
+		{"ci dependency count wrong", strings.Replace(valid, "length == 5", "length == 4", 1), "ci gate"},
 		{"named shard omitted", strings.Replace(valid, "web-2/3, ", "", 1), "shard web-2/3 0 times"},
 		{"named shard repeated", strings.Replace(valid, "web-2/3, ", "web-2/3, web-2/3, ", 1), "shard web-2/3 2 times"},
 		{"non-browser shard omitted", strings.Replace(valid, "web-nonbrowser, ", "", 1), "shard web-nonbrowser 0 times"},
@@ -135,6 +137,87 @@ func TestScheduled(t *testing.T) {
 			err := scheduled(tc.source, shards())
 			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
 				t.Fatalf("scheduled = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestWholePackageShardFlags(t *testing.T) {
+	specs := shards()
+	specs[0].flags += " -timeout 20m"
+	if err := validateShards(specs); err == nil || !strings.Contains(err.Error(), "shard loadgen: flags") {
+		t.Fatalf("validateShards = %v, want rejected whole-package timeout", err)
+	}
+}
+
+func TestCoversMissingRemainderPackage(t *testing.T) {
+	specs := shards()
+	parts := map[string][]string{}
+	var all []string
+	for _, s := range specs {
+		parts[s.name] = s.packages
+		all = append(all, s.packages...)
+	}
+	all = append(all, "./new")
+	if err := covers(parts, all, specs); err == nil || !strings.Contains(err.Error(), "./new is in no shard") {
+		t.Fatalf("covers = %v, want ./new in no shard", err)
+	}
+}
+
+func TestRepositoryWiring(t *testing.T) {
+	for _, path := range []string{workflow, "Makefile"} {
+		t.Run(path, func(t *testing.T) {
+			source, err := os.ReadFile(filepath.Join("../..", path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if path == workflow {
+				err = scheduled(string(source), shards())
+			} else {
+				err = checkMakefile(string(source))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestMakefile(t *testing.T) {
+	source, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := string(source)
+	t.Run("default packages bypass full run", func(t *testing.T) {
+		err := checkMakefile(valid + "\nGO_TEST_PACKAGES ?= ./...\n")
+		if err == nil || !strings.Contains(err.Error(), "found 2 GO_TEST_PACKAGES uses") {
+			t.Fatalf("checkMakefile = %v, want rejected default package list", err)
+		}
+	})
+
+	for _, tc := range []struct{ name, source string }{
+		{"missing wiring", ""},
+		{"missing bundles", strings.Replace(valid, "check-test: bundles db-health", "check-test: db-health", 1)},
+		{"narrowed local packages", strings.Replace(valid, "$(or $(GO_TEST_PACKAGES),./...)", "$(GO_TEST_PACKAGES)", 1)},
+		{"ignored CI selection", strings.Replace(valid, "$(or $(GO_TEST_PACKAGES),./...)", "./...", 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := checkMakefile(tc.source); err == nil || !strings.Contains(err.Error(), "local check-test wiring appears 0 times") {
+				t.Fatalf("checkMakefile = %v, want missing local wiring", err)
+			}
+		})
+	}
+	for _, tc := range []struct{ name, source, want string }{
+		{"extra slice runner elsewhere", valid + "\nextra:\n\tgo -C tools run ./testshard -run .. cmd\n", "found 2 testshard invocations, want 1"},
+		{"extra runner on a continued line", strings.Replace(valid, "\tgo -C tools run ./testshard -check ..\n", "\tgo -C tools run ./testshard -check .. && go -C tools run ./testshard -run .. cmd\n", 1), "testshard -check line appears 0 times"},
+		{"missing check", strings.Replace(valid, "\tgo -C tools run ./testshard -check ..\n", "", 1), "testshard -check line appears 0 times"},
+		{"commented runner ignored", valid + "\n# go -C tools run ./testshard -run .. cmd\n", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkMakefile(tc.source)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("checkMakefile = %v, want %q", err, tc.want)
 			}
 		})
 	}
@@ -224,7 +307,7 @@ func TestBrowserShardCoverage(t *testing.T) {
 }
 
 func TestScheduledBrowserShards(t *testing.T) {
-	valid := "shard: [web-nonbrowser, web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n"
+	valid := "shard: [web-nonbrowser, web-1/3, web-2/3, web-3/3]\n" + steps[rest][0] + "\n" + steps["matrix"][0] + "\n" + ciNeeds + "\n" + ciSuccess + "\n"
 	if err := scheduled(valid, browserShards()); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +352,8 @@ func TestCommand(t *testing.T) {
 		// MAKEFLAGS would make this make print "Entering directory" lines.
 		cmd.Env = append(cmd.Env, "MAKELEVEL=0", "MAKEFLAGS=")
 		out, err := cmd.Output()
-		wantOutput := strings.Join(append(append(strings.Fields(s.flags), s.packages...), s.browser, "-count=1"), "\n") + "\n"
+		args := strings.Fields(s.flags)
+		wantOutput := strings.Join(append(append(args, s.packages...), s.browser, "-count=1"), "\n") + "\n"
 		if err != nil || string(out) != wantOutput {
 			t.Fatalf("make output = %q, %v; want %q", out, err, wantOutput)
 		}

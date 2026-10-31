@@ -10,19 +10,19 @@ when available; development-machine runs decide until then.
 
 ## Host measurements
 
-Approved performance measurements are the only standing exception to the
-[handoff rule](running-other-ai.md#handoff-of-another-ais-code) (maintainer, #1308).
-After handoff, builds, tests and `make dev` stay in CI or sandboxes.
-All conditions apply:
+Performance measurements on the host need the maintainer's approval
+(maintainer, 2026-10-18, #1308).
 
-1. Cross-review (Claude or Codex), Copilot and adversarial review approve
+Conditions:
+
+1. Cross-review, Copilot and adversarial review approve
 with measurement pending; CI passes at that head before `ai-reviewed`.
 Measure after that label. Before asking for merge, the orchestrator
 checks results against the issue's *Done when*.
-2. Match the full build/run SHA to reviews and CI; a label is not enough.
+2. Match full build/run SHA to reviews and CI; labels do not suffice.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
-that SHA.
+that SHA (#1273, #1276).
 3. The measurement is required by the issue's *Done when*, approved by
 `ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
@@ -31,10 +31,10 @@ advance. A head adding a migration is a stop
 for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
-checkouts with the [trusted git settings and `GOENV=off`](running-argon.md#the-trusted-invocation).
+checkouts with the trusted git settings and `GOENV=off` shown in [build routes](#build-routes).
 Never build from the implementer's worktree or sandbox: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
-assets; run time needs no head tree.
+assets; runtime needs no head tree.
 6. If isolation is impossible, build as the dedicated low-privilege
 user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
@@ -44,26 +44,29 @@ maintainer creates the user and installs/validates the
 profile once. If restrictions fail, keep them; stop for a case-by-case
 maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
-on its chosen `127.0.0.1` port, with disposable data and credentials.
+on its chosen `127.0.0.1` port, with disposable data and credentials,
+cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. In PR, record that it was a host measurement, SHAs, conditions (toolchain,
+10. In PR, record host measurement, SHAs, conditions (toolchain,
 image digest, restrictions), exact commands and results. Redact credentials.
 
-**Reproducibility.** Alternate base/head in one session: same
+**Reproducibility (#1149).** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
 restrictions; only code differs. Start at 1-min load below 4; exclude
 warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Both routes run Go webbuild in the same isolation/trusted environment,
-outside Argon verify. Keep verified `src` read-only; generate in a writable
-copy, natively (container linux/arm64, user darwin/arm64), then cross-compile.
-Record the diff listing in PR; only `web/static/dist` may differ.
+Both routes generate with Go and no Node in the isolated build. Keep verified
+`src` read-only; generate in a writable copy, natively (container linux/arm64,
+user darwin/arm64), then cross-compile. Record the diff; only `web/static/dist`
+may differ.
 
-Approved operator: trusted git/Go; `image`: trusted Docker Go image digest
-([current value](measurement-go-image.md#measurement-go-image)).
+Use trusted git/Go; `image`:
+`golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261`
+(`golang:1.27.3`, approved on [#1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never by
+tag; replace it, with approval, when go.mod's `go` outgrows it.
 Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
 head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
@@ -82,8 +85,7 @@ session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
   test -z "$tree_status"
 ```
 
-On success, cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
-After HEAD/clean verification, both routes use:
+Check modules against this SHA's `go.sum`. After HEAD/clean verification, use:
 
 ```sh
 build_steps='
@@ -96,7 +98,7 @@ GOOS=darwin GOARCH=arm64 "$4" build -mod=readonly -trimpath -buildvcs=false -o "
 '
 ```
 
-Mount only read-only source and empty output:
+Mount read-only source and empty output:
 
 ```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
@@ -110,8 +112,9 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   /bin/sh -eu -c "$build_steps" build /src /out "$sha" /usr/local/go/bin/go
 ```
 
-Apple silicon only, never Rosetta. In-tree: only the webbuild step above and this Go build.
+Apple silicon only, never Rosetta. In-tree: only webbuild and this Go build.
 Before staging record SHA and `shasum -a 256`.
+`-buildvcs=false` avoids git ownership mismatches.
 
 If unusable, record why. Maintainer: stage read-only `build/src`,
 no old output/caches or escaping symlinks. User writes only empty
@@ -135,12 +138,12 @@ Maintainer-only setup:
 
 - Create non-admin `_ribbitto_measure`: no login, credentials, privileged
 groups or access to Docker, developer homes or shared data.
-- Create administrator-owned `/private/var/ribbitto-measure`: read-only
+- Create admin-owned `/private/var/ribbitto-measure`: read-only
 `server` slot, user-writable `data`, separate fallback `build` unreadable
 by the server profile. Real paths, no symlinks.
-- Install the administrator-owned profile below at
+- Install the admin-owned profile below at
 `/private/var/ribbitto-measure/server.sb`, not writable by measurement
-user. Reserve ports 18080 (server) and 55434 (database) exclusively.
+user. Reserve ports 18080 (server), 55434 (database) exclusively.
 Change ports in profile and commands together; never allow all loopback.
 - Validate this macOS version in order as dedicated user with
 trusted base. Watch denials:
@@ -155,7 +158,7 @@ with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
 `/usr/bin/nc`; same user/environment and other file/network rules.
 Confirm denial: outside reads (including operator's `~`), connections to
 5432/55433/Chrome's DevTools port, other execution and address/port binds.
-Record results/profiles in PR. A denial stops; widening needs review and
+Record results/profiles in PR. Denial stops; widening needs review and
 maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
@@ -185,8 +188,8 @@ restore dataset with trusted base tools only. Start DB; `db_url`: disposable,
 sockets. Run in foreground.
 Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
-before the profile.
-Ctrl-C then stops only the waiting parent; stop the server by PID.
+before the profile; `env -i` alone leaves files open.
+Ctrl-C stops only the waiting parent; stop the server by PID.
 
 ```sh
 cd /private/var/ribbitto-measure/data &&

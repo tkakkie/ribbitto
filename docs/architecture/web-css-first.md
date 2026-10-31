@@ -71,7 +71,7 @@ and so is HTML or CSS that fails one of the four points.
   server renders UTC text (point 1: CSS cannot do `Intl` formatting).
 - **`web/static/side-panel-v3.js` (`inert`, `aria-modal`, a focus trap):** below
   `wide`, `#side-panel` (`internal/web/view/panel.templ`) covers the
-  conversation ([`ui-components.md`](../ui-components.md#side-panels)). CSS
+  conversation ([`ui-panels-and-motion.md`](../ui-panels-and-motion.md#side-panels)). CSS
   places the overlay or sheet, but only the script sets `inert` on background
   siblings, sets `role="dialog"` and `aria-modal="true"`, moves and traps focus,
   and remembers the opener in `sessionStorage`.

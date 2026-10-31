@@ -13,11 +13,9 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
-# CI's test jobs each pass one shard from tools/testshard; locally every
-# package runs.
-GO_TEST_PACKAGES ?= ./...
+# CI passes GO_TEST_PACKAGES through tools/testshard; unset runs every package.
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev bundles
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles
 
 bundles:
 	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
@@ -88,7 +86,7 @@ check-static: bundles $(TEMPL)
 	go build ./...
 
 check-test: bundles db-health
-	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
+	go test -race $(GO_TEST_FLAGS) $(or $(GO_TEST_PACKAGES),./...)
 
 check-tools: bundles $(TEMPL)
 	go -C tools run ./languagecheck ..
@@ -103,6 +101,7 @@ check-tools: bundles $(TEMPL)
 	go -C tools run ./testshard -check ..
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
+	go -C tools run ./measurementskip ..
 
 # A quick subset of make check to run before pushing a follow-up commit
 # (#848): generated files and CSS are current, the API and dependency
@@ -121,9 +120,24 @@ prepush: bundles $(TEMPL) $(TAILWIND)
 	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI
-# next to make check rather than inside it. Scans the application module.
-vuln: bundles
+# next to make check rather than inside it. Three scans, one per Go module, as
+# separate targets: make -k runs all of them even after one fails, and a failed
+# scan fails make vuln. Root and tools/ scan ./...; tools/tbls/ has no local
+# packages, so it scans the named github.com/k1LoW/tbls main package.
+vuln:
+	$(MAKE) -k vuln-root vuln-tools vuln-tbls
+
+vuln-root: bundles
+	@printf '%s\n' 'Scanning root application module'
 	go tool -modfile=tools/go.mod govulncheck ./...
+
+vuln-tools:
+	@printf '%s\n' 'Scanning tools/ module'
+	go -C tools tool govulncheck ./...
+
+vuln-tbls:
+	@printf '%s\n' 'Scanning tools/tbls/ module (github.com/k1LoW/tbls)'
+	go -C tools/tbls tool -modfile=../go.mod govulncheck github.com/k1LoW/tbls
 
 # tools/lintfixtures proves the lint configuration rejects what it must, on
 # the fixtures in internal/lintfixture; its package comment lists them.

@@ -34,7 +34,7 @@ the typing dots.
   no motion has a delay (`TestArrivalMotion`).
 - **Arrival.** `arrival-v1.js` marks a page reached from another page of
   the app, and CSS animates under the marks ([arrival
-  motion](ui-components.md#arrival-motion)).
+  motion](ui-panels-and-motion.md#arrival-motion)).
 - **Reduced motion.** The arrival animations and press scaling exist only
   under `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`

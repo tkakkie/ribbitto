@@ -68,7 +68,7 @@ versus a device) is a different record: WebKit is not iOS Safari.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1` ([`web-layers-checks.md`](web-layers-checks.md#shared-browser-tests)), using Chrome installed on the CI runner image (not pinned); every CI run records the version `TestBrowser` drives, shard, date and runner image in each browser job's step summary (`test (web-1/3)`, `test (web-2/3)`, `test (web-3/3)`) | unverified (no check yet covers the latest two major versions, including the older one; scope, result and evidence must be filled per check, planned in #1426) |
+| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1` ([`web-layers-browser-tests.md`](web-layers-browser-tests.md#shared-browser-tests)), using Chrome installed on the CI runner image (not pinned); every CI run records the version `TestBrowser` drives, shard, date and runner image in each browser job's step summary (`test (web-1/3)`, `test (web-2/3)`, `test (web-3/3)`) | unverified (no check yet covers the latest two major versions, including the older one; scope, result and evidence must be filled per check, planned in #1426) |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |

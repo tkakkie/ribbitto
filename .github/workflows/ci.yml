@@ -2,7 +2,9 @@ name: ci
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # Not ready_for_review: marking a draft ready does not change its head,
+    # and CI already ran on that head, so a rerun only delays the merge.
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   # Nightly, rerun all checks to catch drift in dependencies or the runner image.

@@ -145,6 +145,7 @@ func TestPosting(t *testing.T) {
 		{name: "selected failure", body: "hi", fail: "selected", err: failure, wantErr: failure},
 		{name: "insert failure", body: "hi", fail: "insert", err: failure, wantErr: failure},
 		{name: "read failure", body: "hi", fail: "read", err: failure, wantErr: failure},
+		{name: "previous message failure", body: "hi", fail: "previous", err: failure, wantErr: failure},
 		{name: "append failure", body: "hi", fail: "append", err: failure, wantErr: failure},
 		{name: "commit failure", body: "hi", fail: "commit", err: failure, wantErr: failure},
 	} {

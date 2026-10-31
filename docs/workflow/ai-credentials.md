@@ -1,4 +1,4 @@
-[ -s "$tok" ] || { echo "run-as: no token, or an empty token file, for $name" >&2; exit 2; }# AI credentials and launchers
+# AI credentials and launchers
 
 How each AI gets its own GitHub token and how Codex and Argon are started
 (rules: [README](README.md#tokens)). Tested on 2026-10-31; the redacted
@@ -33,7 +33,7 @@ changes.
 #!/bin/sh
 name=$1; shift
 tok="$HOME/.ribbitto-ai/$name.token"
-[ -r "$tok" ] || { echo "run-as: no token file for $name" >&2; exit 2; }
+[ -s "$tok" ] || { echo "run-as: no token, or an empty token file, for $name" >&2; exit 2; }
 GH_TOKEN=$(cat "$tok"); export GH_TOKEN
 unset GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN
 export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=2

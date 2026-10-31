@@ -11,12 +11,14 @@ The orchestrator starts every implementer run as one blocking command in the
 background (no `nohup`, no trailing `&`), so the end of the run, including the
 time limit, wakes it (#1457). On every end it reads the result: with a pull
 request it continues through the parallel reviews, fixes and follow-up checks
-to `ai-reviewed` without asking; when the implementer stopped for a maintainer
-decision, or the run failed or timed out (retried once as the
-[README](README.md#reviews-issues-and-pull-requests) says), it reports to the
-maintainer at once. Waiting loops (such as for CI or Copilot) have a maximum
-and report when it is reached. The maintainer is asked only for a decision, a
-measurement approval and the merge.
+to `ai-reviewed` until a rule in this document, [`reviewing.md`](reviewing.md)
+or the [README](README.md) says to ask the maintainer. When the implementer
+stopped for a maintainer decision, it reports at once; when the run failed or
+timed out, it reads the worktree and branch state and resumes or restarts once,
+else reports to the maintainer. Waiting loops for CI and Copilot have a
+60-minute maximum; at the maximum the orchestrator reports to the maintainer
+and does not proceed. The maintainer decides the two gates (`ready`, the
+merge), measurement approval and the cases where the rules say to ask.
 
 ## Running a review
 
@@ -24,7 +26,9 @@ measurement approval and the merge.
   a clean worktree at the head under review (after `git fetch`). The
   orchestrator passes the issue or pull request number, the exact base and head
   (or baseline) SHAs, the review round and the earlier findings; the reviewer
-  reads the rest with `gh` (using its own token) and `git diff`.
+  reads the rest with `gh` (using its own token) and `git diff` (the
+  adversarial reviewer reads the title and description, not other reviewers'
+  reports or comments except the earlier findings the orchestrator names).
 - A background run counts as started only after its log header shows the
   expected `workdir:` and `model:`; an earlier exit is a failed start (#359).
 - Never give a reviewer the Status issue (#1), and never have it fetch it.
@@ -65,46 +69,57 @@ trigger it. A repeat review is requested only when the maintainer asks.
 Balanced is not used: it can only be chosen by hand in the *Reviewers* panel,
 and the CLI and API cannot set the effort.
 
-Wait until its review of that head is submitted (a review that only has a
-body counts: read it), then answer and resolve its comments like any other.
-A change goes through the follow-up check below, still as a draft.
+Wait (up to the [60-minute maximum](#waking-the-orchestrator); at the maximum,
+report to the maintainer and do not proceed) until its review of that head is
+submitted (a review that only has a body counts: read it), then answer and
+resolve its comments like any other. A change goes through the follow-up check
+below, still as a draft.
 
 ## Copilot follow-up check
 
-Pull requests only; after Copilot's one review; not a review round. A change
-made to answer Copilot would otherwise reach the maintainer unreviewed. If
-answering needs a change:
+Pull requests only; after a fix for a Copilot or [third-AI](#third-ai-review)
+(adversarial) finding; not a review round, so the two-round limit is untouched.
+A change made to answer Copilot or a third-AI finding would otherwise reach the
+maintainer or the re-review unreviewed. If answering needs a change:
 
 1. Apply only the changes that answer findings of this round (Copilot's, and
    those of the parallel reviews fixed in the follow-up commits), each finding
-   named; a fix for a third-AI finding keeps its regression test or the
-   recorded reason and alternative verification in
-   [`reviewing.md`](reviewing.md#adversarial-follow-up-check). The pull request
-   stays a draft. (If the maintainer asks for another Copilot review after the pull
-   request was marked ready, convert it back to a draft first.)
+   named. Each fix for a third-AI finding includes a regression test that fails
+   without it; only when no automated test can reproduce the finding (a rule or
+   documentation fix, or a race no existing harness can gate) record instead
+   why, and the alternative verification done: a scripted or manual
+   reproduction, a mutation showing the guard matters, or the exact text change
+   (effort or time is never such a reason). The pull request stays a draft. (If
+   the maintainer asks for another Copilot review after the pull request was
+   marked ready, convert it back to a draft first.)
 2. An AI that did not write the change (following
    [review independence](README.md#principles)) checks that the whole diff
    since the baseline SHA (the head the round reviewed) contains only those
-   changes, each is right, and any third-AI fix has a regression test that
-   fails without it (or the recorded reason and alternative verification hold),
-   using `.github/prompts/copilot-check.md` through the README recipe with the
-   [review context](#running-a-review). A
-   failed or non-counting run is retried once as the README says; record who
-   ran it. It reports:
+   changes, each answers its finding, and for each third-AI finding the test
+   fails without it (by running it, or by reading a run without the fix in CI)
+   — or that the recorded reason holds and the alternative verification was done
+   (a reason it does not accept is ❌) — using `.github/prompts/copilot-check.md`
+   through the README recipe with the [review context](#running-a-review). That
+   prompt is used for both Copilot and adversarial follow-up checks; the report
+   header says `Copilot` only when a Copilot finding is covered, otherwise
+   `Adversarial`. A failed or non-counting run is retried once as the README
+   says; record who ran it. It reports:
 
    ```
-   **Copilot follow-up check — <Claude|Codex|Argon>** (at <SHA>)
+   **<Copilot|Adversarial> follow-up check — <Claude|Codex|Argon>** (at <SHA>)
    Compared: <baseline SHA>..<SHA>
    - ✅ | ❌ finding — how it was checked (for a third-AI finding: the fix, and the test that fails without it, or no test — the reason and alternative verification)
    ```
 
-3. All pass → repeat the [third-AI review](#third-ai-review) over the pull
-   request's whole diff at the new head only if the commits since the last
-   adversarially reviewed head touch its areas, then the remaining lifecycle
-   steps. Copilot is not re-requested unless the maintainer asks; if it reviews
-   again anyway, handle that once the same way, then ask the maintainer. Any
-   other change in the diff, a change that needs a design or specification
-   decision, a failed check or a new blocking finding → ask the maintainer.
+3. All pass → run the [third-AI review](#third-ai-review) over the pull
+   request's whole diff at the new head when the README requires one and no
+   adversarial report covers the head, or repeat it under the
+   [later-push rule](#third-ai-review) when an earlier report exists (a push
+   before it starts this check again), then the remaining lifecycle steps.
+   Copilot is not re-requested unless the maintainer asks; if it reviews again
+   anyway, handle that once the same way, then ask the maintainer. Any other
+   change in the diff, a change that needs a design or specification decision,
+   a failed check or a new blocking finding → ask the maintainer.
 
 ## Docs-only pull requests
 
@@ -154,9 +169,8 @@ skip one. Its findings are advisory.
   diff at the new head. An earlier report covers a later head only when
   every later commit is outside them. A pull request already marked ready
   goes back to a draft until the review completes.
-  A fix for a finding of this review first passes the follow-up check in
-  [reviewing](reviewing.md#adversarial-follow-up-check), or Copilot's in
-  [Copilot follow-up check](#copilot-follow-up-check), before the re-review.
+  A fix for a finding of this review first passes the
+  [follow-up check](#copilot-follow-up-check) before the re-review.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md` and the
   [review context](#running-a-review). Post

@@ -518,6 +518,13 @@ func TestAgyCheckObserveSingleChanges(t *testing.T) {
 					}
 					return
 				}
+				if row.ID == "task-on" && change == "flip" {
+					got := agyCheckClassify(agyCheckObserveRow(row, in), 30)
+					if !got.OK || got.Observed != want {
+						t.Fatalf("task-on flip must preserve allowed outcome: %+v", got)
+					}
+					return
+				}
 				agyCheckObserveAssertDifference(t, inputs, row.ID, want)
 			})
 		}

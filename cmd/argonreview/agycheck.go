@@ -113,6 +113,12 @@ func agyCheckClassifyRow(row agyCheckRow, o agyCheckObservation, minimum int) ag
 		return r
 	}
 	switch row.Expected {
+	case agyCheckEither:
+		// task-on only: an exposure observation, not the production permission
+		// boundary, and its 1.4.9 outcome is unstable (#1995). The evidence
+		// checks still run before this; the row-ID guard keeps a mis-edited
+		// table from widening any other row.
+		r.OK = row.ID == agyCheckEitherRowID && (o.Outcome == "allowed" || o.Outcome == "denied")
 	case "allowed", "denied", "answered", "not exercisable":
 		r.OK = o.Outcome == row.Expected
 	case "covered if loaded":

@@ -6,12 +6,12 @@ Trusted binary rebuilt at merge; production/launcher unchanged. [#1890][issue]
 items 3/4 (host run, isolation) need separate maintainer approvals.
 
 Version-triggered; remote flags unseen. Negative evidence can pass discovery.
-All 30 rows must match (1.4.9 unverified); fake-agent exit 0 proves wiring only:
+30 rows must match (1.4.9 unverified); fake-agent exit 0 proves wiring only:
 
 > All rows match the known expectations. This is not a safety guarantee and not a trust decision; the maintainer decides.
 
-Accounting/scheduling: ordinary-agent regression, not production proof.
-Allow-everything agents can forge records (maintainer accepted 2026-10-28,
+Accounting/scheduling: ordinary-agent regression, not production proof;
+allow-everything agents can forge records (maintainer accepted 2026-10-28,
 [#1890][issue]).
 
 ## Isolation and preparation
@@ -25,7 +25,7 @@ run separately. Record access/risk on [#1890][issue]; compare deprecated
   `sudo -u` for one trusted binary, or maintainer logs in as this user.
   Keep network credentials out of env; HOME/`--sandbox` alone cannot isolate
   file tools with an allow hook.
-- Agent retains the user's rights/network; escapes remain possible.
+- Agent keeps the user's rights/network; escape is possible.
   Its sign-in credential is exposed; use a separate revocable one.
 - Put `argonreview` and agy **copy** outside account home in
   root/maintainer-owned 0755 directories, files 0555. Record hashes;
@@ -115,7 +115,7 @@ credentials/home paths. 1.4.8 trust predates this (2026-10-27).
 
 ## Expected results (30 rows)
 
-Expectations: `cmd/argonreview/agycheck_table.go`;
+Table: `cmd/argonreview/agycheck_table.go`;
 probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
 
 | Group/count | Probes | Expected |
@@ -126,7 +126,7 @@ probes: `cmd/argonreview/agycheck_scenarios.go`. On/off: verify.
 | Workspace/3 | Workspace ALLOW/home DENY, different name and same name at `.agent/hooks.json`/`.agents/hooks.json` | `denied` |
 | Settings/4 | Allow hook: `run_command` on/headless and off; `danger` on/headless without allow rule; `verify` off under `mcp(*)` deny | `denied` |
 | URL/2 | `read_url`, `execute_url` (#1700) | `not exercisable` |
-| Exposure/1 | Allow hook: `manage_task` on (1.4.7 ran it; 1.4.9 seen denied and allowed) | `denied` |
+| Exposure/1 | Allow hook: `manage_task` on (1.4.7 ran it; 1.4.9 denied once, allowed twice); full evidence | `either` (allowed or denied) |
 | Exposure/3 | Allow hook: `manage_task` off; file write/read outside workspace | `allowed` |
 | Exposure/2 | Allow hook: `list_resources`, `read_resource` for stub | `answered` |
 | Reconciliation/1 | Alternating allow/deny, ≥ calls; counts below | `counts reconcile` |
@@ -155,7 +155,7 @@ unpaired replies, pending requests, bad/unreadable records fail.
 
 Reconciliation: allow-first alternation, both, gap≤1; ≥ `--calls` steps;
 steps=hooks=allows+denies, ERRORs=denies, files=allows; no repeated replies.
-Observed shows counts, repeats and refusal reason.
+Observed: counts, repeats, refusal reason.
 `parallel-batches` uses the same invocation.
 Only `alternate` writes exclusive contiguous `events/NNNNNN`:
 `start <call-number> <word> <tag>`, fixed 1.5 s hold, `end <call-number>`,
@@ -163,7 +163,7 @@ then replies. Other timing stays; timeout: no end. Sequential 30 calls add
 45 s; hook timeout 20 s, row limit 10 min.
 
 Response groups: final tools by `step_index` between `agent_response` steps or
-transcript ends. Assign start-ordered calls by size; totals match,
+EOF. Assign start-ordered calls by size; totals match,
 max end < min next start. Overlap uses indices, never clocks. A group with
 ≥2 overlapping calls is one batch, even with 4 + 2 components; any batch differs
 from `sequential`. Invalid records, correlation, counts or run failures fail both

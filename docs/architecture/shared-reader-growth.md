@@ -116,8 +116,10 @@ readers runs today's path, which also stays selectable for the benchmark.
    results, with the distinct-members case, in [stream cost](stream-cost.md)
    next to #227's, with the window's miss rate and memory (raising the
    bound to 512 or 1,024 if needed), plus any remaining consolidation.
-   Claude, third-AI review (a results-only change that meets the
-   [review conditions](../workflow/README.md#lifecycle) may be exempt; changing
-   a test in real-time areas is not).
+   Claude, third-AI review (required whenever the change alters the test,
+   the reader or the window bound, per the
+   [review conditions](../workflow/README.md#lifecycle); only a pull request
+   that records results in `stream-cost.md` and touches none of those areas
+   is exempt).
 
 The issue numbers are added here once they are filed.

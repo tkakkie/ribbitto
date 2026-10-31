@@ -90,8 +90,8 @@ then runs the real checker/runner tests with `go -C tools test -count=1 -v ./web
 that the generated sidebar contract's valid consumers compile and its
 ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
-no-emit config includes only web/src/**/*.ts; existing versioned scripts stay
-outside it. `globals.d.ts` supplies the first input and the htmx global.
+no-emit config includes only web/src/**/*.ts; scripts outside it are bounded by
+`web/legacy-scripts.txt` (#1414). `globals.d.ts` supplies the first input and the htmx global.
 
 **Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
 checker pin and lockfile together; for a Node update also change `.node-version`.

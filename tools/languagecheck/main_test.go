@@ -93,6 +93,7 @@ func TestRules(t *testing.T) {
 		{".gitignore", "", true}, {".gitattributes", "", true}, {".env.example", "", true},
 		{"docs/api/a.txt", "", true}, {"docs/size-exceptions.txt", "", true},
 		{exceptionsFile, "", true}, {"tools/scopecheck/allowlist.txt", "", true},
+		{"web/legacy-scripts.txt", "", true}, {"web/nested/legacy-scripts.txt", "", false},
 		{"cmd/argonreview/verifyimage/Dockerfile", "", true},
 		{"cmd/argonreview/testdata/implement-guard/cases.json", "[]", true},
 		{"cmd/argonreview/testdata/implement-guard/hooks-off.json", "{}", true},

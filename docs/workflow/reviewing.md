@@ -120,26 +120,30 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 **Adversarial follow-up check** (pull requests only; after a fix for a
 finding of the adversarial review; not a review round, so the two-round
 limit is untouched). A fix to an adversarial finding would otherwise
-reach the re-review without either AI checking it:
+reach the re-review without either AI checking it. When Copilot findings are
+fixed in the same follow-up commits, one
+[Copilot follow-up check](delivery.md#copilot-follow-up-check) covers every
+finding of the round under these same rules:
 
-1. Apply only the fix, with a regression test that fails without it; the
-   pull request is a draft. Only when no automated test can reproduce the
-   finding (a rule or documentation fix, or a race no existing harness can
-   gate) record instead why, and the alternative verification done: a
-   scripted or manual reproduction, a mutation showing the guard matters,
-   or the exact text change. Effort or time is never such a reason.
-2. The AI that did not write the fix (following [review independence](README.md#principles)) checks
-   that the diff since the reviewed head contains only that fix,
-   that it answers the original finding, and that the test fails without
-   it (by running it, or by reading a run without the fix in CI) — or
-   that the recorded reason holds and the alternative verification
+1. Apply only the changes that answer the named findings of the round; each fix
+   for a third-AI (adversarial) finding includes a regression test that fails
+   without it, and the pull request stays a draft. Only when no automated test
+   can reproduce the finding (a rule or documentation fix, or a race no existing
+   harness can gate) record instead why, and the alternative verification done:
+   a scripted or manual reproduction, a mutation showing the guard matters, or
+   the exact text change. Effort or time is never such a reason.
+2. The AI that did not write the fix (following
+   [review independence](README.md#principles)) checks that the whole diff
+   since the baseline (reviewed) head contains only the changes for the named
+   findings, that each answers its finding, and that for each third-AI finding
+   the test fails without it (by running it, or by reading a run without the fix
+   in CI) — or that the recorded reason holds and the alternative verification
    was done; a reason it does not accept is ❌. It reports:
 
    ```
    **Adversarial follow-up check — <Claude|Codex|Argon>** (at <SHA>)
-   Compared: <reviewed SHA>..<SHA>
-   - ✅ | ❌ finding — the fix, and the test that fails without it
-     (or: no test — the reason, and the alternative verification)
+   Compared: <baseline SHA>..<SHA>
+   - ✅ | ❌ finding — how it was checked (for a third-AI finding: the fix, and the test that fails without it, or no test — the reason and alternative verification)
    ```
 
 3. All pass → the re-review the

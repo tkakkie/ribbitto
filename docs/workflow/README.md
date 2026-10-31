@@ -60,14 +60,13 @@ bypass list; checked as in the order below):
 
 **Kept by the AIs as rules; GitHub does not prevent breaking them:**
 
-- **Merges.** A token that can push a branch and open a pull request can
-  also merge it once `ci` passes. Required approvals cannot close this gap:
-  every token acts as the maintainer's account, so GitHub would not count
-  an approval. Decision 11 is kept by rule.
+- **Merges.** Any token that pushes and opens a pull request can merge it once
+  `ci` passes; required approvals cannot help because every token acts as the
+  maintainer's account. Decision 11 is kept by rule.
 - **What `ci` checks.** A pull request can change `.github/workflows/`, and
-  its own copy decides what passes. Review reads every such change. This is a known risk.
-  A required check limited to GitHub Actions narrows who can post it, not
-  what a changed workflow tests.
+  its own copy decides what passes (a known risk; review reads every such
+  change). Limiting the required check to GitHub Actions narrows who can post
+  it, not what a changed workflow tests.
 - **Credentials and settings.** See [tokens](#tokens).
 
 ## Enabling an AI's rights
@@ -88,14 +87,14 @@ and show step 4 before ordinary work.
   `GH_TOKEN` and, through `GIT_CONFIG_COUNT`, clears the inherited
   `credential.helper` (`osxkeychain`) and adds one that answers only for
   `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
-  `git push` use it. Without the AI's token file the launcher stops, and a
-  plain `gh` or `git push` fails: no other CLI credential is left (browser
-  sessions and other sign-ins are not verified; see step 2).
-- **What tokens give:** independent revocation and an intended assignment,
-  not isolation and not proof of which AI acted: all three run as one macOS
-  user and can read each other's token files. Whether GitHub's audit log
-  shows token-level events is not verified. To stop an AI, stop its process;
-  if a token may have leaked, revoke all three.
+  `git push` use it. Without the token file the launcher stops, and plain
+  `gh` or `git push` fails: no other CLI credential remains (browser and other
+  sign-ins are unverified; see step 2).
+- **What tokens give:** independent revocation and intended assignment, not
+  isolation or proof of which AI acted (all three share one macOS user and can
+  read each other's token files; token-level GitHub audit logging is
+  unverified). To stop an AI, stop its process; if a token may have leaked,
+  revoke all three.
 
 ## Roles and running the AIs
 
@@ -108,15 +107,17 @@ and show step 4 before ordinary work.
 3. Argon, for everything else, `high` risk included. `high` is a risk class,
    not an assignment: its review conditions hold whoever implements.
 
-When the maintainer did not name one, the orchestrator may change the
-implementer for a concrete reason, such as stalled work, and says why in the
-issue; changing a named one goes back to the maintainer. A fix goes back to the original
+If the maintainer did not name one, the orchestrator may change the
+implementer for a concrete reason (such as stalled work) and state why on the
+issue; changing a named one requires the maintainer. Fixes go to the original
 implementer; Auto-fix runs only on one's own pull requests. Claude writes
 issues and briefs, starts the others and explains pull requests to the
 maintainer in Japanese in the chat.
 
 Headless runs wait for input forever: **close stdin and set a time limit**
-(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`).
+(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). Start each implementer
+run as one blocking background command so its end wakes the orchestrator
+([delivery](delivery.md#waking-the-orchestrator)).
 
 - **Codex**, from the worktree:
 
@@ -135,22 +136,22 @@ Headless runs wait for input forever: **close stdin and set a time limit**
   `settings.json` allows `command(*)` and `write_file(*)` and trusts only
   `~/dev/ribbitto/wt`. `--mode auto` is not available for the account.
   Setup: [credentials](ai-credentials.md).
-- **Reviews** use the same commands with the kept `.github/prompts/`
-  prompts and [context supplied by the orchestrator](ai-credentials.md#review-context).
-  See [reviewing](reviewing.md).
+- **Reviews** use the same commands: a pull request cross-review follows
+  [reviewing](reviewing.md) (only the issue review has a prompt file); others
+  use `.github/prompts/` with [review context](ai-credentials.md#review-context).
 
 ## Reviews (issues and pull requests)
 
 - Another AI reviews, at most two rounds. A review counts only if it
   completed with an approving verdict that covers the issue text or the
   head to be delivered; every finding gets a disposition. If findings still
-  block after two rounds, ask the maintainer. (Kept.)
+  block after two rounds, ask the maintainer.
 - A failed, timed-out or empty run never counts. Record the failure; retry
   a timeout, outage, exhausted quota or empty run once, then ask the
   maintainer. Keep the report tied to its exact commits and findings.
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. A typo or a rewording that changes
-  no meaning is not ([what counts](reviewing.md#follow-up-pushes)). (Kept.)
+  no meaning is not ([what counts](reviewing.md#follow-up-pushes)).
 
 ## Lifecycle
 
@@ -165,11 +166,10 @@ Pull request:
    AI where required, and Copilot (once, unless docs-only; [delivery](delivery.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
    finding gets a disposition and applied fixes are checked before the
-   maintainer is asked. Before every
-   follow-up push, run `make prepush`; before approval, check the pull request against the current `main`. A
-   merge of `main` that resolves conflicts is reported in a comment (files
-   and how); if it does more than combine both sides, it is reviewed.
-
+   maintainer is asked. Run `make prepush` before every follow-up push, and
+   check against current `main` before approval. A conflict-resolving merge of
+   `main` is reported in a comment (files and how) and reviewed if it does more
+   than combine both sides.
 4. `ai-reviewed`, and the pull request is marked ready for review.
 5. Claude explains it in the chat.
 6. The maintainer decides the merge.
@@ -188,7 +188,7 @@ Pull request:
 ## Investigations
 
 Measurements need the maintainer's preapproval and keep the caps in
-[investigations](investigations.md). Kept: record SHAs, conditions, commands
+[investigations](investigations.md): record SHAs, conditions, commands
 and results; alternate base and head under matched conditions in one session;
 check the result against *Done when*.
 

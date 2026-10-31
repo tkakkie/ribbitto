@@ -41,12 +41,11 @@ except B's narrow carve-out; a change there that keeps both is tier B
     which streams or members receive a frame, and authorisation before each
     send;
   - any change to the rules that guard these areas and the AI and CI
-    tooling: the Argon launcher in `cmd/argonreview/`; the trusted prompts and
+    tooling: the trusted prompts and
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
     the review gates (`docs/workflow/README.md`, `pull-requests.md`, `reviewing.md`,
-    `copilot.md`, `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`,
-    `argon-intake.md`, `argon-pull-requests.md`, `investigations.md`, this
+    `copilot.md`, `running-other-ai.md`, `investigations.md`, this
     whole file, and `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
@@ -96,11 +95,11 @@ imports by its own area; A's second item applies to a tool's change too;
 tests that guard A's areas stay tier B; and loosening a check `make check`
 or CI runs stays at least tier B, in a listed tool too.
 
-The template's *Adversarial* field names the review: `Argon (A|B) at <SHA>`,
-`Codex (B) at <SHA>` for an Argon pull request, or `skipped (C: <reason>)`,
-the reason naming the C case, for example "dependency bump". "Behaviour unchanged" is never a C reason: in A's and B's
-areas that is tier B. The other AI checks the tier against what the diff
-does, not only the paths it touches.
+The template's *Adversarial* field follows the
+[README's third-AI rule](README.md#lifecycle): name the third AI and reviewed
+SHA, `pending`, or `not required` with the reason. The older tiers above do
+not override that rule. The other AI checks the requirement against what
+the diff does, not only the paths it touches.
 
 ## When it runs
 
@@ -129,7 +128,7 @@ review before it if it had skipped Copilot under the
 [docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
 gets Codex's at B and at A leaves Argon for the maintainer to decide, under
 [review independence](README.md#principles)
-([who reviews](argon-pull-requests.md#who-reviews)). Fixes first get the
+([review independence](README.md#principles)). Fixes first get the
 follow-up check in [reviewing](reviewing.md) or [Copilot](copilot.md).
 
 A pull request already marked ready is converted back to a draft until that
@@ -141,11 +140,10 @@ the maintainer decides.
 
 ## Running Argon
 
-Use `cmd/argonreview` through the trusted Go invocation in
-[`running-argon.md`](running-argon.md#the-trusted-invocation), which documents
-its setup, security boundary and limits. Codex reviews
-an Argon pull request with the fixed invocation in
-[`argon-pull-requests.md`](argon-pull-requests.md#the-fixed-invocation).
+Use the [README recipe](README.md#roles-and-running-the-ais) with
+`.github/prompts/adversarial.md`. The orchestrator supplies the PR number,
+base and head commits, diff and earlier findings in the prompt text. The
+[README's third-AI rule](README.md#lifecycle) supersedes the older tiers above.
 
 Post the report as `**Adversarial review — Gemini 4 Argon (tier A|B)** (at <SHA>)`,
 or Codex's as `**Adversarial review — Codex (tier B)** (at <SHA>)`.

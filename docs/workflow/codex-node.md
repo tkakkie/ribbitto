@@ -3,11 +3,6 @@
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) limits
 Node/npm to type checking, unit tests and dependency management in development,
 CI and implementer sandboxes. Neither asset builds nor run time use Node.
-Argon gains no Node/npm commands; its `verify` and permissions are unchanged.
-Generated-asset packages stay CI-only / `NOT VERIFIED` in
-[Argon verify](argon-verify.md#results); container asset generation or any checklist
-change needs its own `process` issue.
-
 ## Routine use and trusted setup
 
 Routine Codex Node use is allowed from the merge of #1415, with #1410 already

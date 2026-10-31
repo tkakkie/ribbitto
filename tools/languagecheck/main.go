@@ -1,5 +1,5 @@
 // Command languagecheck checks tracked file kinds by location, bans shebangs
-// and validates exact-path approval records as described by decision 42.
+// and validates exact-path approval records as described by decisions 42 and 44.
 // Commands, configuration contents and dependencies remain review items.
 // Changing the table requires an issue approved by the maintainer.
 package main

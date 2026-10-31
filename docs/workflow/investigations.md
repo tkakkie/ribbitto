@@ -31,7 +31,7 @@ advance (e.g. an external harness). A head adding a migration is a stop
 for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
-checkouts with the [trusted git settings and `GOENV=off`](running-argon.md#the-trusted-invocation).
+checkouts with the trusted git settings and `GOENV=off` shown in [build routes](#build-routes).
 Never build from the implementer's worktree or sandbox: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
 assets; runtime needs no head tree.
@@ -45,7 +45,7 @@ profile once. If restrictions fail, keep them; stop for a case-by-case
 maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
 on its chosen `127.0.0.1` port, with disposable data and credentials,
-started with `budget-start` once in force.
+cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. In PR, record host measurement, SHAs, conditions (toolchain,
@@ -60,8 +60,8 @@ warm-up posts. Another session's absolute values alone never decide.
 
 Host measurements need no Node. After #1411/#1820, Go asset generation
 must precede compilation in a writable copy of the verified checkout, in the
-same isolated build (same trusted checkouts/flags, no Node on `PATH`), outside
-Argon verify. These commands cannot yet build SHAs needing generation.
+same isolated build (same trusted checkouts/flags, no Node on `PATH`).
+These commands cannot yet build SHAs needing generation.
 
 Approved operator: trusted git/Go; `image`: trusted Docker Go image digest
 ([current value](measurement-go-image.md#measurement-go-image)).

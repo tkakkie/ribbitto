@@ -41,35 +41,10 @@ Claude reviews Codex's work directly, or with
 Post: `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
-For an Argon pull request, that example does not apply: Codex runs in a clean
-worktree of `origin/main`, never at the pull
-request's head, and gets the diff on stdin
-([who does what](argon-implementer.md#who-does-what); for a follow-up
-check also [more context][r]):
-
-```sh
-# $W: Argon's worktree; $clean: clean origin/main; $base: merge base with
-# origin/main for round 1, round-1 SHA for round 2, approved SHA (Copilot)
-# or reviewed SHA (adversarial) for a follow-up.
-# gh pr checks fails unless CI is green, which the review needs first.
-# tier=B|C
-g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
-  GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
-  -c core.fsmonitor=false "$@"; }
-case $tier in B) effort=high ;; C) effort=medium ;; *) false ;; esac &&
-  diff=$(mktemp) && head=$(g rev-parse HEAD) &&
-  test "$head" = "$(gh pr view P --json headRefOid -q .headRefOid)" &&
-  echo "Compared: $base..$head" > "$diff" &&
-  g diff --no-ext-diff --no-textconv "$base..$head" >> "$diff" &&
-  gh pr view P --json title,body,comments,headRefOid >> "$diff" &&
-  gh pr checks P >> "$diff" &&
-  gh issue view N --json title,body,comments >> "$diff" &&
-  (cd "$clean" && limit 1800 codex exec -s read-only -c model_reasoning_effort="$effort" -o review.md \
-    "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
-```
-
-Argon's setup: [boundary and preflight](argon-implementer.md#argon-as-implementer);
-review differences: [Argon's pull requests][r].
+Argon reviews use the [README recipe](README.md#roles-and-running-the-ais)
+and the kept prompts, with the PR or issue, relevant commits and earlier
+findings supplied in the prompt text. The same rights and review
+independence rules apply to every AI.
 
 ## Handoff of another AI's code
 
@@ -78,7 +53,7 @@ For code Codex or Argon wrote (maintainer, 2026-10-16,
 difference between the AIs, enough safety for practice, little to operate.
 
 - **In its own sandbox,** the implementing AI may build and test as before:
-  Codex: [profile][c]; Argon only within [boundary][b].
+  see the [README](README.md#what-every-ai-may-do).
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
   `go test`, a build, `make dev` or any tool from that tree. Nor transferred
@@ -89,10 +64,8 @@ difference between the AIs, enough safety for practice, little to operate.
   first review; green CI on each follow-up head replaces `make prepush`;
   closure verification and follow-up checks read CI without re-running code.
 - **Still done on the host:** code and diff review, the credential grep on
-  `PR_BODY.md` ([below][c]), and Argon's protected-file and
-  workspace checks ([boundary][b]).
+  `PR_BODY.md` ([below][c]).
 - **UI changes:** CI browser tests default; maintainer decides whether/how essential manual checks run case by case.
-- Argon's [container verify](argon-verify.md#status): in force. Codex: no Docker. No AI runs another AI's unverified code on the host; green CI is the check.
 
 Handoff builds need no Node. Once #1411/#1820 land, Go asset generation must
 precede compilation in the isolated [build routes](investigations.md#build-routes).
@@ -158,24 +131,11 @@ The brief also includes:
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
   (`bin/` is git-ignored).
-- **Database.** Codex cannot use Docker. Once in force, only while an implementation needs
-  database tests, Claude follows the [recorded-ID lifecycle](argon-verify-budget-start.md#codex-database-lifecycle)
-  for `ribbitto-codex-pg`: create registered, `budget-start`, then a **30-try**
-  readiness wait on port **55433**. Start Codex only if all applicable steps exit 0;
-  reviews and database-free work need no database and set neither value below. End/interruption cleanup
-  uses the recorded ID after identity and process checks, never the name.
-  Not in force until the launcher update; until then see
-  [interim steps](argon-verify-budget-start.md#before-enabling).
-  When a database is running, the brief supplies `make check` with
-  `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
-  and `RIBBITTO_REQUIRE_DB=1`. If port 55433 is taken, change creation and
-  the test URL together. The race detector works in this profile;
-  `make vuln` needs `vuln.go.dev`, which is not allowed, so CI runs it
-  ([Checks](../../README.md#checks)). Without `ps`,
-  `check-test` fails in `cmd/argonreview`, `cmd/capacity` and `cmd/dev`
-  process tests; `make check` stops before `check-tools`
-  ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
-  expected; CI runs the full check ([handoff][h]).
+- **Database.** Use a disposable test database following
+  [credentials](ai-credentials.md#tool-failures-and-disposable-databases),
+  with `RIBBITTO_TEST_DATABASE_URL` and `RIBBITTO_REQUIRE_DB=1`.
+  If the current environment cannot provide a database or a required
+  process tool, record the missing checks and use CI for them.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`, which never contains a connection string with
@@ -217,7 +177,5 @@ The orchestrator, running nothing from the tree
 and CI; never supply or fetch Status #1. Review effort follows the tier
 above; implementation effort follows size.
 
-[r]: argon-pull-requests.md#who-reviews
-[b]: argon-implementer.md#the-boundary
 [h]: #handoff-of-another-ais-code
 [c]: #running-codex

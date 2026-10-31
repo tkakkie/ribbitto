@@ -165,7 +165,7 @@ Pull request:
    before approval, check the pull request against the current `main`. A
    merge of `main` that resolves conflicts is reported in a comment (files
    and how); if it does more than combine both sides, it is reviewed.
-  
+
 4. `ai-reviewed`, and the pull request is marked ready for review.
 5. Claude explains it in the chat.
 6. The maintainer decides the merge.

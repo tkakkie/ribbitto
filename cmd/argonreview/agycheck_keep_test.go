@@ -162,7 +162,7 @@ func TestAgyCheckKeepReady(t *testing.T) {
 				return info, err
 			}
 			if name == "entries-error" {
-				h.x.runner.files.entries = func(string) ([]os.DirEntry, error) { return nil, os.ErrPermission }
+				h.x.runner.files.entriesN = func(string, int) ([]os.DirEntry, error) { return nil, os.ErrPermission }
 			}
 			allowed := name == "missing" || name == "empty" || name == "off"
 			// Allowed cases stop just after the pre-check; refusals have a usable runner.

@@ -152,7 +152,7 @@ func TestAgyCheckKeepFinalMetadata(t *testing.T) {
 				}
 				return info, nil
 			}
-			f.entries = func(path string) ([]os.DirEntry, error) {
+			f.entriesN = func(path string, n int) ([]os.DirEntry, error) {
 				if name == "entries-error" && path == kept || name == "row-entries-error" && path == row {
 					return nil, os.ErrPermission
 				}
@@ -162,7 +162,7 @@ func TestAgyCheckKeepFinalMetadata(t *testing.T) {
 						entries = append(entries, fs.FileInfoToDirEntry(info))
 					}
 				}
-				return entries, nil
+				return entries[:min(n, len(entries))], nil
 			}
 			f.read = func(string, int64) ([]byte, error) { t.Fatal("read retained content"); return nil, nil }
 			f.open = func(string, int, os.FileMode) (*os.File, error) { t.Fatal("opened retained content"); return nil, nil }
@@ -212,12 +212,12 @@ func TestAgyCheckKeepMidRunFailure(t *testing.T) {
 
 func TestAgyCheckKeepMetadataReport(t *testing.T) {
 	h := agyCheckNewCommandHarness(t, "", "")
-	entries := h.x.runner.files.entries
-	h.x.runner.files.entries = func(path string) ([]os.DirEntry, error) {
+	entries := h.x.runner.files.entriesN
+	h.x.runner.files.entriesN = func(path string, n int) ([]os.DirEntry, error) {
 		if path == filepath.Join(h.m.Isolation, "kept") {
 			return nil, errors.New(agyCheckKeepMarker)
 		}
-		return entries(path)
+		return entries(path, n)
 	}
 	var out, stderr bytes.Buffer
 	code := agyCheckCommand([]string{"--home", h.m.Home, "--agy", h.agy, "--keep-transcripts"}, &out, &stderr, h.d)

@@ -40,10 +40,7 @@ func agyCheckKeepReady(root string, f agyCheckFiles) error {
 	if err := f.private(path, true); err != nil {
 		return err
 	}
-	entries, err := f.entries(path)
-	if err == nil && len(entries) != 0 {
-		err = errors.New("kept directory is not empty")
-	}
+	_, err := f.keptEntries(path, 0)
 	return err
 }
 
@@ -153,7 +150,7 @@ func agyCheckKeptValid(root string, f agyCheckFiles, ids []string) bool {
 	if !agyCheckKeptMetadata(f, kept, true, 0) {
 		return false
 	}
-	entries, err := f.entries(kept)
+	entries, err := f.keptEntries(kept, len(agyCheckExpected))
 	if err != nil || len(entries) != len(ids) {
 		return false
 	}
@@ -171,7 +168,7 @@ func agyCheckKeptValid(root string, f agyCheckFiles, ids []string) bool {
 		if !agyCheckKeptMetadata(f, row, true, 0) {
 			return false
 		}
-		files, err := f.entries(row)
+		files, err := f.keptEntries(row, 2)
 		if err != nil || len(files) != 2 {
 			return false
 		}

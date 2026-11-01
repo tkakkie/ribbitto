@@ -31,7 +31,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	}
 	// This is the single declaration of converted page entries; tools/webbuild
 	// parses it from NewScripts, so keep its name and string slice literal.
-	names := []string{"message-time"}
+	names := []string{"message-time", "arrival", "popover-focus", "side-panel"}
 	scripts := &Scripts{urls: make(map[string]string, len(names))}
 	for _, name := range names {
 		entry, ok := manifest.Entries[name]

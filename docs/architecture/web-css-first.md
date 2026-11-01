@@ -69,13 +69,13 @@ and so is HTML or CSS that fails one of the four points.
   in the page's `lang` (`document.documentElement.lang`) and the reader's time
   zone with `Intl.DateTimeFormat` on load and scoped `htmx:load`, while the
   server renders UTC text (point 1: CSS cannot do `Intl` formatting).
-- **`web/static/side-panel-v3.js` (`inert`, `aria-modal`, a focus trap):** below
+- **`web/src/side-panel.ts` (`inert`, `aria-modal`, a focus trap):** below
   `wide`, `#side-panel` (`internal/web/view/panel.templ`) covers the
   conversation ([`ui-panels-and-motion.md`](../ui-panels-and-motion.md#side-panels)). CSS
   places the overlay or sheet, but only the script sets `inert` on background
   siblings, sets `role="dialog"` and `aria-modal="true"`, moves and traps focus,
   and remembers the opener in `sessionStorage`.
-- **`web/static/popover-focus-v1.js` (closing on `Tab`):** popovers are
+- **`web/src/popover-focus.ts` (closing on `Tab`):** popovers are
   non-modal, so `Tab` or `Shift+Tab` can leave `:popover-open` open over the
   newly focused control; the script hides it once `Tab` moves focus outside.
 - **`web/static/branch-selection-v1.js` (`disabled`):** checking a message
@@ -83,7 +83,7 @@ and so is HTML or CSS that fails one of the four points.
   topic's `<option>` in `#branch-to`, and `#branch-name` when an existing topic
   is selected, including on `htmx:load` (points 1 and 3: CSS cannot set
   `disabled`).
-- **`web/static/arrival-v1.js` (navigation type):** reads
+- **`web/src/arrival.ts` (navigation type):** reads
   `navigation.activation` before first paint to set `data-arrive-pill` and
   `data-arrive-panel` on `document.documentElement` only on a same-origin `push`
   navigation that changed the place or opened a panel (point 1: CSS cannot read

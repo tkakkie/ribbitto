@@ -356,7 +356,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			wait("typing shows behind the dialog", `() => document.getElementById('typing-status').textContent.includes('alice')`)
 			read()
 			step("sheet geometry at 390 and 320 px")
-			// The sheet slides in on opening; arrival-v1.js drops the mark at its end.
+			// The sheet slides in on opening; web/src/arrival.ts drops the mark at its end.
 			wait("the panel's arrival motion ends", `() => !('arrivePanel' in document.documentElement.dataset)`)
 			for _, width := range [][2]int{{390, 844}, {320, 568}} {
 				size(width[0], width[1])

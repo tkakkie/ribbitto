@@ -259,3 +259,34 @@ type PendingSendDetail struct{}
 
 // TypingInputDetail is empty because htmx reads the typing form.
 type TypingInputDetail struct{}
+
+// Arrival and side-panel hooks share the layout and conversation panel contracts.
+const (
+	// ArrivePillAttribute marks the root element when arrival motion runs for the selection pill.
+	//dom:attribute
+	ArrivePillAttribute = "data-arrive-pill"
+	// ArrivePanelAttribute marks the root element when arrival motion runs for the side panel.
+	//dom:attribute
+	ArrivePanelAttribute = "data-arrive-panel"
+	// SidePanelID identifies the complementary or modal side panel container.
+	//dom:id HTMLElement
+	SidePanelID = "side-panel"
+	// PanelBackdropID identifies the pointer-only backdrop closing link.
+	//dom:id HTMLAnchorElement
+	PanelBackdropID = "panel-backdrop"
+	// PanelHeadingID identifies the side panel heading that takes initial focus.
+	//dom:id HTMLHeadingElement
+	PanelHeadingID = "panel-heading"
+	// PanelCloseID identifies the side panel close link.
+	//dom:id HTMLAnchorElement
+	PanelCloseID = "panel-close"
+	// PanelControlPrefix identifies the header controls that open a side panel.
+	//dom:suffix HTMLAnchorElement
+	PanelControlPrefix = "panel-control-"
+	// PanelCoverEvent requests a fresh modal-state publication before reading aria-modal.
+	//dom:event PanelCoverDetail
+	PanelCoverEvent = "panel-cover"
+)
+
+// PanelCoverDetail is empty because the listener inspects computed style directly.
+type PanelCoverDetail struct{}

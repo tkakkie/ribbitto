@@ -30,6 +30,12 @@ cannot change anything.
 - **SQL and input handling:** injection, missing constraints, race
   conditions between check and write, transactions that are too long or
   lock in an inconsistent order.
+- **Conversions (behaviour parity):** on a conversion (a pull request whose
+  issue says it keeps today's behaviour), any difference from the old
+  behaviour is a blocking finding unless it is provably unreachable or the
+  issue itself lists it as intended—report behaviour-parity findings here even
+  without a security attack, giving the diverging input or scenario under
+  `Attack:` ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
 
 Ignore style, naming and anything the linters already enforce.
 

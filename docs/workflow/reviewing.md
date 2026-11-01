@@ -91,6 +91,10 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   approving comment is the maintainer's and approves that exact path.
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial*
   matches [third-AI review](delivery.md#third-ai-review).
+- On a conversion (a pull request whose issue says it keeps today's
+  behaviour), any difference from the old behaviour is a `[blocking]` finding
+  unless it is provably unreachable or the issue itself lists it as intended
+  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
 
 **How to report:** one comment on the pull request (or issue):
 

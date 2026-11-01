@@ -4,37 +4,14 @@ Read when: orchestrating a PR ([implementer brief](#standard-implementer-brief),
 
 ## Standard implementer brief
 
-Paste into every implementer run (once `ready`), with the issue number, branch,
-risk and issue text:
+Once `ready`:
 
-> You are `<Codex|Argon>`, implementing issue `#<N>` in `tkakkie/ribbitto` on
-> branch `<ai>/<topic>` from `origin/main` (`ready`, risk: `<normal|high>`).
->
-> Issue `#<N>` — `<title>`:
-> `<issue body, including Done when>`
->
-> 1. Read `AGENTS.md` and only the touched area's `docs/` (`AGENTS.md` "Where
->    things are explained"). Use only your own token; never put a credential in
->    a commit, pull request, comment or log; use only a disposable local test
->    database (`RIBBITTO_TEST_DATABASE_URL`), never a shared one. Skip
->    `docs/workflow/` unless an action triggers a section:
->    own token, credentials, `ready`, merge (docs/workflow/README.md#what-no-ai-does),
->    tool failures, disposable test DBs (docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
->    PR body credential scan (docs/workflow/delivery.md#running-a-review), or
->    measurement caps (docs/workflow/investigations.md#investigations-and-the-performance-target).
-> 2. Implement the issue in this worktree (diff under ~400 lines excluding
->    generated files). Stop and report if a maintainer decision or a new
->    language/tool is needed.
-> 3. Run `make check` and `make prepush` (plus `make deps` if imports change);
->    fix failures without deleting, skipping or weakening a test.
-> 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
->    branch, run the credential scan (docs/workflow/delivery.md#running-a-review)
->    on the PR body file, and open a DRAFT PR (`.github/pull_request_template.md`,
->    `Closes #<N>`).
-> 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before any
->    follow-up push), and stop once CI is green. Do not set labels, request or
->    run reviews, mark ready, merge, or touch `main`, other branches, settings
->    or tokens.
+> You are `<Codex|Argon>`, implementing `#<N>` (`<title>`) in `tkakkie/ribbitto` on `<ai>/<topic>` from `origin/main` (`ready`, risk: `<normal|high>`): `<issue body, including Done when>`
+> 1. Read `AGENTS.md` and touched `docs/`. Use only your own token, put no credential in a commit, PR, comment or log, keep `ready`/merge rules (docs/workflow/README.md#what-no-ai-does), and use only a disposable local test DB (`RIBBITTO_TEST_DATABASE_URL`, never shared; docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases). Skip `docs/workflow/` unless triggered (above, step 4, or measurement caps: docs/workflow/investigations.md#investigations-and-the-performance-target).
+> 2. Implement here (diff <~400 lines excluding generated); stop and report if a maintainer/new-language/tool decision is needed. For a behaviour-preserving script-to-module conversion, before the PR compare the old script (at the issue's baseline SHA) and new module on the same inputs/outputs (clock, storage failures, malformed values; `node --test` in `web/test` for DOM-free logic, or naming `TestBrowser` suites for browser needs), kept as evidence in the PR body (commands/comparison), not as a permanent file (restructurings record what was compared; [#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+> 3. Run `make check` and `make prepush` (`make deps` if imports change); fix failures without deleting, skipping or weakening tests.
+> 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your branch, scan the PR body (docs/workflow/delivery.md#running-a-review) and open a DRAFT PR (`.github/pull_request_template.md`, `Closes #<N>`).
+> 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before pushing) and stop once green; do not set labels, request/run reviews, mark ready, merge, or touch `main`/other branches/settings/tokens.
 
 ## Waking the orchestrator
 

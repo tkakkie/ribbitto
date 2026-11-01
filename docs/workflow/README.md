@@ -1,11 +1,11 @@
 # AI development workflow
 
-How work moves from idea to `main` in ribbitto. **One set of rules applies
-to every AI — Claude, Codex and Argon.**
-Safety comes from GitHub (branch protection, CI) and from review, not from
-per-AI sandboxes. `AGENTS.md` covers coding. This file governs the workflow;
-where an older workflow file conflicts, this file wins. Product-quality
-checklists remain in use.
+Read when: orchestrating an issue or pull request, or when an action triggers [What no AI does](#what-no-ai-does) (own token, credentials, `ready`, merge rule).
+
+**One set of rules applies to every AI — Claude, Codex and Argon.** Safety
+comes from GitHub (`main` ruleset, CI) and review, not per-AI sandboxes.
+`AGENTS.md` covers coding; this file governs the workflow and wins over older
+workflow text.
 
 ## Principles
 
@@ -53,12 +53,12 @@ checklists remain in use.
 ## What GitHub enforces and what is only a rule
 
 **Enforced by the `main` ruleset** (pull request and `ci` required, no
-bypass list; checked as in the order below):
+bypass list):
 
 - Nothing reaches `main` except through a pull request.
 - A pull request cannot merge until `ci` passes.
 
-**Kept by the AIs as rules; GitHub does not prevent breaking them:**
+**Kept by the AIs as rules (not enforced by GitHub):**
 
 - **Merges.** Any token that pushes and opens a pull request can merge it once
   `ci` passes; required approvals cannot help because every token acts as the
@@ -137,7 +137,7 @@ run as one blocking background command so its end wakes the orchestrator
   `~/dev/ribbitto/wt`. `--mode auto` is not available for the account.
   Setup: [credentials](ai-credentials.md).
 - **Reviews** use the same commands: a pull request cross-review follows
-  [reviewing](reviewing.md) (only the issue review has a prompt file); others
+  [reviewing](reviewing.md#pull-request-cross-review) (only the issue review has a prompt file); others
   use `.github/prompts/` with [review context](ai-credentials.md#review-context).
 
 ## Reviews (issues and pull requests)
@@ -200,7 +200,6 @@ check the result against *Done when*.
   · likely cause · (optional) idea. No secrets or personal data.
 - **Roadmap:** `docs/roadmap.md`, updated when the plan changes.
 
-
 ## Labels
 
 | Label | Set by | Meaning |
@@ -212,6 +211,5 @@ check the result against *Done when*.
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
 [investigations](investigations.md) and [credentials](ai-credentials.md)
-supply checklists. Optional: an AI hunts contradictions with
-[`audit.md`](../../.github/prompts/audit.md); check each finding first. No verification harness or sandbox
+supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
 is built or extended (#2002).

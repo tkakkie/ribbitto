@@ -56,16 +56,12 @@ warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Isolated routes: keep verified `src` read-only; generate in a writable copy
-with Go, no Node (native linux/arm64 in container, darwin/arm64 as user), then
-cross-compile. Record diff; only `web/static/dist` may differ.
-
-Use trusted git/Go; `image`:
+Approved operator: trusted git/Go; `image`:
 `golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261`
-(`golang:1.27.3`, [approved #1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never tag.
-Replace with approval when go.mod's `go` outgrows it.
-Condition 5: no clone/config/hooks/cache reuse. `sha`: approved full head/fixed
-trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
+(`golang:1.27.3`, approved on [#1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never by
+tag; replace it, with approval, when go.mod's `go` outgrows it.
+Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
+head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
 ```sh
 session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
@@ -82,7 +78,8 @@ tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
 test -z "$tree_status"
 ```
 
-Then check modules against this SHA's `go.sum`:
+On success, cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
+Mount only read-only source and empty output:
 
 ```sh
 build_steps='
@@ -107,14 +104,15 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   /bin/sh -eu -c "$build_steps" build /src /out "$sha" /usr/local/go/bin/go
 ```
 
-Apple silicon, never Rosetta. In-tree: webbuild and Go build only.
-Before staging record SHA and `shasum -a 256`.
+Apple silicon only, never Rosetta. In-tree: only this generation and Go build.
+Before staging record SHA and `shasum -a 256`;
+`-buildvcs=false` avoids git ownership mismatches.
 
-If unusable, record why. Maintainer stages read-only `build/src`; no old
-output/caches or escaping symlinks. User writes only empty `work`/`out`/`cache`
-under `build`. Recheck `src` HEAD/clean via `pinned`;
+If unusable, record why. Maintainer: stage read-only source in
+`build/src`, no old output/caches or escaping symlinks. User writes only
+empty `work`/`out`/`cache` under `build`. Recheck staged `src` `HEAD`/clean status via `pinned`;
 require `test -z "$(find "$src" -type l)"`.
-`go`: absolute trusted Go path; same version/flags:
+`go`: absolute trusted Go path, container version/flags:
 
 ```sh
 b=/private/var/ribbitto-measure/build && cd "$b/work" &&

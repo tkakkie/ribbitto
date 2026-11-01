@@ -152,13 +152,15 @@ func TestMessageListHandler(t *testing.T) {
 			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message,messages-moved" {
 				t.Fatal("latest message list must receive message events")
 			}
-			// An empty channel still loads it: messages swapped in later need it.
-			url, err := static.ScriptURL(t.Context(), "message-time")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if script := `src="` + url + `" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
-				t.Errorf("missing %q", script)
+			// An empty channel still loads them: messages swapped in later need them.
+			for _, name := range []string{"message-time", "pins-sync"} {
+				url, err := static.ScriptURL(t.Context(), name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if script := `src="` + url + `" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
+					t.Errorf("missing %q", script)
+				}
 			}
 			if len(tt.reader.entries) == 0 {
 				return

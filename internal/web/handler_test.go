@@ -89,18 +89,16 @@ func TestStaticBundleRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	for _, name := range []string{"css/app.css", "dist/manifest.json", strings.TrimPrefix(bundleURL, "/static/")} {
-		data, err := fs.ReadFile(static.FS(), name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, data, 0o644); err != nil {
-			t.Fatal(err)
-		}
+	copyScriptAssets(t, dir)
+	data, err := fs.ReadFile(static.FS(), "css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "css"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "css/app.css"), data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	// A real stale bundle isolates registry rejection from the filesystem's 404.
 	if err := os.WriteFile(filepath.Join(dir, "dist", "old-ABCDEFGH.js"), []byte("console.log('stale');"), 0o644); err != nil {

@@ -42,7 +42,7 @@ Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process. These authentication network limits are unchanged by
-member budgets ([posts/pins](member-admission.md)); an identity-side layer
+member budgets ([posts/pins/images](member-admission.md)); an identity-side layer
 is tracked in #99.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
@@ -69,7 +69,7 @@ keys. Refused requests create no buckets, take no tokens and do not extend
 retention. Admission and eviction are serialized, including concurrent
 requests for the same member.
 
-`Services.MemberLimits` groups all nine in-memory member budgets, including
+`Services.MemberLimits` groups all ten in-memory member budgets, including
 send-key preferences. `web.NewMemberLimits` constructs distinct limiters behind
 private fields and accessors; the zero group fails startup. `orgRoutes` takes `Services`
 and wires these budgets to their handlers. Share one group per process. Restart

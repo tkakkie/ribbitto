@@ -373,6 +373,7 @@ test("saving, tombstones, monotonic times, trimming and snapshot eligibility", (
   assert.equal(nextEditTime(200, 100), 201);
   assert.equal(nextEditTime(100, 150), 150);
   assert.equal(nextSendEditTime(120, 150), 151);
+  assert.equal(nextSendEditTime(150, 120), 150);
   assert.equal(shouldWriteDraft(100, 100), false);
   assert.equal(shouldWriteDraft(105, 100), false);
   assert.equal(shouldWriteDraft(99, 100), true);
@@ -388,10 +389,10 @@ test("saving, tombstones, monotonic times, trimming and snapshot eligibility", (
   assert.equal(isSendDetail({ key: sendKeyA, body: 5 }), false);
   assert.equal(isSendDetail(undefined), false);
   assert.equal(isSendDetail({ key: sendKeyA, body: "" }), true);
-  assert.deepEqual(prepareSendSnapshot({ key: sendKeyA, body: "  ", inPlace: false }, 20, 25), {
-    text: "", at: 26, source: sendKeyA, savedKey: null, sending: { key: sendKeyA, inPlace: false },
+  assert.deepEqual(prepareSendSnapshot({ key: sendKeyA, body: "  ", inPlace: false }), {
+    text: "", source: sendKeyA, savedKey: null, sending: { key: sendKeyA, inPlace: false },
   });
-  const sentSnap = prepareSendSnapshot({ key: sendKeyA, body: "sent text", inPlace: true }, 20, 15);
+  const sentSnap = prepareSendSnapshot({ key: sendKeyA, body: "sent text", inPlace: true });
   assert.equal(sentSnap?.savedKey, sendKeyA);
   assert.deepEqual(matchSentSnapshot(sentSnap?.sending, sendKeyA), { key: sendKeyA, inPlace: true });
   assert.equal(matchSentSnapshot(sentSnap?.sending, sendKeyB), null);
@@ -506,6 +507,30 @@ test("sending edits first: the saved time comes from the edit's clock sample and
   assert.equal(saved.at, nowMs + 1000);
   assert.equal(saved.text, "sent");
   assert.equal(saved.key, sendKeyA);
+});
+
+test("sending assigns the snapshot before coercing a malformed stored timestamp, as v7 did", async () => {
+  const openKey = draftKey(memberA, sessionPage, channelA, "feed");
+  const storage = makeStorage([]);
+  let thrown = null;
+  await withAdapter(storage, () => nowMs, async ({ body }) => {
+    storage.setItem(openKey, JSON.stringify({ at: { toString: null } }));
+    const prevUncaught = process.rawListeners("uncaughtException");
+    process.removeAllListeners("uncaughtException");
+    try {
+      const uncaught = new Promise((resolve) => process.once("uncaughtException", resolve));
+      body.dispatchEvent(new CustomEvent("message-sending", { bubbles: true, detail: { key: sendKeyA, body: "sent", inPlace: false } }));
+      thrown = await uncaught;
+    } finally {
+      for (const fn of prevUncaught) process.on("uncaughtException", fn);
+    }
+    storage.removeItem(openKey);
+    globalThis.window.dispatchEvent(new Event("pagehide"));
+  });
+  assert.equal(thrown instanceof TypeError, true);
+  const saved = JSON.parse(storage.getItem(openKey));
+  assert.equal(saved.key, sendKeyA);
+  assert.equal(saved.text, "sent");
 });
 
 test("sending after the session expired writes nothing and removes the session's drafts, as v7 did", async () => {

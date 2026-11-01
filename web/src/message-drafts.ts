@@ -9,7 +9,7 @@ import {
 import {
   type ExpiryState, type SendingSnapshot, DraftPrefix, SignedOutNoticeKey,
   canReplaceSnapshot, checkSessionExpired, collectDraftPlaces, draftKey, isSendDetail, isSessionDraftKey, isValidDraftEntry,
-  marked, matchSentSnapshot, nextEditTime, nextExpiryDelay, normalizeDraftText, parseDraftEntry,
+  marked, matchSentSnapshot, nextEditTime, nextExpiryDelay, nextSendEditTime, normalizeDraftText, parseDraftEntry,
   parseDraftKey, parsePageScope, parseSidebarPlace, pendingActionDecision, prepareSendSnapshot,
   restoredSendKey, selectKeysToTrim, shouldWriteDraft, sweepKeys,
 } from "./drafts.ts";
@@ -126,12 +126,12 @@ try {
         listenMessageSendingEvent(body, (detail) => {
           if (!isSendDetail(detail)) return;
           edited();
-          const snap = prepareSendSnapshot(detail, at, read(key)?.at);
+          const snap = prepareSendSnapshot(detail);
           text = snap.text;
           source = snap.source;
           savedKey = snap.savedKey;
           sending = snap.sending;
-          at = snap.at;
+          at = nextSendEditTime(at, read(key)?.at);
           save(true);
         });
         const replaceSnapshot = (sendKey: string, inPlace = false): void => {

@@ -130,14 +130,11 @@ export type SendDetail = { readonly key: string; readonly body: string; readonly
 export const isSendDetail = (detail: { readonly key?: string | null; readonly body?: unknown } | null | undefined): detail is SendDetail =>
   Boolean(detail?.key) && typeof detail?.body === "string";
 
-// Call after `edited()`: the send time is read from the edited `at` and the stored entry in that order, as v7 did.
 export function prepareSendSnapshot(
   detail: SendDetail,
-  editedAt: number,
-  storedAt: unknown,
-): { readonly text: string; readonly at: number; readonly source: string; readonly savedKey: string | null; readonly sending: SendingSnapshot } {
+): { readonly text: string; readonly source: string; readonly savedKey: string | null; readonly sending: SendingSnapshot } {
   const text = normalizeDraftText(detail.body);
-  return { text, at: nextSendEditTime(editedAt, storedAt), source: detail.key, savedKey: text ? detail.key : null, sending: { key: detail.key, inPlace: Boolean(detail.inPlace) } };
+  return { text, source: detail.key, savedKey: text ? detail.key : null, sending: { key: detail.key, inPlace: Boolean(detail.inPlace) } };
 }
 
 export const matchSentSnapshot = (sending: SendingSnapshot | null | undefined, sentKey: string | null | undefined): SendingSnapshot | null =>

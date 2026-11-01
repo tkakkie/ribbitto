@@ -93,7 +93,13 @@ func FuzzMessageBodyHTML(f *testing.F) {
 		if rendered == nil {
 			t.Fatalf("body %q: no body element in %q", body, out.String())
 		}
+		// The body element itself is the template's too, so it is held to the
+		// same allow-list as what it contains.
+		nodes := []*html.Node{rendered}
 		for n := range rendered.Descendants() {
+			nodes = append(nodes, n)
+		}
+		for _, n := range nodes {
 			if n.Type == html.TextNode {
 				continue
 			}

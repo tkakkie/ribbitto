@@ -85,7 +85,7 @@ Mount only read-only source and empty output:
 build_steps='
 ! command -v node || exit 1
 cp -R "$1" gen; chmod -R u+w gen; cd gen
-"$4" -C tools run -mod=readonly -buildvcs=false ./webbuild .. "$3" measurement message-time
+"$4" -C tools run -mod=readonly -buildvcs=false ./webbuild .. "$3" measurement
 d=$(diff -qr "$1" .) && exit 1
 test "$d" = "Only in ./web/static: dist"; printf "%s\n" "$d"
 GOOS=darwin GOARCH=arm64 "$4" build -mod=readonly -trimpath -buildvcs=false -o "$2/ribbitto" ./cmd/ribbitto

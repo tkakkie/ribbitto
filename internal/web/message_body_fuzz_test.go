@@ -32,6 +32,11 @@ var bodyMarkup = map[string]map[string]bool{
 	"br":         {},
 }
 
+// bodyDir is the elements the templates always give dir="auto".
+var bodyDir = map[string]bool{
+	"div": true, "p": true, "pre": true, "code": true, "blockquote": true, "strong": true, "em": true, "a": true,
+}
+
 // FuzzMessageBodyHTML renders a chat_v1 body as the channel page and the
 // stream do (viewMessage, then view.MessageItem) and parses the HTML back.
 // A body is the one place an author's text reaches every member's page, so
@@ -106,6 +111,12 @@ func FuzzMessageBodyHTML(f *testing.F) {
 			allowed, ok := bodyMarkup[n.Data]
 			if n.Type != html.ElementNode || !ok {
 				t.Fatalf("body %q renders node %d %q", body, n.Type, n.Data)
+			}
+			// A missing attribute is as much a regression as an extra one: every
+			// element below carries dir="auto" (the <code> inside <pre> is the one
+			// that does not).
+			if bodyDir[n.Data] && !(n.Data == "code" && n.Parent != nil && n.Parent.Data == "pre") && attr(n, "dir") != "auto" {
+				t.Fatalf("body %q renders <%s> without dir=\"auto\"", body, n.Data)
 			}
 			for _, a := range n.Attr {
 				if !allowed[a.Key] {

@@ -185,7 +185,7 @@ func inspect(files map[string]string) []string {
 	if err := json.Unmarshal([]byte(files["tsconfig.json"]), &config); err != nil {
 		problems = append(problems, "tsconfig.json: "+err.Error())
 	} else if !validConfig(config) {
-		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; strict-family overrides must be true; no exclude, files or extends; keys are case-sensitive")
+		problems = append(problems, "tsconfig.json: require exact typed include, strict and noEmit; noCheck must be false or absent; strict-family overrides must be true; no exclude, files or extends; keys are case-sensitive")
 	}
 	return problems
 }
@@ -200,6 +200,12 @@ func validConfig(config map[string]json.RawMessage) bool {
 		json.Unmarshal(options["noEmit"], &noEmit) != nil {
 		return false
 	}
+	if value, ok := options["noCheck"]; ok {
+		var enabled *bool
+		if json.Unmarshal(value, &enabled) != nil || enabled == nil || *enabled {
+			return false
+		}
+	}
 	strictFamily := []string{"noImplicitAny", "strictNullChecks", "strictFunctionTypes", "strictBindCallApply", "strictPropertyInitialization", "noImplicitThis", "useUnknownInCatchVariables", "alwaysStrict", "strictBuiltinIteratorReturn"}
 	if hasCaseVariant(options, strictFamily...) {
 		return false
@@ -213,7 +219,7 @@ func validConfig(config map[string]json.RawMessage) bool {
 		}
 	}
 	return !hasCaseVariant(config, "include", "exclude", "files", "extends", "compilerOptions") &&
-		!hasCaseVariant(options, "strict", "noEmit") &&
+		!hasCaseVariant(options, "strict", "noEmit", "noCheck") &&
 		config["exclude"] == nil && config["files"] == nil && config["extends"] == nil &&
 		slices.Equal(include, []string{"web/src/**/*.ts"}) && strict && noEmit
 }

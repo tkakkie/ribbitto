@@ -43,8 +43,9 @@ only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule
 prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
-exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true` and no
-`exclude`, `files` or `extends`; checked keys are case-sensitive. Strict-family
+exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true`,
+`noCheck` absent or `false`, and no `exclude`, `files` or `extends`;
+checked keys are case-sensitive. Strict-family
 overrides must be `true`. Only `.ts` under `web/src/` is type-checked; other
 TypeScript files fail. Raw-source checks reject `@ts-nocheck` in tracked
 `.ts`, `.tsx`, `.mts`, `.cts`, inline script tags without `src` (any case)

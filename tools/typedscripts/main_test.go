@@ -67,6 +67,44 @@ func TestRules(t *testing.T) {
 	}
 }
 
+func TestNoCheck(t *testing.T) {
+	for _, tc := range []struct{ name, good, bad string }{
+		{"false vs true", `"noCheck":false,`, `"noCheck":true,`},
+		{"absent vs true", "", `"noCheck":true,`},
+		{"case variant", `"noCheck":false,`, `"NoCheck":false,`},
+		{"uppercase variant", `"noCheck":false,`, `"NOCHECK":false,`},
+		{"case shadow", `"noCheck":false,`, `"noCheck":false,"NoCheck":false,`},
+		{"uppercase shadow", `"noCheck":false,`, `"noCheck":false,"NOCHECK":false,`},
+		{"string", `"noCheck":false,`, `"noCheck":"true",`},
+		{"number", `"noCheck":false,`, `"noCheck":1,`},
+		{"null", `"noCheck":false,`, `"noCheck":null,`},
+		{"object", `"noCheck":false,`, `"noCheck":{},`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, twin := range []struct {
+				name, options string
+				negative      bool
+			}{
+				{"passing twin", tc.good, false},
+				{"negative twin", tc.bad, true},
+			} {
+				t.Run(twin.name, func(t *testing.T) {
+					files := fixture()
+					files["tsconfig.json"] = strings.Replace(config, `"strict":true`, twin.options+`"strict":true`, 1)
+					got := inspect(files)
+					if twin.negative {
+						if len(got) != 1 || !strings.Contains(got[0], "exact typed include") {
+							t.Fatalf("negative twin: %v; want one exact typed include", got)
+						}
+					} else if len(got) != 0 {
+						t.Fatalf("passing twin: %v", got)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestStrictFamily(t *testing.T) {
 	for _, name := range []string{"noImplicitAny", "strictNullChecks", "strictFunctionTypes", "strictBindCallApply", "strictPropertyInitialization", "noImplicitThis", "useUnknownInCatchVariables", "alwaysStrict", "strictBuiltinIteratorReturn"} {
 		t.Run(name, func(t *testing.T) {

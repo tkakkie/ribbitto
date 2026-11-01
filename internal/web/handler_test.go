@@ -88,6 +88,10 @@ func TestStaticBundleRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	composerURL, err := static.ScriptURL(t.Context(), "composer")
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	copyScriptAssets(t, dir)
 	data, err := fs.ReadFile(static.FS(), "css/app.css")
@@ -113,6 +117,7 @@ func TestStaticBundleRegistry(t *testing.T) {
 		code int
 	}{
 		{bundleURL, http.StatusOK},
+		{composerURL, http.StatusOK},
 		{"/static/dist/old-ABCDEFGH.js", http.StatusNotFound},
 	} {
 		t.Run(tt.path, func(t *testing.T) {

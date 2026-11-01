@@ -91,7 +91,7 @@ and so is HTML or CSS that fails one of the four points.
   `animationcancel`, `data-arrive-pill` on `#sidebar-channels`
   `htmx:oobBeforeSwap`, and any mark whose animation is not running on
   `DOMContentLoaded`.
-- **Composer `visualViewport` handling in `web/static/message-composer-v21.js`:**
+- **Composer `visualViewport` handling in `web/src/composer.ts`:**
   iOS Safari's keyboard shrinks and pans the visual viewport without changing
   `dvh` (point 2). The script writes `--composer-viewport-h` and
   `--composer-viewport-top` on `#organization-stream` when `visualViewport`
@@ -99,7 +99,7 @@ and so is HTML or CSS that fails one of the four points.
   fallback ([`ui-composer.md`](../ui-composer.md)).
 - **Scroll position (`web/static/message-history-v2.js`,
   `web/static/sidebar-scroll-v2.js`, and list anchoring in
-  `web/static/message-composer-v21.js`):** these scripts stay for now. Replacing
+  `web/src/composer.ts`):** these scripts stay for now. Replacing
   message-list anchoring with `flex-direction: column-reverse` or
   `overflow-anchor` fails point 4 today and touches reading order, so it is left
   to the prototype and measurements of `#1361`; centring an out-of-view

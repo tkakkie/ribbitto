@@ -27,6 +27,7 @@ func TestScriptManifest(t *testing.T) {
 	for _, tc := range []struct{ name, entries, file, want string }{
 		{"valid", entry, file, ""},
 		{"missing declaration", "", file, "missing declared entry"},
+		{"missing composer", entry, file, "missing declared entry"},
 		{"missing bundle", entry, "other.js", "reading script bundle"},
 		{"unknown entry", entry + `,"other":{}`, file, "unknown entry"},
 		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "invalid bundle filename"},
@@ -37,6 +38,9 @@ func TestScriptManifest(t *testing.T) {
 			entries := tc.entries
 			assets := fstest.MapFS{"dist/" + tc.file: {Data: []byte(bundle)}}
 			for name := range embedded.Entries {
+				if name == "composer" && tc.name == "missing composer" {
+					continue
+				}
 				if name != "message-time" && entries != "" && entries != "{" {
 					entries += fmt.Sprintf(`,%q:{"file":"%s-ABCDEFGH.js","sha256":"%x"}`, name, name, sum)
 					assets["dist/"+name+"-ABCDEFGH.js"] = &fstest.MapFile{Data: []byte(bundle)}

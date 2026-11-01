@@ -63,7 +63,8 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 Hashed bundles are immutable; the fixed-name manifest is not public.
 Unconverted application scripts retain versioned URLs.
 
-`message-composer-v21.js` loads with the response nonce on channel pages.
+Channel pages load a content-hashed bundle from `/static/dist/`, built from
+`web/src/composer.ts`, with the response nonce.
 It anchors the list during [composer growth](../ui-composer.md) and handles
 [quote focus and locking](web-javascript.md#javascript).
 `requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or

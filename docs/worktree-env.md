@@ -31,7 +31,7 @@ failures and SQL failures without credentials;
 this; its Go tests cover each rule.
 
 Build with `go build -o bin/ai-capacity ./cmd/capacity`, then run
-`bin/ai-capacity WT1 WT2 PACKAGES PARALLEL` outside the sandbox, with this
+`bin/ai-capacity WT1 WT2 PACKAGES PARALLEL` with this
 change in both worktrees and `bin/ai-db` built. Run the built binary so targeted
 signals reach its cleanup handler. It reports
 two uncached required-DB checks' exit codes and counts of lines matching

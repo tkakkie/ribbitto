@@ -85,7 +85,7 @@ non-execution of moved materialisation, and compares counts with a normal page.
 The before run used the same fixture/test with production files restored from
 `codex/sidebar-assembly`; its zero-first assertions failed as expected. Normal
 page first unread remained 2/2 in both runs. Commands and plan excerpts are in
-the local PR handoff.
+the pull request.
 
 ## Expected load
 

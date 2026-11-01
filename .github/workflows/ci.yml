@@ -84,9 +84,9 @@ jobs:
             exit 1
           fi
 
-      # make check is check-static, check-test and check-tools in order;
-      # this job runs the first and the third. tools/download pins
-      # golangci-lint for both local checks and CI, invoked by the Makefile.
+      # make check is check-static, check-test, check-tools, check-web and
+      # test-web in order; this job runs the first and the third. tools/download
+      # pins golangci-lint for both local checks and CI, invoked by the Makefile.
       - name: check-static
         run: make check-static
 

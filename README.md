@@ -24,7 +24,7 @@ the [vision](docs/vision.md).
 - **Nothing to learn:** every channel has a default topic, so you talk
   first and branch a conversation into its own topic later.
 - Messages arrive in real time, with presence and typing indicators.
-- Server-rendered HTML with htmx: one Go binary, no JavaScript build step.
+- Server-rendered HTML with htmx: one Go binary, with a Go-driven front-end build.
 - English and Japanese UI.
 - Easy to self-host: a container image and a Compose file with PostgreSQL
   and Caddy.

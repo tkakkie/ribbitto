@@ -32,13 +32,13 @@ type readBrowserRequest struct {
 // timers still run normally. Gates hold real HTTP responses across all pages.
 const readBrowserClock = `(() => {
  const timers = new Map(); let next = 0;
- window.readTest = {completed: 0, started: 0, active: 0, maxActive: 0, maxTimers: 0, random: 0};
+ window.readTest = {completed: 0, started: 0, active: 0, maxActive: 0, maxTimers: 0, random: 0, now: 1700000000000, step: 0};
  const test = window.readTest, original = window.setTimeout, cancel = window.clearTimeout;
  Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => test.hidden ? 'hidden' : 'visible'});
- Math.random = () => test.random;
- Date.now = () => 1700000000000;
+ Math.random = () => { test.now += test.step; return test.random; };
+ Date.now = () => test.now;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!new Error().stack.includes('read-visibility-v6.js')) return original(fn, ms, ...args);
+  if (typeof fn !== 'function' || !fn.readRetry) return original(fn, ms, ...args);
   const id = --next; timers.set(id, {fn: () => fn(...args), ms});
   test.maxTimers = Math.max(test.maxTimers, timers.size); return id;
  };
@@ -205,12 +205,14 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			if round == 2 {
 				after, low, high = "Tue, 14 Nov 2023 22:13:30 GMT", 10000, 10000
+				page.MustEval(`() => { readTest.step = 100; }`)
 			}
 			if round == 3 {
 				after = "invalid"
 			}
 			page.MustEval(`r => { readTest.random = r; }`, float64(round%2)*0.999)
 			finish(t, request, 429, after, round)
+			page.MustEval(`() => { readTest.step = 0; readTest.now = 1700000000000; }`)
 			assertDelay(t, page, low, high)
 			if after == "" || after == "invalid" {
 				delay := high * (0.5 + float64(round%2)*0.999/2)
@@ -310,5 +312,56 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 			finish(t, request, 204, "", 3)
 			assertState(t, page, 0, 3)
 		}
+	})
+	t.Run("malformed-settlement-and-null-attempt", func(t *testing.T) {
+		page := open(t, "malformed", false)
+		finish(t, next(t), 429, "", 1)
+		page.MustEval(`() => readTest.advance()`)
+		request := next(t)
+		page.MustEval(`() => {
+			document.querySelector('#organization-stream').dataset.appliedCursor = 'bad';
+			document.querySelector('#read-form').dispatchEvent(new CustomEvent('htmx:configRequest', {detail: {triggeringEvent: {type: 'submit'}, parameters: {}}}));
+		}`)
+		finish(t, request, 204, "", 2)
+		page.MustEval(`() => {
+			readTest.random = 0;
+			document.querySelector('#organization-stream').dataset.appliedCursor = '105';
+			document.querySelector('#read-form button[type=submit]').click();
+		}`)
+		finish(t, next(t), 429, "", 3)
+		assertDelay(t, page, 500, 500)
+		page.MustEval(`() => readTest.advance()`)
+		request = next(t)
+		page.MustEval(`() => { document.querySelector('#organization-stream').dataset.appliedCursor = 'bad'; }`)
+		finish(t, request, 500, "", 4)
+		page.MustEval(`() => readTest.apply('104')`)
+		request = next(t)
+		if request.cursor != "104" {
+			t.Fatalf("repaired cursor=%s, want 104", request.cursor)
+		}
+		finish(t, request, 204, "", 5)
+		page.MustEval(`() => {
+			const good = document.querySelector('#read-form'), bad = good.cloneNode(true), fresh = good.cloneNode(true);
+			good.removeAttribute('id');
+			bad.elements.cursor.value = 'bad';
+			good.after(bad);
+			htmx.process(bad);
+			try { htmx.trigger(bad, 'htmx:load', {elt: bad}); } catch {}
+			try { htmx.trigger(bad, 'read-visible'); } catch {}
+			fresh.elements.cursor.value = '220';
+			bad.after(fresh);
+			htmx.process(fresh);
+			htmx.trigger(fresh, 'htmx:load', {elt: fresh});
+		}`)
+		request = next(t)
+		if request.cursor != "bad" {
+			t.Fatalf("malformed snapshot cursor=%s, want bad", request.cursor)
+		}
+		finish(t, request, 204, "", 6)
+		request = next(t)
+		if request.cursor != "220" {
+			t.Fatalf("null-attempt flush cursor=%s, want 220", request.cursor)
+		}
+		finish(t, request, 204, "", 7)
 	})
 }

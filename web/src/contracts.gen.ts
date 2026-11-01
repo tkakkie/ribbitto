@@ -242,6 +242,7 @@ export function listenTypingInputEvent(target: EventTarget, listener: (detail: T
 
 export const ArrivePillAttribute = "data-arrive-pill";
 export const ArrivePanelAttribute = "data-arrive-panel";
+export const AriaModalAttribute = "aria-modal";
 export const SidePanelID = "side-panel";
 export const sidePanelSelector = (): string => "#" + SidePanelID;
 export const getSidePanel = (root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(sidePanelSelector());
@@ -264,14 +265,41 @@ export const panelControlPrefixSelector = (suffix: string): string => "#" + pane
 export const getPanelControlPrefix = (suffix: string, root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(panelControlPrefixSelector(suffix));
 
 export const PanelCoverEvent = "panel-cover";
-export type PanelCoverDetail = Record<string, never>;
-export function dispatchPanelCoverEvent(target: EventTarget, detail: PanelCoverDetail): boolean {
-  return target.dispatchEvent(new CustomEvent(PanelCoverEvent, { bubbles: true, detail }));
+export function dispatchPanelCoverEvent(target: EventTarget): boolean {
+  return target.dispatchEvent(new Event(PanelCoverEvent));
 }
-export function listenPanelCoverEvent(target: EventTarget, listener: (detail: PanelCoverDetail) => void): () => void {
-  const handle = (event: Event): void => listener((event as CustomEvent<PanelCoverDetail>).detail);
-  target.addEventListener(PanelCoverEvent, handle);
-  return () => target.removeEventListener(PanelCoverEvent, handle);
+export function listenPanelCoverEvent(target: EventTarget, listener: () => void): () => void {
+  target.addEventListener(PanelCoverEvent, listener);
+  return () => target.removeEventListener(PanelCoverEvent, listener);
+}
+
+export const ReadFormID = "read-form";
+export const readFormSelector = (): string => "#" + ReadFormID;
+export const getReadForm = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(readFormSelector());
+
+export const CursorField = "cursor";
+export const getCursorField = (form: HTMLFormElement): HTMLInputElement => (form.elements as HTMLFormControlsCollection & Record<typeof CursorField, HTMLInputElement>)[CursorField];
+
+export const ReadAppliedEvent = "read-applied";
+export type ReadAppliedDetail = Record<string, never>;
+export function dispatchReadAppliedEvent(target: EventTarget, detail: ReadAppliedDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(ReadAppliedEvent, { bubbles: true, detail }));
+}
+export function listenReadAppliedEvent(target: EventTarget, listener: (detail: ReadAppliedDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<ReadAppliedDetail>).detail);
+  target.addEventListener(ReadAppliedEvent, handle);
+  return () => target.removeEventListener(ReadAppliedEvent, handle);
+}
+
+export const ReadVisibleEvent = "read-visible";
+export type ReadVisibleDetail = Record<string, never>;
+export function dispatchReadVisibleEvent(target: EventTarget, detail: ReadVisibleDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(ReadVisibleEvent, { bubbles: true, detail }));
+}
+export function listenReadVisibleEvent(target: EventTarget, listener: (detail: ReadVisibleDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<ReadVisibleDetail>).detail);
+  target.addEventListener(ReadVisibleEvent, handle);
+  return () => target.removeEventListener(ReadVisibleEvent, handle);
 }
 
 export const PinsSectionID = "pins-section";
@@ -284,6 +312,6 @@ export const PinControlAttribute = "data-pin-control";
 export const PinActionAttribute = "data-pin-action";
 export const PinnedAttribute = "data-pinned";
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute;
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

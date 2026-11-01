@@ -13,8 +13,12 @@ const (
  BodyID = "message-body"
  //dom:suffix HTMLLIElement
  ChannelDOMPrefix = "channel-"
+ //dom:field HTMLInputElement
+ CursorField = "cursor"
  //dom:attribute
  Count = "data-unread-count"
+ //dom:attribute
+ Modal = "aria-modal"
  //dom:event Detail
  Changed = "sidebar-resync"
 )
@@ -42,6 +46,12 @@ func TestLiteralForms(t *testing.T) {
 		"el.querySelector(`#channel-${id}`)",
 		"el.querySelector(`li[data-x=\"${{ id }.id}-${n}\"] #message-body`)",
 		`el.matches("[data-unread-count]")`, `el.matches('[data-unread-count="1"]')`,
+		`el.matches("[aria-modal]")`, `el.matches('[aria-modal="true"]')`,
+		`el.getAttribute("aria-modal")`, `el.setAttribute("aria-modal", "true")`, `el.removeAttribute("aria-modal")`,
+		`form.elements.cursor`, `form.elements["cursor"]`, `form.elements.namedItem("cursor")`,
+		`event.detail.parameters.cursor`, `event.detail.parameters['cursor']`,
+		`type ReadForm = Record<"cursor", HTMLInputElement>`,
+		`form.querySelector('[name="cursor"]')`,
 		`el.dataset.unreadCount`, `el.dataset["unreadCount"]`, `dataset['unreadCount']`,
 		`new Event("sidebar-resync")`, `new CustomEvent('sidebar-resync', {})`,
 		`el.addEventListener("sidebar-resync", fn)`, `el.removeEventListener('sidebar-resync', fn)`,
@@ -50,7 +60,7 @@ func TestLiteralForms(t *testing.T) {
 	for _, method := range []string{"getAttribute", "setAttribute", "hasAttribute", "removeAttribute", "toggleAttribute"} {
 		forms = append(forms, `el.`+method+`("data-unread-count", "1")`)
 	}
-	templates := []string{`<div id="message-body"/>`, `<li id="channel-0123456789abcdef0123456789abcdef"/>`, `<div data-unread-count={ count }/>`, `<div data-unread-count?={ b }/>`, `<div data-unread-count/>`, `<div data-unread-count hidden/>`, `<div { "data-unread-count" }={ count }/>`, `<div id={ "message-body" }/>`}
+	templates := []string{`<div id="message-body"/>`, `<li id="channel-0123456789abcdef0123456789abcdef"/>`, `<input type="hidden" name="cursor"/>`, `<div aria-modal="true"/>`, `<div data-unread-count={ count }/>`, `<div data-unread-count?={ b }/>`, `<div data-unread-count/>`, `<div data-unread-count hidden/>`, `<div { "data-unread-count" }={ count }/>`, `<div id={ "message-body" }/>`}
 	for _, attr := range []string{"hx-target", "hx-select", "hx-select-oob", "hx-sync", "hx-trigger"} {
 		value := "#message-body:replace"
 		if attr == "hx-trigger" {

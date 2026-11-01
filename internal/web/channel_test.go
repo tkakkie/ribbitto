@@ -313,7 +313,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	}
 	stream := "/organizations/acme/events?after=42&want=sidebar&channel=" + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/")
 	mains, topics, streams, scripts := 0, 0, 0, map[string]bool{}
-	hasComposer := false
+	hasComposer, hasRead := false, false
 	for n := range doc.Descendants() {
 		switch {
 		case n.DataAtom == atom.Main:
@@ -335,6 +335,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 			src := attr(n, "src")
 			scripts[src] = true
 			hasComposer = hasComposer || strings.HasPrefix(src, "/static/dist/composer-")
+			hasRead = hasRead || strings.HasPrefix(src, "/static/dist/read-visibility-")
 		}
 	}
 	if mains != 1 || topics != 1 || streams != 1 {
@@ -344,8 +345,8 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The list has no composer, so its script must be absent.
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v14.js"] || scripts["/static/read-visibility-v6.js"] || scripts[pinsSyncURL] || hasComposer {
+	// The list has no composer or read form, so their scripts must be absent.
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v14.js"] || hasRead || scripts[pinsSyncURL] || hasComposer {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {

@@ -91,12 +91,26 @@ func generate(source []byte) (string, error) {
 				call = "suffix"
 			}
 			fmt.Fprintf(&out, "export const get%s = (%sroot: ParentNode = document): %s | null => root.querySelector<%s>(%sSelector(%s));\n\n", base, args, parts[1], parts[1], lower, call)
+		case "field":
+			if len(parts) != 2 || !strings.HasPrefix(parts[1], "HTML") || !strings.HasSuffix(parts[1], "Element") {
+				return "", fmt.Errorf("%s needs a DOM element type", name)
+			}
+			base := strings.TrimSuffix(name, "Field")
+			if base == "" {
+				return "", fmt.Errorf("naming %s: empty field name after removing Field suffix", name)
+			}
+			fmt.Fprintf(&out, "export const get%sField = (form: HTMLFormElement): %s => (form.elements as HTMLFormControlsCollection & Record<typeof %s, %s>)[%s];\n\n", base, parts[1], name, parts[1], name)
 		case "attribute":
-			if len(parts) != 1 || !strings.HasPrefix(text, "data-") {
+			if len(parts) != 1 || !(strings.HasPrefix(text, "data-") || strings.HasPrefix(text, "aria-")) {
 				return "", fmt.Errorf("invalid attribute %s", name)
 			}
 			attributes = append(attributes, "typeof "+name)
 		case "event":
+			if len(parts) == 1 {
+				fmt.Fprintf(&out, "export function dispatch%s(target: EventTarget): boolean {\n  return target.dispatchEvent(new Event(%s));\n}\n", name, name)
+				fmt.Fprintf(&out, "export function listen%s(target: EventTarget, listener: () => void): () => void {\n  target.addEventListener(%s, listener);\n  return () => target.removeEventListener(%s, listener);\n}\n\n", name, name, name)
+				break
+			}
 			if len(parts) != 2 {
 				return "", fmt.Errorf("%s needs a payload struct", name)
 			}

@@ -88,7 +88,7 @@ func check(root string) ([]string, error) {
 // Tokens retain offsets for diagnostics and keep comments and quoted prose from
 // looking like calls. This is deliberately lexical, not a TypeScript/templ AST.
 var tokens = regexp.MustCompile("(?s)<!--.*?-->|//[^\n]*|/\\*.*?\\*/|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|`[^`]*`|[\\pL\\pN_$-]+|[^\\s]")
-var hooks = regexp.MustCompile(`#[\pL\pN_-]+|\[\s*(data-[\w-]+)(?:\s|[~|^$*]?=|\])`)
+var hooks = regexp.MustCompile(`#[\pL\pN_-]+|\[\s*((?:data|aria)-[\w-]+)(?:\s|[~|^$*]?=|\])|\[\s*name\s*[~|^$*]?=\s*["']?([\w-]+)`)
 var hexSuffix = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func findings(source string, template bool, definitions []domcontract.Definition) []int {
@@ -148,7 +148,7 @@ func findings(source string, template bool, definitions []domcontract.Definition
 			}
 			selector := false
 			for _, hook := range hooks.FindAllStringSubmatch(selectorValue, -1) {
-				selector = selector || strings.HasPrefix(hook[0], "#") && id(hook[0][1:]) || kind == "attribute" && hook[1] == name
+				selector = selector || strings.HasPrefix(hook[0], "#") && id(hook[0][1:]) || kind == "attribute" && hook[1] == name || kind == "field" && hook[2] == name
 			}
 			bad := false
 			if template {
@@ -164,6 +164,9 @@ func findings(source string, template bool, definitions []domcontract.Definition
 				if attribute && key == "id" {
 					bad = id(value)
 				}
+				if attribute && key == "name" {
+					bad = kind == "field" && value == name
+				}
 				if attribute && oneOf(key, "hx-target hx-select hx-select-oob hx-sync hx-trigger") {
 					bad = selector || kind == "event" && eventToken(value, name)
 				}
@@ -173,6 +176,8 @@ func findings(source string, template bool, definitions []domcontract.Definition
 					switch at(-2) {
 					case "getElementById":
 						bad = bad || (kind == "suffix" || at(1) == ")" || at(1) == ",") && id(value)
+					case "namedItem":
+						bad = bad || kind == "field" && value == name
 					case "getAttribute", "setAttribute", "hasAttribute", "removeAttribute", "toggleAttribute":
 						bad = bad || kind == "attribute" && value == name
 					case "addEventListener", "removeEventListener":
@@ -181,10 +186,15 @@ func findings(source string, template bool, definitions []domcontract.Definition
 						bad = bad || at(-3) == "new" && kind == "event" && value == name
 					}
 				}
-				if kind == "attribute" {
+				if kind == "attribute" && strings.HasPrefix(name, "data-") {
 					key := datasetKey(name)
 					bad = bad || at(-1) == "." && at(-2) == "dataset" && word == key
 					bad = bad || quoted && at(-1) == "[" && at(-2) == "dataset" && at(1) == "]" && value == key
+				}
+				if kind == "field" {
+					bad = bad || at(-1) == "." && oneOf(at(-2), "elements parameters") && word == name
+					bad = bad || quoted && at(-1) == "[" && oneOf(at(-2), "elements parameters") && at(1) == "]" && value == name
+					bad = bad || quoted && at(-1) == "<" && at(-2) == "Record" && value == name
 				}
 				bad = bad || quoted && kind == "event" && value == name && triggerArgument(words[:i])
 			}

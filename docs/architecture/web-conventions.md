@@ -89,7 +89,7 @@ Queue state (`"queued"`, `"sending"`, `"failed"`, `"confirmed"`), uncertainty
 (`data-unconfirmed`) and draft identity (`data-draft-key`) still live in
 DOM attributes, through generated accessors, until queue adoption in #1825.
 
-**Former message-composer-v21.js snippet:**
+**Snippet from before the typed composer entry:**
 
 ```js
   const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];

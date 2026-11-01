@@ -226,9 +226,9 @@ const (
 )
 
 // MessageSendingDetail binds a draft snapshot to its sending identity.
-// Key is null in the contract when the page has no idempotency key; until #1824,
-// the unchanged legacy composer sends undefined, which no consumer distinguishes
-// from null (see docs/architecture/web-contracts-generated.md).
+// Key is null when the page has no idempotency key: web/src/composer.ts
+// normalizes an absent key (?.value) to null, as the contract specifies
+// (see docs/architecture/web-contracts-generated.md).
 type MessageSendingDetail struct {
 	Key     *string `json:"key"`
 	Body    string  `json:"body"`

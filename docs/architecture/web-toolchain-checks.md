@@ -32,6 +32,26 @@ and `node:assert`, without Node typings or a DOM emulator. Harnesses are outside
 tsconfig's inputs: stripping types is not checking them, so both checks remain
 required.
 
+`tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
+Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
+`web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
+exactly one file per stem. Exempt paths are the three named vendor scripts
+in `web/static/vendor/` (pinned by `vendor_test.go`)
+and direct `web/test/*.test.mjs` harnesses. On conversion, delete the old
+script and its list line together; version bumps keep the stem. The list may
+only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
+base with `origin/main`. A missing base list bootstraps from its tracked
+versioned scripts. An unreadable base fails CI; locally only the growth rule
+prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
+exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true`,
+`noCheck` absent or `false`, and no `exclude`, `files` or `extends`;
+checked keys are case-sensitive. Strict-family
+overrides must be `true`. Only `.ts` under `web/src/` is type-checked; other
+TypeScript files fail. Raw-source checks reject `@ts-nocheck` in tracked
+`.ts`, `.tsx`, `.mts`, `.cts`, inline script tags without `src` (any case)
+and templ script components in every tracked `.templ`. These checks are not
+parsers; computed imports and re-exports of untyped data remain for review.
+
 Each issue's pre-`ready` measurement record contains, for all five metrics in
 decision 43: baseline SHA, page/path and scenario, device/browser and profile,
 method, sample count and aggregation, and numeric allowed head-minus-base

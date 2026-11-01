@@ -93,6 +93,7 @@ func TestRules(t *testing.T) {
 		{".gitignore", "", true}, {".gitattributes", "", true}, {".env.example", "", true},
 		{"docs/api/a.txt", "", true}, {"docs/size-exceptions.txt", "", true},
 		{exceptionsFile, "", true}, {"tools/scopecheck/allowlist.txt", "", true},
+		{"web/legacy-scripts.txt", "", true}, {"web/nested/legacy-scripts.txt", "", false},
 		{"internal/web/testdata/browser-shard-totals.txt", "", true},
 		{"internal/conversation/testdata/fuzz/FuzzParseChatV1/a", "go test fuzz v1\n[]byte(\"x\")", true},
 		{"internal/identity/testdata/fuzz/FuzzParse/a", "go test fuzz v1", true},

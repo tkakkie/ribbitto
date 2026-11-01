@@ -17,10 +17,11 @@ import (
 func TestScriptManifest(t *testing.T) {
 	const file = "message-time-ABCDEFGH.js"
 	const bundle = "(()=>{})();"
-	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sha256.Sum256([]byte(bundle)))
+	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"},"composer":{"file":"composer-ABCDEFGH.js","sha256":"%x"}`, file, sha256.Sum256([]byte(bundle)), sha256.Sum256([]byte(bundle)))
 	for _, tc := range []struct{ name, entries, file, want string }{
 		{"valid", entry, file, ""},
 		{"missing declaration", "", file, "missing declared entry"},
+		{"missing composer", strings.Split(entry, `,"composer"`)[0], file, "missing declared entry"},
 		{"missing bundle", entry, "other.js", "reading script bundle"},
 		{"unknown entry", entry + `,"other":{}`, file, "unknown entry"},
 		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "invalid bundle filename"},
@@ -29,8 +30,9 @@ func TestScriptManifest(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assets := fstest.MapFS{
-				"dist/manifest.json": {Data: []byte(`{"entries":{` + tc.entries + `}}`)},
-				"dist/" + tc.file:    {Data: []byte(bundle)},
+				"dist/manifest.json":        {Data: []byte(`{"entries":{` + tc.entries + `}}`)},
+				"dist/" + tc.file:           {Data: []byte(bundle)},
+				"dist/composer-ABCDEFGH.js": {Data: []byte(bundle)},
 			}
 			scripts, err := static.NewScripts(assets)
 			if tc.want != "" {
@@ -103,12 +105,15 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(source), 0755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "web/src/composer.ts"), []byte(`console.log("composer");`), 0644); err != nil {
+		t.Fatal(err)
+	}
 	previous := ""
 	for _, text := range []string{`console.log("first");`, `console.log("changed");`} {
 		if err := os.WriteFile(source, []byte(text), 0644); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command(binary, root, "commit", "run", "message-time")
+		cmd := exec.Command(binary, root, "commit", "run", "message-time", "composer")
 		cmd.Env = []string{"PATH=" + t.TempDir()}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("generating without Node: %v: %s", err, out)

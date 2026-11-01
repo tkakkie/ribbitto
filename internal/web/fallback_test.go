@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/web/static"
+
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -137,19 +139,29 @@ func assertFullConversationPage(t *testing.T, body string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	composerURL, err := static.ScriptURL(t.Context(), "composer")
+	if err != nil {
+		t.Fatal(err)
+	}
 	composer := false
+	var scripts []string
 	for n := range doc.Descendants() {
 		if n.DataAtom != atom.Script {
 			continue
 		}
 		src := attr(n, "src")
-		if src == "/static/message-composer-v21.js" {
+		scripts = append(scripts, src)
+		if src == composerURL {
 			composer = true
-		} else if strings.HasPrefix(src, "/static/message-composer-") {
+		} else if strings.HasPrefix(src, "/static/dist/composer-") || strings.HasPrefix(src, "/static/message-composer-") {
 			t.Errorf("unexpected composer script %q", src)
 		}
 	}
+	order := strings.Join(scripts, " ")
+	if strings.Index(order, composerURL) > strings.Index(order, "/static/message-stream-v14.js") || strings.Index(order, "/static/message-stream-v14.js") > strings.Index(order, "/static/message-drafts-v7.js") {
+		t.Errorf("composer listener registration order: %s", order)
+	}
 	if !composer {
-		t.Error("conversation page missing /static/message-composer-v21.js")
+		t.Errorf("conversation page missing %s", composerURL)
 	}
 }

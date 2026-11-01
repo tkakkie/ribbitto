@@ -46,9 +46,9 @@ The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
 (`key`). Fields are strings except boolean `inPlace` and nullable `restoredKey`
 and sending/sent `key`. Without an idempotency key on plain/history pages,
-`message-sent` carries null (`FormData.get`); legacy `message-composer-v21.js`
-in-place `message-sending` carries undefined (`elements.idempotency_key?.value`).
-The contract says null; #1824 may normalize undefined because consumers treat
+`message-sent` carries null (`FormData.get`); `web/src/composer.ts` normalizes
+in-place `message-sending` from undefined (`elements.idempotency_key?.value`)
+to null, as the contract specifies, because consumers treat
 both alike: `message-drafts-v7.js` returns on a falsy key, the composer does not
 listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
 string keys. `message-sent` must keep null: both scripts compare its key with `!==`.

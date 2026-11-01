@@ -30,7 +30,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		return nil, fmt.Errorf("decoding script manifest: %w", err)
 	}
 	// This is the single declaration of converted page entries.
-	names := []string{"message-time"}
+	names := []string{"message-time", "composer"}
 	scripts := &Scripts{urls: make(map[string]string, len(names))}
 	for _, name := range names {
 		entry, ok := manifest.Entries[name]

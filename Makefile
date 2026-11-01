@@ -18,7 +18,7 @@ GO_TEST_FLAGS ?= -p 2
 .PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles
 
 bundles:
-	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
+	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time composer
 
 generate: bundles $(TEMPL)
 	go generate ./internal/web/view

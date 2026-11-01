@@ -84,10 +84,10 @@ checks until migrated.
 
 ## Composer queue example: before and after
 
-**Before (`web/static/message-composer-v21.js`, lines 69–76 and 518–535).**
+**Before typed queue adoption (`web/src/composer.ts`).**
 Queue state (`"queued"`, `"sending"`, `"failed"`, `"confirmed"`), uncertainty
-(`dataset.unconfirmed`) and draft identity (`dataset.draftKey`, line 146) live
-in `dataset` alongside raw DOM selectors:
+(`data-unconfirmed`) and draft identity (`data-draft-key`) still live in
+DOM attributes, through generated accessors. The original logic was:
 
 ```js
   const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];

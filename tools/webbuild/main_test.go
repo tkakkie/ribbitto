@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -118,7 +119,13 @@ func (w chanWriter) Write(p []byte) (int, error) {
 
 func TestBuildDevelopmentAndWatch(t *testing.T) {
 	root := fixture(t, []byte("const first = 'alpha';\nconsole.log(first);\n"))
-	dist := filepath.Join(root, "web/static/dist")
+	prodDist := filepath.Join(root, prodDistDir)
+	if err := build(root, "commit", "run", false); err != nil {
+		t.Fatal(err)
+	}
+	prodSnapshot := snapshotDir(t, prodDist)
+
+	dist := filepath.Join(root, devDistDir)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	errs := make(chanWriter, 32)
@@ -144,6 +151,49 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	}
 
 	b1, js1, sm1 := waitBundle("")
+
+	// A concurrent reader loop continuously reads manifest + bundle + map
+	// across failed rebuilds, recoveries and repeated generation switches.
+	readStop := make(chan struct{})
+	readErr := make(chan error, 1)
+	var reads atomic.Int64
+	go func() {
+		defer close(readErr)
+		for {
+			select {
+			case <-readStop:
+				return
+			default:
+			}
+			data, err := os.ReadFile(filepath.Join(dist, "manifest.json"))
+			if err != nil {
+				readErr <- fmt.Errorf("reading manifest: %w", err)
+				return
+			}
+			var m manifest
+			if err := json.Unmarshal(data, &m); err != nil {
+				readErr <- fmt.Errorf("decoding manifest: %w", err)
+				return
+			}
+			b := m.Entries["message-time"]
+			if b.File == "" || b.Map != b.File+".map" {
+				readErr <- fmt.Errorf("invalid manifest entry: %+v", b)
+				return
+			}
+			js, err1 := os.ReadFile(filepath.Join(dist, b.File))
+			sm, err2 := os.ReadFile(filepath.Join(dist, b.Map))
+			if err1 != nil || err2 != nil {
+				readErr <- fmt.Errorf("reading bundle/map (%s): %v / %v", b.File, err1, err2)
+				return
+			}
+			if fmt.Sprintf("%x", sha256.Sum256(js)) != b.SHA256 || !bytes.Contains(js, []byte("//# sourceMappingURL="+b.Map)) || !bytes.Contains(sm, []byte(`"sourcesContent"`)) {
+				readErr <- fmt.Errorf("corrupted bundle or map for %s", b.File)
+				return
+			}
+			reads.Add(1)
+		}
+	}()
+
 	lock := filepath.Join(root, "web/src/.#message-time.ts")
 	if err := os.Symlink(filepath.Join(root, "web/src/missing.ts"), lock); err != nil {
 		t.Fatal(err)
@@ -168,18 +218,73 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	if !bytes.Contains(js1, []byte("//# sourceMappingURL="+b1.Map)) || !bytes.Contains(sm1, []byte(`"sourcesContent"`)) || !bytes.Contains(sm1, []byte("alpha")) || !bytes.Contains(js2, []byte("//# sourceMappingURL="+b2.Map)) || !bytes.Contains(sm2, []byte("beta")) {
 		t.Fatalf("development bundle or map missing expected content: %s / %s", js2, sm2)
 	}
+	// The previous generation stays on disk right after a switch so in-flight page loads still succeed.
+	if _, err := os.Stat(filepath.Join(dist, b1.File)); err != nil {
+		t.Fatalf("previous generation bundle missing immediately after switch: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dist, b1.Map)); err != nil {
+		t.Fatalf("previous generation map missing immediately after switch: %v", err)
+	}
+	// Advance past maxPreviousGenerations so b1 is garbage-collected while recent generations stay.
+	prevFile := b2.File
+	for _, token := range []string{"gamma", "delta", "epsilon"} {
+		write(t, filepath.Join(root, "web/src/message-time.ts"), fmt.Appendf(nil, "const v = %q;\nconsole.log(v);\n", token))
+		bNext, _, _ := waitBundle(prevFile)
+		prevFile = bNext.File
+	}
 	if _, err := os.Stat(filepath.Join(dist, b1.File)); !os.IsNotExist(err) {
-		t.Fatalf("stale development bundle survived rebuild: %v", err)
+		t.Fatalf("generation older than retention limit survived garbage collection: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dist, b2.File)); err != nil {
+		t.Fatalf("recent generation within retention limit was removed: %v", err)
 	}
 	cancel()
-	if err := <-done; err != nil || build(root, "commit", "run", false) != nil {
-		t.Fatalf("watch or production replacement failed: %v", err)
+	if err := <-done; err != nil {
+		t.Fatalf("watch failed: %v", err)
 	}
-	files, err := os.ReadDir(dist)
-	data, err2 := os.ReadFile(filepath.Join(dist, "manifest.json"))
-	if err != nil || err2 != nil || len(files) != 2 || bytes.Contains(data, []byte(`"map"`)) {
-		t.Fatalf("production replacement failed: %v, %s", files, data)
+	for i := range 10 {
+		write(t, filepath.Join(root, "web/src/message-time.ts"), fmt.Appendf(nil, "const loop = %d;\nconsole.log(loop);\n", i))
+		if err := build(root, "dev", fmt.Sprintf("run-%d", i), true); err != nil {
+			t.Fatal(err)
+		}
 	}
+	targetReads := reads.Load() + 10
+	for reads.Load() < targetReads {
+		select {
+		case err := <-readErr:
+			t.Fatalf("concurrent reader failed: %v", err)
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	close(readStop)
+	if err := <-readErr; err != nil {
+		t.Fatalf("concurrent reader saw error during rebuilds: %v", err)
+	}
+	stages, err := filepath.Glob(filepath.Join(filepath.Dir(dist), ".dist-*"))
+	if err != nil || len(stages) != 0 {
+		t.Fatalf("staging directories left behind: %v, %v", stages, err)
+	}
+	if got := snapshotDir(t, prodDist); got != prodSnapshot {
+		t.Fatalf("development build touched web/static/dist:\ngot:\n%s\nwant:\n%s", got, prodSnapshot)
+	}
+}
+
+func snapshotDir(t *testing.T, dir string) string {
+	t.Helper()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	for _, f := range files {
+		data, err := os.ReadFile(filepath.Join(dir, f.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "%s:%x\n", f.Name(), sha256.Sum256(data))
+	}
+	return b.String()
 }
 
 func TestBuildSecondDeclaredEntry(t *testing.T) {
@@ -351,7 +456,7 @@ func TestNoNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 250 {
-		if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err == nil && bytes.Contains(data, []byte(`"map"`)) {
+		if data, err := os.ReadFile(filepath.Join(root, devDistDir, "manifest.json")); err == nil && bytes.Contains(data, []byte(`"map"`)) {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)

@@ -64,14 +64,15 @@ compiling and package that output (none exists).
 Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
-In `make dev`, `cmd/dev` runs `webbuild -dev` and supervises `webbuild -watch`;
-`RIBBITTO_DEV_ASSETS=web/static` re-reads `dist/manifest.json` per request and
-serves disk bundles and `.js.map` files with `Cache-Control: no-store` (#1821).
-After `make dev`, the ignored `dist` directory holds a development build, so run
-`make bundles` before direct `go test`, `go build` or `go run`. #1819 adds
-private production maps, absent from the runtime manifest. ES modules, shared
-chunks, lazy loading and `modulepreload` need target-browser verification before
-adoption.
+In `make dev`, `cmd/dev` runs `webbuild -dev` and supervises `webbuild -watch`,
+writing development bundles, `.js.map` files and `manifest.json` to `bin/dev-dist`
+without touching `web/static/dist`; recent generations stay on disk and
+`manifest.json` is replaced atomically. `RIBBITTO_DEV_ASSETS=bin/dev-dist`
+re-reads the manifest once per request and serves `web/static` assets and
+`bin/dev-dist` bundles and `.js.map` files with `Cache-Control: no-store` (#1821).
+#1819 adds private production maps, absent from the runtime manifest. ES modules,
+shared chunks, lazy loading and `modulepreload` need target-browser verification
+before adoption.
 
 ## Versions and installation — #1410, #1415
 

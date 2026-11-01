@@ -70,19 +70,19 @@ for integration tests.
 `make dev` builds CSS and development script bundles (with external `.js.map`
 source maps) before starting the server. It runs the pinned templ, Tailwind and
 `webbuild -watch` watchers together, restarting Go when templates or Go source
-change and rebuilding `web/static/dist` when `web/src` changes. It sets
-`RIBBITTO_DEV_ASSETS=web/static` to serve assets, bundles and development source
-maps from disk with `Cache-Control: no-store`, recomputing the stylesheet URL
-and reading `dist/manifest.json` on each page request so script and CSS edits
-take effect on reload without rebuilding the Go binary.
+change and rebuilding `bin/dev-dist` when `web/src` changes. It sets
+`RIBBITTO_DEV_ASSETS=bin/dev-dist` to serve `web/static` assets and `bin/dev-dist`
+bundles and development source maps from disk with `Cache-Control: no-store`,
+recomputing the stylesheet URL and reading the development `manifest.json` on
+each page request so script and CSS edits take effect on reload without
+rebuilding the Go binary.
 `cmd/dev` stops watchers and server on Ctrl-C, SIGTERM or watcher exit.
 
 `make css` and `make lint` use [`tools/download`](../tools/download/main.go)
 for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
 for type checking, unit tests and dependency management; see [setup](architecture/web-toolchain.md#versions-and-installation--1410-1415).
 Generated Go, CSS and vendored scripts are committed. Run `make bundles`
-before direct Go commands (including after `make dev`, which leaves a
-development build in the ignored `dist` directory); it needs no Node, templ or
+before direct Go commands; it needs no Node, templ or
 Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
 

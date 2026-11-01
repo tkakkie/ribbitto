@@ -2,9 +2,10 @@
 
 templ components live in `internal/web/view`. Assets embedded from
 `web/static` are cached as immutable; the stylesheet URL carries the CSS's SHA-256.
-In development (`make dev`, `RIBBITTO_DEV_ASSETS=web/static`), disk assets,
-a per-request CSS hash and per-request `dist/manifest.json` reloads make
-rebuilt CSS, script bundles and `.js.map` source maps appear without restarting.
+In development (`make dev`, `RIBBITTO_DEV_ASSETS=bin/dev-dist`), disk assets
+from `web/static` and `bin/dev-dist`, a per-request CSS hash and per-request
+manifest reloads make rebuilt CSS, script bundles and `.js.map` source maps
+appear without restarting.
 
 Fluent icons use an embedded, versioned SVG sprite in `web/static/vendor`
 through `Icon` ([UI convention](../ui-code.md#icons)). Its same-origin `<use>`

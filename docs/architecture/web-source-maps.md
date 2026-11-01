@@ -4,18 +4,19 @@ Source-map storage and delivery rules for the [web toolchain](web-toolchain.md).
 
 ## Source maps — #1411
 
-In development (`webbuild -dev` and `webbuild -watch`, #1821), each bundle has
-an external `<name>-<hash>.js.map` file with `sourcesContent` and a
-`//# sourceMappingURL=<name>-<hash>.js.map` comment, and `dist/manifest.json`
-records the map filename in each entry's `"map"` field. With
-`RIBBITTO_DEV_ASSETS=web/static`, the static handler serves registered bundles
+In development (`webbuild -dev` and `webbuild -watch`, #1821), bundles, external
+`<name>-<hash>.js.map` files with `sourcesContent` and a
+`//# sourceMappingURL=<name>-<hash>.js.map` comment, and `manifest.json` (with
+each entry's `"map"` field and retained recent generations) are written to
+`bin/dev-dist`, separate from `web/static/dist`. With
+`RIBBITTO_DEV_ASSETS=bin/dev-dist`, the static handler serves registered bundles
 and `.js.map` files from disk with `Cache-Control: no-store`.
 
-Production builds (`make bundles`) omit source maps, `sourceMappingURL`
-comments and `"map"` manifest fields, and replace `web/static/dist` as a whole
-so a prior development build cannot leak into the embedded production tree. The
-embedded production handler never serves `.map` files. Production maps (#1819)
-follow
+Production builds (`make bundles`) write `web/static/dist` and omit source maps,
+`sourceMappingURL` comments and `"map"` manifest fields; because development
+builds write only to `bin/dev-dist`, a development build cannot leak into the
+embedded production tree. The embedded production handler never serves `.map`
+files. Production maps (#1819) follow
 [decision 43](../decisions/43-typescript-with-a-go-driven-build.md)'s approved
 private-storage policy once store details are fixed in issue #1469; match
 maps and bundles by SHA, run id and content hash, recorded in the manifest.

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 
 	assets := static.FS()
 	if devAssets != "" {
-		assets = os.DirFS(devAssets)
+		assets = devAssetsFS(devAssets)
 	}
 	stylesheetURL, err := stylesheetURLForAssets(assets)
 	if err != nil {
@@ -213,6 +214,36 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 		return "", fmt.Errorf("reading stylesheet: %w", err)
 	}
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
+}
+
+// devAssetsFS serves /static/ from disk. When devAssets points at the
+// separate development bundle directory (such as bin/dev-dist), dist/ reads
+// from devAssets while CSS and committed static assets come from web/static.
+func devAssetsFS(devAssets string) fs.FS {
+	if _, err := os.Stat(filepath.Join(devAssets, "css")); err != nil {
+		staticDir := filepath.Join(devAssets, "..", "..", "web", "static")
+		if dInfo, err1 := os.Stat(devAssets); err1 == nil && dInfo.IsDir() {
+			if sInfo, err2 := os.Stat(staticDir); err2 == nil && sInfo.IsDir() {
+				return devFS{static: os.DirFS(staticDir), dist: os.DirFS(devAssets)}
+			}
+		}
+	}
+	return os.DirFS(devAssets)
+}
+
+type devFS struct {
+	static fs.FS
+	dist   fs.FS
+}
+
+func (d devFS) Open(name string) (fs.File, error) {
+	if name == "dist" {
+		return d.dist.Open(".")
+	}
+	if rest, ok := strings.CutPrefix(name, "dist/"); ok {
+		return d.dist.Open(rest)
+	}
+	return d.static.Open(name)
 }
 
 // pageRenderer renders full pages; in development the script registry and

@@ -12,6 +12,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -27,6 +28,12 @@ import (
 
 var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+const (
+	prodDistDir            = "web/static/dist"
+	devDistDir             = "bin/dev-dist"
+	maxPreviousGenerations = 3
+)
+
 type bundle struct {
 	File   string `json:"file"`
 	SHA256 string `json:"sha256"`
@@ -34,9 +41,10 @@ type bundle struct {
 }
 
 type manifest struct {
-	Commit  string            `json:"commit"`
-	RunID   string            `json:"run_id"`
-	Entries map[string]bundle `json:"entries"`
+	Commit   string              `json:"commit"`
+	RunID    string              `json:"run_id"`
+	Entries  map[string]bundle   `json:"entries"`
+	Previous []map[string]bundle `json:"previous,omitempty"`
 }
 
 const usage = "usage: webbuild <repository root> <commit SHA> <run id> | webbuild -dev [-watch] <repository root>"
@@ -75,9 +83,9 @@ func main() {
 }
 
 func watch(ctx context.Context, root string, stderr io.Writer) error {
-	var last string
+	var last, lastErr string
 	if snap, err := sourceSnapshot(root); err == nil {
-		if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err == nil && strings.Contains(string(data), `"run_id": "`+snap+`"`) && strings.Contains(string(data), `"map":`) {
+		if data, err := os.ReadFile(filepath.Join(root, devDistDir, "manifest.json")); err == nil && strings.Contains(string(data), `"run_id": "`+snap+`"`) && strings.Contains(string(data), `"map":`) {
 			last = snap
 		}
 	}
@@ -87,12 +95,18 @@ func watch(ctx context.Context, root string, stderr io.Writer) error {
 	for {
 		next, err := sourceSnapshot(root)
 		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-		} else if next != last {
-			if err := build(root, "dev", next, true); err != nil {
+			if msg := err.Error(); msg != lastErr {
 				_, _ = fmt.Fprintln(stderr, err)
+				lastErr = msg
 			}
-			last = next
+		} else {
+			lastErr = ""
+			if next != last {
+				if err := build(root, "dev", next, true); err != nil {
+					_, _ = fmt.Fprintln(stderr, err)
+				}
+				last = next
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -125,8 +139,10 @@ func build(root, commit, runID string, dev bool) error {
 	if err != nil {
 		return fmt.Errorf("resolving root: %w", err)
 	}
-	dist := filepath.Join(root, "web/static/dist")
-	if !dev {
+	dist := filepath.Join(root, prodDistDir)
+	if dev {
+		dist = filepath.Join(root, devDistDir)
+	} else {
 		// Invalidate the previous generation even if this run fails before staging.
 		if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("invalidating manifest: %w", err)
@@ -186,6 +202,9 @@ func build(root, commit, runID string, dev bool) error {
 	if err != nil {
 		return err
 	}
+	if dev {
+		return publishDev(dist, stage, m)
+	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding manifest: %w", err)
@@ -202,6 +221,58 @@ func build(root, commit, runID string, dev bool) error {
 	if err := os.Rename(stage, dist); err != nil {
 		_ = os.Rename(old, dist)
 		return fmt.Errorf("publishing bundles: %w", err)
+	}
+	return nil
+}
+
+func publishDev(dist, stage string, m manifest) error {
+	var prev manifest
+	if oldData, err := os.ReadFile(filepath.Join(dist, "manifest.json")); err == nil {
+		_ = json.Unmarshal(oldData, &prev)
+	}
+	if len(prev.Entries) > 0 && !maps.Equal(prev.Entries, m.Entries) {
+		m.Previous = append([]map[string]bundle{prev.Entries}, prev.Previous...)
+		if len(m.Previous) > maxPreviousGenerations {
+			m.Previous = m.Previous[:maxPreviousGenerations]
+		}
+	} else {
+		m.Previous = prev.Previous
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding manifest: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), append(data, '\n'), 0644); err != nil {
+		return fmt.Errorf("writing manifest: %w", err)
+	}
+	if err := os.MkdirAll(dist, 0755); err != nil {
+		return fmt.Errorf("creating development bundle directory: %w", err)
+	}
+	for _, entry := range m.Entries {
+		for _, name := range []string{entry.File, entry.Map} {
+			if err := os.Rename(filepath.Join(stage, name), filepath.Join(dist, name)); err != nil {
+				return fmt.Errorf("publishing development bundle: %w", err)
+			}
+		}
+	}
+	// Replacing manifest.json by an atomic rename on the same filesystem
+	// switches the active generation without a missing or half-written window.
+	if err := os.Rename(filepath.Join(stage, "manifest.json"), filepath.Join(dist, "manifest.json")); err != nil {
+		return fmt.Errorf("publishing development manifest: %w", err)
+	}
+	keep := map[string]bool{"manifest.json": true}
+	for _, gen := range append([]map[string]bundle{m.Entries}, m.Previous...) {
+		for _, entry := range gen {
+			keep[entry.File] = true
+			keep[entry.Map] = true
+		}
+	}
+	if files, err := os.ReadDir(dist); err == nil {
+		for _, file := range files {
+			if !keep[file.Name()] {
+				_ = os.RemoveAll(filepath.Join(dist, file.Name()))
+			}
+		}
 	}
 	return nil
 }

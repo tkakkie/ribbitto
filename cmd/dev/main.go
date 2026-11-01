@@ -58,7 +58,7 @@ func run(ctx context.Context, tailwind, templ string) error {
 	css := exec.Command(tailwind, "-i", "web/styles/app.css", "-o", "web/static/css/app.css", "--minify", "--watch=always")
 	bundles := exec.Command("./bin/webbuild", "-watch", ".")
 	server := exec.Command("./bin/ai-db", "run", templ, "generate", "--watch", "--cmd", "go run ./cmd/ribbitto")
-	server.Env = append(os.Environ(), "RIBBITTO_DEV_ASSETS=web/static")
+	server.Env = append(os.Environ(), "RIBBITTO_DEV_ASSETS=bin/dev-dist")
 	return supervise(ctx, []*exec.Cmd{css, bundles, server})
 }
 

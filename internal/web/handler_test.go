@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -499,16 +500,22 @@ func TestDevelopmentAssets(t *testing.T) {
 		t.Fatalf("building webbuild: %v: %s", err, out)
 	}
 	root := t.TempDir()
-	dir := filepath.Join(root, "web", "static")
+	staticDir := filepath.Join(root, "web", "static")
+	devDir := filepath.Join(root, "bin", "dev-dist")
 	registry, err := os.ReadFile("../../web/static/scripts.go")
-	if err != nil || os.CopyFS(filepath.Join(root, "web", "src"), os.DirFS("../../web/src")) != nil || os.MkdirAll(filepath.Join(dir, "css"), 0o755) != nil || os.WriteFile(filepath.Join(dir, "scripts.go"), registry, 0o600) != nil {
+	if err != nil || os.CopyFS(filepath.Join(root, "web", "src"), os.DirFS("../../web/src")) != nil || os.MkdirAll(filepath.Join(staticDir, "css"), 0o755) != nil || os.WriteFile(filepath.Join(staticDir, "scripts.go"), registry, 0o600) != nil {
 		t.Fatal("preparing fixture:", err)
 	}
-	cssPath := filepath.Join(dir, "css", "app.css")
+	cssPath := filepath.Join(staticDir, "css", "app.css")
 	initialCSS := "body { color: red; }"
 	if err := os.WriteFile(cssPath, []byte(initialCSS), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if out, err := exec.Command(builder, root, "commit", "run").CombinedOutput(); err != nil {
+		t.Fatalf("initial production build: %v: %s", err, out)
+	}
+	prodDistDir := filepath.Join(staticDir, "dist")
+	prodBefore := snapshotFiles(t, prodDistDir)
 	if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
 		t.Fatalf("initial dev build: %v: %s", err, out)
 	}
@@ -517,7 +524,7 @@ func TestDevelopmentAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 	setup := &fakeSetup{open: true}
-	handler, err := NewHandler(dir, catalogues, testServices(asAlice, func(s *Services) {
+	handler, err := NewHandler(devDir, catalogues, testServices(asAlice, func(s *Services) {
 		s.Setup, s.SetupSessions, s.SignUp = setup, setup, fakeSignUp{&fakeSetup{open: true}}
 	}))
 	prodHandler, prodErr := newTestHandler(t, "")
@@ -525,6 +532,7 @@ func TestDevelopmentAssets(t *testing.T) {
 	if err != nil || prodErr != nil || urlErr != nil {
 		t.Fatal(err, prodErr, urlErr)
 	}
+	scriptPattern := regexp.MustCompile(`/static/dist/message-time-[A-Z0-9]{8}\.js`)
 	previousCSSURL, previousScriptURL := "", ""
 	for i, css := range []string{initialCSS, "body { color: blue; }"} {
 		if os.WriteFile(cssPath, []byte(css), 0o600) != nil || os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), fmt.Appendf(nil, "console.log(%q);\n", fmt.Sprintf("edit-%d", i)), 0o600) != nil {
@@ -546,20 +554,13 @@ func TestDevelopmentAssets(t *testing.T) {
 		}
 		previousCSSURL = wantCSSURL
 
-		scripts, err := static.NewScripts(os.DirFS(dir))
-		if err != nil {
-			t.Fatal(err)
-		}
-		scriptURL, err := scripts.URL("message-time")
-		if err != nil || scriptURL == previousScriptURL {
-			t.Fatalf("script URL = %q, prev = %q, err = %v", scriptURL, previousScriptURL, err)
-		}
 		req := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1}), nil)
 		req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 		w = httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
-		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<script defer src="`+scriptURL+`"`) || (previousScriptURL != "" && strings.Contains(w.Body.String(), previousScriptURL)) {
-			t.Fatalf("channel page does not link only to current bundle %s: status = %d", scriptURL, w.Code)
+		scriptURL := scriptPattern.FindString(w.Body.String())
+		if w.Code != http.StatusOK || scriptURL == "" || scriptURL == previousScriptURL || (previousScriptURL != "" && strings.Contains(w.Body.String(), previousScriptURL)) {
+			t.Fatalf("channel page does not link only to current bundle (%q vs %q): status = %d", scriptURL, previousScriptURL, w.Code)
 		}
 		for _, assetURL := range []string{scriptURL, scriptURL + ".map"} {
 			w = httptest.NewRecorder()
@@ -568,29 +569,148 @@ func TestDevelopmentAssets(t *testing.T) {
 				t.Fatalf("GET %s: status = %d, Cache-Control = %q", assetURL, w.Code, w.Header().Get("Cache-Control"))
 			}
 		}
-		for _, staleURL := range []string{previousScriptURL, previousScriptURL + ".map"} {
-			if previousScriptURL != "" {
+		// A page rendered just before a rebuild switch can still fetch its bundle and map, while an unknown hash stays 404.
+		if previousScriptURL != "" {
+			for _, retainedURL := range []string{previousScriptURL, previousScriptURL + ".map"} {
 				w = httptest.NewRecorder()
-				handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, staleURL, nil))
-				if w.Code != http.StatusNotFound {
-					t.Errorf("GET stale %s: status = %d, want 404", staleURL, w.Code)
+				handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, retainedURL, nil))
+				if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+					t.Errorf("GET retained %s after switch: status = %d, Cache-Control = %q", retainedURL, w.Code, w.Header().Get("Cache-Control"))
 				}
+			}
+		}
+		for _, unknownURL := range []string{"/static/dist/message-time-00000000.js", "/static/dist/message-time-00000000.js.map"} {
+			w = httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, unknownURL, nil))
+			if w.Code != http.StatusNotFound || w.Header().Get("Cache-Control") != "" {
+				t.Errorf("GET never-registered %s: status = %d, Cache-Control = %q", unknownURL, w.Code, w.Header().Get("Cache-Control"))
 			}
 		}
 		previousScriptURL = scriptURL
 	}
+
+	// Failed rebuild leaves the previous generation fully servable; a subsequent valid build recovers.
+	if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), []byte("const broken = ;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command(builder, "-dev", root).Run(); err == nil {
+		t.Fatal("expected broken TypeScript dev build to fail")
+	}
+	for _, url := range []string{previousScriptURL, previousScriptURL + ".map"} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("GET %s after failed rebuild: status = %d", url, w.Code)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), []byte("console.log('recovered');\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
+		t.Fatalf("recovery dev build: %v: %s", err, out)
+	}
+	req := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1}), nil)
+	req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	recoveredURL := scriptPattern.FindString(w.Body.String())
+	if w.Code != http.StatusOK || recoveredURL == "" || recoveredURL == previousScriptURL {
+		t.Fatalf("recovery page did not switch bundle: got %q, prev %q", recoveredURL, previousScriptURL)
+	}
+	for _, url := range []string{recoveredURL, recoveredURL + ".map", previousScriptURL} {
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("GET %s after recovery: status = %d", url, w.Code)
+		}
+	}
+
+	// Concurrent reader loop of page + bundle + map while rebuilds run.
+	stopRead := make(chan struct{})
+	readErr := make(chan error, 1)
+	var cycles atomic.Int64
+	go func() {
+		defer close(readErr)
+		for {
+			select {
+			case <-stopRead:
+				return
+			default:
+			}
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1}), nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, r)
+			u := scriptPattern.FindString(rec.Body.String())
+			if rec.Code != http.StatusOK || u == "" {
+				readErr <- fmt.Errorf("concurrent page render: status = %d, url = %q", rec.Code, u)
+				return
+			}
+			for _, asset := range []string{u, u + ".map"} {
+				ar := httptest.NewRecorder()
+				handler.ServeHTTP(ar, httptest.NewRequest(http.MethodGet, asset, nil))
+				if ar.Code != http.StatusOK || ar.Body.Len() == 0 {
+					readErr <- fmt.Errorf("concurrent GET %s: status = %d, len = %d", asset, ar.Code, ar.Body.Len())
+					return
+				}
+			}
+			cycles.Add(1)
+		}
+	}()
+	for i := range 3 {
+		if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), fmt.Appendf(nil, "console.log('concurrent-%d');\n", i), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
+			t.Fatalf("concurrent dev build %d: %v: %s", i, err, out)
+		}
+	}
+	target := cycles.Load() + 5
+	for cycles.Load() < target {
+		select {
+		case err := <-readErr:
+			t.Fatalf("concurrent HTTP reader failed: %v", err)
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	close(stopRead)
+	if err := <-readErr; err != nil {
+		t.Fatalf("concurrent HTTP reader error: %v", err)
+	}
+
+	if got := snapshotFiles(t, prodDistDir); got != prodBefore {
+		t.Fatalf("development builds modified web/static/dist:\ngot:\n%s\nwant:\n%s", got, prodBefore)
+	}
+	w = httptest.NewRecorder()
 	prodHandler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, prodScriptURL, nil))
 	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 		t.Fatalf("production bundle: status = %d, Cache-Control = %q", w.Code, w.Header().Get("Cache-Control"))
 	}
-	for _, mapURL := range []string{prodScriptURL + ".map", previousScriptURL + ".map"} {
+	for _, mapURL := range []string{prodScriptURL + ".map", recoveredURL + ".map"} {
 		w = httptest.NewRecorder()
 		prodHandler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, mapURL, nil))
 		if w.Code != http.StatusNotFound {
 			t.Errorf("production GET %s: status = %d, want 404", mapURL, w.Code)
 		}
 	}
+}
+
+func snapshotFiles(t *testing.T, dir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "%s:%x\n", entry.Name(), sha256.Sum256(data))
+	}
+	return b.String()
 }
 
 func newTestHandler(t *testing.T, dir string) (http.Handler, error) {

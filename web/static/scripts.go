@@ -12,8 +12,9 @@ import (
 // Scripts resolves declared page entries to their generated bundles.
 // Its contents are immutable after construction.
 type Scripts struct {
-	urls map[string]string
-	maps map[string]bool
+	urls    map[string]string
+	bundles map[string]bool
+	maps    map[string]bool
 }
 
 // NewScripts validates the runtime manifest against the page entry registry and
@@ -29,6 +30,10 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 			SHA256 string
 			Map    string
 		}
+		Previous []map[string]struct {
+			File string
+			Map  string
+		}
 	}
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("decoding script manifest: %w", err)
@@ -36,7 +41,11 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	// This is the single declaration of converted page entries; tools/webbuild
 	// parses it from NewScripts, so keep its name and string slice literal.
 	names := []string{"message-time"}
-	scripts := &Scripts{urls: make(map[string]string, len(names)), maps: make(map[string]bool, len(names))}
+	scripts := &Scripts{
+		urls:    make(map[string]string, len(names)),
+		bundles: make(map[string]bool, len(names)),
+		maps:    make(map[string]bool, len(names)),
+	}
 	for _, name := range names {
 		entry, ok := manifest.Entries[name]
 		if !ok {
@@ -53,6 +62,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 			return nil, fmt.Errorf("script bundle %q hash mismatch", name)
 		}
 		scripts.urls[name] = "/static/dist/" + entry.File
+		scripts.bundles["dist/"+entry.File] = true
 		if entry.Map != "" {
 			if entry.Map != entry.File+".map" {
 				return nil, fmt.Errorf("invalid source map filename %q", entry.Map)
@@ -67,6 +77,23 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	for name := range manifest.Entries {
 		return nil, fmt.Errorf("script manifest names unknown entry %q", name)
 	}
+	for _, prev := range manifest.Previous {
+		for name, entry := range prev {
+			if scripts.urls[name] == "" {
+				return nil, fmt.Errorf("script manifest names unknown entry %q", name)
+			}
+			if !regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-[A-Z0-9]{8}\.js$`).MatchString(entry.File) {
+				return nil, fmt.Errorf("invalid bundle filename %q", entry.File)
+			}
+			scripts.bundles["dist/"+entry.File] = true
+			if entry.Map != "" {
+				if entry.Map != entry.File+".map" {
+					return nil, fmt.Errorf("invalid source map filename %q", entry.Map)
+				}
+				scripts.maps["dist/"+entry.Map] = true
+			}
+		}
+	}
 	return scripts, nil
 }
 
@@ -80,12 +107,7 @@ func (s *Scripts) URL(name string) (string, error) {
 
 // IsBundle reports whether a static-relative path is a registered bundle.
 func (s *Scripts) IsBundle(path string) bool {
-	for _, url := range s.urls {
-		if url == "/static/"+path {
-			return true
-		}
-	}
-	return false
+	return s.bundles[path]
 }
 
 // IsMap reports whether a static-relative path is a registered development source map.

@@ -26,18 +26,22 @@ func TestScriptManifest(t *testing.T) {
 	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sum)
 	devEntry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":%q}`, file, sum, file+".map")
 	for _, tc := range []struct {
-		name, entries, file, mapFile, want string
+		name, entries, previous, file, mapFile, want string
 	}{
-		{"valid", entry, file, "", ""},
-		{"valid development map", devEntry, file, file + ".map", ""},
-		{"missing declaration", "", file, "", "missing declared entry"},
-		{"missing bundle", entry, "other.js", "", "reading script bundle"},
-		{"missing source map", devEntry, file, "", "reading source map"},
-		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), file, "other.js.map", "invalid source map filename"},
-		{"unknown entry", entry + `,"other":{}`, file, "", "unknown entry"},
-		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "", "invalid bundle filename"},
-		{"wrong content", `"message-time":{"file":"message-time-ABCDEFGH.js","sha256":"bad"}`, file, "", "hash mismatch"},
-		{"invalid JSON", "{", file, "", "decoding script manifest"},
+		{"valid", entry, "", file, "", ""},
+		{"valid development map", devEntry, "", file, file + ".map", ""},
+		{"valid previous generation", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"message-time-OLDHASH1.js.map"}}]`, file, file + ".map", ""},
+		{"missing declaration", "", "", file, "", "missing declared entry"},
+		{"missing bundle", entry, "", "other.js", "", "reading script bundle"},
+		{"missing source map", devEntry, "", file, "", "reading source map"},
+		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), "", file, "other.js.map", "invalid source map filename"},
+		{"unknown entry", entry + `,"other":{}`, "", file, "", "unknown entry"},
+		{"unknown previous entry", devEntry, `[{"other":{"file":"other-OLDHASH1.js"}}]`, file, file + ".map", "unknown entry"},
+		{"invalid previous filename", devEntry, `[{"message-time":{"file":"../escape.js"}}]`, file, file + ".map", "invalid bundle filename"},
+		{"invalid previous map filename", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"other.js.map"}}]`, file, file + ".map", "invalid source map filename"},
+		{"invalid filename", `"message-time":{"file":"../escape.js"}`, "", file, "", "invalid bundle filename"},
+		{"wrong content", `"message-time":{"file":"message-time-ABCDEFGH.js","sha256":"bad"}`, "", file, "", "hash mismatch"},
+		{"invalid JSON", "{", "", file, "", "decoding script manifest"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entries := tc.entries
@@ -51,7 +55,14 @@ func TestScriptManifest(t *testing.T) {
 					assets["dist/"+name+"-ABCDEFGH.js"] = &fstest.MapFile{Data: []byte(bundle)}
 				}
 			}
-			assets["dist/manifest.json"] = &fstest.MapFile{Data: []byte(`{"entries":{` + entries + `}}`)}
+			raw := `{"entries":{` + entries + `}`
+			if tc.previous != "" {
+				raw += `,"previous":` + tc.previous
+			}
+			if entries != "{" {
+				raw += `}`
+			}
+			assets["dist/manifest.json"] = &fstest.MapFile{Data: []byte(raw)}
 			scripts, err := static.NewScripts(assets)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -69,6 +80,9 @@ func TestScriptManifest(t *testing.T) {
 			}
 			if scripts.IsMap("dist/"+file+".map") != (tc.mapFile != "") || scripts.IsMap("dist/manifest.json") {
 				t.Fatalf("IsMap = %v for mapFile %q", scripts.IsMap("dist/"+file+".map"), tc.mapFile)
+			}
+			if tc.previous != "" && (!scripts.IsBundle("dist/message-time-OLDHASH1.js") || !scripts.IsMap("dist/message-time-OLDHASH1.js.map") || scripts.IsBundle("dist/message-time-00000000.js")) {
+				t.Fatal("previous generation bundle/map registration mismatch")
 			}
 			if _, err := static.ScriptURL(ctx, "undeclared"); err == nil {
 				t.Fatal("undeclared script accepted")
@@ -155,5 +169,23 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 			t.Fatalf("source change did not change URL: %q, %v", url, err)
 		}
 		previous = url
+	}
+	prodManifest, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	devCmd := exec.Command(binary, "-dev", root)
+	devCmd.Env = []string{"PATH=" + t.TempDir()}
+	if out, err := devCmd.CombinedOutput(); err != nil {
+		t.Fatalf("generating dev bundles: %v: %s", err, out)
+	}
+	afterManifest, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json"))
+	if err != nil || string(afterManifest) != string(prodManifest) {
+		t.Fatalf("dev build altered production manifest: %v", err)
+	}
+	if scripts, err := static.NewScripts(os.DirFS(filepath.Join(root, "web/static"))); err != nil {
+		t.Fatalf("production scripts invalid after dev build: %v", err)
+	} else if url, err := scripts.URL("message-time"); err != nil || url != previous || scripts.IsMap(strings.TrimPrefix(url, "/static/")+".map") {
+		t.Fatalf("production URL or map changed after dev build: %q, %v", url, err)
 	}
 }

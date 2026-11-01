@@ -240,7 +240,41 @@ export function listenTypingInputEvent(target: EventTarget, listener: (detail: T
   return () => target.removeEventListener(TypingInputEvent, handle);
 }
 
+export const ArrivePillAttribute = "data-arrive-pill";
+export const ArrivePanelAttribute = "data-arrive-panel";
+export const SidePanelID = "side-panel";
+export const sidePanelSelector = (): string => "#" + SidePanelID;
+export const getSidePanel = (root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(sidePanelSelector());
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute;
+export const PanelBackdropID = "panel-backdrop";
+export const panelBackdropSelector = (): string => "#" + PanelBackdropID;
+export const getPanelBackdrop = (root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(panelBackdropSelector());
+
+export const PanelHeadingID = "panel-heading";
+export const panelHeadingSelector = (): string => "#" + PanelHeadingID;
+export const getPanelHeading = (root: ParentNode = document): HTMLHeadingElement | null => root.querySelector<HTMLHeadingElement>(panelHeadingSelector());
+
+export const PanelCloseID = "panel-close";
+export const panelCloseSelector = (): string => "#" + PanelCloseID;
+export const getPanelClose = (root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(panelCloseSelector());
+
+export const PanelControlPrefix = "panel-control-";
+export const panelControlPrefixID = (suffix: string): string => PanelControlPrefix + suffix;
+export const panelControlPrefixSelector = (suffix: string): string => "#" + panelControlPrefixID(suffix);
+export const getPanelControlPrefix = (suffix: string, root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(panelControlPrefixSelector(suffix));
+
+export const PanelCoverEvent = "panel-cover";
+export type PanelCoverDetail = Record<string, never>;
+export function dispatchPanelCoverEvent(target: EventTarget, detail: PanelCoverDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(PanelCoverEvent, { bubbles: true, detail }));
+}
+export function listenPanelCoverEvent(target: EventTarget, listener: (detail: PanelCoverDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<PanelCoverDetail>).detail);
+  target.addEventListener(PanelCoverEvent, handle);
+  return () => target.removeEventListener(PanelCoverEvent, handle);
+}
+
+
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

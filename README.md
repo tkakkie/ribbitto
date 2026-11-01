@@ -36,7 +36,7 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Running it locally for development (`make db-up`, migrations, optional seed data and `make dev`): see [local development](docs/development.md).
+Running it locally for development (`make db-up`, migrations, optional seed data and `make dev`, which watches templates, CSS and scripts): see [local development](docs/development.md).
 
 ### Checks
 

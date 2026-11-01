@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 
 	assets := static.FS()
 	if devAssets != "" {
-		assets = os.DirFS(devAssets)
+		assets = devAssetsFS(devAssets)
 	}
 	stylesheetURL, err := stylesheetURLForAssets(assets)
 	if err != nil {
@@ -95,8 +96,12 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if err != nil {
 		return nil, nil, err
 	}
-	pages := &pageRenderer{scripts: scripts, stylesheetURL: func() (string, error) { return stylesheetURL, nil }}
+	pages := &pageRenderer{
+		scripts:       func() (*static.Scripts, error) { return scripts, nil },
+		stylesheetURL: func() (string, error) { return stylesheetURL, nil },
+	}
 	if devAssets != "" {
+		pages.scripts = func() (*static.Scripts, error) { return static.NewScripts(assets) }
 		pages.stylesheetURL = func() (string, error) { return stylesheetURLForAssets(assets) }
 	}
 	// Register HTML routes here so new pages inherit the shared middleware.
@@ -162,9 +167,15 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "dist/") && !scripts.IsBundle(r.URL.Path) {
-			http.NotFound(w, r)
-			return
+		if strings.HasPrefix(r.URL.Path, "dist/") {
+			current, err := pages.scripts()
+			if err != nil {
+				slog.ErrorContext(r.Context(), "loading scripts", "err", err, "request_id", middleware.RequestID(r.Context()))
+			}
+			if err != nil || (!current.IsBundle(r.URL.Path) && (devAssets == "" || !current.IsMap(r.URL.Path))) {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		// Only successful file responses are immutable; missing assets may appear later.
 		info, err := fs.Stat(assets, r.URL.Path)
@@ -205,10 +216,43 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
 }
 
-// pageRenderer renders full pages; in development the stylesheet URL is
-// recomputed per request so rebuilt CSS shows up without a restart.
+// devAssetsFS serves /static/ from disk. When devAssets points at the
+// separate development bundle directory (bin/dev-dist, two levels below the
+// repository root) rather than a full static tree with css/, dist/ reads from
+// devAssets and committed assets come from ../../web/static so RIBBITTO_DEV_ASSETS
+// and NewHandler need only one path.
+func devAssetsFS(devAssets string) fs.FS {
+	if _, err := os.Stat(filepath.Join(devAssets, "css")); err != nil {
+		staticDir := filepath.Join(devAssets, "..", "..", "web", "static")
+		if dInfo, err1 := os.Stat(devAssets); err1 == nil && dInfo.IsDir() {
+			if sInfo, err2 := os.Stat(staticDir); err2 == nil && sInfo.IsDir() {
+				return devFS{static: os.DirFS(staticDir), dist: os.DirFS(devAssets)}
+			}
+		}
+	}
+	return os.DirFS(devAssets)
+}
+
+type devFS struct {
+	static fs.FS
+	dist   fs.FS
+}
+
+func (d devFS) Open(name string) (fs.File, error) {
+	if name == "dist" {
+		return d.dist.Open(".")
+	}
+	if rest, ok := strings.CutPrefix(name, "dist/"); ok {
+		return d.dist.Open(rest)
+	}
+	return d.static.Open(name)
+}
+
+// pageRenderer renders full pages; in development the script registry and
+// stylesheet URL are recomputed per request so rebuilt assets show up without
+// a restart.
 type pageRenderer struct {
-	scripts       *static.Scripts
+	scripts       func() (*static.Scripts, error)
 	stylesheetURL func() (string, error)
 }
 
@@ -219,7 +263,12 @@ func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int
 		return
 	}
 	if p.scripts != nil {
-		r = r.WithContext(static.WithScripts(r.Context(), p.scripts))
+		scripts, err := p.scripts()
+		if err != nil {
+			serverError(w, r, "loading scripts", err)
+			return
+		}
+		r = r.WithContext(static.WithScripts(r.Context(), scripts))
 	}
 	templ.Handler(page(url), templ.WithStatus(status)).ServeHTTP(w, r)
 }

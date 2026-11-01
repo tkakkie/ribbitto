@@ -152,13 +152,18 @@ export function pendingActionDecision(
   return { action: "none" };
 }
 
-export function collectDraftPlaces(keys: readonly string[], scope: Pick<PageScope, "member" | "session" | "expires">, nowMs: number, readRaw: (key: string) => string | null): Set<string> {
+export function collectDraftPlaces(
+  keys: readonly string[],
+  scope: Pick<PageScope, "member" | "session" | "expires">,
+  nowMs: number | (() => number) = Date.now,
+  readRaw: (key: string) => string | null = () => null,
+): Set<string> {
   const places = new Set<string>();
   for (const key of keys) {
     const parts = parseDraftKey(key);
     if (!isOwnDraftKey(parts, scope)) continue;
     const entry = parseDraftEntry(readRaw(key));
-    if (isValidDraftEntry(entry, scope, nowMs) && entry.text.trim()) {
+    if (isValidDraftEntry(entry, scope, typeof nowMs === "function" ? nowMs() : nowMs) && entry.text.trim()) {
       places.add(parts.channel);
       places.add(parts.channel + ":" + parts.topic);
     }

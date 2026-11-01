@@ -232,6 +232,78 @@ test("cleanup samples clock per own-entry validation at the seven-day boundary a
   assert.deepEqual(Object.keys(throwingClockStorage), [secondKey]);
 });
 
+test("markers and collectDraftPlaces sample clock per own-entry validation and keep v7 exception boundary", async () => {
+  const channelB = "02000000-0000-4000-8000-000000000002";
+  const brokenKey = draftKey(memberA, sessionPage, "02000000-0000-4000-8000-000000000000", "feed");
+  const firstKey = draftKey(memberA, sessionPage, channelB, "feed");
+  const secondKey = draftKey(memberA, sessionPage, channelB, topicA);
+  const foreignKey = draftKey(memberB, sessionSameMs, channelB, "feed");
+  const boundaryValue = JSON.stringify({
+    member: memberA,
+    session: sessionPage,
+    expires: scope.expires,
+    text: "boundary",
+    at: nowMs - 7 * dayMs + 1,
+    key: null,
+  });
+
+  const makeMarker = (href) => ({
+    hidden: true,
+    closest(sel) {
+      return sel === "a" ? { href } : null;
+    },
+  });
+  const feedMarker = makeMarker(`https://example.test/organizations/acme/channels/${channelB}`);
+  const topicMarker = makeMarker(`https://example.test/organizations/acme/channels/${channelB}/topics/${topicA}`);
+  const sidebar = {
+    id: "sidebar-channels",
+    querySelectorAll() {
+      return [feedMarker, topicMarker];
+    },
+  };
+
+  let markerCalls = 0;
+  let shouldThrow = false;
+  const adapterStorage = makeStorage([
+    [firstKey, boundaryValue],
+    [secondKey, boundaryValue],
+  ]);
+  await withAdapter(
+    adapterStorage,
+    () => {
+      if (shouldThrow && markerCalls++ >= 2) throw new Error("clock failed");
+      if (markerCalls > 0) return nowMs + (markerCalls++ >= 3 ? 1 : 0);
+      return nowMs;
+    },
+    () => {
+      markerCalls = 1;
+      globalThis.document.dispatchEvent(new CustomEvent("htmx:load", { detail: { elt: sidebar } }));
+      assert.deepEqual([feedMarker.hidden, topicMarker.hidden], [false, true]);
+
+      markerCalls = 0;
+      shouldThrow = true;
+      globalThis.document.dispatchEvent(new CustomEvent("htmx:load", { detail: { elt: sidebar } }));
+      assert.deepEqual([feedMarker.hidden, topicMarker.hidden], [true, true]);
+    },
+  );
+
+  let directCalls = 0;
+  const directValues = new Map([
+    [foreignKey, boundaryValue],
+    [brokenKey, "{broken"],
+    [firstKey, boundaryValue],
+    [secondKey, boundaryValue],
+  ]);
+  const directPlaces = collectDraftPlaces(
+    [foreignKey, brokenKey, firstKey, secondKey],
+    scope,
+    () => nowMs + (directCalls++ >= 2 ? 1 : 0),
+    (k) => directValues.get(k) ?? null,
+  );
+  assert.equal(directCalls, 3);
+  assert.deepEqual([...directPlaces], [channelB, `${channelB}:feed`]);
+});
+
 test("page scope and entry validity bounds", () => {
   assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: String(scope.expires), rendered: String(scope.rendered) }), scope);
   assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: "", rendered: "" }), {
@@ -378,20 +450,22 @@ test("post-load malformed timestamps preserve v7 comparison, send-time and trim 
 });
 
 test("adapter read preserves parsed JSON string values across trim and send", async () => {
-  const capKeys = Array.from({ length: 49 }, (_, i) =>
+  const capKeys = Array.from({ length: 50 }, (_, i) =>
     draftKey(memberA, sessionPage, `02000000-0000-4000-8000-${String(i + 10).padStart(12, "0")}`, "feed"),
   );
   const openKey = draftKey(memberA, sessionPage, channelA, "feed");
-  const validAt100 = JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "v", at: 100, key: null });
-  const storage = makeStorage([...capKeys.map((k) => [k, validAt100]), [openKey, validAt100]]);
+  const entryAt = (at) => JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "v", at, key: null });
+  const storage = makeStorage([...capKeys.map((k, i) => [k, entryAt(nowMs - 1000 + i)]), [openKey, entryAt(nowMs)]]);
   await withAdapter(storage, () => nowMs, ({ body }) => {
+    assert.deepEqual(storage.removed, []);
     storage[capKeys[1]] = '"abc"';
     storage[openKey] = '"abc"';
     body.dispatchEvent(new CustomEvent("message-sending", { bubbles: true, detail: { key: sendKeyA, body: "sent", inPlace: true } }));
   });
-  assert.equal(JSON.parse(storage.getItem(openKey)).at, null);
+  assert.deepEqual(storage.removed, [capKeys[0]]);
   assert.equal(Object.hasOwn(storage, capKeys[0]), false);
   assert.equal(Object.hasOwn(storage, capKeys[1]), true);
+  assert.equal(JSON.parse(storage.getItem(openKey)).at, null);
 });
 
 test("marker row predicate and sidebar URL parsing", () => {

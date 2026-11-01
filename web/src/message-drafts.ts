@@ -60,7 +60,7 @@ try {
         let places = new Set<string>();
         if (!sessionExpired() && !stopped) {
           try {
-            places = collectDraftPlaces(Object.keys(storage), scope, Date.now(), (k) => {
+            places = collectDraftPlaces(Object.keys(storage), scope, Date.now, (k) => {
               try { return storage.getItem(k); } catch { return null; }
             });
           } catch { places.clear(); }

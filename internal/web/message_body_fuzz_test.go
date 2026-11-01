@@ -115,7 +115,8 @@ func FuzzMessageBodyHTML(f *testing.F) {
 			// A missing attribute is as much a regression as an extra one: every
 			// element below carries dir="auto" (the <code> inside <pre> is the one
 			// that does not).
-			if bodyDir[n.Data] && !(n.Data == "code" && n.Parent != nil && n.Parent.Data == "pre") && attr(n, "dir") != "auto" {
+			codeInPre := n.Data == "code" && n.Parent != nil && n.Parent.Data == "pre"
+			if bodyDir[n.Data] && !codeInPre && attr(n, "dir") != "auto" {
 				t.Fatalf("body %q renders <%s> without dir=\"auto\"", body, n.Data)
 			}
 			for _, a := range n.Attr {

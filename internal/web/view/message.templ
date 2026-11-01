@@ -93,14 +93,18 @@ templ messageItem(entry Message, announcement string) {
 		// topic name wraps. The groups are display: contents from desk, which
 		// keeps the desktop line as it was.
 		<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body max-desk:items-center">
-			<div class="contents max-desk:flex max-desk:min-w-0 max-desk:flex-col">
+			// Below desk the column's ::after keeps the server's UTC text laid
+			// out, unseen, in the time's grid cell (server-time-stack): the
+			// local text message-time writes over it then never changes how
+			// the header wraps or how many lines the time takes (#2044).
+			<div data-server-time={ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") } class="contents max-desk:server-time-stack max-desk:min-w-0">
 				<span class="min-w-0 break-words">
 					@MemberName(entry.DisplayName, entry.Handle)
 				</span>
 				// From desk the time keeps its width when message-time
 				// localises it, so the topic label and Select beside it do not
-				// move (#1094). Below desk they sit at the row's end, and the
-				// reserved width would push them to a row of their own.
+				// move (#1094). Below desk they sit at the row's end, and that
+				// width would push them to a row of their own.
 				<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted desk:min-w-timestamp desk:tabular-nums">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 			</div>
 			<div class="contents max-desk:ml-auto max-desk:flex max-desk:min-w-0 max-desk:items-center max-desk:gap-x-2">

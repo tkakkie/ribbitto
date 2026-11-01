@@ -271,6 +271,26 @@
   }
 }
 
+/* Below desk a message header's name-and-time column keeps the box of the
+   server's UTC time after web/src/message-time.ts writes the local time
+   (#2044): its ::after copy of that text (data-server-time) shares the
+   time's grid cell, unseen and unspoken, so the cell is as wide and as tall
+   as the larger of the two at every width and text size, and the rewrite
+   cannot rewrap the header or the time. The name takes the first row. A
+   pseudo-element rather than a child keeps the feed's element budget. */
+@utility server-time-stack {
+  display: grid;
+  & > time,
+  &::after {
+    grid-area: 2 / 1;
+  }
+  &::after {
+    @apply text-caption;
+    content: attr(data-server-time) / "";
+    visibility: hidden;
+  }
+}
+
 /* A popover below its invoking button, aligned to the button's end, flipping
    above when there is no room (a message's actions menu, #1159). The anchor
    is the popovertarget button, the popover's implicit anchor. */

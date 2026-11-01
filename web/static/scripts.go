@@ -48,6 +48,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"side-panel",
 		"read-visibility",
 		"pins-sync",
+		"message-drafts",
 	}
 	scripts := &Scripts{
 		urls:    make(map[string]string, len(names)),

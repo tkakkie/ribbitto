@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -129,24 +128,6 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 	const topic = "topic-02000000000000000000000000000000"
 	const sibling = "topic-03000000000000000000000000000000"
 	path := view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{3})
-	t.Run("row-predicate", func(t *testing.T) {
-		p := open(t, path, true)
-		source, err := fs.ReadFile(static.FS(), "message-drafts-v7.js")
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, rest, ok := strings.Cut(string(source), "const marked = ")
-		expression, _, _ := strings.Cut(rest, "\n")
-		if !ok {
-			t.Fatal("missing pure row predicate")
-		}
-		got := step(t, p, "unit-test pure row predicate").MustEval(`() => { const marked = ` + expression + `
-          const places=new Set(['channel','channel:topic']);
-          return JSON.stringify([marked(places,'channel','feed',false),marked(places,'channel','topic',false),marked(places,'channel','sibling',false),marked(places,'channel','topic',true),marked(places,'other','feed',false)]); }`).Str()
-		if got != "[true,true,false,false,false]" {
-			t.Fatalf("pure row predicate: %s", got)
-		}
-	})
 	for _, tc := range []struct{ name, seed, want string }{
 		{"non-empty-feed", `put()`, `marked('` + channel + `') && !marked('` + topic + `')`},
 		{"topic-and-channel-only", `put('02000000-0000-0000-0000-000000000000')`, `marked('` + channel + `') && marked('` + topic + `') && !marked('` + sibling + `')`},

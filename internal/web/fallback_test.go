@@ -143,6 +143,10 @@ func assertFullConversationPage(t *testing.T, body string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	draftsURL, err := static.ScriptURL(t.Context(), "message-drafts")
+	if err != nil {
+		t.Fatal(err)
+	}
 	composer := false
 	var scripts []string
 	for n := range doc.Descendants() {
@@ -158,7 +162,7 @@ func assertFullConversationPage(t *testing.T, body string) {
 		}
 	}
 	order := strings.Join(scripts, " ")
-	if strings.Index(order, composerURL) > strings.Index(order, "/static/message-stream-") || strings.Index(order, "/static/message-stream-") > strings.Index(order, "/static/message-drafts-") {
+	if strings.Index(order, composerURL) > strings.Index(order, "/static/message-stream-") || strings.Index(order, "/static/message-stream-") > strings.Index(order, draftsURL) {
 		t.Errorf("composer listener registration order: %s", order)
 	}
 	if !composer {

@@ -70,7 +70,7 @@ Phases may overlap where nothing depends on it:
    relabel them. No Svelte-specific implementation starts without a new
    performance evaluation and the maintainer's explicit approval.
 5. **Conversions,** stateful first: #1416 composer queue state machine →
-   #1417 render from queue state · #1418 drafts and unread counts · #1419
+   #1417 render from queue state · #1418 (drafts) · #1826 (unread counts) · #1419
    stream scripts · #1420 composer helpers · #1421 remaining small scripts.
 6. **Client-side UX:** #1422 tab title and favicon. #1424 (conversation
    swap) and #1425 (in-memory cache) are held: #1467 kept full-page

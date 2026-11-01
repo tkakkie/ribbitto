@@ -321,7 +321,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		@pageScript("side-panel")
 		<script defer src="/static/sidebar-unread-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v14.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-drafts-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("message-drafts")
 	}
 }
 
@@ -334,9 +334,9 @@ templ channelFrame(page ChannelPage) {
 	<div
 		id={ OrganizationStreamID }
 		{ MemberAttribute }={ idValue(page.MemberID) }
-		data-session={ idValue(page.Session) }
-		data-session-expires={ fmt.Sprint(page.SessionExpires.UnixMilli()) }
-		data-rendered-at={ fmt.Sprint(page.Rendered.UnixMilli()) }
+		{ SessionAttribute }={ idValue(page.Session) }
+		{ SessionExpiresAttribute }={ fmt.Sprint(page.SessionExpires.UnixMilli()) }
+		{ RenderedAtAttribute }={ fmt.Sprint(page.Rendered.UnixMilli()) }
 		if page.Topic != nil {
 			{ SidebarTopicAttribute }={ idValue(page.Topic.ID) }
 		}
@@ -409,7 +409,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v14.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-drafts-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("message-drafts")
 	}
 }
 
@@ -826,7 +826,7 @@ templ unreadBadge(count int64) {
 }
 
 templ draftMarker() {
-	<span data-draft-marker hidden class="shrink-0 text-caption font-normal text-muted">{ i18n.T(ctx, "sidebar.draft") }</span>
+	<span { DraftMarkerAttribute } hidden class="shrink-0 text-caption font-normal text-muted">{ i18n.T(ctx, "sidebar.draft") }</span>
 }
 
 func sendKeyValue(page ChannelPage) string {

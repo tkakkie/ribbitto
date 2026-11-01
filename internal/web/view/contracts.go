@@ -38,6 +38,15 @@ const (
 	// MemberAttribute carries the current membership identity.
 	//dom:attribute
 	MemberAttribute = "data-member"
+	// SessionAttribute carries the signing-in session identity.
+	//dom:attribute
+	SessionAttribute = "data-session"
+	// SessionExpiresAttribute carries the session expiry timestamp in milliseconds.
+	//dom:attribute
+	SessionExpiresAttribute = "data-session-expires"
+	// RenderedAtAttribute carries the page render timestamp in milliseconds.
+	//dom:attribute
+	RenderedAtAttribute = "data-rendered-at"
 	// SidebarTopicAttribute carries the selected topic identity.
 	//dom:attribute
 	SidebarTopicAttribute = "data-sidebar-topic"
@@ -186,12 +195,18 @@ const (
 	// CapacityAttribute names the composer's capacity contract.
 	//dom:attribute
 	CapacityAttribute = "data-capacity"
+	// DraftsHorizonAttribute carries the sign-out horizon on the sign-in form.
+	//dom:attribute
+	DraftsHorizonAttribute = "data-drafts-horizon"
 	// DraftChannelAttribute names the composer's draft-channel contract.
 	//dom:attribute
 	DraftChannelAttribute = "data-draft-channel"
 	// DraftTopicAttribute names the composer's draft-topic contract.
 	//dom:attribute
 	DraftTopicAttribute = "data-draft-topic"
+	// DraftMarkerAttribute marks sidebar draft indicators.
+	//dom:attribute
+	DraftMarkerAttribute = "data-draft-marker"
 	// EventCursorAttribute names the composer's event-cursor contract.
 	//dom:attribute
 	EventCursorAttribute = "data-event-cursor"

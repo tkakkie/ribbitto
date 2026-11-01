@@ -308,7 +308,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		// read-visibility starts at htmx:load, after every deferred script, so
 		// side-panel already answers its panel-cover request whatever the order.
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("read-visibility")
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("message-time")
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -472,7 +472,7 @@ templ pendingMessage(page ChannelPage) {
 					<input type="hidden" name="body"/>
 					<input type="hidden" name="idempotency_key"/>
 					<input type="hidden" name="composer"/>
-					<input type="hidden" name="cursor"/>
+					<input type="hidden" name={ CursorField }/>
 					<p role="status" class="text-caption text-danger"></p>
 					<div { PendingActionsAttribute } hidden>
 						<button type="submit" aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
@@ -595,7 +595,7 @@ templ composerState(page ChannelPage) {
 			<input type="hidden" name="idempotency_key" value={ *page.IdempotencyKey }/>
 		}
 		if latest(page) && page.EventCursor != nil {
-			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
+			<input type="hidden" name={ CursorField } value={ fmt.Sprint(*page.EventCursor) }/>
 		}
 		if fieldError(page) != "" {
 			<p id={ MessageHelpID } role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
@@ -656,8 +656,8 @@ func readable(page ChannelPage) bool {
 templ readForm(page ChannelPage) {
 	// Below wide its button shows in the overview panel instead, at phone and
 	// middle widths alike; automatic reading posts through the form at every width.
-	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-wide:hidden">
-		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
+	<form id={ ReadFormID } method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger={ ReadVisibleEvent + ", submit" } hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-wide:hidden">
+		<input type="hidden" name={ CursorField } value={ fmt.Sprint(*page.EventCursor) }/>
 		if page.FirstUnread > 0 {
 			@submitButton(buttonSecondaryIcon, "reading.mark", submitValue{"scope", "all"}) {
 				@Icon("checkmark-regular", 20)

@@ -22,7 +22,7 @@ reaches. The panel covers the conversation exactly while it is out of flow.
 `web/src/side-panel.ts` alone decides that, from the panel's computed `position`
 on load and on each resize, and makes it a modal dialog over an inert page
 ([accessibility](accessibility.md)); its `aria-modal="true"` is the
-published state. `read-visibility-v6.js` reads that attribute and pauses
+published state. `web/src/read-visibility.ts` reads that attribute and pauses
 automatic reading, while the stream still updates the page behind. Each time
 it reads, it first dispatches a synchronous `panel-cover` event on the panel,
 and the panel script publishes the state for the current size: a page shown

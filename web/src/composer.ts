@@ -2,7 +2,7 @@ import * as dom from "./contracts.gen.ts";
 
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
-  Record<"cursor" | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement } };
+  Record<typeof dom.CursorField | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement } };
 type ComposerBody = HTMLTextAreaElement & { form: ComposerForm };
 // htmx supplies detail; target types are narrowed by each delegated hook below.
 type HtmxEvent<T extends HTMLElement = HTMLElement> = CustomEvent<{
@@ -119,7 +119,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       return;
     }
     const stream = dom.getOrganizationStream();
-    const cursor = event.target.elements.cursor;
+    const cursor = dom.getCursorField(event.target);
     if (stream && cursor) cursor.value = dom.readAttribute(stream, dom.EventCursorAttribute)!;
     const template = dom.getMessagePendingTemplate();
     changedRestoration(event.target.elements.body as ComposerBody);
@@ -151,7 +151,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     event.stopImmediatePropagation();
     const item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
     const sending = item.querySelector<ComposerForm>("form")!;
-    for (const name of ["idempotency_key", "composer", "cursor"]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
+    for (const name of ["idempotency_key", "composer", dom.CursorField]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
     const removed = removedKeys.get(removedKey(form, body.value));
     removedKeys.delete(removedKey(form, body.value));
     sending.elements.idempotency_key.value = restoredKey ||

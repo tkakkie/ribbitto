@@ -71,7 +71,7 @@ jobs:
           ln -s "$(command -v go)" bin/node-free/go
           export PATH="$PWD/bin/node-free" CGO_ENABLED=0
           if command -v node; then exit 1; fi
-          go -C tools run -mod=readonly ./webbuild .. "$GITHUB_SHA" "$GITHUB_RUN_ID" message-time composer
+          go -C tools run -mod=readonly ./webbuild .. "$GITHUB_SHA" "$GITHUB_RUN_ID"
           go build -mod=readonly -buildvcs=false -o bin/ribbitto ./cmd/ribbitto
 
       - name: verify generated files

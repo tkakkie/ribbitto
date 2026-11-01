@@ -29,7 +29,8 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("decoding script manifest: %w", err)
 	}
-	// This is the single declaration of converted page entries.
+	// This is the single declaration of converted page entries; tools/webbuild
+	// parses it from NewScripts, so keep its name and string slice literal.
 	names := []string{"message-time", "composer"}
 	scripts := &Scripts{urls: make(map[string]string, len(names))}
 	for _, name := range names {

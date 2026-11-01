@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -71,6 +72,29 @@ func TestHashAndVerify(t *testing.T) {
 	}
 	if !strings.HasPrefix(h.dummy, "$argon2id$v=19$m=19456,t=2,p=1$") {
 		t.Fatalf("dummy hash does not use the current parameters: %q", h.dummy)
+	}
+}
+
+// TestVerifyComparesWholeKey flips each byte of a stored key in turn. The
+// wrong-password cases above change the whole key, which a comparison of
+// only one byte would still reject 255 times in 256, so they cannot catch a
+// Verify that compares part of the key.
+func TestVerifyComparesWholeKey(t *testing.T) {
+	t.Parallel()
+	h := newTestHasher(t)
+	const memory, iterations, threads = 8 * 1024, 1, 1
+	salt := []byte(strings.Repeat("s", 16))
+	key := argon2.IDKey([]byte("pw"), salt, iterations, memory, threads, 32)
+	if ok, err := h.Verify(t.Context(), "pw", format(params{memory, iterations, threads, salt, key})); err != nil || !ok {
+		t.Fatalf("untampered: Verify = %v, %v; want true, nil", ok, err)
+	}
+	for i := range key {
+		tampered := bytes.Clone(key)
+		tampered[i] ^= 0x01
+		stored := format(params{memory, iterations, threads, salt, tampered})
+		if ok, err := h.Verify(t.Context(), "pw", stored); err != nil || ok {
+			t.Fatalf("key byte %d flipped: Verify = %v, %v; want false, nil", i, ok, err)
+		}
 	}
 }
 

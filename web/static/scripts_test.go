@@ -2,6 +2,7 @@ package static_test
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,11 +18,16 @@ import (
 func TestScriptManifest(t *testing.T) {
 	const file = "message-time-ABCDEFGH.js"
 	const bundle = "(()=>{})();"
-	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"},"composer":{"file":"composer-ABCDEFGH.js","sha256":"%x"}`, file, sha256.Sum256([]byte(bundle)), sha256.Sum256([]byte(bundle)))
+	sum := sha256.Sum256([]byte(bundle))
+	var embedded struct{ Entries map[string]struct{} }
+	if data, err := fs.ReadFile(static.FS(), "dist/manifest.json"); err != nil || json.Unmarshal(data, &embedded) != nil {
+		t.Fatal("reading embedded manifest")
+	}
+	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sum)
 	for _, tc := range []struct{ name, entries, file, want string }{
 		{"valid", entry, file, ""},
 		{"missing declaration", "", file, "missing declared entry"},
-		{"missing composer", strings.Split(entry, `,"composer"`)[0], file, "missing declared entry"},
+		{"missing composer", entry, file, "missing declared entry"},
 		{"missing bundle", entry, "other.js", "reading script bundle"},
 		{"unknown entry", entry + `,"other":{}`, file, "unknown entry"},
 		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "invalid bundle filename"},
@@ -29,11 +35,18 @@ func TestScriptManifest(t *testing.T) {
 		{"invalid JSON", "{", file, "decoding script manifest"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assets := fstest.MapFS{
-				"dist/manifest.json":        {Data: []byte(`{"entries":{` + tc.entries + `}}`)},
-				"dist/" + tc.file:           {Data: []byte(bundle)},
-				"dist/composer-ABCDEFGH.js": {Data: []byte(bundle)},
+			entries := tc.entries
+			assets := fstest.MapFS{"dist/" + tc.file: {Data: []byte(bundle)}}
+			for name := range embedded.Entries {
+				if name == "composer" && tc.name == "missing composer" {
+					continue
+				}
+				if name != "message-time" && entries != "" && entries != "{" {
+					entries += fmt.Sprintf(`,%q:{"file":"%s-ABCDEFGH.js","sha256":"%x"}`, name, name, sum)
+					assets["dist/"+name+"-ABCDEFGH.js"] = &fstest.MapFile{Data: []byte(bundle)}
+				}
 			}
+			assets["dist/manifest.json"] = &fstest.MapFile{Data: []byte(`{"entries":{` + entries + `}}`)}
 			scripts, err := static.NewScripts(assets)
 			if tc.want != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -101,19 +114,26 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 		t.Fatalf("building asset builder: %v: %s", err, out)
 	}
 	root := t.TempDir()
+	if err := os.CopyFS(filepath.Join(root, "web/src"), os.DirFS("../src")); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := os.ReadFile("scripts.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "web/static"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), registry, 0644); err != nil {
+		t.Fatal(err)
+	}
 	source := filepath.Join(root, "web/src/message-time.ts")
-	if err := os.MkdirAll(filepath.Dir(source), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "web/src/composer.ts"), []byte(`console.log("composer");`), 0644); err != nil {
-		t.Fatal(err)
-	}
 	previous := ""
 	for _, text := range []string{`console.log("first");`, `console.log("changed");`} {
 		if err := os.WriteFile(source, []byte(text), 0644); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command(binary, root, "commit", "run", "message-time", "composer")
+		cmd := exec.Command(binary, root, "commit", "run")
 		cmd.Env = []string{"PATH=" + t.TempDir()}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("generating without Node: %v: %s", err, out)

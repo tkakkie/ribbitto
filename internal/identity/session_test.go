@@ -112,6 +112,15 @@ func (f *fakeStore) DeleteOtherSessions(_ context.Context, accountID, currentID 
 
 func (f *fakeStore) SessionHorizon(context.Context) (kernel.ID, error) { return kernel.ID{}, f.err }
 
+// nonCanonical sets the lowest of the two unused bits in the token's last
+// character. A lenient decoder reads the same 32 bytes, so only strict
+// decoding stops one session from having several valid cookie spellings.
+func nonCanonical(token string) string {
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	last := strings.IndexByte(alphabet, token[len(token)-1])
+	return token[:len(token)-1] + string(alphabet[last^0x01])
+}
+
 func TestSessions(t *testing.T) {
 	start := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	account := kernel.ID{1, 2, 3}
@@ -132,6 +141,7 @@ func TestSessions(t *testing.T) {
 		{"too long", func(c string) string { return c + "A" }, 0, false, identity.ErrNoSession},
 		{"padded", func(c string) string { return c[:40] + "==" }, 0, false, identity.ErrNoSession},
 		{"standard alphabet", func(string) string { return strings.Repeat("+", 43) }, 0, false, identity.ErrNoSession},
+		{"unused trailing bits set", nonCanonical, 0, false, identity.ErrNoSession},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			now := start

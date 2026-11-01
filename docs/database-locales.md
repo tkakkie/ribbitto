@@ -27,25 +27,61 @@ and [collations](https://www.postgresql.org/docs/18/collation.html#COLLATION-MAN
 Review PostgreSQL major-version upgrade notes too: independence from glibc
 does not promise unchanged character semantics across PostgreSQL versions.
 
-The channel uniqueness constraint in `db/migrations/00005_channel_message.sql`
-is on `(organization_id, name)`, so differently cased names remain distinct.
-The topic index instead compares `lower(name)` within each channel, excluding
-NULL names. Lowercasing follows the input expression's collation and character
-classification provider; code-point ordering alone does not determine it.
-With the recommended database default, non-ASCII letters use builtin simple
-case mapping. Before moving data, inspect the installed index definitions
-with `\d channel` and `\d topic` in psql (the channel rule may change), and
-compare representative names on both servers:
+Channel and topic names are both unique by `lower(name)`: the channel index
+from `db/migrations/00020_channel_name_case_unique.sql` is on
+`(organization_id, lower(name))`, and the topic index compares `lower(name)`
+within each channel, excluding NULL names. Lowercasing follows the input
+expression's collation and character classification provider; code-point
+ordering alone does not determine it. With the recommended database default,
+non-ASCII letters use builtin simple case mapping; under a `C` libc locale only
+ASCII letters are lowercased, so `É` and `é` stay distinct names. Before moving
+data, inspect the installed index definitions with `\d channel` and `\d topic`
+in psql, and compare representative names on both servers:
 
 ```sql
 SELECT name, lower(name) FROM (VALUES ('É'), ('é'), ('İ'), ('ß')) AS names(name);
-SELECT 'É'::text = 'é'::text AS same_channel_name,
-       lower('É'::text) = lower('é'::text) AS same_topic_name;
+SELECT lower('É'::text) = lower('é'::text) AS same_name;
 ```
 
 A libc database cannot switch providers in place. To adopt builtin, dump and
-restore into a new cluster initialised as above; check name collisions under
-the target rules before cutover. Follow the
+restore into a new cluster initialised as above. The restore fails while
+building the unique indexes if names that differ today become equal under the
+target's `lower()`, so check this before cutover, on the target server, using a
+copy of the data that has no unique name index:
+
+1. On the target cluster, create a throwaway database with the same provider
+   and locale options as the database you will cut over to (`lower()` follows
+   the database's collation and character classification, so a database with
+   other options proves nothing).
+2. Restore a fresh `pg_dump -Fc` of production into it in two steps:
+   `pg_restore --section=pre-data` and then `--section=data`. The indexes,
+   including `channel_name_idx` and `topic_name_idx`, belong to `post-data`, so
+   they are never built and the rows load. (A plain-SQL dump creates indexes
+   after the rows too; restore it with `psql` without `ON_ERROR_STOP` or
+   `--single-transaction`, expect the two unique-index errors, and keep the
+   loaded rows.)
+3. Run both queries in that database. Each must return no rows:
+
+   ```sql
+   -- channels: the twin query of channel-name-upgrade.md
+   SELECT organization_id, lower(name), array_agg(name ORDER BY name)
+   FROM channel
+   GROUP BY organization_id, lower(name)
+   HAVING count(*) > 1;
+
+   -- topics: unique per channel, unnamed topics are excluded
+   SELECT organization_id, channel_id, lower(name), array_agg(name ORDER BY name)
+   FROM topic
+   WHERE name IS NOT NULL
+   GROUP BY organization_id, channel_id, lower(name)
+   HAVING count(*) > 1;
+   ```
+
+4. If a group is returned, rename the names on the source (see
+   [channel name upgrade](channel-name-upgrade.md) for channels), take a new
+   dump and repeat from step 1. Drop the throwaway database when done.
+
+Only then run the real restore. Follow the
 [restore procedure](../README.md#restoring-a-backup), including stopping ribbitto.
 This does not change column collations by migration.
 

@@ -7,7 +7,6 @@ message-drafts
 message-history
 message-link
 message-stream
-message-time
 pins-sync
 popover-focus
 quote-selection

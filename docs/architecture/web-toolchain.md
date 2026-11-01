@@ -65,9 +65,15 @@ compiling and package that output (none exists).
 Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
-#1821 adds development rebuilds, disk serving and maps; #1819 adds private
-production maps, absent from the runtime manifest. ES modules, shared chunks,
-lazy loading and `modulepreload` need target-browser verification before adoption.
+In `make dev`, `cmd/dev` runs `webbuild -dev` and supervises `webbuild -watch`,
+writing dev bundles, `.js.map` files and `manifest.json` to `bin/dev-dist`
+without touching `web/static/dist` (recent generations kept, manifest replaced
+atomically). `RIBBITTO_DEV_ASSETS=bin/dev-dist` re-reads the manifest per
+request and serves `web/static` assets plus `bin/dev-dist` bundles and `.js.map`
+files with `Cache-Control: no-store` (#1821).
+#1819 adds private production maps, absent from the runtime manifest. ES modules,
+shared chunks, lazy loading and `modulepreload` need target-browser verification
+before adoption.
 
 ## Versions and installation — #1410, #1415
 

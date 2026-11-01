@@ -50,8 +50,10 @@ func TestSupervise(t *testing.T) {
 		{"interrupt", os.Interrupt, "", false},
 		{"terminate", syscall.SIGTERM, "", false},
 		{"css exits", nil, "css", false},
+		{"bundles exits", nil, "bundles", false},
 		{"templ exits", nil, "templ", false},
 		{"css fails", nil, "css", true},
+		{"bundles fails", nil, "bundles", true},
 		{"templ fails", nil, "templ", true},
 		{"second start fails", nil, "start", true},
 	} {
@@ -80,7 +82,7 @@ func TestSupervise(t *testing.T) {
 					}
 				}
 			}()
-			roles := []string{"css", "css-child", "css-child-child", "templ", "templ-child", "templ-child-child"}
+			roles := []string{"css", "css-child", "css-child-child", "bundles", "bundles-child", "bundles-child-child", "templ", "templ-child", "templ-child-child"}
 			if tc.exit == "start" {
 				roles = roles[:0]
 			}
@@ -723,7 +725,7 @@ func TestHelperProcess(t *testing.T) {
 	if role == "supervisor" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		commands := []*exec.Cmd{helper("css", root), helper("templ", root)}
+		commands := []*exec.Cmd{helper("css", root), helper("bundles", root), helper("templ", root)}
 		if os.Getenv("DEV_EXIT") == "start" {
 			commands[1] = exec.Command(filepath.Join(root, "missing"))
 		}

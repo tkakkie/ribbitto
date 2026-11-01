@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"github.com/tkakkie/ribbitto/web/static"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -339,8 +340,12 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
+	pinsSyncURL, err := static.ScriptURL(t.Context(), "pins-sync")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The list has no composer, so its script must be absent.
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v14.js"] || scripts["/static/read-visibility-v6.js"] || hasComposer {
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v14.js"] || scripts["/static/read-visibility-v6.js"] || scripts[pinsSyncURL] || hasComposer {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
@@ -470,8 +475,16 @@ func TestStreamStoppedNotice(t *testing.T) {
 	} {
 		for _, topic := range []*view.Topic{nil, {ID: kernel.ID{2}}} {
 			t.Run(tc.lang+fmt.Sprint(topic), func(t *testing.T) {
+				pinsSyncURL, err := static.ScriptURL(t.Context(), "pins-sync")
+				if err != nil {
+					t.Fatal(err)
+				}
 				snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, Topic: topic}
-				doc, err := html.Parse(strings.NewReader(renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", snapshot))))
+				rendered := renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", snapshot))
+				if !strings.Contains(rendered, `<script defer src="`+pinsSyncURL+`"`) {
+					t.Fatalf("channel page missing pins-sync bundle %q", pinsSyncURL)
+				}
+				doc, err := html.Parse(strings.NewReader(rendered))
 				if err != nil {
 					t.Fatal(err)
 				}

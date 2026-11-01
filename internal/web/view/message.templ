@@ -192,7 +192,7 @@ templ PinControl(entry Message, errorKey string) {
 			action = entry.PinURL + "/unpin"
 		}
 	}}
-	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } data-pin-control={ idValue(entry.ID) } data-pinned={ fmt.Sprint(entry.Pinned) }>
+	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } { PinControlAttribute }={ idValue(entry.ID) } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) }>
 		for _, pinned := range []bool{false, true} {
 			{{
 				action, label := entry.PinURL+"/pin", "message.pin"
@@ -200,7 +200,7 @@ templ PinControl(entry Message, errorKey string) {
 					action, label = entry.PinURL+"/unpin", "message.unpin"
 				}
 			}}
-			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } data-pin-action={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
+			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } { PinActionAttribute }={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
 		}
 		if errorKey != "" {
 			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>

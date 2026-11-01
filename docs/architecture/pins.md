@@ -96,7 +96,7 @@ presence/typing, so decision 31's memory-only owners remain unchanged.
 
 The section carries `data-pins-seq` from its repeatable-read snapshot and
 `data-pinned-ids`. Pin responses include the same current section out of band;
-`pins-sync-v2.js` rejects older frames or responses before swapping. This
+`web/src/pins-sync.ts` (`web/src/pins-seq.ts`) rejects older frames or responses before swapping. This
 orders racing transports without changing durable or applied cursors. Loaded
 controls render both explicit actions; the script only selects visibility and
 restores focus. Closing the overview unsubscribes; its controls recover on reload.

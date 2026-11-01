@@ -121,18 +121,31 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			u, err := url.Parse(f.reader.server.URL)
 			acceptanceOK(t, err)
 			cookies := f.reader.client.Jar.Cookies(u)
-			frames := make(chan string)
+			// Each stream request gets its own frame channel, and frames go to
+			// the one the test last saw open. A released stream's handler runs
+			// until the server notices the closed connection; on one shared
+			// channel it could take, and lose, a frame meant for the reopened
+			// stream, and the probe wait would then time out. The handler
+			// announces its channel before it writes ": connected", so the test
+			// learns of a stream before the browser can see it open, both at
+			// first load and in reopened().
+			type stream struct {
+				want   string
+				frames chan string
+			}
+			streams := make(chan stream, 1)
+			var frames chan string
 			requests := make(chan chan int, 4)
-			interests := make(chan string, 1)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/events") {
-					interests <- r.URL.Query().Get("want")
+					own := make(chan string)
+					streams <- stream{r.URL.Query().Get("want"), own}
 					w.Header().Set("Content-Type", "text/event-stream")
 					_, _ = fmt.Fprint(w, ": connected\n\n")
 					_ = http.NewResponseController(w).Flush()
 					for {
 						select {
-						case frame := <-frames:
+						case frame := <-own:
 							_, _ = fmt.Fprint(w, frame)
 							_ = http.NewResponseController(w).Flush()
 						case <-r.Context().Done():
@@ -171,10 +184,11 @@ func TestSidebarUnreadBrowser(t *testing.T) {
     document.addEventListener('htmx:afterRequest', e => { if(e.target.id === 'sidebar-resync') window.completed++; });`)
 			page.MustNavigate(server.URL + path).MustWaitLoad()
 			select {
-			case want := <-interests:
-				if want != wantInterests {
-					t.Fatalf("interests = %s, want %s", want, wantInterests)
+			case opened := <-streams:
+				if opened.want != wantInterests {
+					t.Fatalf("interests = %s, want %s", opened.want, wantInterests)
 				}
+				frames = opened.frames
 			case <-ctx.Done():
 				t.Fatal("no stream")
 			}
@@ -271,10 +285,11 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				reopened := func() {
 					t.Helper()
 					select {
-					case want := <-interests:
-						if want != wantInterests {
-							t.Fatalf("interests = %s, want %s", want, wantInterests)
+					case opened := <-streams:
+						if opened.want != wantInterests {
+							t.Fatalf("interests = %s, want %s", opened.want, wantInterests)
 						}
+						frames = opened.frames
 					case <-ctx.Done():
 						t.Fatal("persisted restore did not reopen the stream")
 					}

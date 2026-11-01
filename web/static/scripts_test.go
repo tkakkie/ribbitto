@@ -32,6 +32,7 @@ func TestScriptManifest(t *testing.T) {
 		{"valid development map", devEntry, "", file, file + ".map", ""},
 		{"valid previous generation", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"message-time-OLDHASH1.js.map"}}]`, file, file + ".map", ""},
 		{"missing declaration", "", "", file, "", "missing declared entry"},
+		{"missing composer", entry, "", file, "", "missing declared entry"},
 		{"missing bundle", entry, "", "other.js", "", "reading script bundle"},
 		{"missing source map", devEntry, "", file, "", "reading source map"},
 		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), "", file, "other.js.map", "invalid source map filename"},
@@ -50,6 +51,9 @@ func TestScriptManifest(t *testing.T) {
 				assets["dist/"+tc.mapFile] = &fstest.MapFile{Data: []byte("{}")}
 			}
 			for name := range embedded.Entries {
+				if name == "composer" && tc.name == "missing composer" {
+					continue
+				}
 				if name != "message-time" && entries != "" && entries != "{" {
 					entries += fmt.Sprintf(`,%q:{"file":"%s-ABCDEFGH.js","sha256":"%x"}`, name, name, sum)
 					assets["dist/"+name+"-ABCDEFGH.js"] = &fstest.MapFile{Data: []byte(bundle)}

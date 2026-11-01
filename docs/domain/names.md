@@ -105,6 +105,10 @@ of ASCII letters, digits, `_`, `.` and `-`, strips trailing punctuation, and
 validates the whole handle; it never falls back to a shorter prefix.
 Bold/italic delimiters remain in these runs, so paired underscores cannot
 split a handle; `*` ends a handle. Trailing punctuation stays outside.
+A `_` right after a converted handle is stored as `\_` unless it closes
+italics: the typed handle's last letter or digit stops that `_` opening
+italics, but the reference's `>` would not, so the stored body would show
+italics or lose underscores the typed text kept.
 Code spans, closed fences, escapes, URLs and e-mail addresses stay literal;
 an unclosed fence is ordinary text. Only the URL organisation's members
 resolve, through org's existing handle-ordered listing, fetched once only

@@ -188,6 +188,22 @@ func parseInline(line string, offset int, runs *[]textRun) []BodyInline {
 	return mergeText(p.stack[0].nodes)
 }
 
+// closesItalic reports whether the "_" at line[i] closes an italic when
+// parseInline reads line, a line's content after any quote marker.
+func closesItalic(line string, i int) bool {
+	p := inlineParser{line: line, stack: make([]inlineFrame, 1, 3)}
+	j := 0
+	for j < i {
+		j = p.step(j)
+	}
+	if j != i || line[i] != '_' {
+		return false
+	}
+	depth := len(p.stack)
+	p.step(i)
+	return len(p.stack) < depth
+}
+
 // step reads the construct at line[i], trying the rules in decision 39's
 // order, and returns where the next one starts.
 func (p *inlineParser) step(i int) int {

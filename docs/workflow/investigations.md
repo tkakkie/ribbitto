@@ -1,6 +1,6 @@
 # Investigations and the performance target
 
-Read when: proposing, approving or running a benchmark, load test, host measurement or performance investigation.
+Read when: proposing, approving or running a benchmark, load test, host measurement or investigation.
 
 - New measurement/verification stages, prototypes and measurement
 infrastructure need explicit maintainer preapproval.
@@ -27,8 +27,7 @@ that SHA (#1273, #1276).
 `ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
 other tools use the trusted, fixed base SHA or a preapproved source (e.g.
-an external harness). A head adding a migration is a stop for the
-maintainer.
+an external harness); a new migration stops for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
 checkouts with the trusted git settings and `GOENV=off` in [build routes](#build-routes).
@@ -144,7 +143,7 @@ Expect logged usage error, exit 1: profile, dyld and Go start.
 Possible gaps: self-signals (`(allow signal (target self))`),
 parent-directory metadata reads, pgx current-user lookup. Prefer `db_url`
 with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
-  3. Test copy: add only exec/runtime reads for `/bin/cat` and
+  3. Test copy: add only execution/runtime reads for `/bin/cat` and
 `/usr/bin/nc`; same user/environment and other file/network rules.
 Confirm denial: outside reads (including operator's `~`), connections to
 5432/55433/Chrome's DevTools port, other execution and address/port binds.
@@ -177,9 +176,9 @@ Per SHA: stop servers; stage checksummed binary read-only; clear `data`;
 restore dataset with trusted base tools only. Start DB; `db_url`: disposable,
 `127.0.0.1:55434`, explicit `user=`, `sslmode=disable`, no fallback hosts/Unix
 sockets. Run in foreground.
-Trusted Perl starts a new session, redirects fds 0-2 to `/dev/null` and
+Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
-before the profile; `env -i` leaves fds open.
+before the profile; `env -i` alone leaves files open.
 Ctrl-C stops only the waiting parent; stop the server by PID.
 
 ```sh
@@ -209,7 +208,7 @@ cd /private/var/ribbitto-measure/data &&
 ```
 
 Administrator after start: `lsof -a -p "$pid" -d 0-65535` (`pid`: server).
-Require 0: `/dev/null`; 1-2: fresh log; higher: allowed server files,
+Require 0: `/dev/null`; 1-2: fresh log; higher: server-opened allowed files,
 runtime kqueue/pipes or permitted sockets only. Stop on inherited operator
 files/terminals/sockets.
 

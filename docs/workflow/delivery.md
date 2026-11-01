@@ -1,31 +1,36 @@
 # Delivering a pull request
 
-Read when: orchestrating a pull request ([implementer brief](#standard-implementer-brief), reviews, Copilot, third-AI review; rounds and independence in [`reviewing.md`](reviewing.md)), or scanning a pull request body before publishing ([Running a review](#running-a-review)).
+Read when: orchestrating a PR ([implementer brief](#standard-implementer-brief), reviews, Copilot, third-AI review; rounds and independence in [`reviewing.md`](reviewing.md)), or scanning a PR body before publishing ([Running a review](#running-a-review)).
 
 ## Standard implementer brief
 
-Paste into every implementer run (once the issue is `ready`), with the issue
-number, branch, risk and issue text:
+Paste into every implementer run (once `ready`), with the issue number, branch,
+risk and issue text:
 
 > You are `<Codex|Argon>`, implementing issue `#<N>` in `tkakkie/ribbitto` on
-> branch `<ai>/<topic>` from `origin/main`, started with your own GitHub token
-> via `run-as.sh`. The issue is `ready`.
+> branch `<ai>/<topic>` from `origin/main` (`ready`, risk: `<normal|high>`).
 >
-> 1. Read [`AGENTS.md`](../../AGENTS.md) and only the `docs/` files for the
->    touched area (`AGENTS.md` "Where things are explained"). Skip
+> Issue `#<N>` — `<title>`:
+> `<issue body, including Done when>`
+>
+> 1. Read `AGENTS.md` and only the touched area's `docs/` (`AGENTS.md` "Where
+>    things are explained"). Use only your own token; never put a credential in
+>    a commit, pull request, comment or log; use only a disposable local test
+>    database (`RIBBITTO_TEST_DATABASE_URL`), never a shared one. Skip
 >    `docs/workflow/` unless an action triggers a section:
->    [own token, credentials, `ready` and merge](README.md#what-no-ai-does),
->    [tool failures and disposable test DBs](ai-credentials.md#tool-failures-and-disposable-databases),
->    [PR body credential scan](#running-a-review), or
->    [measurement caps](investigations.md#investigations-and-the-performance-target).
-> 2. Implement the issue in this worktree (keep the diff under ~400 lines
->    excluding generated files). Stop and report if a maintainer decision or a
->    new language/tool is needed.
+>    own token, credentials, `ready`, merge (docs/workflow/README.md#what-no-ai-does),
+>    tool failures, disposable test DBs (docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
+>    PR body credential scan (docs/workflow/delivery.md#running-a-review), or
+>    measurement caps (docs/workflow/investigations.md#investigations-and-the-performance-target).
+> 2. Implement the issue in this worktree (diff under ~400 lines excluding
+>    generated files). Stop and report if a maintainer decision or a new
+>    language/tool is needed.
 > 3. Run `make check` and `make prepush` (plus `make deps` if imports change);
 >    fix failures without deleting, skipping or weakening a test.
 > 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
->    branch, run the [credential scan](#running-a-review) on the PR body file,
->    and open a DRAFT PR (`.github/pull_request_template.md`, `Closes #<N>`).
+>    branch, run the credential scan (docs/workflow/delivery.md#running-a-review)
+>    on the PR body file, and open a DRAFT PR (`.github/pull_request_template.md`,
+>    `Closes #<N>`).
 > 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before any
 >    follow-up push), and stop once CI is green. Do not set labels, request or
 >    run reviews, mark ready, merge, or touch `main`, other branches, settings
@@ -34,14 +39,14 @@ number, branch, risk and issue text:
 ## Waking the orchestrator
 
 Start every implementer run as one blocking background command (no `nohup` or
-trailing `&`), so the run's end or time limit wakes the orchestrator (#1457).
+trailing `&`), so its end or time limit wakes the orchestrator (#1457).
 On wakeup, read the result: with a PR, continue through the parallel reviews,
 fixes and follow-up checks to `ai-reviewed` until a rule in this file,
 [`reviewing.md`](reviewing.md) or the [README](README.md) says to ask the
 maintainer. If the implementer stopped for a maintainer decision, report at
 once; if the run failed or timed out, inspect the worktree and branch and
-resume or restart once, else report. CI and Copilot wait loops have a 60-minute
-maximum; at the maximum, report to the maintainer and do not proceed. The
+resume or restart once, else report. CI and Copilot wait loops cap at 60
+minutes; at the cap, report to the maintainer and do not proceed. The
 maintainer decides `ready`, the merge, measurement approval and the cases where
 the rules say to ask.
 
@@ -51,8 +56,8 @@ the rules say to ask.
   clean worktree at the reviewed head (after `git fetch`). Pass the issue or PR
   number, exact base and head (or baseline) SHAs, round and earlier findings;
   the reviewer reads the rest with `gh` (own token) and `git diff` (the
-  adversarial reviewer reads only title, description and named earlier
-  findings, not other reports or comments).
+  adversarial reviewer reads the title and description (and the diff), not
+  other reports or comments except the earlier findings the orchestrator names).
 - A background run counts as started only after its log header shows the
   expected `workdir:` and `model:`; an earlier exit is a failed start (#359).
 - Never pass the Status issue (#1) or have a reviewer fetch it.
@@ -70,7 +75,7 @@ the rules say to ask.
   ```
 
 - CodeQL (`.github/workflows/codeql.yml`) runs on pushes to `main` and weekly,
-  not on pull requests; read its alerts on `main` in the Security tab.
+  not on PRs; read its alerts on `main` in the Security tab.
 - Scratch files go outside the worktree, or are deleted before checks such as
   `go test ./...`; git-ignored paths (`bin/`) are no exception because builds
   and tests use them.
@@ -85,14 +90,14 @@ branch has current `main`. The `main` ruleset does not request it on ready, and
 drafts and pushes do not trigger it. Repeat only if the maintainer asks.
 Balanced is not used (UI-only in *Reviewers*, not CLI/API).
 
-Wait (up to the [60-minute maximum](#waking-the-orchestrator); at the maximum,
-report to the maintainer and do not proceed) until its review of that head is
+Wait (up to the [60-minute cap](#waking-the-orchestrator); at the cap, report
+to the maintainer and do not proceed) until its review of that head is
 submitted (a body-only review counts: read it), then answer and resolve its
 comments. Any change goes through the follow-up check below as a draft.
 
 ## Copilot follow-up check
 
-Pull requests only, after a fix for a Copilot or [third-AI](#third-ai-review)
+PRs only, after a fix for a Copilot or [third-AI](#third-ai-review)
 (adversarial) finding; not a review round, so the two-round limit is untouched.
 If answering needs a change:
 
@@ -102,7 +107,7 @@ If answering needs a change:
    no automated test can reproduce it (a rule/doc fix, or a race no existing
    harness can gate; never effort or time) record why and the alternative
    verification: a scripted/manual reproduction, a mutation showing the guard
-   matters, or the exact text change. Keep the PR a draft (convert back to a
+   matters, or the exact text change. Keep the PR a draft (convert back to
    draft first if the maintainer asked for another Copilot review after ready).
 2. An AI that did not write the change ([review independence](README.md#principles))
    checks that the whole diff since the baseline SHA (the head the round
@@ -112,8 +117,8 @@ If answering needs a change:
    alternative verification was done (an unaccepted reason is ❌) — using
    `.github/prompts/copilot-check.md` via the README recipe with
    [review context](#running-a-review). Header: `Copilot` only when a Copilot
-   finding is covered, else `Adversarial`. Retry a non-counting run once as the
-   README says; record who ran it:
+   finding is covered, else `Adversarial`. Retry a non-counting run once per the
+   README; record who ran it:
 
    ```
    **<Copilot|Adversarial> follow-up check — <Claude|Codex|Argon>** (at <SHA>)
@@ -127,8 +132,9 @@ If answering needs a change:
    when an earlier report exists (a push before it restarts this check), then
    the remaining lifecycle steps. Do not re-request Copilot unless the
    maintainer asks; if it reviews again anyway, handle once the same way, then
-   ask the maintainer. Any unrelated change, design/spec decision, failed check
-   or new blocking finding → ask the maintainer.
+   ask the maintainer. Any change in the diff other than those answering
+   findings, design/spec decision, failed check or new blocking finding → ask
+   the maintainer.
 
 ## Docs-only pull requests
 
@@ -140,10 +146,9 @@ Copilot is skipped when all four hold (#1234):
 - risk `normal` ([Risk](reviewing.md#risk));
 - no loosened check (a `docs/size-exceptions.txt` change that loosens one is not exempt).
 
-All other lifecycle steps and [checks](../../AGENTS.md#commands) stay; state in
-the PR body that the docs-only rule applied. Handle any unsolicited Copilot
-review as above. Stopping meeting a condition restores the normal chain,
-Copilot included.
+All other lifecycle steps and [checks](../../AGENTS.md#commands) stay; note the
+docs-only rule in the PR body. Handle any unsolicited Copilot review as above.
+Stopping meeting a condition restores the normal chain, Copilot included.
 
 ## Third-AI review
 

@@ -52,7 +52,8 @@ Self-contained instructions for cross-reviewing a pull request (alongside
 - **Independence and credentials:** Review only if you neither implemented nor
   pushed to the pull request ([Who reviews and who changed it](#review-independence-and-rounds);
   [review independence](README.md#principles)). Use only your own GitHub token
-  and never include credentials in the report ([What no AI does](README.md#what-no-ai-does)).
+  and never include credentials in the report ([What no AI does](README.md#what-no-ai-does));
+  for database tests or tool failures, follow [Tool failures and disposable databases](ai-credentials.md#tool-failures-and-disposable-databases).
 - **Head SHA and round:** The orchestrator supplies the pull request number,
   exact base and head SHAs, round (`1` or `2`; [at most two rounds](#review-independence-and-rounds))
   and earlier findings ([review context](ai-credentials.md#review-context)).

@@ -78,18 +78,19 @@ Read and update the relevant doc in the same PR:
 [`docs/ui-colours.md`](docs/ui-colours.md) (token utilities only, never raw colours; `tools/sourcecheck`)
 and [`docs/accessibility.md`](docs/accessibility.md).
 
-Workflow reading: implementers read this file, the touched area's docs, and
-action-triggered sections — [own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
-[tool failures and disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
-[PR body credential scan](docs/workflow/delivery.md#running-a-review) and
+Workflow reading: whoever performs an action reads its section —
+[own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
+[tool failures, disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
+[PR body scan](docs/workflow/delivery.md#running-a-review),
 [measurement caps](docs/workflow/investigations.md#investigations-and-the-performance-target).
-Cross-reviewers read this file and [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
-(or [issue review](docs/workflow/reviewing.md#issue-review)). The orchestrator
-reads the [workflow README](docs/workflow/README.md) ([independence](docs/workflow/README.md#principles),
+Implementers read this file and the touched area's docs; cross-reviewers this
+file and [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
+(or [issue review](docs/workflow/reviewing.md#issue-review)); the orchestrator
+the [workflow README](docs/workflow/README.md) ([independence](docs/workflow/README.md#principles),
 [ruleset](docs/workflow/README.md#what-github-enforces-and-what-is-only-a-rule),
-[head SHA](docs/workflow/README.md#lifecycle)) and [`delivery.md`](docs/workflow/delivery.md)
-([third-AI rules](docs/workflow/delivery.md#third-ai-review)). Read
-[`ai-credentials.md`](docs/workflow/ai-credentials.md),
+[head SHA](docs/workflow/README.md#lifecycle)), [`delivery.md`](docs/workflow/delivery.md)
+([third-AI](docs/workflow/delivery.md#third-ai-review)) and
+[`reviewing.md`](docs/workflow/reviewing.md); [`ai-credentials.md`](docs/workflow/ai-credentials.md),
 [`investigations.md`](docs/workflow/investigations.md) and `docs/decisions/` only
 for their subject.
 
@@ -112,9 +113,9 @@ for their subject.
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Handlers, templ, htmx and JS follow [`docs/architecture/web-layers.md`](docs/architecture/web-layers.md).
 - Product vocabulary follows `docs/domain/vocabulary.md` (`tools/sourcecheck` checks identifiers, file names and routes).
-- UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
-  neutral IDs (`hello.title`, never a product word), and update both languages
-  in the same PR. Templates use `i18n.T(ctx, "message.id")`.
+- UI strings go in `internal/web/i18n/locales/{en,ja}.toml` (dotted neutral IDs
+  like `hello.title`, never a product word; update both in the same PR) via
+  `i18n.T(ctx, "message.id")`.
 - Update `docs/` in the same PR when terminology, invariants, data flow or
   dependency direction changes.
 

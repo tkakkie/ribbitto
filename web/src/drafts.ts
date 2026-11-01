@@ -63,21 +63,23 @@ export function decideCleanupKey(key: string, horizon: string, member?: string):
   return uuidMillisecondPrefix(parts.session) < uuidMillisecondPrefix(horizon) ? "remove" : "keep";
 }
 
+export interface DraftStorage {
+  getItem(key: string): string | null;
+  removeItem(key: string): void;
+}
+
 export function sweepKeys(
-  keys: readonly string[],
+  storage: DraftStorage,
   horizon: string,
-  scope: Pick<PageScope, "member" | "session" | "expires"> | null,
-  nowMs: number,
-  readRaw: (key: string) => string | null,
-): string[] {
-  const removed: string[] = [];
-  for (const key of keys) {
+  scope?: Pick<PageScope, "member" | "session" | "expires"> | null,
+  nowMs = 0,
+): void {
+  for (const key of Object.keys(storage)) {
     const action = decideCleanupKey(key, horizon, scope?.member);
-    if (action === "remove" || (action === "validate" && (!scope || !isValidDraftEntry(parseDraftEntry(readRaw(key)), scope, nowMs)))) {
-      removed.push(key);
+    if (action === "remove" || (action === "validate" && (!scope || !isValidDraftEntry(parseDraftEntry(storage.getItem(key)), scope, nowMs)))) {
+      storage.removeItem(key);
     }
   }
-  return removed;
 }
 
 export function checkSessionExpired(state: ExpiryState, perfNow: number, dateNow: number): { readonly justExpired: boolean; readonly expired: boolean } {
@@ -92,8 +94,8 @@ export const nextExpiryDelay = (deadline: number, perfNow: number): number => Ma
 export const normalizeDraftText = (raw: string): string => (!raw.trim() || [...raw].length > 4000 ? "" : raw);
 export const nextEditTime = (prevAt: number, nowMs: number): number => Math.max(nowMs, prevAt + 1);
 export const nextSendEditTime = (tabAt: number, nowMs: number, storedAt: unknown): number =>
-  Math.max(nextEditTime(tabAt, nowMs), (typeof storedAt === "number" && storedAt ? storedAt : 0) + 1);
-export const shouldWriteDraft = (storedAt: unknown, candidateAt: number): boolean => !(typeof storedAt === "number" && storedAt >= candidateAt);
+  Math.max(nextEditTime(tabAt, nowMs), ((storedAt as number) || 0) + 1);
+export const shouldWriteDraft = (storedAt: unknown, candidateAt: number): boolean => !((storedAt as number) >= candidateAt);
 
 export function selectKeysToTrim(
   keys: readonly string[],
@@ -104,7 +106,7 @@ export function selectKeysToTrim(
 ): string[] {
   const entries = keys
     .filter((k) => k !== exceptKey && isOwnDraftKey(parseDraftKey(k), scope))
-    .map((k): [string, number] => { const rawAt = readAt(k); return [k, typeof rawAt === "number" && rawAt ? rawAt : 0]; });
+    .map((k): [string, number] => [k, (readAt(k) as number) || 0]);
   entries.sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   return entries.slice(0, Math.max(0, entries.length - limit)).map(([k]) => k);
 }

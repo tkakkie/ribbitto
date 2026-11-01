@@ -49,6 +49,26 @@ test("draft key grammar and ownership", () => {
   assert.equal(isSessionDraftKey(draftKey(memberA, sessionOlder, channelA), sessionPage), false);
 });
 
+const makeStorage = (entries, onGet) => {
+  const reads = [];
+  const removed = [];
+  const storage = Object.create({
+    get reads() { return reads; },
+    get removed() { return removed; },
+    getItem(k) {
+      reads.push(k);
+      if (onGet) onGet(k);
+      return Object.hasOwn(storage, k) ? storage[k] : null;
+    },
+    removeItem(k) {
+      removed.push(k);
+      delete storage[k];
+    },
+  });
+  for (const [k, v] of entries) storage[k] = v;
+  return storage;
+};
+
 test("cleanup decisions across sign-in and organisation horizons without reading foreign values", () => {
   const ownValidKey = draftKey(memberA, sessionPage, channelA, "feed");
   const ownInvalidKey = draftKey(memberA, sessionPage, channelA, topicA);
@@ -73,26 +93,52 @@ test("cleanup decisions across sign-in and organisation horizons without reading
   }
 
   const validValue = JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "hi", at: nowMs, key: null });
-  const values = new Map([
+  const seed = [
+    [SignedOutNoticeKey, sessionPage],
+    [malformedKey, validValue],
+    [sameSessionForeignMember, validValue],
     [ownValidKey, validValue],
     [ownInvalidKey, "{broken"],
-    [sameSessionForeignMember, validValue],
     [olderForeign, validValue],
     [sameMsForeign, validValue],
     [newerForeign, validValue],
-  ]);
-  const readKeys = [];
-  const readRaw = (k) => { readKeys.push(k); return values.get(k) ?? null; };
-  const keys = [SignedOutNoticeKey, malformedKey, sameSessionForeignMember, ownValidKey, ownInvalidKey, olderForeign, sameMsForeign, newerForeign];
+  ];
+  const orgStorage = makeStorage(seed);
+  sweepKeys(orgStorage, sessionPage, scope, nowMs);
+  assert.deepEqual(orgStorage.removed, [malformedKey, sameSessionForeignMember, ownInvalidKey, olderForeign]);
+  assert.deepEqual(orgStorage.reads, [ownValidKey, ownInvalidKey]);
+  assert.deepEqual(Object.keys(orgStorage), [SignedOutNoticeKey, ownValidKey, sameMsForeign, newerForeign]);
 
-  assert.deepEqual(sweepKeys(keys, sessionPage, scope, nowMs, readRaw), [malformedKey, sameSessionForeignMember, ownInvalidKey, olderForeign]);
-  assert.deepEqual(readKeys, [ownValidKey, ownInvalidKey]);
+  const signInStorage = makeStorage(seed);
+  sweepKeys(signInStorage, sessionPage, null, nowMs);
+  assert.deepEqual(signInStorage.removed, [malformedKey, olderForeign]);
+  assert.deepEqual(signInStorage.reads, []);
 
-  const signInReads = [];
-  assert.deepEqual(sweepKeys(keys, sessionPage, null, nowMs, (k) => { signInReads.push(k); return null; }), [malformedKey, olderForeign]);
-  assert.deepEqual(signInReads, []);
-  assert.deepEqual([...collectDraftPlaces([ownValidKey, sameMsForeign, newerForeign], scope, nowMs, readRaw)], [channelA, `${channelA}:feed`]);
-  assert.deepEqual(readKeys, [ownValidKey, ownInvalidKey, ownValidKey]);
+  const placeReads = [];
+  const values = new Map(seed);
+  assert.deepEqual([...collectDraftPlaces([ownValidKey, sameMsForeign, newerForeign], scope, nowMs, (k) => { placeReads.push(k); return values.get(k) ?? null; })], [channelA, `${channelA}:feed`]);
+  assert.deepEqual(placeReads, [ownValidKey]);
+});
+
+test("cleanup deletes earlier older-session key before a later own-session getItem throws", () => {
+  const olderForeign = draftKey(memberB, sessionOlder, channelA, "feed");
+  const ownKey = draftKey(memberA, sessionPage, channelA, "feed");
+  const laterMalformed = `${DraftPrefix}malformed`;
+  const validValue = JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "hi", at: nowMs, key: null });
+  const storage = makeStorage(
+    [
+      [olderForeign, validValue],
+      [ownKey, validValue],
+      [laterMalformed, validValue],
+    ],
+    (k) => {
+      if (k === ownKey) throw new Error("getItem failed");
+    },
+  );
+  assert.throws(() => sweepKeys(storage, sessionPage, scope, nowMs), /getItem failed/);
+  assert.equal(Object.hasOwn(storage, olderForeign), false);
+  assert.deepEqual(storage.removed, [olderForeign]);
+  assert.equal(Object.hasOwn(storage, laterMalformed), true);
 });
 
 test("page scope and entry validity bounds", () => {
@@ -188,6 +234,45 @@ test("saving, tombstones, monotonic times, trimming and snapshot eligibility", (
   assert.equal(restoredSendKey({ text: "hello", key: sendKeyA }), sendKeyA);
   assert.equal(restoredSendKey({ text: "", key: sendKeyA }), null);
   assert.equal(restoredSendKey({ text: "hello", key: "bad" }), null);
+});
+
+test("post-load malformed timestamps preserve v7 comparison, send-time and trim semantics", () => {
+  assert.equal(shouldWriteDraft("200", 100), false);
+  assert.equal(shouldWriteDraft("100", 100), false);
+  assert.equal(shouldWriteDraft("50", 100), true);
+  assert.equal(shouldWriteDraft("bad", 100), true);
+  assert.equal(shouldWriteDraft(NaN, 100), true);
+  assert.equal(shouldWriteDraft(-50, 100), true);
+  assert.equal(shouldWriteDraft(-50, -50), false);
+  assert.equal(shouldWriteDraft(undefined, 100), true);
+  assert.equal(shouldWriteDraft(null, 100), true);
+  assert.equal(shouldWriteDraft(null, 0), false);
+
+  assert.equal(nextSendEditTime(100, 120, "200"), 2001);
+  assert.equal(Number.isNaN(nextSendEditTime(100, 120, "bad")), true);
+  assert.equal(nextSendEditTime(100, 120, ""), 120);
+  assert.equal(nextSendEditTime(100, 120, NaN), 120);
+  assert.equal(nextSendEditTime(100, 120, -50), 120);
+  assert.equal(nextSendEditTime(-100, -100, -50), -49);
+  assert.equal(nextSendEditTime(100, 120, undefined), 120);
+  assert.equal(nextSendEditTime(100, 120, null), 120);
+
+  const ownKeys = Array.from({ length: 5 }, (_, i) => draftKey(memberA, sessionPage, `02000000-0000-4000-8000-${String(i).padStart(12, "0")}`, "feed"));
+  const malformedTimes = new Map([
+    [ownKeys[0], undefined],
+    [ownKeys[1], NaN],
+    [ownKeys[2], -50],
+    [ownKeys[3], "200"],
+    [ownKeys[4], 100],
+  ]);
+  assert.deepEqual(
+    selectKeysToTrim([ownKeys[3], ownKeys[4], ownKeys[1], ownKeys[0], ownKeys[2]], scope, 1, (k) => malformedTimes.get(k)),
+    [ownKeys[2], ownKeys[0], ownKeys[1], ownKeys[4]],
+  );
+  assert.deepEqual(
+    selectKeysToTrim([ownKeys[1], ownKeys[0]], scope, 1, (k) => (k === ownKeys[1] ? "bad" : 100)),
+    [ownKeys[0]],
+  );
 });
 
 test("marker row predicate and sidebar URL parsing", () => {

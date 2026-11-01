@@ -19,7 +19,7 @@ try {
   const signIn = signInForm ? readAttribute(signInForm, DraftsHorizonAttribute) : null;
   if (signIn) {
     const storage = window.localStorage;
-    for (const key of sweepKeys(Object.keys(storage), signIn, null, 0, () => null)) storage.removeItem(key);
+    sweepKeys(storage, signIn);
     storage.setItem(SignedOutNoticeKey, signIn);
   } else {
     const stream = getOrganizationStream();
@@ -32,7 +32,7 @@ try {
     if (scope) {
       const { member, session, expires, deadline } = scope;
       const storage = window.localStorage;
-      for (const k of sweepKeys(Object.keys(storage), session, scope, Date.now(), (k) => storage.getItem(k))) storage.removeItem(k);
+      sweepKeys(storage, session, scope, Date.now());
       const expiryState: ExpiryState = { expired: false, deadline, expires };
       let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, dirty = false, composing = false, at = 0, text = "";
       let lastWrite: string | undefined, source: string | null | undefined, sending: SendingSnapshot | null = null, savedKey: string | null = null;

@@ -42,11 +42,15 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-`static.NewScripts` validates the manifest and bundle hashes at startup for
-`web/src/message-time.ts`. templ uses context; direct renders use the embedded
-registry without mutable globals. Its legacy asset and `web/legacy-scripts.txt`
-entry are removed; the 16 remaining stems stay on versioned assets.
-Missing/unknown entries or bundles fail startup;
+`static.NewScripts` in `web/static/scripts.go` holds the single `names`
+declaration of converted page entries (`message-time` initially; a conversion
+adds its entry name there) and validates the manifest and bundle hashes at
+startup; `tools/webbuild` reads that same declaration from the repository root
+instead of taking entry names on the command line (#2022). Non-entry modules
+under `web/src/` are never built as bundles on their own. templ uses context;
+direct renders use the embedded registry without mutable globals. Its legacy
+asset and `web/legacy-scripts.txt` entry are removed; the 16 remaining stems
+stay on versioned assets. Missing/unknown entries or bundles fail startup;
 undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.

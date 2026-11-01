@@ -6,9 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -27,17 +32,17 @@ type manifest struct {
 }
 
 func main() {
-	if len(os.Args) < 5 {
-		fmt.Fprintln(os.Stderr, "usage: webbuild <repository root> <commit SHA> <run id> <entry>...")
+	if len(os.Args) != 4 {
+		fmt.Fprintln(os.Stderr, "usage: webbuild <repository root> <commit SHA> <run id>")
 		os.Exit(2)
 	}
-	if err := build(os.Args[1], os.Args[2], os.Args[3], os.Args[4:]); err != nil {
+	if err := build(os.Args[1], os.Args[2], os.Args[3]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func build(root, commit, runID string, names []string) error {
+func build(root, commit, runID string) error {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolving root: %w", err)
@@ -46,6 +51,10 @@ func build(root, commit, runID string, names []string) error {
 	// Invalidate the previous generation even if this run fails before staging.
 	if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("invalidating manifest: %w", err)
+	}
+	names, err := declaredEntries(root)
+	if err != nil {
+		return err
 	}
 	if commit == "" || runID == "" || len(names) == 0 {
 		return fmt.Errorf("commit, run id and entries are required")
@@ -107,6 +116,84 @@ func build(root, commit, runID string, names []string) error {
 		return fmt.Errorf("publishing bundles: %w", err)
 	}
 	return nil
+}
+
+func declaredEntries(root string) ([]string, error) {
+	source, err := os.ReadFile(filepath.Join(root, "web/static/scripts.go"))
+	if err != nil {
+		return nil, fmt.Errorf("reading entry declarations: %w", err)
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), "scripts.go", source, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parsing entry declarations: %w", err)
+	}
+	var names []string
+	var found bool
+	var declarations int
+	var parseErr error
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil || fn.Name.Name != "NewScripts" || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			if parseErr != nil {
+				return false
+			}
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok || assign.Tok != token.DEFINE || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+				return true
+			}
+			ident, ok := assign.Lhs[0].(*ast.Ident)
+			if !ok || ident.Name != "names" {
+				return true
+			}
+			declarations++
+			if declarations > 1 {
+				parseErr = fmt.Errorf("multiple entry declarations in scripts.go")
+				return false
+			}
+			if !slices.Contains(fn.Body.List, ast.Stmt(assign)) {
+				return false
+			}
+			found = true
+			lit, ok := assign.Rhs[0].(*ast.CompositeLit)
+			if !ok {
+				parseErr = fmt.Errorf("entry declaration must be a string slice literal")
+				return false
+			}
+			array, ok := lit.Type.(*ast.ArrayType)
+			if !ok || array.Len != nil {
+				parseErr = fmt.Errorf("entry declaration must be a string slice literal")
+				return false
+			}
+			if elt, ok := array.Elt.(*ast.Ident); !ok || elt.Name != "string" {
+				parseErr = fmt.Errorf("entry declaration must be a string slice literal")
+				return false
+			}
+			for _, expr := range lit.Elts {
+				basic, ok := expr.(*ast.BasicLit)
+				if !ok || basic.Kind != token.STRING {
+					parseErr = fmt.Errorf("entry name must be a string literal")
+					return false
+				}
+				name, err := strconv.Unquote(basic.Value)
+				if err != nil {
+					parseErr = fmt.Errorf("reading entry name: %w", err)
+					return false
+				}
+				names = append(names, name)
+			}
+			return false
+		})
+	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	if !found {
+		return nil, fmt.Errorf("missing entry declaration in scripts.go")
+	}
+	return names, nil
 }
 
 func validate(root, dist, stage string, entries map[string]string, result api.BuildResult) (map[string]bundle, error) {

@@ -242,6 +242,59 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("watch failed: %v", err)
 	}
+	for i := range 25 {
+		stageFor := func(tag string) (string, bundle) {
+			stage, err := os.MkdirTemp(filepath.Dir(dist), ".dist-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := fmt.Sprintf("message-time-%s%07d.js", tag, i)
+			js := fmt.Appendf(nil, "console.log(%q);\n//# sourceMappingURL=%s.map\n", file, file)
+			sm := []byte(`{"version":3,"sourcesContent":["x"]}`)
+			write(t, filepath.Join(stage, file), js)
+			write(t, filepath.Join(stage, file+".map"), sm)
+			return stage, bundle{File: file, SHA256: fmt.Sprintf("%x", sha256.Sum256(js)), Map: file + ".map"}
+		}
+		stageA, bA := stageFor("A")
+		stageB, bB := stageFor("B")
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		for _, pub := range []struct {
+			stage string
+			b     bundle
+		}{{stageA, bA}, {stageB, bB}} {
+			go func() {
+				defer func() { _ = os.RemoveAll(pub.stage) }()
+				<-start
+				errs <- publishDev(dist, pub.stage, manifest{Commit: "dev", RunID: pub.b.File, Entries: map[string]bundle{"message-time": pub.b}})
+			}()
+		}
+		close(start)
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatal(err)
+			}
+		}
+		data, err := os.ReadFile(filepath.Join(dist, "manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m manifest
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatal(err)
+		}
+		if len(m.Previous) == 0 || (m.Entries["message-time"] != bA || m.Previous[0]["message-time"] != bB) && (m.Entries["message-time"] != bB || m.Previous[0]["message-time"] != bA) {
+			t.Fatalf("overlapping publishDev lost generation ordering: entries=%+v previous=%+v", m.Entries, m.Previous)
+		}
+		for _, b := range []bundle{bA, bB} {
+			if _, err := os.Stat(filepath.Join(dist, b.File)); err != nil {
+				t.Fatalf("overlapping publishDev lost bundle %s (active=%s): %v", b.File, m.Entries["message-time"].File, err)
+			}
+			if _, err := os.Stat(filepath.Join(dist, b.Map)); err != nil {
+				t.Fatalf("overlapping publishDev lost map %s (active=%s): %v", b.Map, m.Entries["message-time"].File, err)
+			}
+		}
+	}
 	for i := range 10 {
 		write(t, filepath.Join(root, "web/src/message-time.ts"), fmt.Appendf(nil, "const loop = %d;\nconsole.log(loop);\n", i))
 		if err := build(root, "dev", fmt.Sprintf("run-%d", i), true); err != nil {
@@ -264,6 +317,17 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	stages, err := filepath.Glob(filepath.Join(filepath.Dir(dist), ".dist-*"))
 	if err != nil || len(stages) != 0 {
 		t.Fatalf("staging directories left behind: %v, %v", stages, err)
+	}
+	for _, dir := range []string{dist, filepath.Dir(prodDist), prodDist} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".lock") {
+				t.Fatalf("lock file %s inside served or embedded tree %s", e.Name(), dir)
+			}
+		}
 	}
 	if got := snapshotDir(t, prodDist); got != prodSnapshot {
 		t.Fatalf("development build touched web/static/dist:\ngot:\n%s\nwant:\n%s", got, prodSnapshot)

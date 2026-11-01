@@ -217,8 +217,10 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 }
 
 // devAssetsFS serves /static/ from disk. When devAssets points at the
-// separate development bundle directory (such as bin/dev-dist), dist/ reads
-// from devAssets while CSS and committed static assets come from web/static.
+// separate development bundle directory (bin/dev-dist, two levels below the
+// repository root) rather than a full static tree with css/, dist/ reads from
+// devAssets and committed assets come from ../../web/static so RIBBITTO_DEV_ASSETS
+// and NewHandler need only one path.
 func devAssetsFS(devAssets string) fs.FS {
 	if _, err := os.Stat(filepath.Join(devAssets, "css")); err != nil {
 		staticDir := filepath.Join(devAssets, "..", "..", "web", "static")

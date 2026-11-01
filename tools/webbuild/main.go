@@ -226,6 +226,21 @@ func build(root, commit, runID string, dev bool) error {
 }
 
 func publishDev(dist, stage string, m manifest) error {
+	if err := os.MkdirAll(dist, 0755); err != nil {
+		return fmt.Errorf("creating development bundle directory: %w", err)
+	}
+	// Serialize concurrent dev publishers (such as webbuild -dev during watch)
+	// across reading the previous manifest, publishing files and cleanup; keep
+	// the lock file outside dist so it is never served or garbage-collected.
+	lock, err := os.OpenFile(filepath.Clean(dist)+".lock", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("locking development bundle directory: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("locking development bundle directory: %w", err)
+	}
+	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 	var prev manifest
 	if oldData, err := os.ReadFile(filepath.Join(dist, "manifest.json")); err == nil {
 		_ = json.Unmarshal(oldData, &prev)
@@ -244,9 +259,6 @@ func publishDev(dist, stage string, m manifest) error {
 	}
 	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), append(data, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
-	}
-	if err := os.MkdirAll(dist, 0755); err != nil {
-		return fmt.Errorf("creating development bundle directory: %w", err)
 	}
 	for _, entry := range m.Entries {
 		for _, name := range []string{entry.File, entry.Map} {

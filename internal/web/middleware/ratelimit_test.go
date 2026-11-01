@@ -239,9 +239,9 @@ func TestClientKey(t *testing.T) {
 // FuzzClientKey generalises TestClientKey and TestTrustedProxyContract,
 // because a client that can choose its key escapes every rate limit: an
 // untrusted peer's X-Forwarded-For is ignored, a key read from the header
-// never covers a trusted proxy, and whatever the client wrote to the left of
-// the entries the trusted proxies appended cannot change its key
-// (docs/architecture/rate-limits.md, Reverse proxies).
+// never lies inside a trusted proxy's prefix, and whatever the client wrote
+// to the left of the entries the trusted proxies appended cannot change its
+// key (docs/architecture/rate-limits.md, Reverse proxies).
 func FuzzClientKey(f *testing.F) {
 	f.Add("10.0.0.1:443", "10.0.0.0/8,::ffff:192.168.0.0/112", "1.2.3.4", "9.9.9.9, 10.0.0.2")
 	f.Add("[::1]:80", "::1/128", "::ffff:1.2.3.4", "2001:db8::1")

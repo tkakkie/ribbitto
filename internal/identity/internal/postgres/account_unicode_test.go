@@ -18,9 +18,10 @@ import (
 // marks swapped). The validators lower-case and compose with Go's Unicode
 // tables, while account's CHECKs use PostgreSQL's lower and normalize, which
 // follow the server's Unicode version and collation provider. A code point
-// where they disagree turns a valid form into an unmapped 23514, a 500. The
-// organisation, channel and topic name CHECKs pair the same Go NFC with the
-// same normalize.
+// where they disagree rejects a valid form: a 23514 on an email CHECK becomes
+// ErrInvalidEmail (422) for input the form accepted, and one on a display
+// name CHECK is not mapped at all, so it answers 500. The organisation,
+// channel and topic name CHECKs pair the same Go NFC with the same normalize.
 func TestAccountChecksAcceptValidatedUnicode(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

@@ -268,6 +268,9 @@ const (
 	// ArrivePanelAttribute marks the root element when arrival motion runs for the side panel.
 	//dom:attribute
 	ArrivePanelAttribute = "data-arrive-panel"
+	// AriaModalAttribute publishes whether the side panel covers the conversation as a modal dialog.
+	//dom:attribute
+	AriaModalAttribute = "aria-modal"
 	// SidePanelID identifies the complementary or modal side panel container.
 	//dom:id HTMLElement
 	SidePanelID = "side-panel"
@@ -284,11 +287,14 @@ const (
 	//dom:suffix HTMLAnchorElement
 	PanelControlPrefix = "panel-control-"
 	// PanelCoverEvent requests a fresh modal-state publication before reading aria-modal.
-	//dom:event PanelCoverDetail
+	//dom:event
 	PanelCoverEvent = "panel-cover"
 	// ReadFormID identifies the conversation's read form.
 	//dom:id HTMLFormElement
 	ReadFormID = "read-form"
+	// CursorField names the hidden cursor input and request parameter.
+	//dom:field HTMLInputElement
+	CursorField = "cursor"
 	// ReadAppliedEvent signals that live stream changes have been visibly applied.
 	//dom:event ReadAppliedDetail
 	ReadAppliedEvent = "read-applied"
@@ -296,9 +302,6 @@ const (
 	//dom:event ReadVisibleDetail
 	ReadVisibleEvent = "read-visible"
 )
-
-// PanelCoverDetail is empty because the listener inspects computed style directly.
-type PanelCoverDetail struct{}
 
 // ReadAppliedDetail is empty because the listener reads the applied cursor attribute.
 type ReadAppliedDetail struct{}

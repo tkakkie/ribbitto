@@ -46,8 +46,23 @@ for (const [name, state, attempted, successful, latest, want] of [
     { succeeded: 42n, failures: 2, intent: '100' }, 100n, false, '101', { succeeded: 42n, failures: 2, intent: null, flush: true }],
   ['non-429 failure compares cursors above 2^53 as BigInt',
     { succeeded: 42n, failures: 1, intent: large }, largePrev, false, large, { succeeded: 42n, failures: 1, intent: null, flush: true }],
+  ['null attempt on success still flushes pending work',
+    { succeeded: 40n, failures: 2, intent: null }, null, true, 'bad', { succeeded: null, failures: 0, intent: null, flush: true }],
+  ['null attempt on non-429 failure clears intent and flushes positive cursor',
+    { succeeded: null, failures: 1, intent: '100' }, null, false, '42', { succeeded: null, failures: 1, intent: null, flush: true }],
 ]) test(`settleRead: ${name}`, () => {
   assert.deepEqual(settleRead(state, attempted, successful, latest), want);
+});
+
+test('settleRead: preserves state transitions before BigInt throws on malformed intent or cursor', () => {
+  const afterSuccess = { succeeded: null, failures: 1, intent: 'bad' };
+  assert.throws(() => settleRead(afterSuccess, 42n, true, '42'), SyntaxError);
+  assert.deepEqual(afterSuccess, { succeeded: 42n, failures: 0, intent: 'bad' });
+  assert.equal(retryDelay(afterSuccess.failures, null, 0, now), 500);
+
+  const afterFailure = { succeeded: 42n, failures: 1, intent: '100' };
+  assert.throws(() => settleRead(afterFailure, 42n, false, 'bad'), SyntaxError);
+  assert.equal(afterFailure.intent, null);
 });
 
 for (const [name, failures, retryAfter, random, want] of [
@@ -68,4 +83,22 @@ for (const [name, failures, retryAfter, random, want] of [
   ['clamps distant HTTP-date to 2^31 - 1 ms', 1, 'Thu, 14 Nov 2024 22:13:20 GMT', 0, 2147483647],
 ]) test(`retryDelay: ${name}`, () => {
   assert.equal(retryDelay(failures, retryAfter, random, now), want);
+});
+
+test('retryDelay: HTTP-date evaluates Date.parse, then Date.now, then Math.random, and numeric skips Date.now', () => {
+  const origParse = Date.parse, origNow = Date.now, origRandom = Math.random;
+  try {
+    let clock = now;
+    const calls = [];
+    Date.parse = (s) => { calls.push(`parse:${s}`); return origParse(s); };
+    Date.now = () => { calls.push('now'); return clock; };
+    Math.random = () => { calls.push('random'); clock += 100; return 0; };
+    assert.equal(retryDelay(1, 'Tue, 14 Nov 2023 22:13:30 GMT'), 10000);
+    assert.deepEqual(calls, ['parse:Tue, 14 Nov 2023 22:13:30 GMT', 'now', 'random']);
+    calls.length = 0;
+    assert.equal(retryDelay(0, '3'), 3000);
+    assert.deepEqual(calls, ['random']);
+  } finally {
+    Date.parse = origParse; Date.now = origNow; Math.random = origRandom;
+  }
 });

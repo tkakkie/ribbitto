@@ -472,7 +472,7 @@ templ pendingMessage(page ChannelPage) {
 					<input type="hidden" name="body"/>
 					<input type="hidden" name="idempotency_key"/>
 					<input type="hidden" name="composer"/>
-					<input type="hidden" name="cursor"/>
+					<input type="hidden" name={ CursorField }/>
 					<p role="status" class="text-caption text-danger"></p>
 					<div { PendingActionsAttribute } hidden>
 						<button type="submit" aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
@@ -595,7 +595,7 @@ templ composerState(page ChannelPage) {
 			<input type="hidden" name="idempotency_key" value={ *page.IdempotencyKey }/>
 		}
 		if latest(page) && page.EventCursor != nil {
-			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
+			<input type="hidden" name={ CursorField } value={ fmt.Sprint(*page.EventCursor) }/>
 		}
 		if fieldError(page) != "" {
 			<p id={ MessageHelpID } role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
@@ -657,7 +657,7 @@ templ readForm(page ChannelPage) {
 	// Below wide its button shows in the overview panel instead, at phone and
 	// middle widths alike; automatic reading posts through the form at every width.
 	<form id={ ReadFormID } method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger={ ReadVisibleEvent + ", submit" } hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-wide:hidden">
-		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
+		<input type="hidden" name={ CursorField } value={ fmt.Sprint(*page.EventCursor) }/>
 		if page.FirstUnread > 0 {
 			@submitButton(buttonSecondaryIcon, "reading.mark", submitValue{"scope", "all"}) {
 				@Icon("checkmark-regular", 20)

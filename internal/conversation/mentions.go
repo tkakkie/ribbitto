@@ -66,17 +66,43 @@ func (p *Posting) convertHandles(ctx context.Context, organizationID kernel.ID, 
 	for _, member := range members {
 		byHandle[strings.ToLower(member.Handle)] = member.ID
 	}
+	return replaceHandles(body, tokens, func(handle string) (kernel.ID, bool) {
+		id, ok := byHandle[strings.ToLower(handle)]
+		return id, ok
+	}), nil
+}
+
+// replaceHandles writes a reference for each token whose handle lookup
+// finds. A reference ends in ">", which is not a word character, so a "_"
+// right after it can open italics where the typed handle's last letter
+// stopped it. Unless that "_" closes italics in the converted line, it is
+// escaped, so the stored body reads it as literal, as the typed body did.
+func replaceHandles(body string, tokens []textRun, lookup func(handle string) (kernel.ID, bool)) string {
 	var converted strings.Builder
-	start := 0
+	start, line := 0, 0 // line: where the current token's line content starts in converted
 	for _, token := range tokens {
-		converted.WriteString(body[start:token.start])
-		if id, ok := byHandle[strings.ToLower(body[token.start+1:token.end])]; ok {
-			converted.WriteString("<@" + realtime.FormatPayloadID(id) + ">")
-		} else {
-			converted.WriteString(body[token.start:token.end])
+		if token.line >= start {
+			line = converted.Len() + token.line - start
 		}
+		converted.WriteString(body[start:token.start])
 		start = token.end
+		id, ok := lookup(body[token.start+1 : token.end])
+		if !ok {
+			converted.WriteString(body[token.start:token.end])
+			continue
+		}
+		converted.WriteString("<@" + realtime.FormatPayloadID(id) + ">")
+		if token.end < len(body) && body[token.end] == '_' {
+			end := strings.IndexByte(body[token.end:], '\n')
+			if end < 0 {
+				end = len(body) - token.end
+			}
+			content := converted.String()[line:] + body[token.end:token.end+end]
+			if !closesItalic(content, converted.Len()-line) {
+				converted.WriteByte('\\')
+			}
+		}
 	}
 	converted.WriteString(body[start:])
-	return converted.String(), nil
+	return converted.String()
 }

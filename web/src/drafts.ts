@@ -107,8 +107,8 @@ export function checkSessionExpired(state: ExpiryState, perfNow: number, dateNow
 export const nextExpiryDelay = (deadline: number, perfNow: number): number => Math.min(deadline - perfNow, MaxTimerDelay);
 export const normalizeDraftText = (raw: string): string => (!raw.trim() || [...raw].length > 4000 ? "" : raw);
 export const nextEditTime = (prevAt: number, nowMs: number): number => Math.max(nowMs, prevAt + 1);
-export const nextSendEditTime = (tabAt: number, nowMs: number, storedAt: unknown): number =>
-  Math.max(nextEditTime(tabAt, nowMs), ((storedAt as number) || 0) + 1);
+// The send moves `at` past an entry another tab stored, after `edited()` has already advanced it.
+export const nextSendEditTime = (editedAt: number, storedAt: unknown): number => Math.max(editedAt, ((storedAt as number) || 0) + 1);
 export const shouldWriteDraft = (storedAt: unknown, candidateAt: number): boolean => !((storedAt as number) >= candidateAt);
 
 export function selectKeysToTrim(
@@ -125,15 +125,19 @@ export function selectKeysToTrim(
   return entries.slice(0, Math.max(0, entries.length - limit)).map(([k]) => k);
 }
 
+export type SendDetail = { readonly key: string; readonly body: string; readonly inPlace?: boolean };
+
+export const isSendDetail = (detail: { readonly key?: string | null; readonly body?: unknown } | null | undefined): detail is SendDetail =>
+  Boolean(detail?.key) && typeof detail?.body === "string";
+
+// Call after `edited()`: the send time is read from the edited `at` and the stored entry in that order, as v7 did.
 export function prepareSendSnapshot(
-  detail: { readonly key?: string | null; readonly body?: unknown; readonly inPlace?: boolean } | null | undefined,
-  tabAt: number,
-  nowMs: number,
+  detail: SendDetail,
+  editedAt: number,
   storedAt: unknown,
-): { readonly text: string; readonly at: number; readonly source: string; readonly savedKey: string | null; readonly sending: SendingSnapshot } | null {
-  if (!detail?.key || typeof detail.body !== "string") return null;
+): { readonly text: string; readonly at: number; readonly source: string; readonly savedKey: string | null; readonly sending: SendingSnapshot } {
   const text = normalizeDraftText(detail.body);
-  return { text, at: nextSendEditTime(tabAt, nowMs, storedAt), source: detail.key, savedKey: text ? detail.key : null, sending: { key: detail.key, inPlace: Boolean(detail.inPlace) } };
+  return { text, at: nextSendEditTime(editedAt, storedAt), source: detail.key, savedKey: text ? detail.key : null, sending: { key: detail.key, inPlace: Boolean(detail.inPlace) } };
 }
 
 export const matchSentSnapshot = (sending: SendingSnapshot | null | undefined, sentKey: string | null | undefined): SendingSnapshot | null =>

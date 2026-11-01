@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   DraftPrefix, MaxTimerDelay, SignedOutNoticeKey, canReplaceSnapshot, checkSessionExpired,
   collectDraftPlaces, decideCleanupKey, draftKey, isOwnDraftKey, isSessionDraftKey, isUUID, isUUIDv7,
-  isValidDraftEntry, marked, matchSentSnapshot, nextEditTime, nextExpiryDelay, nextSendEditTime,
+  isSendDetail, isValidDraftEntry, marked, matchSentSnapshot, nextEditTime, nextExpiryDelay, nextSendEditTime,
   normalizeDraftText, parseDraftEntry, parseDraftKey, parsePageScope, parseSidebarPlace,
   pendingActionDecision, prepareSendSnapshot, restoredSendKey, selectKeysToTrim, shouldWriteDraft,
   sweepKeys, uuidMillisecondPrefix,
@@ -372,7 +372,7 @@ test("saving, tombstones, monotonic times, trimming and snapshot eligibility", (
   assert.equal(nextEditTime(100, 100), 101);
   assert.equal(nextEditTime(200, 100), 201);
   assert.equal(nextEditTime(100, 150), 150);
-  assert.equal(nextSendEditTime(100, 120, 150), 151);
+  assert.equal(nextSendEditTime(120, 150), 151);
   assert.equal(shouldWriteDraft(100, 100), false);
   assert.equal(shouldWriteDraft(105, 100), false);
   assert.equal(shouldWriteDraft(99, 100), true);
@@ -384,11 +384,14 @@ test("saving, tombstones, monotonic times, trimming and snapshot eligibility", (
   assert.deepEqual(selectKeysToTrim([foreignKey, ownKeys[1], ownKeys[0], ...ownKeys.slice(2)], scope, 49, (k) => times.get(k), ownKeys[50]), [ownKeys[0]]);
   assert.deepEqual(selectKeysToTrim([...ownKeys], scope, 50, (k) => times.get(k)), [ownKeys[0]]);
 
-  assert.equal(prepareSendSnapshot({ key: null, body: "hi", inPlace: true }, 10, 20, 0), null);
-  assert.deepEqual(prepareSendSnapshot({ key: sendKeyA, body: "  ", inPlace: false }, 10, 20, 25), {
+  assert.equal(isSendDetail({ key: null, body: "hi", inPlace: true }), false);
+  assert.equal(isSendDetail({ key: sendKeyA, body: 5 }), false);
+  assert.equal(isSendDetail(undefined), false);
+  assert.equal(isSendDetail({ key: sendKeyA, body: "" }), true);
+  assert.deepEqual(prepareSendSnapshot({ key: sendKeyA, body: "  ", inPlace: false }, 20, 25), {
     text: "", at: 26, source: sendKeyA, savedKey: null, sending: { key: sendKeyA, inPlace: false },
   });
-  const sentSnap = prepareSendSnapshot({ key: sendKeyA, body: "sent text", inPlace: true }, 10, 20, 15);
+  const sentSnap = prepareSendSnapshot({ key: sendKeyA, body: "sent text", inPlace: true }, 20, 15);
   assert.equal(sentSnap?.savedKey, sendKeyA);
   assert.deepEqual(matchSentSnapshot(sentSnap?.sending, sendKeyA), { key: sendKeyA, inPlace: true });
   assert.equal(matchSentSnapshot(sentSnap?.sending, sendKeyB), null);
@@ -422,14 +425,14 @@ test("post-load malformed timestamps preserve v7 comparison, send-time and trim 
   assert.equal(shouldWriteDraft(null, 100), true);
   assert.equal(shouldWriteDraft(null, 0), false);
 
-  assert.equal(nextSendEditTime(100, 120, "200"), 2001);
-  assert.equal(Number.isNaN(nextSendEditTime(100, 120, "bad")), true);
-  assert.equal(nextSendEditTime(100, 120, ""), 120);
-  assert.equal(nextSendEditTime(100, 120, NaN), 120);
-  assert.equal(nextSendEditTime(100, 120, -50), 120);
-  assert.equal(nextSendEditTime(-100, -100, -50), -49);
-  assert.equal(nextSendEditTime(100, 120, undefined), 120);
-  assert.equal(nextSendEditTime(100, 120, null), 120);
+  assert.equal(nextSendEditTime(120, "200"), 2001);
+  assert.equal(Number.isNaN(nextSendEditTime(120, "bad")), true);
+  assert.equal(nextSendEditTime(120, ""), 120);
+  assert.equal(nextSendEditTime(120, NaN), 120);
+  assert.equal(nextSendEditTime(120, -50), 120);
+  assert.equal(nextSendEditTime(-100, -50), -49);
+  assert.equal(nextSendEditTime(120, undefined), 120);
+  assert.equal(nextSendEditTime(120, null), 120);
 
   const ownKeys = Array.from({ length: 5 }, (_, i) => draftKey(memberA, sessionPage, `02000000-0000-4000-8000-${String(i).padStart(12, "0")}`, "feed"));
   const malformedTimes = new Map([
@@ -482,4 +485,39 @@ test("marker row predicate and sidebar URL parsing", () => {
   );
   assert.deepEqual(parseSidebarPlace(`https://example.test/organizations/acme/channels/${channelA}`), { channel: channelA, topic: "feed" });
   assert.deepEqual(parseSidebarPlace(`https://example.test/organizations/acme/channels/${channelA}/topics/${topicA}`), { channel: channelA, topic: topicA });
+});
+
+test("sending edits first: the saved time comes from the edit's clock sample and the stored time is read after it, as v7 did", async () => {
+  const openKey = draftKey(memberA, sessionPage, channelA, "feed");
+  let armed = false, clockReads = 0, readsBeforeStoredRead = null;
+  const storage = makeStorage([], (k) => {
+    if (armed && k === openKey && readsBeforeStoredRead === null) readsBeforeStoredRead = clockReads;
+  });
+  // Every clock read during the send is a later millisecond than the last.
+  await withAdapter(storage, () => nowMs + (armed ? 1000 * clockReads++ : 0), ({ body }) => {
+    body.value = "typed";
+    armed = true;
+    body.dispatchEvent(new CustomEvent("message-sending", { bubbles: true, detail: { key: sendKeyA, body: "sent", inPlace: false } }));
+    armed = false;
+  });
+  // edited() reads the clock twice (expiry check, then the edit time); the stored entry is read only afterwards.
+  assert.equal(readsBeforeStoredRead, 2);
+  const saved = JSON.parse(storage.getItem(openKey));
+  assert.equal(saved.at, nowMs + 1000);
+  assert.equal(saved.text, "sent");
+  assert.equal(saved.key, sendKeyA);
+});
+
+test("sending after the session expired writes nothing and removes the session's drafts, as v7 did", async () => {
+  const openKey = draftKey(memberA, sessionPage, channelA, "feed");
+  const entry = JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "v", at: nowMs, key: null });
+  const storage = makeStorage([[openKey, entry]]);
+  let armed = false;
+  await withAdapter(storage, () => (armed ? scope.expires + 1 : nowMs), ({ body }) => {
+    armed = true;
+    body.dispatchEvent(new CustomEvent("message-sending", { bubbles: true, detail: { key: sendKeyA, body: "sent", inPlace: false } }));
+    armed = false;
+  });
+  assert.equal(Object.hasOwn(storage, openKey), false);
+  assert.deepEqual(storage.removed, [openKey]);
 });

@@ -8,7 +8,7 @@ import {
 } from "./contracts.gen.ts";
 import {
   type ExpiryState, type SendingSnapshot, DraftPrefix, SignedOutNoticeKey,
-  canReplaceSnapshot, checkSessionExpired, collectDraftPlaces, draftKey, isSessionDraftKey, isValidDraftEntry,
+  canReplaceSnapshot, checkSessionExpired, collectDraftPlaces, draftKey, isSendDetail, isSessionDraftKey, isValidDraftEntry,
   marked, matchSentSnapshot, nextEditTime, nextExpiryDelay, normalizeDraftText, parseDraftEntry,
   parseDraftKey, parsePageScope, parseSidebarPlace, pendingActionDecision, prepareSendSnapshot,
   restoredSendKey, selectKeysToTrim, shouldWriteDraft, sweepKeys,
@@ -124,9 +124,9 @@ try {
           }
         }
         listenMessageSendingEvent(body, (detail) => {
-          const snap = prepareSendSnapshot(detail, at, Date.now(), read(key)?.at);
-          if (!snap) return;
+          if (!isSendDetail(detail)) return;
           edited();
+          const snap = prepareSendSnapshot(detail, at, read(key)?.at);
           text = snap.text;
           source = snap.source;
           savedKey = snap.savedKey;

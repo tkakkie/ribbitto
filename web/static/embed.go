@@ -1,4 +1,4 @@
-// Package static provides the assets shipped in the server binary.
+// Package static provides embedded assets and the manifest-backed page script registry.
 package static
 
 import (
@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-//go:embed css vendor brand *.js channel-images-v1
+//go:embed css vendor brand *.js channel-images-v1 dist/*.js dist/manifest.json
 var files embed.FS
 
 // FS returns the embedded assets including CSS, vendored libraries, brand

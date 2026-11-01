@@ -146,6 +146,7 @@ func TestNewHandlerStylesheetMissing(t *testing.T) {
 
 func TestDevelopmentStylesheetRemoved(t *testing.T) {
 	dir := t.TempDir()
+	copyScriptAssets(t, dir)
 	if err := os.Mkdir(filepath.Join(dir, "css"), 0o755); err != nil {
 		t.Fatal(err)
 	}

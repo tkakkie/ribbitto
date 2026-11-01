@@ -63,6 +63,17 @@ jobs:
             tools/go.sum
             tools/tbls/go.sum
 
+      # Only Go is available: prove generation, embedding and the application
+      # build need no Node. The binary embeds this exact generation.
+      - name: generate and build without Node
+        run: |
+          mkdir -p bin/node-free
+          ln -s "$(command -v go)" bin/node-free/go
+          export PATH="$PWD/bin/node-free" CGO_ENABLED=0
+          if command -v node; then exit 1; fi
+          go -C tools run -mod=readonly ./webbuild .. "$GITHUB_SHA" "$GITHUB_RUN_ID" message-time
+          go build -mod=readonly -buildvcs=false -o bin/ribbitto ./cmd/ribbitto
+
       - name: verify generated files
         run: |
           make generate
@@ -185,6 +196,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: generate bundles before testshard loads the tree
+        run: make bundles
+
       - name: check-test (${{ matrix.shard }})
         env:
           SHARD: ${{ matrix.shard }}
@@ -220,6 +234,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+
+      - name: generate bundles before testshard loads the tree
+        run: make bundles
 
       # testshard owns the packages, selector and flags and propagates failure.
       - name: check-test (rest)

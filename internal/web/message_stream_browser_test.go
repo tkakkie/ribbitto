@@ -48,15 +48,46 @@ func TestBrowser(t *testing.T) {
 	// HTTP/1.1's six connections per host are per scenario as before.
 	const browsers = 3
 	pool := make(chan *rod.Browser, browsers)
+	summary := browserSummary{shard: selector, messageTimeSelected: slices.Contains(selected, "message-time")}
+	// Registered before browser cleanups, so shutdown failures also suppress
+	// the summary. Parent cleanups wait for every parallel subtest to finish.
+	t.Cleanup(func() {
+		if t.Failed() || t.Skipped() || summary.product == "" {
+			return
+		}
+		summary.os = browserSummaryOS()
+		summary.imageOS, summary.imageVersion = os.Getenv("ImageOS"), os.Getenv("ImageVersion")
+		summary.runID, summary.runAttempt = os.Getenv("GITHUB_RUN_ID"), os.Getenv("GITHUB_RUN_ATTEMPT")
+		summary.date = time.Now().UTC().Format("2006-01-02")
+		line := formatBrowserSummary(summary)
+		t.Log(line)
+		if err := appendBrowserSummary(line); err != nil {
+			if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
+				t.Fatalf("writing browser summary: %v", err)
+			}
+			t.Logf("writing browser summary: %v", err)
+		}
+	})
 	for range browsers {
 		pool <- launchScenarioBrowser(t, ctx, bin)
 	}
+	browser := <-pool
+	version, err := browser.Timeout(10 * time.Second).Version()
+	pool <- browser
+	if err != nil {
+		t.Fatalf("reading driven browser version: %v", err)
+	}
+	summary.product, summary.revision, summary.jsVersion = version.Product, version.Revision, version.JsVersion
 	registerBrowserScenarios(func(name string, scenario func(*testing.T, *rod.Browser)) {
 		if !slices.Contains(selected, name) {
 			return
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+			if name == "message-time" {
+				// Runs after the scenario's cleanups, before the parent reads it.
+				t.Cleanup(func() { summary.messageTimePassed = !t.Failed() && !t.Skipped() })
+			}
 			browser := <-pool
 			// Registered first, so it runs after the scenario's own cleanups:
 			// the next scenario gets the browser only once this one's pages

@@ -1,5 +1,5 @@
 // Command webbuild builds classic, content-hashed browser bundles without Node.
-// Output is uncommitted and is not yet embedded by the application.
+// Output is uncommitted and embedded only after successful generation.
 package main
 
 import (

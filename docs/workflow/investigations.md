@@ -47,7 +47,7 @@ cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. In PR, record host measurement, SHAs, conditions (toolchain,
-image digest, restrictions), exact commands and results. Redact credentials.
+image digest, restrictions), exact commands, results and the generation diff listing. Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
@@ -55,11 +55,6 @@ restrictions; only code differs. Start at 1-min load below 4; exclude
 warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
-
-Host measurements need no Node. After #1411/#1820, Go asset generation
-precedes compilation in a writable copy of the verified checkout, in the same
-isolated build (same trusted checkouts/flags, no Node on `PATH`). They
-cannot yet build SHAs needing generation.
 
 Approved operator: trusted git/Go; `image`:
 `golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261`
@@ -70,54 +65,62 @@ head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
 ```sh
 session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
-  src=$session/src && mkdir "$src" "$session/out" &&
-  pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=false "$@"; } &&
-  pinned init --quiet --template= &&
-  pinned fetch --quiet https://github.com/tkakkie/ribbitto.git "$sha" &&
-  replaced=$(pinned for-each-ref refs/replace) && test -z "$replaced" &&
-  tree=$(pinned ls-tree -r --full-tree "$sha") &&
-  printf '%s\n' "$tree" | awk '$1 == "120000" { exit 1 }' &&
-  pinned checkout --quiet --detach "$sha" &&
-  test "$(pinned rev-parse HEAD)" = "$sha" &&
-  tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
-  test -z "$tree_status"
+src=$session/src && mkdir "$src" "$session/out" &&
+pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=false "$@"; } &&
+pinned init --quiet --template= &&
+pinned fetch --quiet https://github.com/tkakkie/ribbitto.git "$sha" &&
+replaced=$(pinned for-each-ref refs/replace) && test -z "$replaced" &&
+tree=$(pinned ls-tree -r --full-tree "$sha") &&
+printf '%s\n' "$tree" | awk '$1 == "120000" { exit 1 }' &&
+pinned checkout --quiet --detach "$sha" &&
+test "$(pinned rev-parse HEAD)" = "$sha" &&
+tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
+test -z "$tree_status"
 ```
 
 On success, cross-compile in a throwaway container; check modules against this SHA's `go.sum`.
 Mount only read-only source and empty output:
 
 ```sh
+build_steps='
+! command -v node || exit 1
+cp -R "$1" gen; chmod -R u+w gen; cd gen
+"$4" -C tools run -mod=readonly -buildvcs=false ./webbuild .. "$3" measurement message-time
+d=$(diff -qr "$1" .) && exit 1
+test "$d" = "Only in ./web/static: dist"; printf "%s\n" "$d"
+GOOS=darwin GOARCH=arm64 "$4" build -mod=readonly -trimpath -buildvcs=false -o "$2/ribbitto" ./cmd/ribbitto
+'
+```
+
+```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --user "$(id -u):$(id -g)" --tmpfs /tmp:exec,mode=1777 \
   --mount "type=bind,src=$src,dst=/src,readonly" \
-  --mount "type=bind,src=$session/out,dst=/out" --workdir /src \
+  --mount "type=bind,src=$session/out,dst=/out" --workdir /tmp \
   --entrypoint /usr/bin/env "$image" -i PATH=/usr/local/go/bin:/usr/bin:/bin \
   HOME=/tmp GOENV=off GOTOOLCHAIN=local GOCACHE=/tmp/build GOMODCACHE=/tmp/mod \
   GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 \
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-  go build -mod=readonly -trimpath -buildvcs=false -o /out/ribbitto ./cmd/ribbitto
+  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  /bin/sh -eu -c "$build_steps" build /src /out "$sha" /usr/local/go/bin/go
 ```
 
-Apple silicon only, never Rosetta. In-tree: only this Go build.
-Before staging record SHA and `shasum -a 256`;
-`-buildvcs=false` avoids git ownership mismatches.
+Apple silicon only, never Rosetta. In-tree: only this generation and Go build.
+Before staging record SHA and `shasum -a 256`.
 
 If unusable, record why. Maintainer: stage read-only source in
-`build`, no old output/caches or escaping symlinks. User writes only
-output/caches. Recheck staged `src` `HEAD`/clean status via `pinned`;
+`build/src`, no old output/caches or escaping symlinks. User writes only
+empty `work`/`out`/`cache` under `build`. Recheck staged `src` `HEAD`/clean status via `pinned`;
 require `test -z "$(find "$src" -type l)"`.
 `go`: absolute trusted Go path, container version/flags:
 
 ```sh
-cd /private/var/ribbitto-measure/build/src &&
+b=/private/var/ribbitto-measure/build && cd "$b/work" &&
   sudo -u _ribbitto_measure /usr/bin/env -i PATH=/usr/bin:/bin \
-  HOME=/private/var/ribbitto-measure/build/cache GOENV=off GOTOOLCHAIN=local \
-  GOCACHE=/private/var/ribbitto-measure/build/cache/go-build \
-  GOMODCACHE=/private/var/ribbitto-measure/build/cache/mod \
+  HOME="$b/cache" GOENV=off GOTOOLCHAIN=local \
+  GOCACHE="$b/cache/go-build" GOMODCACHE="$b/cache/mod" \
   GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 \
   CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-  "$go" build -mod=readonly -trimpath -buildvcs=false \
-  -o /private/var/ribbitto-measure/build/out/ribbitto ./cmd/ribbitto
+  /bin/sh -eu -c "$build_steps" build "$b/src" "$b/out" "$sha" "$go"
 ```
 
 ### One-time setup and run

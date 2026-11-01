@@ -1,0 +1,5 @@
+package view
+
+templ scriptTag(url string) {
+	<script defer src={ url } nonce={ templ.GetNonce(ctx) }></script>
+}

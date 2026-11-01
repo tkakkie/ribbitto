@@ -42,7 +42,7 @@ library; Make asks it for the versioned paths and invokes it on first use.
 | `internal/unread` | Owns read state (decision 32). Its store locks member/channel state and unions `conversation.SequenceRange` values with the join prefix in the caller's transaction (`unreadpg.WriterIn`); it never reads messages. `unread.Reading` owns feed/topic transactions through an injected runner. Unread owns message and count interfaces; conversation's wiring returns concrete stores. See [API](../api/unread.txt). | [manifest](../../module_imports_test.go) |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoints. The only package that produces HTML. | `kernel`, `identity`, `org`, `conversation`, `realtime`, `presence`, `typing`, `unread`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
-| `web/static` | Embedded CSS, application JavaScript, vendored JavaScript, SVG icons, brand images and channel illustrations. | — |
+| `web/static` | Embedded CSS, manifest-backed script registry/bundles, legacy/vendor scripts, icons and brand/channel images. | — |
 
 Sub-packages may import each other, apart from the store, wiring, compose and fixture
 rules. [Modules](modules.md) states the test-only

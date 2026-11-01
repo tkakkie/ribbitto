@@ -499,7 +499,7 @@ func runs(lines, want []string) int {
 
 // Pin full local coverage and explicit CI selection together.
 func checkMakefile(source string) error {
-	wiring := `check-test: db-health
+	wiring := `check-test: bundles db-health
 	go test -race $(GO_TEST_FLAGS) $(or $(GO_TEST_PACKAGES),./...)`
 	if n := runs(strings.Split(source, "\n"), strings.Split(wiring, "\n")); n != 1 {
 		return fmt.Errorf("Makefile: local check-test wiring appears %d times, want once", n)

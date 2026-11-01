@@ -20,7 +20,7 @@ GO_TEST_FLAGS ?= -p 2
 bundles:
 	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}" message-time
 
-generate: $(TEMPL)
+generate: bundles $(TEMPL)
 	go generate ./internal/web/view
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
@@ -29,10 +29,10 @@ schema-docs: bin/ai-db
 	./bin/ai-db run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 # Regenerates docs/dependencies.md; make check fails when it is stale.
-deps:
+deps: bundles
 	go -C tools run ./deps ..
 
-api:
+api: bundles
 	go -C tools run ./apicheck ..
 
 $(TEMPL): tools/go.mod tools/go.sum
@@ -42,7 +42,7 @@ css: $(TAILWIND)
 	$(TAILWIND) $(CSS_ARGS)
 
 # Serve rebuilt CSS from disk so updates do not depend on a server restart.
-dev: $(TEMPL) css bin/ai-db bin/dev
+dev: bundles $(TEMPL) css bin/ai-db bin/dev
 	@./bin/dev -tailwind $(TAILWIND) -templ $(TEMPL)
 
 bin/dev: $(wildcard cmd/dev/*.go) go.mod go.sum
@@ -78,17 +78,17 @@ check-web:
 test-web:
 	go -C tools run ./webtypes test ..
 
-check-static: $(TEMPL)
+check-static: bundles $(TEMPL)
 	go -C tools run ./formatcheck -templ ../$(TEMPL) ..
 	go vet ./...
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
 
-check-test: db-health
+check-test: bundles db-health
 	go test -race $(GO_TEST_FLAGS) $(or $(GO_TEST_PACKAGES),./...)
 
-check-tools: $(TEMPL)
+check-tools: bundles $(TEMPL)
 	go -C tools run ./languagecheck ..
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
@@ -111,7 +111,7 @@ check-tools: $(TEMPL)
 # nothing pipes a check's output, which once hid a docscheck failure. It does
 # not run Go or templ formatting, the doc.go check, go vet, sourcecheck or
 # the tests (make check does), nor the schema docs or make vuln (CI does).
-prepush: $(TEMPL) $(TAILWIND)
+prepush: bundles $(TEMPL) $(TAILWIND)
 	$(MAKE) check-web
 	go -C tools run ./languagecheck ..
 	go -C tools run ./unchanged .. $(MAKE) generate css
@@ -128,7 +128,7 @@ prepush: $(TEMPL) $(TAILWIND)
 vuln:
 	$(MAKE) -k vuln-root vuln-tools vuln-tbls
 
-vuln-root:
+vuln-root: bundles
 	@printf '%s\n' 'Scanning root application module'
 	go tool -modfile=tools/go.mod govulncheck ./...
 
@@ -145,7 +145,7 @@ vuln-tbls:
 lint-fixtures: $(GOLANGCI_LINT)
 	go -C tools run ./lintfixtures -lint ../$(GOLANGCI_LINT) ..
 
-lint: $(GOLANGCI_LINT)
+lint: bundles $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...
 
 db-up:
@@ -174,8 +174,11 @@ ai-health: bin/ai-db
 db-health:
 	@if [ "$${RIBBITTO_TEST_DATABASE_URL+x}" = x ] || [ "$${RIBBITTO_REQUIRE_DB:-}" = 1 ]; then $(MAKE) ai-health; fi
 
-migrate: bin/ai-db
+migrate: bundles bin/ai-db
 	@./bin/ai-db run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
 
-seed: bin/ai-db
+seed: bundles bin/ai-db
 	@./bin/ai-db run go run ./cmd/seed $(ARGS)
+
+# Order-only: even an up-to-date helper must prepare embeds before use.
+bin/dev bin/ai-db: | bundles

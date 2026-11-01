@@ -13,6 +13,7 @@ set -a; . ./.env; set +a    # export configuration; the binary does not load .en
 make db-up                 # starts PostgreSQL and waits for health
 make migrate               # DIRECTION=up|down|status
 make seed ARGS='-messages 100' # optional development fixtures
+make bundles               # scripts before direct Go commands
 go run ./cmd/ribbitto       # http://localhost:8080
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
@@ -66,7 +67,7 @@ reverts one migration. See [database development](database.md) for
 configuration and migration ownership, and [database tests](database-tests.md)
 for integration tests.
 
-`make dev` builds CSS before starting the server. It runs the pinned templ
+`make dev` builds CSS and scripts before starting the server. It runs the pinned templ
 and Tailwind watchers together, restarting Go when templates or Go source
 change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
 without caching and recompute the stylesheet URL's content hash on each page
@@ -76,8 +77,8 @@ request. Reload on edits; CSS needs no server restart.
 `make css` and `make lint` use [`tools/download`](../tools/download/main.go)
 for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
 for type checking, unit tests and dependency management; see [setup](architecture/web-toolchain.md#versions-and-installation--1410-1415).
-Generated Go, CSS and vendored scripts are committed, so `go build` needs
-neither templ nor Tailwind. CSS class detection is limited to `.templ` files
+Generated Go, CSS and vendored scripts are committed. Run `make bundles`
+before direct Go commands; it needs no Node, templ or Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
 
 ### Checks

@@ -198,6 +198,7 @@ func TestMakefile(t *testing.T) {
 
 	for _, tc := range []struct{ name, source string }{
 		{"missing wiring", ""},
+		{"missing bundles", strings.Replace(valid, "check-test: bundles db-health", "check-test: db-health", 1)},
 		{"narrowed local packages", strings.Replace(valid, "$(or $(GO_TEST_PACKAGES),./...)", "$(GO_TEST_PACKAGES)", 1)},
 		{"ignored CI selection", strings.Replace(valid, "$(or $(GO_TEST_PACKAGES),./...)", "./...", 1)},
 	} {

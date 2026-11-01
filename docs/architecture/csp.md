@@ -46,7 +46,9 @@ matching entry wins: composer errors replace `#message-composer-state`, branch
 errors replace `#branch-feedback`. New htmx requests inherit both rules
 ([`web-htmx.md`](web-htmx.md)). Other status codes retain their defaults.
 
-Message timestamps use `message-time-v2.js`, loaded with the response nonce
+Message timestamps use `web/src/message-time.ts`, selected by the logical
+`message-time` registry entry from the embedded manifest and delivered under
+`/static/dist/` with a content-hashed name, loaded with the response nonce
 on every channel page, empty or not, because htmx does not run scripts in
 swapped fragments. The server renders `<time datetime>` in UTC, truncating
 only the attribute to millisecond precision; stored timestamps and the
@@ -58,7 +60,8 @@ rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled. From `desk` the element reserves a width that
 fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
-Application script URLs are versioned because static assets are immutable.
+Hashed bundles are immutable; the fixed-name manifest is not public.
+Unconverted application scripts retain versioned URLs.
 
 `message-composer-v21.js` loads with the response nonce on channel pages.
 It anchors the list during [composer growth](../ui-composer.md) and handles

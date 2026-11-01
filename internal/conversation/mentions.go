@@ -38,7 +38,7 @@ func handleTokens(body string) []textRun {
 				last--
 			}
 			if _, err := org.ValidateHandle(body[i+1 : last]); err == nil {
-				tokens = append(tokens, textRun{start: i, end: last})
+				tokens = append(tokens, textRun{start: i, end: last, line: run.line})
 			}
 			i = end - 1
 		}

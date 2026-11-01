@@ -39,6 +39,7 @@ func FuzzTypedHandlesRoundTrip(f *testing.F) {
 		"```go\n@tomoya", "```go\n@a1\n```", "`@x1`", `\@tomoya`, "https://e.org/@tomoya", "a@b.dev",
 		"_x @ab_ y", "@ab_x_", "@ab**x**", "**@ab**", "(@ab) _(@cd)_", "@ab.\n@cd-", "@ab<@cd",
 		"_@ab_", "** @ab**", "@ab @cd @ef_gh_ _ij @kl_", "x _@ab_ y", "@ab _c_", "@ab　_x_",
+		"_open\n@ab_!x_", "a `b\n_hi @ab_ c`", "> _open\n> @ab_!x_", "> a `b\n> _hi @ab_ c`",
 	} {
 		f.Add(s)
 	}

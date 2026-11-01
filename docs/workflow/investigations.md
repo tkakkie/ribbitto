@@ -32,7 +32,7 @@ for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
 checkouts with the trusted git settings and `GOENV=off` shown in [build routes](#build-routes).
-Never build from the implementer's worktree or sandbox: ignored/untracked
+Never build from the implementer's worktree: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
 assets; runtime needs no head tree.
 6. If isolation is impossible, build as the dedicated low-privilege

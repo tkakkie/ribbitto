@@ -149,7 +149,7 @@ for a primary-key read, and the choice should be revisited.
   allows are cached); a deny skipped and advanced (#670) until #852 made a
   deny of the stream's own member end the stream.
 - Recorded here and in streaming.md; decision 23 covers the event log and
-  hub. #669, #670 and #671 are high risk; #669 and #670 are tier A.
+  hub. #669, #670 and #671 are high risk; #669 and #670 need the third-AI review.
 
 ### Tests that prove (a2)
 

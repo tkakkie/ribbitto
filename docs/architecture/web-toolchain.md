@@ -64,8 +64,8 @@ lazy loading and `modulepreload` need target-browser verification before adoptio
 
 ## Versions and installation — #1410, #1415
 
-**Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI setup, local
-development and sandbox setup read this same pin; Go wrappers used by one-line
+**Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI and local
+development read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
 bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
 the directory of the version-checked Node without resolving Node symlinks. CI provisions the release

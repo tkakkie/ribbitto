@@ -88,8 +88,12 @@ func TestStaticBundleRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dist, err := fs.Glob(static.FS(), "dist/*")
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
-	for _, name := range []string{"css/app.css", "dist/manifest.json", strings.TrimPrefix(bundleURL, "/static/")} {
+	for _, name := range append([]string{"css/app.css"}, dist...) {
 		data, err := fs.ReadFile(static.FS(), name)
 		if err != nil {
 			t.Fatal(err)

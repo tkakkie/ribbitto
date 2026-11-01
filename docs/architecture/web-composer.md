@@ -62,68 +62,51 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 
 ### Drafts
 
-Only `message-drafts-vN.js` may use `localStorage` (checked).
-`message-drafts-v7.js`: cleanup (#1178, #1181), saving (#1186), feed/topic
-restore (#1162), never history. Restore seeds `at` without input/typing/focus;
+Only `web/src/message-drafts.ts` may use `localStorage` (checked). Pure rules
+live in `web/src/drafts.ts` (`web/test/drafts.test.mjs`) and the thin adapter
+`web/src/message-drafts.ts` owns storage, timers, events and marker `hidden`:
+cleanup (#1178, #1181), saving (#1186), feed/topic restore (#1162), never history.
+Restore seeds `at` without input/typing/focus;
 [Events](web-javascript.md#javascript): server text wins; Edit saves; Remove clears
 its unchanged snapshot. Snapshot keys survive 409 rotation.
 At dispatch, save raw text and its send key before the request leaves or the
-textarea empties (#1328), including in-flight reload/navigation. Restore the key
-only with valid text in the same session/place; reuse it only while that text is
-unchanged. Any edit or emptying renews it. A 200 or stored-key confirmation clears
-the saved key while keeping newer text. Only the latest send dispatched in a
-place is kept: an unconfirmed item followed by another send loses its key on
-reload, as its text did before.
+textarea empties (#1328), including in-flight reload/navigation. Restore and
+reuse the key only with valid unchanged text (`restoredSendKey`, tested in
+`web/test/drafts.test.mjs`); any edit or emptying renews it. A 200 or stored-key
+confirmation clears the saved key while keeping newer text. Only the latest send
+dispatched in a place is kept: an unconfirmed item followed by another send loses
+its key on reload, as its text did before.
 Retry keeps unsaved edits. In-place 409 confirms recovered prefixes;
 dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
 
-- **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
-  canonical lower-case UUIDs; session: UUIDv7 id; place: `feed` or topic ID.
-- **Value:** JSON `{member, session, expires, text, at, key}`; `expires` and `at`
-  are Unix milliseconds; `key` is a send UUID or null (older entries may omit it).
-  Limit: 4,000 code points, 50 entries per member
-  and session. Retention: last edit (`at`), checked only at load.
-- **Saving:** latest htmx forms carry `data-draft-channel`/optional
-  `data-draft-topic` outside state swaps. Tab-monotonic edit times, never save
-  times; 300 ms debounce, `pagehide`/hidden flush, wait for `compositionend`.
-  Clean tabs never flush. Blank/over-limit input and confirmed blank text write
-  empty tombstones at edit time, never delete keys. Tombstones restore nothing,
-  count toward 50; only eviction, session end or retention removes them.
-- **Races and cap:** pre-write reads skip equal/later stored edits, leaving
-  the tab clean. Sort own entries by edit time (oldest first), then key;
-  trim other entries to 49 before insertion, all to 50 after every write.
-  Both rules are best effort on observed values: overlapping reads may
-  leave older text; eviction may remove a concurrent update. No repair;
-  textarea unchanged. Only next input saves again.
-  Foreign values unread, keys unwritten.
-- **Stopping:** sign-out notices or either expiry clock cancel pending saves
-  and stop writes until reload. Save, edit, restore, timer and marker updates
-  share one expiry check. Expiry removes that session's keys, preserving input
-  text and sending. Storage errors leave typing/sending usable.
-  A device clock set too far ahead may end saving early and delete saved drafts
-  (accepted trade-off, #1798); a clock set behind cannot extend the monotonic deadline.
-- **Notice:** `ribbitto.signed-out.v1` holds only the horizon;
-  every write fires `storage` in other tabs.
-- **Millisecond rule:** cleanup removes malformed `ribbitto.draft.v1:` keys
-  and entries whose session's 48-bit millisecond prefix (first 12 hex digits)
-  strictly precedes its horizon's. Foreign sessions at/after that millisecond
-  stay unread: stale pages cannot remove newer sessions' entries.
-- **Sign-in page:** `data-drafts-horizon` is PostgreSQL's `uuidv7()`
-  (`identity.SessionHorizon`, session-id clock), only when
-  signed out, including sign-in errors. Cleanup then notice run once per
-  document load, never on back-forward cache restore. Storage errors keep it usable.
-- **Organisation pages:** channel/list pages' `#organization-stream` has
-  `data-session` (id, never token/hash), `data-session-expires` and
-  `data-rendered-at` (Unix milliseconds) beside `data-member`. Once per load,
-  first match per draft key wins: malformed or own session
-  with another member, removed; foreign session, removed if earlier by the
-  millisecond rule, else unread; own values, removed if invalid JSON, fields
-  missing/mistyped, member/session/expiry mismatched, over 4,000 code points,
-  or `at` at least 7 days old or over a day ahead. Expiry: the monotonic deadline
-  (expiry minus render time; `performance.now()` from document time origin) or
-  `Date.now() >= expires`, covering sleep that pauses the monotonic clock.
-  Either removes own session's keys unread; the existing chained timer uses
-  the monotonic deadline, without polling.
+- **Key and value (`web/test/drafts.test.mjs`):**
+  `ribbitto.draft.v1:<member>:<session>:<channel>:<place>` (lowercase UUIDs;
+  UUIDv7 session; `feed` or topic ID) and JSON
+  `{member, session, expires, text, at, key}` (≤4,000 code points, 50 entries
+  per member/session, `at` <7 days old and ≤1 day ahead, checked at load).
+- **Saving and cap (`web/test/drafts.test.mjs`):** latest htmx forms carry
+  `data-draft-channel`/optional `data-draft-topic` outside state swaps.
+  Tab-monotonic edit times (`nextEditTime`), 300 ms debounce, `pagehide`/hidden
+  flush, wait for `compositionend`; clean tabs never flush. Blank/over-limit
+  text writes empty tombstones (`normalizeDraftText`), which count toward 50.
+  Equal/later stored edits win (`shouldWriteDraft`); own entries trim by edit
+  time then key to 49 before insert and 50 after (`selectKeysToTrim`), best
+  effort without reading or writing foreign keys.
+- **Stopping and expiry (`web/test/drafts.test.mjs`):** sign-out notices
+  (`ribbitto.signed-out.v1`) or either expiry clock (`checkSessionExpired`:
+  `performance.now() >= expires - rendered` or `Date.now() >= expires`, latched
+  against rollback with chained `nextExpiryDelay` waits) cancel saves, remove
+  the session's keys and leave typing/sending usable. An ahead device clock may
+  expire drafts early (#1798).
+- **Cleanup (`web/test/drafts.test.mjs`):** once per document load (never on
+  bfcache restore), `sweepKeys` removes malformed `ribbitto.draft.v1:` keys,
+  own-session keys under another member, invalid own entries, and foreign
+  sessions whose 48-bit millisecond prefix strictly precedes the horizon
+  (leaving same-millisecond or later foreign sessions unread). The sign-in page
+  uses `data-drafts-horizon` (`identity.SessionHorizon`, PostgreSQL `uuidv7()`)
+  when signed out and writes `ribbitto.signed-out.v1`; organisation pages use
+  `#organization-stream`'s `data-member`, `data-session`, `data-session-expires`
+  and `data-rendered-at`.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
   where supported (Chromium); the sign-in page covers the rest.
 

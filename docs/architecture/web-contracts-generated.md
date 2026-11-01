@@ -49,7 +49,7 @@ and sending/sent `key`. Without an idempotency key on plain/history pages,
 `message-sent` carries null (`FormData.get`); legacy `message-composer-v21.js`
 in-place `message-sending` carries undefined (`elements.idempotency_key?.value`).
 The contract says null; #1824 may normalize undefined because consumers treat
-both alike: `message-drafts-v7.js` returns on a falsy key, the composer does not
+both alike: `web/src/drafts.ts` returns on a falsy key, the composer does not
 listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
 string keys. `message-sent` must keep null: both scripts compare its key with `!==`.
 `message-sending` is both an id (composer markup) and an event name by design;

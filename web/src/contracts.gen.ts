@@ -45,6 +45,9 @@ export const topicLinkSelector = (suffix: string): string => "#" + topicLinkID(s
 export const getTopicLink = (suffix: string, root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(topicLinkSelector(suffix));
 
 export const MemberAttribute = "data-member";
+export const SessionAttribute = "data-session";
+export const SessionExpiresAttribute = "data-session-expires";
+export const RenderedAtAttribute = "data-rendered-at";
 export const SidebarTopicAttribute = "data-sidebar-topic";
 export const SnapshotSeqAttribute = "data-snapshot-seq";
 export const UnreadCountAttribute = "data-unread-count";
@@ -163,8 +166,10 @@ export const RecoveredAttribute = "data-recovered";
 export const RepeatAttribute = "data-repeat";
 export const BusyAttribute = "data-busy";
 export const CapacityAttribute = "data-capacity";
+export const DraftsHorizonAttribute = "data-drafts-horizon";
 export const DraftChannelAttribute = "data-draft-channel";
 export const DraftTopicAttribute = "data-draft-topic";
+export const DraftMarkerAttribute = "data-draft-marker";
 export const EventCursorAttribute = "data-event-cursor";
 export const AppliedCursorAttribute = "data-applied-cursor";
 export const TopicAttribute = "data-topic";
@@ -236,6 +241,6 @@ export function listenTypingInputEvent(target: EventTarget, listener: (detail: T
 }
 
 
-export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute;
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

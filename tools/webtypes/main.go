@@ -28,7 +28,7 @@ func main() {
 }
 
 func environment(root string) []string {
-	// Preserve sandbox proxy settings; clearing every npm_config_* would lose them.
+	// Preserve proxy settings; clearing every npm_config_* would lose them.
 	var env []string
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")

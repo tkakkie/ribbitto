@@ -93,8 +93,14 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   matches [third-AI review](delivery.md#third-ai-review).
 - On a conversion (a pull request whose issue says it keeps today's
   behaviour), any difference from the old behaviour is a `[blocking]` finding
-  unless it is provably unreachable or the issue itself lists it as intended
-  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+  unless it is provably unreachable or the issue itself lists it as intended;
+  the PR body shows the pre-review comparison against the old script (baseline
+  SHA, commands and result, or what was compared for a restructuring;
+  [implementer brief](delivery.md#standard-implementer-brief)) and its absence
+  is also a `[blocking]` finding ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+  Behaviour is what leaves the module and is observable outside it — DOM
+  writes, events dispatched, request parameters, stored values, timer delays,
+  escaping exceptions and their order — not internal call traces.
 
 **How to report:** one comment on the pull request (or issue):
 

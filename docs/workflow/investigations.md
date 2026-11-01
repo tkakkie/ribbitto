@@ -13,7 +13,7 @@ when available; development-machine runs decide until then.
 Performance measurements on the host need the maintainer's approval
 (maintainer, 2026-10-18, #1308).
 
-Conditions:
+All conditions apply:
 
 1. Cross-review, Copilot and adversarial review approve
 with measurement pending; CI passes at that head before `ai-reviewed`.

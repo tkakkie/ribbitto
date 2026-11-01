@@ -50,9 +50,9 @@ func parse(args []string) (string, string, error) {
 }
 
 func run(ctx context.Context, tailwind, templ string) error {
-	init := exec.Command("./bin/webbuild", "-dev", ".")
-	init.Stdout, init.Stderr = os.Stdout, os.Stderr
-	if err := init.Run(); err != nil {
+	initial := exec.CommandContext(ctx, "./bin/webbuild", "-dev", ".")
+	initial.Stdout, initial.Stderr = os.Stdout, os.Stderr
+	if err := initial.Run(); err != nil {
 		return fmt.Errorf("building development bundles: %w", err)
 	}
 	css := exec.Command(tailwind, "-i", "web/styles/app.css", "-o", "web/static/css/app.css", "--minify", "--watch=always")

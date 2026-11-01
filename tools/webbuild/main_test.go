@@ -109,13 +109,21 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+type chanWriter chan string
+
+func (w chanWriter) Write(p []byte) (int, error) {
+	w <- string(p)
+	return len(p), nil
+}
+
 func TestBuildDevelopmentAndWatch(t *testing.T) {
 	root := fixture(t, []byte("const first = 'alpha';\nconsole.log(first);\n"))
 	dist := filepath.Join(root, "web/static/dist")
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
+	errs := make(chanWriter, 32)
 	done := make(chan error, 1)
-	go func() { done <- watch(ctx, root) }()
+	go func() { done <- watch(ctx, root, errs) }()
 
 	waitBundle := func(prev string) (bundle, []byte, []byte) {
 		t.Helper()
@@ -136,6 +144,25 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	}
 
 	b1, js1, sm1 := waitBundle("")
+	lock := filepath.Join(root, "web/src/.#message-time.ts")
+	if err := os.Symlink(filepath.Join(root, "web/src/missing.ts"), lock); err != nil {
+		t.Fatal(err)
+	}
+	if msg := <-errs; !strings.Contains(msg, ".#message-time.ts") {
+		t.Fatalf("unexpected snapshot error: %s", msg)
+	}
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "web/src/message-time.ts"), []byte("const broken = ;\n"))
+	for {
+		if msg := <-errs; strings.Contains(msg, "building bundles:") {
+			break
+		}
+	}
+	if kept, _, _ := waitBundle(""); kept != b1 {
+		t.Fatalf("failed rebuild altered previous bundle: got %+v, want %+v", kept, b1)
+	}
 	write(t, filepath.Join(root, "web/src/message-time.ts"), []byte("const second = 'beta';\nconsole.log(second);\n"))
 	b2, js2, sm2 := waitBundle(b1.File)
 	if !bytes.Contains(js1, []byte("//# sourceMappingURL="+b1.Map)) || !bytes.Contains(sm1, []byte(`"sourcesContent"`)) || !bytes.Contains(sm1, []byte("alpha")) || !bytes.Contains(js2, []byte("//# sourceMappingURL="+b2.Map)) || !bytes.Contains(sm2, []byte("beta")) {

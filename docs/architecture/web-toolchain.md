@@ -67,8 +67,11 @@ Host builds use the
 In `make dev`, `cmd/dev` runs `webbuild -dev` and supervises `webbuild -watch`;
 `RIBBITTO_DEV_ASSETS=web/static` re-reads `dist/manifest.json` per request and
 serves disk bundles and `.js.map` files with `Cache-Control: no-store` (#1821).
-#1819 adds private production maps, absent from the runtime manifest. ES modules, shared chunks,
-lazy loading and `modulepreload` need target-browser verification before adoption.
+After `make dev`, the ignored `dist` directory holds a development build, so run
+`make bundles` before direct `go test`, `go build` or `go run`. #1819 adds
+private production maps, absent from the runtime manifest. ES modules, shared
+chunks, lazy loading and `modulepreload` need target-browser verification before
+adoption.
 
 ## Versions and installation — #1410, #1415
 

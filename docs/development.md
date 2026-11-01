@@ -81,7 +81,9 @@ take effect on reload without rebuilding the Go binary.
 for SHA-256 checked tools (macOS ARM64 and Linux x64). Node/npm are only
 for type checking, unit tests and dependency management; see [setup](architecture/web-toolchain.md#versions-and-installation--1410-1415).
 Generated Go, CSS and vendored scripts are committed. Run `make bundles`
-before direct Go commands; it needs no Node, templ or Tailwind. CSS class detection is limited to `.templ` files
+before direct Go commands (including after `make dev`, which leaves a
+development build in the ignored `dist` directory); it needs no Node, templ or
+Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
 
 ### Checks

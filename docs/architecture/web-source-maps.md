@@ -20,8 +20,9 @@ follow
 private-storage policy once store details are fixed in issue #1469; match
 maps and bundles by SHA, run id and content hash, recorded in the manifest.
 
-Keep maps out of the image, embedded files and public static routes; no inline
-maps or public `sourceMappingURL` link. Match a stack to the exact output.
+In production, keep maps out of the image, embedded files and public static
+routes; no inline maps or public `sourceMappingURL` link. Match a stack to the
+exact output.
 Verify CSP and delivery in the [target browsers](browser-targets.md), with
 version-specific evidence under that document's verification rules. The
 classic bundle needs a browser check; module/shared/lazy/preload delivery

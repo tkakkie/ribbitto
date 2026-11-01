@@ -168,7 +168,10 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 		}
 		if strings.HasPrefix(r.URL.Path, "dist/") {
 			current, err := pages.scripts()
-			if err != nil || !current.IsBundle(r.URL.Path) && (devAssets == "" || !current.IsMap(r.URL.Path)) {
+			if err != nil {
+				slog.ErrorContext(r.Context(), "loading scripts", "err", err, "request_id", middleware.RequestID(r.Context()))
+			}
+			if err != nil || (!current.IsBundle(r.URL.Path) && (devAssets == "" || !current.IsMap(r.URL.Path))) {
 				http.NotFound(w, r)
 				return
 			}
@@ -229,7 +232,7 @@ func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int
 	if p.scripts != nil {
 		scripts, err := p.scripts()
 		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			serverError(w, r, "loading scripts", err)
 			return
 		}
 		r = r.WithContext(static.WithScripts(r.Context(), scripts))

@@ -56,7 +56,7 @@ func main() {
 	case *watchMode && len(args) == 1:
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		err = watch(ctx, args[0])
+		err = watch(ctx, args[0], os.Stderr)
 	case *dev && !*watchMode && len(args) == 1:
 		var snap string
 		if snap, err = sourceSnapshot(args[0]); err == nil {
@@ -74,33 +74,30 @@ func main() {
 	}
 }
 
-func watch(ctx context.Context, root string) error {
-	last, err := sourceSnapshot(root)
-	if err != nil {
-		return err
-	}
-	if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err != nil || !strings.Contains(string(data), `"run_id": "`+last+`"`) || !strings.Contains(string(data), `"map":`) {
-		if err := build(root, "dev", last, true); err != nil {
-			return err
+func watch(ctx context.Context, root string, stderr io.Writer) error {
+	var last string
+	if snap, err := sourceSnapshot(root); err == nil {
+		if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err == nil && strings.Contains(string(data), `"run_id": "`+snap+`"`) && strings.Contains(string(data), `"map":`) {
+			last = snap
 		}
 	}
+	// Poll web/src every 50 ms so watch needs no external watcher dependency.
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
+		next, err := sourceSnapshot(root)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
+		} else if next != last {
+			if err := build(root, "dev", next, true); err != nil {
+				_, _ = fmt.Fprintln(stderr, err)
+			}
+			last = next
+		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			next, err := sourceSnapshot(root)
-			if err != nil {
-				return err
-			}
-			if next != last {
-				if err := build(root, "dev", next, true); err != nil {
-					return err
-				}
-				last = next
-			}
 		}
 	}
 }
@@ -129,9 +126,11 @@ func build(root, commit, runID string, dev bool) error {
 		return fmt.Errorf("resolving root: %w", err)
 	}
 	dist := filepath.Join(root, "web/static/dist")
-	// Invalidate the previous generation even if this run fails before staging.
-	if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("invalidating manifest: %w", err)
+	if !dev {
+		// Invalidate the previous generation even if this run fails before staging.
+		if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("invalidating manifest: %w", err)
+		}
 	}
 	names, err := declaredEntries(root)
 	if err != nil {
@@ -195,10 +194,13 @@ func build(root, commit, runID string, dev bool) error {
 	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), append(data, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
 	}
-	if err := os.RemoveAll(dist); err != nil {
+	old := stage + "-old"
+	defer func() { _ = os.RemoveAll(old) }()
+	if err := os.Rename(dist, old); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("replacing bundles: %w", err)
 	}
 	if err := os.Rename(stage, dist); err != nil {
+		_ = os.Rename(old, dist)
 		return fmt.Errorf("publishing bundles: %w", err)
 	}
 	return nil
@@ -365,7 +367,11 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 	if err != nil {
 		return nil, fmt.Errorf("reading staged bundles: %w", err)
 	}
-	if len(files) != len(listed)*(1+map[bool]int{true: 1}[dev]) {
+	expected := len(listed)
+	if dev {
+		expected *= 2
+	}
+	if len(files) != expected {
 		return nil, fmt.Errorf("foreign file in output directory")
 	}
 	return listed, nil

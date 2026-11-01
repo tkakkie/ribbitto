@@ -41,9 +41,12 @@ $(TEMPL): tools/go.mod tools/go.sum
 css: $(TAILWIND)
 	$(TAILWIND) $(CSS_ARGS)
 
-# Serve rebuilt CSS from disk so updates do not depend on a server restart.
-dev: bundles $(TEMPL) css bin/ai-db bin/dev
+# Serve rebuilt CSS and script bundles from disk so updates do not depend on a server restart.
+dev: bundles $(TEMPL) bin/webbuild css bin/ai-db bin/dev
 	@./bin/dev -tailwind $(TAILWIND) -templ $(TEMPL)
+
+bin/webbuild: $(wildcard tools/webbuild/*.go) tools/go.mod tools/go.sum
+	go -C tools build -o ../$@ ./webbuild
 
 bin/dev: $(wildcard cmd/dev/*.go) go.mod go.sum
 	go build -o $@ ./cmd/dev

@@ -64,7 +64,7 @@ templ panelControls(page ChannelPage) {
 templ panelControl(page ChannelPage, panel, label string) {
 	{{ open := page.Panel == panel }}
 	<a
-		id={ "panel-control-" + panel }
+		id={ PanelControlPrefix + panel }
 		href={ templ.SafeURL(panelURL(page, panel)) }
 		if open {
 			aria-current="true"
@@ -97,17 +97,17 @@ func sheetHeight(panel string) string {
 // below it the block covers the conversation over a dimmed page, whose
 // dimmed area is a link that closes it: an overlay on the conversation's
 // right side, below desk a bottom sheet. The heading takes focus when the
-// panel opens; side-panel-v3.js makes the covering panel a modal dialog,
+// panel opens; web/src/side-panel.ts makes the covering panel a modal dialog,
 // adds Escape and returns focus.
 templ sidePanel(page ChannelPage) {
 	{{ closeURL := conversationURL(page) + conversationQuery(page) }}
 	// Pointer-only: the close link and Escape serve the keyboard and
 	// assistive technology.
-	<a id="panel-backdrop" href={ templ.SafeURL(closeURL) } tabindex="-1" aria-hidden="true" class="hidden max-wide:fixed max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:bg-scrim"></a>
-	<aside id="side-panel" aria-labelledby="panel-heading" class={ "flex w-panel shrink-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-bg shadow-block max-wide:absolute max-wide:inset-y-0 max-wide:right-0 max-wide:z-20 max-wide:shadow-popover max-desk:fixed max-desk:inset-x-0 max-desk:top-auto max-desk:w-auto max-desk:rounded-b-none max-desk:pb-safe-0", sheetHeight(page.Panel) }>
+	<a id={ PanelBackdropID } href={ templ.SafeURL(closeURL) } tabindex="-1" aria-hidden="true" class="hidden max-wide:fixed max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:bg-scrim"></a>
+	<aside id={ SidePanelID } aria-labelledby={ PanelHeadingID } class={ "flex w-panel shrink-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-bg shadow-block max-wide:absolute max-wide:inset-y-0 max-wide:right-0 max-wide:z-20 max-wide:shadow-popover max-desk:fixed max-desk:inset-x-0 max-desk:top-auto max-desk:w-auto max-desk:rounded-b-none max-desk:pb-safe-0", sheetHeight(page.Panel) }>
 		<header class="flex shrink-0 items-center gap-2 border-b border-border py-2 pl-5 pr-2">
-			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, panelTitle(page.Panel)) }</h2>
-			<a id="panel-close" href={ templ.SafeURL(closeURL) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96">
+			<h2 id={ PanelHeadingID } tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, panelTitle(page.Panel)) }</h2>
+			<a id={ PanelCloseID } href={ templ.SafeURL(closeURL) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96">
 				@Icon("dismiss-regular", 20)
 			</a>
 		</header>

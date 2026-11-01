@@ -1,15 +1,11 @@
-arrival
 branch-selection
 member-mentions
 mention-picker
-message-composer
 message-drafts
 message-history
 message-link
 message-stream
-popover-focus
 quote-selection
 read-visibility
-side-panel
 sidebar-scroll
 sidebar-unread

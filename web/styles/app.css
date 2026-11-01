@@ -283,7 +283,7 @@
    switch (#921); the new page shows from its first frame. Only an opening
    panel and a new row's pill move. Reduced motion never opts in. */
 @media (prefers-reduced-motion: no-preference) {
-  /* Set by arrival-v1.js for one run after a push navigation inside the
+  /* Set by web/src/arrival.ts for one run after a push navigation inside the
      app; content and input never wait for these. */
   :root[data-arrive-pill] [data-selection-pill] {
     animation: rb-pill-in var(--duration-faster) var(--ease-decelerate);
@@ -305,7 +305,7 @@
 @keyframes rb-panel-in {
   from { transform: translateX(0.5rem); }
 }
-/* A phone's bottom sheet rises instead. The name stays, so arrival-v1.js
+/* A phone's bottom sheet rises instead. The name stays, so web/src/arrival.ts
    ends the panel mark the same way at every width. */
 @variant max-desk {
   @keyframes rb-panel-in {

@@ -32,7 +32,7 @@ the typing dots.
   (a closing one just disappears), and the pill grows into a new row over
   100 ms, the list page's too. Their keyframes only move, never fade, and
   no motion has a delay (`TestArrivalMotion`).
-- **Arrival.** `arrival-v1.js` marks a page reached from another page of
+- **Arrival.** `web/src/arrival.ts` marks a page reached from another page of
   the app, and CSS animates under the marks ([arrival
   motion](ui-panels-and-motion.md#arrival-motion)).
 - **Reduced motion.** The arrival animations and press scaling exist only

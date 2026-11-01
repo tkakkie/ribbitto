@@ -76,7 +76,7 @@ stays put; focus moves to the next link, or the pane at the start.
 The account menu or sheet (`#account-menu`) and the create popover
 (`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
 #1159) are non-modal native popovers. Tab/Shift-Tab leaving closes it
-and keeps focus on the reached control (#1092) (`popover-focus-v1.js`, on every page;
+and keeps focus on the reached control (#1092) (`web/src/popover-focus.ts`, on every page;
 it suits all three, which nest no popover). They close on Tab exit because outside clicks already close them. Escape closes it and focuses its button; outside clicks close it, keeping
 clicked focus; inside clicks keep it open except Quote. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks each at desktop and
@@ -92,7 +92,7 @@ Enter and with Space at desktop and phone width.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
 (`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.
-The close link and `side-panel-v3.js`'s Escape return to the conversation.
+The close link and `web/src/side-panel.ts`'s Escape return to the conversation.
 Escape acts only with focus in the panel or on nothing and no popover open;
 Escape in the composer keeps the panel. Closing focuses the opener, whose id
 crosses the load in `sessionStorage`. Session-bound device drafts return after

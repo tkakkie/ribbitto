@@ -1,6 +1,9 @@
 package view
 
-import "github.com/tkakkie/ribbitto/internal/web/i18n"
+import (
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/web/static"
+)
 
 // layout wraps every page. title names the page itself; the app name follows
 // it, so tabs, history and screen readers tell pages apart (WCAG 2.4.2).
@@ -22,12 +25,12 @@ templ layout(stylesheetURL, title string) {
 			<link rel="stylesheet" href={ stylesheetURL }/>
 			<link rel="icon" type="image/svg+xml" href={ logoURL }/>
 			// Not deferred: it must mark the page before the first paint.
-			<script src="/static/arrival-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script src={ static.ScriptURL(ctx, "arrival") } nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/htmx-2.0.7.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			// Every popover follows one focus rule (docs/accessibility.md).
-			<script defer src="/static/popover-focus-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+			@pageScript("popover-focus")
 		</head>
 		<body class="bg-base">
 			{ children... }

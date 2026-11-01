@@ -4,7 +4,7 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar and composer ids, dynamic id
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival and side-panel ids, dynamic id
 prefixes, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
 other scripts' private hooks remain outside the generated contract.
@@ -59,7 +59,7 @@ listeners; `composed` stays unset (no script sets it; no shadow DOM).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
 `data-state` and `data-draft-key` are script-written hooks, not server state.
-Sidebar and typed composer entries use these hooks; `web/src/composer.ts` still
+Sidebar, arrival, side-panel and typed composer entries use these hooks; `web/src/composer.ts` still
 keeps queue state in DOM attributes until `web/src/composer-queue.ts` adoption (#1825).
 
 `tools/contractliterals`, run by `make check-tools`, rejects literal ids,

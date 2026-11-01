@@ -25,7 +25,7 @@ Read the file for the area you change:
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication and member limits; the reverse-proxy contract |
-| [`member-admission.md`](member-admission.md) | posting and pin-change admission, provisional budgets and retries |
+| [`member-admission.md`](member-admission.md) | posting, pin-change and image-change admission, provisional budgets and retries |
 | [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`ephemeral-state.md`](ephemeral-state.md) | presence and typing as current state: generations, owners, delivery and reset |

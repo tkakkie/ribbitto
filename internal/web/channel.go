@@ -54,6 +54,7 @@ type channelPages struct {
 	typing           *typing.State
 	limiter          *middleware.MemberRateLimiter
 	createLimit      *middleware.MemberRateLimiter
+	imageLimit       *middleware.MemberRateLimiter
 	branchLimit      *middleware.MemberRateLimiter
 	postLimit        *middleware.MemberRateLimiter
 	pinLimit         *middleware.MemberRateLimiter

@@ -20,7 +20,7 @@
     let intent = null;
     const needed = () => !navigating && document.visibilityState === 'visible' && form.isConnected;
     // A modal panel covers the conversation (an overlay, or a phone's sheet):
-    // automatic reading waits, Mark as read never does. side-panel-v3.js
+    // automatic reading waits, Mark as read never does. web/src/side-panel.ts
     // alone decides it; the synchronous panel-cover event asks it to publish
     // aria-modal for the current size first. Its listener is in place from
     // htmx:load, which follows every deferred script.

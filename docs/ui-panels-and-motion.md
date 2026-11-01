@@ -19,7 +19,7 @@ breakpoints ([`ui-code.md`](ui-code.md#dimension-tokens)) place it (#972):
 Below `wide` the overlay and the sheet are one modal: `#panel-backdrop` dims
 the whole page in `scrim`, a link to the close URL that only a pointer
 reaches. The panel covers the conversation exactly while it is out of flow.
-`side-panel-v3.js` alone decides that, from the panel's computed `position`
+`web/src/side-panel.ts` alone decides that, from the panel's computed `position`
 on load and on each resize, and makes it a modal dialog over an inert page
 ([accessibility](accessibility.md)); its `aria-modal="true"` is the
 published state. `read-visibility-v6.js` reads that attribute and pauses
@@ -54,7 +54,7 @@ scrolls the conversation up from the composer.
 ## Arrival motion
 
 The selection pill and side panel move only on arrival
-([motion](ui-motion.md#motion), #921). `arrival-v1.js` marks the root
+([motion](ui-motion.md#motion), #921). `web/src/arrival.ts` marks the root
 (`data-arrive-pill`, `data-arrive-panel`) and CSS animates under those
 marks. It reads `navigation.activation` and stores nothing: only a `push`
 whose previous entry is same-origin (a link, or a form's redirect) is

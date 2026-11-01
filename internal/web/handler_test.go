@@ -93,18 +93,16 @@ func TestStaticBundleRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	for _, name := range []string{"css/app.css", "dist/manifest.json", strings.TrimPrefix(bundleURL, "/static/"), strings.TrimPrefix(composerURL, "/static/")} {
-		data, err := fs.ReadFile(static.FS(), name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		path := filepath.Join(dir, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, data, 0o644); err != nil {
-			t.Fatal(err)
-		}
+	copyScriptAssets(t, dir)
+	data, err := fs.ReadFile(static.FS(), "css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "css"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "css", "app.css"), data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	// A real stale bundle isolates registry rejection from the filesystem's 404.
 	if err := os.WriteFile(filepath.Join(dir, "dist", "old-ABCDEFGH.js"), []byte("console.log('stale');"), 0o644); err != nil {
@@ -222,6 +220,10 @@ func TestReadiness(t *testing.T) {
 // and refuses methods other than GET and HEAD with 405 and Allow,
 // from the embedded assets and from a development directory.
 func TestStaticHeaders(t *testing.T) {
+	arrivalURL, err := static.ScriptURL(t.Context(), "arrival")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, dir := range []string{"", filepath.Join("..", "..", "web", "static")} {
 		handler, err := newTestHandler(t, dir)
 		if err != nil {
@@ -233,7 +235,7 @@ func TestStaticHeaders(t *testing.T) {
 		}{
 			{http.MethodGet, "/static/brand/logo-v1.svg", "", http.StatusOK},
 			{http.MethodGet, "/static/channel-images-v1/lake.svg", "", http.StatusOK},
-			{http.MethodGet, "/static/arrival-v1.js", "", http.StatusOK},
+			{http.MethodGet, arrivalURL, "", http.StatusOK},
 			{http.MethodGet, "/static/css/app.css", "", http.StatusOK},
 			{http.MethodHead, "/static/brand/logo-v1.svg", "", http.StatusOK},
 			{http.MethodGet, "/static/brand/logo-v1.svg", "bytes=0-9", http.StatusPartialContent},
@@ -346,6 +348,69 @@ func TestHello(t *testing.T) {
 	if w.Code != http.StatusOK || w.Body.String() != string(css) {
 		t.Error("hashed stylesheet URL does not serve the embedded CSS")
 	}
+}
+
+func TestArrivalScriptLayout(t *testing.T) {
+	handler, err := newTestHandler(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	arrivalURL, err := static.ScriptURL(t.Context(), "arrival")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	body := w.Body.String()
+	nonce := responseNonce(t, w)
+	if err := checkArrivalScript(body, arrivalURL, nonce); err != nil {
+		t.Fatal(err)
+	}
+	wantTag := `<script src="` + arrivalURL + `" nonce="` + nonce + `"></script>`
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"defer", strings.Replace(body, wantTag, `<script defer src="`+arrivalURL+`" nonce="`+nonce+`"></script>`, 1)},
+		{"async", strings.Replace(body, wantTag, `<script async src="`+arrivalURL+`" nonce="`+nonce+`"></script>`, 1)},
+		{"type=module", strings.Replace(body, wantTag, `<script type="module" src="`+arrivalURL+`" nonce="`+nonce+`"></script>`, 1)},
+		{"outside head", strings.Replace(strings.Replace(body, wantTag, "", 1), "</head>", "</head>"+wantTag, 1)},
+		{"after htmx", strings.Replace(strings.Replace(body, wantTag, "", 1), `htmx-2.0.7.min.js" nonce="`+nonce+`"></script>`, `htmx-2.0.7.min.js" nonce="`+nonce+`"></script>`+wantTag, 1)},
+		{"missing nonce", strings.Replace(body, wantTag, `<script src="`+arrivalURL+`"></script>`, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := checkArrivalScript(tc.body, arrivalURL, nonce); err == nil {
+				t.Fatalf("accepted invalid arrival script (%s)", tc.name)
+			}
+		})
+	}
+}
+
+func checkArrivalScript(body, arrivalURL, nonce string) error {
+	headStart, headEnd := strings.Index(body, "<head>"), strings.Index(body, "</head>")
+	if headStart < 0 || headEnd <= headStart {
+		return errors.New("missing <head>")
+	}
+	head := body[headStart:headEnd]
+	tagRe := regexp.MustCompile(`<script\b[^>]*\bsrc="` + regexp.QuoteMeta(arrivalURL) + `"[^>]*></script>`)
+	loc := tagRe.FindStringIndex(head)
+	if loc == nil {
+		return errors.New("arrival script missing from <head>")
+	}
+	tag := head[loc[0]:loc[1]]
+	if !strings.Contains(tag, ` nonce="`+nonce+`"`) {
+		return fmt.Errorf("arrival script missing response nonce: %s", tag)
+	}
+	for _, forbidden := range []string{"defer", "async", `type="module"`} {
+		if regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta(forbidden) + `(?:$|\s|>)`).MatchString(tag) {
+			return fmt.Errorf("arrival script must not have %s: %s", forbidden, tag)
+		}
+	}
+	htmxIndex := strings.Index(head, `<script defer src="/static/vendor/htmx-2.0.7.min.js"`)
+	if htmxIndex < 0 || loc[0] >= htmxIndex {
+		return errors.New("arrival script must precede htmx tags in <head>")
+	}
+	return nil
 }
 
 func TestHTMLSecurity(t *testing.T) {

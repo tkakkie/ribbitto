@@ -8,12 +8,14 @@
   if (!CSS.supports?.("selector(:popover-open)")) return;
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;
-    const open = [...document.querySelectorAll(":popover-open")];
+    const open = [...document.querySelectorAll<HTMLElement>(":popover-open")];
     if (open.length === 0) return;
     // Input such as Enter on a button can run before the timer. A popover it
     // opens or reopens belongs to that input, not to this Tab, so it stays.
-    const opened = new Set();
-    const note = (e) => { if (e.newState === "open") opened.add(e.target); };
+    const opened = new Set<EventTarget | null>();
+    const note = (e: Event) => {
+      if ((e as ToggleEvent).newState === "open") opened.add(e.target);
+    };
     document.addEventListener("beforetoggle", note, true);
     // The browser moves focus after this handler. By then focus is outside,
     // so hiding does not return it to the button: it stays where Tab put it.

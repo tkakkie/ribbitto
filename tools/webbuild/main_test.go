@@ -214,15 +214,21 @@ func TestRejectedEntries(t *testing.T) {
 	}
 	for _, tc := range []struct{ script, want string }{
 		{"package static\nfunc NewScripts() {}\n", "missing entry declaration"},
+		{"package static\nfunc NewScripts() {\n\tvar names = []string{\"message-time\", \"second-entry\"}\n\t{\n\t\tnames := []string{\"message-time\"}\n\t\t_ = names\n\t}\n\t_ = names\n}\n", "missing entry declaration"},
 		{"package static\nfunc NewScripts() { names := []string{}; _ = names }\n", "entries are required"},
 		{"package static\nfunc NewScripts() {\n\tnames := []string{\"a\"}\n\t{\n\t\tnames := []string{\"b\"}\n\t\t_ = names\n\t}\n\t_ = names\n}\n", "multiple entry declarations"},
 		{"package static\nfunc NewScripts() { names := [1]string{\"a\"}; _ = names }\n", "string slice literal"},
 		{"package static\nfunc NewScripts() { entry := \"a\"; names := []string{entry}; _ = names }\n", "string literal"},
 	} {
 		root := fixture(t, []byte(`console.log("ok");`))
+		path := filepath.Join(root, "web/static/dist/manifest.json")
+		write(t, path, []byte("old manifest"))
 		write(t, filepath.Join(root, "web/static/scripts.go"), []byte(tc.script))
 		if err := build(root, "commit", "run"); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("want %s, got %v", tc.want, err)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("failed build retained manifest: %v", err)
 		}
 	}
 	root := fixture(t, []byte(`import("./other.ts");`))
@@ -244,8 +250,8 @@ func TestNoNode(t *testing.T) {
 		t.Fatalf("building command: %v: %s", err, out)
 	}
 	root := fixture(t, []byte(`console.log("classic");`))
-	if err := exec.Command(binary, root, "commit", "run", "extra").Run(); err == nil {
-		t.Fatal("accepted entry argument on command line")
+	if out, err := exec.Command(binary, root, "commit", "run", "extra").CombinedOutput(); err == nil || !bytes.Contains(out, []byte("usage: webbuild <repository root> <commit SHA> <run id>")) {
+		t.Fatalf("accepted entry argument on command line: %v: %s", err, out)
 	}
 	cmd := exec.Command(binary, root, "commit", "run")
 	cmd.Env = []string{"PATH=" + t.TempDir()}

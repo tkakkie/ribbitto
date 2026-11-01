@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 
 	"github.com/evanw/esbuild/pkg/api"
@@ -128,6 +129,7 @@ func declaredEntries(root string) ([]string, error) {
 	}
 	var names []string
 	var found bool
+	var declarations int
 	var parseErr error
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -146,8 +148,12 @@ func declaredEntries(root string) ([]string, error) {
 			if !ok || ident.Name != "names" {
 				return true
 			}
-			if found {
+			declarations++
+			if declarations > 1 {
 				parseErr = fmt.Errorf("multiple entry declarations in scripts.go")
+				return false
+			}
+			if !slices.Contains(fn.Body.List, ast.Stmt(assign)) {
 				return false
 			}
 			found = true

@@ -49,9 +49,9 @@ startup; `tools/webbuild` reads that same declaration from the repository root
 instead of taking entry names on the command line (#2022). Non-entry modules
 under `web/src/` are never built as bundles on their own. templ uses context;
 direct renders use the embedded registry without mutable globals. Its legacy
-asset and `web/legacy-scripts.txt` entry are removed; the 16 remaining stems
-stay on versioned assets. Missing/unknown entries or bundles fail startup;
-undeclared renders fail.
+asset and `web/legacy-scripts.txt` entry are removed; the stems still listed in
+`web/legacy-scripts.txt` stay on versioned assets. Missing/unknown entries or
+bundles fail startup; undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
 

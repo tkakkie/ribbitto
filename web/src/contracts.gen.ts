@@ -269,6 +269,32 @@ export function listenPanelCoverEvent(target: EventTarget, listener: (detail: Pa
   return () => target.removeEventListener(PanelCoverEvent, handle);
 }
 
+export const ReadFormID = "read-form";
+export const readFormSelector = (): string => "#" + ReadFormID;
+export const getReadForm = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(readFormSelector());
+
+export const ReadAppliedEvent = "read-applied";
+export type ReadAppliedDetail = Record<string, never>;
+export function dispatchReadAppliedEvent(target: EventTarget, detail: ReadAppliedDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(ReadAppliedEvent, { bubbles: true, detail }));
+}
+export function listenReadAppliedEvent(target: EventTarget, listener: (detail: ReadAppliedDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<ReadAppliedDetail>).detail);
+  target.addEventListener(ReadAppliedEvent, handle);
+  return () => target.removeEventListener(ReadAppliedEvent, handle);
+}
+
+export const ReadVisibleEvent = "read-visible";
+export type ReadVisibleDetail = Record<string, never>;
+export function dispatchReadVisibleEvent(target: EventTarget, detail: ReadVisibleDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(ReadVisibleEvent, { bubbles: true, detail }));
+}
+export function listenReadVisibleEvent(target: EventTarget, listener: (detail: ReadVisibleDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<ReadVisibleDetail>).detail);
+  target.addEventListener(ReadVisibleEvent, handle);
+  return () => target.removeEventListener(ReadVisibleEvent, handle);
+}
+
 
 export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);

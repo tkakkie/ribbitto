@@ -45,7 +45,7 @@ func (v *sheetVisit) Page(ctx context.Context, m org.Membership, channel kernel.
 }
 
 // noReadWindow is how long a check that expects no reading POST watches for
-// one. read-visibility-v6.js reads with no delay of its own: from read-applied
+// one. web/src/read-visibility.ts reads with no delay of its own: from read-applied
 // in the task that applies a stream event, from resize at the next frame. A
 // stray POST after a resize arrived within 10 ms when measured (#1122); the
 // rest is margin for a loaded machine. No such check follows a refused read,
@@ -156,7 +156,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			// read checks that exactly the expected reading POSTs have arrived,
 			// returning once they have; within 2 s, which covers a 429's first
-			// retry (at most 1 s with Retry-After 0, read-visibility-v6.js).
+			// retry (at most 1 s with Retry-After 0, web/src/read-visibility.ts).
 			// Expecting none, it watches for one for noReadWindow instead. The
 			// list is cumulative: a POST arriving after a check returned is still
 			// compared by the next one.

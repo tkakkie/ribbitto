@@ -286,7 +286,22 @@ const (
 	// PanelCoverEvent requests a fresh modal-state publication before reading aria-modal.
 	//dom:event PanelCoverDetail
 	PanelCoverEvent = "panel-cover"
+	// ReadFormID identifies the conversation's read form.
+	//dom:id HTMLFormElement
+	ReadFormID = "read-form"
+	// ReadAppliedEvent signals that live stream changes have been visibly applied.
+	//dom:event ReadAppliedDetail
+	ReadAppliedEvent = "read-applied"
+	// ReadVisibleEvent triggers the htmx read form when a read is due.
+	//dom:event ReadVisibleDetail
+	ReadVisibleEvent = "read-visible"
 )
 
 // PanelCoverDetail is empty because the listener inspects computed style directly.
 type PanelCoverDetail struct{}
+
+// ReadAppliedDetail is empty because the listener reads the applied cursor attribute.
+type ReadAppliedDetail struct{}
+
+// ReadVisibleDetail is empty because htmx reads the form's cursor input.
+type ReadVisibleDetail struct{}

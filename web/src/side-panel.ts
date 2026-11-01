@@ -70,7 +70,7 @@ import {
   };
   cover();
   window.addEventListener("resize", cover);
-  // web/static/read-visibility-v6.js dispatches panel-cover on the panel just
+  // web/src/read-visibility.ts dispatches panel-cover on the panel just
   // before it reads aria-modal, so it never reads a stale state: a page shown
   // again after a size change while hidden gets its resize event only later.
   listenPanelCoverEvent(panel, publish);

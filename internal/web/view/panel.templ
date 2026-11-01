@@ -129,7 +129,7 @@ templ overviewPanel(page ChannelPage) {
 		</p>
 		if readable(page) && page.FirstUnread > 0 {
 			<div class="flex wide:hidden">
-				@submitButtonFor(buttonSecondary, "reading.mark", "read-form", submitValue{"scope", "all"})
+				@submitButtonFor(buttonSecondary, "reading.mark", ReadFormID, submitValue{"scope", "all"})
 			</div>
 		}
 		<details open?={ page.OverviewImageError != "" }>

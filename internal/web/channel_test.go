@@ -333,7 +333,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 		case n.DataAtom == atom.Script:
 			src := attr(n, "src")
 			scripts[src] = true
-			hasComposer = hasComposer || strings.HasPrefix(src, "/static/message-composer-")
+			hasComposer = hasComposer || strings.HasPrefix(src, "/static/dist/composer-")
 		}
 	}
 	if mains != 1 || topics != 1 || streams != 1 {

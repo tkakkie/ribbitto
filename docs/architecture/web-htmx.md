@@ -29,7 +29,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   Composers on `?before=` pages omit it; every post reads only its own message.
   Feed/topic pending items use the [composer contract](web-composer-pending.md#pending-own-posts):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
-  `message-composer-v21.js` copies `#organization-stream`'s applied-and-shown
+  `web/src/composer.ts` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one. Events on `#message-body`:
   `message-sending` and `message-sent` bind draft snapshots/confirmation to each

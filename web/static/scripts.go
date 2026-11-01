@@ -46,6 +46,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"arrival",
 		"popover-focus",
 		"side-panel",
+		"pins-sync",
 	}
 	scripts := &Scripts{
 		urls:    make(map[string]string, len(names)),

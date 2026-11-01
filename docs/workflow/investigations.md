@@ -1,5 +1,7 @@
 # Investigations and the performance target
 
+Read when: proposing, approving or running a benchmark, load test, host measurement or performance investigation.
+
 - New measurement/verification stages, prototypes and measurement
 infrastructure need explicit maintainer preapproval.
 - Investigation/optimisation issues state a PR/time cap before work;
@@ -10,8 +12,7 @@ when available; development-machine runs decide until then.
 
 ## Host measurements
 
-Performance measurements on the host need the maintainer's approval
-(maintainer, 2026-10-18, #1308).
+Performance measurements on the host need the maintainer's approval (#1308).
 All conditions apply:
 
 1. Cross-review, Copilot and adversarial review approve
@@ -25,12 +26,12 @@ that SHA (#1273, #1276).
 3. The measurement is required by the issue's *Done when*, approved by
 `ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
-other tools use the trusted, fixed base SHA or a source approved in
-advance (e.g. an external harness). A head adding a migration is a stop
-for the maintainer.
+other tools use the trusted, fixed base SHA or a preapproved source (e.g.
+an external harness). A head adding a migration is a stop for the
+maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
-checkouts with the trusted git settings and `GOENV=off` shown in [build routes](#build-routes).
+checkouts with the trusted git settings and `GOENV=off` in [build routes](#build-routes).
 Never build from the implementer's worktree: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
 assets; runtime needs no head tree.
@@ -39,9 +40,8 @@ user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
 neither. Use only its binary/data/runtime paths and server/database
 loopback ports; shared databases and Chrome's DevTools stay denied. The
-maintainer creates the user (a system change) and installs/validates the
-profile once. If restrictions fail, keep them; stop for a case-by-case
-maintainer decision.
+maintainer creates the user and installs/validates the profile once. If
+restrictions fail, keep them; stop for a case-by-case maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
 on its chosen `127.0.0.1` port, with disposable data and credentials,
 cleaned up by its recorded container ID.
@@ -144,7 +144,7 @@ Expect logged usage error, exit 1: profile, dyld and Go start.
 Possible gaps: self-signals (`(allow signal (target self))`),
 parent-directory metadata reads, pgx current-user lookup. Prefer `db_url`
 with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
-  3. Test copy: add only execution/runtime reads for `/bin/cat` and
+  3. Test copy: add only exec/runtime reads for `/bin/cat` and
 `/usr/bin/nc`; same user/environment and other file/network rules.
 Confirm denial: outside reads (including operator's `~`), connections to
 5432/55433/Chrome's DevTools port, other execution and address/port binds.
@@ -177,9 +177,9 @@ Per SHA: stop servers; stage checksummed binary read-only; clear `data`;
 restore dataset with trusted base tools only. Start DB; `db_url`: disposable,
 `127.0.0.1:55434`, explicit `user=`, `sslmode=disable`, no fallback hosts/Unix
 sockets. Run in foreground.
-Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
+Trusted Perl starts a new session, redirects fds 0-2 to `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
-before the profile; `env -i` alone leaves files open.
+before the profile; `env -i` leaves fds open.
 Ctrl-C stops only the waiting parent; stop the server by PID.
 
 ```sh
@@ -209,7 +209,7 @@ cd /private/var/ribbitto-measure/data &&
 ```
 
 Administrator after start: `lsof -a -p "$pid" -d 0-65535` (`pid`: server).
-Require 0: `/dev/null`; 1-2: fresh log; higher: server-opened allowed files,
+Require 0: `/dev/null`; 1-2: fresh log; higher: allowed server files,
 runtime kqueue/pipes or permitted sockets only. Stop on inherited operator
 files/terminals/sockets.
 

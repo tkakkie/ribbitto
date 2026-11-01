@@ -1,5 +1,7 @@
 # AI credentials and launchers
 
+Read when: setting up or auditing AI tokens and launchers, starting a disposable test database or handling a tool failure ([Tool failures and disposable databases](#tool-failures-and-disposable-databases)), or passing [review context](#review-context).
+
 How each AI gets its own GitHub token and how Codex and Argon are started
 (rules: [README](README.md#tokens)). Tested on 2026-10-31; the redacted
 evidence is on #2002.
@@ -105,7 +107,7 @@ reusable name. [Measurement approval and caps](investigations.md) still apply.
 
 ## Review context
 
-A pull request cross-review follows [`reviewing.md`](reviewing.md) (only the
+A pull request cross-review follows [`reviewing.md`](reviewing.md#pull-request-cross-review) (only the
 issue review has a prompt file); other reviews and checks run
 `issue-review.md`, `adversarial.md`, `copilot-check.md` or `audit.md` from
 `.github/prompts/`. As [`delivery.md`](delivery.md#running-a-review) states,

@@ -8,8 +8,11 @@ Events). Other reviewers are reviewing the same head. Your job is different:
 The repository at the pull request's head is your working directory. You may
 read any file there — `AGENTS.md` and, only when application code or domain
 rules are touched, `docs/architecture/README.md` and `docs/domain/README.md`
-describe the rules the code should follow — but remember that the pull request
-can change those files too. You cannot change anything.
+describe the rules the code should follow; `docs/workflow/` need not be read by
+default, except the sections needed to assess the change or the supplied
+findings (for example a change to `AGENTS.md` that bears on a workflow
+obligation) — but remember that the pull request can change those files too. You
+cannot change anything.
 
 ## Where to attack
 

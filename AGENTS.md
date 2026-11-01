@@ -12,10 +12,7 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 ## Workflow
 
-One set of rules applies to every AI: start at
-[`docs/workflow/README.md`](docs/workflow/README.md).
-[Investigations](docs/workflow/investigations.md#investigations-and-the-performance-target)
-covers measurement approval and caps.
+One set of rules binds every AI; see [Where things are explained](#where-things-are-explained).
 
 ## Commands
 
@@ -73,67 +70,72 @@ Features ([map](docs/architecture/features.md)):
 
 ## Where things are explained
 
-Read the relevant document before changing its area, and update it in the
-same pull request: [`docs/architecture/`](docs/architecture/README.md)
-(packages, imports, data flow, real-time), [`docs/domain/README.md`](docs/domain/README.md)
-(terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
-(index of settled decisions in `docs/decisions/` — change them through an issue),
-[`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) and [`docs/ui-colours.md`](docs/ui-colours.md) (design tokens — use
-only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`docs/accessibility.md`](docs/accessibility.md)
-(markup and accessibility rules).
+Read and update the relevant doc in the same PR:
+[`docs/architecture/`](docs/architecture/README.md) (packages, imports, data flow, real-time),
+[`docs/domain/README.md`](docs/domain/README.md) (terms, entities, invariants, unread),
+[`DECISIONS.md`](DECISIONS.md) (`docs/decisions/` index — change via issue),
+[`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md),
+[`docs/ui-colours.md`](docs/ui-colours.md) (token utilities only, never raw colours; `tools/sourcecheck`)
+and [`docs/accessibility.md`](docs/accessibility.md).
+
+Workflow reading: whoever performs an action reads its section —
+[own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
+[tool failures, disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
+[PR body scan](docs/workflow/delivery.md#running-a-review),
+[measurement caps](docs/workflow/investigations.md#investigations-and-the-performance-target).
+Implementers read this file and the touched area's docs; cross-reviewers this
+file and [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
+(or [issue review](docs/workflow/reviewing.md#issue-review)); the orchestrator
+the [workflow README](docs/workflow/README.md) ([independence](docs/workflow/README.md#principles),
+[ruleset](docs/workflow/README.md#what-github-enforces-and-what-is-only-a-rule),
+[head SHA](docs/workflow/README.md#lifecycle)), [`delivery.md`](docs/workflow/delivery.md)
+([third-AI](docs/workflow/delivery.md#third-ai-review)) and
+[`reviewing.md`](docs/workflow/reviewing.md); [`ai-credentials.md`](docs/workflow/ai-credentials.md),
+[`investigations.md`](docs/workflow/investigations.md) and `docs/decisions/` only
+for their subject.
 
 ## Writing code
 
-- Use only the languages and formats in the
-  [language list](docs/decisions/42-repository-languages-and-formats.md#language-list)
-  and its [decision 44 amendment](docs/decisions/44-remove-the-launcher-language-entries.md);
-  if a task seems to need another, stop and ask the maintainer in the issue.
-- Write boring Go: no generics or reflection unless they remove real
-  duplication, no global state, pass `context.Context`, wrap errors with
-  `fmt.Errorf("doing x: %w", err)`.
-- Every package under `internal/` has a `doc.go` stating its
-  responsibility; module roots keep owned tables, event kinds and reasons,
-  not API lists. Command packages (`cmd/...`) use the package comment in
-  their main file instead; do not add empty `doc.go` files. Exported
-  identifiers have doc comments.
-- Comments explain **why**, not what. Record the reason for a non-obvious
-  choice, a constraint, or a trap; do not narrate the code.
-- Organisation-owned data is always scoped by `organization_id`; the
-  organisation comes from the URL, never from a request body; a
-  non-member gets 404. Setup creates the organisation; installation-wide
-  sign-up and `/` resolve it from the setup row, never from the request.
+- Use only the [language list](docs/decisions/42-repository-languages-and-formats.md#language-list)
+  and [decision 44](docs/decisions/44-remove-the-launcher-language-entries.md);
+  if a task needs another, stop and ask the maintainer in the issue.
+- Boring Go: no generics or reflection unless removing real duplication, no
+  global state, pass `context.Context`, wrap errors (`fmt.Errorf("doing x: %w", err)`).
+- Every `internal/` package has a `doc.go` stating its responsibility; module
+  roots list owned tables, event kinds and reasons, not APIs. `cmd/...` uses the
+  main file's package comment (no empty `doc.go`). Exported identifiers have doc
+  comments.
+- Comments explain **why** (non-obvious choice, constraint or trap), not what;
+  do not narrate code.
+- Organisation-owned data is always scoped by `organization_id` from the URL,
+  never a request body; non-members get 404. Setup creates the organisation;
+  installation-wide sign-up and `/` resolve it from the setup row, never the request.
 - Never use `templ.Raw` or build HTML by string concatenation.
-- Handlers, templ, htmx and JavaScript follow
-  [`docs/architecture/web-layers.md`](docs/architecture/web-layers.md).
-- Product vocabulary follows `docs/domain/vocabulary.md`; `tools/sourcecheck` checks identifiers, file names and routes.
-- UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
-  neutral IDs (`hello.title`, never a product word), and update both languages
-  in the same PR. Templates get messages through `i18n.T(ctx, "message.id")`.
-- When a change alters terminology, invariants, data flow or dependency
-  direction, update `docs/` in the same pull request.
+- Handlers, templ, htmx and JS follow [`docs/architecture/web-layers.md`](docs/architecture/web-layers.md).
+- Product vocabulary follows `docs/domain/vocabulary.md` (`tools/sourcecheck` checks identifiers, file names and routes).
+- UI strings go in `internal/web/i18n/locales/{en,ja}.toml` (dotted neutral IDs
+  like `hello.title`, never a product word; update both in the same PR) via
+  `i18n.T(ctx, "message.id")`.
+- Update `docs/` in the same PR when terminology, invariants, data flow or
+  dependency direction changes.
 
 ## Tests
 
 - Module roots: table-driven unit tests, with no database.
 - Stores and wiring: integration tests against a real PostgreSQL.
-- `web`: unit tests for handlers, middleware and validation that need no
-  database; a real PostgreSQL only for cases that involve persistence or
-  authentication end to end, so most `web` tests stay fast.
-- Authorization changes need a test proving that someone who must not see
-  the data does not see it.
-- Never delete, skip or weaken a test to make CI pass; say so in the pull
-  request instead.
+- `web`: unit tests without a DB for handlers, middleware and validation; real
+  PostgreSQL only for end-to-end persistence or authentication, keeping most `web` tests fast.
+- Authorization changes need a test proving an unauthorized user cannot see the data.
+- Never delete, skip or weaken a test to pass CI; report it in the PR instead.
 
 ## Pull requests
 
 - Maintainer AI branches use `claude/<topic>`, `codex/<topic>` or
-  `argon/<topic>`. Branch names of outside contributors are not restricted.
-- Conventional Commits title; squash-merged. Keep the diff under about 400
-  lines excluding generated files; split larger work.
-- Fill in the pull request template briefly. UI changes say how to see
-  them (`make dev`, the URL and any configuration, e.g.
-  `RIBBITTO_SIGNUP=on`) and what was checked in a browser. Screenshots are
-  needed only when the look itself is the point or the maintainer asks
-  for them; whoever can upload them attaches them.
-- Do not push to `main`. Merge only on the maintainer's explicit instruction,
-  as [the workflow README](docs/workflow/README.md#what-no-ai-does) says.
+  `argon/<topic>` (outside contributors' branches are unrestricted).
+- Conventional Commits title; squash-merged. Keep diffs under ~400 lines
+  excluding generated files; split larger work.
+- Fill in the PR template briefly. UI changes state how to see them (`make dev`,
+  URL, config such as `RIBBITTO_SIGNUP=on`) and what was checked in a browser.
+  Attach screenshots only when the look is the point or the maintainer asks.
+- Do not push to `main`. Merge only on the maintainer's explicit instruction
+  ([workflow README](docs/workflow/README.md#what-no-ai-does)).

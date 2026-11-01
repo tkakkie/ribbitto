@@ -1,5 +1,7 @@
 # Investigations and the performance target
 
+Read when: proposing, approving or running a benchmark, load test, host measurement or investigation.
+
 - New measurement/verification stages, prototypes and measurement
 infrastructure need explicit maintainer preapproval.
 - Investigation/optimisation issues state a PR/time cap before work;
@@ -10,9 +12,7 @@ when available; development-machine runs decide until then.
 
 ## Host measurements
 
-Performance measurements on the host need the maintainer's approval
-(maintainer, 2026-10-18, #1308).
-
+Performance measurements on the host need the maintainer's approval (#1308).
 All conditions apply:
 
 1. Cross-review, Copilot and adversarial review approve
@@ -26,12 +26,11 @@ that SHA (#1273, #1276).
 3. The measurement is required by the issue's *Done when*, approved by
 `ready`, and within the issue's cap.
 4. Only the PR's `cmd/ribbitto` server runs. Seed, migrations, harness and
-other tools use the trusted, fixed base SHA or a source approved in
-advance. A head adding a migration is a stop
-for the maintainer.
+other tools use the trusted, fixed base SHA or a preapproved source (e.g.
+an external harness); a new migration stops for the maintainer.
 5. First cross-compile in isolation; only the macOS binary reaches the host.
 Both routes build both approved full SHAs from fresh, verified clean
-checkouts with the trusted git settings and `GOENV=off` shown in [build routes](#build-routes).
+checkouts with the trusted git settings and `GOENV=off` in [build routes](#build-routes).
 Never build from the implementer's worktree: ignored/untracked
 files and local git config can alter builds at the same `HEAD`. Embed
 assets; runtime needs no head tree.
@@ -40,9 +39,8 @@ user with the minimal environment below. Use the same route for base.
 7. Run as that user under the file/network profile; `env -i` restricts
 neither. Use only its binary/data/runtime paths and server/database
 loopback ports; shared databases and Chrome's DevTools stay denied. The
-maintainer creates the user and installs/validates the
-profile once. If restrictions fail, keep them; stop for a case-by-case
-maintainer decision.
+maintainer creates the user and installs/validates the profile once. If
+restrictions fail, keep them; stop for a case-by-case maintainer decision.
 8. Listen only on `127.0.0.1`; publish a throwaway database container only
 on its chosen `127.0.0.1` port, with disposable data and credentials,
 cleaned up by its recorded container ID.
@@ -58,34 +56,33 @@ warm-up posts. Another session's absolute values alone never decide.
 
 ### Build routes
 
-Both routes generate with Go and no Node in the isolated build. Keep verified
-`src` read-only; generate in a writable copy, natively (container linux/arm64,
-user darwin/arm64), then cross-compile. Record the diff; only `web/static/dist`
-may differ.
+Isolated routes: keep verified `src` read-only; generate in a writable copy
+with Go, no Node (native linux/arm64 in container, darwin/arm64 as user), then
+cross-compile. Record diff; only `web/static/dist` may differ.
 
 Use trusted git/Go; `image`:
 `golang@sha256:6928d94d1142af58816fed5a62338d605a266ccd53a0deaab6b1096f19059261`
-(`golang:1.27.3`, approved on [#1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never by
-tag; replace it, with approval, when go.mod's `go` outgrows it.
-Apply condition 5; no clone/config/hooks/cache reuse. `sha`: full approved
-head/fixed trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
+(`golang:1.27.3`, [approved #1492](https://github.com/tkakkie/ribbitto/issues/1492#issuecomment-6308976459)); pull by digest, never tag.
+Replace with approval when go.mod's `go` outgrows it.
+Condition 5: no clone/config/hooks/cache reuse. `sha`: approved full head/fixed
+trusted base SHA. Disable hooks/fsmonitor; refuse symlinks:
 
 ```sh
 session=$(mktemp -d /private/tmp/ribbitto-measure.XXXXXX) &&
-  src=$session/src && mkdir "$src" "$session/out" &&
-  pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=false "$@"; } &&
-  pinned init --quiet --template= &&
-  pinned fetch --quiet https://github.com/tkakkie/ribbitto.git "$sha" &&
-  replaced=$(pinned for-each-ref refs/replace) && test -z "$replaced" &&
-  tree=$(pinned ls-tree -r --full-tree "$sha") &&
-  printf '%s\n' "$tree" | awk '$1 == "120000" { exit 1 }' &&
-  pinned checkout --quiet --detach "$sha" &&
-  test "$(pinned rev-parse HEAD)" = "$sha" &&
-  tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
-  test -z "$tree_status"
+src=$session/src && mkdir "$src" "$session/out" &&
+pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 git -C "$src" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=false "$@"; } &&
+pinned init --quiet --template= &&
+pinned fetch --quiet https://github.com/tkakkie/ribbitto.git "$sha" &&
+replaced=$(pinned for-each-ref refs/replace) && test -z "$replaced" &&
+tree=$(pinned ls-tree -r --full-tree "$sha") &&
+printf '%s\n' "$tree" | awk '$1 == "120000" { exit 1 }' &&
+pinned checkout --quiet --detach "$sha" &&
+test "$(pinned rev-parse HEAD)" = "$sha" &&
+tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
+test -z "$tree_status"
 ```
 
-Check modules against this SHA's `go.sum`. After HEAD/clean verification, use:
+Then check modules against this SHA's `go.sum`:
 
 ```sh
 build_steps='
@@ -97,8 +94,6 @@ test "$d" = "Only in ./web/static: dist"; printf "%s\n" "$d"
 GOOS=darwin GOARCH=arm64 "$4" build -mod=readonly -trimpath -buildvcs=false -o "$2/ribbitto" ./cmd/ribbitto
 '
 ```
-
-Mount read-only source and empty output:
 
 ```sh
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
@@ -112,15 +107,14 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   /bin/sh -eu -c "$build_steps" build /src /out "$sha" /usr/local/go/bin/go
 ```
 
-Apple silicon only, never Rosetta. In-tree: only webbuild and this Go build.
+Apple silicon, never Rosetta. In-tree: webbuild and Go build only.
 Before staging record SHA and `shasum -a 256`.
-`-buildvcs=false` avoids git ownership mismatches.
 
-If unusable, record why. Maintainer: stage read-only `build/src`,
-no old output/caches or escaping symlinks. User writes only empty
-`work`/`out`/`cache` under `build`. Recheck staged `src` `HEAD`/clean status via `pinned`;
+If unusable, record why. Maintainer stages read-only `build/src`; no old
+output/caches or escaping symlinks. User writes only empty `work`/`out`/`cache`
+under `build`. Recheck `src` HEAD/clean via `pinned`;
 require `test -z "$(find "$src" -type l)"`.
-`go`: absolute trusted Go path, container version/flags:
+`go`: absolute trusted Go path; same version/flags:
 
 ```sh
 b=/private/var/ribbitto-measure/build && cd "$b/work" &&
@@ -152,7 +146,8 @@ trusted base. Watch denials:
 `sandbox-exec -f /private/var/ribbitto-measure/server.sb /private/var/ribbitto-measure/server bogus`.
 Expect logged usage error, exit 1: profile, dyld and Go start.
   2. With throwaway DB, send a DB-backed request to `127.0.0.1:18080`.
-Prefer `db_url`
+Possible gaps: self-signals (`(allow signal (target self))`),
+parent-directory metadata reads, pgx current-user lookup. Prefer `db_url`
 with explicit `user=` and `sslmode=disable` to allowing `mach-lookup`.
   3. Test copy: add only execution/runtime reads for `/bin/cat` and
 `/usr/bin/nc`; same user/environment and other file/network rules.
@@ -176,6 +171,7 @@ commands still use `127.0.0.1`:
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/usr/lib")
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"))
 (allow file-read* file-write* (subpath "/private/var/ribbitto-measure/data"))
+; dyld opens / as its lookup root.
 (allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom"))
 (allow network-bind (local tcp "localhost:18080"))
 (allow network-inbound (local tcp "localhost:18080"))

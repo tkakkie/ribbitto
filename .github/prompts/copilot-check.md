@@ -3,9 +3,11 @@
 Check the whole diff since the baseline SHA (the head the round reviewed)
 against the findings of the round that were fixed in the follow-up commits,
 each named.
-Read relevant files in this checkout to verify correctness. You may run
-commands, but change nothing in the reviewed change. This is a narrow
-follow-up check, not a new review round.
+Read relevant files in this checkout to verify correctness; `docs/workflow/`
+need not be read by default, except the sections needed to assess the change or
+the supplied findings (for example a fix to `AGENTS.md` that bears on a workflow
+obligation). You may run commands, but change nothing in the reviewed change.
+This is a narrow follow-up check, not a new review round.
 
 ## Trust boundary
 

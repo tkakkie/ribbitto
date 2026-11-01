@@ -43,9 +43,10 @@ commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulti
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
 `static.NewScripts` validates the manifest and bundle hashes at startup for
-`web/src/message-time.ts`. templ uses context; direct renders use the embedded
-registry without mutable globals. Its legacy asset and `web/legacy-scripts.txt`
-entry are removed; the 16 remaining stems stay on versioned assets.
+`web/src/message-time.ts` and `web/src/composer.ts`. templ uses context; direct
+renders use the embedded registry without mutable globals. Their legacy assets and
+`web/legacy-scripts.txt` entries are removed; the 15 remaining stems stay on
+versioned assets.
 Missing/unknown entries or bundles fail startup;
 undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.

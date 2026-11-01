@@ -69,8 +69,8 @@ checks until migrated.
   reached by `go generate`, writes the committed generated file
   `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
   names, with constants, types and typed accessors (sidebar #1413 and composer
-  #1823, including typed payloads, nullable keys and htmx triggers). The legacy composer stays unchanged until
-  its typed entry conversion (#1824). A
+  #1823, including typed payloads, nullable keys and htmx triggers).
+  `web/src/composer.ts` is the typed composer entry and uses these accessors. A
   module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and
   type narrowing stay in the modules because static types cannot validate server
@@ -84,10 +84,12 @@ checks until migrated.
 
 ## Composer queue example: before and after
 
-**Before typed queue adoption (`web/src/composer.ts`).**
+**Current typed entry (`web/src/composer.ts`).**
 Queue state (`"queued"`, `"sending"`, `"failed"`, `"confirmed"`), uncertainty
 (`data-unconfirmed`) and draft identity (`data-draft-key`) still live in
-DOM attributes, through generated accessors. The original logic was:
+DOM attributes, through generated accessors, until queue adoption in #1825.
+
+**Former message-composer-v21.js snippet:**
 
 ```js
   const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];
@@ -100,12 +102,12 @@ DOM attributes, through generated accessors. The original logic was:
   };
 ```
 
-**Queue specification now; DOM adoption planned (#1824, #1825, #1417).**
+**Queue specification now; DOM adoption planned (#1825, #1417).**
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) holds typed state
 with immutable `draftKey` separate from `requestKey`;
 [`web/test/composer-queue.test.mjs`](../../web/test/composer-queue.test.mjs)
-specifies transitions and ordering. The module is not served or used by the
-legacy script yet. Its injected clock and key generator keep tests DOM-free:
+specifies transitions and ordering. The typed composer entry does not import or
+serve this module until #1825. Its injected clock and key generator keep tests DOM-free:
 
 ```ts
 import { createComposerQueue, holdsReload } from "./composer-queue.ts";

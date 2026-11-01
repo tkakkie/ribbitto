@@ -158,7 +158,7 @@ func assertFullConversationPage(t *testing.T, body string) {
 		}
 	}
 	order := strings.Join(scripts, " ")
-	if strings.Index(order, composerURL) > strings.Index(order, "/static/message-stream-v14.js") || strings.Index(order, "/static/message-stream-v14.js") > strings.Index(order, "/static/message-drafts-v7.js") {
+	if strings.Index(order, composerURL) > strings.Index(order, "/static/message-stream-") || strings.Index(order, "/static/message-stream-") > strings.Index(order, "/static/message-drafts-") {
 		t.Errorf("composer listener registration order: %s", order)
 	}
 	if !composer {

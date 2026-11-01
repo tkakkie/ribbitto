@@ -305,3 +305,25 @@ type ReadAppliedDetail struct{}
 
 // ReadVisibleDetail is empty because htmx reads the form's cursor input.
 type ReadVisibleDetail struct{}
+
+// Pins hooks cover the overview section and message pin controls.
+const (
+	// PinsSectionID identifies the overview's pins section.
+	//dom:id HTMLElement
+	PinsSectionID = "pins-section"
+	// PinsSeqAttribute carries the pins section's snapshot sequence.
+	//dom:attribute
+	PinsSeqAttribute = "data-pins-seq"
+	// PinnedIDsAttribute carries the space-separated pinned message ids.
+	//dom:attribute
+	PinnedIDsAttribute = "data-pinned-ids"
+	// PinControlAttribute carries a pin control form's message id.
+	//dom:attribute
+	PinControlAttribute = "data-pin-control"
+	// PinActionAttribute carries a pin button's desired pin state.
+	//dom:attribute
+	PinActionAttribute = "data-pin-action"
+	// PinnedAttribute carries a pin control form's current pin state.
+	//dom:attribute
+	PinnedAttribute = "data-pinned"
+)

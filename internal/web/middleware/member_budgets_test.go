@@ -18,10 +18,13 @@ func TestMemberBudgets(t *testing.T) {
 		// docs/architecture/rate-limits.md, "Member admission for branching":
 		// burst 20, one token every 6 s, unlimited concurrency.
 		{"branch", NewBranchRateLimiter, 20, 6 * time.Second, 0},
-		// docs/architecture/member-admission.md, "Posting and pin-change admission" table ("Channel and topic posts"):
+		// docs/architecture/member-admission.md, "Posting, pin-change and image-change admission" table ("Channel image changes"):
+		// burst 10, one per 6 s, unlimited concurrency.
+		{"channel image", NewChannelImageRateLimiter, 10, 6 * time.Second, 0},
+		// docs/architecture/member-admission.md, "Posting, pin-change and image-change admission" table ("Channel and topic posts"):
 		// burst 20, 1/s, 4 concurrent requests.
 		{"post", NewPostRateLimiter, 20, time.Second, 4},
-		// docs/architecture/member-admission.md, "Posting and pin-change admission" table ("Pin and unpin together"):
+		// docs/architecture/member-admission.md, "Posting, pin-change and image-change admission" table ("Pin and unpin together"):
 		// burst 10, one per 2 s, unlimited concurrency.
 		{"pin", NewPinRateLimiter, 10, 2 * time.Second, 0},
 		// docs/architecture/rate-limits.md, "Member admission for sidebar resyncs":

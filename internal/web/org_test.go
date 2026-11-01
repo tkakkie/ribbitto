@@ -99,8 +99,12 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	services := postgresServices(t, pool, sessions, "", false)
-	// This multi-route fixture intentionally posts more than the production burst.
-	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) { l.post = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4) })
+	// This multi-route fixture intentionally posts and changes images more
+	// than the production bursts.
+	services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) {
+		l.post = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 4)
+		l.image = middleware.NewMemberRateLimiterWithBudget(time.Now, 1000, 1000, 0)
+	})
 	state := typing.New(realtime.NewHub())
 	services.Typing = state
 	budgetTime := now

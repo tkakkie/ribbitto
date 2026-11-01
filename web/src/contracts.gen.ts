@@ -295,7 +295,16 @@ export function listenReadVisibleEvent(target: EventTarget, listener: (detail: R
   return () => target.removeEventListener(ReadVisibleEvent, handle);
 }
 
+export const PinsSectionID = "pins-section";
+export const pinsSectionSelector = (): string => "#" + PinsSectionID;
+export const getPinsSection = (root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(pinsSectionSelector());
 
-export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute;
+export const PinsSeqAttribute = "data-pins-seq";
+export const PinnedIDsAttribute = "data-pinned-ids";
+export const PinControlAttribute = "data-pin-control";
+export const PinActionAttribute = "data-pin-action";
+export const PinnedAttribute = "data-pinned";
+
+export type ContractAttribute = typeof MemberAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

@@ -54,8 +54,15 @@ a narrower screen or a long name or topic moves them to their own row (#1093, `t
 `internal/web/message_row_browser_test.go`). From `desk` the time reserves `min-w-timestamp` with tabular digits, fitting
 UTC and both languages without moving the topic link or **Select** (#1094,
 `testMessageTimeBrowser` in `internal/web/message_time_browser_test.go`). Below
-`desk` they sit at the row's end, where the time's width moves them only if
-it changes how the header wraps; reserving it there would wrap seed rows at 390 px. At every width the create popover may stretch to
+`desk` they sit at the row's end, where reserving `min-w-timestamp` would
+wrap seed rows at 390 px; there the name-and-time column's `::after`
+keeps the server's UTC text laid out, unseen, in the time's grid cell
+(`server-time-stack`; a pseudo-element, so the feed's element budget holds),
+so the time keeps the larger box of the two and the rewrite never rewraps the header or the time,
+at any width, font or text size (#2044, `testMessageTimeSweepBrowser` in
+`internal/web/message_time_sweep_browser_test.go`). The message list takes
+its height with `flex-auto`: with a zero basis Chromium first sized it at no
+height and kept the scrollbar that narrowed and wrapped every header. At every width the create popover may stretch to
 16 px above the bottom, capped at its content height, so in a short
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.

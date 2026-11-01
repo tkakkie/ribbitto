@@ -114,9 +114,13 @@ Outermost first:
    no query and stays 404 while the database is down. The middleware
    resolves the cookie and puts the account and the session in the context
    (`middleware.Account`, `middleware.CurrentSession`; streams register
-   under the session). A token that signs nobody in means signed out
-   and the cookie is cleared; a store error answers 500 and keeps the
-   cookie, so an outage does not sign everyone out. Responses to signed-in
+   under the session). A token that signs nobody in means signed out,
+   and the cookie is kept: `Max-Age=0` deletes the cookie whatever its
+   value, so clearing it in answer to a request sent before a sign-in in
+   another tab stored a new cookie would sign the browser out. The dead
+   cookie expires with its session or is replaced by the next sign-in or
+   sign-out. A store error answers 500 and keeps the cookie, so an outage
+   does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
 
 `run` configures logging before parsing commands or constructing services:

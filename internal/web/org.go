@@ -27,7 +27,7 @@ type orgRoute struct {
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
 func orgRoutes(pages *pageRenderer, services Services) []orgRoute {
-	handlers := channelPages{typing: services.Typing, limiter: services.MemberLimits.Signal(), readLimit: services.MemberLimits.Read(), createLimit: services.MemberLimits.Create(), branchLimit: services.MemberLimits.Branch(), postLimit: services.MemberLimits.Post(), pinLimit: services.MemberLimits.Pin(), reading: services.Reading, pages: pages, channels: services.Channels, topics: services.Topics, messages: services.Messages, posting: services.Posting, branching: services.Branching, pinning: services.Pinning, stream: services.Stream}
+	handlers := channelPages{typing: services.Typing, limiter: services.MemberLimits.Signal(), readLimit: services.MemberLimits.Read(), createLimit: services.MemberLimits.Create(), imageLimit: services.MemberLimits.Image(), branchLimit: services.MemberLimits.Branch(), postLimit: services.MemberLimits.Post(), pinLimit: services.MemberLimits.Pin(), reading: services.Reading, pages: pages, channels: services.Channels, topics: services.Topics, messages: services.Messages, posting: services.Posting, branching: services.Branching, pinning: services.Pinning, stream: services.Stream}
 	if services.Stream != nil {
 		handlers.renders = newRenderCache(services.Stream.Lifetime)
 	}

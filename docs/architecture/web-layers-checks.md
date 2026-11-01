@@ -99,7 +99,7 @@ quote delimiters remain for string timers. It rejects:
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
   `document.writeln` and `createContextualFragment`. Reads and comparisons
   of HTML properties pass.
-- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `pins-sync-v2.js`; `localStorage` outside `message-drafts-vN.js`.
+- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `web/src/pins-sync.ts`; `localStorage` outside `message-drafts-vN.js`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. They restate
   CSP without `'unsafe-eval'` ([`csp.md`](csp.md)).

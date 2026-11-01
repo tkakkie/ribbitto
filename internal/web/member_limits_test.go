@@ -19,8 +19,8 @@ func TestMemberLimitsZeroOption(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			l := NewMemberLimits(now, tt.options...)
-			limits := []*middleware.MemberRateLimiter{l.SendKey(), l.Mention(), l.Signal(), l.Read(), l.Create(), l.Resync(), l.Branch(), l.Post(), l.Pin()}
-			bursts := []int{4, 8, 4, 16, 10, 32, 20, 20, 10}
+			limits := []*middleware.MemberRateLimiter{l.SendKey(), l.Mention(), l.Signal(), l.Read(), l.Create(), l.Image(), l.Resync(), l.Branch(), l.Post(), l.Pin()}
+			bursts := []int{4, 8, 4, 16, 10, 10, 32, 20, 20, 10}
 			seen := make(map[*middleware.MemberRateLimiter]bool)
 			for i, limit := range limits {
 				if limit == nil || seen[limit] {
@@ -84,10 +84,10 @@ func TestWithReadAdmissionBudget(t *testing.T) {
 func TestMemberLimitsIndependent(t *testing.T) {
 	now := func() time.Time { return time.Unix(1, 0) }
 	for _, options := range [][]MemberLimitsOption{nil, {WithReadAdmission(now, 5)}} {
-		for exhausted := range 9 {
+		for exhausted := range 10 {
 			l := NewMemberLimits(now, options...)
-			limits := []*middleware.MemberRateLimiter{l.SendKey(), l.Mention(), l.Signal(), l.Read(), l.Create(), l.Resync(), l.Branch(), l.Post(), l.Pin()}
-			bursts := []int{4, 8, 4, 16, 10, 32, 20, 20, 10}
+			limits := []*middleware.MemberRateLimiter{l.SendKey(), l.Mention(), l.Signal(), l.Read(), l.Create(), l.Image(), l.Resync(), l.Branch(), l.Post(), l.Pin()}
+			bursts := []int{4, 8, 4, 16, 10, 10, 32, 20, 20, 10}
 			for i, limit := range limits {
 				if limit == nil {
 					t.Fatalf("limiter %d is missing", i)

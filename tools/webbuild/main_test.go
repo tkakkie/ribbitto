@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -9,7 +10,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -59,7 +62,7 @@ func TestBuild(t *testing.T) {
 		root := fixture(t, source)
 		dist := filepath.Join(root, "web/static/dist")
 		write(t, filepath.Join(dist, "foreign.js"), nil)
-		if err := build(root, "commit", "run"); err != nil {
+		if err := build(root, "commit", "run", false); err != nil {
 			t.Fatal(err)
 		}
 		data, err := os.ReadFile(filepath.Join(dist, "manifest.json"))
@@ -76,7 +79,7 @@ func TestBuild(t *testing.T) {
 			t.Fatal(err)
 		}
 		files, err := os.ReadDir(dist)
-		if err != nil || len(files) != 2 || len(m.Entries) != 1 || m.Commit != "commit" || m.RunID != "run" || b.SHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || !strings.HasPrefix(b.File, "message-time-") || !bytes.Contains(data, []byte("(()=>{")) || bytes.Contains(data, []byte("sourceMappingURL")) {
+		if err != nil || len(files) != 2 || len(m.Entries) != 1 || m.Commit != "commit" || m.RunID != "run" || b.Map != "" || b.SHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || !strings.HasPrefix(b.File, "message-time-") || !bytes.Contains(data, []byte("(()=>{")) || bytes.Contains(data, []byte("sourceMappingURL")) {
 			t.Fatalf("invalid production output: %+v, %v, %v", m, files, err)
 		}
 		if i == 1 && (b != previous || !bytes.Equal(data, previousBytes)) || i == 2 && b.File == previous.File {
@@ -97,7 +100,7 @@ func TestBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(repo, "web/static/scripts.go"), registry)
-	if err := build(repo, "commit", "run"); err != nil {
+	if err := build(repo, "commit", "run", false); err != nil {
 		t.Fatal(err)
 	}
 	files, err := os.ReadDir(filepath.Join(repo, "web/static/dist"))
@@ -106,11 +109,57 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildDevelopmentAndWatch(t *testing.T) {
+	root := fixture(t, []byte("const first = 'alpha';\nconsole.log(first);\n"))
+	dist := filepath.Join(root, "web/static/dist")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- watch(ctx, root) }()
+
+	waitBundle := func(prev string) (bundle, []byte, []byte) {
+		t.Helper()
+		for range 250 {
+			var m manifest
+			if data, err := os.ReadFile(filepath.Join(dist, "manifest.json")); err == nil && json.Unmarshal(data, &m) == nil {
+				b := m.Entries["message-time"]
+				js, err1 := os.ReadFile(filepath.Join(dist, b.File))
+				sm, err2 := os.ReadFile(filepath.Join(dist, b.Map))
+				if b.File != "" && b.File != prev && b.Map == b.File+".map" && err1 == nil && err2 == nil {
+					return b, js, sm
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatalf("timed out waiting for bundle change from %q", prev)
+		return bundle{}, nil, nil
+	}
+
+	b1, js1, sm1 := waitBundle("")
+	write(t, filepath.Join(root, "web/src/message-time.ts"), []byte("const second = 'beta';\nconsole.log(second);\n"))
+	b2, js2, sm2 := waitBundle(b1.File)
+	if !bytes.Contains(js1, []byte("//# sourceMappingURL="+b1.Map)) || !bytes.Contains(sm1, []byte(`"sourcesContent"`)) || !bytes.Contains(sm1, []byte("alpha")) || !bytes.Contains(js2, []byte("//# sourceMappingURL="+b2.Map)) || !bytes.Contains(sm2, []byte("beta")) {
+		t.Fatalf("development bundle or map missing expected content: %s / %s", js2, sm2)
+	}
+	if _, err := os.Stat(filepath.Join(dist, b1.File)); !os.IsNotExist(err) {
+		t.Fatalf("stale development bundle survived rebuild: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil || build(root, "commit", "run", false) != nil {
+		t.Fatalf("watch or production replacement failed: %v", err)
+	}
+	files, err := os.ReadDir(dist)
+	data, err2 := os.ReadFile(filepath.Join(dist, "manifest.json"))
+	if err != nil || err2 != nil || len(files) != 2 || bytes.Contains(data, []byte(`"map"`)) {
+		t.Fatalf("production replacement failed: %v, %s", files, data)
+	}
+}
+
 func TestBuildSecondDeclaredEntry(t *testing.T) {
 	root := fixture(t, []byte(`console.log("first");`))
 	declare(t, root, "message-time", "second-entry")
 	write(t, filepath.Join(root, "web/src/second-entry.ts"), []byte(`console.log("second");`))
-	if err := build(root, "commit", "run"); err != nil {
+	if err := build(root, "commit", "run", false); err != nil {
 		t.Fatal(err)
 	}
 	dist := filepath.Join(root, "web/static/dist")
@@ -137,7 +186,7 @@ func TestBuildSecondDeclaredEntry(t *testing.T) {
 
 func TestBuildClassicIIFE(t *testing.T) {
 	root := fixture(t, []byte(`const value = 1; console.log(value);`))
-	if err := build(root, "commit", "run"); err != nil {
+	if err := build(root, "commit", "run", false); err != nil {
 		t.Fatal(err)
 	}
 	files, err := filepath.Glob(filepath.Join(root, "web/static/dist/*.js"))
@@ -179,12 +228,23 @@ func TestValidation(t *testing.T) {
 			if tc.name == "unexplained file" {
 				r.OutputFiles = append(r.OutputFiles, api.OutputFile{Path: filepath.Join(dist, "extra.js")})
 			}
-			_, err := validate(root, dist, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r)
+			_, err := validate(root, dist, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, err)
 			}
 		})
 	}
+	t.Run("missing development map", func(t *testing.T) {
+		root, stage := t.TempDir(), t.TempDir()
+		dist := filepath.Join(root, "web/static/dist")
+		r := api.BuildResult{
+			Metafile:    fmtMeta("web/static/dist/x.js", "web/src/message-time.ts"),
+			OutputFiles: []api.OutputFile{{Path: filepath.Join(dist, "x.js")}},
+		}
+		if _, err := validate(root, dist, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r, true); err == nil || !strings.Contains(err.Error(), "bundle without source map") {
+			t.Fatalf("expected missing source map error, got %v", err)
+		}
+	})
 }
 
 func fmtMeta(output, entry string) string {
@@ -197,7 +257,7 @@ func TestRejectedEntries(t *testing.T) {
 		declare(t, root, "message-time", name)
 		path := filepath.Join(root, "web/static/dist/manifest.json")
 		write(t, path, []byte("old manifest"))
-		err := build(root, "commit", "run")
+		err := build(root, "commit", "run", false)
 		want := "invalid entry name"
 		switch name {
 		case "missing":
@@ -224,7 +284,7 @@ func TestRejectedEntries(t *testing.T) {
 		path := filepath.Join(root, "web/static/dist/manifest.json")
 		write(t, path, []byte("old manifest"))
 		write(t, filepath.Join(root, "web/static/scripts.go"), []byte(tc.script))
-		if err := build(root, "commit", "run"); err == nil || !strings.Contains(err.Error(), tc.want) {
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("want %s, got %v", tc.want, err)
 		}
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -233,12 +293,12 @@ func TestRejectedEntries(t *testing.T) {
 	}
 	root := fixture(t, []byte(`import("./other.ts");`))
 	write(t, filepath.Join(root, "web/src/other.ts"), []byte(`console.log("other");`))
-	if err := build(root, "commit", "run"); err == nil || !strings.Contains(err.Error(), "dynamic imports") {
+	if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "dynamic imports") {
 		t.Fatalf("expected dynamic import rejection: %v", err)
 	}
 	t.Run("non-literal dynamic import", func(t *testing.T) {
 		root := fixture(t, []byte(`declare const x: string; import(x);`))
-		if err := build(root, "commit", "run"); err == nil || !strings.Contains(err.Error(), "dynamic imports are not supported") {
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "dynamic imports are not supported") {
 			t.Fatalf("expected non-literal dynamic import rejection: %v", err)
 		}
 	})
@@ -257,6 +317,20 @@ func TestNoNode(t *testing.T) {
 	cmd.Env = []string{"PATH=" + t.TempDir()}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("building without Node: %v: %s", err, out)
+	}
+	watchCmd := exec.Command(binary, "-watch", root)
+	watchCmd.Env = []string{"PATH=" + t.TempDir()}
+	if err := watchCmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	for range 250 {
+		if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err == nil && bytes.Contains(data, []byte(`"map"`)) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := watchCmd.Process.Signal(syscall.SIGTERM); err != nil || watchCmd.Wait() != nil {
+		t.Fatalf("watch process exit on SIGTERM: %v", err)
 	}
 }
 

@@ -3,17 +3,24 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -23,6 +30,7 @@ var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 type bundle struct {
 	File   string `json:"file"`
 	SHA256 string `json:"sha256"`
+	Map    string `json:"map,omitempty"`
 }
 
 type manifest struct {
@@ -31,18 +39,91 @@ type manifest struct {
 	Entries map[string]bundle `json:"entries"`
 }
 
+const usage = "usage: webbuild <repository root> <commit SHA> <run id> | webbuild -dev [-watch] <repository root>"
+
 func main() {
-	if len(os.Args) != 4 {
-		fmt.Fprintln(os.Stderr, "usage: webbuild <repository root> <commit SHA> <run id>")
+	flags := flag.NewFlagSet("webbuild", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	dev := flags.Bool("dev", false, "write local development source maps")
+	watchMode := flags.Bool("watch", false, "watch web/src and rebuild development bundles")
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
-	if err := build(os.Args[1], os.Args[2], os.Args[3]); err != nil {
+	args := flags.Args()
+	var err error
+	switch {
+	case *watchMode && len(args) == 1:
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		err = watch(ctx, args[0])
+	case *dev && !*watchMode && len(args) == 1:
+		var snap string
+		if snap, err = sourceSnapshot(args[0]); err == nil {
+			err = build(args[0], "dev", snap, true)
+		}
+	case !*dev && !*watchMode && len(args) == 3:
+		err = build(args[0], args[1], args[2], false)
+	default:
+		fmt.Fprintln(os.Stderr, usage)
+		os.Exit(2)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func build(root, commit, runID string) error {
+func watch(ctx context.Context, root string) error {
+	last, err := sourceSnapshot(root)
+	if err != nil {
+		return err
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "web/static/dist/manifest.json")); err != nil || !strings.Contains(string(data), `"run_id": "`+last+`"`) || !strings.Contains(string(data), `"map":`) {
+		if err := build(root, "dev", last, true); err != nil {
+			return err
+		}
+	}
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			next, err := sourceSnapshot(root)
+			if err != nil {
+				return err
+			}
+			if next != last {
+				if err := build(root, "dev", next, true); err != nil {
+					return err
+				}
+				last = next
+			}
+		}
+	}
+}
+
+func sourceSnapshot(root string) (string, error) {
+	h := sha256.New()
+	scripts, err := os.ReadFile(filepath.Join(root, "web/static/scripts.go"))
+	if err != nil {
+		return "", err
+	}
+	h.Write(scripts)
+	err = filepath.WalkDir(filepath.Join(root, "web/src"), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		_, _ = fmt.Fprintf(h, "\x00%s\x00%s", path, data)
+		return err
+	})
+	return fmt.Sprintf("%x", h.Sum(nil)), err
+}
+
+func build(root, commit, runID string, dev bool) error {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolving root: %w", err)
@@ -75,13 +156,18 @@ func build(root, commit, runID string) error {
 		entries[input] = name
 		inputs = append(inputs, input)
 	}
+	sourcemap := api.SourceMapNone
+	if dev {
+		sourcemap = api.SourceMapLinked
+	}
 	result := api.Build(api.BuildOptions{
 		AbsWorkingDir: root, EntryPoints: inputs, Outdir: dist,
 		EntryNames: "[name]-[hash]", Bundle: true, Format: api.FormatIIFE,
 		Platform: api.PlatformBrowser, Target: api.ES2017,
 		MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
-		Sourcemap: api.SourceMapNone, LegalComments: api.LegalCommentsNone,
-		Metafile: true, Write: false,
+		Sourcemap: sourcemap, SourcesContent: api.SourcesContentInclude,
+		LegalComments: api.LegalCommentsNone,
+		Metafile:      true, Write: false,
 		// Non-literal imports are absent from the metafile; expose their debug diagnostic for validation.
 		LogOverride: map[string]api.LogLevel{"unsupported-dynamic-import": api.LogLevelWarning},
 	})
@@ -97,7 +183,7 @@ func build(root, commit, runID string) error {
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	m := manifest{Commit: commit, RunID: runID}
-	m.Entries, err = validate(root, dist, stage, entries, result)
+	m.Entries, err = validate(root, dist, stage, entries, result, dev)
 	if err != nil {
 		return err
 	}
@@ -196,7 +282,7 @@ func declaredEntries(root string) ([]string, error) {
 	return names, nil
 }
 
-func validate(root, dist, stage string, entries map[string]string, result api.BuildResult) (map[string]bundle, error) {
+func validate(root, dist, stage string, entries map[string]string, result api.BuildResult, dev bool) (map[string]bundle, error) {
 	for _, warning := range result.Warnings {
 		if warning.ID == "unsupported-dynamic-import" {
 			return nil, fmt.Errorf("dynamic imports are not supported: %s", warning.Text)
@@ -217,12 +303,17 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 		}
 	}
 	produced := make(map[string]bundle)
+	maps, metaMaps := make(map[string]bool), make(map[string]bool)
 	for _, file := range result.OutputFiles {
-		if filepath.Dir(file.Path) != dist || filepath.Ext(file.Path) != ".js" {
+		name := filepath.Base(file.Path)
+		if filepath.Dir(file.Path) != dist || (filepath.Ext(name) != ".js" && (!dev || !strings.HasSuffix(name, ".js.map"))) {
 			return nil, fmt.Errorf("output outside bundle tree: %s", file.Path)
 		}
-		name := filepath.Base(file.Path)
-		produced[name] = bundle{name, fmt.Sprintf("%x", sha256.Sum256(file.Contents))}
+		if filepath.Ext(name) == ".js" {
+			produced[name] = bundle{File: name, SHA256: fmt.Sprintf("%x", sha256.Sum256(file.Contents))}
+		} else {
+			maps[name] = true
+		}
 		if err := os.WriteFile(filepath.Join(stage, name), file.Contents, 0644); err != nil {
 			return nil, fmt.Errorf("writing bundle: %w", err)
 		}
@@ -235,11 +326,16 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 		if filepath.Dir(path) != dist {
 			return nil, fmt.Errorf("metafile output outside bundle tree: %s", path)
 		}
+		base := filepath.Base(path)
+		if dev && strings.HasSuffix(base, ".js.map") && output.EntryPoint == "" && !metaMaps[base] {
+			metaMaps[base] = true
+			continue
+		}
 		name := entries[filepath.Clean(output.EntryPoint)]
 		if name == "" || listed[name].File != "" {
 			return nil, fmt.Errorf("unexplained output: %s", path)
 		}
-		listed[name] = bundle{File: filepath.Base(path)}
+		listed[name] = bundle{File: base}
 	}
 	for _, name := range entries {
 		if listed[name].File == "" {
@@ -251,17 +347,25 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 		if !ok {
 			return nil, fmt.Errorf("manifest names unproduced file: %s", line.File)
 		}
+		if dev {
+			file.Map = line.File + ".map"
+			if !metaMaps[file.Map] || !maps[file.Map] {
+				return nil, fmt.Errorf("bundle without source map: %s", line.File)
+			}
+			delete(metaMaps, file.Map)
+			delete(maps, file.Map)
+		}
 		listed[name] = file
 		delete(produced, line.File)
 	}
-	if len(produced) != 0 {
+	if len(produced) != 0 || len(metaMaps) != 0 || len(maps) != 0 {
 		return nil, fmt.Errorf("unexplained produced files")
 	}
 	files, err := os.ReadDir(stage)
 	if err != nil {
 		return nil, fmt.Errorf("reading staged bundles: %w", err)
 	}
-	if len(files) != len(listed) {
+	if len(files) != len(listed)*(1+map[bool]int{true: 1}[dev]) {
 		return nil, fmt.Errorf("foreign file in output directory")
 	}
 	return listed, nil

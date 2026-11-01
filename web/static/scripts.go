@@ -9,9 +9,12 @@ import (
 	"regexp"
 )
 
-// Scripts resolves declared page entries to their generated, embedded bundles.
+// Scripts resolves declared page entries to their generated bundles.
 // Its contents are immutable after construction.
-type Scripts struct{ urls map[string]string }
+type Scripts struct {
+	urls map[string]string
+	maps map[string]bool
+}
 
 // NewScripts validates the runtime manifest against the page entry registry and
 // assets. Call it at startup so incomplete generations cannot serve pages.
@@ -24,6 +27,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		Entries map[string]struct {
 			File   string
 			SHA256 string
+			Map    string
 		}
 	}
 	if err := json.Unmarshal(data, &manifest); err != nil {
@@ -32,7 +36,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	// This is the single declaration of converted page entries; tools/webbuild
 	// parses it from NewScripts, so keep its name and string slice literal.
 	names := []string{"message-time"}
-	scripts := &Scripts{urls: make(map[string]string, len(names))}
+	scripts := &Scripts{urls: make(map[string]string, len(names)), maps: make(map[string]bool, len(names))}
 	for _, name := range names {
 		entry, ok := manifest.Entries[name]
 		if !ok {
@@ -49,6 +53,15 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 			return nil, fmt.Errorf("script bundle %q hash mismatch", name)
 		}
 		scripts.urls[name] = "/static/dist/" + entry.File
+		if entry.Map != "" {
+			if entry.Map != entry.File+".map" {
+				return nil, fmt.Errorf("invalid source map filename %q", entry.Map)
+			}
+			if _, err := fs.ReadFile(assets, "dist/"+entry.Map); err != nil {
+				return nil, fmt.Errorf("reading source map %q: %w", name, err)
+			}
+			scripts.maps["dist/"+entry.Map] = true
+		}
 		delete(manifest.Entries, name)
 	}
 	for name := range manifest.Entries {
@@ -73,6 +86,11 @@ func (s *Scripts) IsBundle(path string) bool {
 		}
 	}
 	return false
+}
+
+// IsMap reports whether a static-relative path is a registered development source map.
+func (s *Scripts) IsMap(path string) bool {
+	return s.maps[path]
 }
 
 type scriptsKey struct{}

@@ -24,18 +24,27 @@ func TestScriptManifest(t *testing.T) {
 		t.Fatal("reading embedded manifest")
 	}
 	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sum)
-	for _, tc := range []struct{ name, entries, file, want string }{
-		{"valid", entry, file, ""},
-		{"missing declaration", "", file, "missing declared entry"},
-		{"missing bundle", entry, "other.js", "reading script bundle"},
-		{"unknown entry", entry + `,"other":{}`, file, "unknown entry"},
-		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "invalid bundle filename"},
-		{"wrong content", `"message-time":{"file":"message-time-ABCDEFGH.js","sha256":"bad"}`, file, "hash mismatch"},
-		{"invalid JSON", "{", file, "decoding script manifest"},
+	devEntry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":%q}`, file, sum, file+".map")
+	for _, tc := range []struct {
+		name, entries, file, mapFile, want string
+	}{
+		{"valid", entry, file, "", ""},
+		{"valid development map", devEntry, file, file + ".map", ""},
+		{"missing declaration", "", file, "", "missing declared entry"},
+		{"missing bundle", entry, "other.js", "", "reading script bundle"},
+		{"missing source map", devEntry, file, "", "reading source map"},
+		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), file, "other.js.map", "invalid source map filename"},
+		{"unknown entry", entry + `,"other":{}`, file, "", "unknown entry"},
+		{"invalid filename", `"message-time":{"file":"../escape.js"}`, file, "", "invalid bundle filename"},
+		{"wrong content", `"message-time":{"file":"message-time-ABCDEFGH.js","sha256":"bad"}`, file, "", "hash mismatch"},
+		{"invalid JSON", "{", file, "", "decoding script manifest"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entries := tc.entries
 			assets := fstest.MapFS{"dist/" + tc.file: {Data: []byte(bundle)}}
+			if tc.mapFile != "" {
+				assets["dist/"+tc.mapFile] = &fstest.MapFile{Data: []byte("{}")}
+			}
 			for name := range embedded.Entries {
 				if name != "message-time" && entries != "" && entries != "{" {
 					entries += fmt.Sprintf(`,%q:{"file":"%s-ABCDEFGH.js","sha256":"%x"}`, name, name, sum)
@@ -57,6 +66,9 @@ func TestScriptManifest(t *testing.T) {
 			url, err := static.ScriptURL(ctx, "message-time")
 			if err != nil || url != "/static/dist/"+file || !scripts.IsBundle("dist/"+file) {
 				t.Fatalf("URL = %q, %v", url, err)
+			}
+			if scripts.IsMap("dist/"+file+".map") != (tc.mapFile != "") || scripts.IsMap("dist/manifest.json") {
+				t.Fatalf("IsMap = %v for mapFile %q", scripts.IsMap("dist/"+file+".map"), tc.mapFile)
 			}
 			if _, err := static.ScriptURL(ctx, "undeclared"); err == nil {
 				t.Fatal("undeclared script accepted")

@@ -1,5 +1,6 @@
-// Command dev runs the Tailwind and templ watchers for make dev. Each owns
-// a session because templ moves its server command into another process group.
+// Command dev runs the Tailwind, script-bundle and templ watchers for make dev.
+// Each owns a session because templ moves its server command into another
+// process group.
 package main
 
 import (
@@ -49,10 +50,16 @@ func parse(args []string) (string, string, error) {
 }
 
 func run(ctx context.Context, tailwind, templ string) error {
+	init := exec.Command("./bin/webbuild", "-dev", ".")
+	init.Stdout, init.Stderr = os.Stdout, os.Stderr
+	if err := init.Run(); err != nil {
+		return fmt.Errorf("building development bundles: %w", err)
+	}
 	css := exec.Command(tailwind, "-i", "web/styles/app.css", "-o", "web/static/css/app.css", "--minify", "--watch=always")
+	bundles := exec.Command("./bin/webbuild", "-watch", ".")
 	server := exec.Command("./bin/ai-db", "run", templ, "generate", "--watch", "--cmd", "go run ./cmd/ribbitto")
 	server.Env = append(os.Environ(), "RIBBITTO_DEV_ASSETS=web/static")
-	return supervise(ctx, []*exec.Cmd{css, server})
+	return supervise(ctx, []*exec.Cmd{css, bundles, server})
 }
 
 // deliver hands a reaped watcher's result to supervise; a test replaces it

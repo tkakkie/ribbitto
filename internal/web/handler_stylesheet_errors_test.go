@@ -16,11 +16,13 @@ import (
 	"testing/fstest"
 
 	"github.com/a-h/templ"
+	"github.com/tkakkie/ribbitto/web/static"
 )
 
 func TestPageRendererStylesheetError(t *testing.T) {
 	for _, tt := range []struct {
 		name            string
+		scripts         func() (*static.Scripts, error)
 		stylesheetURL   func() (string, error)
 		status          int
 		failOnPage      bool
@@ -40,6 +42,17 @@ func TestPageRendererStylesheetError(t *testing.T) {
 			wantNosniff:     "nosniff",
 		},
 		{
+			name:            "scripts error",
+			scripts:         func() (*static.Scripts, error) { return nil, errors.New("manifest gone") },
+			stylesheetURL:   func() (string, error) { return "/static/css/app.css?v=abc", nil },
+			status:          http.StatusCreated,
+			failOnPage:      true,
+			wantCode:        http.StatusInternalServerError,
+			wantBody:        "Internal Server Error\n",
+			wantContentType: "text/plain; charset=utf-8",
+			wantNosniff:     "nosniff",
+		},
+		{
 			name:          "renders component with url and status",
 			stylesheetURL: func() (string, error) { return "/static/css/app.css?v=abc", nil },
 			status:        http.StatusTooManyRequests,
@@ -48,7 +61,7 @@ func TestPageRendererStylesheetError(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &pageRenderer{stylesheetURL: tt.stylesheetURL}
+			p := &pageRenderer{scripts: tt.scripts, stylesheetURL: tt.stylesheetURL}
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			p.render(w, r, tt.status, func(url string) templ.Component {

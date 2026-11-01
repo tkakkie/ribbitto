@@ -95,8 +95,12 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if err != nil {
 		return nil, nil, err
 	}
-	pages := &pageRenderer{scripts: scripts, stylesheetURL: func() (string, error) { return stylesheetURL, nil }}
+	pages := &pageRenderer{
+		scripts:       func() (*static.Scripts, error) { return scripts, nil },
+		stylesheetURL: func() (string, error) { return stylesheetURL, nil },
+	}
 	if devAssets != "" {
+		pages.scripts = func() (*static.Scripts, error) { return static.NewScripts(assets) }
 		pages.stylesheetURL = func() (string, error) { return stylesheetURLForAssets(assets) }
 	}
 	// Register HTML routes here so new pages inherit the shared middleware.
@@ -162,9 +166,12 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "dist/") && !scripts.IsBundle(r.URL.Path) {
-			http.NotFound(w, r)
-			return
+		if strings.HasPrefix(r.URL.Path, "dist/") {
+			current, err := pages.scripts()
+			if err != nil || !current.IsBundle(r.URL.Path) && (devAssets == "" || !current.IsMap(r.URL.Path)) {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		// Only successful file responses are immutable; missing assets may appear later.
 		info, err := fs.Stat(assets, r.URL.Path)
@@ -205,10 +212,11 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
 }
 
-// pageRenderer renders full pages; in development the stylesheet URL is
-// recomputed per request so rebuilt CSS shows up without a restart.
+// pageRenderer renders full pages; in development the script registry and
+// stylesheet URL are recomputed per request so rebuilt assets show up without
+// a restart.
 type pageRenderer struct {
-	scripts       *static.Scripts
+	scripts       func() (*static.Scripts, error)
 	stylesheetURL func() (string, error)
 }
 
@@ -219,7 +227,12 @@ func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int
 		return
 	}
 	if p.scripts != nil {
-		r = r.WithContext(static.WithScripts(r.Context(), p.scripts))
+		scripts, err := p.scripts()
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		r = r.WithContext(static.WithScripts(r.Context(), scripts))
 	}
 	templ.Handler(page(url), templ.WithStatus(status)).ServeHTTP(w, r)
 }

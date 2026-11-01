@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -24,8 +25,10 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
@@ -491,43 +494,102 @@ func TestCrossOriginProtection(t *testing.T) {
 }
 
 func TestDevelopmentAssets(t *testing.T) {
-	dir := t.TempDir()
-	copyScriptAssets(t, dir)
-	if err := os.Mkdir(filepath.Join(dir, "css"), 0o755); err != nil {
-		t.Fatal(err)
+	builder := filepath.Join(t.TempDir(), "webbuild")
+	if out, err := exec.Command("go", "-C", "../../tools", "build", "-o", builder, "./webbuild").CombinedOutput(); err != nil {
+		t.Fatalf("building webbuild: %v: %s", err, out)
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, "web", "static")
+	registry, err := os.ReadFile("../../web/static/scripts.go")
+	if err != nil || os.CopyFS(filepath.Join(root, "web", "src"), os.DirFS("../../web/src")) != nil || os.MkdirAll(filepath.Join(dir, "css"), 0o755) != nil || os.WriteFile(filepath.Join(dir, "scripts.go"), registry, 0o600) != nil {
+		t.Fatal("preparing fixture:", err)
 	}
 	cssPath := filepath.Join(dir, "css", "app.css")
 	initialCSS := "body { color: red; }"
 	if err := os.WriteFile(cssPath, []byte(initialCSS), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := newTestHandler(t, dir)
+	if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
+		t.Fatalf("initial dev build: %v: %s", err, out)
+	}
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	previousURL := ""
-	for _, css := range []string{initialCSS, "body { color: blue; }"} {
-		if err := os.WriteFile(cssPath, []byte(css), 0o600); err != nil {
-			t.Fatal(err)
+	setup := &fakeSetup{open: true}
+	handler, err := NewHandler(dir, catalogues, testServices(asAlice, func(s *Services) {
+		s.Setup, s.SetupSessions, s.SignUp = setup, setup, fakeSignUp{&fakeSetup{open: true}}
+	}))
+	prodHandler, prodErr := newTestHandler(t, "")
+	prodScriptURL, urlErr := static.ScriptURL(t.Context(), "message-time")
+	if err != nil || prodErr != nil || urlErr != nil {
+		t.Fatal(err, prodErr, urlErr)
+	}
+	previousCSSURL, previousScriptURL := "", ""
+	for i, css := range []string{initialCSS, "body { color: blue; }"} {
+		if os.WriteFile(cssPath, []byte(css), 0o600) != nil || os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), fmt.Appendf(nil, "console.log(%q);\n", fmt.Sprintf("edit-%d", i)), 0o600) != nil {
+			t.Fatal("writing updated sources")
+		}
+		if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
+			t.Fatalf("rebuilding dev bundles: %v: %s", err, out)
 		}
 		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-		wantURL := fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256([]byte(css)))
-		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<link rel="stylesheet" href="`+wantURL+`">`) {
-			t.Fatalf("page does not link to current CSS: status = %d, body = %s", w.Code, w.Body.String())
-		}
-		if previousURL != "" && strings.Contains(w.Body.String(), previousURL) {
-			t.Error("page still contains the previous stylesheet URL")
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/signup", nil))
+		wantCSSURL := fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256([]byte(css)))
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<link rel="stylesheet" href="`+wantCSSURL+`">`) || (previousCSSURL != "" && strings.Contains(w.Body.String(), previousCSSURL)) {
+			t.Fatalf("page does not link only to current CSS: status = %d, body = %s", w.Code, w.Body.String())
 		}
 		w = httptest.NewRecorder()
-		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, wantURL, nil))
-		if w.Code != http.StatusOK || w.Body.String() != css {
-			t.Fatalf("stylesheet does not serve current CSS: status = %d, body = %q", w.Code, w.Body.String())
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, wantCSSURL, nil))
+		if w.Code != http.StatusOK || w.Body.String() != css || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("stylesheet response: status = %d, Cache-Control = %q, body = %q", w.Code, w.Header().Get("Cache-Control"), w.Body.String())
 		}
-		if got := w.Header().Get("Cache-Control"); got != "no-store" {
-			t.Errorf("Cache-Control = %q, want no-store", got)
+		previousCSSURL = wantCSSURL
+
+		scripts, err := static.NewScripts(os.DirFS(dir))
+		if err != nil {
+			t.Fatal(err)
 		}
-		previousURL = wantURL
+		scriptURL, err := scripts.URL("message-time")
+		if err != nil || scriptURL == previousScriptURL {
+			t.Fatalf("script URL = %q, prev = %q, err = %v", scriptURL, previousScriptURL, err)
+		}
+		req := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1}), nil)
+		req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<script defer src="`+scriptURL+`"`) || (previousScriptURL != "" && strings.Contains(w.Body.String(), previousScriptURL)) {
+			t.Fatalf("channel page does not link only to current bundle %s: status = %d", scriptURL, w.Code)
+		}
+		for _, assetURL := range []string{scriptURL, scriptURL + ".map"} {
+			w = httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, assetURL, nil))
+			if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("GET %s: status = %d, Cache-Control = %q", assetURL, w.Code, w.Header().Get("Cache-Control"))
+			}
+		}
+		for _, staleURL := range []string{previousScriptURL, previousScriptURL + ".map"} {
+			if previousScriptURL != "" {
+				w = httptest.NewRecorder()
+				handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, staleURL, nil))
+				if w.Code != http.StatusNotFound {
+					t.Errorf("GET stale %s: status = %d, want 404", staleURL, w.Code)
+				}
+			}
+		}
+		previousScriptURL = scriptURL
+	}
+	w := httptest.NewRecorder()
+	prodHandler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, prodScriptURL, nil))
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("production bundle: status = %d, Cache-Control = %q", w.Code, w.Header().Get("Cache-Control"))
+	}
+	for _, mapURL := range []string{prodScriptURL + ".map", previousScriptURL + ".map"} {
+		w = httptest.NewRecorder()
+		prodHandler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, mapURL, nil))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("production GET %s: status = %d, want 404", mapURL, w.Code)
+		}
 	}
 }
 

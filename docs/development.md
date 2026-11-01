@@ -17,7 +17,7 @@ make bundles               # scripts before direct Go commands
 go run ./cmd/ribbitto       # http://localhost:8080
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
-make dev                   # watches templ and CSS; restarts the server
+make dev                   # watches templ, CSS and scripts; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests (with -race)
 make vuln                  # govulncheck on the root, tools/ and tools/tbls/ modules; any failure fails the target
 make deps                  # regenerates docs/dependencies.md after an import change
@@ -67,11 +67,14 @@ reverts one migration. See [database development](database.md) for
 configuration and migration ownership, and [database tests](database-tests.md)
 for integration tests.
 
-`make dev` builds CSS and scripts before starting the server. It runs the pinned templ
-and Tailwind watchers together, restarting Go when templates or Go source
-change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
-without caching and recompute the stylesheet URL's content hash on each page
-request. Reload on edits; CSS needs no server restart.
+`make dev` builds CSS and development script bundles (with external `.js.map`
+source maps) before starting the server. It runs the pinned templ, Tailwind and
+`webbuild -watch` watchers together, restarting Go when templates or Go source
+change and rebuilding `web/static/dist` when `web/src` changes. It sets
+`RIBBITTO_DEV_ASSETS=web/static` to serve assets, bundles and development source
+maps from disk with `Cache-Control: no-store`, recomputing the stylesheet URL
+and reading `dist/manifest.json` on each page request so script and CSS edits
+take effect on reload without rebuilding the Go binary.
 `cmd/dev` stops watchers and server on Ctrl-C, SIGTERM or watcher exit.
 
 `make css` and `make lint` use [`tools/download`](../tools/download/main.go)

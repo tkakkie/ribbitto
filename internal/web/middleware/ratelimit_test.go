@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strings"
@@ -233,6 +234,53 @@ func TestClientKey(t *testing.T) {
 			t.Fatalf("peer %s with a mapped trusted CIDR: key %s", remote, got)
 		}
 	}
+}
+
+// FuzzClientKey generalises TestClientKey and TestTrustedProxyContract,
+// because a client that can choose its key escapes every rate limit: an
+// untrusted peer's X-Forwarded-For is ignored, a key read from the header
+// never lies inside a trusted proxy's prefix, and whatever the client wrote
+// to the left of the entries the trusted proxies appended cannot change its
+// key (docs/architecture/rate-limits.md, Reverse proxies).
+func FuzzClientKey(f *testing.F) {
+	f.Add("10.0.0.1:443", "10.0.0.0/8,::ffff:192.168.0.0/112", "1.2.3.4", "9.9.9.9, 10.0.0.2")
+	f.Add("[::1]:80", "::1/128", "::ffff:1.2.3.4", "2001:db8::1")
+	f.Add("10.0.0.1:1", "10.0.0.0/8", "fe80::1%eth0", "")
+	f.Add("10.0.0.1:1", "10.0.0.0/8", " 1.2.3.4 ", "x, ,")
+	f.Add("198.51.100.7:1", "10.0.0.0/8", "203.0.113.9", "")
+	f.Fuzz(func(t *testing.T, peer, proxies, appended, client string) {
+		trusted, err := ParseTrustedProxies(proxies)
+		if err != nil {
+			return
+		}
+		request := func(lines ...string) *http.Request {
+			r := &http.Request{RemoteAddr: peer, Header: http.Header{}}
+			for _, line := range lines {
+				r.Header.Add("X-Forwarded-For", line)
+			}
+			return r
+		}
+		key, fallback := ClientKey(request(appended), trusted), ClientKey(request(), trusted)
+		if !isTrusted(peerAddr(request()), trusted) {
+			if key != fallback {
+				t.Fatalf("untrusted peer %q: header %q changed key %s to %s", peer, appended, fallback, key)
+			}
+			return
+		}
+		if key == fallback {
+			return
+		}
+		for _, prefix := range trusted {
+			if prefix.Bits() <= key.Bits() && prefix.Overlaps(key) {
+				t.Fatalf("key %s from %q lies inside trusted %s", key, appended, prefix)
+			}
+		}
+		for _, r := range []*http.Request{request(client, appended), request(client + "," + appended)} {
+			if again := ClientKey(r, trusted); again != key {
+				t.Fatalf("client-written %q changed key %s to %s (appended %q)", client, key, again, appended)
+			}
+		}
+	})
 }
 
 // sixtyFour is the i-th /64 in 2001:db8::/48.

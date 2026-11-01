@@ -56,6 +56,13 @@ func NewChannelCreationRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 1.0/60, 10, 0)
 }
 
+// NewChannelImageRateLimiter returns an independent burst of 10, then one
+// token every 6 s: enough to try several illustrations in a row, while one
+// member cannot keep rewriting channel images or the channel row.
+func NewChannelImageRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 1.0/6, 10, 0)
+}
+
 // NewBranchRateLimiter returns an independent burst of 20, then one token
 // every 6 s: tidying a channel move by move fits, while sustained moves can
 // dirty each viewer's sidebar at most about ten times a minute.

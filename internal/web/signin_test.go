@@ -161,9 +161,9 @@ func TestSignInPost(t *testing.T) {
 		if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
 			t.Fatalf("status %d, Location %q", w.Code, w.Header().Get("Location"))
 		}
-		// The middleware clears the dead "stale" cookie, then the new one is set.
+		// The middleware keeps the dead "stale" cookie; only the new one is set.
 		cookies := w.Header().Values("Set-Cookie")
-		if len(cookies) == 0 || !strings.HasPrefix(cookies[len(cookies)-1], "__Host-session=new-token;") {
+		if len(cookies) != 1 || !strings.HasPrefix(cookies[0], "__Host-session=new-token;") {
 			t.Fatalf("Set-Cookie = %q", cookies)
 		}
 		if service.previous != "stale" {

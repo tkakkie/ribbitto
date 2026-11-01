@@ -120,8 +120,10 @@ func TestSession(t *testing.T) {
 		// Malformed, unknown, deleted and expired tokens all come back from
 		// identity.Sessions as ErrNoSession (tested there); here they are tokens
 		// the fake does not know.
-		{"malformed", "not base64!", http.StatusOK, false, true, false, true},
-		{"unknown, deleted or expired", "gone", http.StatusOK, false, true, false, true},
+		// The dead cookie is kept: clearing it could delete a newer cookie a
+		// sign-in in another tab stored while this request was in flight.
+		{"malformed", "not base64!", http.StatusOK, false, false, false, true},
+		{"unknown, deleted or expired", "gone", http.StatusOK, false, false, false, true},
 		{"store error", "outage", http.StatusInternalServerError, false, false, false, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

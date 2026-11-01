@@ -89,7 +89,7 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		rules = append(rules, rule{"global cast", regexp.MustCompile(`\(\s*(?:window|globalThis)\s+as\b`)})
 	}
 	// Stage 1 pins delegate native submits to htmx using server-rendered URLs.
-	if name != "pins-sync-v2.js" {
+	if name != "pins-sync.ts" {
 		rules = append(rules, rule{"requests", regexp.MustCompile(`\bhtmx\s*\.\s*ajax\b`)})
 	}
 	// Only the drafts module may keep data that outlives the tab (decision 37 (d)).
@@ -257,10 +257,10 @@ func TestJavaScriptPatterns(t *testing.T) {
 }
 
 func TestJavaScriptAllowedPatterns(t *testing.T) {
-	if got := checkJavaScript("pins-sync-v2.js", `window.htmx.ajax("POST", button.getAttribute("formaction"), {source: button, target: form, swap: "outerHTML"});`); len(got) != 0 {
+	if got := checkJavaScript("pins-sync.ts", `window.htmx.ajax("POST", button.getAttribute("formaction"), {source: button, target: form, swap: "outerHTML"});`); len(got) != 0 {
 		t.Errorf("delegated pins request: %v", got)
 	}
-	for _, name := range []string{"pins-sync-v0.js", "other-pins-sync-v2.js", "pins-sync-v2.js.bak-v1.js", "pins-sync-v3.js"} {
+	for _, name := range []string{"pins-sync-v0.js", "pins-sync-v2.js", "other-pins-sync-v2.js", "pins-sync-v2.js.bak-v1.js", "pins-sync-v3.js", "other-pins-sync.ts", "pins-sync.ts.bak.ts", "pins-sync-v2.ts", "pins-seq.ts"} {
 		if got := checkJavaScript(name, `htmx.ajax("POST", url);`); len(got) != 1 || got[0].rule != "requests" {
 			t.Errorf("%s: got %v, want one requests finding", name, got)
 		}

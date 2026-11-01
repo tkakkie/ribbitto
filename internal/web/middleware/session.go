@@ -67,7 +67,12 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 		account, session, err := sessions.Resolve(r.Context(), cookie.Value)
 		switch {
 		case errors.Is(err, identity.ErrNoSession):
-			ClearSessionCookie(w)
+			// Signed out, but the dead cookie is kept: Max-Age=0 deletes the
+			// cookie by name and path whatever its value, so this response,
+			// to a request sent before a sign-in in another tab stored the
+			// new cookie, would arrive after it and sign the browser out.
+			// The dead cookie expires with its session, and the next
+			// sign-in or sign-out replaces it.
 			next.ServeHTTP(w, r)
 		case err != nil:
 			// Keep the cookie: a database outage must not sign everyone out.

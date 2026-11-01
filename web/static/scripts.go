@@ -46,6 +46,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"arrival",
 		"popover-focus",
 		"side-panel",
+		"pins-sync",
 		"message-drafts",
 	}
 	scripts := &Scripts{

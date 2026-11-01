@@ -4,7 +4,6 @@ mention-picker
 message-history
 message-link
 message-stream
-pins-sync
 quote-selection
 read-visibility
 sidebar-scroll

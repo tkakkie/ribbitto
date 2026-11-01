@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -214,5 +216,46 @@ func TestImagePickerError(t *testing.T) {
 				t.Fatalf("alert %v, radios linked to it = %d; want the alert and 13", alert, radios)
 			}
 		})
+	}
+}
+
+// TestChannelImageAdmission proves image changes spend the member's own
+// budget after membership resolution and before the channel lookup and the
+// write, for channel and topic overviews alike.
+func TestChannelImageAdmission(t *testing.T) {
+	channel := kernel.ID{1}
+	fake := &fakeChannels{channels: []conversation.Channel{{ID: channel, Name: "Example"}}}
+	limits := middleware.NewChannelImageRateLimiter(time.Now)
+	handler, _ := newLimitedHandler(t, asAlice, func(s *Services) {
+		s.Channels, s.Messages = fake, fakeMessages{channels: fake}
+		s.MemberLimits = memberLimitOverride(s.MemberLimits, func(l *MemberLimits) { l.image = limits })
+	})
+	send := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, path, strings.NewReader("image=leaf"))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	// A non-member gets 404 and cannot spend the member's budget.
+	if w := send("/organizations/unknown/channels/" + realtime.FormatPayloadID(channel) + "/overview"); w.Code != http.StatusNotFound {
+		t.Fatalf("non-member: %d", w.Code)
+	}
+	path := view.ChannelURL("acme", channel) + "/overview"
+	for i := range 10 {
+		if w := send(path); w.Code != http.StatusSeeOther {
+			t.Fatalf("request %d within the burst: status %d", i+1, w.Code)
+		}
+	}
+	w := send(path)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "6" || w.Body.Len() != 0 {
+		t.Fatalf("over the burst: status %d, Retry-After %q, body %q", w.Code, w.Header().Get("Retry-After"), w.Body.String())
+	}
+	if w := send(path[:strings.LastIndex(path, "/overview")] + "/topics/" + realtime.FormatPayloadID(kernel.ID{2}) + "/overview"); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("topic overview shares the budget: status %d", w.Code)
+	}
+	if fake.imageSets != 10 {
+		t.Fatalf("SetImage ran %d times, want 10", fake.imageSets)
 	}
 }

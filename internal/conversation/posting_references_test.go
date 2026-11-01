@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -120,15 +121,39 @@ func TestPostingReferences(t *testing.T) {
 	}
 }
 
+var escapeCases = []string{
+	"**Deploy**", "<@" + realtime.FormatPayloadID(kernel.ID{0xb1}) + ">", "_x_ `c` \\*", "> quote", "```go", "see https://example.com/a", "設計 **重要**",
+}
+
 // An escaped text reads back as exactly the text, all of it literal.
 func TestEscapeChatV1(t *testing.T) {
-	for _, text := range []string{
-		"**Deploy**", "<@" + realtime.FormatPayloadID(kernel.ID{0xb1}) + ">", "_x_ `c` \\*", "> quote", "```go", "see https://example.com/a", "設計 **重要**",
-	} {
-		blocks := conversation.ParseChatV1(conversation.EscapeChatV1(text))
-		want := []conversation.BodyBlock{{Kind: conversation.BlockText, Lines: [][]conversation.BodyInline{{{Kind: conversation.InlineText, Text: text}}}}}
-		if !reflect.DeepEqual(blocks, want) {
-			t.Errorf("%q parsed as %+v", text, blocks)
+	for _, text := range escapeCases {
+		checkEscaped(t, text)
+	}
+}
+
+// FuzzEscapeChatV1 extends TestEscapeChatV1 to any single line: branching's
+// notice escapes a member-chosen topic name, so a name that escaping fails to
+// neutralise would post markup, a link or a member reference in the
+// server's own words.
+func FuzzEscapeChatV1(f *testing.F) {
+	for _, text := range append(escapeCases, "\\", "a\\*b", "`a`", "(http://x)", "日本_語_", " x ", "~!@#$%^&*()_+{}|:\"<>?") {
+		f.Add(text)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		// A line break necessarily starts a new line; topic names hold none.
+		if text == "" || !utf8.ValidString(text) || strings.ContainsAny(text, "\r\n") {
+			return
 		}
+		checkEscaped(t, text)
+	})
+}
+
+func checkEscaped(t *testing.T, text string) {
+	t.Helper()
+	blocks := conversation.ParseChatV1(conversation.EscapeChatV1(text))
+	want := []conversation.BodyBlock{{Kind: conversation.BlockText, Lines: [][]conversation.BodyInline{{{Kind: conversation.InlineText, Text: text}}}}}
+	if !reflect.DeepEqual(blocks, want) {
+		t.Errorf("%q parsed as %+v", text, blocks)
 	}
 }

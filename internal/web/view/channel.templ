@@ -237,7 +237,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						{ i18n.T(ctx, "stream.stopped") }
 						<a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "stream.reload") }</a>
 					</p>
-					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
+					// flex-auto, not flex-1: with a zero basis Chromium first sizes the
+					// list at no height, gives it a scrollbar that then narrows and
+					// wraps every message header, and keeps it although the
+					// unwrapped rows would fit (#2044).
+					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-auto overflow-y-auto short:h-32 short:flex-none">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
 						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
@@ -310,7 +314,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("composer")
-		<script defer src="/static/pins-sync-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("pins-sync")
 		<script defer src="/static/quote-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>

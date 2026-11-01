@@ -59,7 +59,11 @@ tracks localised elements in a `WeakSet` so overlapping load events do not
 rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled. From `desk` the element reserves a width that
 fits both texts, so the rewrite moves nothing beside it (#1094,
-[`ui-components.md`](../ui-components.md#shared-components)).
+[`ui-components.md`](../ui-components.md#shared-components)). Below `desk`
+the stylesheet's `server-time-stack` lays out the header column's
+`data-server-time` copy of the UTC text in the time's grid cell, hidden and
+with empty alternative text, so the cell never shrinks when the local text
+replaces it (#2044); the script itself is unchanged.
 Hashed bundles are immutable; the fixed-name manifest is not public.
 Unconverted application scripts retain versioned URLs.
 

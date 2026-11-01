@@ -25,11 +25,11 @@ type Pin struct {
 // ordinary navigation and read rules.
 templ PinsSection(page ChannelPage, oob ...bool) {
 	<section
-		id="pins-section"
+		id={ PinsSectionID }
 		sse-swap="pins"
 		hx-swap="outerHTML"
-		data-pins-seq={ fmt.Sprint(page.SnapshotSeq) }
-		data-pinned-ids={ pinnedIDs(page.Pins) }
+		{ PinsSeqAttribute }={ fmt.Sprint(page.SnapshotSeq) }
+		{ PinnedIDsAttribute }={ pinnedIDs(page.Pins) }
 		if len(oob) > 0 && oob[0] {
 			hx-swap-oob="outerHTML"
 		}

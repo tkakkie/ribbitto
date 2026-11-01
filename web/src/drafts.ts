@@ -34,7 +34,7 @@ export const isOwnDraftKey = (parts: DraftKeyParts | null, scope: Pick<PageScope
 export const isSessionDraftKey = (key: string, session: string): boolean => parseDraftKey(key)?.session === session;
 
 export function parsePageScope(raw: { member?: string | null; session?: string | null; expires?: string | null; rendered?: string | null }): PageScope | null {
-  if (!isUUIDv7(raw.session) || !raw.expires || !raw.rendered) return null;
+  if (!isUUIDv7(raw.session) || raw.expires == null || raw.rendered == null) return null;
   const expires = Number(raw.expires), rendered = Number(raw.rendered);
   if (!Number.isSafeInteger(expires) || !Number.isSafeInteger(rendered)) return null;
   return { member: raw.member ?? "", session: raw.session, expires, rendered, deadline: expires - rendered };
@@ -68,15 +68,29 @@ export interface DraftStorage {
   removeItem(key: string): void;
 }
 
+function keepOwnEntry(
+  raw: string | null,
+  scope: Pick<PageScope, "member" | "session" | "expires"> | null | undefined,
+  nowMs: number | (() => number),
+): boolean {
+  if (!scope) return false;
+  try {
+    const entry: unknown = JSON.parse(raw as string);
+    return isValidDraftEntry(entry, scope, typeof nowMs === "function" ? nowMs() : nowMs);
+  } catch {
+    return false;
+  }
+}
+
 export function sweepKeys(
   storage: DraftStorage,
   horizon: string,
   scope?: Pick<PageScope, "member" | "session" | "expires"> | null,
-  nowMs = 0,
+  nowMs: number | (() => number) = Date.now,
 ): void {
   for (const key of Object.keys(storage)) {
     const action = decideCleanupKey(key, horizon, scope?.member);
-    if (action === "remove" || (action === "validate" && (!scope || !isValidDraftEntry(parseDraftEntry(storage.getItem(key)), scope, nowMs)))) {
+    if (action === "remove" || (action === "validate" && !keepOwnEntry(storage.getItem(key), scope, nowMs))) {
       storage.removeItem(key);
     }
   }

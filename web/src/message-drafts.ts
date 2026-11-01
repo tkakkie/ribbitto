@@ -32,16 +32,13 @@ try {
     if (scope) {
       const { member, session, expires, deadline } = scope;
       const storage = window.localStorage;
-      sweepKeys(storage, session, scope, Date.now());
+      sweepKeys(storage, session, scope, Date.now);
       const expiryState: ExpiryState = { expired: false, deadline, expires };
       let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, dirty = false, composing = false, at = 0, text = "";
       let lastWrite: string | undefined, source: string | null | undefined, sending: SendingSnapshot | null = null, savedKey: string | null = null;
       const stop = (): void => { stopped = true; dirty = false; clearTimeout(timer); markers(); };
       const read = (k: string): Record<string, unknown> | null => {
-        try {
-          const parsed = parseDraftEntry(storage.getItem(k));
-          return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-        } catch { return null; }
+        try { return parseDraftEntry(storage.getItem(k)) as Record<string, unknown> | null; } catch { return null; }
       };
       const form = getMessageComposer();
       const body = getMessageBody();

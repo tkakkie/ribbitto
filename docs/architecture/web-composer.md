@@ -84,24 +84,38 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   UUIDv7 session; `feed` or topic ID) and JSON
   `{member, session, expires, text, at, key}` (≤4,000 code points, 50 entries
   per member/session, `at` <7 days old and ≤1 day ahead, checked at load).
+  Restore a send key only for the current member/session/place. `expires` and
+  `at` are Unix milliseconds; `key` is a send UUID or null, and older entries
+  may omit it.
 - **Saving and cap (`web/test/drafts.test.mjs`):** latest htmx forms carry
   `data-draft-channel`/optional `data-draft-topic` outside state swaps.
   Tab-monotonic edit times (`nextEditTime`), 300 ms debounce, `pagehide`/hidden
   flush, wait for `compositionend`; clean tabs never flush. Blank/over-limit
-  text writes empty tombstones (`normalizeDraftText`), which count toward 50.
-  Equal/later stored edits win (`shouldWriteDraft`); own entries trim by edit
-  time then key to 49 before insert and 50 after (`selectKeysToTrim`), best
-  effort without reading or writing foreign keys.
+  text (`normalizeDraftText`) and confirmed blank text write empty tombstones at
+  edit time; saving never deletes the key. Tombstones restore no text, count
+  toward 50, and persist until eviction, session end or retention cleanup.
+  Equal/later stored edits win (`shouldWriteDraft`), and a skipped equal/later
+  write leaves the tab clean; own entries trim by edit time then key to 49
+  before insert and 50 after (`selectKeysToTrim`), best effort without reading
+  or writing foreign keys. Overlapping writes can retain older text, and
+  eviction can remove a concurrent update; neither race is repaired, textarea
+  text stays unchanged, and only subsequent input saves again.
 - **Stopping and expiry (`web/test/drafts.test.mjs`):** sign-out notices
-  (`ribbitto.signed-out.v1`) or either expiry clock (`checkSessionExpired`:
+  (`ribbitto.signed-out.v1`) call `stop()`, which only cancels saves and stops
+  writes; either expiry clock (`checkSessionExpired`:
   `performance.now() >= expires - rendered` or `Date.now() >= expires`, latched
-  against rollback with chained `nextExpiryDelay` waits) cancel saves, remove
-  the session's keys and leave typing/sending usable. An ahead device clock may
-  expire drafts early (#1798).
+  against rollback with chained `nextExpiryDelay` waits) also removes the
+  session's keys. Both stop writes until reload; expiry removes session keys
+  unread, preserving page text and sending, and storage errors leave
+  typing/sending usable. The monotonic deadline uses the document time origin;
+  chained waits do not poll. An ahead device clock may expire drafts early
+  (#1798).
 - **Cleanup (`web/test/drafts.test.mjs`):** once per document load (never on
-  bfcache restore), `sweepKeys` removes malformed `ribbitto.draft.v1:` keys,
-  own-session keys under another member, invalid own entries, and foreign
-  sessions whose 48-bit millisecond prefix strictly precedes the horizon
+  bfcache restore), first match per key wins: `sweepKeys` removes malformed
+  `ribbitto.draft.v1:` keys, own-session keys under another member, invalid own
+  entries (own values are removed for invalid JSON, missing or mistyped required
+  fields, member/session/expiry mismatch, or the stated text/time bounds), and
+  foreign sessions whose 48-bit millisecond prefix strictly precedes the horizon
   (leaving same-millisecond or later foreign sessions unread). The sign-in page
   uses `data-drafts-horizon` (`identity.SessionHorizon`, PostgreSQL `uuidv7()`)
   when signed out and writes `ribbitto.signed-out.v1`; organisation pages use

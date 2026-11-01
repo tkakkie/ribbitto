@@ -60,6 +60,9 @@ const makeStorage = (entries, onGet) => {
       if (onGet) onGet(k);
       return Object.hasOwn(storage, k) ? storage[k] : null;
     },
+    setItem(k, v) {
+      storage[k] = String(v);
+    },
     removeItem(k) {
       removed.push(k);
       delete storage[k];
@@ -141,12 +144,111 @@ test("cleanup deletes earlier older-session key before a later own-session getIt
   assert.equal(Object.hasOwn(storage, laterMalformed), true);
 });
 
+let adapterRun = 0;
+async function withAdapter(storage, nowFn, fn) {
+  const prevWindow = globalThis.window;
+  const prevDocument = globalThis.document;
+  const prevSetTimeout = globalThis.setTimeout;
+  const prevClearTimeout = globalThis.clearTimeout;
+  const prevDateNow = Date.now;
+  const streamAttrs = new Map([
+    ["data-member", memberA],
+    ["data-session", sessionPage],
+    ["data-session-expires", String(scope.expires)],
+    ["data-rendered-at", String(scope.rendered)],
+  ]);
+  const formAttrs = new Map([["data-draft-channel", channelA]]);
+  const stream = { getAttribute: (name) => streamAttrs.get(name) ?? null };
+  const form = { getAttribute: (name) => formAttrs.get(name) ?? null, hasAttribute: (name) => name === "hx-post" };
+  const body = Object.assign(new EventTarget(), { value: "" });
+  globalThis.window = Object.assign(new EventTarget(), { localStorage: storage });
+  globalThis.document = Object.assign(new EventTarget(), {
+    hidden: false,
+    querySelector(sel) {
+      if (sel === "#organization-stream") return stream;
+      if (sel === "#message-composer") return form;
+      if (sel === "#message-body") return body;
+      return null;
+    },
+  });
+  globalThis.setTimeout = () => 0;
+  globalThis.clearTimeout = () => {};
+  Date.now = nowFn;
+  try {
+    await import(new URL(`../src/message-drafts.ts?case=${++adapterRun}`, import.meta.url).href);
+    if (fn) await fn({ body });
+  } finally {
+    Date.now = prevDateNow;
+    globalThis.setTimeout = prevSetTimeout;
+    globalThis.clearTimeout = prevClearTimeout;
+    globalThis.document = prevDocument;
+    globalThis.window = prevWindow;
+  }
+}
+
+test("cleanup samples clock per own-entry validation at the seven-day boundary and keeps v7 exception boundary", async () => {
+  const brokenKey = draftKey(memberA, sessionPage, "02000000-0000-4000-8000-000000000000", "feed");
+  const firstKey = draftKey(memberA, sessionPage, channelA, "feed");
+  const secondKey = draftKey(memberA, sessionPage, channelA, topicA);
+  const boundaryValue = JSON.stringify({
+    member: memberA,
+    session: sessionPage,
+    expires: scope.expires,
+    text: "boundary",
+    at: nowMs - 7 * dayMs + 1,
+    key: null,
+  });
+
+  let adapterCalls = 0;
+  const adapterStorage = makeStorage([
+    [firstKey, boundaryValue],
+    [secondKey, boundaryValue],
+  ]);
+  await withAdapter(adapterStorage, () => nowMs + (adapterCalls++ > 0 ? 1 : 0));
+  assert.deepEqual(adapterStorage.removed, [secondKey]);
+  assert.deepEqual(Object.keys(adapterStorage), [firstKey]);
+
+  let directCalls = 0;
+  const directStorage = makeStorage([
+    [brokenKey, "{broken"],
+    [firstKey, boundaryValue],
+    [secondKey, boundaryValue],
+  ]);
+  sweepKeys(directStorage, sessionPage, scope, () => nowMs + directCalls++);
+  assert.equal(directCalls, 2);
+  assert.deepEqual(directStorage.removed, [brokenKey, secondKey]);
+  assert.deepEqual(Object.keys(directStorage), [firstKey]);
+
+  const throwingClockStorage = makeStorage([[firstKey, boundaryValue], [secondKey, boundaryValue]]);
+  let throwOnce = true;
+  sweepKeys(throwingClockStorage, sessionPage, scope, () => {
+    if (throwOnce) {
+      throwOnce = false;
+      throw new Error("clock failed");
+    }
+    return nowMs;
+  });
+  assert.deepEqual(throwingClockStorage.removed, [firstKey]);
+  assert.deepEqual(Object.keys(throwingClockStorage), [secondKey]);
+});
+
 test("page scope and entry validity bounds", () => {
   assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: String(scope.expires), rendered: String(scope.rendered) }), scope);
+  assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: "", rendered: "" }), {
+    member: memberA, session: sessionPage, expires: 0, rendered: 0, deadline: 0,
+  });
+  assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: "100", rendered: "" }), {
+    member: memberA, session: sessionPage, expires: 100, rendered: 0, deadline: 100,
+  });
+  assert.deepEqual(parsePageScope({ member: memberA, session: sessionPage, expires: "", rendered: "50" }), {
+    member: memberA, session: sessionPage, expires: 0, rendered: 50, deadline: -50,
+  });
   for (const bad of [
     { member: memberA, session: memberA, expires: "100", rendered: "50" },
     { member: memberA, session: sessionPage, expires: null, rendered: "50" },
-    { member: memberA, session: sessionPage, expires: "100", rendered: "" },
+    { member: memberA, session: sessionPage, expires: "100", rendered: null },
+    { member: memberA, session: sessionPage, expires: undefined, rendered: "50" },
+    { member: memberA, session: sessionPage, expires: "100", rendered: undefined },
     { member: memberA, session: sessionPage, expires: "1.5", rendered: "50" },
   ]) {
     assert.equal(parsePageScope(bad), null);
@@ -273,6 +375,23 @@ test("post-load malformed timestamps preserve v7 comparison, send-time and trim 
     selectKeysToTrim([ownKeys[1], ownKeys[0]], scope, 1, (k) => (k === ownKeys[1] ? "bad" : 100)),
     [ownKeys[0]],
   );
+});
+
+test("adapter read preserves parsed JSON string values across trim and send", async () => {
+  const capKeys = Array.from({ length: 49 }, (_, i) =>
+    draftKey(memberA, sessionPage, `02000000-0000-4000-8000-${String(i + 10).padStart(12, "0")}`, "feed"),
+  );
+  const openKey = draftKey(memberA, sessionPage, channelA, "feed");
+  const validAt100 = JSON.stringify({ member: memberA, session: sessionPage, expires: scope.expires, text: "v", at: 100, key: null });
+  const storage = makeStorage([...capKeys.map((k) => [k, validAt100]), [openKey, validAt100]]);
+  await withAdapter(storage, () => nowMs, ({ body }) => {
+    storage[capKeys[1]] = '"abc"';
+    storage[openKey] = '"abc"';
+    body.dispatchEvent(new CustomEvent("message-sending", { bubbles: true, detail: { key: sendKeyA, body: "sent", inPlace: true } }));
+  });
+  assert.equal(JSON.parse(storage.getItem(openKey)).at, null);
+  assert.equal(Object.hasOwn(storage, capKeys[0]), false);
+  assert.equal(Object.hasOwn(storage, capKeys[1]), true);
 });
 
 test("marker row predicate and sidebar URL parsing", () => {

@@ -27,25 +27,27 @@ and [collations](https://www.postgresql.org/docs/18/collation.html#COLLATION-MAN
 Review PostgreSQL major-version upgrade notes too: independence from glibc
 does not promise unchanged character semantics across PostgreSQL versions.
 
-The channel uniqueness constraint in `db/migrations/00005_channel_message.sql`
-is on `(organization_id, name)`, so differently cased names remain distinct.
-The topic index instead compares `lower(name)` within each channel, excluding
-NULL names. Lowercasing follows the input expression's collation and character
-classification provider; code-point ordering alone does not determine it.
-With the recommended database default, non-ASCII letters use builtin simple
-case mapping. Before moving data, inspect the installed index definitions
-with `\d channel` and `\d topic` in psql (the channel rule may change), and
-compare representative names on both servers:
+Channel and topic names are both unique by `lower(name)`: the channel index
+from `db/migrations/00020_channel_name_case_unique.sql` is on
+`(organization_id, lower(name))`, and the topic index compares `lower(name)`
+within each channel, excluding NULL names. Lowercasing follows the input
+expression's collation and character classification provider; code-point
+ordering alone does not determine it. With the recommended database default,
+non-ASCII letters use builtin simple case mapping; under a `C` libc locale only
+ASCII letters are lowercased, so `É` and `é` stay distinct names. Before moving
+data, inspect the installed index definitions with `\d channel` and `\d topic`
+in psql, and compare representative names on both servers:
 
 ```sql
 SELECT name, lower(name) FROM (VALUES ('É'), ('é'), ('İ'), ('ß')) AS names(name);
-SELECT 'É'::text = 'é'::text AS same_channel_name,
-       lower('É'::text) = lower('é'::text) AS same_topic_name;
+SELECT lower('É'::text) = lower('é'::text) AS same_name;
 ```
 
 A libc database cannot switch providers in place. To adopt builtin, dump and
-restore into a new cluster initialised as above; check name collisions under
-the target rules before cutover. Follow the
+restore into a new cluster initialised as above; check channel and topic name
+collisions under the target rules before cutover (for channels, run the
+[twin query](channel-name-upgrade.md) on the target server), or the restore
+fails while building the unique indexes. Follow the
 [restore procedure](../README.md#restoring-a-backup), including stopping ribbitto.
 This does not change column collations by migration.
 

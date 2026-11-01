@@ -83,7 +83,7 @@ and failure handling are decided in the separate store-preparation issue
 release runs and what incident investigation needs. Each map corresponds to
 its bundle by build SHA, run id and content hash. A failure to store a map
 must be detectable, and nothing may let a map end up in a public artifact. The
-store issue precedes #1411, which depends on it.
+store issue precedes #1819, which depends on it.
 
 Keep the nonce-only CSP and verify the initial classic bundle in a browser.
 Before ES-module delivery, shared chunks, lazy loading or `modulepreload`,

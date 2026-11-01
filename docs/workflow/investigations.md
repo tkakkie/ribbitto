@@ -47,7 +47,7 @@ cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
 10. In PR, record host measurement, SHAs, conditions (toolchain,
-image digest, restrictions), exact commands and results. Redact credentials.
+image digest, restrictions), exact commands, results and the generation diff listing. Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,
@@ -105,8 +105,7 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
 ```
 
 Apple silicon only, never Rosetta. In-tree: only this generation and Go build.
-Before staging record SHA and `shasum -a 256`;
-`-buildvcs=false` avoids git ownership mismatches.
+Before staging record SHA and `shasum -a 256`.
 
 If unusable, record why. Maintainer: stage read-only source in
 `build/src`, no old output/caches or escaping symlinks. User writes only

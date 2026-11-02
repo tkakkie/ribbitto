@@ -107,7 +107,8 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
             try {
               const current = getSidebarChannels(connection);
               if (current === previous || sequence(current ? attr(current, SnapshotSeqAttribute) : undefined) !== seq) throw new Error("snapshot not applied");
-              // Validate every shown target, including an unlisted heading.
+              // Validate every shown target, including an unlisted heading; compare lengths
+              // before reading paired values so a missing actual badge is never read.
               for (const root of payload.querySelectorAll("[hx-swap-oob]")) {
                 const target = connection.querySelector("#" + root.id);
                 if (!target) continue;

@@ -74,15 +74,19 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   required review and the follow-up checks cover the delivered head.
 - **Cap and what counts:** at most **two completed runs** per pull request
   ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085)).
-  A run counts only when it completes: a report on the PR at its head commit,
-  each finding with a disposition (fixed, follow-up issue, declined with
-  reason, or — for a blocking conversion-parity finding after the cap —
-  accepted by the maintainer under
-  [Pull request cross-review](reviewing.md#pull-request-cross-review)). A
-  failed, timed-out or empty run never counts: record it on the PR, retry once,
-  then ask the maintainer. Follow-up checks
-  ([`review-followups.md`](review-followups.md)) are not runs. The cross-review
-  limit (two rounds, then closure verification or the maintainer) is unchanged.
+  A run counts toward the cap when it completes with a non-empty report on the
+  PR covering its stated head commit and scope (`base..head` in run 1,
+  `Compared: <first run's SHA>..<head>` in run 2), independent of how its
+  findings are later dispositioned. Before `ai-reviewed`, every finding must
+  have a disposition (fixed, follow-up issue, declined with a reason, or — for a
+  blocking conversion-parity finding after the two-run cap — accepted by the
+  maintainer under
+  [Pull request cross-review](reviewing.md#pull-request-cross-review)) and any
+  applied fix or required verification must be completed. A failed, timed-out or
+  empty run never counts: record it on the PR, retry once, then ask the
+  maintainer. Follow-up checks ([`review-followups.md`](review-followups.md))
+  are not runs. The cross-review limit (two rounds, then closure verification or
+  the maintainer) is unchanged.
 - **Second run (after a later push before the cap):** after a later push (fix,
   Copilot follow-up, merge of `main`) whose diff touches those areas, a ready PR
   goes back to a draft until the review completes. A fix for a finding of this

@@ -3,11 +3,20 @@
 Goal and plan for milestone M10 (#2060) in the [roadmap](roadmap.md#after-the-mvp):
 a front end whose complexity stays bounded as reactions, editing, uploads and
 search arrive. Each state has one owner, page lifecycles are explicit, and the
-stream stays safe across reconnects.
+stream's known failure paths are recorded by tests.
 
 Principle: Go provides truth and HTML. TypeScript owns client state and
-decides when server HTML is applied. No swap or reconnect loses, duplicates or
-resets what the member is doing.
+decides when server HTML is applied. Ordinary swaps and reconnects keep what
+the member is doing: typed text, pending posts and their keys.
+
+M10 does not remove the two failure paths #2060 lists as remaining risk:
+
+- a native reconnect after a failed application can skip that message;
+- a failed re-application of a move that crossed Load older leaves the DOM
+  inconsistent.
+
+M10 records both with tests. Preventing the skip and recovering the DOM
+belong to A-F, which needs its own approval.
 
 ## Outcomes
 

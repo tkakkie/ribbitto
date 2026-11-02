@@ -37,6 +37,9 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   const removedKeyRetention = 5 * 60 * 1000;
   const holds = new Map<string, { key: string; at: number; owner: PendingItem }>();
   let restored: { key: string; text: string | null; unconfirmed: boolean } | null = null;
+  // Public sent events compare the raw key even when it cannot arm restoration.
+  let restoredEventKey: string | null = null;
+  const forgetRestoration = () => { restored = null; restoredEventKey = null; };
   const holdID = (place: string, text: string) => JSON.stringify([place, text]);
   // A timer must expire its own hold even when the clock has not advanced.
   const expire = (removed?: PendingItem) => {
@@ -45,7 +48,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   const erase = (item: PendingItem) => { items.splice(items.indexOf(item), 1); };
   const delivered = (item: PendingItem, view: Delivery) => item.postedMessage !== null &&
     (view.ids.includes(item.postedMessage) || Boolean(view.topic && view.moved?.fromTopic === view.topic && view.moved.ids.includes(item.postedMessage)));
-  const release = (renew = newKey) => { restored = null; return renew(); };
+  const release = (renew = newKey) => { forgetRestoration(); return renew(); };
   const changeText = (text: string, renew = newKey) => {
     if (restored && (text === "" || (restored.text !== null && restored.text !== text))) return release(renew);
     return undefined;
@@ -64,17 +67,17 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     get removedKeyRetention(): number { return removedKeyRetention; },
     get restoration(): Restoration | null { return restored ? { ...restored } : null; },
     changeText,
-    restore(key: string, text: string) { restored = { key, text, unconfirmed: true }; },
+    restore(key: string, text: string) { restoredEventKey = key; restored = key ? { key, text, unconfirmed: true } : null; },
     sent(key: string | null, renew = newKey) {
       for (const [id, hold] of holds) if (hold.key === key) holds.delete(id);
-      return (restored ? restored.key : null) === key ? release(renew) : undefined;
+      return restoredEventKey === key ? release(renew) : undefined;
     },
     ordinarySettled(status: number) {
       if (restored && (status === 200 || status === 409)) return release();
       if (restored && !refusedStatuses.includes(status)) restored.unconfirmed = true;
       return undefined;
     },
-    forgetRestoration() { restored = null; },
+    forgetRestoration,
     pagehide() { holds.clear(); },
     expire,
     admit(text: string, place: string, ordinaryBusy = false, quoted = false, prepare?: () => void): PendingItem | "busy" | "capacity" | "ordinary" {
@@ -95,7 +98,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       const key = restored?.key || (hold && now() - hold.at < removedKeyRetention ? hold.key : newKey());
       const item: MutablePendingItem = { draftKey: key, requestKey: key, state: "queued", text,
         unconfirmed: hold?.key === key || Boolean(restored?.key === key && restored.unconfirmed), postedMessage: null };
-      restored = null;
+      forgetRestoration();
       items.push(item);
       changed();
       return item;
@@ -154,6 +157,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     edit(item: PendingItem, composerText: string, composing: boolean) {
       if (!items.includes(item) || item.state !== "failed" || composerText !== "" || composing) return undefined;
       // Edit identity survives non-empty edits; device drafts require exact text.
+      restoredEventKey = item.requestKey;
       restored = { key: item.requestKey, text: null, unconfirmed: item.unconfirmed };
       erase(item);
       changed();

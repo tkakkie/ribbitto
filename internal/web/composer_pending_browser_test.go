@@ -156,6 +156,37 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, kind := range []string{"empty", "null", "undefined"} {
+		for _, action := range []string{"none", "input", "empty", "submit", "swap", "sent-empty", "sent-null", "sent-undefined", "input-sent-empty", "input-sent-null", "input-sent-undefined", "send", "input-send"} {
+			t.Run("falsy-restoration/"+kind+"/"+action, func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if problem := page.MustEval(`([kind,action])=>{
+ const b=document.getElementById('message-body'),f=b.form,calls=[],keys={empty:'',null:null,undefined:undefined};
+ b.value='draft';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:keys[kind]}}));
+ const initial=f.elements.idempotency_key.value,mark=f.getAttribute('data-unconfirmed-key');
+ crypto.randomUUID=()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));return 'released'};
+ if(action==='input'||action==='empty'||action.startsWith('input-')){b.value=action==='empty'?'':'draft!';b.dispatchEvent(new Event('input',{bubbles:true}))}
+ if(action==='submit'){f.classList.add('htmx-request');document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true);f.requestSubmit()}
+ if(action==='swap'){f.elements.idempotency_key.value='server';document.getElementById('message-composer-state').dispatchEvent(new CustomEvent('htmx:afterSwap',{bubbles:true,detail:{xhr:{status:422},requestConfig:{elt:f,formData:new FormData(f)}}}))}
+ const sending=action.endsWith('send');if(sending)f.requestSubmit();
+ const sent=action.includes('sent-'),sentKind=action.split('-').at(-1),release=sent&&keys[sentKind]===keys[kind];
+ if(sent)b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:keys[sentKind]}}));
+ const result=[calls,f.elements.idempotency_key.value,f.getAttribute('data-unconfirmed-key')],want=[sending?[true,false]:release?[false]:[],release||sending?'released':action==='swap'?'server':initial,release||sending?null:mark];
+ window.trace?.push(['G3',kind,action,result]);return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []string{kind, action}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				if strings.HasSuffix(action, "send") {
+					request := receivePending(t, page, posts)
+					if request.values.Get("idempotency_key") != "released" {
+						t.Fatal("falsy restoration supplied the pending request key")
+					}
+					request.reply <- browserReply{status: 400, body: []byte("refused")}
+					page.MustWait(`()=>window.answers===1`)
+				}
+			})
+		}
+	}
 	for _, mode := range []string{"throw", "undefined"} {
 		for _, ordinary := range []bool{false, true} {
 			t.Run(fmt.Sprintf("conflict-uuid-lock/%s/ordinary=%t", mode, ordinary), func(t *testing.T) {

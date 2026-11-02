@@ -18,7 +18,8 @@ That released key belongs to the composer; a queued item instead takes the resto
 key, else an unexpired Remove hold for the same place and raw text, else a fresh
 `newKey()`. As in the legacy composer, enqueue rotates the composer's own key,
 discarding any released key. Items expose readonly views; `restoration` returns a
-readonly snapshot.
+readonly snapshot. Falsy draft-event keys do not arm restoration; sent events
+still compare their raw identity exactly, including null and undefined.
 
 ## Pending own posts
 

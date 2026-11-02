@@ -38,14 +38,14 @@ no-JavaScript list wrapper. Current measured values and caps are:
 | Explicit type=submit | 7 / 7 | 0 / 0 | 7 / 7 |
 | hx-* carriers | 10 / 10 | 0 / 0 | 11 / 11 |
 | htmx-selected nodes | 21 / 21 | 1 / 1 | 72 / 72 |
-| HTML bytes | 20732.333 / 21769 | 4681.873 / 4916 | 262397 / 275517 |
+| HTML bytes | 20988.333 / 21769 | 4745.873 / 4916 | 265856 / 275517 |
 
 The structure fixture at 50/100/200 messages measures bytes
-254826/488887/957107. Its 50-message htmx mirror is 71 nodes; the
+258282/495543/970163. Its 50-message htmx mirror is 71 nodes; the
 handler first render is 72. Attribute-less buttons do not match htmx
 2.0.7's `[type='submit']` selector; the per-message pin form still does.
 The older whole-page test remains: 1632 elements, 10 hx carriers and
-267568 bytes (5% above 254826, rounded up), one byte stricter than the
+267568 bytes (258282 measured; cap 5% above #1500's 254826, rounded up), one byte stricter than the
 standing guard's rounded fixed + 50 × slope byte caps. It checks the
 whole total; this guard also checks growth, linearity and handler output.
 

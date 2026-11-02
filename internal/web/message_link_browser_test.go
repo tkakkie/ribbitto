@@ -85,12 +85,15 @@ func testMessageLinkBrowser(t *testing.T, browser *rod.Browser) {
 					if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: scheme.name}}}).Call(page); err != nil {
 						t.Fatal(err)
 					}
-					got := page.MustEval(`id => {
-						const list = document.getElementById('message-list'), item = document.getElementById(id);
-						const port = list.getBoundingClientRect(), box = item.getBoundingClientRect();
-						const shown = box.top >= port.top && box.bottom <= port.bottom && document.querySelector('#message-items > li:last-child').getBoundingClientRect().top >= port.bottom;
+					got := page.MustEval(`(id, scripts) => {
+						const list = document.getElementById('message-list'), item = document.getElementById(id), last = document.querySelector('#message-items > li:last-child');
+						const port = list.getBoundingClientRect(), box = item.getBoundingClientRect(), lastBox = last.getBoundingClientRect();
+						const offBottom = !scripts && getComputedStyle(list).flexDirection === 'column-reverse'
+							? list.getClientRects().length > 0 && port.width > 0 && port.height > 0 && last.getClientRects().length > 0 && lastBox.width > 0 && lastBox.height > 0 && lastBox.top >= port.bottom
+							: list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+						const shown = box.top >= port.top && box.bottom <= port.bottom && offBottom;
 						return [shown, item.matches(':target'), getComputedStyle(item).backgroundColor].join();
-					}`, target).Str()
+					}`, target, scripts).Str()
 					if want := "true,true," + scheme.fill; got != want {
 						t.Errorf("%s %s: shown, :target, fill = %s; want %s", what, scheme.name, got, want)
 					}

@@ -16,7 +16,7 @@ func TestFeedMarkupBudget(t *testing.T) {
 	}
 	hx := countElements(doc, hasHTMXAttribute)
 	elements := countElements(doc, nil)
-	// #1500, #1489: same English feedFixture(50), 254826 bytes (#1500), 1632 elements
+	// #1500, #1489: same English feedFixture(50), 258282 bytes (cap 267568 from #1500), 1632 elements
 	// and 10 hx carriers. Keep this whole-page check alongside the standing
 	// guard's slope/intercept and handler checks: counts have zero headroom;
 	// bytes allow 5% rounded up. Its 267568-byte cap is one byte stricter

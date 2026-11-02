@@ -243,7 +243,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					// unwrapped rows would fit (#2044).
 					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class={ "peer/list min-h-0 flex-auto overflow-y-auto short:h-32 short:flex-none", templ.KV("noscript:flex noscript:flex-col-reverse", latest(page)) }>
 						// One child keeps DOM, reading and Tab order unchanged while the
-						// reversed flex container starts at the newest entry without JavaScript.
+						// reversed flex column starts at the newest entry without JavaScript.
 						<div class={ "contents", templ.KV("noscript:block noscript:grow noscript:shrink-0", latest(page)) }>
 							// Always present, empty on the oldest page: loading older
 							// messages replaces it out of band with the next control.

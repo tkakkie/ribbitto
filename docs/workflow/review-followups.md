@@ -22,10 +22,11 @@ If answering needs a change:
    each third-AI finding the test fails without it (by running it or reading a
    CI run without the fix) — or that the recorded reason holds and the
    alternative verification was done (an unaccepted reason is ❌) — using
-   `.github/prompts/copilot-check.md` via the README recipe with
-   [review context](review-operations.md#running-a-review). Header: `Copilot` only when a Copilot
-   finding is covered, else `Adversarial`. Retry a non-counting run once per the
-   README; record who ran it:
+   `.github/prompts/copilot-check.md` via the
+   [README recipe](README.md#roles-and-running-the-ais) with
+   [review context](review-operations.md#running-a-review). Header: `Copilot`
+   only when a Copilot finding is covered, else `Adversarial`. Retry a
+   non-counting run once per the README; record who ran it:
 
    ```
    **<Copilot|Adversarial> follow-up check — <Claude|Codex|Argon>** (at <SHA>)
@@ -39,9 +40,9 @@ If answering needs a change:
    when an earlier report exists (a push before it restarts this check), then
    the remaining lifecycle steps. Do not re-request Copilot unless the
    maintainer asks; if it reviews again anyway, handle once the same way, then
-   ask the maintainer. Any change in the diff other than those answering
-   findings, design/spec decision, failed check or new blocking finding → ask
-   the maintainer.
+   ask the maintainer. Ask the maintainer for any change in the diff other than
+   those answering findings, and for any design/spec decision, failed check or
+   new blocking finding.
 
 ## Adversarial follow-up check
 
@@ -57,7 +58,10 @@ otherwise `Adversarial`).
 at most once per PR; not a review round; keeps its round-two reviewer). Evidence: #2, the case of #14.
 
 1. **Eligibility is declared in the round-2 report,** after the round-two
-   review described in [Review independence and rounds](reviewing.md#review-independence-and-rounds) and [Pull request cross-review](reviewing.md#pull-request-cross-review), and only if every remaining blocking finding
+   review described in
+   [Review independence and rounds](reviewing.md#review-independence-and-rounds)
+   and [Pull request cross-review](reviewing.md#pull-request-cross-review), and
+   only if every remaining blocking finding
    is mechanical: the report names the exact fix, the reviewer has
    verified that the fix works, and it needs no design or specification
    decision. Without that declaration, ask the maintainer.
@@ -101,5 +105,6 @@ authorisation, organisation scoping), to the meaning of a workflow or
 specification, or anything else that bears on a review decision. A nit need
 not be fixed, and is not pushed on its own.
 
-Which pull requests skip Copilot: [docs-only pull requests](review-operations.md#docs-only-pull-requests).
+Which pull requests skip Copilot:
+[docs-only pull requests](review-operations.md#docs-only-pull-requests).
 

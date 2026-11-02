@@ -35,7 +35,8 @@ Balanced is not used (UI-only in *Reviewers*, not CLI/API).
 Wait (up to the [60-minute cap](delivery.md#waking-the-orchestrator); at the cap, report
 to the maintainer and do not proceed) until its review of that head is
 submitted (a body-only review counts: read it), then answer and resolve its
-comments. Any change goes through the [follow-up check](review-followups.md#copilot-follow-up-check) as a draft.
+comments. Any change goes through the
+[follow-up check](review-followups.md#copilot-follow-up-check) as a draft.
 
 ## Docs-only pull requests
 
@@ -48,8 +49,9 @@ Copilot is skipped when all four hold (#1234):
 - no loosened check (a `docs/size-exceptions.txt` change that loosens one is not exempt).
 
 All other lifecycle steps and [checks](../../AGENTS.md#commands) stay; note the
-docs-only rule in the PR body. Handle any unsolicited Copilot review as in the [follow-up check](review-followups.md#copilot-follow-up-check).
-Stopping meeting a condition restores the normal chain, Copilot included.
+docs-only rule in the PR body. Handle any unsolicited Copilot review as in the
+[follow-up check](review-followups.md#copilot-follow-up-check).
+If a condition stops holding, restore the normal chain, Copilot included.
 
 ## Third-AI review
 
@@ -77,8 +79,9 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
 - **After a later push** (fix, Copilot follow-up, merge of `main`) whose diff
   touches those areas, review again over the PR's whole diff at the new head.
   An earlier report covers a later head only when every later commit is outside
-  them. A ready PR goes back to a draft until the review completes. A fix for a
-  finding of this review first passes the [follow-up check](review-followups.md#copilot-follow-up-check).
+  those areas. A ready PR goes back to a draft until the review completes. A fix
+  for a finding of this review first passes the
+  [follow-up check](review-followups.md#copilot-follow-up-check).
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md` and [review context](#running-a-review).
   Post `**Adversarial review — <AI>** (at <SHA>)`. The template's *Adversarial*

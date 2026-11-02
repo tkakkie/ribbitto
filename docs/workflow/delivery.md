@@ -38,11 +38,25 @@ risk and issue text:
 
 ## Waking the orchestrator
 
-Run every implementer as one blocking background command (no `nohup` or trailing `&`), so its end/time limit wakes the orchestrator (#1457). On wakeup, read the result: with a PR, continue through parallel reviews, fixes and follow-up checks to `ai-reviewed` until a rule here, in [reviewing.md](reviewing.md), [review operations](review-operations.md), [review follow-ups](review-followups.md) or the [README](README.md) says to ask the maintainer. If it stopped for a maintainer decision, report at once; if it failed or timed out, inspect worktree/branch and resume/restart once, else report. CI and Copilot wait loops cap at 60 minutes (at the cap, report to the maintainer and do not proceed). The maintainer decides `ready`, merges, measurement approval and the cases where the rules say to ask.
+Start every implementer run as one blocking background command (no `nohup` or
+trailing `&`), so its end or time limit wakes the orchestrator (#1457).
+On wakeup, read the result: with a PR, continue through the parallel reviews,
+fixes and follow-up checks to `ai-reviewed` until a rule in this file,
+[`reviewing.md`](reviewing.md), [review operations](review-operations.md),
+[review follow-ups](review-followups.md) or the [README](README.md) says to ask the
+maintainer. If the implementer stopped for a maintainer decision, report at
+once; if the run failed or timed out, inspect the worktree and branch and
+resume or restart once, else report. CI and Copilot wait loops cap at 60
+minutes; at the cap, report to the maintainer and do not proceed. The
+maintainer decides `ready`, the merge, measurement approval and the cases where
+the rules say to ask.
 
 ## PR body credential scan
 
-- Before publishing a PR body (`gh pr create --body-file body.md`), run this scan (joins `\`-continued lines and flags URLs with user info, #358); it prints nothing, or review each match (redact real credentials; harmless placeholders/prose may stay):
+- Before publishing a PR body (`gh pr create --body-file body.md`), run this
+  scan; it prints nothing, or each match is reviewed (redact real credentials;
+  harmless placeholders or prose may stay). It joins `\`-continued lines and
+  flags URLs with user info (#358):
 
   ```sh
   sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta body.md |

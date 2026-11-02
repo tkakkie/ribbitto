@@ -4,18 +4,44 @@ Read when: orchestrators handle review findings or later pushes; implementers ap
 
 ## Copilot follow-up check
 
-PRs only, after a Copilot or [third-AI](review-operations.md#third-ai-review) (adversarial) fix (not a review round; two-round limit untouched). If answering needs a change:
+PRs only, after a fix for a Copilot or [third-AI](review-operations.md#third-ai-review)
+(adversarial) finding; not a review round, so the two-round limit is untouched.
+If answering needs a change:
 
-1. Apply only changes answering this round's findings (Copilot and parallel-review fixes in follow-up commits), each named. Each third-AI fix includes a regression test failing without it; only if no automated test can reproduce it (rule/doc fix or a race no existing harness can gate; never effort/time) record why and alternative verification (scripted/manual reproduction, mutation showing the guard matters or exact text change). Keep the PR draft (re-draft first if the maintainer asked for another Copilot review after ready).
-2. An AI that did not write the change ([review independence](README.md#principles)) checks via `.github/prompts/copilot-check.md` ([README recipe](README.md#roles-and-running-the-ais), [review context](review-operations.md#running-a-review)) that the whole diff since the baseline SHA (the round's reviewed head) contains only those changes, each answers its finding, and each third-AI fix's test fails without it (running it or reading a pre-fix CI run) — or the no-test reason holds and alternative verification was done (unaccepted reason: ❌). Header: `Copilot` only if a Copilot finding is covered, else `Adversarial`; retry non-counting runs once per README; record who ran it:
+1. Apply only changes answering findings of this round (Copilot's and parallel
+   review findings fixed in the follow-up commits), each named. Each fix for a
+   third-AI finding includes a regression test that fails without it; only when
+   no automated test can reproduce it (a rule/doc fix, or a race no existing
+   harness can gate; never effort or time) record why and the alternative
+   verification: a scripted/manual reproduction, a mutation showing the guard
+   matters, or the exact text change. Keep the PR a draft (convert back to
+   draft first if the maintainer asked for another Copilot review after ready).
+2. An AI that did not write the change ([review independence](README.md#principles))
+   checks that the whole diff since the baseline SHA (the head the round
+   reviewed) contains only those changes, each answers its finding, and for
+   each third-AI finding the test fails without it (by running it or reading a
+   CI run without the fix) — or that the recorded reason holds and the
+   alternative verification was done (an unaccepted reason is ❌) — using
+   `.github/prompts/copilot-check.md` via the README recipe with
+   [review context](review-operations.md#running-a-review). Header: `Copilot` only when a Copilot
+   finding is covered, else `Adversarial`. Retry a non-counting run once per the
+   README; record who ran it:
 
    ```
    **<Copilot|Adversarial> follow-up check — <Claude|Codex|Argon>** (at <SHA>)
    Compared: <baseline SHA>..<SHA>
-   - ✅ | ❌ finding — how checked (third-AI: fix + test failing without it, or no-test reason + alternative verification)
+   - ✅ | ❌ finding — how it was checked (for a third-AI finding: the fix, and the test that fails without it, or no test — the reason and alternative verification)
    ```
 
-3. All pass → run [third-AI review](review-operations.md#third-ai-review) on the whole PR diff at the new head when required and no adversarial report covers that head, or repeat it under the [later-push rule](review-operations.md#third-ai-review) if an earlier report exists (a push before it restarts this check), then complete the lifecycle. Do not re-request Copilot unless the maintainer asks (if it reviews again anyway, handle once as above, then ask the maintainer). Any other diff change, design/spec decision, failed check or new blocking finding → ask the maintainer.
+3. All pass → run the [third-AI review](review-operations.md#third-ai-review) over the PR's whole
+   diff at the new head when the README requires one and no adversarial report
+   covers the head, or repeat it under the [later-push rule](review-operations.md#third-ai-review)
+   when an earlier report exists (a push before it restarts this check), then
+   the remaining lifecycle steps. Do not re-request Copilot unless the
+   maintainer asks; if it reviews again anyway, handle once the same way, then
+   ask the maintainer. Any change in the diff other than those answering
+   findings, design/spec decision, failed check or new blocking finding → ask
+   the maintainer.
 
 ## Adversarial follow-up check
 

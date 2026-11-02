@@ -67,7 +67,7 @@ bypass list):
   its own copy decides what passes (a known risk; review reads every such
   change). Limiting the required check to GitHub Actions narrows who can post
   it, not what a changed workflow tests.
-- **Credentials and settings.** See [tokens](#tokens).
+- **Credentials and settings.** See [tokens](ai-credentials.md#tokens).
 
 ## Enabling an AI's rights
 
@@ -77,24 +77,7 @@ and show step 4 before ordinary work.
 
 ## Tokens
 
-- **One fine-grained token per AI** (`claude-ribbitto`, `codex-ribbitto`,
-  `antigravity-ribbitto`) for `tkakkie/ribbitto` only: Contents, Pull
-  requests, Issues and Workflows read/write, no Administration, with an
-  expiry. Kept as `~/.ribbitto-ai/<claude|codex|antigravity>.token` (mode
-  600), outside every repository.
-- **Tested recipe** (scripts and checks: [credentials](ai-credentials.md)):
-  start an AI with `run-as.sh <name> <command…>`. It exports that token as
-  `GH_TOKEN` and, through `GIT_CONFIG_COUNT`, clears the inherited
-  `credential.helper` (`osxkeychain`) and adds one that answers only for
-  `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
-  `git push` use it. Without the token file the launcher stops, and plain
-  `gh` or `git push` fails: no other CLI credential remains (browser and other
-  sign-ins are unverified; see step 2).
-- **What tokens give:** independent revocation and intended assignment, not
-  isolation or proof of which AI acted (all three share one macOS user and can
-  read each other's token files; token-level GitHub audit logging is
-  unverified). To stop an AI, stop its process; if a token may have leaked,
-  revoke all three.
+Tokens and the tested `run-as.sh` recipe moved to [AI credentials and launchers](ai-credentials.md#tokens).
 
 ## Roles and running the AIs
 

@@ -25,8 +25,17 @@ import (
 var (
 	canonicalRe = regexp.MustCompile(`^map-([0-9]{8}T[0-9]{6}Z)-([0-9a-f]{40})-([1-9][0-9]*)\.([1-9][0-9]*)$`)
 	shaRe       = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	sha256Re    = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	numIDRe     = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
+
+func isPlainFilename(s string) bool {
+	return s != "" && s != "." && s != ".." && s != "index.json" && filepath.Base(s) == s && !filepath.IsAbs(s) && !strings.ContainsAny(s, `/\`)
+}
+
+func validBundleEntry(b bundle) bool {
+	return isPlainFilename(b.File) && isPlainFilename(b.Map) && b.Map == b.File+".map" && sha256Re.MatchString(b.SHA256)
+}
 
 const (
 	maxResponseBytes = 64 << 20
@@ -220,8 +229,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	}
 	assets := map[string][]byte{"index.json": idxBytes}
 	for _, b := range m.Entries {
+		if !validBundleEntry(b) {
+			return fmt.Errorf("invalid source map entry %q", b.Map)
+		}
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
-		if err != nil || b.File == "" || b.SHA256 == "" || b.Map != b.File+".map" || !bytes.Contains(data, []byte(`"sourcesContent"`)) {
+		if err != nil || !bytes.Contains(data, []byte(`"sourcesContent"`)) {
 			return fmt.Errorf("invalid source map %s: %w", b.Map, err)
 		}
 		assets[b.Map] = data

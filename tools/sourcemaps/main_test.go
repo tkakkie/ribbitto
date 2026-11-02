@@ -335,3 +335,27 @@ func TestHTTPClientHardening(t *testing.T) {
 		}
 	}
 }
+
+func TestManifestPathAndHashValidation(t *testing.T) {
+	now, sha, validHash := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), strings.Repeat("a", 64)
+	mapContent, root := []byte(`{"version":3,"sourcesContent":["x"]}`), t.TempDir()
+	_ = os.WriteFile(filepath.Join(root, "secret.js.map"), mapContent, 0644)
+	for _, tc := range []struct{ name, file, mapName, hash string }{
+		{"parent", "../secret.js", "../secret.js.map", validHash},
+		{"nested", "sub/app.js", "sub/app.js.map", validHash},
+		{"absolute", "/abs/app.js", "/abs/app.js.map", validHash},
+		{"bad-hash", "app.js", "app.js.map", "not-a-sha256"},
+	} {
+		dir := filepath.Join(root, tc.name)
+		_ = os.MkdirAll(filepath.Join(dir, "sub"), 0755)
+		_ = cmp.Or(os.WriteFile(filepath.Join(dir, "sub", "app.js.map"), mapContent, 0644), os.WriteFile(filepath.Join(dir, "app.js.map"), mapContent, 0644))
+		idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, tc.hash, tc.mapName)
+		_ = os.WriteFile(filepath.Join(dir, "index.json"), []byte(idx), 0644)
+		s := &mockStore{token: "tok"}
+		srv := s.server(t)
+		defer srv.Close()
+		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || len(s.events) != 0 {
+			t.Fatalf("expected %s to fail before any API call, got err=%v events=%v", tc.name, err, s.events)
+		}
+	}
+}

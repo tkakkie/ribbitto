@@ -33,6 +33,7 @@ func rules() []rule {
 		{"package.json", "npm manifest"}, {"package-lock.json", "npm lockfile"},
 		{"tsconfig.json", "TypeScript configuration"},
 		{"web/src/*.ts", "TypeScript source and declarations"},
+		{"web/src/package.json", "TypeScript module scope manifest"},
 		{"web/test/*.test.mjs", "client unit-test harness"},
 		{"web/styles/*.css", "CSS source"},
 		{"web/static/css/*.css", "CSS output"},

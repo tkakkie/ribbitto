@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -30,6 +31,7 @@ var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 const (
 	prodDistDir            = "web/static/dist"
+	prodMapDir             = "bin/sourcemaps"
 	devDistDir             = "bin/dev-dist"
 	maxPreviousGenerations = 3
 )
@@ -140,6 +142,7 @@ func build(root, commit, runID string, dev bool) error {
 		return fmt.Errorf("resolving root: %w", err)
 	}
 	dist := filepath.Join(root, prodDistDir)
+	mapDist := filepath.Join(root, prodMapDir)
 	if dev {
 		dist = filepath.Join(root, devDistDir)
 	} else {
@@ -147,6 +150,12 @@ func build(root, commit, runID string, dev bool) error {
 		if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("invalidating manifest: %w", err)
 		}
+		for _, p := range []string{filepath.Dir(mapDist), mapDist} {
+			if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("staging maps: symlinked map path %s", p)
+			}
+		}
+		_ = os.Remove(filepath.Join(mapDist, "index.json"))
 	}
 	names, err := declaredEntries(root)
 	if err != nil {
@@ -175,7 +184,7 @@ func build(root, commit, runID string, dev bool) error {
 	if dev {
 		sourcemap = api.SourceMapLinked
 	}
-	result := api.Build(api.BuildOptions{
+	opts := api.BuildOptions{
 		AbsWorkingDir: root, EntryPoints: inputs, Outdir: dist,
 		EntryNames: "[name]-[hash]", Bundle: true, Format: api.FormatIIFE,
 		Platform: api.PlatformBrowser, Target: api.ES2017,
@@ -185,9 +194,16 @@ func build(root, commit, runID string, dev bool) error {
 		Metafile:      true, Write: false,
 		// Non-literal imports are absent from the metafile; expose their debug diagnostic for validation.
 		LogOverride: map[string]api.LogLevel{"unsupported-dynamic-import": api.LogLevelWarning},
-	})
+	}
+	result := api.Build(opts)
 	if len(result.Errors) != 0 {
 		return fmt.Errorf("building bundles: %s", result.Errors[0].Text)
+	}
+	if !dev {
+		opts.Sourcemap, opts.EntryNames = api.SourceMapExternal, "[name]"
+		if result, err = attachExternalMaps(dist, result, api.Build(opts)); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(dist), 0755); err != nil {
 		return fmt.Errorf("creating bundle directory: %w", err)
@@ -197,13 +213,40 @@ func build(root, commit, runID string, dev bool) error {
 		return fmt.Errorf("staging bundles: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
+	mapStage := stage
+	if !dev {
+		if err := os.MkdirAll(filepath.Dir(mapDist), 0755); err != nil {
+			return fmt.Errorf("staging maps: %w", err)
+		}
+		realRoot, err1 := filepath.EvalSymlinks(root)
+		realParent, err2 := filepath.EvalSymlinks(filepath.Dir(mapDist))
+		if err1 != nil || err2 != nil || realParent != filepath.Join(realRoot, filepath.Dir(prodMapDir)) {
+			return fmt.Errorf("staging maps: symlinked map path %s", filepath.Dir(mapDist))
+		}
+		mapStage, err = os.MkdirTemp(filepath.Dir(mapDist), ".sourcemaps-")
+		if err != nil {
+			return fmt.Errorf("staging maps: %w", err)
+		}
+		defer func() { _ = os.RemoveAll(mapStage) }()
+	}
 	m := manifest{Commit: commit, RunID: runID}
-	m.Entries, err = validate(root, dist, stage, entries, result, dev)
+	m.Entries, err = validate(root, dist, stage, mapStage, entries, result, dev)
 	if err != nil {
 		return err
 	}
 	if dev {
 		return publishDev(dist, stage, m)
+	}
+	idxData, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding map index: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(mapStage, "index.json"), append(idxData, '\n'), 0644); err != nil {
+		return fmt.Errorf("writing map index: %w", err)
+	}
+	for name, b := range m.Entries {
+		b.Map = ""
+		m.Entries[name] = b
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -212,6 +255,12 @@ func build(root, commit, runID string, dev bool) error {
 	// The manifest is the completion marker, written only after all validation.
 	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), append(data, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
+	}
+	// Maps are published before bundles; if bundle replacement fails below,
+	// manifest.json was already removed and the build exits non-zero.
+	_ = os.RemoveAll(mapDist)
+	if err := os.Rename(mapStage, mapDist); err != nil {
+		return fmt.Errorf("publishing maps: %w", err)
 	}
 	old := stage + "-old"
 	defer func() { _ = os.RemoveAll(old) }()
@@ -223,6 +272,32 @@ func build(root, commit, runID string, dev bool) error {
 		return fmt.Errorf("publishing bundles: %w", err)
 	}
 	return nil
+}
+
+func attachExternalMaps(dist string, noneRes, extRes api.BuildResult) (api.BuildResult, error) {
+	if len(extRes.Errors) != 0 {
+		return noneRes, fmt.Errorf("building source maps: %s", extRes.Errors[0].Text)
+	}
+	extFiles := make(map[string][]byte, len(extRes.OutputFiles))
+	for _, f := range extRes.OutputFiles {
+		extFiles[filepath.Base(f.Path)] = f.Contents
+	}
+	var meta map[string]map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(noneRes.Metafile), &meta); err != nil {
+		return noneRes, err
+	}
+	for _, f := range noneRes.OutputFiles {
+		base := filepath.Base(f.Path)
+		name := base[:max(0, strings.LastIndexByte(base, '-'))]
+		if !bytes.Equal(f.Contents, extFiles[name+".js"]) || len(extFiles[name+".js.map"]) == 0 {
+			return noneRes, fmt.Errorf("external map mismatch for %s", base)
+		}
+		noneRes.OutputFiles = append(noneRes.OutputFiles, api.OutputFile{Path: filepath.Join(dist, base+".map"), Contents: extFiles[name+".js.map"]})
+		meta["outputs"][filepath.Join(dist, base+".map")] = json.RawMessage(`{}`)
+	}
+	b, err := json.Marshal(meta)
+	noneRes.Metafile = string(b)
+	return noneRes, err
 }
 
 func publishDev(dist, stage string, m manifest) error {
@@ -367,7 +442,7 @@ func declaredEntries(root string) ([]string, error) {
 	return names, nil
 }
 
-func validate(root, dist, stage string, entries map[string]string, result api.BuildResult, dev bool) (map[string]bundle, error) {
+func validate(root, dist, stage, mapStage string, entries map[string]string, result api.BuildResult, dev bool) (map[string]bundle, error) {
 	for _, warning := range result.Warnings {
 		if warning.ID == "unsupported-dynamic-import" {
 			return nil, fmt.Errorf("dynamic imports are not supported: %s", warning.Text)
@@ -391,15 +466,23 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 	maps, metaMaps := make(map[string]bool), make(map[string]bool)
 	for _, file := range result.OutputFiles {
 		name := filepath.Base(file.Path)
-		if filepath.Dir(file.Path) != dist || (filepath.Ext(name) != ".js" && (!dev || !strings.HasSuffix(name, ".js.map"))) {
+		if filepath.Dir(file.Path) != dist || (filepath.Ext(name) != ".js" && !strings.HasSuffix(name, ".js.map")) {
 			return nil, fmt.Errorf("output outside bundle tree: %s", file.Path)
 		}
+		targetDir := stage
 		if filepath.Ext(name) == ".js" {
+			if !dev && bytes.Contains(file.Contents, []byte("sourceMappingURL")) {
+				return nil, fmt.Errorf("production bundle contains sourceMappingURL: %s", name)
+			}
 			produced[name] = bundle{File: name, SHA256: fmt.Sprintf("%x", sha256.Sum256(file.Contents))}
 		} else {
+			if !bytes.Contains(file.Contents, []byte(`"sourcesContent"`)) {
+				return nil, fmt.Errorf("source map missing sourcesContent: %s", name)
+			}
 			maps[name] = true
+			targetDir = mapStage
 		}
-		if err := os.WriteFile(filepath.Join(stage, name), file.Contents, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(targetDir, name), file.Contents, 0644); err != nil {
 			return nil, fmt.Errorf("writing bundle: %w", err)
 		}
 	}
@@ -412,7 +495,7 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 			return nil, fmt.Errorf("metafile output outside bundle tree: %s", path)
 		}
 		base := filepath.Base(path)
-		if dev && strings.HasSuffix(base, ".js.map") && output.EntryPoint == "" && !metaMaps[base] {
+		if strings.HasSuffix(base, ".js.map") && output.EntryPoint == "" && !metaMaps[base] {
 			metaMaps[base] = true
 			continue
 		}
@@ -432,14 +515,12 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 		if !ok {
 			return nil, fmt.Errorf("manifest names unproduced file: %s", line.File)
 		}
-		if dev {
-			file.Map = line.File + ".map"
-			if !metaMaps[file.Map] || !maps[file.Map] {
-				return nil, fmt.Errorf("bundle without source map: %s", line.File)
-			}
-			delete(metaMaps, file.Map)
-			delete(maps, file.Map)
+		file.Map = line.File + ".map"
+		if !metaMaps[file.Map] || !maps[file.Map] {
+			return nil, fmt.Errorf("bundle without source map: %s", line.File)
 		}
+		delete(metaMaps, file.Map)
+		delete(maps, file.Map)
 		listed[name] = file
 		delete(produced, line.File)
 	}
@@ -456,6 +537,11 @@ func validate(root, dist, stage string, entries map[string]string, result api.Bu
 	}
 	if len(files) != expected {
 		return nil, fmt.Errorf("foreign file in output directory")
+	}
+	if !dev {
+		if mapFiles, err := os.ReadDir(mapStage); err != nil || len(mapFiles) != len(listed) {
+			return nil, fmt.Errorf("foreign file in map output directory")
+		}
 	}
 	return listed, nil
 }

@@ -3,8 +3,29 @@
 Read when: setting up or auditing AI tokens and launchers, starting a disposable test database or handling a tool failure ([Tool failures and disposable databases](#tool-failures-and-disposable-databases)), or passing [review context](#review-context).
 
 How each AI gets its own GitHub token and how Codex and Argon are started
-(rules: [README](README.md#tokens)). Tested on 2026-10-31; the redacted
+(rules: [Tokens](#tokens)). Tested on 2026-10-31; the redacted
 evidence is on #2002.
+
+## Tokens
+
+- **One fine-grained token per AI** (`claude-ribbitto`, `codex-ribbitto`,
+  `antigravity-ribbitto`) for `tkakkie/ribbitto` only: Contents, Pull
+  requests, Issues and Workflows read/write, no Administration, with an
+  expiry. Kept as `~/.ribbitto-ai/<claude|codex|antigravity>.token` (mode
+  600), outside every repository.
+- **Tested recipe** (scripts and checks: [credentials](#layout)):
+  start an AI with `run-as.sh <name> <command…>`. It exports that token as
+  `GH_TOKEN` and, through `GIT_CONFIG_COUNT`, clears the inherited
+  `credential.helper` (`osxkeychain`) and adds one that answers only for
+  `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
+  `git push` use it. Without the token file the launcher stops, and plain
+  `gh` or `git push` fails: no other CLI credential remains (browser and other
+  sign-ins are unverified; see step 2).
+- **What tokens give:** independent revocation and intended assignment, not
+  isolation or proof of which AI acted (all three share one macOS user and can
+  read each other's token files; token-level GitHub audit logging is
+  unverified). To stop an AI, stop its process; if a token may have leaked,
+  revoke all three.
 
 ## Layout
 
@@ -137,7 +158,7 @@ starts after step 4 succeeds.
    deleted from the account. A signed-in browser session may still be
    reachable by browser-capable AIs; the maintainer uses another profile or
    the phone for settings, and that exposure stays a stated risk.
-3. Each AI has its own token ([README](README.md#tokens)). Creating tokens
+3. Each AI has its own token ([Tokens](#tokens)). Creating tokens
    and changing the environment are the maintainer's actions; an AI lists
    the steps and does not do them.
 4. Shown, not assumed: plain `gh` and `git push` fail (no fallback), and each

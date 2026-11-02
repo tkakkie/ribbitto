@@ -101,9 +101,13 @@ func TestEventHelpersBubble(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantCount := strings.Count(tc.source, "//dom:event")
-			if got := strings.Count(output, "dispatchEvent(new CustomEvent("); got != wantCount {
-				t.Errorf("got %d event dispatches, want %d directives", got, wantCount)
+			wantCustom := strings.Count(tc.source, "//dom:event ")
+			wantPlain := strings.Count(tc.source, "//dom:event") - wantCustom
+			if got := strings.Count(output, "dispatchEvent(new CustomEvent("); got != wantCustom {
+				t.Errorf("got %d CustomEvent dispatches, want %d directives", got, wantCustom)
+			}
+			if got := strings.Count(output, "dispatchEvent(new Event("); got != wantPlain {
+				t.Errorf("got %d Event dispatches, want %d directives", got, wantPlain)
 			}
 			var name string
 			for _, line := range strings.Split(output, "\n") {
@@ -112,6 +116,12 @@ func TestEventHelpersBubble(t *testing.T) {
 				}
 				if strings.Contains(line, "dispatchEvent(new CustomEvent(") {
 					want := "return target.dispatchEvent(new CustomEvent(" + name + ", { bubbles: true, detail }));"
+					if name == "" || strings.TrimSpace(line) != want {
+						t.Errorf("dispatch%s: got %q, want %q", name, strings.TrimSpace(line), want)
+					}
+				}
+				if strings.Contains(line, "dispatchEvent(new Event(") {
+					want := "return target.dispatchEvent(new Event(" + name + "));"
 					if name == "" || strings.TrimSpace(line) != want {
 						t.Errorf("dispatch%s: got %q, want %q", name, strings.TrimSpace(line), want)
 					}
@@ -317,10 +327,12 @@ c.dispatchSidebarResyncEvent(document,{}); c.listenSidebarResyncEvent(document,d
 		}},
 		{"composer", string(sidebar), `const body: HTMLTextAreaElement | null = c.getMessageBody();
 const form: HTMLFormElement | null = c.getMessageComposer();
+const cursor: HTMLInputElement = c.getCursorField(form!);
 const pending: HTMLTemplateElement | null = c.getMessagePendingTemplate();
 c.messagePendingEditHelpPrefixID("send-key");
-c.PendingSendEvent; c.TypingInputEvent;
-c.readAttribute(document.body,c.DraftKeyAttribute); c.writeAttribute(document.body,c.StateAttribute,"failed");
+c.PendingSendEvent; c.TypingInputEvent; c.CursorField;
+c.readAttribute(document.body,c.DraftKeyAttribute); c.readAttribute(document.body,c.AriaModalAttribute); c.writeAttribute(document.body,c.StateAttribute,"failed");
+c.dispatchPanelCoverEvent(document); c.listenPanelCoverEvent(document, () => {});
 c.dispatchMessageSendingEvent(document,{key:"k",body:"text",inPlace:true});
 c.dispatchMessageSendingEvent(document,{key:null,body:"text",inPlace:true});
 c.listenMessageSendingEvent(document,d => { const key: string | null = d.key; const body: string = d.body; const inPlace: boolean = d.inPlace; });
@@ -341,6 +353,7 @@ c.listenMessageDraftRestoredEvent(document,d => { const key: string = d.key; });
 			{`c.dispatchMessagePendingActionEvent(document,{key:"k",restoredKey:null,kind:"retry"});`, "TS2322"},
 			{`c.dispatchMessageDraftRestoredEvent(document,{key:1});`, "TS2322"},
 			{`c.listenMessagePendingActionEvent(document,d => { const key: string = d.restoredKey; });`, "TS2322"},
+			{`c.dispatchPanelCoverEvent(document,{});`, "TS2554"},
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

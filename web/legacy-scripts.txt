@@ -1,11 +1,9 @@
 branch-selection
 member-mentions
 mention-picker
-message-drafts
 message-history
 message-link
 message-stream
 quote-selection
-read-visibility
 sidebar-scroll
 sidebar-unread

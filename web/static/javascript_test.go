@@ -92,8 +92,8 @@ func checkJavaScript(name, source string) []javascriptFinding {
 	if name != "pins-sync.ts" {
 		rules = append(rules, rule{"requests", regexp.MustCompile(`\bhtmx\s*\.\s*ajax\b`)})
 	}
-	// Only the drafts script may keep data that outlives the tab (decision 37 (d)).
-	if !regexp.MustCompile(`^message-drafts-v[0-9]+\.js$`).MatchString(name) {
+	// Only the drafts module may keep data that outlives the tab (decision 37 (d)).
+	if name != "message-drafts.ts" {
 		rules = append(rules, rule{"localStorage", regexp.MustCompile(`\blocalStorage\b`)})
 	}
 	// Delimiter depth bounds the declaration check without requiring an IIFE.
@@ -290,12 +290,12 @@ func TestJavaScriptAllowedPatterns(t *testing.T) {
 			}
 		})
 	}
-	// localStorage is allowed only in the drafts script, by its exact name.
+	// localStorage is allowed only in the drafts module, by its exact name.
 	drafts := `window.localStorage.setItem(key, text); localStorage.removeItem(key);`
-	if got := checkJavaScript("message-drafts-v12.js", drafts); len(got) != 0 {
-		t.Errorf("message-drafts-v12.js: unexpected findings: %v", got)
+	if got := checkJavaScript("message-drafts.ts", drafts); len(got) != 0 {
+		t.Errorf("message-drafts.ts: unexpected findings: %v", got)
 	}
-	for _, name := range []string{"old-message-drafts-v1.js", "message-drafts-v1.js.bak-v1.js"} {
+	for _, name := range []string{"message-drafts-v12.js", "old-message-drafts-v1.js", "message-drafts-v1.js.bak-v1.js"} {
 		if got := checkJavaScript(name, drafts); len(got) != 1 || got[0].rule != "localStorage" {
 			t.Errorf("%s: got %v, want one localStorage finding", name, got)
 		}
@@ -340,7 +340,7 @@ func TestTypeScriptPatterns(t *testing.T) {
 			t.Errorf("cast %s: %v", source, got)
 		}
 	}
-	for _, name := range []string{"logic.ts", "globals.d.ts", "message-drafts.ts", "message-drafts-v12.ts"} {
+	for _, name := range []string{"logic.ts", "globals.d.ts", "drafts.ts", "message-drafts-v12.ts"} {
 		if got := checkJavaScript(name, `localStorage.setItem("draft", "text");`); len(got) != 1 || got[0].rule != "localStorage" {
 			t.Errorf("storage %s: %v", name, got)
 		}

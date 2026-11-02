@@ -38,6 +38,15 @@ const (
 	// MemberAttribute carries the current membership identity.
 	//dom:attribute
 	MemberAttribute = "data-member"
+	// SessionAttribute carries the signing-in session identity.
+	//dom:attribute
+	SessionAttribute = "data-session"
+	// SessionExpiresAttribute carries the session expiry timestamp in milliseconds.
+	//dom:attribute
+	SessionExpiresAttribute = "data-session-expires"
+	// RenderedAtAttribute carries the page render timestamp in milliseconds.
+	//dom:attribute
+	RenderedAtAttribute = "data-rendered-at"
 	// SidebarTopicAttribute carries the selected topic identity.
 	//dom:attribute
 	SidebarTopicAttribute = "data-sidebar-topic"
@@ -186,12 +195,18 @@ const (
 	// CapacityAttribute names the composer's capacity contract.
 	//dom:attribute
 	CapacityAttribute = "data-capacity"
+	// DraftsHorizonAttribute carries the sign-out horizon on the sign-in form.
+	//dom:attribute
+	DraftsHorizonAttribute = "data-drafts-horizon"
 	// DraftChannelAttribute names the composer's draft-channel contract.
 	//dom:attribute
 	DraftChannelAttribute = "data-draft-channel"
 	// DraftTopicAttribute names the composer's draft-topic contract.
 	//dom:attribute
 	DraftTopicAttribute = "data-draft-topic"
+	// DraftMarkerAttribute marks sidebar draft indicators.
+	//dom:attribute
+	DraftMarkerAttribute = "data-draft-marker"
 	// EventCursorAttribute names the composer's event-cursor contract.
 	//dom:attribute
 	EventCursorAttribute = "data-event-cursor"
@@ -268,6 +283,9 @@ const (
 	// ArrivePanelAttribute marks the root element when arrival motion runs for the side panel.
 	//dom:attribute
 	ArrivePanelAttribute = "data-arrive-panel"
+	// AriaModalAttribute publishes whether the side panel covers the conversation as a modal dialog.
+	//dom:attribute
+	AriaModalAttribute = "aria-modal"
 	// SidePanelID identifies the complementary or modal side panel container.
 	//dom:id HTMLElement
 	SidePanelID = "side-panel"
@@ -284,12 +302,27 @@ const (
 	//dom:suffix HTMLAnchorElement
 	PanelControlPrefix = "panel-control-"
 	// PanelCoverEvent requests a fresh modal-state publication before reading aria-modal.
-	//dom:event PanelCoverDetail
+	//dom:event
 	PanelCoverEvent = "panel-cover"
+	// ReadFormID identifies the conversation's read form.
+	//dom:id HTMLFormElement
+	ReadFormID = "read-form"
+	// CursorField names the hidden cursor input and request parameter.
+	//dom:field HTMLInputElement
+	CursorField = "cursor"
+	// ReadAppliedEvent signals that live stream changes have been visibly applied.
+	//dom:event ReadAppliedDetail
+	ReadAppliedEvent = "read-applied"
+	// ReadVisibleEvent triggers the htmx read form when a read is due.
+	//dom:event ReadVisibleDetail
+	ReadVisibleEvent = "read-visible"
 )
 
-// PanelCoverDetail is empty because the listener inspects computed style directly.
-type PanelCoverDetail struct{}
+// ReadAppliedDetail is empty because the listener reads the applied cursor attribute.
+type ReadAppliedDetail struct{}
+
+// ReadVisibleDetail is empty because htmx reads the form's cursor input.
+type ReadVisibleDetail struct{}
 
 // Pins hooks cover the overview section and message pin controls.
 const (

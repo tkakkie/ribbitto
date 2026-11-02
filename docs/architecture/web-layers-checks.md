@@ -63,7 +63,7 @@ session-bound drafts, with their bounds and owner checks.
 Checks: pending bodies' `textContent`, requests, markup
 (`TestComponentsMarkup`). Application scripts forbid `indexedDB` until its first
 allowed use scopes the check to its file, like `localStorage` for
-`message-drafts-vN.js`. Decision 41 changes no checks.
+`message-drafts.ts`. Decision 41 changes no checks.
 `TestBrowser/drafts`: sign-in cleanup (#1178), millisecond boundaries,
 malformed keys, cross-tab notices, blocked scripts, failed sign-out, signed-in
 errors. `TestBrowser/drafts-org`: both organisation pages (#1181), stale sessions
@@ -99,7 +99,7 @@ quote delimiters remain for string timers. It rejects:
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
   `document.writeln` and `createContextualFragment`. Reads and comparisons
   of HTML properties pass.
-- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `web/src/pins-sync.ts`; `localStorage` outside `message-drafts-vN.js`.
+- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `indexedDB` identifiers; `htmx.ajax` outside `web/src/pins-sync.ts`; `localStorage` outside `message-drafts.ts`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. They restate
   CSP without `'unsafe-eval'` ([`csp.md`](csp.md)).
@@ -107,8 +107,7 @@ quote delimiters remain for string timers. It rejects:
   named `function`; properties like `options.var` pass). TypeScript permits
   module declarations. Both reject dot-property writes and
   increments/decrements on `window`/`globalThis`; TypeScript also rejects casts
-  of either global. IIFEs and scoped handlers pass. TypeScript has no
-  `localStorage` allowance (#1418 adds the drafts entry).
+  of either global. IIFEs and scoped handlers pass.
 
 This pattern check is no parser or security boundary: it cannot resolve aliases,
 computed properties, multiline expressions or template interpolations. It may

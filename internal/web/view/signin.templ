@@ -29,7 +29,7 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 				action="/signin"
 				class="flex flex-col gap-4"
 				if form.Horizon != nil {
-					data-drafts-horizon={ idValue(*form.Horizon) }
+					{ DraftsHorizonAttribute }={ idValue(*form.Horizon) }
 				}
 			>
 				@textField("email", "email", "username", form.Email, "signin.email", "")
@@ -40,6 +40,6 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 				@textLink("/signup", "signup.title", "text-body font-semibold")
 			}
 		}
-		<script defer src="/static/message-drafts-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("message-drafts")
 	}
 }

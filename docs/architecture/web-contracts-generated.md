@@ -4,8 +4,8 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel and pins ids, dynamic id
-prefixes, attribute names, custom events and htmx triggers. The composer set
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility and pins ids, dynamic id
+prefixes, field names, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
 other scripts' private hooks remain outside the generated contract.
 
@@ -22,8 +22,9 @@ Composer attributes in the generated set:
 | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
 
 Add a documented constant with a `//dom:id`
-or `//dom:suffix` directive and its DOM element type, `//dom:attribute`, or
-`//dom:event` and its Go payload struct name. Directives belong to a constant's
+or `//dom:suffix` directive and its DOM element type, `//dom:field` and its
+form control type, `//dom:attribute`, or
+`//dom:event` and its optional Go payload struct name. Directives belong to a constant's
 own doc/line comment, never a const group. Payloads support string, bool, numbers
 and nullable string (`*string`). A string field's `dom:"edit,remove"` tag restricts
 it to those literal choices. Fields use the `json:"name"` tag before any comma, otherwise the Go
@@ -34,7 +35,7 @@ Use the constant in templ, then run `go generate ./internal/web/view`
 (also part of `make generate`).
 
 The committed `web/src/contracts.gen.ts` supplies names, selectors, dynamic id
-helpers and typed element, attribute and event accessors; `make check-tools`
+helpers and typed element, field, attribute and event accessors; `make check-tools`
 rejects drift. Element helpers drop trailing `ID`; `DOMPrefix` becomes `Entry`,
 or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
 selectors `nameSelector`, and dynamic ids `nameID`.
@@ -49,23 +50,24 @@ and sending/sent `key`. Without an idempotency key on plain/history pages,
 `message-sent` carries null (`FormData.get`); `web/src/composer.ts` normalizes
 in-place `message-sending` from undefined (`elements.idempotency_key?.value`)
 to null, as the contract specifies, because consumers treat
-both alike: `message-drafts-v7.js` returns on a falsy key, the composer does not
+both alike: `web/src/drafts.ts` returns on a falsy key, the composer does not
 listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
 string keys. `message-sent` must keep null: both scripts compare its key with `!==`.
 `message-sending` is both an id (composer markup) and an event name by design;
 the literal check accepts contract constants in either role.
-Generated dispatches use `bubbles: true`, like legacy scripts, for document
-listeners; `composed` stays unset (no script sets it; no shadow DOM).
+Generated `CustomEvent` dispatches use `bubbles: true`, like legacy scripts, for document
+listeners; `composed` stays unset (no script sets it; no shadow DOM). A payload-free
+`//dom:event` dispatches a plain `Event` on its target (such as `panel-cover`).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
 `data-state` and `data-draft-key` are script-written hooks, not server state.
-Sidebar, arrival, side-panel, pins and typed composer entries use these hooks; `web/src/composer.ts` still
+Sidebar, arrival, side-panel, read-visibility, pins and typed composer entries use these hooks; `web/src/composer.ts` still
 keeps queue state in DOM attributes until `web/src/composer-queue.ts` adoption (#1825).
 
 `tools/contractliterals`, run by `make check-tools`, rejects literal ids,
-attribute names, dataset keys, selectors and custom events in authored
+field names, attribute names, dataset keys, selectors and custom events in authored
 TypeScript under `web/src/`; only `web/src/contracts.gen.ts` is exempt.
-It also checks literal ids, attribute names and contract hooks in `hx-target`,
+It also checks literal ids, field names, attribute names and contract hooks in `hx-target`,
 `hx-select`, `hx-select-oob`, `hx-sync` and `hx-trigger` in view templates.
 Dynamic id literals match the prefix itself or a complete 32-lowercase-hex
 suffix, avoiding unrelated ids such as `channel-create`.

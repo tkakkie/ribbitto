@@ -503,7 +503,10 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       // Routing short-circuits cursor parsing, including on malformed values.
       const checkCursor = view.topic && topic === view.topic && !view.ids.includes(id) && applied;
       if (checkCursor) view.applied = BigInt(applied);
-      queue.route(item, { id, topic, seq: checkCursor ? BigInt(dom.readAttribute(state, dom.PostedSeqAttribute)!) : 0n }, view);
+      if (queue.route(item, { id, topic, seq: checkCursor ? BigInt(dom.readAttribute(state, dom.PostedSeqAttribute)!) : 0n }, view)) {
+        pending.closest("li")!.remove();
+        say("");
+      }
       reconcile();
       if (event.detail.xhr.status === 200 && dom.readAttribute(state, dom.PostedMessageAttribute)) dom.dispatchMessageSentEvent((dom.getMessageBody() as ComposerBody), { key: item.draftKey, message: dom.readAttribute(state, dom.PostedMessageAttribute)! });
       return;

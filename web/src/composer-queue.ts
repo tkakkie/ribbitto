@@ -54,8 +54,10 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     ? undefined : items.find(item => item.state === "queued");
   const response = (item: MutablePendingItem, posted: PostedMessage, view: Delivery) => {
     item.postedMessage = posted.id;
-    if (items.includes(item) && (delivered(item, view) || (view.topic &&
-        (posted.topic !== view.topic || (view.applied !== undefined && view.applied >= posted.seq && !view.ids.includes(posted.id)))))) erase(item);
+    const routed = Boolean(view.topic && (posted.topic !== view.topic ||
+      (view.applied !== undefined && view.applied >= posted.seq && !view.ids.includes(posted.id))));
+    if (items.includes(item) && (delivered(item, view) || routed)) erase(item);
+    return routed;
   };
   return {
     get items(): readonly PendingItem[] { return items; },
@@ -134,10 +136,12 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       changed();
     },
     route(pending: PendingItem, posted: PostedMessage, view: Delivery) {
-      const item = items.find(item => item === pending);
-      if (!item) return;
-      response(item, posted, view);
-      if (!items.includes(item)) changed();
+      const item = items.find(item => item === pending) || [...requests].find(item => item === pending);
+      if (!item) return false;
+      const connected = items.includes(item);
+      const routed = response(item, posted, view);
+      if (connected && !items.includes(item)) changed();
+      return routed;
     },
     retry(pending: PendingItem): boolean {
       const item = items.find(item => item === pending);

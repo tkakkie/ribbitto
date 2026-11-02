@@ -156,6 +156,41 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, route := range []string{"other-topic", "passed", "behind", "delivered", "bad-applied", "bad-seq", "other-topic-bad", "delivered-bad"} {
+		for _, removed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("removed-route/%s/removed=%t", route, removed), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, true)
+				page.MustEval(`() => {const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit()}`)
+				request := receivePending(t, page, posts)
+				page.MustEval(`([route,removed]) => {
+ window.routeErrors=[];window.detachedAnswers=0;
+ window.addEventListener('error',e=>{routeErrors.push(e.error.name);e.preventDefault()});
+ document.querySelector('[data-pending-form]').addEventListener('htmx:afterRequest',()=>detachedAnswers++,{once:true});
+ if(removed) document.querySelector('[data-pending-remove]').click();
+ document.getElementById('message-composer').requestSubmit();
+ document.getElementById('organization-stream').dataset.appliedCursor=route.includes('bad')&&route!=='bad-seq'?'bad':route==='behind'?'50':'51';
+ if(route.startsWith('delivered')) {const li=document.createElement('li');li.id='message-33000000000000000000000000000000';document.getElementById('message-items').append(li)}
+}`, []any{route, removed})
+				reply := pendingAnswer(t, kernel.ID{51})
+				if strings.HasPrefix(route, "other-topic") {
+					reply = pendingTopicAnswer(t, kernel.ID{51}, kernel.ID{9})
+				}
+				if route == "bad-seq" {
+					reply.body = []byte(strings.ReplaceAll(string(reply.body), `data-posted-seq="51"`, `data-posted-seq="bad"`))
+				}
+				request.reply <- reply
+				page.MustWait(`() => window.detachedAnswers===1`)
+				cleared := strings.HasPrefix(route, "other-topic") || route == "passed" || (!removed && strings.HasPrefix(route, "delivered"))
+				if problem := page.MustEval(`([cleared,bad]) => {
+ const a=document.getElementById('message-send-alert'), result=[a.textContent,routeErrors];
+ window.trace?.push(['F2',result]);
+ return a.textContent!==(cleared?'':a.dataset.busy)||JSON.stringify(routeErrors)!==JSON.stringify(bad?['SyntaxError']:[])?JSON.stringify(result):'';
+}`, []bool{cleared, route == "bad-applied" || route == "bad-seq"}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+			})
+		}
+	}
 	for _, kind := range []string{"null", "undefined", "equal", "different"} {
 		for _, missing := range []bool{false, true} {
 			t.Run(fmt.Sprintf("sent-key/%s/missing=%t", kind, missing), func(t *testing.T) {

@@ -34,7 +34,9 @@ confirmed items before paint when their ID appears in `#message-items`.
 Stream-first briefly shows both until the response; replay and feed moves
 preserve the real ID. Topic responses also remove the item if its
 `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
-has reached `data-posted-seq`. Read attributes once, never keep them
+has reached `data-posted-seq`. This also clears the busy alert for a removed
+in-flight item; delivered or still-pending detached responses leave it alone.
+Read attributes once, never keep them
 on the item. Once confirmed, `htmx:sseBeforeMessage` removes it when
 a `messages-moved` payload names its ID with this topic as source.
 Ordering allows removal of absent, already-applied posts

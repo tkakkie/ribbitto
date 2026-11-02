@@ -28,12 +28,12 @@ assertions. CI never judges time.
 
 The source is `internal/web/feed_guard_budgets_test.go`; each constant cites
 an issue and explains its reason. Initial values cite #1478; #1500 ratchets
-message actions, including #1461's pin attribute removal. Current measured
-values and caps are:
+message actions, including #1461's pin attribute removal; #1489 adds the
+no-JavaScript list wrapper. Current measured values and caps are:
 
 | Metric | Fixed measured / cap | Per message measured / cap | First render measured / cap (50 messages) |
 |---|---:|---:|---:|
-| Elements | 181 / 181 | 29 / 29 | 1692 / 1692 |
+| Elements | 182 / 182 | 29 / 29 | 1693 / 1693 |
 | Forms | 11 / 11 | 1 / 1 | 61 / 61 |
 | Explicit type=submit | 7 / 7 | 0 / 0 | 7 / 7 |
 | hx-* carriers | 10 / 10 | 0 / 0 | 11 / 11 |
@@ -44,7 +44,7 @@ The structure fixture at 50/100/200 messages measures bytes
 254826/488887/957107. Its 50-message htmx mirror is 71 nodes; the
 handler first render is 72. Attribute-less buttons do not match htmx
 2.0.7's `[type='submit']` selector; the per-message pin form still does.
-The older whole-page test remains: 1631 elements, 10 hx carriers and
+The older whole-page test remains: 1632 elements, 10 hx carriers and
 267568 bytes (5% above 254826, rounded up), one byte stricter than the
 standing guard's rounded fixed + 50 × slope byte caps. It checks the
 whole total; this guard also checks growth, linearity and handler output.

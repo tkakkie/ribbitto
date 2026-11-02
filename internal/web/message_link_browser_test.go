@@ -88,7 +88,7 @@ func testMessageLinkBrowser(t *testing.T, browser *rod.Browser) {
 					got := page.MustEval(`id => {
 						const list = document.getElementById('message-list'), item = document.getElementById(id);
 						const port = list.getBoundingClientRect(), box = item.getBoundingClientRect();
-						const shown = box.top >= port.top && box.bottom <= port.bottom && list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+						const shown = box.top >= port.top && box.bottom <= port.bottom && document.querySelector('#message-items > li:last-child').getBoundingClientRect().top >= port.bottom;
 						return [shown, item.matches(':target'), getComputedStyle(item).backgroundColor].join();
 					}`, target).Str()
 					if want := "true,true," + scheme.fill; got != want {

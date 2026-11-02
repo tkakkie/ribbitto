@@ -241,50 +241,54 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					// list at no height, gives it a scrollbar that then narrows and
 					// wraps every message header, and keeps it although the
 					// unwrapped rows would fit (#2044).
-					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-auto overflow-y-auto short:h-32 short:flex-none">
-						// Always present, empty on the oldest page: loading older
-						// messages replaces it out of band with the next control.
-						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
-							if page.Older {
-								<p class="flex justify-center px-6 pt-4">
-									@historyLink(olderURL(page), true) {
-										@Icon("arrow-up-regular", 20)
-										{ i18n.T(ctx, "message.load_older") }
+					<div id={ MessageListID } role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class={ "peer/list min-h-0 flex-auto overflow-y-auto short:h-32 short:flex-none", templ.KV("noscript:flex noscript:flex-col-reverse", latest(page)) }>
+						// One child keeps DOM, reading and Tab order unchanged while the
+						// reversed flex container starts at the newest entry without JavaScript.
+						<div class={ "contents", templ.KV("noscript:block noscript:grow noscript:shrink-0", latest(page)) }>
+							// Always present, empty on the oldest page: loading older
+							// messages replaces it out of band with the next control.
+							<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
+								if page.Older {
+									<p class="flex justify-center px-6 pt-4">
+										@historyLink(olderURL(page), true) {
+											@Icon("arrow-up-regular", 20)
+											{ i18n.T(ctx, "message.load_older") }
+										}
+									</p>
+								}
+							</div>
+							<ol
+								id={ MessageItemsID }
+								if page.Topic != nil {
+									{ TopicAttribute }={ idValue(page.Topic.ID) }
+								}
+								if page.EventCursor != nil && latest(page) {
+									sse-swap="message,messages-moved"
+									hx-swap="beforeend"
+								}
+								class="peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden max-desk:max-w-none max-desk:px-4"
+							>
+								for _, entry := range page.Messages {
+									@unreadDivider(entry.EventSeq, page.FirstUnread)
+									@MessageItem(entry)
+								}
+							</ol>
+							if latest(page) {
+								<ol id={ MessagePendingID } class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
+								@pendingMessage(page)
+							}
+							<div id={ MessageEmptyID } class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+							if !latest(page) {
+								// Only an older page reached by its own URL shows this: a
+								// message's link, or "Load older" without JavaScript.
+								<p class="px-6 pb-4 text-center">
+									@historyLink(conversationURL(page), false) {
+										@Icon("chevron-down-regular", 20)
+										{ i18n.T(ctx, "message.newest") }
 									}
 								</p>
 							}
 						</div>
-						<ol
-							id={ MessageItemsID }
-							if page.Topic != nil {
-								{ TopicAttribute }={ idValue(page.Topic.ID) }
-							}
-							if page.EventCursor != nil && latest(page) {
-								sse-swap="message,messages-moved"
-								hx-swap="beforeend"
-							}
-							class="peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden max-desk:max-w-none max-desk:px-4"
-						>
-							for _, entry := range page.Messages {
-								@unreadDivider(entry.EventSeq, page.FirstUnread)
-								@MessageItem(entry)
-							}
-						</ol>
-						if latest(page) {
-							<ol id={ MessagePendingID } class="mx-auto flex w-full max-w-reading flex-col gap-6 px-6 pb-6 peer-empty:pt-6 empty:hidden max-desk:max-w-none max-desk:px-4"></ol>
-							@pendingMessage(page)
-						}
-						<div id={ MessageEmptyID } class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
-						if !latest(page) {
-							// Only an older page reached by its own URL shows this: a
-							// message's link, or "Load older" without JavaScript.
-							<p class="px-6 pb-4 text-center">
-								@historyLink(conversationURL(page), false) {
-									@Icon("chevron-down-regular", 20)
-									{ i18n.T(ctx, "message.newest") }
-								}
-							</p>
-						}
 					</div>
 					<div id={ MessageStatusID } role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)

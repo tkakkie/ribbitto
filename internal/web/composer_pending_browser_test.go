@@ -156,6 +156,24 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("hold-delay-and-dispatch-microtask", func(t *testing.T) {
+		page, _, posts, _ := pendingBrowser(t, browser, false)
+		page.MustEval(`()=>{const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit();b.value='second';b.form.requestSubmit();
+ window.order=[];document.querySelector('[data-pending-form]').addEventListener('htmx:afterRequest',()=>{order.push('after');Promise.resolve().then(()=>order.push('promise'))},{once:true});
+ document.addEventListener('htmx:beforeRequest',e=>{if(e.detail.requestConfig?.elt.matches('[data-pending-form]'))order.push('next')});
+}`)
+		first := receivePending(t, page, posts)
+		first.reply <- browserReply{status: 400, body: []byte("refused")}
+		second := receivePending(t, page, posts)
+		if page.MustEval(`()=>JSON.stringify(order)`).Str() != `["after","next","promise"]` {
+			t.Fatal("dispatch did not run in the completion microtask before the resolved promise")
+		}
+		second.reply <- browserReply{status: 500, body: []byte("unknown")}
+		page.MustWait(`()=>window.answers===2`)
+		if page.MustEval(`()=>{const delays=[],schedule=setTimeout;window.setTimeout=(fn,ms,...args)=>{delays.push(ms);return ms>=300000?-1:schedule(fn,ms,...args)};document.querySelector('[data-unconfirmed] [data-pending-remove]').click();window.trace?.push(['timing',order,delays]);return JSON.stringify(delays)}`).Str() != `[300000]` {
+			t.Fatal("Remove hold delay differs from 300000 ms")
+		}
+	})
 	for _, admission := range []string{"busy", "capacity", "empty", "oversized", "quote", "pending-empty"} {
 		for _, empty := range []bool{false, true} {
 			t.Run(fmt.Sprintf("malformed-template/%s/empty=%t", admission, empty), func(t *testing.T) {

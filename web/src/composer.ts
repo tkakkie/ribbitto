@@ -81,7 +81,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   document.addEventListener(dom.MessageSentEvent, (native) => {
     const event = native as CustomEvent<dom.MessageSentDetail> & { target: ComposerBody };
     queue.sent(event.detail.key, () => {
-      // Preserve cleanup and missing-field exceptions before generating the key.
+      // Keep cleanup, key generation and missing-field exceptions in legacy order.
       const form = event.target.form;
       form.removeAttribute(dom.UnconfirmedKeyAttribute);
       form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!;

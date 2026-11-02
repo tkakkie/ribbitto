@@ -4,7 +4,7 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility and pins ids, dynamic id
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link and member-mentions ids, dynamic id
 prefixes, field names, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
 other scripts' private hooks remain outside the generated contract.

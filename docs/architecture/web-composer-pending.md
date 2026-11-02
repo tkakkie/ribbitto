@@ -9,8 +9,9 @@ The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. Timers call `expire(item)` to clear only their own hold even with a
 frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
 own hold and checks age only without a restored key. `pagehide`/`sent` clear holds.
-Before `admit`, the adapter calls `changeText` and applies any returned fresh key
-to the composer, including when admission returns busy or ordinary.
+Before `admit`, the adapter calls `changeText` with a renewal callback that clears
+the uncertainty mark before generating/writing the composer key, including when
+admission returns busy or ordinary. The fallback key clears only after that write.
 Only successful admission calls the adapter's `prepare` callback to clone/copy the
 form, before key generation and the synchronous projection notification.
 That released key belongs to the composer; a queued item instead takes the restored

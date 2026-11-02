@@ -61,13 +61,13 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       projected.set(item, { ...item });
     }
   });
-  const releaseRestored = (body: ComposerBody, key: string | undefined) => {
-    if (key === undefined) return;
+  const releaseRestored = (body: ComposerBody) => {
     body.form.removeAttribute(dom.UnconfirmedKeyAttribute);
-    body.form.elements.idempotency_key.value = key;
+    body.form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!;
     freshRestoredKey = null;
+    return body.form.elements.idempotency_key.value;
   };
-  const changedRestoration = (body: ComposerBody) => releaseRestored(body, queue.changeText(body.value));
+  const changedRestoration = (body: ComposerBody) => queue.changeText(body.value, () => releaseRestored(body));
   const place = (form: ComposerForm) => JSON.stringify([dom.readAttribute(form, dom.DraftChannelAttribute), dom.readAttribute(form, dom.DraftTopicAttribute) || "feed"]);
   window.addEventListener("pagehide", () => queue.pagehide());
   document.addEventListener(dom.MessageDraftRestoredEvent, (native) => {
@@ -80,14 +80,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   });
   document.addEventListener(dom.MessageSentEvent, (native) => {
     const event = native as CustomEvent<dom.MessageSentDetail> & { target: ComposerBody };
-    queue.sent(event.detail.key, () => {
-      // Keep cleanup, key generation and missing-field exceptions in legacy order.
-      const form = event.target.form;
-      form.removeAttribute(dom.UnconfirmedKeyAttribute);
-      form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!;
-      freshRestoredKey = null;
-      return form.elements.idempotency_key.value;
-    });
+    queue.sent(event.detail.key, () => releaseRestored(event.target));
   });
   const updateEdits = () => {
     const body = (dom.getMessageBody() as ComposerBody);

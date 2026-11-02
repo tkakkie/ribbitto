@@ -156,6 +156,37 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, mode := range []string{"normal", "throw", "undefined", "missing"} {
+		for _, submit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("restoration-release/%s/submit=%t", mode, submit), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if problem := page.MustEval(`([mode,submit])=>{
+ const b=document.getElementById('message-body'), f=b.form, errors=[], calls=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ b.value='saved';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:'saved'}}));
+ if(mode==='missing')f.elements.idempotency_key.remove();
+ crypto.randomUUID=mode==='undefined'?undefined:()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));if(mode==='throw')throw Error('uuid');return 'released'};
+ if(submit){f.classList.add('htmx-request');document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true)}
+ b.value='edited';if(submit)f.requestSubmit();else b.dispatchEvent(new Event('input',{bubbles:true}));
+ const result=[errors,calls,f.elements.idempotency_key?.value??null,f.hasAttribute('data-unconfirmed-key')];
+ const want=[mode==='missing'?['TypeError']:[],mode==='undefined'?[]:[false],mode==='missing'?null:mode==='throw'?'saved':mode==='undefined'?'00000000-0000-4000-8000-000000000001':'released',false];
+ window.trace?.push(['G1',mode,submit,result]);
+ return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []any{mode, submit}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				if mode == "throw" && !submit {
+					page.MustEval(`()=>{crypto.randomUUID=undefined;window.refused=0;document.addEventListener('htmx:afterRequest',e=>{if(e.target.id==='message-composer')refused++});document.getElementById('message-composer').requestSubmit()}`)
+					request := receivePending(t, page, posts)
+					request.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{Composer: new("fresh"), IdempotencyKey: new("saved")})))}
+					page.MustWait(`()=>refused===1`)
+					if !page.MustEval(`()=>{const b=document.getElementById('message-body'),a=document.getElementById('message-send-alert');const refused=a.textContent===a.dataset.notSent;b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:null}}));const result=[refused,b.form.elements.idempotency_key.value];window.trace?.push(['G1-after-throw',result]);return refused&&result[1]==='00000000-0000-4000-8000-000000000001'}`).Bool() {
+						t.Fatal("refused send or retained fallback key differs after UUID exception")
+					}
+				}
+			})
+		}
+	}
 	t.Run("hold-delay-and-dispatch-microtask", func(t *testing.T) {
 		page, _, posts, _ := pendingBrowser(t, browser, false)
 		page.MustEval(`()=>{const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit();b.value='second';b.form.requestSubmit();

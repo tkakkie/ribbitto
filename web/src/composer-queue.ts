@@ -46,8 +46,8 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   const delivered = (item: PendingItem, view: Delivery) => item.postedMessage !== null &&
     (view.ids.includes(item.postedMessage) || Boolean(view.topic && view.moved?.fromTopic === view.topic && view.moved.ids.includes(item.postedMessage)));
   const release = (renew = newKey) => { restored = null; return renew(); };
-  const changeText = (text: string) => {
-    if (restored && (text === "" || (restored.text !== null && restored.text !== text))) return release();
+  const changeText = (text: string, renew = newKey) => {
+    if (restored && (text === "" || (restored.text !== null && restored.text !== text))) return release(renew);
     return undefined;
   };
   const next = (ordinaryBusy = false) => ordinaryBusy || requests.size || items.some(item => item.state === "failed" && item.unconfirmed)

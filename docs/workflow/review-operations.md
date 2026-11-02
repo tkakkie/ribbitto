@@ -70,22 +70,99 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   while the PR is a draft with current `main`. Each report names its SHA; a
   substantive push (not a typo or meaning-preserving rewording) makes older
   reports non-final. Each finding gets a disposition, applied fixes are checked
-  before asking the maintainer, and `ai-reviewed` requires every required
-  review to cover the delivered head.
-- **Counts only when it completes:** a report on the PR at its head commit,
-  each finding with a disposition (fixed, follow-up issue, or declined with
-  reason). A failed, timed-out or empty run never counts: record it on the PR,
-  retry once, then ask the maintainer.
-- **After a later push** (fix, Copilot follow-up, merge of `main`) whose diff
-  touches those areas, review again over the PR's whole diff at the new head.
-  An earlier report covers a later head only when every later commit is outside
-  those areas. A ready PR goes back to a draft until the review completes. A fix
-  for a finding of this review first passes the
-  [follow-up check](review-followups.md#copilot-follow-up-check).
+  before asking the maintainer, and `ai-reviewed` is set only when every
+  required review and the follow-up checks cover the delivered head.
+- **Cap and what counts:** at most **two completed runs** per pull request
+  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085)).
+  A run counts toward the cap when it completes with a non-empty report on the
+  PR covering the supplied head commit and required scope (`base..head` in run
+  1, `Compared: <first run's SHA>..<head>` in run 2), independent of how its
+  findings are later dispositioned. Before `ai-reviewed`, every finding must
+  have a disposition (fixed, follow-up issue, declined with a reason, or — for a
+  blocking conversion-parity finding at any time, including before the two-run
+  cap — accepted by the maintainer under
+  [Pull request cross-review](reviewing.md#pull-request-cross-review); the
+  two-run cap prevents endless review-and-fix loops and is not a precondition
+  for an exception, so no completed second run is needed) and any
+  applied fix or required verification must be completed. A failed, timed-out or
+  empty run never counts: record it on the PR, retry once, then ask the
+  maintainer. Follow-up checks ([`review-followups.md`](review-followups.md))
+  are not runs. The cross-review limit (two rounds, then closure verification or
+  the maintainer) is unchanged.
+- **Second run (after a later push before the cap):** after a later push (fix,
+  Copilot follow-up, merge of `main`) whose diff touches those areas, a ready PR
+  goes back to a draft until the review completes. A fix for a finding of this
+  review first passes the
+  [follow-up check](review-followups.md#copilot-follow-up-check); then run the
+  second review. The second run reports `Compared: <first run's SHA>..<head>`
+  and reviews that whole delta: the fixes of the first run, any Copilot fixes
+  and merges of `main` made in between, and their effect on unchanged code that
+  calls into it (a second run that reads only the fix commits is not enough).
+  `.github/prompts/adversarial.md` carries the same scope. An earlier report
+  covers a later head only when every later commit is outside those areas (or,
+  after the two-run cap, is covered by the post-cap rules below).
+- **After the second run (at the cap):** no third adversarial run; the
+  orchestrator starts no further fix round on its own. When findings remain
+  after the second run, the
+  [post-cap triage](reviewing.md#pull-request-cross-review) stops automatic
+  fixing for remaining blocking conversion-parity findings and hands them to
+  the maintainer's decision (maintainer acceptance itself is available at any
+  time, including before the cap); non-parity third-AI
+  findings keep today's dispositions (fixed, follow-up issue, or declined with a
+  reason) and are not part of that triage, and after the cap a fix for one is
+  applied only if the maintainer selects it (checked by the independent
+  follow-up check below, never a third adversarial run). On any post-cap push,
+  a ready PR goes back to a draft until
+  the follow-up check or escalation completes. A fix the maintainer chooses
+  after the cap, a Copilot fix or a merge of `main` is checked by an
+  independent [follow-up check](review-followups.md#copilot-follow-up-check) of
+  exactly that delta **only when it is limited**: it changes no behaviour,
+  security boundary or interaction with existing code beyond answering the
+  named findings (an independent checker may classify a clean merge of `main`
+  as limited only after establishing that it leaves the pull request's
+  behaviour, security boundaries and interactions unchanged, including effects
+  through callers, direct or transitive dependencies and shared contracts;
+  uncertainty goes to the maintainer). A change that substantively alters
+  behaviour, a security boundary or the interaction with existing code (for
+  example a merge of `main` that changes code the diff depends on, or an
+  additional fix that goes beyond the named findings) is **never approved by a
+  limited follow-up check alone**, and this rule takes precedence even when the
+  change solely answers a named finding or implements a maintainer-selected
+  fix: the orchestrator escalates to the maintainer, who may require it to go
+  into a separate pull request that gets the normal review (cross-review and
+  third-AI review from the start). On escalation the orchestrator withholds
+  `ai-reviewed` and records the maintainer's explicit chat decision, the
+  applicable SHA and the required verification in the pull request body (in the
+  *Accepted parity differences* / escalation field and *Adversarial*) and in an
+  orchestrator PR comment before proceeding, preserving
+  all existing gates; the re-confirmation of an accepted difference cannot
+  approve the substantive delta or automatically restart a fix/review cycle. If
+  a fix itself needs a fix, the orchestrator asks the maintainer instead of
+  starting another round. Accepting a conversion-parity difference
+  ([Pull request cross-review](reviewing.md#pull-request-cross-review)) records
+  an approval at a SHA, not review coverage of a change scope (no part of the
+  change set may be left unverified — no gap), and skips none of the other
+  required reviews, the conversion differential test (#2053), the required
+  follow-up checks or the final-SHA confirmation: if the head changes after the
+  maintainer accepts a difference (whether accepted before or after the cap), an
+  independent [follow-up check](review-followups.md#copilot-follow-up-check)
+  from the latest covered SHA (the decision's head SHA only if changes up to it
+  were covered) confirms at the final SHA that the accepted occurrence
+  conditions and the effect are unchanged (the same scenario, the same effect,
+  no new path to it), and the orchestrator records that re-confirmation check's
+  SHA alongside the decision's head SHA in *Accepted parity differences*;
+  if anything differs, the maintainer must approve again and `ai-reviewed`
+  waits.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md` and [review context](#running-a-review).
-  Post `**Adversarial review — <AI>** (at <SHA>)`. The template's *Adversarial*
-  field names the AI and reviewed SHA, `pending`, or `not required` with reason.
+  Post `**Adversarial review — <AI>, run <1|2>** (at <SHA>)` (with
+  `Compared: <first run's SHA>..<head>` on run 2). The template's *Adversarial*
+  field names the AI, the completed run count (`1` or `2` of `2`), the reviewed
+  SHAs (and any follow-up check SHA covering the delivered head), `pending`, or
+  `not required` with reason; its *Accepted parity differences* field records
+  any maintainer-accepted conversion-parity differences (with the decision's
+  head SHA and any re-confirmation check SHA) and any post-cap escalation
+  record, or `n/a`.
 - **Who reviews, and the requirement check:** an AI eligible under
   [review independence](README.md#principles), decided from the actual commits;
   check the requirement against what the diff does, not only touched paths.

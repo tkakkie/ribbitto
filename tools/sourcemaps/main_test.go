@@ -57,7 +57,7 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 		case r.Method == "POST" && path == "/releases":
 			var req mockRelease
 			_ = json.NewDecoder(r.Body).Decode(&req)
-			if !req.Draft || req.Prerelease || req.TargetCommitish != "main" {
+			if r.Header.Get("Content-Type") != "application/json" || !req.Draft || req.Prerelease || req.TargetCommitish != "main" {
 				http.Error(w, "bad draft or unknown target_commitish", 422)
 				return
 			}
@@ -67,8 +67,8 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 			w.WriteHeader(201)
 			_ = json.NewEncoder(w).Encode(req)
 		case r.Method == "POST" && strings.HasPrefix(path, "/releases/") && strings.HasSuffix(path, "/assets"):
-			if s.failUpload {
-				http.Error(w, "upload refused", 500)
+			if r.Header.Get("Content-Type") != "application/octet-stream" || s.failUpload {
+				http.Error(w, "upload refused", cmp.Or(map[bool]int{true: 415}[r.Header.Get("Content-Type") != "application/octet-stream"], 500))
 				return
 			}
 			id, _ := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(path, "/releases/"), "/assets"), 10, 64)
@@ -117,6 +117,10 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				case "GET":
 					_ = json.NewEncoder(w).Encode(s.releases[i])
 				case "PATCH":
+					if r.Header.Get("Content-Type") != "application/json" {
+						http.Error(w, "expected application/json", 415)
+						return
+					}
 					var p struct{ Draft, Prerelease bool }
 					_ = json.NewDecoder(r.Body).Decode(&p)
 					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft, p.Prerelease

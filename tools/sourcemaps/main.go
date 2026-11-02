@@ -124,7 +124,8 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 		return 0, nil, fmt.Errorf("refusing non-production endpoint configuration")
 	}
 	base := strings.TrimRight(c.cfg.apiBase, "/")
-	if method == "POST" && strings.HasSuffix(strings.Split(path, "?")[0], "/assets") {
+	isUpload := method == "POST" && strings.HasSuffix(strings.Split(path, "?")[0], "/assets")
+	if isUpload {
 		base = strings.TrimRight(cmp.Or(c.cfg.uploadBase, strings.Replace(base, "://api.github.com", "://uploads.github.com", 1)), "/")
 	}
 	if !c.cfg.allowTestEndpoint && !strings.HasPrefix(base, "https://") {
@@ -143,7 +144,9 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	if storeAuth {
 		req.Header.Set("Authorization", "Bearer "+c.cfg.token)
 	}
-	if body != nil {
+	if isUpload {
+		req.Header.Set("Content-Type", "application/octet-stream")
+	} else if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	client := &http.Client{Timeout: 2 * time.Minute, Transport: c.cfg.transport, CheckRedirect: checkRedirect}

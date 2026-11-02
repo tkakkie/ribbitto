@@ -156,6 +156,200 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, kind := range []string{"empty", "null", "undefined"} {
+		for _, action := range []string{"none", "input", "empty", "submit", "swap", "sent-empty", "sent-null", "sent-undefined", "input-sent-empty", "input-sent-null", "input-sent-undefined", "send", "input-send"} {
+			t.Run("falsy-restoration/"+kind+"/"+action, func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if problem := page.MustEval(`([kind,action])=>{
+ const b=document.getElementById('message-body'),f=b.form,calls=[],keys={empty:'',null:null,undefined:undefined};
+ b.value='draft';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:keys[kind]}}));
+ const initial=f.elements.idempotency_key.value,mark=f.getAttribute('data-unconfirmed-key');
+ crypto.randomUUID=()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));return 'released'};
+ if(action==='input'||action==='empty'||action.startsWith('input-')){b.value=action==='empty'?'':'draft!';b.dispatchEvent(new Event('input',{bubbles:true}))}
+ if(action==='submit'){f.classList.add('htmx-request');document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true);f.requestSubmit()}
+ if(action==='swap'){f.elements.idempotency_key.value='server';document.getElementById('message-composer-state').dispatchEvent(new CustomEvent('htmx:afterSwap',{bubbles:true,detail:{xhr:{status:422},requestConfig:{elt:f,formData:new FormData(f)}}}))}
+ const sending=action.endsWith('send');if(sending)f.requestSubmit();
+ const sent=action.includes('sent-'),sentKind=action.split('-').at(-1),release=sent&&keys[sentKind]===keys[kind];
+ if(sent)b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:keys[sentKind]}}));
+ const result=[calls,f.elements.idempotency_key.value,f.getAttribute('data-unconfirmed-key')],want=[sending?[true,false]:release?[false]:[],release||sending?'released':action==='swap'?'server':initial,release||sending?null:mark];
+ window.trace?.push(['G3',kind,action,result]);return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []string{kind, action}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				if strings.HasSuffix(action, "send") {
+					request := receivePending(t, page, posts)
+					if request.values.Get("idempotency_key") != "released" {
+						t.Fatal("falsy restoration supplied the pending request key")
+					}
+					request.reply <- browserReply{status: 400, body: []byte("refused")}
+					page.MustWait(`()=>window.answers===1`)
+				}
+			})
+		}
+	}
+	for _, mode := range []string{"throw", "undefined"} {
+		for _, ordinary := range []bool{false, true} {
+			t.Run(fmt.Sprintf("conflict-uuid-lock/%s/ordinary=%t", mode, ordinary), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				page.MustEval(`()=>{const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit()}`)
+				first := receivePending(t, page, posts)
+				first.reply <- browserReply{status: 500, body: []byte("unknown")}
+				page.MustWait(`()=>window.answers===1`)
+				page.MustEval(`([mode,ordinary])=>{document.querySelector('[data-pending-form]').requestSubmit();if(!ordinary){const b=document.getElementById('message-body');b.value='second';b.form.requestSubmit()}
+ window.conflictCalls=[];crypto.randomUUID=mode==='undefined'?undefined:()=>{const f=document.querySelector('[data-pending-form]');conflictCalls.push([f.dataset.state,f.hasAttribute('data-unconfirmed')]);throw Error('uuid')};
+}`, []any{mode, ordinary})
+				retry := receivePending(t, page, posts)
+				retry.reply <- browserReply{status: 409, body: []byte("repeat")}
+				page.MustWait(`()=>window.answers===2`)
+				page.MustEval(`ordinary=>{const f=document.querySelector('[data-pending-form]');window.conflictState=[f.dataset.state,f.hasAttribute('data-unconfirmed')];crypto.randomUUID=()=> 'recovered';document.querySelector('[data-pending-remove]').click();if(ordinary)document.getElementById('message-composer').requestSubmit()}`, ordinary)
+				if problem := page.MustEval(`([mode,ordinary])=>new Promise(resolve=>setTimeout(()=>{const a=document.getElementById('message-send-alert'),result=[conflictCalls,conflictState,window.requests,window.ordinaryRequests,a.textContent];window.trace?.push(['G2',ordinary,result]);resolve(JSON.stringify(conflictState)!=='["failed",false]'||JSON.stringify(conflictCalls)!==(mode==='throw'?'[["failed",false]]':'[]')||window.requests!==2||window.ordinaryRequests!==0||a.textContent!==(ordinary?a.dataset.busy:'')?JSON.stringify(result):'')},30))`, []any{mode, ordinary}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+			})
+		}
+	}
+	for _, mode := range []string{"normal", "throw", "undefined", "missing"} {
+		for _, submit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("restoration-release/%s/submit=%t", mode, submit), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if problem := page.MustEval(`([mode,submit])=>{
+ const b=document.getElementById('message-body'), f=b.form, errors=[], calls=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ b.value='saved';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:'saved'}}));
+ if(mode==='missing')f.elements.idempotency_key.remove();
+ crypto.randomUUID=mode==='undefined'?undefined:()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));if(mode==='throw')throw Error('uuid');return 'released'};
+ if(submit){f.classList.add('htmx-request');document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true)}
+ b.value='edited';if(submit)f.requestSubmit();else b.dispatchEvent(new Event('input',{bubbles:true}));
+ const result=[errors,calls,f.elements.idempotency_key?.value??null,f.hasAttribute('data-unconfirmed-key')];
+ const want=[mode==='missing'?['TypeError']:[],mode==='undefined'?[]:[false],mode==='missing'?null:mode==='throw'?'saved':mode==='undefined'?'00000000-0000-4000-8000-000000000001':'released',false];
+ window.trace?.push(['G1',mode,submit,result]);
+ return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []any{mode, submit}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+				if mode == "throw" && !submit {
+					page.MustEval(`()=>{crypto.randomUUID=undefined;window.refused=0;document.addEventListener('htmx:afterRequest',e=>{if(e.target.id==='message-composer')refused++});document.getElementById('message-composer').requestSubmit()}`)
+					request := receivePending(t, page, posts)
+					request.reply <- browserReply{status: 422, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{Composer: new("fresh"), IdempotencyKey: new("saved")})))}
+					page.MustWait(`()=>refused===1`)
+					if !page.MustEval(`()=>{const b=document.getElementById('message-body'),a=document.getElementById('message-send-alert');const refused=a.textContent===a.dataset.notSent;b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key:null}}));const result=[refused,b.form.elements.idempotency_key.value];window.trace?.push(['G1-after-throw',result]);return refused&&result[1]==='00000000-0000-4000-8000-000000000001'}`).Bool() {
+						t.Fatal("refused send or retained fallback key differs after UUID exception")
+					}
+				}
+			})
+		}
+	}
+	t.Run("hold-delay-and-dispatch-microtask", func(t *testing.T) {
+		page, _, posts, _ := pendingBrowser(t, browser, false)
+		page.MustEval(`()=>{const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit();b.value='second';b.form.requestSubmit();
+ window.order=[];document.querySelector('[data-pending-form]').addEventListener('htmx:afterRequest',()=>{order.push('after');Promise.resolve().then(()=>order.push('promise'))},{once:true});
+ document.addEventListener('htmx:beforeRequest',e=>{if(e.detail.requestConfig?.elt.matches('[data-pending-form]'))order.push('next')});
+}`)
+		first := receivePending(t, page, posts)
+		first.reply <- browserReply{status: 400, body: []byte("refused")}
+		second := receivePending(t, page, posts)
+		if page.MustEval(`()=>JSON.stringify(order)`).Str() != `["after","next","promise"]` {
+			t.Fatal("dispatch did not run in the completion microtask before the resolved promise")
+		}
+		second.reply <- browserReply{status: 500, body: []byte("unknown")}
+		page.MustWait(`()=>window.answers===2`)
+		if page.MustEval(`()=>{const delays=[],schedule=setTimeout;window.setTimeout=(fn,ms,...args)=>{delays.push(ms);return ms>=300000?-1:schedule(fn,ms,...args)};document.querySelector('[data-unconfirmed] [data-pending-remove]').click();window.trace?.push(['timing',order,delays]);return JSON.stringify(delays)}`).Str() != `[300000]` {
+			t.Fatal("Remove hold delay differs from 300000 ms")
+		}
+	})
+	for _, admission := range []string{"busy", "capacity", "empty", "oversized", "quote", "pending-empty"} {
+		for _, empty := range []bool{false, true} {
+			t.Run(fmt.Sprintf("malformed-template/%s/empty=%t", admission, empty), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if admission == "capacity" || admission == "pending-empty" {
+					count := 1
+					if admission == "capacity" {
+						count = 10
+					}
+					page.MustEval(`count=>{const b=document.getElementById('message-body');for(let n=0;n<count;n++){b.value='queued '+n;b.form.requestSubmit()}}`, count)
+					request := receivePending(t, page, posts)
+					request.reply <- browserReply{status: 500, body: []byte("pause")}
+					page.MustWait(`()=>window.answers===1`)
+				}
+				if result := page.MustEval(`([admission,empty])=>{
+ const b=document.getElementById('message-body'), f=b.form, errors=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true);
+ const template=document.getElementById('message-pending-template');template.content.replaceChildren();
+ if(!empty)template.content.append(document.createElement('li'));
+ if(admission==='busy')f.classList.add('htmx-request');
+ if(admission==='quote'){const input=document.createElement('input');input.name='quote';f.append(input)}
+ b.value=admission.includes('empty')?'':admission==='oversized'?'x'.repeat(4001):'valid';
+ f.requestSubmit();
+ const a=document.getElementById('message-send-alert'), want=admission==='capacity'?a.dataset.capacity:admission==='busy'||admission==='pending-empty'?a.dataset.busy:'';
+ const result=[errors,a.textContent];window.trace?.push(['F4b',result]);
+ return errors.length||a.textContent!==want?JSON.stringify({result,want}):'';
+}`, []any{admission, empty}).Str(); result != "" {
+					t.Fatal(result)
+				}
+			})
+		}
+	}
+	for _, route := range []string{"other-topic", "passed", "behind", "delivered", "bad-applied", "bad-seq", "other-topic-bad", "delivered-bad"} {
+		for _, removed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("removed-route/%s/removed=%t", route, removed), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, true)
+				page.MustEval(`() => {const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit()}`)
+				request := receivePending(t, page, posts)
+				page.MustEval(`([route,removed]) => {
+ window.routeErrors=[];window.detachedAnswers=0;
+ window.addEventListener('error',e=>{routeErrors.push(e.error.name);e.preventDefault()});
+ document.querySelector('[data-pending-form]').addEventListener('htmx:afterRequest',()=>detachedAnswers++,{once:true});
+ if(removed) document.querySelector('[data-pending-remove]').click();
+ document.getElementById('message-composer').requestSubmit();
+ document.getElementById('organization-stream').dataset.appliedCursor=route.includes('bad')&&route!=='bad-seq'?'bad':route==='behind'?'50':'51';
+ if(route.startsWith('delivered')) {const li=document.createElement('li');li.id='message-33000000000000000000000000000000';document.getElementById('message-items').append(li)}
+}`, []any{route, removed})
+				reply := pendingAnswer(t, kernel.ID{51})
+				if strings.HasPrefix(route, "other-topic") {
+					reply = pendingTopicAnswer(t, kernel.ID{51}, kernel.ID{9})
+				}
+				if route == "bad-seq" {
+					reply.body = []byte(strings.ReplaceAll(string(reply.body), `data-posted-seq="51"`, `data-posted-seq="bad"`))
+				}
+				request.reply <- reply
+				page.MustWait(`() => window.detachedAnswers===1`)
+				cleared := strings.HasPrefix(route, "other-topic") || route == "passed" || (!removed && strings.HasPrefix(route, "delivered"))
+				if problem := page.MustEval(`([cleared,bad]) => {
+ const a=document.getElementById('message-send-alert'), result=[a.textContent,routeErrors];
+ window.trace?.push(['F2',result]);
+ return a.textContent!==(cleared?'':a.dataset.busy)||JSON.stringify(routeErrors)!==JSON.stringify(bad?['SyntaxError']:[])?JSON.stringify(result):'';
+}`, []bool{cleared, route == "bad-applied" || route == "bad-seq"}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+			})
+		}
+	}
+	for _, kind := range []string{"null", "undefined", "equal", "different"} {
+		for _, missing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("sent-key/%s/missing=%t", kind, missing), func(t *testing.T) {
+				page, _, _, _ := pendingBrowser(t, browser, false)
+				result := page.MustEval(`([kind,missing]) => {
+ const b=document.getElementById('message-body'), f=b.form, errors=[], calls=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ if(kind==='equal'||kind==='different') {b.value='saved';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:'saved'}}))}
+ f.dataset.unconfirmedKey='mark';
+ if(missing) f.elements.idempotency_key.remove();
+ crypto.randomUUID=()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));return 'released'};
+ const key=kind==='null'?null:kind==='undefined'?undefined:kind==='equal'?'saved':'other';
+ b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key,message:'message-51'}}));
+ const release=kind==='null'||kind==='equal';
+ const result=[errors,calls,f.elements.idempotency_key?.value??null,f.hasAttribute('data-unconfirmed-key')];
+ window.trace?.push(['F1',kind,missing,result]);
+ const want=[release&&missing?['TypeError']:[],release?[false]:[],missing?null:release?'released':kind==='different'?'saved':'00000000-0000-4000-8000-000000000001',!release];
+ return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []any{kind, missing}).Str()
+				if result != "" {
+					t.Fatal(result)
+				}
+			})
+		}
+	}
 	for _, topic := range []bool{false, true} {
 		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) { testPendingComposerPage(t, browser, topic) })
 	}

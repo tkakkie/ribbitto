@@ -161,6 +161,10 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 	}))
 }
 
+func testCfg(apiBase, token string, now time.Time, stdout *bytes.Buffer) config {
+	return config{apiBase: apiBase, uploadBase: apiBase, storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: token, now: now, stdout: stdout, allowTestEndpoint: true}
+}
+
 func shaOf(n int) string { return fmt.Sprintf("%040x", n) }
 
 func relNameAt(t time.Time, sha string, run, attempt int) string {
@@ -198,7 +202,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	defer srv.Close()
 
 	var out bytes.Buffer
-	cfg := config{apiBase: srv.URL, storeRepo: "tkakkie/ribbitto-sourcemaps", token: "test-token", now: now, stdout: &out}
+	cfg := testCfg(srv.URL, "test-token", now, &out)
 	if err := runStore(t.Context(), cfg, dir, currSHA, "500", "2"); err != nil {
 		t.Fatalf("runStore failed: %v", err)
 	}
@@ -252,7 +256,7 @@ func TestStoreCoreFailures(t *testing.T) {
 			tc.mod(s)
 			srv := s.server(t)
 			defer srv.Close()
-			err := runStore(t.Context(), config{apiBase: srv.URL, storeRepo: "tkakkie/ribbitto-sourcemaps", token: tc.token, now: now, stdout: &bytes.Buffer{}}, dir, currSHA, "10", "1")
+			err := runStore(t.Context(), testCfg(srv.URL, tc.token, now, &bytes.Buffer{}), dir, currSHA, "10", "1")
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) || slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") }) {
 				t.Fatalf("want error %q and no publish, got err=%v events=%v", tc.wantErr, err, s.events)
 			}
@@ -293,7 +297,9 @@ func TestHTTPClientHardening(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	c := &apiClient{cfg: config{apiBase: srv.URL, storeRepo: "tkakkie/ribbitto-sourcemaps", token: "secret-tok", transport: tlsTarget.Client().Transport}}
+	cfg := testCfg(srv.URL, "secret-tok", time.Time{}, nil)
+	cfg.transport = tlsTarget.Client().Transport
+	c := &apiClient{cfg: cfg}
 	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 11, Name: tag, TagName: tag}) == nil || c.deleteTagByRef(t.Context(), tag) == nil {
 		t.Fatal("expected 301-to-GET 200 and 200 on DELETE to fail")
 	}
@@ -308,5 +314,20 @@ func TestHTTPClientHardening(t *testing.T) {
 	}
 	if _, err := c.listReleases(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeded") {
 		t.Fatalf("expected page cap error, got err=%v (pages=%d)", err, pages)
+	}
+	t.Setenv("SOURCEMAPS_API_URL", srv.URL)
+	t.Setenv("SOURCEMAPS_REPO", "evil/repo")
+	if pc := prodConfig("secret-tok", &bytes.Buffer{}, &bytes.Buffer{}); pc.apiBase != prodAPIBase || pc.uploadBase != prodUploadBase || pc.storeRepo != prodStoreRepo || pc.allowTestEndpoint {
+		t.Fatalf("prodConfig affected by env override: %+v", pc)
+	}
+	for _, bad := range []config{
+		{apiBase: srv.URL, uploadBase: prodUploadBase, storeRepo: prodStoreRepo, token: "secret-tok"},
+		{apiBase: "https://collector.example", uploadBase: prodUploadBase, storeRepo: prodStoreRepo, token: "secret-tok"},
+		{apiBase: prodAPIBase, uploadBase: "https://collector.example", storeRepo: prodStoreRepo, token: "secret-tok"},
+		{apiBase: prodAPIBase, uploadBase: prodUploadBase, storeRepo: "evil/repo", token: "secret-tok"},
+	} {
+		if _, _, err := (&apiClient{cfg: bad}).do(t.Context(), true, "GET", "/target", "", nil, nil); err == nil || leakedAuth != "" {
+			t.Fatalf("expected unpinned/non-https config %+v to be rejected without sending token, got err=%v leakedAuth=%q", bad, err, leakedAuth)
+		}
 	}
 }

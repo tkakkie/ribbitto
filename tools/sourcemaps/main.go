@@ -31,13 +31,22 @@ var (
 const (
 	maxResponseBytes = 64 << 20
 	maxReleasePages  = 100
+	prodAPIBase      = "https://api.github.com"
+	prodUploadBase   = "https://uploads.github.com"
+	prodStoreRepo    = "tkakkie/ribbitto-sourcemaps"
+	prodSourceRepo   = "tkakkie/ribbitto"
 )
 
 type config struct {
-	apiBase, storeRepo, sourceRepo, token string
-	now                                   time.Time
-	stdout, summary                       io.Writer
-	transport                             http.RoundTripper
+	apiBase, uploadBase, storeRepo, sourceRepo, token string
+	now                                               time.Time
+	stdout, summary                                   io.Writer
+	transport                                         http.RoundTripper
+	allowTestEndpoint                                 bool
+}
+
+func prodConfig(token string, stdout, summary io.Writer) config {
+	return config{apiBase: prodAPIBase, uploadBase: prodUploadBase, storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: token, stdout: stdout, summary: summary}
 }
 
 type bundle struct {
@@ -111,9 +120,15 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 }
 
 func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept string, body []byte, out any) (int, []byte, error) {
+	if !c.cfg.allowTestEndpoint && (c.cfg.apiBase != prodAPIBase || c.cfg.uploadBase != prodUploadBase || c.cfg.storeRepo != prodStoreRepo) {
+		return 0, nil, fmt.Errorf("refusing non-production endpoint configuration")
+	}
 	base := strings.TrimRight(c.cfg.apiBase, "/")
 	if method == "POST" && strings.HasSuffix(strings.Split(path, "?")[0], "/assets") {
-		base = strings.Replace(base, "://api.github.com", "://uploads.github.com", 1)
+		base = strings.TrimRight(cmp.Or(c.cfg.uploadBase, strings.Replace(base, "://api.github.com", "://uploads.github.com", 1)), "/")
+	}
+	if !c.cfg.allowTestEndpoint && !strings.HasPrefix(base, "https://") {
+		return 0, nil, fmt.Errorf("refusing non-https base %s", base)
 	}
 	var r io.Reader
 	if body != nil {
@@ -324,10 +339,7 @@ func main() {
 		defer func() { _ = f.Close() }()
 		summary = io.MultiWriter(os.Stderr, f)
 	}
-	cfg := config{
-		apiBase: cmp.Or(os.Getenv("SOURCEMAPS_API_URL"), "https://api.github.com"), storeRepo: cmp.Or(os.Getenv("SOURCEMAPS_REPO"), "tkakkie/ribbitto-sourcemaps"),
-		sourceRepo: cmp.Or(os.Getenv("SOURCEMAPS_SOURCE_REPO"), "tkakkie/ribbitto"), token: os.Getenv("SOURCEMAPS_TOKEN"), stdout: os.Stdout, summary: summary,
-	}
+	cfg := prodConfig(os.Getenv("SOURCEMAPS_TOKEN"), os.Stdout, summary)
 	var err error
 	switch {
 	case *lookup && len(args) >= 1 && len(args) <= 3:

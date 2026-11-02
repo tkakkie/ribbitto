@@ -103,8 +103,10 @@ func testInputTextBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatalf("%s: %v", name, err)
 				}
 				page.MustNavigate(server.URL + c.path).MustWaitLoad()
-				if media := page.MustEval(`() => [matchMedia('(pointer: coarse)').matches, matchMedia('(pointer: fine)').matches, matchMedia('(hover: none)').matches]`).Arr(); media[0].Bool() != v.touch || media[1].Bool() == v.touch || media[2].Bool() != v.touch {
-					t.Fatalf("%s: pointer coarse=%v fine=%v hover none=%v; want touch=%t", name, media[0], media[1], media[2], v.touch)
+				// Headless Chrome on Linux CI has no mouse (pointer: none, hover: none),
+				// so non-touch checks that the pointer is not coarse.
+				if media := page.MustEval(`() => [matchMedia('(pointer: coarse)').matches, matchMedia('(hover: none)').matches]`).Arr(); media[0].Bool() != v.touch || (v.touch && !media[1].Bool()) {
+					t.Fatalf("%s: pointer coarse=%v hover none=%v; want touch=%t", name, media[0], media[1], v.touch)
 				}
 				if c.show != "" {
 					page.MustEval(c.show)

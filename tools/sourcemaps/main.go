@@ -71,9 +71,14 @@ type manifest struct {
 }
 
 type ghAsset struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Size int64  `json:"size"`
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Size  int64  `json:"size"`
+	State string `json:"state"`
+}
+
+func validAsset(a ghAsset) bool {
+	return a.ID > 0 && a.Size > 0 && (a.State == "" || a.State == "uploaded")
 }
 
 type ghRelease struct {
@@ -273,7 +278,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		wantAssets[e.Map] = int64(len(assets[e.Map]))
 	}
 	for _, a := range draftRel.Assets {
-		if sz, ok := wantAssets[a.Name]; !ok || a.ID <= 0 || a.Size <= 0 || a.Size != sz {
+		if sz, ok := wantAssets[a.Name]; !ok || !validAsset(a) || a.Size != sz {
 			return fmt.Errorf("uploaded asset %s does not match manifest", a.Name)
 		}
 		delete(wantAssets, a.Name)
@@ -300,8 +305,8 @@ func runLookup(ctx context.Context, cfg config, sha, bundleSHA256, runID string)
 }
 
 func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runID string) (string, string, []byte, error) {
-	if !shaRe.MatchString(sha) || (runID != "" && !numIDRe.MatchString(runID)) {
-		return "", "", nil, fmt.Errorf("invalid lookup arguments")
+	if !shaRe.MatchString(sha) || (runID != "" && !numIDRe.MatchString(runID)) || (bundleSHA256 != "" && !sha256Re.MatchString(bundleSHA256)) || c.cfg.token == "" || c.cfg.now.IsZero() {
+		return "", "", nil, fmt.Errorf("invalid lookup configuration or arguments")
 	}
 	rels, err := c.listReleases(ctx)
 	if err != nil {
@@ -310,30 +315,46 @@ func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runI
 	var cands []parsedRel
 	for _, r := range rels {
 		p, ok := parseReleaseName(r.Name)
-		if ok && !r.Draft && !r.Prerelease && r.Name == r.TagName && p.SHA == sha && (c.cfg.now.IsZero() || !p.Start.After(c.cfg.now.Add(24*time.Hour))) && (runID == "" || strconv.FormatUint(p.RunID, 10) == runID) {
+		if ok && !r.Draft && !r.Prerelease && r.Name == r.TagName && p.SHA == sha && !p.Start.After(c.cfg.now.Add(24*time.Hour)) && (runID == "" || strconv.FormatUint(p.RunID, 10) == runID) {
 			cands = append(cands, parsedRel{r, p})
 		}
 	}
 	if len(cands) == 0 {
 		return "", "", nil, fmt.Errorf("no published release found for %s", sha)
 	}
-	slices.SortFunc(cands, func(a, b parsedRel) int { return compareOrder(b.parsed, a.parsed) })
-	best, assets := cands[0].rel, make(map[string]int64)
+	slices.SortFunc(cands, func(a, b parsedRel) int {
+		return cmp.Or(compareOrder(b.parsed, a.parsed), cmp.Compare(b.rel.ID, a.rel.ID))
+	})
+	best, p := cands[0].rel, cands[0].parsed
+	assets := make(map[string]ghAsset, len(best.Assets))
 	for _, a := range best.Assets {
-		assets[a.Name] = a.ID
+		if !validAsset(a) {
+			return "", "", nil, fmt.Errorf("invalid asset %s in %s", a.Name, best.Name)
+		}
+		assets[a.Name] = a
 	}
-	code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, assets["index.json"]), "application/octet-stream", nil, nil)
+	idxAsset, ok := assets["index.json"]
+	if !ok {
+		return "", "", nil, fmt.Errorf("missing index.json in %s", best.Name)
+	}
+	code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
 	var m manifest
-	if assets["index.json"] == 0 || err != nil || code != 200 || json.Unmarshal(idxBytes, &m) != nil {
-		return "", "", nil, fmt.Errorf("reading index.json from %s: status %d (%v)", best.Name, code, err)
+	if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
+		return "", "", nil, fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", best.Name, code, err)
+	}
+	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
+		if e := m.Entries[k]; !validBundleEntry(e) || assets[e.Map].ID == 0 {
+			return "", "", nil, fmt.Errorf("incomplete or invalid manifest entry %s in %s", e.Map, best.Name)
+		}
 	}
 	if bundleSHA256 == "" {
 		return best.Name, "index.json", idxBytes, nil
 	}
-	for _, e := range m.Entries {
-		if e.SHA256 == bundleSHA256 && assets[e.Map] != 0 {
-			code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, assets[e.Map]), "application/octet-stream", nil, nil)
-			if err != nil || code != 200 {
+	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
+		if e := m.Entries[k]; e.SHA256 == bundleSHA256 {
+			ma := assets[e.Map]
+			code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
+			if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
 				return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", e.Map, code, err)
 			}
 			return best.Name, e.Map, mapBytes, nil
@@ -355,6 +376,7 @@ func main() {
 	var err error
 	switch {
 	case *lookup && len(args) >= 1 && len(args) <= 3:
+		cfg.now = time.Now().UTC()
 		a := append(args, "", "")
 		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2])
 		if err = lerr; err == nil {

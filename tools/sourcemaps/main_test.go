@@ -17,10 +17,11 @@ import (
 )
 
 type mockAsset struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	data []byte
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Size  int64  `json:"size"`
+	State string `json:"state,omitempty"`
+	data  []byte
 }
 
 type mockRelease struct {
@@ -384,6 +385,44 @@ func TestZeroSizeAssetAndAllEntriesFetchBack(t *testing.T) {
 		err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1")
 		if err == nil || (mode == "zero-second" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
 			t.Fatalf("%s: expected failure, got err=%v events=%v", mode, err, s.events)
+		}
+	}
+}
+
+func TestLookupHardening(t *testing.T) {
+	now, sha, h, h2 := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), strings.Repeat("a", 64), strings.Repeat("b", 64)
+	rel, futRel, mapData := relNameAt(now, sha, 10, 1), fmt.Sprintf("map-99990101T000000Z-%s-10.1", sha), []byte(`{"version":3,"sourcesContent":["ok"]}`)
+	validIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":"a.js","sha256":%q,"map":"a.js.map"}}}`, sha, h))
+	wrongCommitIdx := bytes.ReplaceAll(validIdx, []byte(sha), []byte(shaOf(2)))
+	missingAssetIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"b.js","sha256":%q,"map":"b.js.map"}}}`, sha, h, h2))
+	assetOf := func(id int64, name, state string, d []byte) mockAsset {
+		return mockAsset{ID: id, Name: name, Size: int64(len(d)), State: state, data: d}
+	}
+	for _, tc := range []struct {
+		name, tok, relName string
+		clk                time.Time
+		assets             []mockAsset
+	}{
+		{"zero clock", "tok", futRel, time.Time{}, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "", mapData)}},
+		{"empty token", "", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "", mapData)}},
+		{"wrong commit", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", wrongCommitIdx), assetOf(3, "a.js.map", "", mapData)}},
+		{"missing asset", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", missingAssetIdx), assetOf(3, "a.js.map", "", mapData)}},
+		{"unready state", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "starter", mapData)}},
+	} {
+		s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: tc.relName, TagName: tc.relName, Assets: tc.assets}}}
+		srv := s.server(t)
+		defer srv.Close()
+		if _, _, _, err := runLookup(t.Context(), testCfg(srv.URL, tc.tok, tc.clk, nil), sha, h, ""); err == nil {
+			t.Fatalf("expected %s to fail lookup", tc.name)
+		}
+	}
+	dupIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"z":{"file":"z.js","sha256":%q,"map":"z.js.map"}}}`, sha, h, h))
+	s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: rel, TagName: rel, Assets: []mockAsset{assetOf(2, "index.json", "", dupIdx), assetOf(3, "a.js.map", "", mapData), assetOf(4, "z.js.map", "", mapData)}}}}
+	srv := s.server(t)
+	defer srv.Close()
+	for i := range 30 {
+		if _, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "10"); err != nil || gotMap != "a.js.map" {
+			t.Fatalf("iter %d: expected deterministic a.js.map, got %q (err=%v)", i, gotMap, err)
 		}
 	}
 }

@@ -6,4 +6,3 @@ message-link
 message-stream
 quote-selection
 sidebar-scroll
-sidebar-unread

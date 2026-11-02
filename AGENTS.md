@@ -81,17 +81,18 @@ and [`docs/accessibility.md`](docs/accessibility.md).
 Workflow reading: whoever performs an action reads its section —
 [own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
 [tool failures, disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
-[PR body scan](docs/workflow/delivery.md#running-a-review),
+[PR body scan](docs/workflow/delivery.md#pr-body-credential-scan),
 [measurement caps](docs/workflow/investigations.md#investigations-and-the-performance-target).
-Implementers read this file and the touched area's docs; cross-reviewers this
-file and [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
-(or [issue review](docs/workflow/reviewing.md#issue-review)); the orchestrator
-the [workflow README](docs/workflow/README.md) ([independence](docs/workflow/README.md#principles),
-[ruleset](docs/workflow/README.md#what-github-enforces-and-what-is-only-a-rule),
-[head SHA](docs/workflow/README.md#lifecycle)), [`delivery.md`](docs/workflow/delivery.md)
-([third-AI](docs/workflow/delivery.md#third-ai-review)) and
-[`reviewing.md`](docs/workflow/reviewing.md); [`ai-credentials.md`](docs/workflow/ai-credentials.md),
-[`investigations.md`](docs/workflow/investigations.md) and `docs/decisions/` only
+Read when implementing: this file and the touched area's docs. Cross-reviewers read this file and
+[PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
+(or [issue review](docs/workflow/reviewing.md#issue-review)). Orchestrators read
+the [workflow README](docs/workflow/README.md),
+[delivery](docs/workflow/delivery.md), [reviewing](docs/workflow/reviewing.md),
+[review operations](docs/workflow/review-operations.md)
+([third-AI](docs/workflow/review-operations.md#third-ai-review)) and
+[review follow-ups](docs/workflow/review-followups.md).
+Read [credentials](docs/workflow/ai-credentials.md),
+[investigations](docs/workflow/investigations.md) and `docs/decisions/` only
 for their subject.
 
 ## Writing code

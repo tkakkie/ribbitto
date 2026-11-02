@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -119,6 +118,16 @@ func (w chanWriter) Write(p []byte) (int, error) {
 
 func TestBuildDevelopmentAndWatch(t *testing.T) {
 	root := fixture(t, []byte("const first = 'alpha';\nconsole.log(first);\n"))
+	writeSource := func(data []byte) {
+		t.Helper()
+		// Stage outside the watched tree so truncation cannot publish an
+		// unintended empty generation and consume a retention slot.
+		stage := filepath.Join(root, "message-time.ts")
+		write(t, stage, data)
+		if err := os.Rename(stage, filepath.Join(root, "web/src/message-time.ts")); err != nil {
+			t.Fatal(err)
+		}
+	}
 	prodDist := filepath.Join(root, prodDistDir)
 	if err := build(root, "commit", "run", false); err != nil {
 		t.Fatal(err)
@@ -127,10 +136,18 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 
 	dist := filepath.Join(root, devDistDir)
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 	errs := make(chanWriter, 32)
 	done := make(chan error, 1)
-	go func() { done <- watch(ctx, root, errs) }()
+	go func() {
+		defer close(done)
+		done <- watch(ctx, root, errs)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("watch failed: %v", err)
+		}
+	})
 
 	waitBundle := func(prev string) (bundle, []byte, []byte) {
 		t.Helper()
@@ -138,9 +155,23 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 			var m manifest
 			if data, err := os.ReadFile(filepath.Join(dist, "manifest.json")); err == nil && json.Unmarshal(data, &m) == nil {
 				b := m.Entries["message-time"]
-				js, err1 := os.ReadFile(filepath.Join(dist, b.File))
-				sm, err2 := os.ReadFile(filepath.Join(dist, b.Map))
-				if b.File != "" && b.File != prev && b.Map == b.File+".map" && err1 == nil && err2 == nil {
+				if b.File != "" && b.File != prev {
+					// The manifest switches before cleanup. Acquiring the publisher's
+					// lock afterwards waits for both publication and garbage collection.
+					lock, err := os.Open(dist + ".lock")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() { _ = lock.Close() }()
+					if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_SH); err != nil {
+						t.Fatal(err)
+					}
+					defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
+					js, err1 := os.ReadFile(filepath.Join(dist, b.File))
+					sm, err2 := os.ReadFile(filepath.Join(dist, b.Map))
+					if b.Map != b.File+".map" || err1 != nil || err2 != nil {
+						t.Fatalf("invalid completed publication: %+v, %v / %v", b, err1, err2)
+					}
 					return b, js, sm
 				}
 			}
@@ -156,7 +187,7 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	// across failed rebuilds, recoveries and repeated generation switches.
 	readStop := make(chan struct{})
 	readErr := make(chan error, 1)
-	var reads atomic.Int64
+	readBundles := make(chan bundle)
 	go func() {
 		defer close(readErr)
 		for {
@@ -190,9 +221,35 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 				readErr <- fmt.Errorf("corrupted bundle or map for %s", b.File)
 				return
 			}
-			reads.Add(1)
+			select {
+			case readBundles <- b:
+			default:
+			}
 		}
 	}()
+	t.Cleanup(func() {
+		close(readStop)
+		if err := <-readErr; err != nil {
+			t.Errorf("concurrent reader saw error during rebuilds: %v", err)
+		}
+	})
+	// A completed read of the current generation bounds the next in-flight
+	// read's age. No more than two distinct publications follow each barrier,
+	// so the lock-free reader stays within retention even if descheduled.
+	waitRead := func(want bundle) {
+		t.Helper()
+		for {
+			select {
+			case got := <-readBundles:
+				if got == want {
+					return
+				}
+			case err := <-readErr:
+				t.Fatalf("concurrent reader failed: %v", err)
+			}
+		}
+	}
+	waitRead(b1)
 
 	lock := filepath.Join(root, "web/src/.#message-time.ts")
 	if err := os.Symlink(filepath.Join(root, "web/src/missing.ts"), lock); err != nil {
@@ -204,7 +261,7 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "web/src/message-time.ts"), []byte("const broken = ;\n"))
+	writeSource([]byte("const broken = ;\n"))
 	for {
 		if msg := <-errs; strings.Contains(msg, "building bundles:") {
 			break
@@ -213,8 +270,10 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	if kept, _, _ := waitBundle(""); kept != b1 {
 		t.Fatalf("failed rebuild altered previous bundle: got %+v, want %+v", kept, b1)
 	}
-	write(t, filepath.Join(root, "web/src/message-time.ts"), []byte("const second = 'beta';\nconsole.log(second);\n"))
+	waitRead(b1)
+	writeSource([]byte("const second = 'beta';\nconsole.log(second);\n"))
 	b2, js2, sm2 := waitBundle(b1.File)
+	waitRead(b2)
 	if !bytes.Contains(js1, []byte("//# sourceMappingURL="+b1.Map)) || !bytes.Contains(sm1, []byte(`"sourcesContent"`)) || !bytes.Contains(sm1, []byte("alpha")) || !bytes.Contains(js2, []byte("//# sourceMappingURL="+b2.Map)) || !bytes.Contains(sm2, []byte("beta")) {
 		t.Fatalf("development bundle or map missing expected content: %s / %s", js2, sm2)
 	}
@@ -228,15 +287,22 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	// Advance past maxPreviousGenerations so b1 is garbage-collected while recent generations stay.
 	prevFile := b2.File
 	for _, token := range []string{"gamma", "delta", "epsilon"} {
-		write(t, filepath.Join(root, "web/src/message-time.ts"), fmt.Appendf(nil, "const v = %q;\nconsole.log(v);\n", token))
+		writeSource(fmt.Appendf(nil, "const v = %q;\nconsole.log(v);\n", token))
 		bNext, _, _ := waitBundle(prevFile)
+		waitRead(bNext)
 		prevFile = bNext.File
 	}
 	if _, err := os.Stat(filepath.Join(dist, b1.File)); !os.IsNotExist(err) {
 		t.Fatalf("generation older than retention limit survived garbage collection: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dist, b1.Map)); !os.IsNotExist(err) {
+		t.Fatalf("map older than retention limit survived garbage collection: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(dist, b2.File)); err != nil {
 		t.Fatalf("recent generation within retention limit was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dist, b2.Map)); err != nil {
+		t.Fatalf("recent map within retention limit was removed: %v", err)
 	}
 	cancel()
 	if err := <-done; err != nil {
@@ -264,9 +330,10 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 			b     bundle
 		}{{stageA, bA}, {stageB, bB}} {
 			go func() {
-				defer func() { _ = os.RemoveAll(pub.stage) }()
 				<-start
-				errs <- publishDev(dist, pub.stage, manifest{Commit: "dev", RunID: pub.b.File, Entries: map[string]bundle{"message-time": pub.b}})
+				err := publishDev(dist, pub.stage, manifest{Commit: "dev", RunID: pub.b.File, Entries: map[string]bundle{"message-time": pub.b}})
+				_ = os.RemoveAll(pub.stage)
+				errs <- err
 			}()
 		}
 		close(start)
@@ -286,6 +353,7 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 		if len(m.Previous) == 0 || (m.Entries["message-time"] != bA || m.Previous[0]["message-time"] != bB) && (m.Entries["message-time"] != bB || m.Previous[0]["message-time"] != bA) {
 			t.Fatalf("overlapping publishDev lost generation ordering: entries=%+v previous=%+v", m.Entries, m.Previous)
 		}
+		waitRead(m.Entries["message-time"])
 		for _, b := range []bundle{bA, bB} {
 			if _, err := os.Stat(filepath.Join(dist, b.File)); err != nil {
 				t.Fatalf("overlapping publishDev lost bundle %s (active=%s): %v", b.File, m.Entries["message-time"].File, err)
@@ -296,23 +364,16 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 		}
 	}
 	for i := range 10 {
-		write(t, filepath.Join(root, "web/src/message-time.ts"), fmt.Appendf(nil, "const loop = %d;\nconsole.log(loop);\n", i))
+		writeSource(fmt.Appendf(nil, "const loop = %d;\nconsole.log(loop);\n", i))
 		if err := build(root, "dev", fmt.Sprintf("run-%d", i), true); err != nil {
 			t.Fatal(err)
 		}
+		b, _, _ := waitBundle("")
+		waitRead(b)
 	}
-	targetReads := reads.Load() + 10
-	for reads.Load() < targetReads {
-		select {
-		case err := <-readErr:
-			t.Fatalf("concurrent reader failed: %v", err)
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
-	close(readStop)
-	if err := <-readErr; err != nil {
-		t.Fatalf("concurrent reader saw error during rebuilds: %v", err)
+	b, _, _ := waitBundle("")
+	for range 10 {
+		waitRead(b)
 	}
 	stages, err := filepath.Glob(filepath.Join(filepath.Dir(dist), ".dist-*"))
 	if err != nil || len(stages) != 0 {

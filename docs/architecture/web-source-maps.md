@@ -58,41 +58,43 @@ is ever committed to Git** (Actions artifacts do not fit public-repo CI).
 ### Storing job, release naming and retention — #1819
 
 [#1819][i1819] writes production `.js.map` files (`sourcesContent`, outside
-`web/static/dist`, no `sourceMappingURL`) and the map index (outside
-`web/static`), uploads them, runs retention and the real-credential check
-automatically on `main` (nothing by hand), and adds mock-API (`httptest` in
-`make check-tools`) and public-artifact leak tests via a Go command in `tools`
-and non-PR `main`-push workflow sourcemaps-store.yml in the workflows directory
-(plain words until #1819; environment `sourcemaps`, `GITHUB_TOKEN` `contents:
-read`, store via `SOURCEMAPS_TOKEN` only; `.github/workflows/ci.yml` keeps
-`cancel-in-progress: true` and no secret/credentialed job).
+`web/static/dist`, no `sourceMappingURL`) and `bin/sourcemaps/index.json`
+(outside `web/static`), uploads them, runs retention and the real-credential
+check on `main`, and adds `httptest` (`make check-tools`) and leak tests via
+`tools/sourcemaps` (`make sourcemaps-store`) and
+`.github/workflows/sourcemaps-store.yml` (`sourcemaps` environment,
+`GITHUB_TOKEN` `contents: read`, `SOURCEMAPS_TOKEN` only;
+`.github/workflows/ci.yml` keeps `cancel-in-progress: true`, no secret).
 
 The job uses a per-commit concurrency group (`sourcemaps-<full SHA>`,
 `cancel-in-progress: false`), as a shared group keeps one running and one
 pending run and cancels the rest (silently dropping maps, since cancellation is
 not a failure); runs for different commits may overlap, so deletions are
-idempotent by exact ID (404 is success) and no step assumes it runs alone.
-Because the job also runs build tooling, the secret is passed only to the upload
-step (step-level `env`), never build, install or test steps; actions are
-SHA-pinned; and the storing command, its Go dependencies and every Makefile
-target or tool it calls are reviewed as workflow changes
+idempotent by exact ID (404 or absent-confirmed 422 is success) and no step
+assumes it runs alone. It builds once (`make bundles`) and uploads that output
+(`make sourcemaps-store`), passing the secret only to the upload step
+(step-level `env`), never build/install/test; actions are SHA-pinned; and the
+command, Go dependencies and called Makefile targets/tools are reviewed as
+workflow changes
 ([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
 - **Release naming, order and uniqueness:** tag and name
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>` (runner
   clock is the only "now", read once at job start and passed to the command;
   lower-case 40-hex SHA; decimal GitHub run id and attempt without leading
-  zeros, preventing same-SHA same-second collisions); maps and their index are
-  its assets. Age and order use the parsed name (never GitHub's commit-based
-  `created_at`), by `(start time, run id, attempt)`. A release is never reused,
-  renamed, retagged or returned to draft; tags are created and deleted with
-  their release. A rerun or second push of a SHA makes a new release; #2049 and
-  map lookup resolve a SHA to its newest complete published release by that
-  order, and older duplicates are never required.
-- **Release lifecycle:** each run creates a new draft, uploads all assets and
-  the index, verifies the asset set against its own manifest (no external
-  expected-asset list), and only then publishes; published releases are complete
-  by construction and only drafts are incomplete. A failed or interrupted run
+  zeros, preventing same-SHA same-second collisions); maps and index are its
+  assets. Age and order use the parsed name (never GitHub's `created_at`), by
+  `(start time, run id, attempt)` (`run id`/`attempt` numeric). A release is
+  never reused, renamed, retagged or returned to draft; releases target store
+  `main` (`target_commitish: "main"`, README-only store) and tags are
+  created/deleted with their release. A rerun or second push makes a new
+  release; #2049 and lookup (`go -C tools run ./sourcemaps -lookup <SHA>
+  [<sha256> [<run id>]]`) resolve a SHA to its newest complete published release.
+- **Release lifecycle:** each run creates a draft, uploads maps and `index.json`
+  (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verifies
+  them against that manifest, publishes, and verifies lookup and per-ID
+  fetch-back; published releases are complete by construction and only drafts
+  are incomplete. A failed or interrupted run
   leaves its own draft or (if it failed after publishing) a published duplicate,
   both harmless under distinct-SHA retention below. A draft is never reused; any
   later run idempotently deletes abandoned strict-`map-` drafts older than 7

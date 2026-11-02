@@ -35,18 +35,36 @@ type mockRelease struct {
 }
 
 type mockStore struct {
-	token, tamperManifest, failTagDel, tagDel404 string
-	releases                                     []mockRelease
-	tags, events                                 []string
-	failUpload                                   bool
-	failRelDelID, relDel404ID, wrongLookupID     int64
-	nextID                                       int64
+	token, expiryHeader, tamperManifest, failTagDel, failTagDel422, tagDel404, tagDel422, recheckTagRel string
+	releases                                                                                            []mockRelease
+	tags, events                                                                                        []string
+	activeSHAs                                                                                          map[string]bool
+	failUpload                                                                                          bool
+	failRelDelID, relDel404ID, wrongLookupID, nextID                                                    int64
 }
 
 func (s *mockStore) server(t *testing.T) *httptest.Server {
 	t.Helper()
 	s.nextID = max(s.nextID, 100)
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/repos/tkakkie/ribbitto/actions/runs") {
+			if r.Header.Get("Authorization") != "" {
+				t.Errorf("store token leaked to source repo: %s", r.URL.Path)
+			}
+			headSHA := r.URL.Query().Get("head_sha")
+			runs := []map[string]string{
+				{"status": "in_progress", "path": ".github/workflows/ci.yml"},
+				{"status": "completed", "path": ".github/workflows/sourcemaps-store.yml"},
+			}
+			if s.activeSHAs[headSHA] {
+				runs = append(runs, map[string]string{"status": "in_progress", "path": ".github/workflows/sourcemaps-store.yml"})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": runs})
+			return
+		}
+		if s.expiryHeader != "" {
+			w.Header().Set("github-authentication-token-expiration", s.expiryHeader)
+		}
 		if r.Header.Get("Authorization") != "Bearer "+s.token {
 			http.Error(w, "unauthorized", 401)
 			return
@@ -111,6 +129,19 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				}
 			}
 			http.NotFound(w, r)
+		case r.Method == "GET" && strings.HasPrefix(path, "/releases/tags/"):
+			tag := strings.TrimPrefix(path, "/releases/tags/")
+			if tag == s.recheckTagRel {
+				_ = json.NewEncoder(w).Encode(mockRelease{ID: 999, Name: tag, TagName: tag})
+				return
+			}
+			for _, rel := range s.releases {
+				if !rel.Draft && rel.TagName == tag {
+					_ = json.NewEncoder(w).Encode(rel)
+					return
+				}
+			}
+			http.NotFound(w, r)
 		case strings.HasPrefix(path, "/releases/"):
 			id, _ := strconv.ParseInt(strings.TrimPrefix(path, "/releases/"), 10, 64)
 			if r.Method == "GET" && id == s.wrongLookupID {
@@ -142,9 +173,12 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 					}
 					var p struct{ Draft, Prerelease bool }
 					_ = json.NewDecoder(r.Body).Decode(&p)
-					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft, p.Prerelease || s.tamperManifest == "pub-prerelease"
-					s.releases[i].Draft = s.releases[i].Draft || s.tamperManifest == "pub-still-draft"
-					if s.tamperManifest == "corrupt-second-after-publish" {
+					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft || s.tamperManifest == "pub-still-draft", p.Prerelease || s.tamperManifest == "pub-prerelease"
+					if s.tamperManifest == "pub-bad-name" {
+						s.releases[i].Name = "wrong"
+					} else if s.tamperManifest == "pub-bad-tag" {
+						s.releases[i].TagName = "wrong"
+					} else if s.tamperManifest == "corrupt-second-after-publish" {
 						for j := range s.releases[i].Assets {
 							if s.releases[i].Assets[j].Name == "b-second.js.map" {
 								s.releases[i].Assets[j].data = []byte(`{"sourcesContent":["X"]}`)
@@ -156,6 +190,9 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 					}
 					s.events = append(s.events, "publish:"+s.releases[i].Name)
 					_ = json.NewEncoder(w).Encode(s.releases[i])
+					if s.tamperManifest == "post-publish-tag-mismatch" {
+						s.releases[i].TagName = "wrong"
+					}
 				case "DELETE":
 					if id == s.failRelDelID {
 						http.Error(w, "refused", 500)
@@ -171,21 +208,39 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				return
 			}
 			http.NotFound(w, r)
+		case r.Method == "GET" && path == "/tags":
+			p, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			start := min((max(p, 1)-1)*100, len(s.tags))
+			var out []map[string]string
+			for _, tag := range s.tags[start:min(start+100, len(s.tags))] {
+				out = append(out, map[string]string{"name": tag})
+			}
+			_ = json.NewEncoder(w).Encode(out)
+		case r.Method == "GET" && strings.HasPrefix(path, "/git/ref/tags/"):
+			if tag := strings.TrimPrefix(path, "/git/ref/tags/"); slices.Contains(s.tags, tag) {
+				_ = json.NewEncoder(w).Encode(map[string]string{"ref": "refs/tags/" + tag})
+				return
+			}
+			http.NotFound(w, r)
 		case r.Method == "DELETE" && strings.HasPrefix(path, "/git/refs/tags/"):
 			tag := strings.TrimPrefix(path, "/git/refs/tags/")
-			if tag == s.failTagDel {
-				http.Error(w, "refused", 500)
+			if tag == s.failTagDel || tag == s.failTagDel422 {
+				http.Error(w, "refused", cmp.Or(map[bool]int{true: 422}[tag == s.failTagDel422], 500))
 				return
 			}
 			s.events = append(s.events, "del-tag:"+tag)
 			if idx := slices.Index(s.tags, tag); idx >= 0 {
 				s.tags = slices.Delete(s.tags, idx, idx+1)
-				if tag != s.tagDel404 {
+				if tag == s.tagDel404 {
+					http.NotFound(w, r)
+					return
+				}
+				if tag != s.tagDel422 {
 					w.WriteHeader(204)
 					return
 				}
 			}
-			http.NotFound(w, r)
+			http.Error(w, `{"message":"Reference does not exist"}`, 422)
 		default:
 			http.NotFound(w, r)
 		}
@@ -220,38 +275,98 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	oldTag := relNameAt(now.Add(-95*day), shaOf(11), 9, 1)
 	oldTag404 := relNameAt(now.Add(-100*day), shaOf(11), 8, 1)
 	oldTag500 := relNameAt(now.Add(-105*day), shaOf(11), 7, 1)
-	store := &mockStore{
-		token: "test-token",
-		releases: []mockRelease{
-			{ID: 11, Name: oldTag, TagName: oldTag},
-			{ID: 12, Name: oldTag404, TagName: oldTag404},
-			{ID: 13, Name: oldTag, TagName: oldTag},
-			{ID: 14, Name: oldTag500, TagName: oldTag500},
-		},
-		tags:        []string{oldTag, oldTag404, oldTag500},
-		relDel404ID: 12, tagDel404: oldTag404, wrongLookupID: 13, failRelDelID: 14, failTagDel: oldTag500,
+	var rels []mockRelease
+	var tags []string
+	addPub := func(id int64, ts time.Time, sha string, run, att int) string {
+		name := relNameAt(ts, sha, run, att)
+		rels, tags = append(rels, mockRelease{ID: id, Name: name, TagName: name}), append(tags, name)
+		return name
 	}
-	for i := range 102 {
-		filler := relNameAt(now.Add(-time.Duration(i+1)*time.Minute), shaOf(50+i), i+1, 1)
-		store.releases = append(store.releases, mockRelease{ID: int64(200 + i), Name: filler, TagName: filler})
+	for i := 2; i <= 10; i++ {
+		addPub(int64(i), now.Add(-10*day), shaOf(i), 100+i, 1)
+	}
+	for i := range 95 {
+		d := relNameAt(now.Add(-time.Duration(i+1)*time.Hour), shaOf(200+i), i+1, 1)
+		rels, tags = append(rels, mockRelease{ID: int64(200 + i), Name: d, TagName: d, Draft: true}), append(tags, d)
+	}
+	dupOld, kept89d := addPub(20, now.Add(-100*day), shaOf(2), 50, 1), addPub(13, now.Add(-89*day), shaOf(12), 7, 1)
+	draftDel, draftActive, draftYoung := relNameAt(now.Add(-8*day), shaOf(50), 1, 1), relNameAt(now.Add(-9*day), shaOf(99), 1, 1), relNameAt(now.Add(-3*day), shaOf(51), 1, 1)
+	preTag, subName := relNameAt(now.Add(-120*day), shaOf(60), 1, 1), "prefix-"+relNameAt(now.Add(-120*day), shaOf(61), 1, 1)
+	mismatchTag, futureTag := relNameAt(now.Add(-120*day), shaOf(62), 1, 1), relNameAt(now.Add(2*day), shaOf(64), 1, 1)
+	orphanOld, orphanRecheck, orphanYoung := relNameAt(now.Add(-8*day), shaOf(70), 1, 1), relNameAt(now.Add(-8*day), shaOf(71), 1, 1), relNameAt(now.Add(-2*day), shaOf(72), 1, 1)
+	rels = append(rels,
+		mockRelease{ID: 11, Name: oldTag, TagName: oldTag},
+		mockRelease{ID: 12, Name: oldTag404, TagName: oldTag404},
+		mockRelease{ID: 15, Name: oldTag500, TagName: oldTag500},
+		mockRelease{ID: 30, Name: draftDel, TagName: draftDel, Draft: true},
+		mockRelease{ID: 31, Name: draftDel, TagName: draftDel, Draft: true},
+		mockRelease{ID: 32, Name: draftActive, TagName: draftActive, Draft: true},
+		mockRelease{ID: 33, Name: draftYoung, TagName: draftYoung, Draft: true},
+		mockRelease{ID: 34, Name: "draft-non-strict", TagName: "draft-non-strict", Draft: true},
+		mockRelease{ID: 40, Name: preTag, TagName: preTag, Prerelease: true},
+		mockRelease{ID: 41, Name: "map-bad-name", TagName: "map-bad-name"},
+		mockRelease{ID: 42, Name: subName, TagName: subName},
+		mockRelease{ID: 43, Name: relNameAt(now.Add(-120*day), shaOf(63), 1, 1), TagName: mismatchTag},
+		mockRelease{ID: 44, Name: futureTag, TagName: futureTag},
+	)
+	tags = append(tags, oldTag, oldTag404, oldTag500, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
+	store := &mockStore{
+		token: "test-token", expiryHeader: now.Add(15 * day).Format("2006-01-02 15:04:05 UTC"),
+		releases: rels, tags: tags, activeSHAs: map[string]bool{shaOf(99): true},
+		relDel404ID: 12, tagDel404: oldTag404, tagDel422: oldTag500, recheckTagRel: orphanRecheck,
 	}
 	srv := store.server(t)
 	defer srv.Close()
 
-	var out bytes.Buffer
+	var out, summary bytes.Buffer
 	cfg := testCfg(srv.URL, "test-token", now, &out)
+	cfg.summary = &summary
 	if err := runStore(t.Context(), cfg, dir, currSHA, "500", "2"); err != nil {
 		t.Fatalf("runStore failed: %v", err)
 	}
 	wantRel := relNameAt(now, currSHA, 500, 2)
-	draftIdx, pubIdx := slices.Index(store.events, "draft:"+wantRel), slices.Index(store.events, "publish:"+wantRel)
-	if !strings.Contains(out.String(), wantRel) || draftIdx < 0 || pubIdx <= draftIdx {
+	draftIdx, pubIdx, delIdx := slices.Index(store.events, "draft:"+wantRel), slices.Index(store.events, "publish:"+wantRel), slices.Index(store.events, "del-rel:11")
+	delTag11, delRel12, delTag12, delRel15, delTag15 := slices.Index(store.events, "del-tag:"+oldTag), slices.Index(store.events, "del-rel:12"), slices.Index(store.events, "del-tag:"+oldTag404), slices.Index(store.events, "del-rel:15"), slices.Index(store.events, "del-tag:"+oldTag500)
+	if !strings.Contains(out.String(), wantRel) || draftIdx < 0 || pubIdx <= draftIdx || delIdx <= pubIdx || delTag11 <= delIdx || delRel12 <= pubIdx || delTag12 <= delRel12 || delRel15 <= pubIdx || delTag15 <= delRel15 {
 		t.Fatalf("unexpected output or lifecycle order: %s / %v", out.String(), store.events)
 	}
-	for _, run := range []struct{ id, att int }{{10, 1}, {9, 1}, {510, 10}, {510, 9}} {
+	hasRel := func(id int64) bool {
+		return slices.ContainsFunc(store.releases, func(r mockRelease) bool { return r.ID == id })
+	}
+	for _, gone := range []int64{11, 12, 15, 30, 31} {
+		if hasRel(gone) {
+			t.Errorf("release ID %d was not deleted", gone)
+		}
+	}
+	for _, kept := range []int64{2, 20, 13, 32, 33, 34, 40, 41, 42, 43, 44} {
+		if !hasRel(kept) {
+			t.Errorf("release ID %d was wrongly deleted", kept)
+		}
+	}
+	for _, goneTag := range []string{oldTag, oldTag404, oldTag500, orphanOld} {
+		if slices.Contains(store.tags, goneTag) {
+			t.Errorf("tag %s was not deleted", goneTag)
+		}
+	}
+	for _, keptTag := range []string{wantRel, dupOld, kept89d, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanRecheck, orphanYoung} {
+		if !slices.Contains(store.tags, keptTag) {
+			t.Errorf("tag %s was wrongly deleted", keptTag)
+		}
+	}
+	for _, warn := range []string{"abandoned draft", "younger draft", "prerelease", "unparsable", "name/tag mismatch", "future-dated"} {
+		if !strings.Contains(summary.String(), warn) {
+			t.Errorf("job summary missing %q warning:\n%s", warn, summary.String())
+		}
+	}
+	for _, run := range []struct{ id, att int }{{9, 1}, {10, 1}, {510, 9}, {510, 10}} {
 		dirN, _, _ := writeMapDir(t, currSHA, strconv.Itoa(run.id))
 		if err := runStore(t.Context(), cfg, dirN, currSHA, strconv.Itoa(run.id), strconv.Itoa(run.att)); err != nil {
 			t.Fatalf("rerun store %v failed: %v", run, err)
+		}
+	}
+	for i := range store.releases {
+		if store.releases[i].Name == relNameAt(now, currSHA, 510, 9) {
+			store.releases[i].ID = 9999
 		}
 	}
 	store.releases = append([]mockRelease{
@@ -270,12 +385,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		t.Fatalf("lookup with runID=9 failed: rel=%s err=%v", gotRel9, err)
 	}
 	c := &apiClient{cfg: cfg}
-	if err := cmp.Or(c.deleteReleaseByID(t.Context(), ghRelease{ID: 11, Name: oldTag, TagName: oldTag}), c.deleteTagByRef(t.Context(), oldTag), c.deleteReleaseByID(t.Context(), ghRelease{ID: 12, Name: oldTag404, TagName: oldTag404}), c.deleteTagByRef(t.Context(), oldTag404)); err != nil {
-		t.Fatalf("exact-ID deletion failed: %v", err)
-	}
-	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 14, Name: oldTag500, TagName: oldTag500}) == nil || c.deleteTagByRef(t.Context(), oldTag500) == nil ||
-		c.deleteReleaseByID(t.Context(), ghRelease{ID: 13, Name: oldTag, TagName: oldTag}) == nil ||
-		c.deleteReleaseByID(t.Context(), ghRelease{ID: 40, Name: oldTag, TagName: oldTag, Prerelease: true}) == nil ||
+	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 40, Name: oldTag, TagName: oldTag, Prerelease: true}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 41, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 42, Name: oldTag, TagName: oldTag404}) == nil ||
 		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
@@ -283,11 +393,40 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		c.deleteTagByRef(t.Context(), "non-canonical") == nil {
 		t.Fatal("expected exact-ID deletion guard to refuse invalid release or tag")
 	}
+	tenStore := &mockStore{token: "test-token", expiryHeader: now.Add(20 * day).Format("2006-01-02 15:04:05 UTC")}
+	tenSrv := tenStore.server(t)
+	defer tenSrv.Close()
+	tenCfg := testCfg(tenSrv.URL, "test-token", now.Add(-100*day), &out)
+	tenCfg.summary = &summary
+	for i := 1; i <= 10; i++ {
+		d, _, _ := writeMapDir(t, shaOf(i), strconv.Itoa(i))
+		if err := runStore(t.Context(), tenCfg, d, shaOf(i), strconv.Itoa(i), "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	futureSlot := relNameAt(now.Add(2*day), shaOf(999), 1, 1)
+	tenStore.releases, tenStore.tags = append(tenStore.releases, mockRelease{ID: 999, Name: futureSlot, TagName: futureSlot}), append(tenStore.tags, futureSlot)
+	tenCfg.now = now
+	d1, _, _ := writeMapDir(t, shaOf(1), "99")
+	d11, _, _ := writeMapDir(t, shaOf(11), "100")
+	oldSHA1, oldSHA2 := relNameAt(now.Add(-100*day), shaOf(1), 1, 1), relNameAt(now.Add(-100*day), shaOf(2), 2, 1)
+	if len(tenStore.releases) != 11 || runStore(t.Context(), tenCfg, d1, shaOf(1), "99", "1") != nil || len(tenStore.releases) != 12 || runStore(t.Context(), tenCfg, d11, shaOf(11), "100", "1") != nil || len(tenStore.releases) != 12 || !slices.Contains(tenStore.tags, oldSHA1) || !slices.Contains(tenStore.tags, futureSlot) || slices.Contains(tenStore.tags, oldSHA2) {
+		t.Fatalf("unexpected distinct-SHA slot retention: %d releases, tags=%v", len(tenStore.releases), tenStore.tags)
+	}
 }
 
 func TestStoreCoreFailures(t *testing.T) {
-	now, currSHA := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1)
+	now, day, currSHA := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), 24*time.Hour, shaOf(1)
 	dir, _, _ := writeMapDir(t, currSHA, "10")
+	oldExpired := func() ([]mockRelease, []string) {
+		var r []mockRelease
+		var tags []string
+		for i := 2; i <= 12; i++ {
+			name := relNameAt(now.Add(-100*day), shaOf(i), i, 1)
+			r, tags = append(r, mockRelease{ID: int64(i), Name: name, TagName: name}), append(tags, name)
+		}
+		return r, tags
+	}
 	for _, tc := range []struct {
 		name, token, wantErr string
 		mod                  func(*mockStore)
@@ -303,17 +442,53 @@ func TestStoreCoreFailures(t *testing.T) {
 		{"draft verification bad tag", "tok", "verifying draft", func(s *mockStore) { s.tamperManifest = "draft-bad-tag" }},
 		{"publish response still draft", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-still-draft" }},
 		{"publish response prerelease", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-prerelease" }},
+		{"publish response bad name", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-bad-name" }},
+		{"publish response bad tag", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-bad-tag" }},
+		{"post-publish lookup verification", "tok", "verifying published release", func(s *mockStore) { s.tamperManifest = "post-publish-tag-mismatch" }},
+		{"refused release deletion", "tok", "500", func(s *mockStore) { s.failRelDelID = 2 }},
+		{"refused tag deletion 422 while present", "tok", "deleting tag", func(s *mockStore) { s.failTagDel422 = relNameAt(now.Add(-100*day), shaOf(2), 2, 1) }},
+		{"wrong lookup release refused", "tok", "mismatch", func(s *mockStore) { s.wrongLookupID = 2 }},
+		{"13 days expiry fails after upload and retention", "tok", "expires", func(s *mockStore) { s.expiryHeader = now.Add(13 * day).Format("2006-01-02 15:04:05 UTC") }},
+		{"warn:missing github-authentication-token-expiration", "tok", "", func(s *mockStore) { s.expiryHeader = "" }},
+		{"warn:unparsable github-authentication-token-expiration", "tok", "", func(s *mockStore) { s.expiryHeader = "not-a-date" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := &mockStore{token: "tok"}
+			rels, tags := oldExpired()
+			s := &mockStore{token: "tok", expiryHeader: now.Add(15 * day).Format("2006-01-02 15:04:05 UTC"), releases: rels, tags: tags}
 			tc.mod(s)
 			srv := s.server(t)
 			defer srv.Close()
-			err := runStore(t.Context(), testCfg(srv.URL, tc.token, now, &bytes.Buffer{}), dir, currSHA, "10", "1")
-			if err == nil || !strings.Contains(err.Error(), tc.wantErr) || (tc.wantErr != "publishing release" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
-				t.Fatalf("want error %q and no publish, got err=%v events=%v", tc.wantErr, err, s.events)
+			var out, summary bytes.Buffer
+			cfg := testCfg(srv.URL, tc.token, now, &out)
+			cfg.summary = &summary
+			err := runStore(t.Context(), cfg, dir, currSHA, "10", "1")
+			if (tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr))) || (tc.wantErr == "" && err != nil) {
+				t.Fatalf("want error %q, got %v", tc.wantErr, err)
+			}
+			published := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })
+			deleted := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "del-rel:") })
+			wantWarn, hasWarn := strings.CutPrefix(tc.name, "warn:")
+			if (published && !strings.Contains(tc.name, "publish") && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "lookup") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
+				(deleted && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
+				((strings.Contains(tc.name, "expiry") || hasWarn) && !slices.Contains(s.events, "del-rel:2")) ||
+				(hasWarn && !strings.Contains(summary.String(), wantWarn)) {
+				t.Fatalf("unexpected events %v or summary %q", s.events, summary.String())
 			}
 		})
+	}
+	rels, tags := oldExpired()
+	failTag := rels[0].TagName
+	s := &mockStore{token: "tok", expiryHeader: now.Add(15 * day).Format("2006-01-02 15:04:05 UTC"), releases: rels, tags: tags, failTagDel: failTag}
+	srv := s.server(t)
+	defer srv.Close()
+	cfg := testCfg(srv.URL, "tok", now, &bytes.Buffer{})
+	cfg.summary = &bytes.Buffer{}
+	if runStore(t.Context(), cfg, dir, currSHA, "10", "1") == nil || !slices.Contains(s.tags, failTag) {
+		t.Fatal("failed tag deletion must error and leave tag for next run")
+	}
+	s.failTagDel = ""
+	if err := runStore(t.Context(), cfg, dir, currSHA, "10", "2"); err != nil || slices.Contains(s.tags, failTag) {
+		t.Fatalf("next run failed to delete orphan tag: %v", err)
 	}
 }
 
@@ -383,10 +558,11 @@ func TestHTTPClientHardening(t *testing.T) {
 		t.Fatalf("prodConfig affected by env override: %+v", pc)
 	}
 	for _, bad := range []config{
-		{apiBase: srv.URL, uploadBase: prodUploadBase, storeRepo: prodStoreRepo, token: "secret-tok"},
-		{apiBase: "https://collector.example", uploadBase: prodUploadBase, storeRepo: prodStoreRepo, token: "secret-tok"},
-		{apiBase: prodAPIBase, uploadBase: "https://collector.example", storeRepo: prodStoreRepo, token: "secret-tok"},
-		{apiBase: prodAPIBase, uploadBase: prodUploadBase, storeRepo: "evil/repo", token: "secret-tok"},
+		{apiBase: srv.URL, uploadBase: prodUploadBase, storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: "secret-tok"},
+		{apiBase: "https://collector.example", uploadBase: prodUploadBase, storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: "secret-tok"},
+		{apiBase: prodAPIBase, uploadBase: "https://collector.example", storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: "secret-tok"},
+		{apiBase: prodAPIBase, uploadBase: prodUploadBase, storeRepo: "evil/repo", sourceRepo: prodSourceRepo, token: "secret-tok"},
+		{apiBase: prodAPIBase, uploadBase: prodUploadBase, storeRepo: prodStoreRepo, sourceRepo: "evil/source", token: "secret-tok"},
 	} {
 		if _, _, err := (&apiClient{cfg: bad}).do(t.Context(), true, "GET", "/target", "", nil, nil); err == nil || leakedAuth != "" {
 			t.Fatalf("expected unpinned/non-https config %+v to be rejected without sending token, got err=%v leakedAuth=%q", bad, err, leakedAuth)
@@ -497,16 +673,26 @@ func TestLookupHardening(t *testing.T) {
 		}
 	}
 	dupIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"z":{"file":"z.js","sha256":%q,"map":"z.js.map"}}}`, sha, h, h))
-	newerRel := relNameAt(now.Add(time.Minute), sha, 20, 1)
-	newerDupMapIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"20","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"a.js","sha256":%q,"map":"a.js.map"}}}`, sha, h, h2))
+	idxFor := func(run int, entries string) []byte {
+		return []byte(fmt.Sprintf(`{"commit":%q,"run_id":"%d","entries":{%s}}`, sha, run, entries))
+	}
+	rAt := func(run int) string { return relNameAt(now.Add(time.Duration(run)*time.Minute), sha, run, 1) }
 	s := &mockStore{token: "tok", releases: []mockRelease{
-		{ID: 2, Name: newerRel, TagName: newerRel, Assets: []mockAsset{assetOf(5, "index.json", "", newerDupMapIdx), assetOf(6, "a.js.map", "", mapData)}},
+		{ID: 26, Name: rAt(26), TagName: rAt(26), Assets: []mockAsset{assetOf(261, "index.json", "", idxFor(26, fmt.Sprintf(`"a":{"file":"a.js","sha256":%q,"map":"a.js.map"}`, h))), assetOf(262, "a.js.map", "starter", mapData)}},
+		{ID: 25, Name: rAt(25), TagName: rAt(25), Assets: []mockAsset{assetOf(251, "a.js.map", "", mapData)}},
+		{ID: 24, Name: rAt(24), TagName: rAt(24), Assets: []mockAsset{assetOf(241, "index.json", "", idxFor(24, fmt.Sprintf(`"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"b.js","sha256":%q,"map":"b.js.map"}`, h, h2))), assetOf(242, "a.js.map", "", mapData)}},
+		{ID: 23, Name: rAt(23), TagName: rAt(23), Assets: []mockAsset{assetOf(231, "index.json", "", idxFor(23, `"a":{"file":"a.js","sha256":"bad","map":"a.js.map"}`)), assetOf(232, "a.js.map", "", mapData)}},
+		{ID: 22, Name: rAt(22), TagName: rAt(22), Assets: []mockAsset{assetOf(221, "index.json", "", idxFor(22, fmt.Sprintf(`"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"a.js","sha256":%q,"map":"a.js.map"}`, h, h2))), assetOf(222, "a.js.map", "", mapData), assetOf(223, "extra.js.map", "", mapData)}},
+		{ID: 21, Name: rAt(21), TagName: rAt(21), Assets: []mockAsset{assetOf(211, "index.json", "", idxFor(21, fmt.Sprintf(`"a":{"file":"a.js","sha256":%q,"map":"a.js.map"}`, h))), assetOf(212, "other.js.map", "", mapData)}},
 		{ID: 1, Name: rel, TagName: rel, Assets: []mockAsset{assetOf(2, "index.json", "", dupIdx), assetOf(3, "a.js.map", "", mapData), assetOf(4, "z.js.map", "", mapData)}},
 	}}
 	srv := s.server(t)
 	defer srv.Close()
 	if gotRel, gotIdx, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, "", ""); err != nil || gotRel != rel || gotIdx != "index.json" {
-		t.Fatalf("expected SHA-only lookup to skip incomplete newer release and pick %s, got rel=%q asset=%q err=%v", rel, gotRel, gotIdx, err)
+		t.Fatalf("expected SHA-only lookup to skip incomplete newer releases and pick %s, got rel=%q asset=%q err=%v", rel, gotRel, gotIdx, err)
+	}
+	if gotRel, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, ""); err != nil || gotRel != rel || gotMap != "a.js.map" {
+		t.Fatalf("expected hash lookup to skip incomplete newer releases and pick %s/a.js.map, got rel=%q map=%q err=%v", rel, gotRel, gotMap, err)
 	}
 	for i := range 30 {
 		if _, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "10"); err != nil || gotMap != "a.js.map" {

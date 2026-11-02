@@ -1,5 +1,6 @@
 // Command sourcemaps uploads production source maps to the private release store,
-// verifies the uploaded manifest and assets, and looks up stored maps.
+// verifies the uploaded manifest and assets, applies distinct-SHA retention,
+// draft/orphan-tag cleanup and token-expiry checks, and looks up stored maps.
 package main
 
 import (
@@ -121,7 +122,10 @@ func compareOrder(a, b releaseName) int {
 	return cmp.Or(a.Start.Compare(b.Start), cmp.Compare(a.RunID, b.RunID), cmp.Compare(a.Attempt, b.Attempt))
 }
 
-type apiClient struct{ cfg config }
+type apiClient struct {
+	cfg    config
+	expiry string
+}
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 || req.Method != http.MethodGet || via[0].Method != http.MethodGet || req.URL.Scheme != "https" {
@@ -132,7 +136,7 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 }
 
 func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept string, body []byte, out any) (int, []byte, error) {
-	if !c.cfg.allowTestEndpoint && (c.cfg.apiBase != prodAPIBase || c.cfg.uploadBase != prodUploadBase || c.cfg.storeRepo != prodStoreRepo) {
+	if !c.cfg.allowTestEndpoint && (c.cfg.apiBase != prodAPIBase || c.cfg.uploadBase != prodUploadBase || c.cfg.storeRepo != prodStoreRepo || c.cfg.sourceRepo != prodSourceRepo) {
 		return 0, nil, fmt.Errorf("refusing non-production endpoint configuration")
 	}
 	base := strings.TrimRight(c.cfg.apiBase, "/")
@@ -167,6 +171,9 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, path, errors.Unwrap(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if storeAuth {
+		c.expiry = cmp.Or(resp.Header.Get("github-authentication-token-expiration"), c.expiry)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err == nil && int64(len(raw)) > maxResponseBytes {
 		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
@@ -211,10 +218,29 @@ func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 	if _, ok := parseReleaseName(tag); !ok {
 		return fmt.Errorf("refusing to delete non-canonical tag %q", tag)
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (code != 204 && code != 404) {
+	code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
+	if err == nil && code == 422 {
+		code, _, err = c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
+	}
+	if err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting tag %s: status %d (%v)", tag, code, err)
 	}
 	return nil
+}
+
+func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) {
+	var res struct {
+		Runs []struct{ Status, Path string } `json:"workflow_runs"`
+	}
+	if code, _, err := c.do(ctx, false, "GET", fmt.Sprintf("/repos/%s/actions/runs?head_sha=%s&per_page=100", c.cfg.sourceRepo, sha), "", nil, &res); err != nil || code != 200 {
+		return false, fmt.Errorf("checking concurrency group for %s: status %d (%v)", sha, code, err)
+	}
+	for _, r := range res.Runs {
+		if r.Status != "completed" && strings.TrimPrefix(strings.Split(r.Path, "@")[0], ".github/workflows/") == "sourcemaps-store.yml" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt string) error {
@@ -291,8 +317,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		return fmt.Errorf("uploaded asset set missing manifest entries")
 	}
 	pubBody, _ := json.Marshal(map[string]any{"draft": false, "prerelease": false})
-	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
+	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.ID != created.ID || pubRel.Draft || pubRel.Prerelease || pubRel.Name != relName || pubRel.TagName != relName {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
+	}
+	if gotRel, _, gotIdx, err := lookupWithClient(ctx, c, sha, "", runID); err != nil || gotRel != relName || !bytes.Equal(gotIdx, idxBytes) {
+		return fmt.Errorf("verifying published release: %v", err)
 	}
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 		e := m.Entries[k]
@@ -301,7 +330,123 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		}
 	}
 	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(m.Entries))
+	if err := runRetention(ctx, c, sha); err != nil {
+		return err
+	}
+	if c.expiry == "" {
+		_, _ = fmt.Fprintf(cmp.Or(cfg.summary, io.Discard), "warning: missing github-authentication-token-expiration header\n")
+		return nil
+	}
+	exp, err := time.Parse("2006-01-02 15:04:05 UTC", c.expiry)
+	if err != nil {
+		exp, err = time.Parse("2006-01-02 15:04:05 -0700", c.expiry)
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(cmp.Or(cfg.summary, io.Discard), "warning: unparsable github-authentication-token-expiration header\n")
+		return nil
+	}
+	if exp.Sub(cfg.now) < 14*24*time.Hour {
+		return fmt.Errorf("SOURCEMAPS_TOKEN expires within 14 days (%s)", exp.UTC().Format(time.RFC3339))
+	}
 	return nil
+}
+
+func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
+	rels, err := c.listReleases(ctx)
+	if err != nil {
+		return err
+	}
+	now, sum, deletedIDs, bySHA := c.cfg.now, cmp.Or(c.cfg.summary, io.Discard), make(map[int64]bool), make(map[string][]parsedRel)
+	for _, r := range rels {
+		p, ok := parseReleaseName(r.Name)
+		switch {
+		case r.Prerelease:
+			_, _ = fmt.Fprintf(sum, "warning: prerelease %s (id %d)\n", r.Name, r.ID)
+		case r.Name != r.TagName:
+			_, _ = fmt.Fprintf(sum, "warning: name/tag mismatch %s != %s (id %d)\n", r.Name, r.TagName, r.ID)
+		case !ok:
+			_, _ = fmt.Fprintf(sum, "warning: unparsable release %s (id %d)\n", r.Name, r.ID)
+		case p.Start.After(now.Add(24 * time.Hour)):
+			_, _ = fmt.Fprintf(sum, "warning: future-dated release %s (id %d)\n", r.Name, r.ID)
+		case r.Draft && now.Sub(p.Start) > 7*24*time.Hour:
+			_, _ = fmt.Fprintf(sum, "warning: abandoned draft %s (id %d)\n", r.Name, r.ID)
+			active := p.SHA == currentSHA
+			if !active {
+				if active, err = c.hasActiveRun(ctx, p.SHA); err != nil {
+					return err
+				}
+			}
+			if !active {
+				if err := c.deleteReleaseByID(ctx, r); err != nil {
+					return err
+				}
+				deletedIDs[r.ID] = true
+			}
+		case r.Draft:
+			_, _ = fmt.Fprintf(sum, "warning: younger draft %s (id %d)\n", r.Name, r.ID)
+		default:
+			bySHA[p.SHA] = append(bySHA[p.SHA], parsedRel{r, p})
+		}
+	}
+	var shas []string
+	for s, list := range bySHA {
+		slices.SortFunc(list, func(a, b parsedRel) int {
+			return cmp.Or(compareOrder(b.parsed, a.parsed), cmp.Compare(b.rel.ID, a.rel.ID))
+		})
+		bySHA[s], shas = list, append(shas, s)
+	}
+	slices.SortFunc(shas, func(a, b string) int {
+		return cmp.Or(compareOrder(bySHA[b][0].parsed, bySHA[a][0].parsed), cmp.Compare(bySHA[b][0].rel.ID, bySHA[a][0].rel.ID))
+	})
+	for idx := len(shas) - 1; idx >= 10; idx-- {
+		if s := shas[idx]; now.Sub(bySHA[s][0].parsed.Start) > 90*24*time.Hour {
+			for i := len(bySHA[s]) - 1; i >= 0; i-- {
+				item := bySHA[s][i]
+				if err := cmp.Or(c.deleteReleaseByID(ctx, item.rel), c.deleteTagByRef(ctx, item.rel.TagName)); err != nil {
+					return err
+				}
+				deletedIDs[item.rel.ID] = true
+			}
+		}
+	}
+	refTags := make(map[string]bool)
+	for _, r := range rels {
+		if !deletedIDs[r.ID] {
+			refTags[r.TagName], refTags[r.Name] = true, true
+		}
+	}
+	for page := 1; page <= maxReleasePages; page++ {
+		var batch []struct{ Name string }
+		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/tags?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
+			return fmt.Errorf("listing tags: status %d (%v)", code, err)
+		}
+		for _, t := range batch {
+			if p, ok := parseReleaseName(t.Name); !ok || now.Sub(p.Start) <= 7*24*time.Hour || refTags[t.Name] {
+				continue
+			}
+			if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, t.Name), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
+				return fmt.Errorf("rechecking tag %s: status %d (%v)", t.Name, tCode, err)
+			} else if tCode == 200 {
+				continue
+			}
+			if fresh, err := c.listReleases(ctx); err != nil {
+				return err
+			} else if slices.ContainsFunc(fresh, func(r ghRelease) bool { return r.TagName == t.Name || r.Name == t.Name }) {
+				continue
+			}
+			var refObj struct{ Ref string }
+			if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, t.Name), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+t.Name) {
+				return fmt.Errorf("verifying tag ref %s: status %d (%v)", t.Name, rCode, err)
+			}
+			if err := c.deleteTagByRef(ctx, t.Name); err != nil {
+				return err
+			}
+		}
+		if len(batch) < 100 {
+			return nil
+		}
+	}
+	return fmt.Errorf("listing tags: exceeded %d pages", maxReleasePages)
 }
 
 func runLookup(ctx context.Context, cfg config, sha, bundleSHA256, runID string) (string, string, []byte, error) {

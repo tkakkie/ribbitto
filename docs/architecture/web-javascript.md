@@ -10,8 +10,8 @@ Bounded state: [composer][c], decision 37.
 UI-library islands need scoped [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
 exceptions; none exist.
 
-**Exception (#1039):** [decision 34](../decisions/34-live-unread-counts.md) lets one script own
-sidebar badge numbers and bounded recovery state: the snapshot sequence,
+**Exception (#1039):** [decision 34](../decisions/34-live-unread-counts.md) lets `web/src/sidebar-unread.ts`
+(with DOM-free rules in `web/src/unread-counts.ts`) own sidebar badge numbers and bounded recovery state: the snapshot sequence,
 at most 1,000 retained `unread` events with eligibility and application flags,
 a recovering flag, loss generations and the highest possibly lost sequence.
 It changes only server-rendered badge text/visibility, never creates elements

@@ -319,7 +319,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("side-panel")
-		<script defer src="/static/sidebar-unread-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("sidebar-unread")
 		<script defer src="/static/message-stream-v14.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("message-drafts")
 	}
@@ -407,7 +407,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 			</div>
 		}
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/sidebar-unread-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("sidebar-unread")
 		<script defer src="/static/message-stream-v14.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("message-drafts")
 	}

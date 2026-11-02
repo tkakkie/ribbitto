@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -130,5 +133,89 @@ func TestRealNodeTests(t *testing.T) {
 		} else if err != nil || !strings.Contains(out, "wrapper probe") {
 			t.Fatalf("expected passing harness, got %v: %s", err, out)
 		}
+	}
+	t.Run("moduleScopeWarning", func(t *testing.T) {
+		control := t.TempDir()
+		for name, content := range map[string]string{
+			".node-version": string(pin),
+			"package.json":  `{"private":true}` + "\n",
+			"web/src/probe.ts": `export const value: number = 1;
+`,
+		} {
+			full := filepath.Join(control, name)
+			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(content), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		writeHarness(t, control, "probe.test.mjs", `import test from 'node:test'; import assert from 'node:assert/strict'; import { value } from '../src/probe.ts'; test('module scope probe', () => assert.equal(value, 1));`)
+		out, err := runOutput(t, "test", control)
+		if err != nil || !strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
+			t.Fatalf("expected MODULE_TYPELESS_PACKAGE_JSON without web/src/package.json, got %v: %s", err, out)
+		}
+		if err := os.WriteFile(filepath.Join(control, "web/src/package.json"), []byte(`{"type": "module"}`+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		out, err = runOutput(t, "test", control)
+		if err != nil || strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
+			t.Fatalf("unexpected MODULE_TYPELESS_PACKAGE_JSON with web/src/package.json, got %v: %s", err, out)
+		}
+		out, err = runOutput(t, "test", "../..")
+		if err != nil || strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
+			t.Fatalf("repository unit tests failed or warned: %v\n%s", err, out)
+		}
+	})
+}
+
+func TestModuleScopeManifest(t *testing.T) {
+	validScope := func(data []byte) bool {
+		return strings.TrimSpace(string(data)) == `{"type": "module"}`
+	}
+	data, err := os.ReadFile("../../web/src/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !validScope(data) {
+		t.Fatalf("web/src/package.json = %q; want exact {\"type\": \"module\"}", data)
+	}
+	for _, invalid := range []struct {
+		name string
+		raw  string
+	}{
+		{"escapedKey", `{"\u0074ype": "module"}`},
+		{"duplicateKey", `{"type": "commonjs", "type": "module"}`},
+		{"duplicateEscapedKey", `{"type": "commonjs", "\u0074ype": "module"}`},
+	} {
+		t.Run(invalid.name, func(t *testing.T) {
+			if validScope([]byte(invalid.raw)) {
+				t.Fatalf("accepted invalid module scope manifest %s", invalid.raw)
+			}
+		})
+	}
+	data, err = os.ReadFile("../../package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := root["type"]; ok {
+		t.Fatal("root package.json must not set type")
+	}
+	out, err := exec.Command("git", "-C", "../..", "ls-files", "-z", "--", "web").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifests []string
+	for _, name := range strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00") {
+		if path.Base(name) == "package.json" {
+			manifests = append(manifests, name)
+		}
+	}
+	if !slices.Equal(manifests, []string{"web/src/package.json"}) {
+		t.Fatalf("tracked web package.json files = %q, want [\"web/src/package.json\"]", manifests)
 	}
 }

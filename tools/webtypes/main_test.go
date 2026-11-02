@@ -160,17 +160,18 @@ func runOutput(t *testing.T, mode, root string) (string, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout := os.Stdout
-	os.Stdout = w
-	defer func() { os.Stdout = stdout }()
+	stdout, stderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	defer func() { os.Stdout, os.Stderr = stdout, stderr }()
+	done := make(chan string, 1)
+	go func() {
+		out, _ := io.ReadAll(r)
+		_ = r.Close()
+		done <- string(out)
+	}()
 	err = run(mode, root)
 	_ = w.Close()
-	out, readErr := io.ReadAll(r)
-	_ = r.Close()
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
-	return string(out), err
+	return <-done, err
 }
 
 func TestMissingChecker(t *testing.T) {

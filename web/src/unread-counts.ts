@@ -1,4 +1,5 @@
-export interface UnreadEvent { channel: string; topic: string; author?: string; seq: number; eligible: boolean; applied: boolean }
+export interface UnreadFrame { channel: string; topic: string; author?: string; seq: number }
+export interface UnreadEvent extends UnreadFrame { eligible: boolean; applied: boolean }
 export interface ResyncRequest { losses: number; received: boolean; success: boolean }
 export interface UnreadState {
   snapshot: bigint; seen: bigint; lostThrough: bigint; recovering: boolean; losses: number;
@@ -14,11 +15,12 @@ export function sequence(value: string | undefined): bigint {
   if (!/^\d+$/.test(value as string)) throw new Error("invalid snapshot sequence");
   return BigInt(value!);
 }
-export function unreadSequence(event: UnreadEvent | null): bigint {
+export function unreadSequence(value: unknown): bigint {
+  const event = value as UnreadFrame | null;
   if (!event || !Number.isSafeInteger(event.seq) || event.seq < 0) throw new Error("invalid unread sequence");
   return BigInt(event.seq);
 }
-export function routing(event: UnreadEvent): boolean {
+export function routing(event: UnreadFrame): boolean {
   const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
   if (!uuid(event.channel)) throw new Error("invalid unread");
   if (event.topic === undefined) return false;
@@ -33,7 +35,7 @@ export function overflow(state: UnreadState): { state: UnreadState; through: big
   for (const seq of state.events.keys()) if (seq > dropped) dropped = seq;
   return { state: { ...state, events: new Map() }, through: dropped };
 }
-export function retain(state: UnreadState, seq: bigint, event: UnreadEvent, member: string | undefined): UnreadState {
+export function retain(state: UnreadState, seq: bigint, event: UnreadFrame, member: string | undefined): UnreadState {
   return { ...state, events: new Map(state.events).set(seq, { ...event, eligible: event.author !== undefined && event.author !== member, applied: false }) };
 }
 export function loss(state: UnreadState, through = state.seen): UnreadState {
@@ -61,3 +63,31 @@ export function incrementCount(raw: string): { count: string; text: string } {
   return { count: String(count), text: count >= 100n ? "99+" : String(count) };
 }
 export function incrementLabel(label: string, text: string): string { return label.replace(/\d+\+?/, text); }
+
+/** Staged inputs let the adapter preserve short-circuit DOM reads. */
+export function badgeFailure(rawCount: string | undefined, hasNumeric = true, hasLabel = true): boolean {
+  return !validCount(rawCount) || !hasNumeric || !hasLabel;
+}
+export function missingRow(row: unknown): row is null { return row === null; }
+export function snapshotBadgesMatch(expectedLength: number, actualLength: number, expected?: string, actual?: string): boolean {
+  return expectedLength === actualLength && expected === actual;
+}
+export function mayRequest(state: UnreadState, timerPending: boolean, connected = true): boolean {
+  return !state.request && !timerPending && connected;
+}
+export function failedRequest(state: UnreadState): UnreadState {
+  return loss({ ...state, request: null, delay: backoff(state.delay) });
+}
+/** Observation precedes routing, even for old/duplicate malformed frames. */
+export function receiveFrame(state: UnreadState, value: unknown): { state: UnreadState; action: "ignore" | "recover" | "retain"; seq: bigint; overflowed: boolean } {
+  try {
+    const seq = unreadSequence(value);
+    state = observe(state, seq);
+    if (!routing(value as UnreadFrame) || ignored(state, seq)) return { state, action: "ignore", seq, overflowed: false };
+    const dropped = overflow(state);
+    if (dropped) state = loss(dropped.state, dropped.through);
+    return { state, action: "retain", seq, overflowed: dropped !== null };
+  } catch (_) {
+    return { state: loss(state), action: "recover", seq: 0n, overflowed: false };
+  }
+}

@@ -4,9 +4,9 @@ import {
   SidebarResyncEvent, MemberAttribute, SidebarTopicAttribute, SnapshotSeqAttribute, UnreadCountAttribute,
   readAttribute, writeAttribute, type ContractAttribute,
 } from "./contracts.gen.ts";
-import { unreadState, observe, sequence, unreadSequence, routing, ignored, overflow, retain, loss,
-  backoff, retryWait, resumeWait, complete as completeResync, snapshot, applicable, markApplied, incrementCount, incrementLabel, validCount,
-  type UnreadEvent } from "./unread-counts.ts";
+import { unreadState, observe, sequence, receiveFrame, retain, loss,
+  failedRequest, retryWait, resumeWait, complete as completeResync, snapshot, applicable, markApplied, incrementCount, incrementLabel, badgeFailure, missingRow, snapshotBadgesMatch, mayRequest,
+  type UnreadFrame } from "./unread-counts.ts";
 type SidebarEvent = CustomEvent<{ data: string; type: string }>;
 const attr = (node: Element, name: ContractAttribute) => readAttribute(node, name) ?? undefined;
 
@@ -19,7 +19,7 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
     let state = unreadState(BigInt(attr(getSidebarChannels(connection)!, SnapshotSeqAttribute)!));
     let timer: ReturnType<typeof setTimeout> | null = null;
     const schedule = (wait = retryWait(state.delay, Math.random())) => {
-      if (state.request || timer || !connection.isConnected) return;
+      if (!mayRequest(state, !!timer) || !mayRequest(state, !!timer, connection.isConnected)) return;
       timer = setTimeout(() => {
         timer = null;
         if (!connection.isConnected) return;
@@ -38,17 +38,18 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
       if (covered === true) applyRetained();
       else if (covered === false) schedule();
     };
-    const increment = (event: UnreadEvent) => {
+    const increment = (event: UnreadFrame) => {
       const hex = (id: string) => id.replaceAll("-", "");
       const channel = getChannelLink(hex(event.channel), connection);
       const topic = getTopicLink(hex(event.topic), connection) ||
         (attr(connection, SidebarTopicAttribute) === event.topic ? getTopicHeadingCount(connection) : null);
-      const badges = [channel, topic].filter((node) => node !== null).map((node) => node.querySelector<HTMLElement>(`[${UnreadCountAttribute}]`));
+      const badges = [channel, topic].filter((node) => !missingRow(node)).map((node) => node.querySelector<HTMLElement>(`[${UnreadCountAttribute}]`));
       // Missing rows are an intended approximation; a shown row missing its
       // server-rendered badge is an application failure.
       for (const badge of badges) {
-        if (!badge || !validCount(attr(badge, UnreadCountAttribute)) ||
-            !badge.querySelector("[aria-hidden]") || !badge.querySelector(".sr-only")) throw new Error("invalid badge");
+        const raw = badge ? attr(badge, UnreadCountAttribute) : undefined;
+        if (badgeFailure(raw) || badgeFailure(raw, !!badge!.querySelector("[aria-hidden]")) ||
+            badgeFailure(raw, true, !!badge!.querySelector(".sr-only"))) throw new Error("invalid badge");
       }
       for (const badge of badges) {
         const { count, text } = incrementCount(attr(badge!, UnreadCountAttribute)!);
@@ -69,21 +70,28 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
     };
     const unread = (message: MessageEvent) => {
       try {
-        const event = JSON.parse(message.data) as UnreadEvent;
-        const seq = unreadSequence(event);
-        state = observe(state, seq);
-        if (!routing(event) || ignored(state, seq)) return;
-        const dropped = overflow(state);
-        if (dropped !== null) { state = dropped.state; recover(dropped.through); }
-        state = retain(state, seq, event, event.author === undefined ? undefined : attr(connection, MemberAttribute));
-        const retained = state.events.get(seq)!;
-        if (!state.recovering && retained.eligible) {
-          increment(event);
-          state = markApplied(state, seq);
+        const event: unknown = JSON.parse(message.data);
+        const result = receiveFrame(state, event);
+        state = result.state;
+        if (result.action === "ignore") return;
+        if (result.action === "retain") {
+          if (result.overflowed) schedule();
+          const seq = result.seq;
+          const frame = event as UnreadFrame;
+          state = retain(state, seq, frame, frame.author === undefined ? undefined : attr(connection, MemberAttribute));
+          const retained = state.events.get(seq)!;
+          if (applicable(state, retained)) {
+            increment(frame);
+            state = markApplied(state, seq);
+          }
+          return;
         }
       } catch (_) {
         recover();
+        return;
       }
+      // A malformed frame recovered in the catch before extraction: timer errors escape.
+      schedule();
     };
     const sidebar = (event: SidebarEvent) => {
       event.preventDefault();
@@ -105,8 +113,10 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
                 if (!target) continue;
                 const expected = root.querySelectorAll(`[${UnreadCountAttribute}]`);
                 const actual = target.querySelectorAll(`[${UnreadCountAttribute}]`);
-                if (expected.length !== actual.length || Array.from(expected).some((badge, i) =>
-                  !validCount(attr(badge, UnreadCountAttribute)) || attr(badge, UnreadCountAttribute) !== attr(actual[i], UnreadCountAttribute))) throw new Error("bad snapshot badges");
+                const expectedLength = expected.length, actualLength = actual.length;
+                if (!snapshotBadgesMatch(expectedLength, actualLength) || Array.from(expected).some((badge, i) =>
+                  badgeFailure(attr(badge, UnreadCountAttribute)) || !snapshotBadgesMatch(expectedLength, actualLength,
+                    attr(badge, UnreadCountAttribute), attr(actual[i], UnreadCountAttribute)))) throw new Error("bad snapshot badges");
               }
               state = snapshot(state, seq);
               if (state.request && state.request === dispatched) state.request.received = true;
@@ -131,9 +141,8 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
       const event = native as CustomEvent<{ successful: boolean }>;
       if (!state.request) return;
       if (!event.detail.successful) {
-        state.request = null;
-        state.delay = backoff(state.delay);
-        recover();
+        state = failedRequest(state);
+        schedule();
       } else {
         state.request.success = true;
         try { complete(); }

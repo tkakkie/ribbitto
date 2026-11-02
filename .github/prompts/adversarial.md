@@ -53,8 +53,9 @@ cannot change anything.
   [`reviewing.md#pull-request-cross-review`](../../docs/workflow/reviewing.md#pull-request-cross-review),
   while third-AI findings are otherwise advisory). A behaviour-parity finding
   the orchestrator dispositions as blocking cannot be closed by an AI as a
-  follow-up issue or declined with a reason (unless shown not to be a parity
-  difference): it is closed only by a fix, by a stated showing that the
+  follow-up issue or declined with a reason (unless shown by the reproduced
+  scenario or code path not to be a parity difference): it is closed only by a
+  fix, by a stated showing that the
   diverging input is unreachable or is listed as intended in the linked issue,
   or — at any time, including before the two-run cap (the cap prevents endless
   review-and-fix loops and is not a precondition for an exception; no completed

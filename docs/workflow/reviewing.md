@@ -113,10 +113,10 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   remaining **blocking conversion-parity finding** it proposes: fix in this PR
   (normal use or documented behaviour;
   [post-cap rules](review-operations.md#third-ai-review)); accept (below); or,
-  if shown not to be a parity difference, existing dispositions. Non-parity
-  third-AI findings are outside this triage and keep their dispositions (fixed,
-  follow-up issue, or declined with a reason; after the cap, see
-  [third-AI review](review-operations.md#third-ai-review)).
+  if shown by the reproduced scenario or code path not to be a parity
+  difference, existing dispositions. Non-parity third-AI findings are outside
+  this triage and keep their dispositions (fixed — after the cap, only if the
+  maintainer selects it — follow-up issue, or declined with a reason).
 - **Accepting a parity difference:** a blocking conversion-parity finding may be
   accepted at any time, including before the two-run cap (the cap prevents
   endless review-and-fix loops and is not a precondition for an exception; no
@@ -130,14 +130,14 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   use or documented behaviour; any authorization, organisation scoping or
   data-exposure finding (never waivable). That a case appears in no document or
   test is **not by itself** evidence or a reason; the maintainer settles
-  disputed classifications. Before `ai-reviewed`, record each in **Accepted
-  parity differences (maintainer chat decision), or n/a** with: **PR and
-  finding**, **head SHA** (plus **re-confirmation SHA** if the head changed),
-  **scenario**, **difference**, **occurrence condition** (concrete reachability:
-  exact sequence or environment), **likelihood** in real deployments (origins,
-  browsers, extensions, documented self-hosted setups), **user effect**,
-  **reason accepted**, and **document location** where the behaviour is
-  described; merge authorization stays separate
+  disputed classifications. Before `ai-reviewed`, the orchestrator records each
+  in **Accepted parity differences (maintainer chat decision), or n/a** with:
+  **PR and finding**, **head SHA** (plus **re-confirmation SHA** if the head
+  changed), **scenario**, **difference**, **occurrence condition** (concrete
+  reachability: exact sequence or environment), **likelihood** in real
+  deployments (origins, browsers, extensions, documented self-hosted setups),
+  **user effect**, **reason accepted**, and **document location** where the
+  behaviour is described; merge authorization stays separate
   ([What no AI does](README.md#what-no-ai-does)). Accepting a difference skips
   none of the other required reviews (cross-review limits and
   [closure verification](review-followups.md#closure-verification) stay), the

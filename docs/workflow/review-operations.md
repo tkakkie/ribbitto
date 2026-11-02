@@ -75,8 +75,8 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
 - **Cap and what counts:** at most **two completed runs** per pull request
   ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085)).
   A run counts toward the cap when it completes with a non-empty report on the
-  PR covering its stated head commit and scope (`base..head` in run 1,
-  `Compared: <first run's SHA>..<head>` in run 2), independent of how its
+  PR covering the supplied head commit and required scope (`base..head` in run
+  1, `Compared: <first run's SHA>..<head>` in run 2), independent of how its
   findings are later dispositioned. Before `ai-reviewed`, every finding must
   have a disposition (fixed, follow-up issue, declined with a reason, or — for a
   blocking conversion-parity finding at any time, including before the two-run
@@ -109,10 +109,10 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   the maintainer's decision (maintainer acceptance itself is available at any
   time, including before the cap); non-parity third-AI
   findings keep today's dispositions (fixed, follow-up issue, or declined with a
-  reason) and are not part of that triage, so any non-parity finding left open
-  after run 2 is dispositioned by the maintainer-chosen path (a fix the
-  maintainer chooses gets the independent follow-up check below, never a third
-  adversarial run). On any post-cap push, a ready PR goes back to a draft until
+  reason) and are not part of that triage, and after the cap a fix for one is
+  applied only if the maintainer selects it (checked by the independent
+  follow-up check below, never a third adversarial run). On any post-cap push,
+  a ready PR goes back to a draft until
   the follow-up check or escalation completes. A fix the maintainer chooses
   after the cap, a Copilot fix or a merge of `main` is checked by an
   independent [follow-up check](review-followups.md#copilot-follow-up-check) of

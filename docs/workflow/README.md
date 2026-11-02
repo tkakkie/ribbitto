@@ -134,7 +134,7 @@ run as one blocking background command so its end wakes the orchestrator
   maintainer. Keep the report tied to its exact commits and findings.
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. A typo or a rewording that changes
-  no meaning is not ([what counts](reviewing.md#follow-up-pushes)).
+  no meaning is not ([what counts](review-followups.md#follow-up-pushes)).
 
 ## Lifecycle
 
@@ -146,7 +146,7 @@ Pull request:
 1. The implementer works in its worktree and `make check` passes.
 2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
-   AI where required, and Copilot (once, unless docs-only; [delivery](delivery.md)).
+   AI where required, and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
    finding gets a disposition and applied fixes are checked before the
    maintainer is asked. Run `make prepush` before every follow-up push, and
@@ -164,7 +164,7 @@ Pull request:
   transactions, authentication, authorisation or organisation scoping, or
   that removes, skips or loosens a check `make check` or CI runs. "Touches"
   includes behaviour-preserving moves, refactors and new tests in those
-  areas. Details: [delivery](delivery.md#third-ai-review).
+  areas. Details: [review operations](review-operations.md#third-ai-review).
 - `normal` risk: the maintainer reads the summary and "Look here".
 - One issue fits one pull request of about 400 changed lines.
 
@@ -193,6 +193,7 @@ check the result against *Done when*.
 ## Supporting files
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
+[review operations](review-operations.md), [review follow-ups](review-followups.md),
 [investigations](investigations.md) and [credentials](ai-credentials.md)
 supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
 is built or extended (#2002).

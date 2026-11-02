@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Rules for AI coding tools and the people using them. Keep this file short;
-explanations of the product and the code belong in `docs/`.
+Rules for AI coding tools and their users. Keep this file short;
+explanations belong in `docs/`.
 
 ## Project
 
@@ -78,21 +78,24 @@ Read and update the relevant doc in the same PR:
 [`docs/ui-colours.md`](docs/ui-colours.md) (token utilities only, never raw colours; `tools/sourcecheck`)
 and [`docs/accessibility.md`](docs/accessibility.md).
 
-Workflow reading: whoever performs an action reads its section —
+Whoever performs an action reads:
 [own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
 [tool failures, disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
-[PR body scan](docs/workflow/delivery.md#running-a-review),
+[PR body scan](docs/workflow/delivery.md#pr-body-credential-scan),
 [measurement caps](docs/workflow/investigations.md#investigations-and-the-performance-target).
-Implementers read this file and the touched area's docs; cross-reviewers this
-file and [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
-(or [issue review](docs/workflow/reviewing.md#issue-review)); the orchestrator
-the [workflow README](docs/workflow/README.md) ([independence](docs/workflow/README.md#principles),
+Implementers: this file, docs of touched areas; cross-reviewers: this file,
+[PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)
+(or [issue review](docs/workflow/reviewing.md#issue-review)); orchestrators:
+[workflow README](docs/workflow/README.md)
+([independence](docs/workflow/README.md#principles),
 [ruleset](docs/workflow/README.md#what-github-enforces-and-what-is-only-a-rule),
-[head SHA](docs/workflow/README.md#lifecycle)), [`delivery.md`](docs/workflow/delivery.md)
-([third-AI](docs/workflow/delivery.md#third-ai-review)) and
-[`reviewing.md`](docs/workflow/reviewing.md); [`ai-credentials.md`](docs/workflow/ai-credentials.md),
-[`investigations.md`](docs/workflow/investigations.md) and `docs/decisions/` only
-for their subject.
+[head SHA](docs/workflow/README.md#lifecycle)),
+[delivery](docs/workflow/delivery.md), [reviewing](docs/workflow/reviewing.md),
+[operations](docs/workflow/review-operations.md)
+([third-AI](docs/workflow/review-operations.md#third-ai-review)),
+[follow-ups](docs/workflow/review-followups.md).
+By subject only: [credentials](docs/workflow/ai-credentials.md),
+[investigations](docs/workflow/investigations.md), `docs/decisions/`.
 
 ## Writing code
 

@@ -131,7 +131,7 @@ reusable name. [Measurement approval and caps](investigations.md) still apply.
 A pull request cross-review follows [`reviewing.md`](reviewing.md#pull-request-cross-review) (only the
 issue review has a prompt file); other reviews and checks run
 `issue-review.md`, `adversarial.md`, `copilot-check.md` or `audit.md` from
-`.github/prompts/`. As [`delivery.md`](delivery.md#running-a-review) states,
+`.github/prompts/`. As [`review-operations.md`](review-operations.md#running-a-review) states,
 the orchestrator passes the issue or pull request number, the exact base and
 head (or baseline) SHAs, the review round and the earlier findings in the
 prompt text after the review instructions; the reviewer reads the rest with

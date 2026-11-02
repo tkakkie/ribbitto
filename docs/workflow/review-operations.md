@@ -79,9 +79,11 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   `Compared: <first run's SHA>..<head>` in run 2), independent of how its
   findings are later dispositioned. Before `ai-reviewed`, every finding must
   have a disposition (fixed, follow-up issue, declined with a reason, or — for a
-  blocking conversion-parity finding after the two-run cap — accepted by the
-  maintainer under
-  [Pull request cross-review](reviewing.md#pull-request-cross-review)) and any
+  blocking conversion-parity finding at any time, including before the two-run
+  cap — accepted by the maintainer under
+  [Pull request cross-review](reviewing.md#pull-request-cross-review); the
+  two-run cap prevents endless review-and-fix loops and is not a precondition
+  for an exception, so no completed second run is needed) and any
   applied fix or required verification must be completed. A failed, timed-out or
   empty run never counts: record it on the PR, retry once, then ask the
   maintainer. Follow-up checks ([`review-followups.md`](review-followups.md))
@@ -101,8 +103,11 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   after the two-run cap, is covered by the post-cap rules below).
 - **After the second run (at the cap):** no third adversarial run; the
   orchestrator starts no further fix round on its own. When findings remain
-  after the second run, blocking conversion-parity findings follow the
-  [post-cap triage](reviewing.md#pull-request-cross-review); non-parity third-AI
+  after the second run, the
+  [post-cap triage](reviewing.md#pull-request-cross-review) stops automatic
+  fixing for remaining blocking conversion-parity findings and hands them to
+  the maintainer's decision (maintainer acceptance itself is available at any
+  time, including before the cap); non-parity third-AI
   findings keep today's dispositions (fixed, follow-up issue, or declined with a
   reason) and are not part of that triage, so any non-parity finding left open
   after run 2 is dispositioned by the maintainer-chosen path (a fix the
@@ -133,15 +138,19 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   all existing gates; the re-confirmation of an accepted difference cannot
   approve the substantive delta or automatically restart a fix/review cycle. If
   a fix itself needs a fix, the orchestrator asks the maintainer instead of
-  starting another round. If the head changes after the maintainer accepts a
-  conversion-parity difference
-  ([Pull request cross-review](reviewing.md#pull-request-cross-review)), an
+  starting another round. Accepting a conversion-parity difference
+  ([Pull request cross-review](reviewing.md#pull-request-cross-review)) skips
+  none of the other required reviews, the conversion differential test (#2053),
+  the required follow-up checks or the final-SHA confirmation: if the head
+  changes after the maintainer accepts a difference (whether accepted before or
+  after the cap), an
   independent [follow-up check](review-followups.md#copilot-follow-up-check)
   confirms at the final SHA that the accepted occurrence conditions and the
   effect are unchanged (the same scenario, the same effect, no new path to it),
   and the orchestrator records that re-confirmation check's SHA alongside the
   decision's head SHA in *Accepted parity differences*;
-  if anything differs, the maintainer decides again and `ai-reviewed` waits.
+  if anything differs, the maintainer must approve again and `ai-reviewed`
+  waits.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md` and [review context](#running-a-review).
   Post `**Adversarial review — <AI>, run <1|2>** (at <SHA>)` (with

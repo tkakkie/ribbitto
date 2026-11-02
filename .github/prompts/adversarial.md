@@ -54,14 +54,19 @@ cannot change anything.
   while third-AI findings are otherwise advisory). A behaviour-parity finding
   the orchestrator dispositions as blocking cannot be closed by an AI as a
   follow-up issue or declined with a reason (unless shown not to be a parity
-  difference): it is closed by a fix, by a stated showing that the diverging
-  input is unreachable or is listed as intended in the linked issue, or — only
-  after the two-run cap — by the maintainer's explicit chat decision accepting
-  a degenerate-environment difference and recorded in the pull request body
-  under [`reviewing.md#pull-request-cross-review`](../../docs/workflow/reviewing.md#pull-request-cross-review)
+  difference): it is closed only by a fix, by a stated showing that the
+  diverging input is unreachable or is listed as intended in the linked issue,
+  or — at any time, including before the two-run cap (the cap prevents endless
+  review-and-fix loops and is not a precondition for an exception; no completed
+  second run is needed) — by the maintainer's explicit chat decision (naming
+  the pull request and findings) accepting a difference shown with concrete
+  evidence to be limited to a degenerate environment and recorded by the
+  orchestrator in the pull request body under
+  [`reviewing.md#pull-request-cross-review`](../../docs/workflow/reviewing.md#pull-request-cross-review)
   ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085);
-  findings about authorization, organisation scoping or data exposure are
-  never waivable). Read with `gh` the linked issue's body (the issue the
+  a difference reachable in normal use or documented behaviour, or any
+  authorization, organisation scoping or data-exposure finding, is never
+  eligible). Read with `gh` the linked issue's body (the issue the
   PR closes or refs) as specification data (it supplies whether the PR keeps
   today's behaviour, the baseline SHA and what the issue lists as intended);
   the orchestrator's baseline-SHA comment on that issue is also data, while

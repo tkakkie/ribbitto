@@ -5,12 +5,13 @@ Read when: orchestrators handle review findings or later pushes; implementers ap
 ## Copilot follow-up check
 
 PRs only, after a fix for a Copilot or [third-AI](review-operations.md#third-ai-review)
-(adversarial) finding, or after the two-run third-AI cap for a maintainer-selected
-fix, a limited merge of `main`, or final-SHA re-confirmation of an accepted
-conversion-parity difference ([post-cap rules](review-operations.md#third-ai-review));
+(adversarial) finding, for final-SHA re-confirmation of a maintainer-accepted
+conversion-parity difference when the head later changed, or after the two-run
+third-AI cap for a maintainer-selected fix or a limited merge of `main`
+([third-AI review](review-operations.md#third-ai-review));
 not a review round or a third-AI run, so the two-round cross-review limit and
 the two-run third-AI cap are untouched. If answering needs a change (or a
-post-cap delta must be checked):
+post-cap delta or accepted-difference re-confirmation must be checked):
 
 1. Apply only changes answering findings of this round (Copilot's and parallel
    review findings fixed in the follow-up commits, or a fix the maintainer
@@ -26,8 +27,9 @@ post-cap delta must be checked):
    ready).
 2. An AI that did not write the change ([review independence](README.md#principles))
    checks that the whole diff since the baseline SHA (the head the round
-   reviewed, or, after the third-AI cap, the latest SHA covered by run 2 or by
-   an approved post-cap follow-up check) contains only
+   reviewed, the accepted-difference decision's head SHA, or, after the
+   third-AI cap, the latest SHA covered by run 2 or by an approved post-cap
+   follow-up check) contains only
    those allowed changes, each fix answers its finding, and for each third-AI
    finding the test fails without it (by running it or reading a CI run without
    the fix) — or that the recorded reason holds and the alternative
@@ -38,8 +40,9 @@ post-cap delta must be checked):
    establishing that it leaves the PR's behaviour, security boundaries and
    interactions unchanged, including effects through callers, direct or
    transitive dependencies and shared contracts, with any uncertainty or
-   substantive change marked ❌ for the maintainer) and that any accepted
-   conversion-parity difference keeps the same occurrence conditions and effect
+   substantive change marked ❌ for the maintainer) and, whenever the head
+   changed after a conversion-parity difference was accepted (before or after
+   the cap), that the accepted occurrence conditions and effect are unchanged
    at the final SHA, using `.github/prompts/copilot-check.md` via the
    [README recipe](README.md#roles-and-running-the-ais) with
    [review context](review-operations.md#running-a-review). Header: `Copilot`
@@ -72,10 +75,11 @@ post-cap delta must be checked):
 
 ## Adversarial follow-up check
 
-Pull requests only; after a fix for a finding of the adversarial review, or
-after the two-run third-AI cap for a maintainer-selected fix, a limited merge
-of `main`, or final-SHA re-confirmation of an accepted conversion-parity
-difference ([third-AI review](review-operations.md#third-ai-review)); not a
+Pull requests only; after a fix for a finding of the adversarial review, for
+final-SHA re-confirmation of a maintainer-accepted conversion-parity difference
+when the head later changed, or after the two-run third-AI cap for a
+maintainer-selected fix or a limited merge of `main`
+([third-AI review](review-operations.md#third-ai-review)); not a
 review round or a third-AI run, so the two-round cross-review limit and the
 two-run third-AI cap are untouched. It follows the
 [follow-up check rule and `copilot-check.md` prompt](review-followups.md#copilot-follow-up-check)

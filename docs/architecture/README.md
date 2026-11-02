@@ -57,7 +57,7 @@ Read the file for the area you change:
 | [`web-contracts-generated.md`](web-contracts-generated.md) | the generated DOM contract (`internal/web/view/contracts.go`, `web/src/contracts.gen.ts` and `tools/contractliterals`) |
 | [`web-conventions.md`](web-conventions.md) | *planned* (decision 43): front-end module layout, pure logic versus DOM code, typed state, script registry, shared helpers and generated DOM contracts |
 | [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
-| [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1411) |
+| [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1469, #1819) |
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |

@@ -27,8 +27,8 @@ import (
 // header differently, which happens only in a band of widths that depends
 // on the fonts the runner has. So besides a fixed sweep of phone widths in
 // both languages at 100 % and 125 % text, and 200 % text at 320 px (where
-// no time may reach past the list's edge or widen what scrolls) and around
-// 425 px, the critical case computes the band
+// no time may reach past the list's edge, widen what scrolls or make the
+// list scroll sideways, #2048) and around 425 px, the critical case computes the band
 // for this browser's fonts from the measured texts and loads the page
 // inside it, which fails without the fix whatever font the runner uses.
 // Each case holds the time script until the UTC markup has painted, then
@@ -156,10 +156,7 @@ func testMessageTimeSweepBrowser(t *testing.T, browser *rod.Browser) {
 				t.Errorf("%s: with the %s a time reaches past the list's edge: %s (%s)", what, state.name, overflow, state.rows.Widths)
 			}
 			if state.rows.SidewaysScroll {
-				// Not from the time (checked above): at 200 % text a
-				// header's Select label alone can be wider than a 320 px
-				// phone's group (reported separately from #2044).
-				t.Logf("%s: with the %s the list scrolls sideways, not because of a time: %s", what, state.name, state.rows.Widths)
+				t.Errorf("%s: with the %s the list scrolls sideways: %s", what, state.name, state.rows.Widths)
 			}
 			if !header44 {
 				continue

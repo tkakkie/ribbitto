@@ -171,8 +171,8 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 		}
 	}
 	makefile, err := os.ReadFile("../../Makefile")
-	if err != nil || bytes.Count(makefile, []byte("bin/sourcemaps")) > 1 {
-		t.Errorf("Makefile exposes bin/sourcemaps outside sourcemaps-store target: %v", err)
+	if err != nil || bytes.Count(makefile, []byte("bin/sourcemaps")) != 0 {
+		t.Errorf("Makefile references bin/sourcemaps: %v", err)
 	}
 }
 

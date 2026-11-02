@@ -58,6 +58,7 @@
     if (stopped) return;
     stopped = true;
     let timer = null;
+    let reloading = false;
     const notice = document.getElementById("stream-stopped");
     // Confirmed items await reload delivery; drafts do not hold reload.
     const atStake = () => {
@@ -67,6 +68,7 @@
         pendingHold;
     };
     const decide = () => {
+      if (reloading) return;
       const held = Boolean(atStake());
       if (notice) notice.hidden = !held;
       if (held) {
@@ -77,6 +79,8 @@
           timer = null;
           // Recheck even if the mutation observer has not run yet.
           if (atStake()) { decide(); return; }
+          reloading = true;
+          pendingChanged = () => {};
           observer.disconnect();
           location.reload();
         }, Math.random() * 5000);

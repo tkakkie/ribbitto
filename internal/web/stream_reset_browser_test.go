@@ -96,6 +96,44 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 		})
 	}
 
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reload-then-notify/held=%t", held), func(t *testing.T) {
+			page, events, posts, _ := pendingBrowser(t, browser, false)
+			resetClock(page)
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.value='confirmed';b.form.requestSubmit()}`)
+			receivePending(t, page, posts).reply <- pendingAnswer(t, kernel.ID{51})
+			page.MustWait(`() => window.answers===1`)
+			events <- realtime.Outgoing{Name: "reset"}
+			page.MustWait(`() => window.reloadTimers.size===1`)
+			// Keep the old document alive while its reload navigation is in flight.
+			release := make(chan struct{})
+			router := page.HijackRequests()
+			router.MustAdd("*", func(h *rod.Hijack) {
+				if h.Request.Type() == proto.NetworkResourceTypeDocument {
+					<-release
+					h.Response.Fail(proto.NetworkErrorReasonAborted)
+					return
+				}
+				h.ContinueRequest(&proto.FetchContinueRequest{})
+			})
+			go router.Run()
+			t.Cleanup(func() { close(release); _ = router.Stop() })
+			if !page.MustEval(`held => {
+ // Removal queues a recheck before the timer fires in this same task.
+ document.querySelector('[data-pending-remove]').click();
+ window.fireReset();
+ // A later notification must also be inert throughout the navigation.
+ if(held){
+  document.addEventListener('htmx:beforeRequest',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true});
+  const b=document.getElementById('message-body');b.value='next';b.form.requestSubmit();
+ } else document.dispatchEvent(new CustomEvent('message-pending-query',{detail:{}}));
+ return Promise.resolve().then(()=>reloadTimers.size===0 && document.getElementById('stream-stopped').hidden);
+}`, held).Bool() {
+				t.Fatal("queue notification after reload rearmed a timer or revealed the notice")
+			}
+		})
+	}
+
 	// Isolate each predicate: another at-stake state must not mask its removal.
 	for _, test := range []struct {
 		state string

@@ -5,6 +5,7 @@
 Amended by the maintainer on 2026-10-20 in #1437.
 Amended by the maintainer on 2026-10-24 in #1695.
 Amended by the maintainer on 2026-10-28 in #1902.
+Amended by the maintainer on 2026-11-02 in #1854.
 Use the language list below. A task needing another language, runtime,
 dependency or format stops for the maintainer's explicit approval in its issue. The
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)
@@ -16,11 +17,13 @@ for limited Node use.
 ## Language list
 
 Derived from all 976 tracked files of the 2026-10-19 baseline, without
-exceptions, with later additions approved through #1437, #1695 and #1902.
+exceptions, with later additions approved through #1437, #1695, #1902 and #1854.
 Directory entries below are direct-only unless stated otherwise:
 
-- TypeScript directly in `web/src/` (including `.d.ts`); root `.node-version`,
-  `package.json`, `package-lock.json` and `tsconfig.json`, approved through
+- TypeScript directly in `web/src/` (including `.d.ts`); `web/src/package.json`,
+  contents `{"type": "module"}`, as the module-type scope of `web/src/*.ts`
+  (#1854); root `.node-version`, `package.json`, `package-lock.json` and
+  `tsconfig.json`, approved through
   [#1356](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
   and introduced by #1410.
 - Client unit-test harnesses named `<name>.test.mjs` directly in `web/test/`,

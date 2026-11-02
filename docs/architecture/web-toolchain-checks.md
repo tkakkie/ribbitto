@@ -21,16 +21,21 @@ multiline or interpolation blind spots. Keep review and browser tests.
 Go wrapper's test mode, also in `make check`. It checks `.node-version`, scrubs
 `NODE_OPTIONS`, expands the glob itself (no matches fails), needs no
 `node_modules` and runs `node --test <files>` from the repository root,
-propagating failure. Missing/mismatched Node prints `NOT VERIFIED` and skips
+propagating failure. `web/src/package.json` (`{"type": "module"}`) scopes
+`web/src/*.ts` as ES modules for Node's file-location package lookup without
+changing the root `package.json`, avoiding `MODULE_TYPELESS_PACKAGE_JSON`
+reparsing (#1854). Missing/mismatched Node prints `NOT VERIFIED` and skips
 unless `RIBBITTO_REQUIRE_NODE=1` makes it fail. CI runs tests after type checking
 in `web-types`, even if that check fails, unless cancelled. Hermetic wrapper
-tests run in `check-tools` without Node; the real-Node pass/fail probe runs only
-with that flag. The sole setup harness creates temporary annotated `.ts`
-modules and proves relative `.ts` imports and type stripping. Future harnesses
-import DOM-free `web/src/<concern>.ts` by relative `.ts` path, using `node:test`
-and `node:assert`, without Node typings or a DOM emulator. Harnesses are outside
-tsconfig's inputs: stripping types is not checking them, so both checks remain
-required.
+tests in `check-tools` (without Node) also check the `web/src/package.json` and
+root `package.json` module scope; the real-Node `TestRealNodeTests` probe (only
+with that flag) checks pass/fail propagation and fails if
+`MODULE_TYPELESS_PACKAGE_JSON` returns (with a temporary-root positive control).
+The setup harness creates temporary annotated `.ts` modules and proves relative
+`.ts` imports and type stripping. Harnesses import DOM-free `web/src/<concern>.ts`
+by relative `.ts` path, using `node:test` and `node:assert`, without Node typings
+or a DOM emulator. Harnesses are outside tsconfig's inputs: stripping types is
+not checking them, so both checks remain required.
 
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned

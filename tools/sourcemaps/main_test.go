@@ -86,6 +86,9 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 						s.releases[i].Assets = s.releases[i].Assets[:len(s.releases[i].Assets)-1]
 					} else if s.tamperManifest == "zero-second" && name == "b-second.js.map" {
 						s.releases[i].Assets[len(s.releases[i].Assets)-1] = mockAsset{ID: s.nextID, Name: name, Size: 0}
+					} else if s.tamperManifest == "sub-index" && name == "index.json" {
+						last := &s.releases[i].Assets[len(s.releases[i].Assets)-1]
+						last.data = bytes.ReplaceAll(last.data, []byte("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), []byte(strings.Repeat("f", 64)))
 					}
 					s.events = append(s.events, "upload:"+name)
 					w.WriteHeader(201)
@@ -263,6 +266,7 @@ func TestStoreCoreFailures(t *testing.T) {
 		{"upload failure", "tok", "500", func(s *mockStore) { s.failUpload = true }},
 		{"manifest mismatch extra asset", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "extra" }},
 		{"manifest mismatch missing asset", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "drop" }},
+		{"substituted manifest with altered hash", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "sub-index" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &mockStore{token: "tok"}

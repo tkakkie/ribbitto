@@ -265,11 +265,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	}
 	code, upIdxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", cfg.storeRepo, idxID), "application/octet-stream", nil, nil)
 	var upIdx manifest
-	if idxID == 0 || err != nil || code != 200 || json.Unmarshal(upIdxBytes, &upIdx) != nil || upIdx.Commit != sha || upIdx.RunID != runID || len(upIdx.Entries) == 0 {
+	if idxID == 0 || err != nil || code != 200 || !bytes.Equal(upIdxBytes, idxBytes) || json.Unmarshal(upIdxBytes, &upIdx) != nil || upIdx.Commit != sha || upIdx.RunID != runID || !maps.Equal(upIdx.Entries, m.Entries) {
 		return fmt.Errorf("verifying uploaded manifest: status %d (%v)", code, err)
 	}
 	wantAssets := map[string]int64{"index.json": int64(len(idxBytes))}
-	for _, e := range upIdx.Entries {
+	for _, e := range m.Entries {
 		wantAssets[e.Map] = int64(len(assets[e.Map]))
 	}
 	for _, a := range draftRel.Assets {
@@ -285,13 +285,13 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
 	}
-	for _, k := range slices.Sorted(maps.Keys(upIdx.Entries)) {
-		e := upIdx.Entries[k]
+	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
+		e := m.Entries[k]
 		if gotRel, gotMap, gotBytes, err := lookupWithClient(ctx, c, sha, e.SHA256, runID); err != nil || gotRel != relName || gotMap != e.Map || len(gotBytes) != len(assets[e.Map]) || !bytes.Equal(gotBytes, assets[e.Map]) {
 			return fmt.Errorf("fetching back stored map %s: %v", e.Map, err)
 		}
 	}
-	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(upIdx.Entries))
+	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(m.Entries))
 	return nil
 }
 

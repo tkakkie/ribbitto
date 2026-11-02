@@ -54,7 +54,9 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 		path := strings.TrimPrefix(r.URL.Path, "/repos/tkakkie/ribbitto-sourcemaps")
 		switch {
 		case r.Method == "GET" && path == "/releases":
-			_ = json.NewEncoder(w).Encode(s.releases)
+			p, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			start := min((max(p, 1)-1)*100, len(s.releases))
+			_ = json.NewEncoder(w).Encode(s.releases[start:min(start+100, len(s.releases))])
 		case r.Method == "POST" && path == "/releases":
 			var req mockRelease
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -121,7 +123,18 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				}
 				switch r.Method {
 				case "GET":
-					_ = json.NewEncoder(w).Encode(s.releases[i])
+					rel := s.releases[i]
+					switch s.tamperManifest {
+					case "draft-not-draft":
+						rel.Draft = false
+					case "draft-prerelease":
+						rel.Prerelease = true
+					case "draft-bad-name":
+						rel.Name = "wrong"
+					case "draft-bad-tag":
+						rel.TagName = "wrong"
+					}
+					_ = json.NewEncoder(w).Encode(rel)
 				case "PATCH":
 					if r.Header.Get("Content-Type") != "application/json" {
 						http.Error(w, "expected application/json", 415)
@@ -129,7 +142,8 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 					}
 					var p struct{ Draft, Prerelease bool }
 					_ = json.NewDecoder(r.Body).Decode(&p)
-					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft, p.Prerelease
+					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft, p.Prerelease || s.tamperManifest == "pub-prerelease"
+					s.releases[i].Draft = s.releases[i].Draft || s.tamperManifest == "pub-still-draft"
 					if s.tamperManifest == "corrupt-second-after-publish" {
 						for j := range s.releases[i].Assets {
 							if s.releases[i].Assets[j].Name == "b-second.js.map" {
@@ -205,15 +219,21 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	dir, bundleHash, wantMap := writeMapDir(t, currSHA, "500")
 	oldTag := relNameAt(now.Add(-95*day), shaOf(11), 9, 1)
 	oldTag404 := relNameAt(now.Add(-100*day), shaOf(11), 8, 1)
+	oldTag500 := relNameAt(now.Add(-105*day), shaOf(11), 7, 1)
 	store := &mockStore{
 		token: "test-token",
 		releases: []mockRelease{
 			{ID: 11, Name: oldTag, TagName: oldTag},
 			{ID: 12, Name: oldTag404, TagName: oldTag404},
 			{ID: 13, Name: oldTag, TagName: oldTag},
+			{ID: 14, Name: oldTag500, TagName: oldTag500},
 		},
-		tags:        []string{oldTag, oldTag404},
-		relDel404ID: 12, tagDel404: oldTag404, wrongLookupID: 13,
+		tags:        []string{oldTag, oldTag404, oldTag500},
+		relDel404ID: 12, tagDel404: oldTag404, wrongLookupID: 13, failRelDelID: 14, failTagDel: oldTag500,
+	}
+	for i := range 102 {
+		filler := relNameAt(now.Add(-time.Duration(i+1)*time.Minute), shaOf(50+i), i+1, 1)
+		store.releases = append(store.releases, mockRelease{ID: int64(200 + i), Name: filler, TagName: filler})
 	}
 	srv := store.server(t)
 	defer srv.Close()
@@ -234,6 +254,12 @@ func TestStoreCoreAndLookup(t *testing.T) {
 			t.Fatalf("rerun store %v failed: %v", run, err)
 		}
 	}
+	store.releases = append([]mockRelease{
+		{ID: 901, Name: relNameAt(now.Add(time.Hour), currSHA, 600, 1), TagName: relNameAt(now.Add(time.Hour), currSHA, 600, 1), Draft: true},
+		{ID: 902, Name: relNameAt(now.Add(2*time.Hour), currSHA, 601, 1), TagName: relNameAt(now.Add(2*time.Hour), currSHA, 601, 1), Prerelease: true},
+		{ID: 903, Name: relNameAt(now.Add(3*time.Hour), currSHA, 602, 1), TagName: relNameAt(now.Add(3*time.Hour), currSHA, 601, 1)},
+		{ID: 904, Name: relNameAt(now.Add(25*time.Hour), currSHA, 603, 1), TagName: relNameAt(now.Add(25*time.Hour), currSHA, 603, 1)},
+	}, store.releases...)
 	if gotRel, gotIdx, _, err := runLookup(t.Context(), cfg, currSHA, "", ""); err != nil || gotRel != relNameAt(now, currSHA, 510, 10) || gotIdx != "index.json" {
 		t.Fatalf("lookup by SHA alone failed: rel=%s asset=%s err=%v", gotRel, gotIdx, err)
 	}
@@ -247,7 +273,8 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	if err := cmp.Or(c.deleteReleaseByID(t.Context(), ghRelease{ID: 11, Name: oldTag, TagName: oldTag}), c.deleteTagByRef(t.Context(), oldTag), c.deleteReleaseByID(t.Context(), ghRelease{ID: 12, Name: oldTag404, TagName: oldTag404}), c.deleteTagByRef(t.Context(), oldTag404)); err != nil {
 		t.Fatalf("exact-ID deletion failed: %v", err)
 	}
-	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 13, Name: oldTag, TagName: oldTag}) == nil ||
+	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 14, Name: oldTag500, TagName: oldTag500}) == nil || c.deleteTagByRef(t.Context(), oldTag500) == nil ||
+		c.deleteReleaseByID(t.Context(), ghRelease{ID: 13, Name: oldTag, TagName: oldTag}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 40, Name: oldTag, TagName: oldTag, Prerelease: true}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 41, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 42, Name: oldTag, TagName: oldTag404}) == nil ||
@@ -268,6 +295,12 @@ func TestStoreCoreFailures(t *testing.T) {
 		{"manifest mismatch extra asset", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "extra" }},
 		{"manifest mismatch missing asset", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "drop" }},
 		{"substituted manifest with altered hash", "tok", "manifest", func(s *mockStore) { s.tamperManifest = "sub-index" }},
+		{"draft verification not draft", "tok", "verifying draft", func(s *mockStore) { s.tamperManifest = "draft-not-draft" }},
+		{"draft verification prerelease", "tok", "verifying draft", func(s *mockStore) { s.tamperManifest = "draft-prerelease" }},
+		{"draft verification bad name", "tok", "verifying draft", func(s *mockStore) { s.tamperManifest = "draft-bad-name" }},
+		{"draft verification bad tag", "tok", "verifying draft", func(s *mockStore) { s.tamperManifest = "draft-bad-tag" }},
+		{"publish response still draft", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-still-draft" }},
+		{"publish response prerelease", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-prerelease" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &mockStore{token: "tok"}
@@ -275,7 +308,7 @@ func TestStoreCoreFailures(t *testing.T) {
 			srv := s.server(t)
 			defer srv.Close()
 			err := runStore(t.Context(), testCfg(srv.URL, tc.token, now, &bytes.Buffer{}), dir, currSHA, "10", "1")
-			if err == nil || !strings.Contains(err.Error(), tc.wantErr) || slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") }) {
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) || (tc.wantErr != "publishing release" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
 				t.Fatalf("want error %q and no publish, got err=%v events=%v", tc.wantErr, err, s.events)
 			}
 		})

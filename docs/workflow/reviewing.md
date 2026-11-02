@@ -89,12 +89,14 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   invariants, data flow or dependencies change.
 - For each exception in `docs/language-exceptions.txt`, verify that its
   approving comment is the maintainer's and approves that exact path.
-- *Risk* in the PR description matches [Risk](#risk), and *Adversarial*
-  matches [third-AI review](review-operations.md#third-ai-review).
+- *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and
+  *Accepted parity differences* match
+  [third-AI review](review-operations.md#third-ai-review) and below.
 - On a conversion (a pull request whose issue says it keeps today's
   behaviour), any difference from the old behaviour is a `[blocking]` finding
   (and blocks in [third-AI review](review-operations.md#third-ai-review) too) unless it
-  is provably unreachable or the issue itself lists it as intended;
+  is provably unreachable, the issue itself lists it as intended, or the
+  maintainer accepts it below;
   the PR body shows the pre-review comparison against the old script (baseline
   SHA, commands and result, or what was compared for a restructuring;
   [implementer brief](delivery.md#standard-implementer-brief)) and its absence
@@ -102,6 +104,47 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   Behaviour is what leaves the module and is observable outside it — DOM
   writes, events dispatched, request parameters, stored values, timer delays,
   escaping exceptions and their order — not internal call traces.
+- **Post-cap conversion-parity triage**
+  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085)):
+  after the two-run [third-AI cap](review-operations.md#third-ai-review), this
+  stops automatic fixing (the orchestrator starts no further fix round) and
+  hands remaining blocking findings to the maintainer's decision; it is not the
+  start condition for acceptance (below, available at any time). For each
+  remaining **blocking conversion-parity finding** it proposes: fix in this PR
+  (normal use or documented behaviour;
+  [post-cap rules](review-operations.md#third-ai-review)); accept (below); or,
+  if shown by the reproduced scenario or code path not to be a parity
+  difference, existing dispositions. Non-parity third-AI findings are outside
+  this triage and keep their dispositions (fixed — after the cap, only if the
+  maintainer selects it — follow-up issue, or declined with a reason).
+- **Accepting a parity difference:** a blocking conversion-parity finding may be
+  accepted at any time, including before the two-run cap (the cap prevents
+  endless review-and-fix loops and is not a precondition for an exception; no
+  completed second run is needed), only by the maintainer's explicit chat
+  decision naming the PR and findings (a GitHub comment proves nothing: every AI
+  posts as one account), when shown with concrete evidence to be limited to a
+  **degenerate environment**: a case outside documented behaviour and what
+  repository tests exercise, such as an API that is present but throws, or an
+  event detail no repository script dispatches; an absent API a document
+  specifies is not degenerate. Not eligible: a difference reachable in normal
+  use or documented behaviour; any authorization, organisation scoping or
+  data-exposure finding (never waivable). That a case appears in no document or
+  test is **not by itself** evidence or a reason; the maintainer settles
+  disputed classifications. Before `ai-reviewed`, the orchestrator records each
+  in **Accepted parity differences (maintainer chat decision), or n/a** with:
+  **PR and finding**, **head SHA** (plus **re-confirmation SHA** if the head
+  changed), **scenario**, **difference**, **occurrence condition** (concrete
+  reachability: exact sequence or environment), **likelihood** in real
+  deployments (origins, browsers, extensions, documented self-hosted setups),
+  **user effect**, **reason accepted**, and **document location** where the
+  behaviour is described; merge authorization stays separate
+  ([What no AI does](README.md#what-no-ai-does)). Accepting a difference skips
+  none of the other required reviews (cross-review limits and
+  [closure verification](review-followups.md#closure-verification) stay), the
+  conversion differential test (#2053), the required follow-up checks or
+  final-SHA confirmation ([independent follow-up check](review-operations.md#third-ai-review));
+  if a later change alters the accepted occurrence conditions or effect, the
+  maintainer must approve again (`ai-reviewed` waits).
 
 **How to report:** one comment on the pull request (or issue):
 

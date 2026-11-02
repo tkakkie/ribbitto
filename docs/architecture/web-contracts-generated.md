@@ -52,7 +52,8 @@ in-place `message-sending` from undefined (`elements.idempotency_key?.value`)
 to null, as the contract specifies, because consumers treat
 both alike: `web/src/drafts.ts` returns on a falsy key, the composer does not
 listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
-string keys. `message-sent` must keep null: both scripts compare its key with `!==`.
+string keys. `message-sent` must keep null: the composer compares against a null initial
+restoration key (undefined differs), and drafts also uses strict key comparison.
 `message-sending` is both an id (composer markup) and an event name by design;
 the literal check accepts contract constants in either role.
 Generated `CustomEvent` dispatches use `bubbles: true`, like legacy scripts, for document
@@ -60,9 +61,10 @@ listeners; `composed` stays unset (no script sets it; no shadow DOM). A payload-
 `//dom:event` dispatches a plain `Event` on its target (such as `panel-cover`).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
-`data-state` and `data-draft-key` are script-written hooks, not server state.
-Sidebar, arrival, side-panel, read-visibility, pins and typed composer entries use these hooks; `web/src/composer.ts` still
-keeps queue state in DOM attributes until `web/src/composer-queue.ts` adoption (#1825).
+`data-state`, `data-unconfirmed` and item `data-posted-message` are synchronous
+queue projections. `draftKey` and `requestKey` live on the in-memory queue item;
+the composer no longer writes `data-draft-key`. The generated constant remains
+until a later contract cleanup.
 
 `tools/contractliterals`, run by `make check-tools`, rejects literal ids,
 field names, attribute names, dataset keys, selectors and custom events in authored

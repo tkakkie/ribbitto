@@ -1,4 +1,5 @@
 import * as dom from "./contracts.gen.ts";
+import { createComposerQueue, type PendingItem, type Delivery } from "./composer-queue.ts";
 
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
@@ -34,44 +35,52 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   viewport?.addEventListener("scroll", updateViewport);
   window.addEventListener("resize", updateViewport);
   window.addEventListener("orientationchange", updateViewport);
-  const pendingRequests = new Set<ComposerForm>();
   let rememberPost = () => {};
-  // An edited send keeps its identity even when another queue response swaps
-  // the hidden controls. Only sending or emptying this text releases it.
-  let restoredKey: string | null = null;
-  let restoredText: string | null = null;
   let freshRestoredKey: string | null = null;
+  let admitting: ComposerForm | undefined;
+  const forms = new Map<PendingItem, ComposerForm>();
+  const identities = new WeakMap<ComposerForm, PendingItem>();
+  const projected = new WeakMap<PendingItem, PendingItem>();
+  const queue = createComposerQueue(() => performance.now(), () => crypto.randomUUID(), (settled, notice) => {
+    for (const item of queue.items) if (!forms.has(item) && admitting) {
+      forms.set(item, admitting);
+      identities.set(admitting, item);
+    }
+    for (const [item, form] of forms) {
+      const previous = projected.get(item);
+      // Admission marks uncertainty before state; completion writes state first.
+      const uncertainty = () => {
+        if (item.unconfirmed) dom.writeAttribute(form, dom.UnconfirmedAttribute, "true");
+        else form.removeAttribute(dom.UnconfirmedAttribute);
+      };
+      if (!previous && item.unconfirmed) uncertainty();
+      if (previous?.state !== item.state) dom.writeAttribute(form, dom.StateAttribute, item.state);
+      if (previous && (previous.unconfirmed !== item.unconfirmed || (settled === item && notice === "unconfirmed"))) uncertainty();
+      if (item.postedMessage !== null && previous?.postedMessage !== item.postedMessage)
+        dom.writeAttribute(form.closest("li")!, dom.PostedMessageAttribute, item.postedMessage);
+      projected.set(item, { ...item });
+    }
+  });
   const releaseRestored = (body: ComposerBody) => {
-    restoredKey = null;
-    restoredText = null;
     body.form.removeAttribute(dom.UnconfirmedKeyAttribute);
     body.form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!;
     freshRestoredKey = null;
+    return body.form.elements.idempotency_key.value;
   };
-  const changedRestoration = (body: ComposerBody) => {
-    if (restoredKey && (body.value === "" || (restoredText !== null && body.value !== restoredText))) releaseRestored(body);
-  };
-  // A deliberate Remove only protects an unchanged resend briefly (#1328).
-  const removedKeyRetention = 5 * 60 * 1000;
-  const removedKey = (form: ComposerForm, text: string) => JSON.stringify([dom.readAttribute(form, dom.DraftChannelAttribute), dom.readAttribute(form, dom.DraftTopicAttribute) || "feed", text]);
-  const removedKeys = new Map<string, { key: string; at: number }>();
-  window.addEventListener("pagehide", () => removedKeys.clear());
+  const changedRestoration = (body: ComposerBody) => queue.changeText(body.value, () => releaseRestored(body));
+  const place = (form: ComposerForm) => JSON.stringify([dom.readAttribute(form, dom.DraftChannelAttribute), dom.readAttribute(form, dom.DraftTopicAttribute) || "feed"]);
+  window.addEventListener("pagehide", () => queue.pagehide());
   document.addEventListener(dom.MessageDraftRestoredEvent, (native) => {
     const event = native as CustomEvent<dom.MessageDraftRestoredDetail> & { target: ComposerBody };
     // The ordinary fallback still has the fresh key rendered by the server.
     freshRestoredKey = event.target.form.elements.idempotency_key.value;
-    restoredKey = event.detail.key;
-    restoredText = event.target.value;
-    event.target.form.elements.idempotency_key.value = restoredKey;
-    dom.writeAttribute(event.target.form, dom.UnconfirmedKeyAttribute, restoredKey);
+    queue.restore(event.detail.key, event.target.value);
+    event.target.form.elements.idempotency_key.value = event.detail.key;
+    dom.writeAttribute(event.target.form, dom.UnconfirmedKeyAttribute, event.detail.key);
   });
   document.addEventListener(dom.MessageSentEvent, (native) => {
     const event = native as CustomEvent<dom.MessageSentDetail> & { target: ComposerBody };
-    for (const [text, held] of removedKeys) {
-      if (held.key === event.detail.key) removedKeys.delete(text);
-    }
-    if (restoredKey !== event.detail.key) return;
-    releaseRestored(event.target);
+    queue.sent(event.detail.key, () => releaseRestored(event.target));
   });
   const updateEdits = () => {
     const body = (dom.getMessageBody() as ComposerBody);
@@ -79,18 +88,15 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     for (const form of pendingForms()) {
       const edit = form.querySelector<HTMLButtonElement>(`[${dom.PendingEditAttribute}]`)!;
       const help = form.querySelector<HTMLElement>(`[${dom.PendingEditHelpAttribute}]`)!;
-      edit.disabled = occupied || dom.readAttribute(form, dom.StateAttribute) !== "failed";
+      edit.disabled = occupied || identities.get(form)?.state !== "failed";
       help.hidden = !occupied;
       edit.setAttribute("aria-describedby", form.closest("li")!.querySelector(`[${dom.PendingBodyAttribute}]`)!.id + (occupied ? " " + help.id : ""));
     }
   };
   const pendingForms = () => [...document.querySelectorAll<ComposerForm>(`${dom.messagePendingSelector()} [${dom.PendingFormAttribute}]`)];
   const dispatch = () => {
-    if (pendingRequests.size || (dom.getMessageComposer() as ComposerForm | null)?.classList.contains("htmx-request")) return;
-    const forms = pendingForms();
-    if (forms.some(form => dom.readAttribute(form, dom.StateAttribute) === "failed" && dom.readAttribute(form, dom.UnconfirmedAttribute))) return;
-    const head = forms.find(form => dom.readAttribute(form, dom.StateAttribute) === "queued");
-    if (head) htmx.trigger(head, dom.PendingSendEvent);
+    const head = queue.next((dom.getMessageComposer() as ComposerForm | null)?.classList.contains("htmx-request"));
+    if (head) htmx.trigger(forms.get(head)!, dom.PendingSendEvent);
   };
   document.addEventListener("submit", (native) => {
     const event = native as SubmitEvent & { target: ComposerForm };
@@ -98,11 +104,12 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       event.preventDefault();
       event.stopImmediatePropagation();
       const form = event.target;
-      if (dom.readAttribute(form, dom.StateAttribute) !== "failed") return;
+      const pending = identities.get(form)!;
+      if (pending.state !== "failed") return;
       // A refused send will now be stored after the later sends. An unknown
       // outcome keeps its place until its same-key retry resolves it.
-      if (!dom.readAttribute(form, dom.UnconfirmedAttribute)) form.closest("li")!.parentElement!.append(form.closest("li")!);
-      dom.writeAttribute(form, dom.StateAttribute, "queued");
+      if (!pending.unconfirmed) form.closest("li")!.parentElement!.append(form.closest("li")!);
+      queue.retry(pending);
       form.querySelector("[role=status]")!.textContent = "";
       form.querySelector<HTMLElement>(`[${dom.PendingActionsAttribute}]`)!.hidden = true;
       form.closest("li")!.querySelector<HTMLElement>(`[${dom.PendingSendingAttribute}]`)!.hidden = false;
@@ -130,46 +137,29 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     }
     const form = event.target, body = form.elements.body as ComposerBody;
     const list = dom.getMessagePending()!;
-    // Both forms replace the same state; a stale ordinary answer must not
-    // overwrite a pending send's fresh generation and key.
-    if (form.classList.contains("htmx-request") || list.children.length >= 10) {
+    let item!: HTMLLIElement, sending!: ComposerForm;
+    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), Boolean(form.elements.quote), () => {
       event.preventDefault();
       event.stopImmediatePropagation();
-      say(list.children.length >= 10 ? "capacity" : "busy");
+      item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+      sending = item.querySelector<ComposerForm>("form")!;
+      for (const name of ["idempotency_key", "composer", dom.CursorField]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
+      admitting = sending;
+    });
+    admitting = undefined;
+    if (typeof pending === "string") {
+      if (pending === "ordinary") inPlace();
+      else { event.preventDefault(); event.stopImmediatePropagation(); say(pending); }
       return;
     }
-    const text = body.value.replace(/\r\n?/g, "\n").trim();
-    if (form.elements.quote || !text || [...text].length > 4000) {
-      if (list.firstElementChild || pendingRequests.size) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        say("busy");
-      } else inPlace();
-      return;
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
-    const sending = item.querySelector<ComposerForm>("form")!;
-    for (const name of ["idempotency_key", "composer", dom.CursorField]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
-    const removed = removedKeys.get(removedKey(form, body.value));
-    removedKeys.delete(removedKey(form, body.value));
-    sending.elements.idempotency_key.value = restoredKey ||
-      (removed && performance.now() - removed.at < removedKeyRetention ? removed.key : crypto.randomUUID());
-    if (removed && sending.elements.idempotency_key.value === removed.key) dom.writeAttribute(sending, dom.UnconfirmedAttribute, "true");
-    if (restoredKey && dom.readAttribute(form, dom.UnconfirmedKeyAttribute) === restoredKey) dom.writeAttribute(sending, dom.UnconfirmedAttribute, "true");
+    sending.elements.idempotency_key.value = pending.requestKey;
     form.removeAttribute(dom.UnconfirmedKeyAttribute);
-    restoredKey = null;
-    restoredText = null;
-    // Correlate draft cleanup even after a 409 renews the request key.
-    dom.writeAttribute(sending, dom.DraftKeyAttribute, sending.elements.idempotency_key.value);
     sending.elements.body.value = body.value;
     const shownBody = item.querySelector(`[${dom.PendingBodyAttribute}]`)!;
-    shownBody.textContent = text;
+    shownBody.textContent = pending.text.replace(/\r\n?/g, "\n").trim();
     shownBody.id += "-" + sending.elements.idempotency_key.value;
     sending.querySelector<HTMLElement>(`[${dom.PendingEditHelpAttribute}]`)!.id += "-" + sending.elements.idempotency_key.value;
     for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
-    dom.writeAttribute(sending, dom.StateAttribute, "queued");
     list.append(item);
     dom.dispatchMessageSendingEvent((dom.getMessageBody() as ComposerBody), { key: sending.elements.idempotency_key.value, body: body.value, inPlace: false });
     body.value = "";
@@ -189,11 +179,18 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   };
   // Mutation observers run before paint: a response-first delivery never
   // paints both identities. Stream-first waits for the response's ID.
+  const delivery = (): Delivery => ({
+    ids: [...dom.getMessageItems()?.children || []].map(item => item.id),
+    topic: dom.readAttribute(dom.getMessageItems()!, dom.TopicAttribute) || undefined,
+  });
   const reconcile = () => {
     const list = dom.getMessagePending()!;
-    for (const item of [...(list?.children || [])] as HTMLLIElement[]) {
-      if (dom.readAttribute(item, dom.PostedMessageAttribute) && document.getElementById(dom.readAttribute(item, dom.PostedMessageAttribute)!)?.parentElement!.id === dom.MessageItemsID) {
-        item.remove();
+    if (list) queue.deliver(delivery());
+    for (const form of pendingForms()) {
+      const pending = identities.get(form);
+      if (pending && !queue.items.includes(pending)) {
+        form.closest("li")!.remove();
+        if (pending.state !== "sending") forms.delete(pending);
         say("");
       }
     }
@@ -209,13 +206,8 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
     const moved = payload.querySelector("ul");
     if ((moved && dom.readAttribute(moved, dom.FromTopicAttribute)) !== dom.readAttribute(items, dom.TopicAttribute)) return;
-    for (const form of pendingForms()) {
-      const item = form.closest("li")!;
-      if (dom.readAttribute(item, dom.PostedMessageAttribute) && payload.getElementById(dom.readAttribute(item, dom.PostedMessageAttribute)!)) {
-        item.remove();
-        say("");
-      }
-    }
+    queue.deliver({ ...delivery(), moved: { fromTopic: dom.readAttribute(moved!, dom.FromTopicAttribute)!,
+      ids: [...payload.querySelectorAll("[id]")].map(item => item.id) } });
     reconcile();
   });
   document.addEventListener("htmx:configRequest", (native) => {
@@ -233,25 +225,21 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     if (!edit && !event.target.closest(`[${dom.PendingRemoveAttribute}]`)) return;
     const body = (dom.getMessageBody() as ComposerBody);
     const form = event.target.closest<ComposerForm>("form")!;
+    const pending = identities.get(form)!;
     if (edit) {
-      if (body.value || composing.has(body) || dom.readAttribute(form, dom.StateAttribute) !== "failed") return;
-      body.value = form.elements.body.value;
-      restoredKey = form.elements.idempotency_key.value;
-      restoredText = null;
-      body.form.elements.idempotency_key.value = restoredKey;
-      if (dom.readAttribute(form, dom.UnconfirmedAttribute)) dom.writeAttribute(body.form, dom.UnconfirmedKeyAttribute, restoredKey);
+      const restored = queue.edit(pending, body.value, composing.has(body));
+      if (!restored) return;
+      body.value = restored.text;
+      body.form.elements.idempotency_key.value = restored.requestKey;
+      if (restored.unconfirmed) dom.writeAttribute(body.form, dom.UnconfirmedKeyAttribute, restored.requestKey);
       else body.form.removeAttribute(dom.UnconfirmedKeyAttribute);
       body.setSelectionRange(body.value.length, body.value.length);
-    } else if (dom.readAttribute(form, dom.UnconfirmedAttribute)) {
-      for (const [text, held] of removedKeys) {
-        if (performance.now() - held.at >= removedKeyRetention) removedKeys.delete(text);
-      }
-      const text = removedKey(body.form, form.elements.body.value);
-      const held = { key: form.elements.idempotency_key.value, at: performance.now() };
-      removedKeys.set(text, held);
-      setTimeout(() => { if (removedKeys.get(text) === held) removedKeys.delete(text); }, removedKeyRetention);
+    } else {
+      queue.remove(pending, place(body.form));
+      if (pending.unconfirmed) setTimeout(() => queue.expire(pending), queue.removedKeyRetention);
     }
-    dom.dispatchMessagePendingActionEvent((dom.getMessageBody() as ComposerBody), { key: dom.readAttribute(form, dom.DraftKeyAttribute)!, restoredKey: edit ? restoredKey : null, kind: edit ? "edit" : "remove" });
+    dom.dispatchMessagePendingActionEvent((dom.getMessageBody() as ComposerBody), { key: pending.draftKey, restoredKey: edit ? queue.restoration!.key : null, kind: edit ? "edit" : "remove" });
+    if (pending.state !== "sending") forms.delete(pending);
     event.target.closest("li")!.remove();
     updateEdits();
     say("");
@@ -263,13 +251,13 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     const event = native as HtmxEvent;
     const form = pendingForm(event);
     if (!form) return;
-    pendingRequests.add(form);
-    dom.writeAttribute(form, dom.StateAttribute, "sending");
+    queue.dispatch();
     // htmx dispatches completion on the form even after it is detached,
     // when the event can no longer bubble to document.
     form.addEventListener("htmx:afterRequest", (answer) => {
       completePending(answer as HtmxEvent, form);
-      pendingRequests.delete(form);
+      const pending = identities.get(form)!;
+      if (!queue.items.includes(pending)) forms.delete(pending);
       // Finish htmx's request cleanup before triggering the next form.
       queueMicrotask(dispatch);
     }, { once: true });
@@ -498,25 +486,24 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     body.setAttribute("aria-invalid", String(state.hasAttribute(dom.InvalidAttribute)));
     const pending = pendingForm(event);
     // Guard against a future ordinary-send path retaining an edited key.
-    if (!pending && [200, 409].includes(event.detail.xhr.status)) restoredKey = null;
-    if (restoredKey) body.form.elements.idempotency_key.value = restoredKey;
+    if (!pending && [200, 409].includes(event.detail.xhr.status)) queue.forgetRestoration();
+    if (queue.restoration) body.form.elements.idempotency_key.value = queue.restoration.key;
     if (pending) {
-      const item = pending.closest("li")!;
-      dom.writeAttribute(item, dom.PostedMessageAttribute, String(dom.readAttribute(state, dom.PostedMessageAttribute) ?? undefined));
-      // Read response routing once; retain only the confirmed ID on the item.
-      // Ordered application proves an absent post has already moved away.
-      const topic = dom.readAttribute(items, dom.TopicAttribute);
-      if (topic) {
-        const applied = dom.readAttribute(dom.getOrganizationStream()!, dom.AppliedCursorAttribute);
-        if (dom.readAttribute(state, dom.PostedTopicAttribute) !== topic ||
-            (!items.querySelector("#" + dom.readAttribute(state, dom.PostedMessageAttribute)) && applied &&
-             BigInt(applied) >= BigInt(dom.readAttribute(state, dom.PostedSeqAttribute)!))) {
-          item.remove();
-          say("");
-        }
+      const item = identities.get(pending)!;
+      const id = String(dom.readAttribute(state, dom.PostedMessageAttribute) ?? undefined);
+      queue.response(item, id);
+      const view = delivery();
+      const topic = dom.readAttribute(state, dom.PostedTopicAttribute)!;
+      const applied = view.topic && dom.readAttribute(dom.getOrganizationStream()!, dom.AppliedCursorAttribute);
+      // Routing short-circuits cursor parsing, including on malformed values.
+      const checkCursor = view.topic && topic === view.topic && !view.ids.includes(id) && applied;
+      if (checkCursor) view.applied = BigInt(applied);
+      if (queue.route(item, { id, topic, seq: checkCursor ? BigInt(dom.readAttribute(state, dom.PostedSeqAttribute)!) : 0n }, view)) {
+        pending.closest("li")!.remove();
+        say("");
       }
       reconcile();
-      if (event.detail.xhr.status === 200 && dom.readAttribute(state, dom.PostedMessageAttribute)) dom.dispatchMessageSentEvent((dom.getMessageBody() as ComposerBody), { key: dom.readAttribute(pending, dom.DraftKeyAttribute), message: dom.readAttribute(state, dom.PostedMessageAttribute)! });
+      if (event.detail.xhr.status === 200 && dom.readAttribute(state, dom.PostedMessageAttribute)) dom.dispatchMessageSentEvent((dom.getMessageBody() as ComposerBody), { key: item.draftKey, message: dom.readAttribute(state, dom.PostedMessageAttribute)! });
       return;
     }
     // The stream consumes this attribute at settle, possibly before IME ends.
@@ -551,21 +538,17 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   });
   const completePending = (event: HtmxEvent, pending: ComposerForm) => {
     const status = event.detail.xhr.status;
-    if (status === 200) {
-      dom.writeAttribute(pending, dom.StateAttribute, "confirmed");
-      pending.removeAttribute(dom.UnconfirmedAttribute);
-      return;
-    }
-    dom.writeAttribute(pending, dom.StateAttribute, "failed");
-    const alert = dom.getMessageSendAlert()!;
-    let name: AlertName = "unconfirmed";
+    const item = identities.get(pending)!;
     if (status === 409) {
-      name = "repeat";
+      // The legacy DOM transition precedes UUID generation, even if it throws.
+      dom.writeAttribute(pending, dom.StateAttribute, "failed");
       pending.removeAttribute(dom.UnconfirmedAttribute);
-      pending.elements.idempotency_key.value = crypto.randomUUID();
-    } else if ([400, 404, 413, 422, 429].includes(status)) {
-      name = dom.readAttribute(pending, dom.UnconfirmedAttribute) ? "stillUnconfirmed" : "notSent";
-    } else dom.writeAttribute(pending, dom.UnconfirmedAttribute, "true");
+      projected.set(item, { ...item, state: "failed", unconfirmed: false });
+    }
+    const name = queue.settle(item, status);
+    if (status === 409) pending.elements.idempotency_key.value = item.requestKey;
+    if (!name) return;
+    const alert = dom.getMessageSendAlert()!;
     pending.querySelector("[role=status]")!.textContent = dom.readAttribute(alert, alerts[name]);
     pending.querySelector<HTMLElement>(`[${dom.PendingActionsAttribute}]`)!.hidden = false;
     pending.closest("li")!.querySelector<HTMLElement>(`[${dom.PendingSendingAttribute}]`)!.hidden = true;
@@ -583,6 +566,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     const key = form.elements.idempotency_key?.value;
     if (dom.readAttribute(form, dom.UnconfirmedKeyAttribute) !== key) form.removeAttribute(dom.UnconfirmedKeyAttribute);
     if (status === 200 || status === 409) return;
+    queue.ordinarySettled(status);
     // The post handler answers 400/404/413/422 before any write; 429 rejects
     // the request by spec. Other 4xx, 5xx, network errors or timeouts may
     // follow a commit.

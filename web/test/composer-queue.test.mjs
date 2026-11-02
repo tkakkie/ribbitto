@@ -299,3 +299,88 @@ for (const status of [404, 413]) {
     assert.deepEqual(q.restoration, { key: item.requestKey, text: null, unconfirmed: uncertain });
   });
 }
+
+for (const streamFirst of [false, true]) test(`response projection precedes completion, streamFirst=${streamFirst}`, () => {
+  const seen = [];
+  const { q } = fixture(() => seen.push(q.items.map(item => [item.state, item.postedMessage])));
+  const item = q.admit('body', 'feed');
+  assert.equal(q.next(), item);
+  assert.equal(item.state, 'queued');
+  assert.equal(q.next(true), undefined);
+  q.dispatch();
+  q.response(item, posted.id);
+  q.route(item, posted, { ids: streamFirst ? [posted.id] : [] });
+  assert.equal(item.state, 'sending');
+  assert.equal(item.postedMessage, posted.id);
+  assert.equal(q.items.length, streamFirst ? 0 : 1);
+  assert.equal(q.next(), undefined);
+  q.settle(item, 200);
+  assert.equal(item.state, 'confirmed');
+  assert.equal(item.postedMessage, posted.id);
+  q.deliver({ ids: [posted.id] });
+  assert.deepEqual(q.items, []);
+  assert.deepEqual(seen[2], [['sending', posted.id]]);
+});
+
+test('Remove timeout clears its hold with a frozen clock', () => {
+  const { q } = fixture(), first = failed(q);
+  q.remove(first, 'feed');
+  const second = q.admit(first.text, 'feed');
+  q.remove(second, 'feed');
+  q.expire(first);
+  const third = q.admit(first.text, 'feed');
+  assert.equal(third.requestKey, first.requestKey);
+  q.remove(third, 'feed');
+  q.expire(third);
+  assert.notEqual(q.admit(first.text, 'feed').requestKey, first.requestKey);
+});
+
+test('Remove holds read a stepped clock only for the matching resend', () => {
+  let time = 0, reads = 0, keys = 0;
+  const q = createComposerQueue(() => { reads++; return time += 200000; }, () => `key-${++keys}`, () => {});
+  const first = failed(q, 500, 'msg 1');
+  q.remove(first, 'feed');
+  q.admit('msg 2', 'feed');
+  assert.equal(reads, 1);
+  const resend = q.admit('msg 1', 'feed');
+  assert.deepEqual([reads, resend.requestKey, resend.unconfirmed], [2, first.requestKey, true]);
+});
+
+test('Remove timer never reads the clock or expires a replacement hold', () => {
+  let throwing = false, reads = 0;
+  const q = createComposerQueue(() => { reads++; if (throwing) throw Error('clock'); return 0; }, () => 'key', () => {});
+  const first = failed(q);
+  q.remove(first, 'feed');
+  const second = q.admit(first.text, 'feed');
+  q.remove(second, 'feed');
+  const before = reads;
+  throwing = true;
+  q.expire(first);
+  assert.equal(reads, before);
+  throwing = false;
+  assert.equal(q.admit(first.text, 'feed').unconfirmed, true);
+});
+
+for (const restored of [false, true]) test(`Remove hold is consumed before age check, restored=${restored}`, () => {
+  let throwing = false, keys = 0;
+  const q = createComposerQueue(() => { if (throwing) throw Error('clock'); return 0; }, () => `key-${++keys}`, () => {});
+  const first = failed(q);
+  q.remove(first, 'feed');
+  if (restored) q.restore('saved', first.text);
+  throwing = true;
+  if (restored) assert.equal(q.admit(first.text, 'feed').requestKey, 'saved');
+  else assert.throws(() => q.admit(first.text, 'feed'), /clock/);
+  throwing = false;
+  assert.equal(q.admit(first.text, 'feed').unconfirmed, false);
+});
+
+test('409 notifies once after rotating the request key', () => {
+  const seen = [];
+  let key = 0;
+  const q = createComposerQueue(() => 0, () => `key-${++key}`, () => seen.push(q.items.map(item => [item.state, item.requestKey])));
+  const item = q.admit('hello', 'feed');
+  q.dispatch();
+  seen.length = 0;
+  q.settle(item, 409);
+  assert.deepEqual(seen, [[['failed', 'key-2']]]);
+});

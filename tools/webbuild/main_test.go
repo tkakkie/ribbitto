@@ -65,22 +65,46 @@ func TestBuild(t *testing.T) {
 		if err := build(root, "commit", "run", false); err != nil {
 			t.Fatal(err)
 		}
-		data, err := os.ReadFile(filepath.Join(dist, "manifest.json"))
+		manifestBytes, err := os.ReadFile(filepath.Join(dist, "manifest.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		var m manifest
-		if err := json.Unmarshal(data, &m); err != nil {
+		if err := json.Unmarshal(manifestBytes, &m); err != nil {
 			t.Fatal(err)
 		}
 		b := m.Entries["message-time"]
-		data, err = os.ReadFile(filepath.Join(dist, b.File))
+		data, err := os.ReadFile(filepath.Join(dist, b.File))
 		if err != nil {
 			t.Fatal(err)
 		}
 		files, err := os.ReadDir(dist)
 		if err != nil || len(files) != 2 || len(m.Entries) != 1 || m.Commit != "commit" || m.RunID != "run" || b.Map != "" || b.SHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || !strings.HasPrefix(b.File, "message-time-") || !bytes.Contains(data, []byte("(()=>{")) || bytes.Contains(data, []byte("sourceMappingURL")) {
 			t.Fatalf("invalid production output: %+v, %v, %v", m, files, err)
+		}
+		idxData, err := os.ReadFile(filepath.Join(root, "bin/sourcemaps/index.json"))
+		if err != nil {
+			t.Fatalf("missing production map index: %v", err)
+		}
+		var idx manifest
+		if err := json.Unmarshal(idxData, &idx); err != nil {
+			t.Fatal(err)
+		}
+		ib := idx.Entries["message-time"]
+		mapBytes, err := os.ReadFile(filepath.Join(root, "bin/sourcemaps", ib.Map))
+		if err != nil || idx.Commit != "commit" || idx.RunID != "run" || ib.File != b.File || ib.SHA256 != b.SHA256 || ib.Map != b.File+".map" || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
+			t.Fatalf("invalid production source map or index: %+v, %v", idx, err)
+		}
+		noneRes := api.Build(api.BuildOptions{
+			AbsWorkingDir: root, EntryPoints: []string{"web/src/message-time.ts"}, Outdir: dist,
+			EntryNames: "[name]-[hash]", Bundle: true, Format: api.FormatIIFE,
+			Platform: api.PlatformBrowser, Target: api.ES2017,
+			MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
+			Sourcemap: api.SourceMapNone, LegalComments: api.LegalCommentsNone,
+		})
+		wantManifest, _ := json.MarshalIndent(manifest{Commit: "commit", RunID: "run", Entries: map[string]bundle{"message-time": {File: filepath.Base(noneRes.OutputFiles[0].Path), SHA256: fmt.Sprintf("%x", sha256.Sum256(noneRes.OutputFiles[0].Contents))}}}, "", "  ")
+		if len(noneRes.OutputFiles) != 1 || !bytes.Equal(data, noneRes.OutputFiles[0].Contents) || filepath.Base(noneRes.OutputFiles[0].Path) != b.File || !bytes.Equal(manifestBytes, append(wantManifest, '\n')) {
+			t.Fatal("production bundle or manifest differs from build without maps")
 		}
 		if i == 1 && (b != previous || !bytes.Equal(data, previousBytes)) || i == 2 && b.File == previous.File {
 			t.Fatal("bundle names/bytes violate content hashing")
@@ -487,14 +511,17 @@ func TestValidation(t *testing.T) {
 		{"unexplained file", "web/src/message-time.ts", "web/static/dist/x.js", "x.js", "", "unexplained produced"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, stage := t.TempDir(), t.TempDir()
+			root, stage, mapStage := t.TempDir(), t.TempDir(), t.TempDir()
 			dist := filepath.Join(root, "web/static/dist")
 			r := api.BuildResult{Metafile: `{"outputs":{}}`}
 			if tc.output != "" {
 				r.Metafile = fmtMeta(tc.output, tc.entry)
 			}
 			if tc.file != "" {
-				r.OutputFiles = []api.OutputFile{{Path: filepath.Join(dist, tc.file)}}
+				r.OutputFiles = []api.OutputFile{
+					{Path: filepath.Join(dist, tc.file)},
+					{Path: filepath.Join(dist, tc.file+".map"), Contents: []byte(`{"sourcesContent":["x"]}`)},
+				}
 			}
 			if tc.foreign != "" {
 				write(t, filepath.Join(stage, tc.foreign), nil)
@@ -502,7 +529,7 @@ func TestValidation(t *testing.T) {
 			if tc.name == "unexplained file" {
 				r.OutputFiles = append(r.OutputFiles, api.OutputFile{Path: filepath.Join(dist, "extra.js")})
 			}
-			_, err := validate(root, dist, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false)
+			_, err := validate(root, dist, stage, mapStage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, err)
 			}
@@ -512,17 +539,73 @@ func TestValidation(t *testing.T) {
 		root, stage := t.TempDir(), t.TempDir()
 		dist := filepath.Join(root, "web/static/dist")
 		r := api.BuildResult{
-			Metafile:    fmtMeta("web/static/dist/x.js", "web/src/message-time.ts"),
+			Metafile:    `{"outputs":{"web/static/dist/x.js":{"entryPoint":"web/src/message-time.ts"}}}`,
 			OutputFiles: []api.OutputFile{{Path: filepath.Join(dist, "x.js")}},
 		}
-		if _, err := validate(root, dist, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r, true); err == nil || !strings.Contains(err.Error(), "bundle without source map") {
+		if _, err := validate(root, dist, stage, stage, map[string]string{"web/src/message-time.ts": "message-time"}, r, true); err == nil || !strings.Contains(err.Error(), "bundle without source map") {
 			t.Fatalf("expected missing source map error, got %v", err)
+		}
+	})
+	t.Run("missing sourcesContent", func(t *testing.T) {
+		root, stage, mapStage := t.TempDir(), t.TempDir(), t.TempDir()
+		dist := filepath.Join(root, "web/static/dist")
+		r := api.BuildResult{
+			Metafile: fmtMeta("web/static/dist/x.js", "web/src/message-time.ts"),
+			OutputFiles: []api.OutputFile{
+				{Path: filepath.Join(dist, "x.js"), Contents: []byte("(()=>{})();")},
+				{Path: filepath.Join(dist, "x.js.map"), Contents: []byte(`{"version":3}`)},
+			},
+		}
+		if _, err := validate(root, dist, stage, mapStage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false); err == nil || !strings.Contains(err.Error(), "missing sourcesContent") {
+			t.Fatalf("expected missing sourcesContent rejection, got %v", err)
+		}
+	})
+	t.Run("map for another bundle hash", func(t *testing.T) {
+		root, stage, mapStage := t.TempDir(), t.TempDir(), t.TempDir()
+		dist := filepath.Join(root, "web/static/dist")
+		r := api.BuildResult{
+			Metafile: `{"outputs":{"web/static/dist/message-time-AAAAAAAA.js":{"entryPoint":"web/src/message-time.ts"},"web/static/dist/message-time-BBBBBBBB.js.map":{}}}`,
+			OutputFiles: []api.OutputFile{
+				{Path: filepath.Join(dist, "message-time-AAAAAAAA.js"), Contents: []byte("(()=>{})();")},
+				{Path: filepath.Join(dist, "message-time-BBBBBBBB.js.map"), Contents: []byte(`{"sourcesContent":["x"]}`)},
+			},
+		}
+		if _, err := validate(root, dist, stage, mapStage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false); err == nil || !strings.Contains(err.Error(), "bundle without source map") {
+			t.Fatalf("expected mismatched map hash rejection, got %v", err)
+		}
+	})
+	t.Run("blocked map parent", func(t *testing.T) {
+		root := fixture(t, []byte(`console.log("ok");`))
+		write(t, filepath.Join(root, "bin"), []byte("blocked"))
+		wd := t.TempDir()
+		t.Chdir(wd)
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "staging maps") {
+			t.Fatalf("expected map staging failure, got %v", err)
+		}
+		if entries, err := os.ReadDir(wd); err != nil || len(entries) != 0 {
+			t.Fatalf("unexpected files in working directory: %v, %v", entries, err)
+		}
+	})
+	t.Run("symlinked map parent", func(t *testing.T) {
+		root := fixture(t, []byte(`console.log("ok");`))
+		vendor := filepath.Join(root, "web/static/vendor")
+		if err := os.MkdirAll(vendor, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(vendor, filepath.Join(root, "bin")); err != nil {
+			t.Fatal(err)
+		}
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "staging maps") {
+			t.Fatalf("expected symlinked map parent failure, got %v", err)
+		}
+		if entries, err := os.ReadDir(vendor); err != nil || len(entries) != 0 {
+			t.Fatalf("symlinked map parent wrote into vendor: %v, %v", entries, err)
 		}
 	})
 }
 
 func fmtMeta(output, entry string) string {
-	return `{"outputs":{"` + output + `":{"entryPoint":"` + entry + `"}}}`
+	return `{"outputs":{"` + output + `":{"entryPoint":"` + entry + `"},"` + output + `.map":{}}}`
 }
 
 func TestRejectedEntries(t *testing.T) {

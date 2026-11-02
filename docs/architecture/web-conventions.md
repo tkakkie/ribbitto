@@ -84,10 +84,9 @@ checks until migrated.
 
 ## Composer queue example: before and after
 
-**Current typed entry (`web/src/composer.ts`).**
-Queue state (`"queued"`, `"sending"`, `"failed"`, `"confirmed"`), uncertainty
-(`data-unconfirmed`) and draft identity (`data-draft-key`) still live in
-DOM attributes, through generated accessors, until queue adoption in #1825.
+**Typed entry (`web/src/composer.ts`).** The queue owns state, uncertainty and
+immutable `draftKey`; `requestKey` may rotate after a 409. The entry subscribes
+to synchronous changes and writes only the existing DOM projections.
 
 **Snippet from before the typed composer entry:**
 
@@ -102,25 +101,25 @@ DOM attributes, through generated accessors, until queue adoption in #1825.
   };
 ```
 
-**Queue specification now; DOM adoption planned (#1825, #1417).**
+**Queue implementation (#1825); guard adoption planned (#1417).**
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) holds typed state
 with immutable `draftKey` separate from `requestKey`;
 [`web/test/composer-queue.test.mjs`](../../web/test/composer-queue.test.mjs)
-specifies transitions and ordering. The typed composer entry does not import or
-serve this module until #1825. Its injected clock and key generator keep tests DOM-free:
+specifies transitions and ordering. The typed composer entry imports it;
+its injected clock and key generator keep tests DOM-free:
 
 ```ts
-import { createComposerQueue, holdsReload } from "./composer-queue.ts";
+import { createComposerQueue } from "./composer-queue.ts";
 
 const queue = createComposerQueue(now, newKey, () => {
   // Called synchronously after mutation, including removal of the last item.
-  notifyResetGuard(holdsReload(queue.items));
+  projectPendingForms(queue.items);
 });
-const item = queue.dispatch(ordinaryRequestInFlight);
+const item = queue.next(ordinaryRequestInFlight);
 if (item) sendPending(item);
 ```
 
-The adapter above is illustrative. #1825 adopts the module and writes
+The adapter above is illustrative. The entry writes
 `data-state`, `data-unconfirmed` and item `data-posted-message` as projections;
 `draftKey` stays in memory. The stream guard still reads the DOM until #1417
 switches its item predicate to `holdsReload` and the synchronous notification.

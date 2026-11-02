@@ -3,18 +3,23 @@
 Pending-post rules for the [web composer](web-composer.md#composer).
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) and its
 [table-driven tests](../../web/test/composer-queue.test.mjs) specify transitions,
-refusals, ordering and identity. Until adoption (#1825), changes to the legacy
-queue rules update both files in the same pull request. No browser entry imports
-this module yet; this prose becomes pointers when adoption lands.
+refusals, ordering and identity; `web/src/composer.ts` adapts these decisions to
+htmx and the existing pending DOM.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
-feed/topic. `expire` handles hold expiry; `pagehide` and `sent` clear holds.
-Before `admit`, the adapter calls `changeText` and applies any returned fresh key
-to the composer, including when admission returns busy or ordinary.
+feed/topic. Timers call `expire(item)` to clear only their own hold even with a
+frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
+own hold and checks age only without a restored key. `pagehide`/`sent` clear holds.
+Before `admit`, the adapter calls `changeText` with a renewal callback that clears
+the uncertainty mark before generating/writing the composer key, including when
+admission returns busy or ordinary. The fallback key clears only after that write.
+Only successful admission calls the adapter's `prepare` callback to clone/copy the
+form, before key generation and the synchronous projection notification.
 That released key belongs to the composer; a queued item instead takes the restored
 key, else an unexpired Remove hold for the same place and raw text, else a fresh
 `newKey()`. As in the legacy composer, enqueue rotates the composer's own key,
 discarding any released key. Items expose readonly views; `restoration` returns a
-readonly snapshot.
+readonly snapshot. Falsy draft-event keys do not arm restoration; sent events
+still compare their raw identity exactly, including null and undefined.
 
 ## Pending own posts
 
@@ -25,69 +30,45 @@ after `#message-items`. Each item's htmx form holds original text,
 key, generation and shown cursor. Composer clears immediately, keeps
 focus, takes `crypto.randomUUID()`. Each queued form gets a fresh UUID unless
 Edit, a device draft or the Remove hold supplies one.
-At most 10 items per tab in all states, including failures
-and confirmed items awaiting delivery. At capacity a localised alert keeps
-the next text; Retry takes no slot. Delivery, move-out, Remove and Edit free slots.
-FIFO: one form at a time, predecessor classified first.
-Ordinary requests block composer submits; pending items or requests block
-quoted or invalid ordinary submits, preventing overlap between forms' requests.
-A Not sent item lets later items continue; Retry moves it to the list and
-queue's end. Unknown outcomes pause later items (showing Sending).
-Same-key Retry keeps its place; success resumes dispatch. A refused retry
-keeps the pause while the earlier outcome is unknown. Remove and Edit resume
-without resolving that request: it may commit later; real delivery stays
-visible. Storage follows send order on uninterrupted success or
-successful same-key Retry; Remove or Edit may reorder it.
-200 swaps composer state and out-of-band typing form, sets
-`aria-invalid="false"` and keeps `aria-describedby="message-help composer-quote-description"` and the
-textarea text.
+Admission limits, FIFO dispatch, failure classification, Retry placement and
+restored identity are specified by the table-driven queue tests above.
+`internal/web/composer_pending_browser_test.go` covers request ordering,
+capacity, Retry, Edit, delivery races and live composer-state swaps with real htmx.
 `data-posted-message` links the item to delivery. A `MutationObserver` removes
 confirmed items before paint when their ID appears in `#message-items`.
 Stream-first briefly shows both until the response; replay and feed moves
 preserve the real ID. Topic responses also remove the item if its
 `data-posted-topic` differs, or its ID is absent and `data-applied-cursor`
-has reached `data-posted-seq`. Read attributes once, never keep them
+has reached `data-posted-seq`. This also clears the busy alert for a removed
+in-flight item; delivered or still-pending detached responses leave it alone.
+Read attributes once, never keep them
 on the item. Once confirmed, `htmx:sseBeforeMessage` removes it when
 a `messages-moved` payload names its ID with this topic as source.
 Ordering allows removal of absent, already-applied posts
 ([topic replay](replay.md#ordering-and-replay)).
-Failed responses never swap; the [failure classes](web-composer.md#composer) fill only
-the item's empty polite status. Retry uses form text/key,
-even after an unconfirmed send's refused retry. A 409
-shows `message.error.repeat` and renews the item's key. Remove discards
-the item with the [hold below](#remove-hold); an uncertain committed post
-can still arrive later.
-Edit requires either failure, an empty composer and no IME
-composition; otherwise visible but disabled with an associated
-localised explanation. It never overwrites a draft. It restores raw
-text, key and any unconfirmed mark, focuses the textarea with caret at
-end, then removes the item. The key follows text across state swaps
-until sent/emptied; its unconfirmed mark stays in composer
-`data-unconfirmed-key` for either path. A pending resend transfers
-it to its form and clears the composer's mark; emptying restored
-text clears it and takes a fresh UUID.
-Editing a known refusal clears stale composer marks. Unlike Edit, device-draft
-restoration ties its key to the exact restored text: any edit releases it.
-Unused keys post normally; used keys return the stored message for a body
-matching the [retry rule](posting.md), otherwise that pending 409.
-Pending sends bypass prefix removal, ordinary send alerts/failure
-classification and 409 cleanup.
+Failed responses never swap; their localised notice stays on the item.
+The queue tests specify status handling and immutable `draftKey` across 409
+`requestKey` rotation. Browser tests verify raw text, caret/focus, draft
+protection and restoration across swaps. Ordinary sending retains the
+[failure classes](web-composer.md#composer) and [retry rule](posting.md).
 
 The module's `holdsReload(items)` is true exactly for queued, sending or failed
 items, regardless of uncertainty; confirmed items do not hold reload. Its
 `changed` callback runs synchronously after queue mutations, including last-item
-Remove, Edit and delivery, so listeners see the completed transition.
-#1825 keeps form `data-state`/`data-unconfirmed` and item `data-posted-message`
+Remove, Edit and delivery, so listeners see the completed transition once.
+On 409 the adapter stages failed-state/uncertainty cleanup before generating
+the rotated key, preserving DOM order even if the generator throws. The request
+lock releases only after rotation succeeds; pending rotation requires a UUID
+generator, while restoration release retains the ordinary HTTP fallback.
+The synchronous subscription writes form `data-state`/`data-unconfirmed` and item `data-posted-message`
 as projections; `draftKey` stays in memory. The stream guard keeps reading the
 DOM until #1417 adopts the predicate/notification. Ordinary-request and alert
 clauses remain with the guard; existing browser tests stay unchanged.
 
 ## Remove hold
 
-Remove keeps an unconfirmed item's raw text and key only in page memory, scoped
-to its feed/topic, for five minutes (`removedKeyRetention`, one named constant).
-Identical raw text sent in that place before expiry reuses the key; different
-text takes a fresh key. Expiry, confirmation or `pagehide` clears the hold.
+The queue tests specify the five-minute, page-local Remove hold, exact raw-text
+and place matching, expiry, confirmation and `pagehide` cleanup.
 Remove then reload loses the held identity, even within five minutes; a stored
 message is visible in the conversation (#1328).
 

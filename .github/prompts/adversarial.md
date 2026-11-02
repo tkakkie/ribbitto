@@ -6,7 +6,10 @@ Events). Other reviewers are reviewing the same head. Your job is different:
 **assume the change is wrong and try to break it.**
 
 The repository at the pull request's head is your working directory. This
-review runs at most twice per pull request: in **run 1**, review the pull
+review runs at most **two completed runs** per pull request (a failed,
+timed-out or empty attempt does not count toward the cap and is retried once by
+the orchestrator before escalating to the maintainer; follow-up checks are not
+runs): in **run 1**, review the pull
 request's whole diff (`base..head`); in **run 2**, report
 `Compared: <first run's SHA>..<head>` at the top of your output and review that
 whole delta — the fixes of the first run, any Copilot fixes and merges of

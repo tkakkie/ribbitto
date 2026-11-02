@@ -207,6 +207,28 @@ export function listenMessagePendingActionEvent(target: EventTarget, listener: (
   return () => target.removeEventListener(MessagePendingActionEvent, handle);
 }
 
+export const MessagePendingChangedEvent = "message-pending-changed";
+export type MessagePendingChangedDetail = { "holdsReload": boolean; };
+export function dispatchMessagePendingChangedEvent(target: EventTarget, detail: MessagePendingChangedDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessagePendingChangedEvent, { bubbles: true, detail }));
+}
+export function listenMessagePendingChangedEvent(target: EventTarget, listener: (detail: MessagePendingChangedDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingChangedDetail>).detail);
+  target.addEventListener(MessagePendingChangedEvent, handle);
+  return () => target.removeEventListener(MessagePendingChangedEvent, handle);
+}
+
+export const MessagePendingQueryEvent = "message-pending-query";
+export type MessagePendingQueryDetail = Record<string, never>;
+export function dispatchMessagePendingQueryEvent(target: EventTarget, detail: MessagePendingQueryDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessagePendingQueryEvent, { bubbles: true, detail }));
+}
+export function listenMessagePendingQueryEvent(target: EventTarget, listener: (detail: MessagePendingQueryDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingQueryDetail>).detail);
+  target.addEventListener(MessagePendingQueryEvent, handle);
+  return () => target.removeEventListener(MessagePendingQueryEvent, handle);
+}
+
 export const MessageDraftRestoredEvent = "message-draft-restored";
 export type MessageDraftRestoredDetail = { "key": string; };
 export function dispatchMessageDraftRestoredEvent(target: EventTarget, detail: MessageDraftRestoredDetail): boolean {

@@ -44,6 +44,14 @@
     // Delivery can precede the POST response; the item is then already here.
     scrollPosted(id);
   });
+  let pendingHold = false;
+  let pendingChanged = () => {};
+  document.addEventListener("message-pending-changed", (event) => {
+    if (typeof event.detail?.holdsReload !== "boolean") return;
+    pendingHold = event.detail.holdsReload;
+    pendingChanged();
+  });
+  document.dispatchEvent(new CustomEvent("message-pending-query", { detail: {} }));
   let stopped = false;
   const reset = (event) => {
     event.target.close();
@@ -56,7 +64,7 @@
       const alert = document.getElementById("message-send-alert");
       return document.getElementById("message-composer")?.classList.contains("htmx-request") ||
         (alert?.textContent && ["unconfirmed", "notSent", "stillUnconfirmed"].some(name => alert.textContent === alert.dataset[name])) ||
-        document.querySelector('#message-pending [data-state="queued"], #message-pending [data-state="sending"], #message-pending [data-state="failed"]');
+        pendingHold;
     };
     const decide = () => {
       const held = Boolean(atStake());
@@ -75,8 +83,7 @@
       }
     };
     const observer = new MutationObserver(decide);
-    const pending = document.getElementById("message-pending");
-    if (pending) observer.observe(pending, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-state"] });
+    pendingChanged = () => queueMicrotask(decide);
     const composer = document.getElementById("message-composer");
     if (composer) observer.observe(composer, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     decide();

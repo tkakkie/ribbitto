@@ -156,6 +156,7 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("batched-delivery-after-retry", func(t *testing.T) { testPendingBatchedDelivery(t, browser) })
 	for _, kind := range []string{"empty", "null", "undefined"} {
 		for _, action := range []string{"none", "input", "empty", "submit", "swap", "sent-empty", "sent-null", "sent-undefined", "input-sent-empty", "input-sent-null", "input-sent-undefined", "send", "input-send"} {
 			t.Run("falsy-restoration/"+kind+"/"+action, func(t *testing.T) {
@@ -1497,4 +1498,25 @@ func testPendingEditUnconfirmedBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatal("known refusal became unconfirmed after Edit")
 		}
 	})
+}
+
+func testPendingBatchedDelivery(t *testing.T, browser *rod.Browser) {
+	page, _, posts, _ := pendingBrowser(t, browser, false)
+	page.MustEval(`()=>{const b=document.getElementById('message-body');for(const text of ['first','second','third']){b.value=text;b.form.requestSubmit()}}`)
+	first := receivePending(t, page, posts)
+	first.reply <- browserReply{status: 400, body: []byte("refused")}
+	second := receivePending(t, page, posts)
+	second.reply <- pendingAnswer(t, kernel.ID{52})
+	third := receivePending(t, page, posts)
+	third.reply <- pendingAnswer(t, kernel.ID{53})
+	page.MustWait(`()=>window.answers===3`)
+	page.MustEval(`()=>document.querySelector('[data-state=failed]').requestSubmit()`)
+	retry := receivePending(t, page, posts)
+	retry.reply <- pendingAnswer(t, kernel.ID{51})
+	page.MustWait(`()=>window.answers===4`)
+	page.MustEval(`()=>{window.batchRemoved=[];const remove=Element.prototype.remove;Element.prototype.remove=function(){if(this.matches('#message-pending>li'))batchRemoved.push(this.querySelector('[data-pending-body]').textContent);return remove.call(this)};const items=document.getElementById('message-items');for(const id of ['message-33000000000000000000000000000000','message-34000000000000000000000000000000','message-35000000000000000000000000000000']){const li=document.createElement('li');li.id=id;items.append(li)}}`)
+	page.MustWait(`()=>!document.querySelector('#message-pending>li')`)
+	if page.MustEval(`()=>JSON.stringify(batchRemoved)`).Str() != `["second","third","first"]` {
+		t.Fatal("batched delivery must remove items in their rendered Retry order")
+	}
 }

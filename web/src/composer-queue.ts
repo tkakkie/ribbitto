@@ -117,7 +117,6 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
         item.state = "failed";
         if (status === 409) {
           item.unconfirmed = false;
-          changed(item, "repeat");
           item.requestKey = newKey();
           notice = "repeat";
         } else if (refusedStatuses.includes(status)) {

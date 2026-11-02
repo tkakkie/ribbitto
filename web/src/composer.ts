@@ -544,6 +544,12 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   const completePending = (event: HtmxEvent, pending: ComposerForm) => {
     const status = event.detail.xhr.status;
     const item = identities.get(pending)!;
+    if (status === 409) {
+      // The legacy DOM transition precedes UUID generation, even if it throws.
+      dom.writeAttribute(pending, dom.StateAttribute, "failed");
+      pending.removeAttribute(dom.UnconfirmedAttribute);
+      projected.set(item, { ...item, state: "failed", unconfirmed: false });
+    }
     const name = queue.settle(item, status);
     if (status === 409) pending.elements.idempotency_key.value = item.requestKey;
     if (!name) return;

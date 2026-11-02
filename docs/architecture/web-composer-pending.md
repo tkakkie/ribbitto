@@ -51,7 +51,9 @@ protection and restoration across swaps. Ordinary sending retains the
 The module's `holdsReload(items)` is true exactly for queued, sending or failed
 items, regardless of uncertainty; confirmed items do not hold reload. Its
 `changed` callback runs synchronously after queue mutations, including last-item
-Remove, Edit and delivery, so listeners see the completed transition.
+Remove, Edit and delivery, so listeners see the completed transition once.
+On 409 the adapter stages failed-state/uncertainty cleanup before generating
+the rotated key, preserving DOM order even if the generator throws.
 The synchronous subscription writes form `data-state`/`data-unconfirmed` and item `data-posted-message`
 as projections; `draftKey` stays in memory. The stream guard keeps reading the
 DOM until #1417 adopts the predicate/notification. Ordinary-request and alert

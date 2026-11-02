@@ -373,3 +373,14 @@ for (const restored of [false, true]) test(`Remove hold is consumed before age c
   throwing = false;
   assert.equal(q.admit(first.text, 'feed').unconfirmed, false);
 });
+
+test('409 notifies once after rotating the request key', () => {
+  const seen = [];
+  let key = 0;
+  const q = createComposerQueue(() => 0, () => `key-${++key}`, () => seen.push(q.items.map(item => [item.state, item.requestKey])));
+  const item = q.admit('hello', 'feed');
+  q.dispatch();
+  seen.length = 0;
+  q.settle(item, 409);
+  assert.deepEqual(seen, [[['failed', 'key-2']]]);
+});

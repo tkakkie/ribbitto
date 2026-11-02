@@ -156,6 +156,31 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, kind := range []string{"null", "undefined", "equal", "different"} {
+		for _, missing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("sent-key/%s/missing=%t", kind, missing), func(t *testing.T) {
+				page, _, _, _ := pendingBrowser(t, browser, false)
+				result := page.MustEval(`([kind,missing]) => {
+ const b=document.getElementById('message-body'), f=b.form, errors=[], calls=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ if(kind==='equal'||kind==='different') {b.value='saved';b.dispatchEvent(new CustomEvent('message-draft-restored',{bubbles:true,detail:{key:'saved'}}))}
+ f.dataset.unconfirmedKey='mark';
+ if(missing) f.elements.idempotency_key.remove();
+ crypto.randomUUID=()=>{calls.push(f.hasAttribute('data-unconfirmed-key'));return 'released'};
+ const key=kind==='null'?null:kind==='undefined'?undefined:kind==='equal'?'saved':'other';
+ b.dispatchEvent(new CustomEvent('message-sent',{bubbles:true,detail:{key,message:'message-51'}}));
+ const release=kind==='null'||kind==='equal';
+ const result=[errors,calls,f.elements.idempotency_key?.value??null,f.hasAttribute('data-unconfirmed-key')];
+ window.trace?.push(['F1',kind,missing,result]);
+ const want=[release&&missing?['TypeError']:[],release?[false]:[],missing?null:release?'released':kind==='different'?'saved':'00000000-0000-4000-8000-000000000001',!release];
+ return JSON.stringify(result)===JSON.stringify(want)?'':JSON.stringify({result,want});
+}`, []any{kind, missing}).Str()
+				if result != "" {
+					t.Fatal(result)
+				}
+			})
+		}
+	}
 	for _, topic := range []bool{false, true} {
 		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) { testPendingComposerPage(t, browser, topic) })
 	}

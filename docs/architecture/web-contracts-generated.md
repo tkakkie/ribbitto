@@ -52,7 +52,8 @@ in-place `message-sending` from undefined (`elements.idempotency_key?.value`)
 to null, as the contract specifies, because consumers treat
 both alike: `web/src/drafts.ts` returns on a falsy key, the composer does not
 listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
-string keys. `message-sent` must keep null: both scripts compare its key with `!==`.
+string keys. `message-sent` must keep null: the composer compares against a null initial
+restoration key (undefined differs), and drafts also uses strict key comparison.
 `message-sending` is both an id (composer markup) and an event name by design;
 the literal check accepts contract constants in either role.
 Generated `CustomEvent` dispatches use `bubbles: true`, like legacy scripts, for document

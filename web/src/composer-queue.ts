@@ -45,7 +45,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   const erase = (item: PendingItem) => { items.splice(items.indexOf(item), 1); };
   const delivered = (item: PendingItem, view: Delivery) => item.postedMessage !== null &&
     (view.ids.includes(item.postedMessage) || Boolean(view.topic && view.moved?.fromTopic === view.topic && view.moved.ids.includes(item.postedMessage)));
-  const release = () => { restored = null; return newKey(); };
+  const release = (renew = newKey) => { restored = null; return renew(); };
   const changeText = (text: string) => {
     if (restored && (text === "" || (restored.text !== null && restored.text !== text))) return release();
     return undefined;
@@ -63,9 +63,9 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     get restoration(): Restoration | null { return restored ? { ...restored } : null; },
     changeText,
     restore(key: string, text: string) { restored = { key, text, unconfirmed: true }; },
-    sent(key: string) {
+    sent(key: string | null, renew = newKey) {
       for (const [id, hold] of holds) if (hold.key === key) holds.delete(id);
-      return restored?.key === key ? release() : undefined;
+      return (restored ? restored.key : null) === key ? release(renew) : undefined;
     },
     ordinarySettled(status: number) {
       if (restored && (status === 200 || status === 409)) return release();

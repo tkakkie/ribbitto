@@ -156,6 +156,27 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, mode := range []string{"throw", "undefined"} {
+		for _, ordinary := range []bool{false, true} {
+			t.Run(fmt.Sprintf("conflict-uuid-lock/%s/ordinary=%t", mode, ordinary), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				page.MustEval(`()=>{const b=document.getElementById('message-body');b.value='first';b.form.requestSubmit()}`)
+				first := receivePending(t, page, posts)
+				first.reply <- browserReply{status: 500, body: []byte("unknown")}
+				page.MustWait(`()=>window.answers===1`)
+				page.MustEval(`([mode,ordinary])=>{document.querySelector('[data-pending-form]').requestSubmit();if(!ordinary){const b=document.getElementById('message-body');b.value='second';b.form.requestSubmit()}
+ window.conflictCalls=[];crypto.randomUUID=mode==='undefined'?undefined:()=>{const f=document.querySelector('[data-pending-form]');conflictCalls.push([f.dataset.state,f.hasAttribute('data-unconfirmed')]);throw Error('uuid')};
+}`, []any{mode, ordinary})
+				retry := receivePending(t, page, posts)
+				retry.reply <- browserReply{status: 409, body: []byte("repeat")}
+				page.MustWait(`()=>window.answers===2`)
+				page.MustEval(`ordinary=>{const f=document.querySelector('[data-pending-form]');window.conflictState=[f.dataset.state,f.hasAttribute('data-unconfirmed')];crypto.randomUUID=()=> 'recovered';document.querySelector('[data-pending-remove]').click();if(ordinary)document.getElementById('message-composer').requestSubmit()}`, ordinary)
+				if problem := page.MustEval(`([mode,ordinary])=>new Promise(resolve=>setTimeout(()=>{const a=document.getElementById('message-send-alert'),result=[conflictCalls,conflictState,window.requests,window.ordinaryRequests,a.textContent];window.trace?.push(['G2',ordinary,result]);resolve(JSON.stringify(conflictState)!=='["failed",false]'||JSON.stringify(conflictCalls)!==(mode==='throw'?'[["failed",false]]':'[]')||window.requests!==2||window.ordinaryRequests!==0||a.textContent!==(ordinary?a.dataset.busy:'')?JSON.stringify(result):'')},30))`, []any{mode, ordinary}).Str(); problem != "" {
+					t.Fatal(problem)
+				}
+			})
+		}
+	}
 	for _, mode := range []string{"normal", "throw", "undefined", "missing"} {
 		for _, submit := range []bool{false, true} {
 			t.Run(fmt.Sprintf("restoration-release/%s/submit=%t", mode, submit), func(t *testing.T) {

@@ -41,7 +41,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   const forms = new Map<PendingItem, ComposerForm>();
   const identities = new WeakMap<ComposerForm, PendingItem>();
   const projected = new WeakMap<PendingItem, PendingItem>();
-  const queue = createComposerQueue(() => performance.now(), () => crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!, (settled, notice) => {
+  const queue = createComposerQueue(() => performance.now(), () => crypto.randomUUID(), (settled, notice) => {
     for (const item of queue.items) if (!forms.has(item) && admitting) {
       forms.set(item, admitting);
       identities.set(admitting, item);

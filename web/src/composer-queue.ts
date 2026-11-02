@@ -109,7 +109,6 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     settle(pending: PendingItem, status: number, posted?: PostedMessage, view: Delivery = { ids: [] }) {
       const item = [...requests].find(item => item === pending);
       if (!item || item.state !== "sending") return undefined;
-      requests.delete(item);
       let notice: "" | "repeat" | "notSent" | "stillUnconfirmed" | "unconfirmed" = "";
       if (status === 200) {
         item.state = "confirmed";
@@ -125,6 +124,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
           notice = item.unconfirmed ? "stillUnconfirmed" : "notSent";
         } else { item.unconfirmed = true; notice = "unconfirmed"; }
       }
+      requests.delete(item);
       changed(item, notice);
       return notice;
     },

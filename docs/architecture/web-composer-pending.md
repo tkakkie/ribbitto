@@ -56,7 +56,9 @@ items, regardless of uncertainty; confirmed items do not hold reload. Its
 `changed` callback runs synchronously after queue mutations, including last-item
 Remove, Edit and delivery, so listeners see the completed transition once.
 On 409 the adapter stages failed-state/uncertainty cleanup before generating
-the rotated key, preserving DOM order even if the generator throws.
+the rotated key, preserving DOM order even if the generator throws. The request
+lock releases only after rotation succeeds; pending rotation requires a UUID
+generator, while restoration release retains the ordinary HTTP fallback.
 The synchronous subscription writes form `data-state`/`data-unconfirmed` and item `data-posted-message`
 as projections; `draftKey` stays in memory. The stream guard keeps reading the
 DOM until #1417 adopts the predicate/notification. Ordinary-request and alert

@@ -118,7 +118,7 @@ templ bodyInlines(nodes []BodyInline) {
 				<bdi
 					data-quote-handle={ node.Handle }
 					if node.MemberID != (kernel.ID{}) {
-						data-member-id={ idValue(node.MemberID) }
+						{ MemberIDAttribute }={ idValue(node.MemberID) }
 					}
 					class="rounded-sm bg-selected px-1 data-own-mention:outline-2 data-own-mention:outline-dashed data-own-mention:outline-brand"
 				>

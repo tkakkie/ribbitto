@@ -273,7 +273,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		wantAssets[e.Map] = int64(len(assets[e.Map]))
 	}
 	for _, a := range draftRel.Assets {
-		if sz, ok := wantAssets[a.Name]; !ok || (a.Size > 0 && a.Size != sz) {
+		if sz, ok := wantAssets[a.Name]; !ok || a.ID <= 0 || a.Size <= 0 || a.Size != sz {
 			return fmt.Errorf("uploaded asset %s does not match manifest", a.Name)
 		}
 		delete(wantAssets, a.Name)
@@ -285,9 +285,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
 	}
-	first := upIdx.Entries[slices.Sorted(maps.Keys(upIdx.Entries))[0]]
-	if gotRel, gotMap, gotBytes, err := lookupWithClient(ctx, c, sha, first.SHA256, runID); err != nil || gotRel != relName || gotMap != first.Map || !bytes.Equal(gotBytes, assets[first.Map]) {
-		return fmt.Errorf("fetching back stored map: %v", err)
+	for _, k := range slices.Sorted(maps.Keys(upIdx.Entries)) {
+		e := upIdx.Entries[k]
+		if gotRel, gotMap, gotBytes, err := lookupWithClient(ctx, c, sha, e.SHA256, runID); err != nil || gotRel != relName || gotMap != e.Map || len(gotBytes) != len(assets[e.Map]) || !bytes.Equal(gotBytes, assets[e.Map]) {
+			return fmt.Errorf("fetching back stored map %s: %v", e.Map, err)
+		}
 	}
 	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(upIdx.Entries))
 	return nil

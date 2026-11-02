@@ -84,6 +84,8 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 						s.releases[i].Assets = append(s.releases[i].Assets, mockAsset{ID: s.nextID, Name: "extra.js.map", Size: 2, data: []byte("{}")})
 					} else if s.tamperManifest == "drop" && strings.HasSuffix(name, ".js.map") {
 						s.releases[i].Assets = s.releases[i].Assets[:len(s.releases[i].Assets)-1]
+					} else if s.tamperManifest == "zero-second" && name == "b-second.js.map" {
+						s.releases[i].Assets[len(s.releases[i].Assets)-1] = mockAsset{ID: s.nextID, Name: name, Size: 0}
 					}
 					s.events = append(s.events, "upload:"+name)
 					w.WriteHeader(201)
@@ -124,6 +126,13 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 					var p struct{ Draft, Prerelease bool }
 					_ = json.NewDecoder(r.Body).Decode(&p)
 					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft, p.Prerelease
+					if s.tamperManifest == "corrupt-second-after-publish" {
+						for j := range s.releases[i].Assets {
+							if s.releases[i].Assets[j].Name == "b-second.js.map" {
+								s.releases[i].Assets[j].data = []byte("corrupted")
+							}
+						}
+					}
 					if !p.Draft && !slices.Contains(s.tags, s.releases[i].TagName) {
 						s.tags = append(s.tags, s.releases[i].TagName)
 					}
@@ -356,6 +365,21 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		defer srv.Close()
 		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || len(s.events) != 0 {
 			t.Fatalf("expected %s to fail before any API call, got err=%v events=%v", tc.name, err, s.events)
+		}
+	}
+}
+
+func TestZeroSizeAssetAndAllEntriesFetchBack(t *testing.T) {
+	now, sha, dir, h1, h2 := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), t.TempDir(), strings.Repeat("1", 64), strings.Repeat("2", 64)
+	idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a-first.js","sha256":%q,"map":"a-first.js.map"},"b":{"file":"b-second.js","sha256":%q,"map":"b-second.js.map"}}}`, sha, h1, h2)
+	_ = cmp.Or(os.WriteFile(filepath.Join(dir, "index.json"), []byte(idx), 0644), os.WriteFile(filepath.Join(dir, "a-first.js.map"), []byte(`{"sourcesContent":["1"]}`), 0644), os.WriteFile(filepath.Join(dir, "b-second.js.map"), []byte(`{"sourcesContent":["2"]}`), 0644))
+	for _, mode := range []string{"zero-second", "corrupt-second-after-publish"} {
+		s := &mockStore{token: "tok", tamperManifest: mode}
+		srv := s.server(t)
+		defer srv.Close()
+		err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1")
+		if err == nil || (mode == "zero-second" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
+			t.Fatalf("%s: expected failure, got err=%v events=%v", mode, err, s.events)
 		}
 	}
 }

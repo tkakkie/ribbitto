@@ -311,12 +311,12 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		@pageScript("read-visibility")
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("message-time")
-		<script defer src="/static/member-mentions-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("member-mentions")
 		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("composer")
 		@pageScript("pins-sync")
 		<script defer src="/static/quote-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("message-link")
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("side-panel")
 		@pageScript("sidebar-unread")

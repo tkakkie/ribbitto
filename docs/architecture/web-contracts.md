@@ -28,7 +28,11 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-unconfirmed` | pending form | uncertain outcome only | output-only queue projection; scripts never read it |
   | `data-posted-message` | pending item | response supplies an ID | output-only confirmed identity; reconciliation reads the typed item |
   | `data-query`, `data-count` | `#mention-listbox` | always | query as received and localized result count for the picker's polite status; empty results use the no-members text |
-  | `data-member-id`, `data-handle` | mention option | always | canonical member UUID and handle, in search order |
+  | `data-member-id`, `data-handle` | mention option, body member reference | always (resolved on body) | canonical member UUID and handle, in search order |
+  | `data-own-mention` | body `bdi[data-member-id]` | when it equals `#organization-stream`'s `data-member` | set on the viewer's own mention |
+  | `data-copy-link` | `a[data-copy-link]` in each actions menu | always | copies its browser-resolved href |
+  | `data-copied` | that anchor (`a[data-copy-link]`) | after a successful copy until the menu closes | set while the actions menu remains open |
+  | `data-copied-label` | its confirmation span | always | the text announced in `#message-status` |
   | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
   | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
   | `data-pin-control` | pin form | always | message ID |

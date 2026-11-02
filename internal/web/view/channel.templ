@@ -475,10 +475,10 @@ templ pendingMessage(page ChannelPage) {
 					<input type="hidden" name={ CursorField }/>
 					<p role="status" class="text-caption text-danger"></p>
 					<div { PendingActionsAttribute } hidden>
-						<button type="submit" aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
-						<button type="button" { PendingEditAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.edit") }</button>
+						<button type="submit" aria-describedby={ MessagePendingBodyID } class="min-h-11 max-desk:min-w-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.retry") }</button>
+						<button type="button" { PendingEditAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 max-desk:min-w-11 px-2 text-brand hover:underline">{ i18n.T(ctx, "message.edit") }</button>
 						<span { PendingEditHelpAttribute } id={ MessagePendingEditHelpID } hidden class="text-caption text-muted">{ i18n.T(ctx, "message.edit.unavailable") }</span>
-						<button type="button" { PendingRemoveAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
+						<button type="button" { PendingRemoveAttribute } aria-describedby={ MessagePendingBodyID } class="min-h-11 max-desk:min-w-11 px-2 text-muted hover:underline">{ i18n.T(ctx, "message.remove") }</button>
 					</div>
 				</form>
 			</div>

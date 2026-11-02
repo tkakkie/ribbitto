@@ -43,7 +43,8 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 		Current:     view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: longName, ImageURL: view.ChannelImageURL("lake")},
 		DisplayName: longName, Handle: "long_member_handle", Role: "owner", Messages: messages,
 		Topics:    []view.Topic{{ID: kernel.ID{2}, Name: longName}, {ID: kernel.ID{3}, Name: "短"}},
-		ImageKeys: []string{"lake", "flowers", "moon", "kite"}, Reading: true, FirstUnread: 7, Older: true, EventCursor: &cursor}
+		ImageKeys: []string{"lake", "flowers", "moon", "kite"}, Reading: true, FirstUnread: 7, Older: true, EventCursor: &cursor,
+		Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001")}
 	// Unbroken author and pinner names must wrap inside the overview (#889).
 	base.Pins = []view.Pin{{MessageID: kernel.ID{7}, Excerpt: conversation.PinExcerpt(conversation.Entry{Message: conversation.Message{Body: messages[0].Body}}, ""), AuthorDisplayName: longName, AuthorHandle: "long_member_handle", Topic: view.Topic{Name: longName}, PinnerDisplayName: longName, PinnerHandle: "long_member_handle", PinnedAt: messages[0].CreatedAt}}
 	for i := range 20 {
@@ -90,7 +91,13 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	// Keep the ordinary stream and reading scripts running against idle fakes;
 	// the layout fixture must include the cursor-dependent Mark as read targets.
 	mux.HandleFunc("GET /organizations/acme/events", idleStream)
-	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/read") || strings.HasSuffix(r.URL.Path, "/typing") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	})
 	for _, c := range cases {
 		path := "/" + c.name
 		if c.name == "home" {
@@ -163,6 +170,29 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 						})
 					}
 					if strings.HasSuffix(c.name, "closed") {
+						step("failing a pending send", func(p *rod.Page) {
+							p.MustEval(`() => {
+								const b = document.getElementById('message-body');
+								b.value = 'pending';
+								b.form.requestSubmit();
+							}`)
+							p.MustWait(`() => document.querySelector('#message-pending [data-pending-form][data-state="failed"]') !== null`)
+							defer func() {
+								_ = (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: ""}}}).Call(p)
+								p.MustEval(`() => document.querySelector('#message-pending [data-pending-remove]')?.click()`)
+							}()
+							for _, scheme := range []string{"light", "dark"} {
+								if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: scheme}}}).Call(p); err != nil {
+									t.Fatal(err)
+								}
+								p.MustWait(`scheme => matchMedia('(prefers-color-scheme: ' + scheme + ')').matches`, scheme)
+								state := "pending-failed-" + scheme
+								for _, problem := range p.MustEval(pendingFailedButtonsAudit).Arr() {
+									t.Errorf("%s state=%s: %s", where, state, problem.Str())
+								}
+								audit(p, state)
+							}
+						})
 						step("checking a message", func(p *rod.Page) {
 							p.MustElement(`#message-items input[type=checkbox]`).MustClick()
 							p.MustWait(`() => document.querySelector('#message-items input[type=checkbox]:checked') &&
@@ -264,6 +294,27 @@ const widthAudit = `() => {
 	for (const [e,x,y] of positions) { e.scrollLeft = x; e.scrollTop = y; }
 	window.scrollTo({left:windowPosition[0],top:windowPosition[1],behavior:'instant'});
 	return {problems, checked};
+}`
+
+// pendingFailedButtonsAudit checks that the failed pending item's Retry, Edit
+// and Remove buttons are rendered outside the template and displayed.
+const pendingFailedButtonsAudit = `() => {
+	const problems = [];
+	for (const selector of [
+		'#message-pending [data-pending-actions] button[type=submit]',
+		'#message-pending [data-pending-actions] button[data-pending-edit]',
+		'#message-pending [data-pending-actions] button[data-pending-remove]',
+	]) {
+		const e = document.querySelector(selector);
+		if (!e) {
+			problems.push('missing failed-item button ' + selector);
+			continue;
+		}
+		const r = e.getBoundingClientRect();
+		if (!e.checkVisibility({visibilityProperty: true}) || r.width <= 0 || r.height <= 0)
+			problems.push('hidden failed-item button ' + selector + ' box=' + JSON.stringify(r.toJSON()));
+	}
+	return problems;
 }`
 
 // headerImageGap checks that at least 4 px separate the conversation header's

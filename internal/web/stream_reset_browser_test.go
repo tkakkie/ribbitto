@@ -55,6 +55,47 @@ func resetReload(t *testing.T, page *rod.Page) {
 }
 
 func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
+	for _, delayed := range []string{"composer-", "message-stream-"} {
+		t.Run("handshake/late-"+delayed, func(t *testing.T) {
+			page, events, _, _ := pendingBrowser(t, browser, false, delayed)
+			resetClock(page)
+			load := func() {
+				t.Helper()
+				page.MustEval(`part => new Promise((resolve,reject)=>{
+ const script=document.createElement('script');
+ script.src=[...document.scripts].find(s=>s.src.includes(part)).src+'?late=1';
+ script.onload=()=>resolve(true);script.onerror=()=>reject(new Error("script load failed"));document.head.append(script);
+})`, delayed)
+			}
+			queue := func() {
+				page.MustEval(`() => {
+ document.addEventListener('htmx:beforeRequest',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true});
+ const b=document.getElementById('message-body');b.value='queued before reload';b.form.requestSubmit();
+}`)
+				page.MustWait(`() => !!document.querySelector('[data-state=queued]')`)
+			}
+			if delayed == "composer-" {
+				events <- realtime.Outgoing{Name: "reset"}
+				page.MustWait(`() => window.reloadTimers.size===1`)
+				page.MustEval(`() => {window.startup=[];document.addEventListener('message-pending-changed',e=>startup.push(e.detail.holdsReload))}`)
+				load()
+				if page.MustEval(`() => JSON.stringify(startup)`).Str() != "[false]" {
+					t.Fatal("late composer did not publish its initial reload predicate")
+				}
+				queue()
+			} else {
+				queue()
+				load()
+				page.MustEval(`() => document.getElementById("organization-stream").dispatchEvent(new CustomEvent("htmx:sseOpen",{bubbles:true,detail:{source:window.source}}))`)
+				events <- realtime.Outgoing{Name: "reset"}
+				page.MustWait(`() => window.source.readyState===EventSource.CLOSED`)
+			}
+			resetHeld(t, page)
+			page.MustEval(`() => document.querySelector('[data-pending-remove]').click()`)
+			resetReload(t, page)
+		})
+	}
+
 	// Isolate each predicate: another at-stake state must not mask its removal.
 	for _, test := range []struct {
 		state string

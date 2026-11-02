@@ -29,7 +29,7 @@ type pendingRequest struct {
 }
 
 // Real markup, htmx and stream script; only transport delivery is gated.
-func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
+func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool, delayed ...string) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -40,7 +40,14 @@ func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool) (*rod.Page, 
 	events, posts := make(chan realtime.Outgoing, 8), make(chan pendingRequest, 8)
 	var reads atomic.Int32
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.Handle("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Suppress one initial script; the order tests load it explicitly later.
+		if len(delayed) > 0 && strings.Contains(r.URL.Path, delayed[0]) && r.URL.Query().Get("late") != "1" {
+			w.Header().Set("Content-Type", "text/javascript")
+			return
+		}
+		http.StripPrefix("/static/", http.FileServerFS(static.FS())).ServeHTTP(w, r)
+	}))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/events"):

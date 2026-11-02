@@ -8,9 +8,11 @@ Closes #
 
 **Language exception approved by the maintainer (comment link), or n/a:**
 
+**Accepted parity differences (maintainer chat decision), or n/a:** <!-- PR and finding, at <decision head SHA> (plus re-confirmation check <SHA> if head changed): scenario, difference, occurrence condition (concrete reachability: exact sequence or environment), likelihood in real deployments, user effect, reason accepted, document location where the behaviour is described; also record any post-cap escalation chat decision, applicable SHA and required verification here — see docs/workflow/reviewing.md#pull-request-cross-review and docs/workflow/review-operations.md#third-ai-review -->
+
 **Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 
-**Risk:** <!-- high | normal — see docs/workflow/reviewing.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- third AI at <SHA> | pending | not required (reason) — see docs/workflow/README.md#lifecycle -->
+**Risk:** <!-- high | normal — see docs/workflow/reviewing.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- <AI>, run <1|2> of 2 at <SHA> (run 1 at <SHA>; follow-up check at <SHA>) | pending | not required (reason) — see docs/workflow/review-operations.md#third-ai-review -->
 
 <details><summary>Details</summary>
 

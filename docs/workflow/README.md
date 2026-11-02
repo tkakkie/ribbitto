@@ -146,7 +146,7 @@ Pull request:
 1. The implementer works in its worktree and `make check` passes.
 2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
-   AI where required, and Copilot (once, unless docs-only; [review operations](review-operations.md)).
+   AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
    finding gets a disposition and applied fixes are checked before the
    maintainer is asked. Run `make prepush` before every follow-up push, and

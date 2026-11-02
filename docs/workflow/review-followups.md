@@ -122,7 +122,12 @@ than combine both sides, it needs a normal review. A combination that
 changes lock or transaction order or the delivery contract (the third-AI review list) does more than combine, even when every line came from one side. Either way, follow the
 [third-AI review rules](review-operations.md#third-ai-review), counting this pull
 request's own commits since the last adversarially reviewed head, not only
-the resolution.
+the resolution. After the two-run third-AI cap there is no third adversarial
+run: a merge of `main` that qualifies as limited gets the independent
+[follow-up check](#copilot-follow-up-check), while one that does more than
+combine, changes lock or transaction order or the delivery contract, or is
+otherwise substantive goes to the maintainer under the
+[post-cap escalation rules](review-operations.md#third-ai-review).
 
 **A typo, or a rewording that changes no meaning,** may be pushed without
 a follow-up check, and does not invalidate a review. These are not that, and

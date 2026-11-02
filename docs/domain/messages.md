@@ -137,3 +137,5 @@ An `?around=` page reads up to 25 messages from its position on with
 `ListMessagesAfter` and fills the page with older ones from
 `ListMessagesBefore`, bounded and scoped the same way, so an `around` value
 taken from another channel or topic never shows that channel's messages.
+Without JavaScript, `?before=` and `?around=` pages still open at their top
+unless a message fragment scrolls to its target.

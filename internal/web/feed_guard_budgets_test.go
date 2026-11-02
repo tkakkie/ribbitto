@@ -1,8 +1,8 @@
 package web
 
 const (
-	// #1478: DOM traversal/allocation grows with elements; no count headroom.
-	feedBudgetElementsFixed = 181
+	// #1478, #1489: DOM traversal/allocation grows with elements; no count headroom.
+	feedBudgetElementsFixed = 182
 	// #1478: each message's DOM must not grow without justification.
 	feedBudgetElementsSlope = 29
 	// #1478: fixed forms add request-processing work; zero headroom.
@@ -27,8 +27,8 @@ const (
 	feedBudgetBytesSlope = 4916
 	// #1478: 256-byte middle-sample tolerance covers event_seq digit and cyclic seed-name lengths.
 	feedBudgetBytesLinearity = 256
-	// #1478: real first-render elements have zero headroom; a count change (#1477) is a visible, justified budget change.
-	feedBudgetElementsLatest = 1692
+	// #1478, #1489: real first-render elements have zero headroom; a count change (#1477) is a visible, justified budget change.
+	feedBudgetElementsLatest = 1693
 	// #1478: real first-render forms have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetFormsLatest = 61
 	// #1500: real first-render submits have zero headroom; a count change (#1477) is a visible, justified budget change.

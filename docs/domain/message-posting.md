@@ -31,7 +31,7 @@ See the [Remove hold](../architecture/web-composer-pending.md#remove-hold) for i
 and reload limit.
 
 [Send-key modes](../architecture/identity.md) define shortcuts; IME never sends.
-Pages start at newest; live delivery follows only at the bottom. The sender's
+Latest pages start at their newest entry, with and without JavaScript (unless a permalink's `#message-…` fragment scrolls to its target instead); live delivery follows only at the bottom. The sender's
 response ID scrolls once in either delivery order and after reconnect. Focus
 stays in the composer. Live appends announce; replay replaces IDs silently.
 

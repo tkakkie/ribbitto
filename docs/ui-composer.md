@@ -31,7 +31,8 @@ visible bottom when Safari pans. The frame is outside every htmx swap target;
 navigation uses full pages, so no htmx history restore replaces it.
 
 First layout measurements wait for the list/textarea/form ResizeObserver,
-before paint. It scrolls to newest (or keeps the native message fragment),
+before paint. It scrolls to newest (or keeps the native message fragment;
+without JavaScript, CSS starts the latest page at the newest entry),
 remembers that anchor, then measures/writes the quote deduction last. CSS's
 zero fallback needs no write without a chip. If the deduction resizes the
 composer, another observer delivery restores the anchor before paint without

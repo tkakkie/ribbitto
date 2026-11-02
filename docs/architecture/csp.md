@@ -101,11 +101,10 @@ signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
 composing input. Draft restore emits neither event; send events confirm local
 snapshots ([drafts](web-composer.md#drafts)). Without scripts the form is inert.
-The script scrolls to the newest entry on load, except when the URL's
-fragment names a message on the page: a page opened from a message's URL
-([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)
-keeps the browser's scroll to that message, which CSS `:target` highlights
-with or without scripts. Focus left on the disabled send button returns to the
+Without scripts CSS starts the latest page at the newest entry, and with
+scripts the composer scrolls there on load unless the URL's fragment names a
+message on the page ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
+keeping the browser's scroll to that `:target`-highlighted message. Focus left on the disabled send button returns to the
 textarea. Scripts stay outside the swap.
 
 `message-history-v2.js` keeps the reader's place when "Load older"

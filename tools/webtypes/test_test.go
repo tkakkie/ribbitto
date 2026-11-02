@@ -170,13 +170,29 @@ func TestRealNodeTests(t *testing.T) {
 }
 
 func TestModuleScopeManifest(t *testing.T) {
+	validScope := func(data []byte) bool {
+		return strings.TrimSpace(string(data)) == `{"type": "module"}`
+	}
 	data, err := os.ReadFile("../../web/src/package.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var scope map[string]any
-	if err := json.Unmarshal(data, &scope); err != nil || len(scope) != 1 || scope["type"] != "module" {
-		t.Fatalf("web/src/package.json = %v, %v; want exact {\"type\": \"module\"}", scope, err)
+	if !validScope(data) {
+		t.Fatalf("web/src/package.json = %q; want exact {\"type\": \"module\"}", data)
+	}
+	for _, invalid := range []struct {
+		name string
+		raw  string
+	}{
+		{"escapedKey", `{"\u0074ype": "module"}`},
+		{"duplicateKey", `{"type": "commonjs", "type": "module"}`},
+		{"duplicateEscapedKey", `{"type": "commonjs", "\u0074ype": "module"}`},
+	} {
+		t.Run(invalid.name, func(t *testing.T) {
+			if validScope([]byte(invalid.raw)) {
+				t.Fatalf("accepted invalid module scope manifest %s", invalid.raw)
+			}
+		})
 	}
 	data, err = os.ReadFile("../../package.json")
 	if err != nil {

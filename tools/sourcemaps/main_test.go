@@ -386,22 +386,31 @@ func TestHTTPClientHardening(t *testing.T) {
 func TestManifestPathAndHashValidation(t *testing.T) {
 	now, sha, validHash := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), strings.Repeat("a", 64)
 	mapContent, root := []byte(`{"version":3,"sourcesContent":["x"]}`), t.TempDir()
-	_ = os.WriteFile(filepath.Join(root, "secret.js.map"), mapContent, 0644)
-	for _, tc := range []struct{ name, file, mapName, hash string }{
-		{"parent", "../secret.js", "../secret.js.map", validHash},
-		{"nested", "sub/app.js", "sub/app.js.map", validHash},
-		{"absolute", "/abs/app.js", "/abs/app.js.map", validHash},
-		{"bad-hash", "app.js", "app.js.map", "not-a-sha256"},
-		{"bad-json", "app.js", "app.js.map", "{bad"},
-		{"no-sources", "app.js", "app.js.map", "no-sources"},
+	absBase := filepath.Join(root, "abs.js")
+	for _, tc := range []struct{ name, file, mapName, hash, wantErr string }{
+		{"parent", "../secret.js", "../secret.js.map", validHash, "invalid source map entry"},
+		{"nested", "sub/app.js", "sub/app.js.map", validHash, "invalid source map entry"},
+		{"absolute", absBase, absBase + ".map", validHash, "invalid source map entry"},
+		{"bad-hash", "app.js", "app.js.map", "not-a-sha256", "invalid source map entry"},
+		{"mismatched-map", "app.js", "other.js.map", validHash, "invalid source map entry"},
+		{"bad-json", "app.js", "app.js.map", "{bad", "reading map index"},
+		{"no-sources", "app.js", "app.js.map", "no-sources", "missing sourcesContent"},
 	} {
 		dir := filepath.Join(root, tc.name)
-		_ = os.MkdirAll(filepath.Join(dir, "sub"), 0755)
+		target := filepath.Join(dir, tc.mapName)
+		if filepath.IsAbs(tc.mapName) {
+			target = tc.mapName
+		}
+		_ = os.MkdirAll(filepath.Dir(target), 0755)
+		_ = os.MkdirAll(dir, 0755)
 		mb := mapContent
 		if tc.hash == "no-sources" {
 			mb, tc.hash = []byte(`{"version":3}`), validHash
 		}
-		_ = cmp.Or(os.WriteFile(filepath.Join(dir, "sub", "app.js.map"), mb, 0644), os.WriteFile(filepath.Join(dir, "app.js.map"), mb, 0644))
+		_ = os.WriteFile(target, mb, 0644)
+		if !strings.HasPrefix(target, dir+string(filepath.Separator)) {
+			_ = os.WriteFile(filepath.Join(dir, "pad"), mb, 0644)
+		}
 		idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, tc.hash, tc.mapName)
 		if tc.hash == "{bad" {
 			idx = "{bad"
@@ -410,8 +419,8 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		s := &mockStore{token: "tok"}
 		srv := s.server(t)
 		defer srv.Close()
-		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || len(s.events) != 0 || strings.Contains(err.Error(), "%!w(<nil>)") {
-			t.Fatalf("expected %s to fail cleanly before any API call, got err=%v events=%v", tc.name, err, s.events)
+		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || !strings.Contains(err.Error(), tc.wantErr) || len(s.events) != 0 || strings.Contains(err.Error(), "%!w(<nil>)") {
+			t.Fatalf("expected %s to fail with %q before any API call, got err=%v events=%v", tc.name, tc.wantErr, err, s.events)
 		}
 	}
 }

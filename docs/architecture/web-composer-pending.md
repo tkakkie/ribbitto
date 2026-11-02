@@ -7,7 +7,8 @@ refusals, ordering and identity; `web/src/composer.ts` adapts these decisions to
 htmx and the existing pending DOM.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. Timers call `expire(item)` to clear only their own hold even with a
-frozen clock; `expire()` checks age, and `pagehide`/`sent` clear holds.
+frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
+own hold and checks age only without a restored key. `pagehide`/`sent` clear holds.
 Before `admit`, the adapter calls `changeText` and applies any returned fresh key
 to the composer, including when admission returns busy or ordinary.
 That released key belongs to the composer; a queued item instead takes the restored

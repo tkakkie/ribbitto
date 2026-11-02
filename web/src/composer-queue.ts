@@ -40,7 +40,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
   const holdID = (place: string, text: string) => JSON.stringify([place, text]);
   // A timer must expire its own hold even when the clock has not advanced.
   const expire = (removed?: PendingItem) => {
-    for (const [id, hold] of holds) if (hold.owner === removed || now() - hold.at >= removedKeyRetention) holds.delete(id);
+    for (const [id, hold] of holds) if (removed !== undefined ? hold.owner === removed : now() - hold.at >= removedKeyRetention) holds.delete(id);
   };
   const erase = (item: PendingItem) => { items.splice(items.indexOf(item), 1); };
   const delivered = (item: PendingItem, view: Delivery) => item.postedMessage !== null &&
@@ -88,10 +88,9 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       const normalized = text.replace(/\r\n?/g, "\n").trim();
       if (quoted || !normalized || [...normalized].length > 4000) return items.length || requests.size ? "busy" : "ordinary";
       const id = holdID(place, text);
-      expire();
       const hold = holds.get(id);
       holds.delete(id);
-      const key = restored?.key || hold?.key || newKey();
+      const key = restored?.key || (hold && now() - hold.at < removedKeyRetention ? hold.key : newKey());
       const item: MutablePendingItem = { draftKey: key, requestKey: key, state: "queued", text,
         unconfirmed: hold?.key === key || Boolean(restored?.key === key && restored.unconfirmed), postedMessage: null };
       restored = null;

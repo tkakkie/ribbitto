@@ -334,3 +334,42 @@ test('Remove timeout clears its hold with a frozen clock', () => {
   q.expire(third);
   assert.notEqual(q.admit(first.text, 'feed').requestKey, first.requestKey);
 });
+
+test('Remove holds read a stepped clock only for the matching resend', () => {
+  let time = 0, reads = 0, keys = 0;
+  const q = createComposerQueue(() => { reads++; return time += 200000; }, () => `key-${++keys}`, () => {});
+  const first = failed(q, 500, 'msg 1');
+  q.remove(first, 'feed');
+  q.admit('msg 2', 'feed');
+  assert.equal(reads, 1);
+  const resend = q.admit('msg 1', 'feed');
+  assert.deepEqual([reads, resend.requestKey, resend.unconfirmed], [2, first.requestKey, true]);
+});
+
+test('Remove timer never reads the clock or expires a replacement hold', () => {
+  let throwing = false, reads = 0;
+  const q = createComposerQueue(() => { reads++; if (throwing) throw Error('clock'); return 0; }, () => 'key', () => {});
+  const first = failed(q);
+  q.remove(first, 'feed');
+  const second = q.admit(first.text, 'feed');
+  q.remove(second, 'feed');
+  const before = reads;
+  throwing = true;
+  q.expire(first);
+  assert.equal(reads, before);
+  throwing = false;
+  assert.equal(q.admit(first.text, 'feed').unconfirmed, true);
+});
+
+for (const restored of [false, true]) test(`Remove hold is consumed before age check, restored=${restored}`, () => {
+  let throwing = false, keys = 0;
+  const q = createComposerQueue(() => { if (throwing) throw Error('clock'); return 0; }, () => `key-${++keys}`, () => {});
+  const first = failed(q);
+  q.remove(first, 'feed');
+  if (restored) q.restore('saved', first.text);
+  throwing = true;
+  if (restored) assert.equal(q.admit(first.text, 'feed').requestKey, 'saved');
+  else assert.throws(() => q.admit(first.text, 'feed'), /clock/);
+  throwing = false;
+  assert.equal(q.admit(first.text, 'feed').unconfirmed, false);
+});

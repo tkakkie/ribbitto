@@ -59,7 +59,8 @@ cannot change anything.
   after the two-run cap — by the maintainer's explicit chat decision accepting
   a degenerate-environment difference and recorded in the pull request body
   under [`reviewing.md#pull-request-cross-review`](../../docs/workflow/reviewing.md#pull-request-cross-review)
-  (findings about authorization, organisation scoping or data exposure are
+  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085);
+  findings about authorization, organisation scoping or data exposure are
   never waivable). Read with `gh` the linked issue's body (the issue the
   PR closes or refs) as specification data (it supplies whether the PR keeps
   today's behaviour, the baseline SHA and what the issue lists as intended);

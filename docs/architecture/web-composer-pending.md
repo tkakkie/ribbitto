@@ -4,7 +4,9 @@ Pending-post rules for the [web composer](web-composer.md#composer).
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) and its
 [table-driven tests](../../web/test/composer-queue.test.mjs) specify transitions,
 refusals, ordering and identity; `web/src/composer.ts` adapts these decisions to
-htmx and the existing pending DOM.
+htmx and the existing pending DOM. It clones the server-provided template and sets
+textContent, field values, hidden and contract attributes with DOM APIs. Each typed
+item has held form/item references in the adapter; no pending-state query or DOM read-back occurs.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. Timers call `expire(item)` to clear only their own hold even with a
 frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
@@ -34,7 +36,8 @@ Admission limits, FIFO dispatch, failure classification, Retry placement and
 restored identity are specified by the table-driven queue tests above.
 `internal/web/composer_pending_browser_test.go` covers request ordering,
 capacity, Retry, Edit, delivery races and live composer-state swaps with real htmx.
-`data-posted-message` links the item to delivery. A `MutationObserver` removes
+The typed item's `postedMessage` links it to delivery; `data-posted-message` is
+an output for tests. A `MutationObserver` removes
 confirmed items before paint when their ID appears in `#message-items`.
 Stream-first briefly shows both until the response; replay and feed moves
 preserve the real ID. Topic responses also remove the item if its
@@ -61,9 +64,12 @@ the rotated key, preserving DOM order even if the generator throws. The request
 lock releases only after rotation succeeds; pending rotation requires a UUID
 generator, while restoration release retains the ordinary HTTP fallback.
 The synchronous subscription writes form `data-state`/`data-unconfirmed` and item `data-posted-message`
-as projections; `draftKey` stays in memory. The stream guard keeps reading the
-DOM until #1417 adopts the predicate/notification. Ordinary-request and alert
-clauses remain with the guard; existing browser tests stay unchanged.
+as output-only projections; `draftKey` stays in memory and is never rendered.
+It publishes `holdsReload(items)` through the [contract events](web-contracts.md),
+including notifications without attribute changes and removals. A query/reply
+handshake supplies late listeners. The guard retains its ordinary-request and
+alert clauses, timer, notice and reload behaviour. Browser tests rewrite pending
+projections externally to prove that decisions and reset holds stay queue-driven.
 
 ## Remove hold
 

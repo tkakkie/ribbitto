@@ -2,7 +2,7 @@
 
 Unread-script contracts for [web JavaScript](web-javascript.md#javascript).
 
-`message-stream-v14.js` parks only a non-CLOSED source reported by
+`message-stream-v15.js` parks only a non-CLOSED source reported by
 `htmx:sseClose` during persisted `pagehide` cleanup of `#organization-stream`.
 Persisted `pageshow` dispatches `error` on that closed source once, then
 forgets it. The vendored SSE extension retries after 500 ms, reads the current
@@ -16,7 +16,7 @@ Recreated sources have no `Last-Event-ID`; replay, deduplication and reset
 remain unchanged. Already-CLOSED sources are not parked; any pending
 extension retry remains its only retry.
 
-- `message-stream-v14.js`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `web/src/read-visibility.ts` (`web/src/read-cursor.ts`) initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
+- `message-stream-v15.js`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `web/src/read-visibility.ts` (`web/src/read-cursor.ts`) initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
   cursors. A 429 retries until success/hide/removal/navigation: jittered exponential backoff, initial 8 s cap; `Retry-After` is a minimum even above it. Success resets backoff, flushes newer shown work; other failures flush strictly newer work only. Same cursor awaits another trigger. Cleanup clears timers. Composer responses/unapplied events cannot advance it.
 - `web/src/sidebar-unread.ts` is the registered `sidebar-unread` bundle,
   before the stream script on channel, topic and channel-list pages. It attaches

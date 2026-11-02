@@ -30,7 +30,7 @@ const sidebarUnreadBrowserClock = `(() => {
  window.setTimeout = (fn, ms, ...args) => {
   const stack = new Error().stack;
   // The SSE extension's own reconnect timer (started from a script-dispatched error) stays real.
-  if (!/sidebar-unread-v3.js|message-stream-v14.js/.test(stack) || /htmx-ext-sse/.test(stack)) return original(fn, ms, ...args);
+  if (!/sidebar-unread-[A-Z0-9]{8}\.js|message-stream-v14.js/.test(stack) || /htmx-ext-sse/.test(stack)) return original(fn, ms, ...args);
   window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };
@@ -94,7 +94,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		}
 	})
 
-	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow", "reset-delay", "stream-release"} {
+	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "oob-value", "oob-length", "oob-equal", "oob-non-numeric", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow", "reset-delay", "stream-release"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
@@ -221,12 +221,19 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 					t.Fatalf("topic badge count = %d, want %d", got, want)
 				}
 			}
-			exact := func(seq int64, n int64) {
+			exactWith := func(seq int64, n int64, edit func(string) string) {
 				snapshot.SnapshotSeq = seq
 				snapshot.ChannelCounts[f.channel], snapshot.TopicCounts[f.a] = n, n
 				frame, err := web.RenderSidebar(ctx, m, snapshot)
 				acceptanceOK(t, err)
-				send("event: sidebar\ndata: " + string(frame.Data) + "\n\n")
+				payload := string(frame.Data)
+				if edit != nil {
+					payload = edit(payload)
+				}
+				send("event: sidebar\ndata: " + payload + "\n\n")
+			}
+			exact := func(seq int64, n int64) {
+				exactWith(seq, n, nil)
 			}
 			next := func() chan int {
 				t.Helper()
@@ -323,6 +330,52 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				return
 			}
 			other := kernel.ID{99}
+			if strings.HasPrefix(kind, "oob-") {
+				exact(6, 5)
+				if kind == "oob-non-numeric" {
+					// Equal expected and applied values must still fail numeric validation.
+					exactWith(7, 10, func(payload string) string {
+						edited := strings.Replace(payload, `data-unread-count="10"`, `data-unread-count="bad"`, 1)
+						if edited == payload {
+							t.Fatal("non-numeric payload badge replacement did not happen")
+						}
+						return edited
+					})
+				} else {
+					// Leave parsed expected badges intact to isolate applied DOM mismatches;
+					// oob-equal keeps both sides unchanged to prove a clean swap succeeds.
+					page.MustEval(`(id, kind) => {
+					const swap = htmx.swap;
+					htmx.swap = (...args) => {
+						htmx.swap = swap;
+						const options = args[3], settled = options.afterSettleCallback;
+						options.afterSettleCallback = () => {
+							const row = document.getElementById('link-'+id);
+							const badge = row.querySelector('[data-unread-count]');
+							if (kind === 'oob-value') badge.dataset.unreadCount = '9';
+							if (kind === 'oob-length') document.getElementById('topic-heading-count').append(badge.cloneNode(true));
+							settled();
+						};
+						return swap(...args);
+					};
+					}`, view.ChannelDOMID(f.channel), kind)
+					exact(7, 10)
+				}
+				if kind == "oob-equal" {
+					both(10)
+					noRetry(0)
+					return
+				}
+				if !page.MustEval(`() => window.sidebarTest.pending() === 1`).Bool() {
+					t.Fatal("out-of-band badge mismatch did not enter recovery")
+				}
+				finish(next(), 204)
+				exact(7, 10)
+				send(post(8, other))
+				both(11)
+				noRetry(1)
+				return
+			}
 			if olderPage || kind == "list" {
 				exact(6, 99)
 				send(post(7, other))

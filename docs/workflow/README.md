@@ -67,7 +67,7 @@ bypass list):
   its own copy decides what passes (a known risk; review reads every such
   change). Limiting the required check to GitHub Actions narrows who can post
   it, not what a changed workflow tests.
-- **Credentials and settings.** See [tokens](#tokens).
+- **Credentials and settings.** See [tokens](ai-credentials.md#tokens).
 
 ## Enabling an AI's rights
 
@@ -77,24 +77,7 @@ and show step 4 before ordinary work.
 
 ## Tokens
 
-- **One fine-grained token per AI** (`claude-ribbitto`, `codex-ribbitto`,
-  `antigravity-ribbitto`) for `tkakkie/ribbitto` only: Contents, Pull
-  requests, Issues and Workflows read/write, no Administration, with an
-  expiry. Kept as `~/.ribbitto-ai/<claude|codex|antigravity>.token` (mode
-  600), outside every repository.
-- **Tested recipe** (scripts and checks: [credentials](ai-credentials.md)):
-  start an AI with `run-as.sh <name> <command…>`. It exports that token as
-  `GH_TOKEN` and, through `GIT_CONFIG_COUNT`, clears the inherited
-  `credential.helper` (`osxkeychain`) and adds one that answers only for
-  `github.com` over HTTPS with that token. `GH_TOKEN` alone does not make
-  `git push` use it. Without the token file the launcher stops, and plain
-  `gh` or `git push` fails: no other CLI credential remains (browser and other
-  sign-ins are unverified; see step 2).
-- **What tokens give:** independent revocation and intended assignment, not
-  isolation or proof of which AI acted (all three share one macOS user and can
-  read each other's token files; token-level GitHub audit logging is
-  unverified). To stop an AI, stop its process; if a token may have leaked,
-  revoke all three.
+Tokens and the tested `run-as.sh` recipe moved to [AI credentials and launchers](ai-credentials.md#tokens).
 
 ## Roles and running the AIs
 
@@ -151,7 +134,7 @@ run as one blocking background command so its end wakes the orchestrator
   maintainer. Keep the report tied to its exact commits and findings.
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. A typo or a rewording that changes
-  no meaning is not ([what counts](reviewing.md#follow-up-pushes)).
+  no meaning is not ([what counts](review-followups.md#follow-up-pushes)).
 
 ## Lifecycle
 
@@ -163,7 +146,7 @@ Pull request:
 1. The implementer works in its worktree and `make check` passes.
 2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
-   AI where required, and Copilot (once, unless docs-only; [delivery](delivery.md)).
+   AI where required, and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
    finding gets a disposition and applied fixes are checked before the
    maintainer is asked. Run `make prepush` before every follow-up push, and
@@ -181,7 +164,7 @@ Pull request:
   transactions, authentication, authorisation or organisation scoping, or
   that removes, skips or loosens a check `make check` or CI runs. "Touches"
   includes behaviour-preserving moves, refactors and new tests in those
-  areas. Details: [delivery](delivery.md#third-ai-review).
+  areas. Details: [review operations](review-operations.md#third-ai-review).
 - `normal` risk: the maintainer reads the summary and "Look here".
 - One issue fits one pull request of about 400 changed lines.
 
@@ -210,6 +193,7 @@ check the result against *Done when*.
 ## Supporting files
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
+[review operations](review-operations.md), [review follow-ups](review-followups.md),
 [investigations](investigations.md) and [credentials](ai-credentials.md)
 supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
 is built or extended (#2002).

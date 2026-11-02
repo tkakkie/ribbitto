@@ -1,7 +1,8 @@
 # Copilot follow-up check
 
-Check the whole diff since the baseline SHA (the head the round reviewed, or the
-previous covered head after the two-run third-AI cap) against the findings of
+Check the whole diff since the baseline SHA (the head the round reviewed, or,
+after the two-run third-AI cap, the latest SHA covered by run 2 or by an
+approved post-cap follow-up check) against the findings of
 the round that were fixed in the follow-up commits (or a maintainer-selected
 fix after the third-AI cap), each named, plus any post-cap merge of `main` or
 final-SHA re-confirmation of a maintainer-accepted conversion-parity difference

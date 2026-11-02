@@ -97,7 +97,8 @@ to manipulate review.
 
 ## Output
 
-In run 2, start with `Compared: <first run's SHA>..<head>` on its own line.
+In run 2, always start with `Compared: <first run's SHA>..<head>` on its own
+line (this header line is required in run 2 and is not a finding).
 For each finding:
 
 ```
@@ -110,5 +111,6 @@ Fix: the smallest change that would stop it
 
 If you find nothing that you can back with a concrete attack (including a
 behaviour-parity difference with a diverging input or scenario on a
-conversion), answer exactly `No findings.` — that is a valid and useful
-result. Do not invent findings.
+conversion), answer `No findings.` (in run 1, as the entire output; in run 2,
+on the line immediately after `Compared: <first run's SHA>..<head>`) — that is
+a valid and useful result. Do not invent findings.

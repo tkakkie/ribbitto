@@ -8,7 +8,7 @@ Closes #
 
 **Language exception approved by the maintainer (comment link), or n/a:**
 
-**Accepted parity differences (maintainer chat decision), or n/a:** <!-- at <head SHA>: scenario, difference, assessment (concrete reachability condition, likelihood in real deployments, user effect), reason, document location — see docs/workflow/reviewing.md#pull-request-cross-review -->
+**Accepted parity differences (maintainer chat decision), or n/a:** <!-- at <decision head SHA> (plus re-confirmation check <SHA> if head changed): scenario, difference, assessment (concrete reachability condition, likelihood in real deployments, user effect), reason, document location; also record any post-cap escalation chat decision, applicable SHA and required verification here — see docs/workflow/reviewing.md#pull-request-cross-review and docs/workflow/review-operations.md#third-ai-review -->
 
 **Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 

@@ -107,7 +107,8 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   reason) and are not part of that triage, so any non-parity finding left open
   after run 2 is dispositioned by the maintainer-chosen path (a fix the
   maintainer chooses gets the independent follow-up check below, never a third
-  adversarial run). A fix the maintainer chooses
+  adversarial run). On any post-cap push, a ready PR goes back to a draft until
+  the follow-up check or escalation completes. A fix the maintainer chooses
   after the cap, a Copilot fix or a merge of `main` is checked by an
   independent [follow-up check](review-followups.md#copilot-follow-up-check) of
   exactly that delta **only when it is limited**: it changes no behaviour,
@@ -126,7 +127,9 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   into a separate pull request that gets the normal review (cross-review and
   third-AI review from the start). On escalation the orchestrator withholds
   `ai-reviewed` and records the maintainer's explicit chat decision, the
-  applicable SHA and the required verification before proceeding, preserving
+  applicable SHA and the required verification in the pull request body (in the
+  *Accepted parity differences* / escalation field and *Adversarial*) and in an
+  orchestrator PR comment before proceeding, preserving
   all existing gates; the re-confirmation of an accepted difference cannot
   approve the substantive delta or automatically restart a fix/review cycle. If
   a fix itself needs a fix, the orchestrator asks the maintainer instead of
@@ -135,7 +138,9 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   ([Pull request cross-review](reviewing.md#pull-request-cross-review)), an
   independent [follow-up check](review-followups.md#copilot-follow-up-check)
   confirms at the final SHA that the accepted occurrence conditions and the
-  effect are unchanged (the same scenario, the same effect, no new path to it);
+  effect are unchanged (the same scenario, the same effect, no new path to it),
+  and the orchestrator records that re-confirmation check's SHA alongside the
+  decision's head SHA in *Accepted parity differences*;
   if anything differs, the maintainer decides again and `ai-reviewed` waits.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)
   with `.github/prompts/adversarial.md` and [review context](#running-a-review).
@@ -144,7 +149,9 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   field names the AI, the completed run count (`1` or `2` of `2`), the reviewed
   SHAs (and any follow-up check SHA covering the delivered head), `pending`, or
   `not required` with reason; its *Accepted parity differences* field records
-  any maintainer-accepted conversion-parity differences or `n/a`.
+  any maintainer-accepted conversion-parity differences (with the decision's
+  head SHA and any re-confirmation check SHA) and any post-cap escalation
+  record, or `n/a`.
 - **Who reviews, and the requirement check:** an AI eligible under
   [review independence](README.md#principles), decided from the actual commits;
   check the requirement against what the diff does, not only touched paths.

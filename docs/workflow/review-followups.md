@@ -20,11 +20,14 @@ post-cap delta must be checked):
    no automated test can reproduce it (a rule/doc fix, or a race no existing
    harness can gate; never effort or time) record why and the alternative
    verification: a scripted/manual reproduction, a mutation showing the guard
-   matters, or the exact text change. Keep the PR a draft (convert back to
-   draft first if the maintainer asked for another Copilot review after ready).
+   matters, or the exact text change. Keep the PR a draft (convert a ready PR
+   back to a draft until the follow-up check or escalation completes, including
+   if the maintainer asked for another Copilot review or a post-cap change after
+   ready).
 2. An AI that did not write the change ([review independence](README.md#principles))
    checks that the whole diff since the baseline SHA (the head the round
-   reviewed, or the previous covered head after the third-AI cap) contains only
+   reviewed, or, after the third-AI cap, the latest SHA covered by run 2 or by
+   an approved post-cap follow-up check) contains only
    those allowed changes, each fix answers its finding, and for each third-AI
    finding the test fails without it (by running it or reading a CI run without
    the fix) — or that the recorded reason holds and the alternative
@@ -54,9 +57,9 @@ post-cap delta must be checked):
    diff at the new head; if one completed run exists and the diff since it
    touches the third-AI areas, run the second on
    `Compared: <first run's SHA>..<head>` (a push before it restarts this check);
-   if two completed runs already exist, do not run a third adversarial review —
-   proceed to the remaining lifecycle steps once this check covers the final
-   head. Do not re-request Copilot unless the maintainer asks; if it reviews
+   if two completed runs already exist, do not run a third adversarial review;
+   then the remaining [lifecycle steps](README.md#lifecycle) once the required
+   reviews and this check cover the final head. Do not re-request Copilot unless the maintainer asks; if it reviews
    again anyway, handle once the same way, then ask the maintainer. Ask the
    maintainer if a fix itself needs a fix, if a post-cap change substantively
    alters behaviour, a security boundary or the interaction with existing code

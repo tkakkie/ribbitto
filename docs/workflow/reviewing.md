@@ -112,7 +112,9 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   conversion-parity finding** it proposes one of: fix in this PR (reachable in
   normal use or documented behaviour, checked under the
   [post-cap rules](review-operations.md#third-ai-review)); accept as a recorded
-  difference (below); or, if shown not to be a parity difference, the existing
+  difference (below; acceptance is never available before the two-run cap, where
+  a reachable unintended parity difference must be fixed); or, if shown not to
+  be a parity difference, the existing
   dispositions. Non-parity third-AI findings keep today's dispositions (fixed,
   follow-up issue, or declined with a reason) and are not part of this triage;
   after the cap, one left open after run 2 is dispositioned by the
@@ -135,7 +137,8 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   self-hosted setups); and **user effect**. The maintainer settles disputed
   classifications. Before `ai-reviewed`, record each accepted difference in
   **Accepted parity differences (maintainer chat decision), or n/a** with the
-  **head SHA**, **scenario**, **difference**, **assessment** (reachability
+  decision's **head SHA** (plus the **re-confirmation check SHA** if the head
+  later changed), **scenario**, **difference**, **assessment** (reachability
   condition, likelihood in real deployments, user effect), **reason** and
   **document location**; merge authorization stays separate
   ([What no AI does](README.md#what-no-ai-does)). If the head changes after

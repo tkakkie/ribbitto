@@ -33,9 +33,9 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 - **Idempotency key** (#1155): hidden `idempotency_key`, fresh on load, success/409; kept on 422. Scoped to authorised membership; never in streams. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
-  `data-state`, the composer's request class and #1179's failure alert. Queued, sending
-  and failed items hold reload; confirmed items do not. Retry success, Remove
-  or Edit can release it: Edit's restored text is a draft. Dispatched
+  `data-state` projected from the queue, the composer's request class and
+  #1179's failure alert. `internal/web/stream_reset_browser_test.go` specifies
+  holds and release through the real composer; Edit's restored text is a draft. Dispatched
   requests time out at 30 s; queues/retries/failed text can extend the hold.
 - **Quote chip:** `#composer-quote-description`: author/excerpt or labelled
   editable part, empty without quote. Quote closes popover; whole swaps focus

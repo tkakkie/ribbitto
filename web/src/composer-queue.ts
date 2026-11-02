@@ -29,17 +29,18 @@ export function holdsReload(items: readonly PendingItem[]): boolean {
 }
 
 /** Creates page-local transitions; changed runs synchronously after each mutation. */
-export function createComposerQueue(now: () => number, newKey: () => string, changed: () => void) {
+export function createComposerQueue(now: () => number, newKey: () => string, changed: (settled?: PendingItem, notice?: string) => void) {
   const items: MutablePendingItem[] = [];
   // A removed form's request still blocks dispatch until its completion.
   const requests = new Set<MutablePendingItem>();
   const refusedStatuses = [400, 404, 413, 422, 429];
   const removedKeyRetention = 5 * 60 * 1000;
-  const holds = new Map<string, { key: string; at: number }>();
+  const holds = new Map<string, { key: string; at: number; owner: PendingItem }>();
   let restored: { key: string; text: string | null; unconfirmed: boolean } | null = null;
   const holdID = (place: string, text: string) => JSON.stringify([place, text]);
-  const expire = () => {
-    for (const [id, hold] of holds) if (now() - hold.at >= removedKeyRetention) holds.delete(id);
+  // A timer must expire its own hold even when the clock has not advanced.
+  const expire = (removed?: PendingItem) => {
+    for (const [id, hold] of holds) if (hold.owner === removed || now() - hold.at >= removedKeyRetention) holds.delete(id);
   };
   const erase = (item: PendingItem) => { items.splice(items.indexOf(item), 1); };
   const delivered = (item: PendingItem, view: Delivery) => item.postedMessage !== null &&
@@ -49,8 +50,16 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     if (restored && (text === "" || (restored.text !== null && restored.text !== text))) return release();
     return undefined;
   };
+  const next = (ordinaryBusy = false) => ordinaryBusy || requests.size || items.some(item => item.state === "failed" && item.unconfirmed)
+    ? undefined : items.find(item => item.state === "queued");
+  const response = (item: MutablePendingItem, posted: PostedMessage, view: Delivery) => {
+    item.postedMessage = posted.id;
+    if (items.includes(item) && (delivered(item, view) || (view.topic &&
+        (posted.topic !== view.topic || (view.applied !== undefined && view.applied >= posted.seq && !view.ids.includes(posted.id)))))) erase(item);
+  };
   return {
     get items(): readonly PendingItem[] { return items; },
+    get removedKeyRetention(): number { return removedKeyRetention; },
     get restoration(): Restoration | null { return restored ? { ...restored } : null; },
     changeText,
     restore(key: string, text: string) { restored = { key, text, unconfirmed: true }; },
@@ -63,6 +72,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       if (restored && !refusedStatuses.includes(status)) restored.unconfirmed = true;
       return undefined;
     },
+    forgetRestoration() { restored = null; },
     pagehide() { holds.clear(); },
     expire,
     admit(text: string, place: string, ordinaryBusy = false, quoted = false): PendingItem | "busy" | "capacity" | "ordinary" {
@@ -87,9 +97,9 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       changed();
       return item;
     },
+    next,
     dispatch(ordinaryBusy = false): PendingItem | undefined {
-      if (ordinaryBusy || requests.size || items.some(item => item.state === "failed" && item.unconfirmed)) return undefined;
-      const item = items.find(item => item.state === "queued");
+      const item = next(ordinaryBusy);
       if (item) { item.state = "sending"; requests.add(item); changed(); }
       return item;
     },
@@ -101,21 +111,33 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       if (status === 200) {
         item.state = "confirmed";
         item.unconfirmed = false;
-        item.postedMessage = posted?.id ?? null;
-        if (items.includes(item) && (delivered(item, view) || (posted && view.topic &&
-            (posted.topic !== view.topic || (view.applied !== undefined && view.applied >= posted.seq && !view.ids.includes(posted.id)))))) erase(item);
+        if (posted) response(item, posted, view);
       } else {
         item.state = "failed";
         if (status === 409) {
           item.unconfirmed = false;
+          changed(item, "repeat");
           item.requestKey = newKey();
           notice = "repeat";
         } else if (refusedStatuses.includes(status)) {
           notice = item.unconfirmed ? "stillUnconfirmed" : "notSent";
         } else { item.unconfirmed = true; notice = "unconfirmed"; }
       }
-      changed();
+      changed(item, notice);
       return notice;
+    },
+    // htmx swaps the response before completing the request; project its ID then.
+    response(pending: PendingItem, id: string) {
+      const item = [...requests].find(item => item === pending);
+      if (!item) return;
+      item.postedMessage = id;
+      changed();
+    },
+    route(pending: PendingItem, posted: PostedMessage, view: Delivery) {
+      const item = items.find(item => item === pending);
+      if (!item) return;
+      response(item, posted, view);
+      if (!items.includes(item)) changed();
     },
     retry(pending: PendingItem): boolean {
       const item = items.find(item => item === pending);
@@ -135,7 +157,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     },
     remove(item: PendingItem, place: string): string | undefined {
       if (!items.includes(item)) return undefined;
-      if (item.unconfirmed) { expire(); holds.set(holdID(place, item.text), { key: item.requestKey, at: now() }); }
+      if (item.unconfirmed) { expire(); holds.set(holdID(place, item.text), { key: item.requestKey, at: now(), owner: item }); }
       erase(item);
       changed();
       return item.draftKey;

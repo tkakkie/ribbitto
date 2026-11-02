@@ -299,3 +299,38 @@ for (const status of [404, 413]) {
     assert.deepEqual(q.restoration, { key: item.requestKey, text: null, unconfirmed: uncertain });
   });
 }
+
+for (const streamFirst of [false, true]) test(`response projection precedes completion, streamFirst=${streamFirst}`, () => {
+  const seen = [];
+  const { q } = fixture(() => seen.push(q.items.map(item => [item.state, item.postedMessage])));
+  const item = q.admit('body', 'feed');
+  assert.equal(q.next(), item);
+  assert.equal(item.state, 'queued');
+  assert.equal(q.next(true), undefined);
+  q.dispatch();
+  q.response(item, posted.id);
+  q.route(item, posted, { ids: streamFirst ? [posted.id] : [] });
+  assert.equal(item.state, 'sending');
+  assert.equal(item.postedMessage, posted.id);
+  assert.equal(q.items.length, streamFirst ? 0 : 1);
+  assert.equal(q.next(), undefined);
+  q.settle(item, 200);
+  assert.equal(item.state, 'confirmed');
+  assert.equal(item.postedMessage, posted.id);
+  q.deliver({ ids: [posted.id] });
+  assert.deepEqual(q.items, []);
+  assert.deepEqual(seen[2], [['sending', posted.id]]);
+});
+
+test('Remove timeout clears its hold with a frozen clock', () => {
+  const { q } = fixture(), first = failed(q);
+  q.remove(first, 'feed');
+  const second = q.admit(first.text, 'feed');
+  q.remove(second, 'feed');
+  q.expire(first);
+  const third = q.admit(first.text, 'feed');
+  assert.equal(third.requestKey, first.requestKey);
+  q.remove(third, 'feed');
+  q.expire(third);
+  assert.notEqual(q.admit(first.text, 'feed').requestKey, first.requestKey);
+});

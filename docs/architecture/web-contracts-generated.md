@@ -60,9 +60,10 @@ listeners; `composed` stays unset (no script sets it; no shadow DOM). A payload-
 `//dom:event` dispatches a plain `Event` on its target (such as `panel-cover`).
 `pending-send` and `typing-input` trigger htmx forms with no payload.
 The pending edit help clone suffix includes the hyphen before its send key.
-`data-state` and `data-draft-key` are script-written hooks, not server state.
-Sidebar, arrival, side-panel, read-visibility, pins and typed composer entries use these hooks; `web/src/composer.ts` still
-keeps queue state in DOM attributes until `web/src/composer-queue.ts` adoption (#1825).
+`data-state`, `data-unconfirmed` and item `data-posted-message` are synchronous
+queue projections. `draftKey` and `requestKey` live on the in-memory queue item;
+the composer no longer writes `data-draft-key`. The generated constant remains
+until a later contract cleanup.
 
 `tools/contractliterals`, run by `make check-tools`, rejects literal ids,
 field names, attribute names, dataset keys, selectors and custom events in authored

@@ -23,7 +23,9 @@ write the script ([`web-conventions.md`](web-conventions.md)):
 
 1. It covers the behaviour completely, with no script fallback.
 2. It works in the [target browsers](browser-targets.md) (the list, the version
-   rule and what is verified), iOS Safari included.
+   rule and what is verified; where a CSS feature is verified only in Chromium,
+   its entry below states that Firefox and Safari are expected, unverified),
+   iOS Safari included.
 3. Accessibility semantics (roles, states, focus, reading order;
    [`accessibility.md`](../accessibility.md)) are unchanged.
 4. It is not a trick that the next reader, human or AI, has to decode.
@@ -62,6 +64,20 @@ and so is HTML or CSS that fails one of the four points.
   back link in `internal/web/view/channel.templ` targets `#channel-<id>`
   (`ChannelDOMID`) on the channel list page, scrolling that row into view without
   JavaScript ([`ui-code.md`](../ui-code.md#sidebar-order-and-position)).
+- **Reversed flex container for the no-JavaScript latest page (#1489):** on
+  the latest page only, under `@custom-variant noscript (@media (scripting: none))`
+  in `web/styles/app.css`, `#message-list` in `internal/web/view/channel.templ`
+  uses `noscript:flex noscript:flex-col-reverse` around one wrapper child
+  (`contents noscript:block noscript:grow noscript:shrink-0`). A single child
+  keeps DOM, reading and Tab order unchanged while the reversed scroller's
+  origin is the newest entry from the first paint, and the wrapper's fill
+  classes keep short and empty pages top-aligned or centred. Under *Criterion*
+  point 2, this is verified in the Chromium of local runs and CI
+  (`TestBrowser/message-list/no-javascript`), and **expected, unverified** in
+  Firefox (113+, reversed scroll origin since 81) and Safari / iOS Safari
+  (17.0+); where unsupported, the pane opens at its top as before. With
+  JavaScript (`scripting: enabled`) the variant does not match and the wrapper
+  is `display: contents`.
 
 ## Scripts that stay
 
@@ -99,9 +115,11 @@ and so is HTML or CSS that fails one of the four points.
   fallback ([`ui-composer.md`](../ui-composer.md)).
 - **Scroll position (`web/static/message-history-v2.js`,
   `web/static/sidebar-scroll-v2.js`, and list anchoring in
-  `web/src/composer.ts`):** these scripts stay for now. Replacing
-  message-list anchoring with `flex-direction: column-reverse` or
-  `overflow-anchor` fails point 4 today and touches reading order, so it is left
-  to the prototype and measurements of `#1361`; centring an out-of-view
-  `[aria-current='page']` sidebar row on load without moving the window or focus
-  fails point 1.
+  `web/src/composer.ts`):** these with-JavaScript anchoring scripts stay.
+  Replacing with-JavaScript message-list anchoring with
+  `flex-direction: column-reverse` (#1480) or `overflow-anchor` fails point 4
+  today (whereas the `(scripting: none)` single-child wrapper on the latest
+  page, #1489, keeps reading order and never runs alongside the scripts), so
+  with-JavaScript anchoring is left to the prototype and measurements of
+  `#1361`; centring an out-of-view `[aria-current='page']` sidebar row on load
+  without moving the window or focus fails point 1.

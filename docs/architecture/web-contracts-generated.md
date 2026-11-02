@@ -4,7 +4,7 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility and pins ids, dynamic id
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link and member-mentions ids, dynamic id
 prefixes, field names, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
 other scripts' private hooks remain outside the generated contract.
@@ -45,7 +45,12 @@ The human-readable DOM contract (ids and data attributes) is described in [`web-
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
-(`key`). Fields are strings except boolean `inPlace` and nullable `restoredKey`
+(`key`). The queue publishes `message-pending-changed` (boolean `holdsReload`);
+`message-pending-query` has an empty payload and requests a synchronous reply
+through `message-pending-changed`. The composer also publishes on startup.
+See the definitions in `internal/web/view/contracts.go` and script-order/reset
+cases in `internal/web/stream_reset_browser_test.go`.
+Other fields are strings except boolean `inPlace` and nullable `restoredKey`
 and sending/sent `key`. Without an idempotency key on plain/history pages,
 `message-sent` carries null (`FormData.get`); `web/src/composer.ts` normalizes
 in-place `message-sending` from undefined (`elements.idempotency_key?.value`)

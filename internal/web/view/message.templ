@@ -163,7 +163,7 @@ templ messageQuote(quote Quote) {
 // messageActions is every message's one actions menu (#1159).
 // Its markup depends only on the message and the language, because live
 // renders are shared between members (stream_renderer.go): the link is
-// root-relative, and message-link-v1.js copies the browser-resolved href.
+// root-relative, and web/src/message-link.ts copies the browser-resolved href.
 // From desk the button's negative margin keeps the header's height. Below
 // desk the header has no room for it (#1093 keeps it one 44 px row), so it
 // sits in the avatar's gutter, under the avatar, without growing the item;
@@ -175,9 +175,9 @@ templ messageActions(entry Message) {
 		<span aria-hidden="true" class="text-heading">⋯</span>
 	</button>
 	<div id={ id } popover class="m-0 w-56 desk:inset-auto desk:anchor-below-end rounded-xl border border-border bg-surface p-2 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:top-auto max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
-		<a href={ templ.SafeURL(entry.URL) } data-copy-link class="group flex min-h-11 items-center rounded-md px-3 hover:bg-hover">
+		<a href={ templ.SafeURL(entry.URL) } { CopyLinkAttribute } class="group flex min-h-11 items-center rounded-md px-3 hover:bg-hover">
 			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
-			<span data-copied-label class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
+			<span { CopiedLabelAttribute } class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
 		<button form={ QuoteFormID } name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
 		@PinControl(entry, "")

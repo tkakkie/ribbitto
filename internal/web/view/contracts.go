@@ -229,6 +229,12 @@ const (
 	// MessagePendingActionEvent carries message-pending-action notifications.
 	//dom:event MessagePendingActionDetail
 	MessagePendingActionEvent = "message-pending-action"
+	// MessagePendingChangedEvent publishes the queue's reload predicate.
+	//dom:event MessagePendingChangedDetail
+	MessagePendingChangedEvent = "message-pending-changed"
+	// MessagePendingQueryEvent requests the current predicate for late listeners.
+	//dom:event MessagePendingQueryDetail
+	MessagePendingQueryEvent = "message-pending-query"
 	// MessageDraftRestoredEvent carries message-draft-restored notifications.
 	//dom:event MessageDraftRestoredDetail
 	MessageDraftRestoredEvent = "message-draft-restored"
@@ -263,6 +269,14 @@ type MessagePendingActionDetail struct {
 	RestoredKey *string `json:"restoredKey"`
 	Kind        string  `json:"kind" dom:"edit,remove"`
 }
+
+// MessagePendingChangedDetail contains no DOM-derived state.
+type MessagePendingChangedDetail struct {
+	HoldsReload bool `json:"holdsReload"`
+}
+
+// MessagePendingQueryDetail is empty; the queue replies synchronously.
+type MessagePendingQueryDetail struct{}
 
 // MessageDraftRestoredDetail preserves the identity restored by the drafts script.
 type MessageDraftRestoredDetail struct {
@@ -344,4 +358,24 @@ const (
 	// PinnedAttribute carries a pin control form's current pin state.
 	//dom:attribute
 	PinnedAttribute = "data-pinned"
+)
+
+// Message-link and member-mention hooks cover actions-menu link copying and
+// own-mention highlighting.
+const (
+	// CopyLinkAttribute marks an actions-menu link that copies its resolved href.
+	//dom:attribute
+	CopyLinkAttribute = "data-copy-link"
+	// CopiedAttribute marks a copy-link anchor while its menu stays open after copying.
+	//dom:attribute
+	CopiedAttribute = "data-copied"
+	// CopiedLabelAttribute marks the localized copied-state label inside a copy-link anchor.
+	//dom:attribute
+	CopiedLabelAttribute = "data-copied-label"
+	// MemberIDAttribute carries a resolved mention's or mention candidate's member UUID.
+	//dom:attribute
+	MemberIDAttribute = "data-member-id"
+	// OwnMentionAttribute marks a resolved mention whose member matches the viewer.
+	//dom:attribute
+	OwnMentionAttribute = "data-own-mention"
 )

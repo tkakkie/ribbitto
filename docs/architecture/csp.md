@@ -101,11 +101,10 @@ signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
 composing input. Draft restore emits neither event; send events confirm local
 snapshots ([drafts](web-composer.md#drafts)). Without scripts the form is inert.
-The script scrolls to the newest entry on load, except when the URL's
-fragment names a message on the page: a page opened from a message's URL
-([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)
-keeps the browser's scroll to that message, which CSS `:target` highlights
-with or without scripts. Focus left on the disabled send button returns to the
+Without scripts CSS starts the latest page at the newest entry, and with
+scripts the composer scrolls there on load unless the URL's fragment names a
+message on the page ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
+keeping the browser's scroll to that `:target`-highlighted message. Focus left on the disabled send button returns to the
 textarea. Scripts stay outside the swap.
 
 `message-history-v2.js` keeps the reader's place when "Load older"
@@ -128,7 +127,7 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v14.js` listens to the vendored SSE extension's
+`message-stream-v15.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes server HTML to htmx for append or
 same-id replacement, settling synchronously to order replay and localise
 timestamps before scrolling. Only appends update the separate polite

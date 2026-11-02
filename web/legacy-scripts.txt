@@ -1,8 +1,6 @@
 branch-selection
-member-mentions
 mention-picker
 message-history
-message-link
 message-stream
 quote-selection
 sidebar-scroll

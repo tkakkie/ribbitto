@@ -82,45 +82,27 @@ checks until migrated.
   aliasing, runtime names) remain for review. Legacy `web/static/` scripts
   are outside its scope. Removing or weakening it needs its own review (#1414).
 
-## Composer queue example: before and after
+## Composer queue example
 
-**Typed entry (`web/src/composer.ts`).** The queue owns state, uncertainty and
-immutable `draftKey`; `requestKey` may rotate after a 409. The entry subscribes
-to synchronous changes and writes only the existing DOM projections.
+[`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) owns state,
+uncertainty, original text, confirmed ID and immutable `draftKey`; `requestKey`
+may rotate after a 409. Its [tests](../../web/test/composer-queue.test.mjs)
+specify transitions and ordering. The entry keeps item/form references in maps,
+clones the server template and writes DOM projections from these typed objects.
+It never reads pending state, identity or original text back from those outputs.
 
-**Snippet from before the typed composer entry:**
-
-```js
-  const pendingForms = () => [...document.querySelectorAll("#message-pending [data-pending-form]")];
-  const dispatch = () => {
-    if (pendingRequests.size || document.getElementById("message-composer")?.classList.contains("htmx-request")) return;
-    const forms = pendingForms();
-    if (forms.some(form => form.dataset.state === "failed" && form.dataset.unconfirmed)) return;
-    const head = forms.find(form => form.dataset.state === "queued");
-    if (head) htmx.trigger(head, "pending-send");
-  };
-```
-
-**Queue implementation (#1825); guard adoption planned (#1417).**
-[`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) holds typed state
-with immutable `draftKey` separate from `requestKey`;
-[`web/test/composer-queue.test.mjs`](../../web/test/composer-queue.test.mjs)
-specifies transitions and ordering. The typed composer entry imports it;
-its injected clock and key generator keep tests DOM-free:
+The entry's synchronous subscription renders each changed projection, then calls:
 
 ```ts
-import { createComposerQueue } from "./composer-queue.ts";
-
-const queue = createComposerQueue(now, newKey, () => {
-  // Called synchronously after mutation, including removal of the last item.
-  projectPendingForms(queue.items);
+const notifyPending = () => dom.dispatchMessagePendingChangedEvent(document, {
+  holdsReload: holdsReload(queue.items),
 });
-const item = queue.next(ordinaryRequestInFlight);
-if (item) sendPending(item);
+dom.listenMessagePendingQueryEvent(document, notifyPending);
+notifyPending();
 ```
 
-The adapter above is illustrative. The entry writes
-`data-state`, `data-unconfirmed` and item `data-posted-message` as projections;
-`draftKey` stays in memory. The stream guard still reads the DOM until #1417
-switches its item predicate to `holdsReload` and the synchronous notification.
-The composer's request and alert clauses stay with the guard.
+`data-state`, `data-unconfirmed` and item `data-posted-message` are output only;
+`draftKey` stays in memory. Every queue notification publishes the predicate,
+including a change with no DOM write and removal of the last item. The stream
+subscribes before requesting the current predicate, covering either script order.
+Its request-class and alert clauses stay with the guard.

@@ -24,9 +24,15 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
-  | `data-state` | pending form | each queued item | synchronous queue projection: queued/sending/failed/confirmed; the unchanged stream reset guard reads it until #1417 |
+  | `data-state` | pending form | each queued item | output-only queue projection: queued/sending/failed/confirmed; CSS/tests observe it, scripts never read it |
+  | `data-unconfirmed` | pending form | uncertain outcome only | output-only queue projection; scripts never read it |
+  | `data-posted-message` | pending item | response supplies an ID | output-only confirmed identity; reconciliation reads the typed item |
   | `data-query`, `data-count` | `#mention-listbox` | always | query as received and localized result count for the picker's polite status; empty results use the no-members text |
-  | `data-member-id`, `data-handle` | mention option | always | canonical member UUID and handle, in search order |
+  | `data-member-id`, `data-handle` | mention option, body member reference | always (resolved on body) | canonical member UUID and handle, in search order |
+  | `data-own-mention` | body `bdi[data-member-id]` | when it equals `#organization-stream`'s `data-member` | set on the viewer's own mention |
+  | `data-copy-link` | `a[data-copy-link]` in each actions menu | always | copies its browser-resolved href |
+  | `data-copied` | that anchor (`a[data-copy-link]`) | after a successful copy until the menu closes | set while the actions menu remains open |
+  | `data-copied-label` | its confirmation span | always | the text announced in `#message-status` |
   | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
   | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
   | `data-pin-control` | pin form | always | message ID |
@@ -49,5 +55,14 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 
   Member identity, selected topic and the resync trigger are specified in the
   [sidebar script contract](web-javascript-unread.md).
+
+The composer dispatches `message-pending-changed` on `document` synchronously
+on each queue notification, with `{holdsReload: boolean}` from `holdsReload(items)`.
+The stream retains that predicate and queues a microtask recheck, ignoring malformed
+payloads. After attaching its
+listener it dispatches `message-pending-query` (empty detail); the composer replies
+synchronously with the current predicate. The composer also publishes on startup,
+so either script order and changes before listener attachment work. Pending DOM
+mutations never feed the reset guard; its request-class and alert inputs remain.
 
 See the [generated contract](web-contracts-generated.md#generated-contract).

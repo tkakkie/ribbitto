@@ -94,6 +94,10 @@ leave the desktop classes as they are. The second is `--breakpoint-wide`
 page ([side panels](ui-panels-and-motion.md#side-panels)). The custom variant
 `short:` (#1056) applies below 27.25 rem (436 px) tall, where the header and
 composer leave under 128 px for the list ([short heights](ui-panels-and-motion.md#short-heights)).
+The custom variant `noscript:` (`@media (scripting: none)`, #1489) has one use:
+on the latest conversation page it makes `#message-list` a `column-reverse`
+flex container around its single wrapper child (`contents noscript:block noscript:grow noscript:shrink-0`),
+so the pane opens at the newest entry without JavaScript ([HTML and CSS before JavaScript](architecture/web-css-first.md#html-and-css-in-todays-code)).
 
 **Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
 which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's

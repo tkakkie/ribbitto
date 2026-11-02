@@ -232,6 +232,10 @@
    composer shows its sending state through this (docs/architecture/csp.md). */
 @custom-variant sending (&:where(.htmx-request *));
 
+/* Without JavaScript the latest message list reverses its flex column around
+   one wrapper child so its scroll origin is the newest entry (docs/ui-code.md). */
+@custom-variant noscript (@media (scripting: none));
+
 @layer base {
   html {
     background-color: var(--color-bg);

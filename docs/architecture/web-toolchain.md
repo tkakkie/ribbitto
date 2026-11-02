@@ -17,8 +17,8 @@ Go-driven esbuild build, not blanket authorization.
 #1410 approved web/src/*.ts (including declarations), root tsconfig.json,
 package.json/package-lock.json and .node-version, updating decision 42 and
 [`tools/languagecheck`](../../tools/languagecheck/rules.go); #1854 adds
-`web/src/package.json` (`{"type": "module"}`). The nested file scopes ES-module
-resolution to `web/src/*.ts` so `node --test` loads them without typeless-package
+`web/src/package.json` (`{"type": "module"}`). The nested file scopes the module
+type of `web/src/*.ts` so `node --test` loads them without typeless-package
 reparsing while root and `web/static/` files keep their existing scope.
 Later PRs add rows to both tables with the first file of a new kind or location:
 direct web/test/*.test.mjs harnesses (#1412); Go builders under tools/ are covered.

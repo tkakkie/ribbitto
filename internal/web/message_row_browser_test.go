@@ -24,8 +24,9 @@ import (
 // sit in the same place on every such row, in both languages (#1093). The
 // time is fixed and so is the browser's time zone, so the local format
 // (date and seconds, two-digit month, day and hour) has one width. At
-// 320 x 844 with 200 % text size, the message list does not scroll sideways
-// and each message header's group and controls stay within the header (#2048).
+// 320 x 844 with 200 % text size, the message list does not scroll sideways,
+// each message header's group, topic label and Select stay within the header,
+// and the topic label and Select stay at least 44 x 44 px (#2048).
 func testMessageRowBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -129,8 +130,8 @@ const messageRowAudit = `want => {
 }`
 
 // messageReflowAudit returns a problem if the page or #message-list scrolls
-// sideways, or if any message header's group, topic label or Select overflows
-// the header's box (#2048).
+// sideways, if any message header's group, topic label or Select overflows
+// the header's box, or if the topic label or Select is smaller than 44 x 44 px (#2048).
 const messageReflowAudit = `want => {
 	const problems = [], box = e => e.getBoundingClientRect(), round = n => Math.round(n * 10) / 10;
 	const doc = document.documentElement, list = document.getElementById('message-list');
@@ -149,6 +150,8 @@ const messageReflowAudit = `want => {
 			const r = box(e);
 			if (r.left < h.left - 0.5 || r.right > h.right + 0.5)
 				problems.push(item.id + ': ' + what + ' ' + rect(e) + ' overflows header ' + rect(header));
+			if (e !== group && (r.width < 44 || r.height < 44))
+				problems.push(item.id + ': ' + what + ' ' + rect(e) + ' smaller than 44x44');
 		}
 	}
 	return problems;

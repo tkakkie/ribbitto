@@ -51,8 +51,8 @@ topic link fills its row. There a message's time sits under the name and
 the topic link and **Select** stay together at the row's end, so at 390 px
 a one-line message by a seed member takes that 44 px row and its body line;
 a narrower screen or a long name or topic moves them to their own row, and
-when that group is narrower still (as at 320 px with 200 % text, #2048)
-**Select** wraps inside it (#1093, `testMessageRowBrowser` in
+when that group is narrower still (as at 320 px with 200 % text)
+**Select** wraps inside it (#1093, #2048, `testMessageRowBrowser` in
 `internal/web/message_row_browser_test.go`). From `desk` the time reserves `min-w-timestamp` with tabular digits, fitting
 UTC and both languages without moving the topic link or **Select** (#1094,
 `testMessageTimeBrowser` in `internal/web/message_time_browser_test.go`). Below

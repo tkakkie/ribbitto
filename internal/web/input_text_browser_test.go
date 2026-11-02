@@ -76,7 +76,8 @@ func testInputTextBrowser(t *testing.T, browser *rod.Browser) {
 		{874, 402, true},
 		{1440, 900, false},
 	} {
-		phone := v.width < 852 || v.touch
+		desk := v.width >= 852
+		phone := !desk || v.touch
 		for _, c := range []struct {
 			name, path string
 			// show reveals the fields under test: the create popover, or the
@@ -105,8 +106,8 @@ func testInputTextBrowser(t *testing.T, browser *rod.Browser) {
 				page.MustNavigate(server.URL + c.path).MustWaitLoad()
 				// Headless Chrome on Linux CI has no mouse (pointer: none, hover: none),
 				// so non-touch checks that the pointer is not coarse.
-				if media := page.MustEval(`() => [matchMedia('(pointer: coarse)').matches, matchMedia('(hover: none)').matches]`).Arr(); media[0].Bool() != v.touch || (v.touch && !media[1].Bool()) {
-					t.Fatalf("%s: pointer coarse=%v hover none=%v; want touch=%t", name, media[0], media[1], v.touch)
+				if media := page.MustEval(`() => [matchMedia('(min-width: 53.25rem)').matches, matchMedia('(pointer: coarse)').matches, matchMedia('(hover: none)').matches]`).Arr(); media[0].Bool() != desk || media[1].Bool() != v.touch || (v.touch && !media[2].Bool()) {
+					t.Fatalf("%s: desk=%v pointer coarse=%v hover none=%v; want desk=%t touch=%t", name, media[0], media[1], media[2], desk, v.touch)
 				}
 				if c.show != "" {
 					page.MustEval(c.show)

@@ -28,7 +28,8 @@ Form, error and tap-target rules for [`accessibility.md`](accessibility.md).
   caption label while the control itself is a 44 × 44 px target
   ([`ui.md`](ui.md#layout-principles), #966, #974). Welcome text fields and
   buttons have a 48 px minimum height below `desk`, and every text input,
-  textarea and select has at least 16 px text there (#973, #1120). `TestBrowser/width-audit`
+  textarea and select has at least 16 px text below `desk` and under
+  `coarse:` (`pointer: coarse`) (#973, #1120, #2081). `TestBrowser/width-audit`
   (`internal/web/width_audit_browser_test.go`) checks these targets, control
   reachability, and document and scroll-container horizontal overflow on
   every page at phone, landscape and breakpoint widths (#974). A target

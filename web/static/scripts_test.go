@@ -151,7 +151,7 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 	if _, err := os.Stat("../../bin/sourcemaps/index.json"); err != nil {
 		t.Errorf("missing production source map index in bin/sourcemaps/index.json: %v", err)
 	}
-	if out, err := exec.Command("git", "ls-files", "*.map", "**/*.map").CombinedOutput(); err != nil || len(bytes.TrimSpace(out)) != 0 {
+	if out, err := exec.Command("git", "-C", "../..", "ls-files", "--", "*.map").CombinedOutput(); err != nil || len(bytes.TrimSpace(out)) != 0 {
 		t.Errorf("tracked .map files in git: %v: %s", err, out)
 	}
 	if out, err := exec.Command("git", "check-ignore", "-q", "../../bin/sourcemaps/index.json").CombinedOutput(); err != nil {

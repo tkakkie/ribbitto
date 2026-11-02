@@ -45,7 +45,12 @@ The human-readable DOM contract (ids and data attributes) is described in [`web-
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
 `restoredKey`, `kind` restricted to `edit|remove`) and `message-draft-restored`
-(`key`). Fields are strings except boolean `inPlace` and nullable `restoredKey`
+(`key`). The queue publishes `message-pending-changed` (boolean `holdsReload`);
+`message-pending-query` has an empty payload and requests a synchronous reply
+through `message-pending-changed`. The composer also publishes on startup.
+See the definitions in `internal/web/view/contracts.go` and script-order/reset
+cases in `internal/web/stream_reset_browser_test.go`.
+Other fields are strings except boolean `inPlace` and nullable `restoredKey`
 and sending/sent `key`. Without an idempotency key on plain/history pages,
 `message-sent` carries null (`FormData.get`); `web/src/composer.ts` normalizes
 in-place `message-sending` from undefined (`elements.idempotency_key?.value`)

@@ -229,6 +229,12 @@ const (
 	// MessagePendingActionEvent carries message-pending-action notifications.
 	//dom:event MessagePendingActionDetail
 	MessagePendingActionEvent = "message-pending-action"
+	// MessagePendingChangedEvent publishes the queue's reload predicate.
+	//dom:event MessagePendingChangedDetail
+	MessagePendingChangedEvent = "message-pending-changed"
+	// MessagePendingQueryEvent requests the current predicate for late listeners.
+	//dom:event MessagePendingQueryDetail
+	MessagePendingQueryEvent = "message-pending-query"
 	// MessageDraftRestoredEvent carries message-draft-restored notifications.
 	//dom:event MessageDraftRestoredDetail
 	MessageDraftRestoredEvent = "message-draft-restored"
@@ -263,6 +269,14 @@ type MessagePendingActionDetail struct {
 	RestoredKey *string `json:"restoredKey"`
 	Kind        string  `json:"kind" dom:"edit,remove"`
 }
+
+// MessagePendingChangedDetail contains no DOM-derived state.
+type MessagePendingChangedDetail struct {
+	HoldsReload bool `json:"holdsReload"`
+}
+
+// MessagePendingQueryDetail is empty; the queue replies synchronously.
+type MessagePendingQueryDetail struct{}
 
 // MessageDraftRestoredDetail preserves the identity restored by the drafts script.
 type MessageDraftRestoredDetail struct {

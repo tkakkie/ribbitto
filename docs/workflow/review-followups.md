@@ -26,10 +26,20 @@ post-cap delta or accepted-difference re-confirmation must be checked):
    if the maintainer asked for another Copilot review or a post-cap change after
    ready).
 2. An AI that did not write the change ([review independence](README.md#principles))
-   checks that the whole diff since the baseline SHA (the head the round
-   reviewed, the accepted-difference decision's head SHA, or, after the
-   third-AI cap, the latest SHA covered by run 2 or by an approved post-cap
-   follow-up check) contains only
+   checks that the whole diff since the baseline SHA (the latest SHA whose
+   change scope is already covered by a review or an independent follow-up
+   check — the head the round reviewed, or, after the two-run third-AI cap, the
+   latest SHA covered by run 2 or by an approved post-cap follow-up check; the
+   approval record of a maintainer's acceptance at a SHA and the review coverage
+   of a change scope are different concepts, and no part of the change set may
+   be left unverified — no gap — so the head SHA at the time of an acceptance
+   may be used as the comparison start only if the changes up to it were
+   themselves verified/covered, never unconditionally: for example, if a review
+   completes at `A`, extra changes and a maintainer's acceptance occur at `B`,
+   and the final head is `C`, then if `B` is unverified the check must cover
+   `A..C`, the whole unverified change set, not just `B..C`, while keeping the
+   two-completed-runs third-AI cap with no new third-AI review started by this
+   rule) contains only
    those allowed changes, each fix answers its finding, and for each third-AI
    finding the test fails without it (by running it or reading a CI run without
    the fix) — or that the recorded reason holds and the alternative

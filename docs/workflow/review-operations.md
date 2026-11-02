@@ -139,16 +139,18 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   approve the substantive delta or automatically restart a fix/review cycle. If
   a fix itself needs a fix, the orchestrator asks the maintainer instead of
   starting another round. Accepting a conversion-parity difference
-  ([Pull request cross-review](reviewing.md#pull-request-cross-review)) skips
-  none of the other required reviews, the conversion differential test (#2053),
-  the required follow-up checks or the final-SHA confirmation: if the head
-  changes after the maintainer accepts a difference (whether accepted before or
-  after the cap), an
+  ([Pull request cross-review](reviewing.md#pull-request-cross-review)) records
+  an approval at a SHA, not review coverage of a change scope (no part of the
+  change set may be left unverified — no gap), and skips none of the other
+  required reviews, the conversion differential test (#2053), the required
+  follow-up checks or the final-SHA confirmation: if the head changes after the
+  maintainer accepts a difference (whether accepted before or after the cap), an
   independent [follow-up check](review-followups.md#copilot-follow-up-check)
-  confirms at the final SHA that the accepted occurrence conditions and the
-  effect are unchanged (the same scenario, the same effect, no new path to it),
-  and the orchestrator records that re-confirmation check's SHA alongside the
-  decision's head SHA in *Accepted parity differences*;
+  from the latest covered SHA (the decision's head SHA only if changes up to it
+  were covered) confirms at the final SHA that the accepted occurrence
+  conditions and the effect are unchanged (the same scenario, the same effect,
+  no new path to it), and the orchestrator records that re-confirmation check's
+  SHA alongside the decision's head SHA in *Accepted parity differences*;
   if anything differs, the maintainer must approve again and `ai-reviewed`
   waits.
 - **Running it:** the [README recipe](README.md#roles-and-running-the-ais)

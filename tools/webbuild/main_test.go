@@ -546,6 +546,20 @@ func TestValidation(t *testing.T) {
 			t.Fatalf("expected missing source map error, got %v", err)
 		}
 	})
+	t.Run("missing sourcesContent", func(t *testing.T) {
+		root, stage, mapStage := t.TempDir(), t.TempDir(), t.TempDir()
+		dist := filepath.Join(root, "web/static/dist")
+		r := api.BuildResult{
+			Metafile: fmtMeta("web/static/dist/x.js", "web/src/message-time.ts"),
+			OutputFiles: []api.OutputFile{
+				{Path: filepath.Join(dist, "x.js"), Contents: []byte("(()=>{})();")},
+				{Path: filepath.Join(dist, "x.js.map"), Contents: []byte(`{"version":3}`)},
+			},
+		}
+		if _, err := validate(root, dist, stage, mapStage, map[string]string{"web/src/message-time.ts": "message-time"}, r, false); err == nil || !strings.Contains(err.Error(), "missing sourcesContent") {
+			t.Fatalf("expected missing sourcesContent rejection, got %v", err)
+		}
+	})
 	t.Run("map for another bundle hash", func(t *testing.T) {
 		root, stage, mapStage := t.TempDir(), t.TempDir(), t.TempDir()
 		dist := filepath.Join(root, "web/static/dist")

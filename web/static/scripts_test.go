@@ -157,9 +157,11 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 	if out, err := exec.Command("git", "check-ignore", "-q", "../../bin/sourcemaps/index.json").CombinedOutput(); err != nil {
 		t.Errorf("bin/sourcemaps not ignored by git: %v: %s", err, out)
 	}
-	workflows, err := filepath.Glob("../../.github/workflows/*.yml")
-	if err != nil || len(workflows) == 0 {
-		t.Fatalf("listing workflows: %v", err)
+	yml, err := filepath.Glob("../../.github/workflows/*.yml")
+	yaml, err2 := filepath.Glob("../../.github/workflows/*.yaml")
+	workflows := append(yml, yaml...)
+	if err != nil || err2 != nil || len(workflows) == 0 {
+		t.Fatalf("listing workflows: %v / %v", err, err2)
 	}
 	for _, wf := range workflows {
 		data, err := os.ReadFile(wf)

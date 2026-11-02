@@ -237,7 +237,10 @@ func build(root, commit, runID string, dev bool) error {
 	if dev {
 		return publishDev(dist, stage, m)
 	}
-	idxData, _ := json.MarshalIndent(m, "", "  ")
+	idxData, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding map index: %w", err)
+	}
 	if err := os.WriteFile(filepath.Join(mapStage, "index.json"), append(idxData, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing map index: %w", err)
 	}
@@ -253,6 +256,8 @@ func build(root, commit, runID string, dev bool) error {
 	if err := os.WriteFile(filepath.Join(stage, "manifest.json"), append(data, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing manifest: %w", err)
 	}
+	// Maps are published before bundles; if bundle replacement fails below,
+	// manifest.json was already removed and the build exits non-zero.
 	_ = os.RemoveAll(mapDist)
 	if err := os.Rename(mapStage, mapDist); err != nil {
 		return fmt.Errorf("publishing maps: %w", err)

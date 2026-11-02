@@ -227,7 +227,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		return fmt.Errorf("unexpected files in %s", mapDir)
 	}
 	c := &apiClient{cfg: cfg}
-	createBody, _ := json.Marshal(map[string]any{"tag_name": relName, "name": relName, "target_commitish": sha, "draft": true, "prerelease": false})
+	createBody, _ := json.Marshal(map[string]any{"tag_name": relName, "name": relName, "target_commitish": "main", "draft": true, "prerelease": false})
 	var created, draftRel, pubRel ghRelease
 	if code, _, err := c.do(ctx, true, "POST", fmt.Sprintf("/repos/%s/releases", cfg.storeRepo), "", createBody, &created); err != nil || code != 201 || created.ID <= 0 || !created.Draft || created.Prerelease {
 		return fmt.Errorf("creating draft release: status %d (%v)", code, err)
@@ -267,12 +267,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		return fmt.Errorf("uploaded asset set missing manifest entries")
 	}
 	pubBody, _ := json.Marshal(map[string]any{"draft": false, "prerelease": false})
-	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); code == 422 {
-		// The separate store repository holds only a README; fall back to its default branch if the source commit SHA is absent there.
-		fallback, _ := json.Marshal(map[string]any{"draft": false, "prerelease": false, "target_commitish": "main"})
-		code, _, err = c.do(ctx, true, "PATCH", relPath, "", fallback, &pubRel)
-	}
-	if err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
+	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
 	}
 	first := upIdx.Entries[slices.Sorted(maps.Keys(upIdx.Entries))[0]]

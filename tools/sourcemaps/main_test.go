@@ -57,8 +57,8 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 		case r.Method == "POST" && path == "/releases":
 			var req mockRelease
 			_ = json.NewDecoder(r.Body).Decode(&req)
-			if !req.Draft || req.Prerelease || req.TargetCommitish == "" {
-				http.Error(w, "bad draft", 400)
+			if !req.Draft || req.Prerelease || req.TargetCommitish != "main" {
+				http.Error(w, "bad draft or unknown target_commitish", 422)
 				return
 			}
 			s.nextID++

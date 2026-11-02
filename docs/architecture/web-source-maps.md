@@ -79,58 +79,57 @@ target or tool it calls are reviewed as workflow changes
 ([third-AI review](../workflow/delivery.md#third-ai-review)).
 
 - **Release naming, order and uniqueness:** tag and name
-  `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>` (run start
-  "now" read once and passed to the command, full SHA, and numeric GitHub run id
-  and attempt, preventing same-SHA same-second collisions); maps and their index
-  are its assets. Age and order use the parsed name (never GitHub's commit-based
-  `created_at`), ordered by start time, then numeric run id, then numeric
-  attempt (then SHA). A release is never reused, renamed, retagged or returned
-  to draft; tags are created and deleted with their release. A rerun or second
-  push of a SHA makes a new release with its own start time and
-  `<run id>.<attempt>`; consumers (#2049 gate and map lookup) pick a SHA's
-  newest complete published release by that order.
+  `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>` (runner
+  clock is the only "now", read once at job start and passed to the command;
+  lower-case 40-hex SHA; decimal GitHub run id and attempt without leading
+  zeros, preventing same-SHA same-second collisions); maps and their index are
+  its assets. Age and order use the parsed name (never GitHub's commit-based
+  `created_at`), by `(start time, run id, attempt)`. A release is never reused,
+  renamed, retagged or returned to draft; tags are created and deleted with
+  their release. A rerun or second push of a SHA makes a new release; #2049 and
+  map lookup resolve a SHA to its newest complete published release by that
+  order, and older duplicates are never required.
 - **Release lifecycle:** each run creates a new draft, uploads all assets and
   the index, verifies the asset set against its own manifest (no external
   expected-asset list), and only then publishes; published releases are complete
   by construction and only drafts are incomplete. A failed or interrupted run
-  leaves its own draft, or, if it failed after publishing (tag deletion fails,
-  expiry check fails, cancelled), a complete published duplicate; both are
-  harmless under distinct-SHA retention below, never bypassing the 90-day floor
-  or newest-10 protection. A draft is never reused; any later run idempotently
-  deletes abandoned strict-`map-` drafts (older than 7 days by parsed start
-  time) by release ID unless that SHA's concurrency group still holds a run. The
-  job never creates prereleases.
+  leaves its own draft or (if it failed after publishing) a published duplicate,
+  both harmless under distinct-SHA retention below. A draft is never reused; any
+  later run idempotently deletes abandoned strict-`map-` drafts older than 7
+  days by parsed start time (including any same-named drafts from a retried
+  create call) by release ID unless that SHA's concurrency group holds a run.
+  The job never creates prereleases.
 - **Population and bounds:** only published, non-prerelease releases whose tag
-  equals the name and matches the strict full-match
-  `map-<UTC start>-<full SHA>-<run id>.<attempt>` pattern with parsed time at
-  most "now" plus one day are eligible; other drafts, prereleases, unparsable
-  (invalid time, SHA, run id or attempt), future-dated and name/tag-mismatch
-  releases are neither counted nor deleted and warn in the job summary.
-  Retention counts **distinct SHAs**, not releases: for each SHA only its newest
-  complete published release (by start time in the name, ties broken by run id,
-  then attempt) counts toward the newest 10 and the 90-day floor; older
-  published releases of the same SHA never occupy a slot and are deleted by the
-  run that publishes a newer one (best effort) or by any later run's retention
-  pass.
+  equals the name and full-matches the canonical `map-` pattern above with
+  parsed time at most "now" plus one day are eligible; younger or non-strict
+  drafts (outside the 7-day cleanup above), prereleases, unparsable (invalid
+  time, SHA, run id or attempt), out-of-range (future-dated: merely invisible,
+  never deleted) and name/tag-mismatch releases are neither counted nor deleted
+  and warn in the job summary. Retention counts **distinct SHAs**, not releases:
+  only each SHA's newest complete published release (by the order above) counts
+  toward the newest 10 and the 90-day floor; older published duplicates of a SHA
+  never take a slot and are not deleted early, staying until that SHA expires. A
+  rerun of an old SHA takes a newest-10 slot by start time and can push out an
+  already-deployed SHA past 90 days; this is accepted because slot order is by
+  publication run, not a guarantee, and deployed-SHA protection is the #2049
+  gate's job.
 - **Retention, deletion and failure handling:** **90 days provisionally**
   (2026-11-01), revisited at #2049 so a map outlives its release plus an
   investigation margin. **90 days is a floor, not a deadline:** retention runs
   opportunistically only **after a successful upload** on `main` (without new
   `main` pushes, old releases stay: push-time deletion, not automatic expiry).
-  It deletes older published duplicates, and a SHA's newest release only when
-  **both** older than 90 days (from "now") and outside the newest 10 distinct
-  SHAs by the order above (start time, then run id, then attempt) — each release
-  first by exact ID and then its tag by exact tag ref after verifying the strict
-  full-match `map-` name parses (time, SHA, run id, attempt) and equals the tag
-  (never by name lookup alone). Deleting duplicates is cleanup, not a
-  correctness step: the page's guarantees (the #2049 gate finds the newest
-  complete release for the exact SHA; protected SHAs are never evicted by
-  duplicates) hold even if the deletion never ran. A tag whose deletion failed
-  is left for the next run, which deletes only **orphan tags** — strict `map-`
-  tags referenced by no release of any kind (published, draft, prerelease,
-  unparsable, future-dated or name/tag-mismatched). A failed upload,
-  refused/expired authentication, or failed release or tag deletion fails the
-  job visibly; an upload failure skips retention and deletes nothing.
+  It deletes a SHA's eligible published releases only when that SHA's newest
+  release is **both** older than 90 days (from "now") and outside the newest 10
+  distinct SHAs by the order above — each release first by exact ID and then its
+  tag by exact tag ref after verifying the canonical `map-` name parses and
+  equals the tag (never by name lookup alone). A tag whose deletion failed is
+  left for the next run, which deletes only **orphan tags** — canonical `map-`
+  tags older than 7 days (by parsed start time) referenced by no release of any
+  kind (published, draft, prerelease, unparsable, out-of-range or
+  name/tag-mismatched) and confirmed orphaned by an exact-name re-check after
+  listing. A failed upload, refused/expired authentication, or failed release or
+  tag deletion fails the job visibly; an upload failure skips retention and
+  deletes nothing.
 
 ### Constraints: production gate, rotation and residual risk
 

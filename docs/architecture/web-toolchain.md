@@ -16,15 +16,18 @@ Go-driven esbuild build, not blanket authorization.
 
 #1410 approved web/src/*.ts (including declarations), root tsconfig.json,
 package.json/package-lock.json and .node-version, updating decision 42 and
-[`tools/languagecheck`](../../tools/languagecheck/rules.go) against that approval.
-Later PRs add rows to both path-and-kind tables in the PR introducing the
-first file of a new kind or location: direct web/test/*.test.mjs harnesses are
-#1412's; Go builders under tools/ are covered. Unlisted files fail; exact-path
-exceptions follow decision 42's rules in [`docs/language-exceptions.txt`](../language-exceptions.txt).
+[`tools/languagecheck`](../../tools/languagecheck/rules.go); #1854 adds
+`web/src/package.json` (`{"type": "module"}`). The nested file scopes ES-module
+resolution to `web/src/*.ts` so `node --test` loads them without typeless-package
+reparsing while root and `web/static/` files keep their existing scope.
+Later PRs add rows to both tables with the first file of a new kind or location:
+direct web/test/*.test.mjs harnesses (#1412); Go builders under tools/ are covered.
+Unlisted files fail; exact-path exceptions use
+[`docs/language-exceptions.txt`](../language-exceptions.txt).
 
 Review checks Makefile/workflow node/npm commands against that limited approval
-(decision 42 leaves commands to review); the check does not scan them and they
-need no path-and-kind entries. #1412 adds the narrow .mjs row.
+(decision 42 leaves commands to review); languagecheck does not scan them and they
+need no table entries.
 
 ## Build, manifest and embedding — #1411
 
@@ -45,10 +48,9 @@ locally to a UTC timestamp. Production output has no maps or source-map links.
 `static.NewScripts` in `web/static/scripts.go` holds the single `names`
 declaration of converted page entries (a conversion adds its entry name there) and
 validates the manifest and bundle hashes at startup; `tools/webbuild` reads that
-same declaration from the repository root instead of taking entry names on the
-command line (#2022). Non-entry modules under `web/src/` are never built as
-bundles on their own. templ uses context; direct renders use the embedded
-registry without mutable globals. Their legacy assets and
+declaration from the repository root instead of CLI entry names (#2022); non-entry
+`web/src/` modules are never bundled standalone. templ uses context; direct renders
+use the embedded registry without mutable globals. Their legacy assets and
 `web/legacy-scripts.txt` entries are removed; the stems still listed in
 `web/legacy-scripts.txt` stay on versioned assets. Missing/unknown entries or
 bundles fail startup; undeclared renders fail.
@@ -79,8 +81,8 @@ before adoption.
 **Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI and local
 development read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
-bundled npm, not a separately upgraded global npm. The wrapper resolves npm from
-the directory of the version-checked Node without resolving Node symlinks. CI provisions the release
+bundled npm, not a separately upgraded global npm. The wrapper resolves npm
+beside the version-checked Node without resolving symlinks. CI provisions the release
 from the pin. For local development and Codex, trusted maintainer setup supplies
 it before
 the run. Report missing or mismatched runtimes. Any AI may run the pinned Node
@@ -134,7 +136,7 @@ checking and not type-checked itself ([checks](web-toolchain-checks.md)).
 ## Generated contract and state — #1413, #1416, #1417
 
 **Generated-file commitment — confirmed:**
-#1413 commits web/src/contracts.gen.ts rather than generating it uncommitted.
+#1413 commits web/src/contracts.gen.ts.
 Go definitions used by templ own ids, attribute names, custom event names and
 payload fields/types. A Go generator under `tools/`, reached by `go generate`,
 produces constants/types and typed accessors; a Go freshness check fails on

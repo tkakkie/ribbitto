@@ -156,6 +156,39 @@ func TestPendingEditUnavailableReason(t *testing.T) {
 }
 
 func testPendingComposerBrowser(t *testing.T, browser *rod.Browser) {
+	for _, admission := range []string{"busy", "capacity", "empty", "oversized", "quote", "pending-empty"} {
+		for _, empty := range []bool{false, true} {
+			t.Run(fmt.Sprintf("malformed-template/%s/empty=%t", admission, empty), func(t *testing.T) {
+				page, _, posts, _ := pendingBrowser(t, browser, false)
+				if admission == "capacity" || admission == "pending-empty" {
+					count := 1
+					if admission == "capacity" {
+						count = 10
+					}
+					page.MustEval(`count=>{const b=document.getElementById('message-body');for(let n=0;n<count;n++){b.value='queued '+n;b.form.requestSubmit()}}`, count)
+					request := receivePending(t, page, posts)
+					request.reply <- browserReply{status: 500, body: []byte("pause")}
+					page.MustWait(`()=>window.answers===1`)
+				}
+				if result := page.MustEval(`([admission,empty])=>{
+ const b=document.getElementById('message-body'), f=b.form, errors=[];
+ window.addEventListener('error',e=>{errors.push(e.error.name);e.preventDefault()});
+ document.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation()},true);
+ const template=document.getElementById('message-pending-template');template.content.replaceChildren();
+ if(!empty)template.content.append(document.createElement('li'));
+ if(admission==='busy')f.classList.add('htmx-request');
+ if(admission==='quote'){const input=document.createElement('input');input.name='quote';f.append(input)}
+ b.value=admission.includes('empty')?'':admission==='oversized'?'x'.repeat(4001):'valid';
+ f.requestSubmit();
+ const a=document.getElementById('message-send-alert'), want=admission==='capacity'?a.dataset.capacity:admission==='busy'||admission==='pending-empty'?a.dataset.busy:'';
+ const result=[errors,a.textContent];window.trace?.push(['F4b',result]);
+ return errors.length||a.textContent!==want?JSON.stringify({result,want}):'';
+}`, []any{admission, empty}).Str(); result != "" {
+					t.Fatal(result)
+				}
+			})
+		}
+	}
 	for _, route := range []string{"other-topic", "passed", "behind", "delivered", "bad-applied", "bad-seq", "other-topic-bad", "delivered-bad"} {
 		for _, removed := range []bool{false, true} {
 			t.Run(fmt.Sprintf("removed-route/%s/removed=%t", route, removed), func(t *testing.T) {

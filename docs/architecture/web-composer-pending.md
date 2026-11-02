@@ -11,6 +11,8 @@ frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
 own hold and checks age only without a restored key. `pagehide`/`sent` clear holds.
 Before `admit`, the adapter calls `changeText` and applies any returned fresh key
 to the composer, including when admission returns busy or ordinary.
+Only successful admission calls the adapter's `prepare` callback to clone/copy the
+form, before key generation and the synchronous projection notification.
 That released key belongs to the composer; a queued item instead takes the restored
 key, else an unexpired Remove hold for the same place and raw text, else a fresh
 `newKey()`. As in the legacy composer, enqueue rotates the composer's own key,

@@ -77,7 +77,7 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
     forgetRestoration() { restored = null; },
     pagehide() { holds.clear(); },
     expire,
-    admit(text: string, place: string, ordinaryBusy = false, quoted = false): PendingItem | "busy" | "capacity" | "ordinary" {
+    admit(text: string, place: string, ordinaryBusy = false, quoted = false, prepare?: () => void): PendingItem | "busy" | "capacity" | "ordinary" {
       // The adapter first calls changeText and applies any returned key to the composer;
       // ordinary/busy results use that composer key, not a queued item's key.
       // An item takes the restored key, else an unexpired Remove hold for the same place/raw text, else newKey().
@@ -87,6 +87,8 @@ export function createComposerQueue(now: () => number, newKey: () => string, cha
       if (ordinaryBusy) return "busy";
       const normalized = text.replace(/\r\n?/g, "\n").trim();
       if (quoted || !normalized || [...normalized].length > 4000) return items.length || requests.size ? "busy" : "ordinary";
+      // Prepare the admitted form before key generation, which may throw.
+      prepare?.();
       const id = holdID(place, text);
       const hold = holds.get(id);
       holds.delete(id);

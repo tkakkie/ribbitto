@@ -144,19 +144,21 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     }
     const form = event.target, body = form.elements.body as ComposerBody;
     const list = dom.getMessagePending()!;
-    const item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
-    const sending = item.querySelector<ComposerForm>("form")!;
-    admitting = sending;
-    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), Boolean(form.elements.quote));
+    let item!: HTMLLIElement, sending!: ComposerForm;
+    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), Boolean(form.elements.quote), () => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+      sending = item.querySelector<ComposerForm>("form")!;
+      for (const name of ["idempotency_key", "composer", dom.CursorField]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
+      admitting = sending;
+    });
     admitting = undefined;
     if (typeof pending === "string") {
       if (pending === "ordinary") inPlace();
       else { event.preventDefault(); event.stopImmediatePropagation(); say(pending); }
       return;
     }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    for (const name of ["idempotency_key", "composer", dom.CursorField]) (sending.elements.namedItem(name) as HTMLInputElement).value = (form.elements.namedItem(name) as HTMLInputElement | null)?.value || "";
     sending.elements.idempotency_key.value = pending.requestKey;
     form.removeAttribute(dom.UnconfirmedKeyAttribute);
     sending.elements.body.value = body.value;

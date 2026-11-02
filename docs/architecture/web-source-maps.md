@@ -76,7 +76,7 @@ Because the job also runs build tooling, the secret is passed only to the upload
 step (step-level `env`), never build, install or test steps; actions are
 SHA-pinned; and the storing command, its Go dependencies and every Makefile
 target or tool it calls are reviewed as workflow changes
-([third-AI review](../workflow/delivery.md#third-ai-review)).
+([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
 - **Release naming, order and uniqueness:** tag and name
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>` (runner

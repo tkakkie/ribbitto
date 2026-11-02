@@ -393,6 +393,7 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		{"absolute", absBase, absBase + ".map", validHash, "invalid source map entry"},
 		{"bad-hash", "app.js", "app.js.map", "not-a-sha256", "invalid source map entry"},
 		{"mismatched-map", "app.js", "other.js.map", validHash, "invalid source map entry"},
+		{"dup-map", "app.js", "app.js.map", "dup", "invalid source map entry"},
 		{"bad-json", "app.js", "app.js.map", "{bad", "reading map index"},
 		{"no-sources", "app.js", "app.js.map", "no-sources", "missing sourcesContent"},
 	} {
@@ -412,7 +413,9 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 			_ = os.WriteFile(filepath.Join(dir, "pad"), mb, 0644)
 		}
 		idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, tc.hash, tc.mapName)
-		if tc.hash == "{bad" {
+		if tc.hash == "dup" {
+			idx = fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":%q,"sha256":%q,"map":%q},"b":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, validHash, tc.mapName, tc.file, validHash, tc.mapName)
+		} else if tc.hash == "{bad" {
 			idx = "{bad"
 		}
 		_ = os.WriteFile(filepath.Join(dir, "index.json"), []byte(idx), 0644)
@@ -468,9 +471,17 @@ func TestLookupHardening(t *testing.T) {
 		}
 	}
 	dupIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"z":{"file":"z.js","sha256":%q,"map":"z.js.map"}}}`, sha, h, h))
-	s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: rel, TagName: rel, Assets: []mockAsset{assetOf(2, "index.json", "", dupIdx), assetOf(3, "a.js.map", "", mapData), assetOf(4, "z.js.map", "", mapData)}}}}
+	newerRel := relNameAt(now.Add(time.Minute), sha, 20, 1)
+	newerDupMapIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"20","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"a.js","sha256":%q,"map":"a.js.map"}}}`, sha, h, h2))
+	s := &mockStore{token: "tok", releases: []mockRelease{
+		{ID: 2, Name: newerRel, TagName: newerRel, Assets: []mockAsset{assetOf(5, "index.json", "", newerDupMapIdx), assetOf(6, "a.js.map", "", mapData)}},
+		{ID: 1, Name: rel, TagName: rel, Assets: []mockAsset{assetOf(2, "index.json", "", dupIdx), assetOf(3, "a.js.map", "", mapData), assetOf(4, "z.js.map", "", mapData)}},
+	}}
 	srv := s.server(t)
 	defer srv.Close()
+	if gotRel, gotIdx, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, "", ""); err != nil || gotRel != rel || gotIdx != "index.json" {
+		t.Fatalf("expected SHA-only lookup to skip incomplete newer release and pick %s, got rel=%q asset=%q err=%v", rel, gotRel, gotIdx, err)
+	}
 	for i := range 30 {
 		if _, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "10"); err != nil || gotMap != "a.js.map" {
 			t.Fatalf("iter %d: expected deterministic a.js.map, got %q (err=%v)", i, gotMap, err)

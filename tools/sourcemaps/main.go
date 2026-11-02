@@ -229,11 +229,12 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	if m.Commit != sha || m.RunID != runID || len(m.Entries) == 0 {
 		return fmt.Errorf("invalid map index in %s", mapDir)
 	}
-	assets := map[string][]byte{"index.json": idxBytes}
+	assets, seenFiles := map[string][]byte{"index.json": idxBytes}, make(map[string]bool, len(m.Entries))
 	for _, b := range m.Entries {
-		if !validBundleEntry(b) {
+		if !validBundleEntry(b) || seenFiles[b.File] || assets[b.Map] != nil {
 			return fmt.Errorf("invalid source map entry %q", b.Map)
 		}
+		seenFiles[b.File] = true
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
 		if err != nil {
 			return fmt.Errorf("reading source map %s: %w", b.Map, err)
@@ -327,42 +328,54 @@ func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runI
 	slices.SortFunc(cands, func(a, b parsedRel) int {
 		return cmp.Or(compareOrder(b.parsed, a.parsed), cmp.Compare(b.rel.ID, a.rel.ID))
 	})
-	best, p := cands[0].rel, cands[0].parsed
-	assets := make(map[string]ghAsset, len(best.Assets))
-	for _, a := range best.Assets {
-		if !validAsset(a) {
-			return "", "", nil, fmt.Errorf("invalid asset %s in %s", a.Name, best.Name)
-		}
-		assets[a.Name] = a
-	}
-	idxAsset, ok := assets["index.json"]
-	if !ok {
-		return "", "", nil, fmt.Errorf("missing index.json in %s", best.Name)
-	}
-	code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
-	var m manifest
-	if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
-		return "", "", nil, fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", best.Name, code, err)
-	}
-	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
-		if e := m.Entries[k]; !validBundleEntry(e) || assets[e.Map].ID == 0 {
-			return "", "", nil, fmt.Errorf("incomplete or invalid manifest entry %s in %s", e.Map, best.Name)
-		}
-	}
-	if bundleSHA256 == "" {
-		return best.Name, "index.json", idxBytes, nil
-	}
-	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
-		if e := m.Entries[k]; e.SHA256 == bundleSHA256 {
-			ma := assets[e.Map]
-			code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
-			if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
-				return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", e.Map, code, err)
+	var lastErr error
+candLoop:
+	for _, cand := range cands {
+		best, p := cand.rel, cand.parsed
+		assets := make(map[string]ghAsset, len(best.Assets))
+		for _, a := range best.Assets {
+			if !validAsset(a) {
+				lastErr = fmt.Errorf("invalid asset %s in %s", a.Name, best.Name)
+				continue candLoop
 			}
-			return best.Name, e.Map, mapBytes, nil
+			assets[a.Name] = a
 		}
+		idxAsset, ok := assets["index.json"]
+		if !ok {
+			lastErr = fmt.Errorf("missing index.json in %s", best.Name)
+			continue
+		}
+		code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
+		var m manifest
+		if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
+			lastErr = fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", best.Name, code, err)
+			continue
+		}
+		seen := make(map[string]bool, len(m.Entries)*2)
+		for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
+			e := m.Entries[k]
+			if !validBundleEntry(e) || seen[e.File] || seen[e.Map] || assets[e.Map].ID == 0 {
+				lastErr = fmt.Errorf("incomplete or invalid manifest entry %s in %s", e.Map, best.Name)
+				continue candLoop
+			}
+			seen[e.File], seen[e.Map] = true, true
+		}
+		if bundleSHA256 == "" {
+			return best.Name, "index.json", idxBytes, nil
+		}
+		for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
+			if e := m.Entries[k]; e.SHA256 == bundleSHA256 {
+				ma := assets[e.Map]
+				code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
+				if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
+					return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", e.Map, code, err)
+				}
+				return best.Name, e.Map, mapBytes, nil
+			}
+		}
+		return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, best.Name)
 	}
-	return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, best.Name)
+	return "", "", nil, lastErr
 }
 
 func main() {

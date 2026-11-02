@@ -345,3 +345,23 @@ const (
 	//dom:attribute
 	PinnedAttribute = "data-pinned"
 )
+
+// Message-link and member-mention hooks cover actions-menu link copying and
+// own-mention highlighting.
+const (
+	// CopyLinkAttribute marks an actions-menu link that copies its resolved href.
+	//dom:attribute
+	CopyLinkAttribute = "data-copy-link"
+	// CopiedAttribute marks a copy-link anchor while its menu stays open after copying.
+	//dom:attribute
+	CopiedAttribute = "data-copied"
+	// CopiedLabelAttribute marks the localized copied-state label inside a copy-link anchor.
+	//dom:attribute
+	CopiedLabelAttribute = "data-copied-label"
+	// MemberIDAttribute carries a resolved mention's or mention candidate's member UUID.
+	//dom:attribute
+	MemberIDAttribute = "data-member-id"
+	// OwnMentionAttribute marks a resolved mention whose member matches the viewer.
+	//dom:attribute
+	OwnMentionAttribute = "data-own-mention"
+)

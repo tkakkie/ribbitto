@@ -50,6 +50,8 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"sidebar-unread",
 		"pins-sync",
 		"message-drafts",
+		"member-mentions",
+		"message-link",
 	}
 	scripts := &Scripts{
 		urls:    make(map[string]string, len(names)),

@@ -1,6 +1,7 @@
 package static_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -130,6 +131,50 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	err = filepath.WalkDir("dist", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ".map") || bytes.Contains(data, []byte("sourceMappingURL")) || bytes.Contains(data, []byte(".js.map")) {
+			t.Errorf("public dist leak in %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat("../../bin/sourcemaps/index.json"); err != nil {
+		t.Errorf("missing production source map index in bin/sourcemaps/index.json: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", "../..", "ls-files", "--", "*.map").CombinedOutput(); err != nil || len(bytes.TrimSpace(out)) != 0 {
+		t.Errorf("tracked .map files in git: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "check-ignore", "-q", "../../bin/sourcemaps/index.json").CombinedOutput(); err != nil {
+		t.Errorf("bin/sourcemaps not ignored by git: %v: %s", err, out)
+	}
+	yml, err := filepath.Glob("../../.github/workflows/*.yml")
+	yaml, err2 := filepath.Glob("../../.github/workflows/*.yaml")
+	workflows := append(yml, yaml...)
+	if err != nil || err2 != nil || len(workflows) == 0 {
+		t.Fatalf("listing workflows: %v / %v", err, err2)
+	}
+	for _, wf := range workflows {
+		data, err := os.ReadFile(wf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(data, []byte("upload-artifact")) || (filepath.Base(wf) != "sourcemaps-store.yml" && bytes.Contains(data, []byte("bin/sourcemaps"))) {
+			t.Errorf("workflow %s exposes source maps in public artifact", wf)
+		}
+	}
+	makefile, err := os.ReadFile("../../Makefile")
+	if err != nil || bytes.Count(makefile, []byte("bin/sourcemaps")) != 0 {
+		t.Errorf("Makefile references bin/sourcemaps: %v", err)
 	}
 }
 

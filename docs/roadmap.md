@@ -117,6 +117,7 @@ Left for later: a manual light/dark switch.
 | Milestone | Goal | Done when |
 |---|---|---|
 | **M9 Front end** (#1404) | A front end that stays safe to change as it grows, and conversations that open at a bounded cost | The five outcomes in [M9](roadmap-m9.md) |
+| **M10 Front-end architecture** (#2060) | Front-end complexity that stays bounded as reactions, editing, uploads and search arrive | The five outcomes in [M10](roadmap-m10.md) |
 
 The repository is public, but a release — a
 container image and a Compose file with PostgreSQL and Caddy
@@ -151,6 +152,8 @@ why and what changes, never by quietly breaking an old one. Roughly in this orde
    - *[M9](roadmap-m9.md) (alongside Basics):* follows M7, starting with its
      foundation (phases 1–5); neither M9 as a whole nor its UX
      blocks *Basics* ([position](roadmap-m9.md#position-in-the-roadmap)).
+   - *[M10](roadmap-m10.md):* follows M9 and comes before step 3's reactions,
+     editing and uploads ([position](roadmap-m10.md#position-in-the-roadmap)).
 3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
    (#880; rules agreed, implementation after M6), reply chains
    ([decision 22](decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)),

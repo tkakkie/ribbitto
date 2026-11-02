@@ -83,18 +83,18 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   then ask the maintainer. Follow-up checks
   ([`review-followups.md`](review-followups.md)) are not runs. The cross-review
   limit (two rounds, then closure verification or the maintainer) is unchanged.
-- **Second run (after a later push before the cap):** after a later push (a fix
-  for the first run, a Copilot follow-up, or a merge of `main`) whose diff
-  touches those areas, a ready PR goes back to a draft and a fix for a finding
-  of this review first passes the
+- **Second run (after a later push before the cap):** after a later push (fix,
+  Copilot follow-up, merge of `main`) whose diff touches those areas, a ready PR
+  goes back to a draft until the review completes. A fix for a finding of this
+  review first passes the
   [follow-up check](review-followups.md#copilot-follow-up-check); then run the
   second review. The second run reports `Compared: <first run's SHA>..<head>`
   and reviews that whole delta: the fixes of the first run, any Copilot fixes
   and merges of `main` made in between, and their effect on unchanged code that
   calls into it (a second run that reads only the fix commits is not enough).
   `.github/prompts/adversarial.md` carries the same scope. An earlier report
-  covers a later head without another run only when every later commit is
-  outside those areas (or, at the cap, is covered by the post-cap rules below).
+  covers a later head only when every later commit is outside those areas (or,
+  after the two-run cap, is covered by the post-cap rules below).
 - **After the second run (at the cap):** no third adversarial run. When
   findings remain after the second run, follow the
   [post-cap triage](reviewing.md#pull-request-cross-review); the orchestrator

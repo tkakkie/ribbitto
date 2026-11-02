@@ -24,6 +24,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
+  | `data-state` | pending form | each queued item | synchronous queue projection: queued/sending/failed/confirmed; the unchanged stream reset guard reads it until #1417 |
   | `data-query`, `data-count` | `#mention-listbox` | always | query as received and localized result count for the picker's polite status; empty results use the no-members text |
   | `data-member-id`, `data-handle` | mention option | always | canonical member UUID and handle, in search order |
   | `data-pins-seq` | `#pins-section` | always | snapshot sequence |

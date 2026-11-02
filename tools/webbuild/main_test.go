@@ -163,8 +163,19 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer func() { _ = lock.Close() }()
-					if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_SH); err != nil {
-						t.Fatal(err)
+					deadline := time.Now().Add(30 * time.Second)
+					for {
+						err := syscall.Flock(int(lock.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+						if err == nil {
+							break
+						}
+						if err != syscall.EWOULDBLOCK {
+							t.Fatal(err)
+						}
+						if !time.Now().Before(deadline) {
+							t.Fatalf("timed out waiting for publisher lock for %+v", b)
+						}
+						time.Sleep(20 * time.Millisecond)
 					}
 					defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 					js, err1 := os.ReadFile(filepath.Join(dist, b.File))
@@ -238,6 +249,8 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 	// so the lock-free reader stays within retention even if descheduled.
 	waitRead := func(want bundle) {
 		t.Helper()
+		timer := time.NewTimer(30 * time.Second)
+		defer timer.Stop()
 		for {
 			select {
 			case got := <-readBundles:
@@ -246,6 +259,8 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 				}
 			case err := <-readErr:
 				t.Fatalf("concurrent reader failed: %v", err)
+			case <-timer.C:
+				t.Fatalf("timed out waiting for reader to observe %+v", want)
 			}
 		}
 	}
@@ -363,6 +378,8 @@ func TestBuildDevelopmentAndWatch(t *testing.T) {
 			}
 		}
 	}
+	// Reader acknowledgements deliberately replace unbarriered rapid builds,
+	// which could evict a descheduled reader's generation and falsely fail.
 	for i := range 10 {
 		writeSource(fmt.Appendf(nil, "const loop = %d;\nconsole.log(loop);\n", i))
 		if err := build(root, "dev", fmt.Sprintf("run-%d", i), true); err != nil {

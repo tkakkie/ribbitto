@@ -12,14 +12,6 @@ each entry's `"map"` field and retained recent generations) are written to
 `RIBBITTO_DEV_ASSETS=bin/dev-dist`, the static handler serves registered bundles
 and `.js.map` files from disk with `Cache-Control: no-store`.
 
-Development publication moves complete bundles and maps into place before
-atomically replacing the manifest, then removes files outside the active and
-three previous distinct generations. Seeing a new manifest guarantees its
-files are complete; it does not mean cleanup has finished or pin that generation
-against later eviction. `TestBuildDevelopmentAndWatch` waits on the publisher's
-lock for cleanup assertions and acknowledges reader progress between publication
-batches, keeping the concurrent reader within retention without locking its reads.
-
 Production builds (`make bundles`) write `web/static/dist` and omit source maps,
 `sourceMappingURL` comments and `"map"` manifest fields; because development
 builds write only to `bin/dev-dist`, a development build cannot leak into the
@@ -36,3 +28,4 @@ Verify CSP and delivery in the [target browsers](browser-targets.md), with
 version-specific evidence under that document's verification rules. The
 classic bundle needs a browser check; module/shared/lazy/preload delivery
 needs verification before adoption, without loosening the nonce-only CSP.
+

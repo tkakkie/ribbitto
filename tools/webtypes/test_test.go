@@ -136,13 +136,13 @@ func TestRealNodeTests(t *testing.T) {
 	}
 	t.Run("moduleScopeWarning", func(t *testing.T) {
 		control := t.TempDir()
-		for path, content := range map[string]string{
+		for name, content := range map[string]string{
 			".node-version": string(pin),
 			"package.json":  `{"private":true}` + "\n",
 			"web/src/probe.ts": `export const value: number = 1;
 `,
 		} {
-			full := filepath.Join(control, path)
+			full := filepath.Join(control, name)
 			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
 				t.Fatal(err)
 			}

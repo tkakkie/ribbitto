@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Rules for AI coding tools and the people using them. Keep this file short;
-explanations of the product and the code belong in `docs/`.
+Rules for AI coding tools and their users. Keep this file short;
+explanations belong in `docs/`.
 
 ## Project
 
@@ -78,10 +78,10 @@ Read and update the relevant doc in the same PR:
 [`docs/ui-colours.md`](docs/ui-colours.md) (token utilities only, never raw colours; `tools/sourcecheck`)
 and [`docs/accessibility.md`](docs/accessibility.md).
 
-Read:
+Whoever performs an action reads:
 [own token, credentials, `ready`, merge](docs/workflow/README.md#what-no-ai-does),
 [tool failures, disposable DBs](docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
-[PR scan](docs/workflow/delivery.md#pr-body-credential-scan),
+[PR body scan](docs/workflow/delivery.md#pr-body-credential-scan),
 [measurement caps](docs/workflow/investigations.md#investigations-and-the-performance-target).
 Implementers: this file, docs of touched areas; cross-reviewers: this file,
 [PR cross-review](docs/workflow/reviewing.md#pull-request-cross-review)

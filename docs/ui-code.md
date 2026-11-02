@@ -114,8 +114,8 @@ accessible names at both widths. The topic's channel link keeps a 44 px
 target; both names truncate on one row. Plain-text bodies (URLs and code
 included) and metadata use `wrap-anywhere` below `desk`, topic links at
 every width (#974).
-Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid
-iOS focus zoom (#973, #1120). The send button stays 44 × 44 px.
+Every text input, textarea and select uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` and under `coarse:` (`pointer: coarse`) to avoid
+iOS focus zoom, including on a phone in landscape at `desk` width (#973, #1120, #2081). The send button stays 44 × 44 px.
 Latest feed/topic posts use htmx; history uses plain forms.
 `web/src/composer.ts` handles quote focus and
 [growth anchoring](ui-composer.md); both send modes guard IME and the

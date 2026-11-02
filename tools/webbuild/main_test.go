@@ -572,6 +572,22 @@ func TestValidation(t *testing.T) {
 			t.Fatalf("unexpected files in working directory: %v, %v", entries, err)
 		}
 	})
+	t.Run("symlinked map parent", func(t *testing.T) {
+		root := fixture(t, []byte(`console.log("ok");`))
+		vendor := filepath.Join(root, "web/static/vendor")
+		if err := os.MkdirAll(vendor, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(vendor, filepath.Join(root, "bin")); err != nil {
+			t.Fatal(err)
+		}
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "staging maps") {
+			t.Fatalf("expected symlinked map parent failure, got %v", err)
+		}
+		if entries, err := os.ReadDir(vendor); err != nil || len(entries) != 0 {
+			t.Fatalf("symlinked map parent wrote into vendor: %v, %v", entries, err)
+		}
+	})
 }
 
 func fmtMeta(output, entry string) string {

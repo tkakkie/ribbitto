@@ -147,10 +147,15 @@ func build(root, commit, runID string, dev bool) error {
 		dist = filepath.Join(root, devDistDir)
 	} else {
 		// Invalidate the previous generation even if this run fails before staging.
-		_ = os.Remove(filepath.Join(mapDist, "index.json"))
 		if err := os.Remove(filepath.Join(dist, "manifest.json")); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("invalidating manifest: %w", err)
 		}
+		for _, p := range []string{filepath.Dir(mapDist), mapDist} {
+			if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("staging maps: symlinked map path %s", p)
+			}
+		}
+		_ = os.Remove(filepath.Join(mapDist, "index.json"))
 	}
 	names, err := declaredEntries(root)
 	if err != nil {
@@ -212,6 +217,11 @@ func build(root, commit, runID string, dev bool) error {
 	if !dev {
 		if err := os.MkdirAll(filepath.Dir(mapDist), 0755); err != nil {
 			return fmt.Errorf("staging maps: %w", err)
+		}
+		realRoot, err1 := filepath.EvalSymlinks(root)
+		realParent, err2 := filepath.EvalSymlinks(filepath.Dir(mapDist))
+		if err1 != nil || err2 != nil || realParent != filepath.Join(realRoot, filepath.Dir(prodMapDir)) {
+			return fmt.Errorf("staging maps: symlinked map path %s", filepath.Dir(mapDist))
 		}
 		mapStage, err = os.MkdirTemp(filepath.Dir(mapDist), ".sourcemaps-")
 		if err != nil {

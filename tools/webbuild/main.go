@@ -210,9 +210,10 @@ func build(root, commit, runID string, dev bool) error {
 	defer func() { _ = os.RemoveAll(stage) }()
 	mapStage := stage
 	if !dev {
-		if err := os.MkdirAll(filepath.Dir(mapDist), 0755); err == nil {
-			mapStage, err = os.MkdirTemp(filepath.Dir(mapDist), ".sourcemaps-")
+		if err := os.MkdirAll(filepath.Dir(mapDist), 0755); err != nil {
+			return fmt.Errorf("staging maps: %w", err)
 		}
+		mapStage, err = os.MkdirTemp(filepath.Dir(mapDist), ".sourcemaps-")
 		if err != nil {
 			return fmt.Errorf("staging maps: %w", err)
 		}

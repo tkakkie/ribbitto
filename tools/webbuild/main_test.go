@@ -560,6 +560,18 @@ func TestValidation(t *testing.T) {
 			t.Fatalf("expected mismatched map hash rejection, got %v", err)
 		}
 	})
+	t.Run("blocked map parent", func(t *testing.T) {
+		root := fixture(t, []byte(`console.log("ok");`))
+		write(t, filepath.Join(root, "bin"), []byte("blocked"))
+		wd := t.TempDir()
+		t.Chdir(wd)
+		if err := build(root, "commit", "run", false); err == nil || !strings.Contains(err.Error(), "staging maps") {
+			t.Fatalf("expected map staging failure, got %v", err)
+		}
+		if entries, err := os.ReadDir(wd); err != nil || len(entries) != 0 {
+			t.Fatalf("unexpected files in working directory: %v, %v", entries, err)
+		}
+	})
 }
 
 func fmtMeta(output, entry string) string {

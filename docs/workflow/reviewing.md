@@ -108,42 +108,40 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6578659085)):
   when findings remain after the two-run
   [third-AI review cap](review-operations.md#third-ai-review), the orchestrator
-  does not start another fix round. For each remaining **blocking
-  conversion-parity finding** it proposes one of: fix in this pull request
-  (reachable in normal use or documented behaviour, checked under the
+  starts no further fix round on its own. For each remaining **blocking
+  conversion-parity finding** it proposes one of: fix in this PR (reachable in
+  normal use or documented behaviour, checked under the
   [post-cap rules](review-operations.md#third-ai-review)); accept as a recorded
-  difference (below); or, if the finding is shown not to be a parity
-  difference, the existing dispositions. Non-parity third-AI findings keep
-  today's dispositions (fixed, follow-up issue, or declined with a reason);
-  they are not part of this triage. Findings about authorization, organisation
-  scoping or data exposure can never be accepted under this rule. The
-  cross-review limits, [closure verification](review-followups.md#closure-verification)
-  and the conversion differential-test rules above are not relaxed.
+  difference (below); or, if shown not to be a parity difference, the existing
+  dispositions. Non-parity third-AI findings keep today's dispositions (fixed,
+  follow-up issue, or declined with a reason) and are not part of this triage;
+  after the cap, one left open after run 2 is dispositioned by the
+  maintainer-chosen path (a fix the maintainer chooses gets the independent
+  [follow-up check](review-operations.md#third-ai-review), never a third
+  adversarial run). Findings about authorization, organisation scoping or data
+  exposure can never be accepted under this rule. Cross-review limits,
+  [closure verification](review-followups.md#closure-verification) and the
+  conversion differential-test rules above are not relaxed.
 - **Accepting a parity difference:** only the maintainer can accept one, by an
-  explicit decision in chat that names the pull request and the findings (a
-  GitHub comment proves nothing: every AI posts as one account). It is eligible
-  only if it is reachable solely in a **degenerate environment**: a case
-  outside documented behaviour and outside what the repository's tests
-  exercise, such as an API that is present but throws, or an event detail that
-  no repository script dispatches; an absent API that a document specifies is
-  not degenerate. That a case appears in no document or existing test is **not
-  by itself** evidence that it is unsupported. The assessment recorded as the
-  basis of the decision covers: the **concrete reachability condition** (the
-  exact sequence or environment); how **likely** it is in the environments
-  people actually run (origins, browsers, extensions, the self-hosted setups
-  the documents describe); and the **effect on the user** if it happens. A
-  disputed classification is settled by the maintainer. The orchestrator
-  records each accepted difference before `ai-reviewed` in the pull request
-  body's **Accepted parity differences (maintainer chat decision), or n/a**
-  field with the **head SHA**, the **scenario**, the **difference**, the
-  **assessment** above (reachability condition, likelihood in real deployments,
-  user effect), the **reason** and the **document location** where the
-  behaviour is described; merge authorization stays a separate maintainer
-  instruction ([What no AI does](README.md#what-no-ai-does)). If the head
-  changes after acceptance, an independent
-  [follow-up check](review-followups.md#copilot-follow-up-check) confirms at
-  the final SHA that the accepted occurrence conditions and effect are
-  unchanged ([third-AI review](review-operations.md#third-ai-review)); if
+  explicit chat decision naming the PR and findings (a GitHub comment proves
+  nothing: every AI posts as one account). It is eligible only if reachable
+  solely in a **degenerate environment**: a case outside documented behaviour
+  and what repository tests exercise, such as an API that is present but throws,
+  or an event detail no repository script dispatches; an absent API a document
+  specifies is not degenerate. Absence from documents and existing tests is
+  **not by itself** evidence a case is unsupported. The recorded assessment
+  covers: **concrete reachability condition** (exact sequence or environment);
+  **likelihood** in real deployments (origins, browsers, extensions, documented
+  self-hosted setups); and **user effect**. The maintainer settles disputed
+  classifications. Before `ai-reviewed`, record each accepted difference in
+  **Accepted parity differences (maintainer chat decision), or n/a** with the
+  **head SHA**, **scenario**, **difference**, **assessment** (reachability
+  condition, likelihood in real deployments, user effect), **reason** and
+  **document location**; merge authorization stays separate
+  ([What no AI does](README.md#what-no-ai-does)). If the head changes after
+  acceptance, an independent
+  [follow-up check](review-operations.md#third-ai-review) confirms at the final
+  SHA that the accepted occurrence conditions and effect are unchanged; if
   anything differs, the maintainer decides again and `ai-reviewed` waits.
 
 **How to report:** one comment on the pull request (or issue):

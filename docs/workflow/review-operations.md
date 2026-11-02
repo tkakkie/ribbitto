@@ -95,10 +95,15 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   `.github/prompts/adversarial.md` carries the same scope. An earlier report
   covers a later head only when every later commit is outside those areas (or,
   after the two-run cap, is covered by the post-cap rules below).
-- **After the second run (at the cap):** no third adversarial run. When
-  findings remain after the second run, follow the
-  [post-cap triage](reviewing.md#pull-request-cross-review); the orchestrator
-  does not start another fix round on its own. A fix the maintainer chooses
+- **After the second run (at the cap):** no third adversarial run; the
+  orchestrator starts no further fix round on its own. When findings remain
+  after the second run, blocking conversion-parity findings follow the
+  [post-cap triage](reviewing.md#pull-request-cross-review); non-parity third-AI
+  findings keep today's dispositions (fixed, follow-up issue, or declined with a
+  reason) and are not part of that triage, so any non-parity finding left open
+  after run 2 is dispositioned by the maintainer-chosen path (a fix the
+  maintainer chooses gets the independent follow-up check below, never a third
+  adversarial run). A fix the maintainer chooses
   after the cap, a Copilot fix or a merge of `main` is checked by an
   independent [follow-up check](review-followups.md#copilot-follow-up-check) of
   exactly that delta **only when it is limited**: it changes no behaviour,

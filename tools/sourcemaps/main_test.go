@@ -147,7 +147,7 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 					if s.tamperManifest == "corrupt-second-after-publish" {
 						for j := range s.releases[i].Assets {
 							if s.releases[i].Assets[j].Name == "b-second.js.map" {
-								s.releases[i].Assets[j].data = []byte("corrupted")
+								s.releases[i].Assets[j].data = []byte(`{"sourcesContent":["X"]}`)
 							}
 						}
 					}
@@ -248,7 +248,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	if !strings.Contains(out.String(), wantRel) || draftIdx < 0 || pubIdx <= draftIdx {
 		t.Fatalf("unexpected output or lifecycle order: %s / %v", out.String(), store.events)
 	}
-	for _, run := range []struct{ id, att int }{{9, 1}, {10, 1}, {510, 9}, {510, 10}} {
+	for _, run := range []struct{ id, att int }{{10, 1}, {9, 1}, {510, 10}, {510, 9}} {
 		dirN, _, _ := writeMapDir(t, currSHA, strconv.Itoa(run.id))
 		if err := runStore(t.Context(), cfg, dirN, currSHA, strconv.Itoa(run.id), strconv.Itoa(run.att)); err != nil {
 			t.Fatalf("rerun store %v failed: %v", run, err)
@@ -278,6 +278,8 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 40, Name: oldTag, TagName: oldTag, Prerelease: true}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 41, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}) == nil ||
 		c.deleteReleaseByID(t.Context(), ghRelease{ID: 42, Name: oldTag, TagName: oldTag404}) == nil ||
+		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
+		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-abc-1.1") == nil ||
 		c.deleteTagByRef(t.Context(), "non-canonical") == nil {
 		t.Fatal("expected exact-ID deletion guard to refuse invalid release or tag")
 	}
@@ -320,6 +322,10 @@ func TestHTTPClientHardening(t *testing.T) {
 	batch := make([]ghRelease, 100)
 	tlsTarget := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		leakedAuth = r.Header.Get("Authorization")
+		if r.URL.Path == "/204" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		_, _ = w.Write([]byte("asset-bytes"))
 	}))
 	defer tlsTarget.Close()
@@ -328,7 +334,7 @@ func TestHTTPClientHardening(t *testing.T) {
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/releases/11"):
 			_ = json.NewEncoder(w).Encode(ghRelease{ID: 11, Name: tag, TagName: tag})
 		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/releases/11"):
-			http.Redirect(w, r, "/repos/tkakkie/ribbitto-sourcemaps/releases/11", http.StatusMovedPermanently)
+			http.Redirect(w, r, tlsTarget.URL+"/204", http.StatusSeeOther)
 		case r.Method == "DELETE":
 			w.WriteHeader(http.StatusOK)
 		case strings.HasSuffix(r.URL.Path, "/redir-http"):
@@ -338,7 +344,12 @@ func TestHTTPClientHardening(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/redir-https"):
 			http.Redirect(w, r, tlsTarget.URL+"/blob", http.StatusFound)
 		case strings.HasSuffix(r.URL.Path, "/oversized"):
-			_, _ = w.Write(make([]byte, (64<<20)+1))
+			chunk := make([]byte, 1<<20)
+			for {
+				if _, err := w.Write(chunk); err != nil {
+					return
+				}
+			}
 		case strings.HasSuffix(r.URL.Path, "/releases"):
 			if pages++; pages > 105 {
 				http.Error(w, "infinite loop", 500)
@@ -352,9 +363,9 @@ func TestHTTPClientHardening(t *testing.T) {
 	cfg.transport = tlsTarget.Client().Transport
 	c := &apiClient{cfg: cfg}
 	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 11, Name: tag, TagName: tag}) == nil || c.deleteTagByRef(t.Context(), tag) == nil {
-		t.Fatal("expected 301-to-GET 200 and 200 on DELETE to fail")
+		t.Fatal("expected 303-to-https 204 and 200 on DELETE to fail")
 	}
-	if _, _, err := c.do(t.Context(), true, "GET", "/redir-http", "application/octet-stream", nil, nil); err == nil || leakedAuth != "" {
+	if _, _, err := c.do(t.Context(), true, "GET", "/redir-http", "application/octet-stream", nil, nil); err == nil || !strings.Contains(err.Error(), "redirect refused") || leakedAuth != "" {
 		t.Fatalf("expected insecure redirect error and no leaked auth, got err=%v leakedAuth=%q", err, leakedAuth)
 	}
 	if code, body, err := c.do(t.Context(), true, "GET", "/redir-https", "application/octet-stream", nil, nil); err != nil || code != 200 || string(body) != "asset-bytes" || leakedAuth != "" {
@@ -394,6 +405,9 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		{"bad-hash", "app.js", "app.js.map", "not-a-sha256", "invalid source map entry"},
 		{"mismatched-map", "app.js", "other.js.map", validHash, "invalid source map entry"},
 		{"dup-map", "app.js", "app.js.map", "dup", "invalid source map entry"},
+		{"bad-commit", "app.js", "app.js.map", "bad-commit", "invalid map index"},
+		{"bad-run", "app.js", "app.js.map", "bad-run", "invalid map index"},
+		{"stray-file", "app.js", "app.js.map", "stray", "unexpected files"},
 		{"bad-json", "app.js", "app.js.map", "{bad", "reading map index"},
 		{"no-sources", "app.js", "app.js.map", "no-sources", "missing sourcesContent"},
 	} {
@@ -404,15 +418,23 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		}
 		_ = os.MkdirAll(filepath.Dir(target), 0755)
 		_ = os.MkdirAll(dir, 0755)
-		mb := mapContent
-		if tc.hash == "no-sources" {
-			mb, tc.hash = []byte(`{"version":3}`), validHash
+		mb, cmt, rid, h := mapContent, sha, "10", tc.hash
+		switch tc.hash {
+		case "no-sources":
+			mb, h = []byte(`{"version":3}`), validHash
+		case "bad-commit":
+			cmt, h = shaOf(2), validHash
+		case "bad-run":
+			rid, h = "99", validHash
+		case "stray":
+			_ = os.WriteFile(filepath.Join(dir, "extra.txt"), mb, 0644)
+			h = validHash
 		}
 		_ = os.WriteFile(target, mb, 0644)
 		if !strings.HasPrefix(target, dir+string(filepath.Separator)) {
 			_ = os.WriteFile(filepath.Join(dir, "pad"), mb, 0644)
 		}
-		idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, tc.hash, tc.mapName)
+		idx := fmt.Sprintf(`{"commit":%q,"run_id":%q,"entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, cmt, rid, tc.file, h, tc.mapName)
 		if tc.hash == "dup" {
 			idx = fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":%q,"sha256":%q,"map":%q},"b":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, validHash, tc.mapName, tc.file, validHash, tc.mapName)
 		} else if tc.hash == "{bad" {
@@ -448,6 +470,7 @@ func TestLookupHardening(t *testing.T) {
 	rel, futRel, mapData := relNameAt(now, sha, 10, 1), fmt.Sprintf("map-99990101T000000Z-%s-10.1", sha), []byte(`{"version":3,"sourcesContent":["ok"]}`)
 	validIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":"a.js","sha256":%q,"map":"a.js.map"}}}`, sha, h))
 	wrongCommitIdx := bytes.ReplaceAll(validIdx, []byte(sha), []byte(shaOf(2)))
+	wrongRunIdx := bytes.ReplaceAll(validIdx, []byte(`"10"`), []byte(`"99"`))
 	missingAssetIdx := []byte(fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a.js","sha256":%q,"map":"a.js.map"},"b":{"file":"b.js","sha256":%q,"map":"b.js.map"}}}`, sha, h, h2))
 	assetOf := func(id int64, name, state string, d []byte) mockAsset {
 		return mockAsset{ID: id, Name: name, Size: int64(len(d)), State: state, data: d}
@@ -460,8 +483,11 @@ func TestLookupHardening(t *testing.T) {
 		{"zero clock", "tok", futRel, time.Time{}, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "", mapData)}},
 		{"empty token", "", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "", mapData)}},
 		{"wrong commit", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", wrongCommitIdx), assetOf(3, "a.js.map", "", mapData)}},
+		{"wrong run_id", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", wrongRunIdx), assetOf(3, "a.js.map", "", mapData)}},
 		{"missing asset", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", missingAssetIdx), assetOf(3, "a.js.map", "", mapData)}},
 		{"unready state", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "starter", mapData)}},
+		{"map size mismatch", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), {ID: 3, Name: "a.js.map", Size: int64(len(mapData) + 5), data: mapData}}},
+		{"map missing sourcesContent", "tok", rel, now, []mockAsset{assetOf(2, "index.json", "", validIdx), assetOf(3, "a.js.map", "", []byte(`{"version":3}`))}},
 	} {
 		s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: tc.relName, TagName: tc.relName, Assets: tc.assets}}}
 		srv := s.server(t)

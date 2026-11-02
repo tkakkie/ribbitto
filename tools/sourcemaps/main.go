@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -163,7 +164,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	client := &http.Client{Timeout: 2 * time.Minute, Transport: c.cfg.transport, CheckRedirect: checkRedirect}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("%s %s: request failed", method, path)
+		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, path, errors.Unwrap(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))

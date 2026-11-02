@@ -1,5 +1,5 @@
 // Command sourcemaps uploads production source maps to the private release store,
-// enforces distinct-SHA retention and verifies token expiry.
+// verifies the uploaded manifest and assets, and looks up stored maps.
 package main
 
 import (
@@ -120,10 +120,7 @@ func compareOrder(a, b releaseName) int {
 	return cmp.Or(a.Start.Compare(b.Start), cmp.Compare(a.RunID, b.RunID), cmp.Compare(a.Attempt, b.Attempt))
 }
 
-type apiClient struct {
-	cfg    config
-	expiry string
-}
+type apiClient struct{ cfg config }
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 || req.Method != http.MethodGet || via[0].Method != http.MethodGet || req.URL.Scheme != "https" {
@@ -169,9 +166,6 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 		return 0, nil, fmt.Errorf("%s %s: request failed", method, path)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if exp := resp.Header.Get("github-authentication-token-expiration"); storeAuth && exp != "" {
-		c.expiry = exp
-	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err == nil && int64(len(raw)) > maxResponseBytes {
 		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
@@ -229,8 +223,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	}
 	idxBytes, err := os.ReadFile(filepath.Join(mapDir, "index.json"))
 	var m manifest
-	if err != nil || json.Unmarshal(idxBytes, &m) != nil || m.Commit != sha || m.RunID != runID || len(m.Entries) == 0 {
-		return fmt.Errorf("invalid map index in %s: %w", mapDir, err)
+	if err = cmp.Or(err, json.Unmarshal(idxBytes, &m)); err != nil {
+		return fmt.Errorf("reading map index in %s: %w", mapDir, err)
+	}
+	if m.Commit != sha || m.RunID != runID || len(m.Entries) == 0 {
+		return fmt.Errorf("invalid map index in %s", mapDir)
 	}
 	assets := map[string][]byte{"index.json": idxBytes}
 	for _, b := range m.Entries {
@@ -238,8 +235,11 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 			return fmt.Errorf("invalid source map entry %q", b.Map)
 		}
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
-		if err != nil || !bytes.Contains(data, []byte(`"sourcesContent"`)) {
-			return fmt.Errorf("invalid source map %s: %w", b.Map, err)
+		if err != nil {
+			return fmt.Errorf("reading source map %s: %w", b.Map, err)
+		}
+		if !bytes.Contains(data, []byte(`"sourcesContent"`)) {
+			return fmt.Errorf("invalid source map %s: missing sourcesContent", b.Map)
 		}
 		assets[b.Map] = data
 	}

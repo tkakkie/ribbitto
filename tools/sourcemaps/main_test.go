@@ -392,17 +392,26 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 		{"nested", "sub/app.js", "sub/app.js.map", validHash},
 		{"absolute", "/abs/app.js", "/abs/app.js.map", validHash},
 		{"bad-hash", "app.js", "app.js.map", "not-a-sha256"},
+		{"bad-json", "app.js", "app.js.map", "{bad"},
+		{"no-sources", "app.js", "app.js.map", "no-sources"},
 	} {
 		dir := filepath.Join(root, tc.name)
 		_ = os.MkdirAll(filepath.Join(dir, "sub"), 0755)
-		_ = cmp.Or(os.WriteFile(filepath.Join(dir, "sub", "app.js.map"), mapContent, 0644), os.WriteFile(filepath.Join(dir, "app.js.map"), mapContent, 0644))
+		mb := mapContent
+		if tc.hash == "no-sources" {
+			mb, tc.hash = []byte(`{"version":3}`), validHash
+		}
+		_ = cmp.Or(os.WriteFile(filepath.Join(dir, "sub", "app.js.map"), mb, 0644), os.WriteFile(filepath.Join(dir, "app.js.map"), mb, 0644))
 		idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"e":{"file":%q,"sha256":%q,"map":%q}}}`, sha, tc.file, tc.hash, tc.mapName)
+		if tc.hash == "{bad" {
+			idx = "{bad"
+		}
 		_ = os.WriteFile(filepath.Join(dir, "index.json"), []byte(idx), 0644)
 		s := &mockStore{token: "tok"}
 		srv := s.server(t)
 		defer srv.Close()
-		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || len(s.events) != 0 {
-			t.Fatalf("expected %s to fail before any API call, got err=%v events=%v", tc.name, err, s.events)
+		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1"); err == nil || len(s.events) != 0 || strings.Contains(err.Error(), "%!w(<nil>)") {
+			t.Fatalf("expected %s to fail cleanly before any API call, got err=%v events=%v", tc.name, err, s.events)
 		}
 	}
 }

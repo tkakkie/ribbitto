@@ -28,10 +28,16 @@ var (
 	numIDRe     = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
+const (
+	maxResponseBytes = 64 << 20
+	maxReleasePages  = 100
+)
+
 type config struct {
 	apiBase, storeRepo, sourceRepo, token string
 	now                                   time.Time
 	stdout, summary                       io.Writer
+	transport                             http.RoundTripper
 }
 
 type bundle struct {
@@ -96,6 +102,14 @@ type apiClient struct {
 	expiry string
 }
 
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 || req.Method != http.MethodGet || via[0].Method != http.MethodGet || req.URL.Scheme != "https" {
+		return fmt.Errorf("redirect refused")
+	}
+	req.Header.Del("Authorization")
+	return nil
+}
+
 func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept string, body []byte, out any) (int, []byte, error) {
 	base := strings.TrimRight(c.cfg.apiBase, "/")
 	if method == "POST" && strings.HasSuffix(strings.Split(path, "?")[0], "/assets") {
@@ -117,7 +131,8 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 2 * time.Minute, Transport: c.cfg.transport, CheckRedirect: checkRedirect}
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("%s %s: request failed", method, path)
 	}
@@ -125,7 +140,10 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	if exp := resp.Header.Get("github-authentication-token-expiration"); storeAuth && exp != "" {
 		c.expiry = exp
 	}
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err == nil && int64(len(raw)) > maxResponseBytes {
+		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
+	}
 	if err == nil && out != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && len(raw) > 0 {
 		err = json.Unmarshal(raw, out)
 	}
@@ -134,7 +152,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 
 func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 	var all []ghRelease
-	for page := 1; ; page++ {
+	for page := 1; page <= maxReleasePages; page++ {
 		var batch []ghRelease
 		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
 			return nil, fmt.Errorf("listing releases: status %d (%v)", code, err)
@@ -142,6 +160,7 @@ func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 			return all, nil
 		}
 	}
+	return nil, fmt.Errorf("listing releases: exceeded %d pages", maxReleasePages)
 }
 
 func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
@@ -155,7 +174,7 @@ func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
 	} else if code != 200 || got.ID != r.ID || got.Name != r.Name || got.TagName != r.TagName || got.Draft != r.Draft || got.Prerelease {
 		return fmt.Errorf("release lookup mismatch for id %d (status %d)", r.ID, code)
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", p, "", nil, nil); err != nil || (code != 204 && code != 200 && code != 404) {
+	if code, _, err := c.do(ctx, true, "DELETE", p, "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
 	}
 	return nil
@@ -165,7 +184,7 @@ func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 	if _, ok := parseReleaseName(tag); !ok {
 		return fmt.Errorf("refusing to delete non-canonical tag %q", tag)
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (code != 204 && code != 200 && code != 404) {
+	if code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting tag %s: status %d (%v)", tag, code, err)
 	}
 	return nil

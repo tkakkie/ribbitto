@@ -259,3 +259,54 @@ func TestStoreCoreFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestHTTPClientHardening(t *testing.T) {
+	tag, pages, leakedAuth := relNameAt(time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), 1, 1), 0, ""
+	batch := make([]ghRelease, 100)
+	tlsTarget := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leakedAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("asset-bytes"))
+	}))
+	defer tlsTarget.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/releases/11"):
+			_ = json.NewEncoder(w).Encode(ghRelease{ID: 11, Name: tag, TagName: tag})
+		case r.Method == "DELETE" && strings.HasSuffix(r.URL.Path, "/releases/11"):
+			http.Redirect(w, r, "/repos/tkakkie/ribbitto-sourcemaps/releases/11", http.StatusMovedPermanently)
+		case r.Method == "DELETE":
+			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/redir-http"):
+			http.Redirect(w, r, "http://"+r.Host+"/target", http.StatusFound)
+		case strings.HasSuffix(r.URL.Path, "/target"):
+			leakedAuth = r.Header.Get("Authorization")
+		case strings.HasSuffix(r.URL.Path, "/redir-https"):
+			http.Redirect(w, r, tlsTarget.URL+"/blob", http.StatusFound)
+		case strings.HasSuffix(r.URL.Path, "/oversized"):
+			_, _ = w.Write(make([]byte, (64<<20)+1))
+		case strings.HasSuffix(r.URL.Path, "/releases"):
+			if pages++; pages > 105 {
+				http.Error(w, "infinite loop", 500)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(batch)
+		}
+	}))
+	defer srv.Close()
+	c := &apiClient{cfg: config{apiBase: srv.URL, storeRepo: "tkakkie/ribbitto-sourcemaps", token: "secret-tok", transport: tlsTarget.Client().Transport}}
+	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 11, Name: tag, TagName: tag}) == nil || c.deleteTagByRef(t.Context(), tag) == nil {
+		t.Fatal("expected 301-to-GET 200 and 200 on DELETE to fail")
+	}
+	if _, _, err := c.do(t.Context(), true, "GET", "/redir-http", "application/octet-stream", nil, nil); err == nil || leakedAuth != "" {
+		t.Fatalf("expected insecure redirect error and no leaked auth, got err=%v leakedAuth=%q", err, leakedAuth)
+	}
+	if code, body, err := c.do(t.Context(), true, "GET", "/redir-https", "application/octet-stream", nil, nil); err != nil || code != 200 || string(body) != "asset-bytes" || leakedAuth != "" {
+		t.Fatalf("https redirect failed or leaked auth: code=%d body=%q err=%v leakedAuth=%q", code, body, err, leakedAuth)
+	}
+	if _, _, err := c.do(t.Context(), true, "GET", "/oversized", "application/octet-stream", nil, nil); err == nil {
+		t.Fatal("expected oversized response body to fail")
+	}
+	if _, err := c.listReleases(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeded") {
+		t.Fatalf("expected page cap error, got err=%v (pages=%d)", err, pages)
+	}
+}

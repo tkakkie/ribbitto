@@ -222,6 +222,11 @@
    (docs/ui-code.md). Tailwind's breakpoints are widths, so this is a variant. */
 @custom-variant short (@media (height < 27.25rem));
 
+/* A phone in landscape can be at least desk wide (874 px on iPhone 18 Pro), so
+   width alone misses it; iOS Safari zooms any focused field under 16 px
+   (#2081). A touch laptop's primary pointer stays fine. */
+@custom-variant coarse (@media (pointer: coarse));
+
 /* htmx marks the element whose request is in flight with htmx-request; the
    composer shows its sending state through this (docs/architecture/csp.md). */
 @custom-variant sending (&:where(.htmx-request *));

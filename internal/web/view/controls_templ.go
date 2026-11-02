@@ -315,7 +315,8 @@ type inputProps struct {
 
 // textInput is the one place a single-line text input gets its look. Its
 // label is the caller's: a wrapping <label> or one pointing at ID. Below
-// desk its text is 16 px, since iOS Safari zooms into a smaller field.
+// desk or with a coarse pointer its text is 16 px, since iOS Safari zooms
+// into a smaller field.
 func textInput(p inputProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -338,7 +339,7 @@ func textInput(p inputProps) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		_ = ctx
-		var templ_7745c5c3_Var17 = []any{"min-h-11 min-w-0 rounded-md border border-border-strong border-b-2 bg-input px-3 py-2 text-body text-fg max-desk:text-entry focus:border-b-brand", templ.KV("max-desk:min-h-12", p.Tall)}
+		var templ_7745c5c3_Var17 = []any{"min-h-11 min-w-0 rounded-md border border-border-strong border-b-2 bg-input px-3 py-2 text-body text-fg max-desk:text-entry coarse:text-entry focus:border-b-brand", templ.KV("max-desk:min-h-12", p.Tall)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var17...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -355,7 +356,7 @@ func textInput(p inputProps) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 91, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 92, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -374,7 +375,7 @@ func textInput(p inputProps) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Type)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 94, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 95, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
@@ -392,7 +393,7 @@ func textInput(p inputProps) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 96, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 97, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -405,7 +406,7 @@ func textInput(p inputProps) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 97, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 98, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
@@ -423,7 +424,7 @@ func textInput(p inputProps) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Autocomplete)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 99, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 100, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
@@ -448,7 +449,7 @@ func textInput(p inputProps) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Invalid)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 105, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 106, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -467,7 +468,7 @@ func textInput(p inputProps) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.DescribedBy)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 108, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 109, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
@@ -530,7 +531,7 @@ func iconButton(label, popoverTarget string) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, label))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 120, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 121, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -548,7 +549,7 @@ func iconButton(label, popoverTarget string) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(popoverTarget)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 122, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 123, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {
@@ -610,7 +611,7 @@ func textLink(href, label, extraClasses string) templ.Component {
 		var templ_7745c5c3_Var31 templ.SafeURL
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 133, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 134, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -636,7 +637,7 @@ func textLink(href, label, extraClasses string) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, label))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 133, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 134, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {

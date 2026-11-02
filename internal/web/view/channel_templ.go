@@ -2519,7 +2519,7 @@ func messageComposer(page ChannelPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "\" class=\"w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "\" class=\"w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

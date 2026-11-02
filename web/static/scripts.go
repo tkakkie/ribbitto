@@ -47,6 +47,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"popover-focus",
 		"side-panel",
 		"read-visibility",
+		"sidebar-unread",
 		"pins-sync",
 		"message-drafts",
 	}

@@ -277,10 +277,12 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, e := range m.Entries {
 		wantAssets[e.Map] = int64(len(assets[e.Map]))
 	}
+	assetIDs := make(map[string]int64, len(draftRel.Assets))
 	for _, a := range draftRel.Assets {
 		if sz, ok := wantAssets[a.Name]; !ok || !validAsset(a) || a.Size != sz {
 			return fmt.Errorf("uploaded asset %s does not match manifest", a.Name)
 		}
+		assetIDs[a.Name] = a.ID
 		delete(wantAssets, a.Name)
 	}
 	if len(wantAssets) != 0 {
@@ -292,8 +294,8 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	}
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 		e := m.Entries[k]
-		if gotRel, gotMap, gotBytes, err := lookupWithClient(ctx, c, sha, e.SHA256, runID); err != nil || gotRel != relName || gotMap != e.Map || len(gotBytes) != len(assets[e.Map]) || !bytes.Equal(gotBytes, assets[e.Map]) {
-			return fmt.Errorf("fetching back stored map %s: %v", e.Map, err)
+		if code, gotBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", cfg.storeRepo, assetIDs[e.Map]), "application/octet-stream", nil, nil); err != nil || code != 200 || !bytes.Equal(gotBytes, assets[e.Map]) {
+			return fmt.Errorf("fetching back stored map %s: status %d (%v)", e.Map, code, err)
 		}
 	}
 	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(m.Entries))

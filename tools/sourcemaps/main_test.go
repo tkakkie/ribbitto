@@ -426,16 +426,16 @@ func TestManifestPathAndHashValidation(t *testing.T) {
 }
 
 func TestZeroSizeAssetAndAllEntriesFetchBack(t *testing.T) {
-	now, sha, dir, h1, h2 := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), t.TempDir(), strings.Repeat("1", 64), strings.Repeat("2", 64)
-	idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a-first.js","sha256":%q,"map":"a-first.js.map"},"b":{"file":"b-second.js","sha256":%q,"map":"b-second.js.map"}}}`, sha, h1, h2)
+	now, sha, dir, h1 := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC), shaOf(1), t.TempDir(), strings.Repeat("1", 64)
+	idx := fmt.Sprintf(`{"commit":%q,"run_id":"10","entries":{"a":{"file":"a-first.js","sha256":%q,"map":"a-first.js.map"},"b":{"file":"b-second.js","sha256":%q,"map":"b-second.js.map"}}}`, sha, h1, h1)
 	_ = cmp.Or(os.WriteFile(filepath.Join(dir, "index.json"), []byte(idx), 0644), os.WriteFile(filepath.Join(dir, "a-first.js.map"), []byte(`{"sourcesContent":["1"]}`), 0644), os.WriteFile(filepath.Join(dir, "b-second.js.map"), []byte(`{"sourcesContent":["2"]}`), 0644))
-	for _, mode := range []string{"zero-second", "corrupt-second-after-publish"} {
+	for _, mode := range []string{"", "zero-second", "corrupt-second-after-publish"} {
 		s := &mockStore{token: "tok", tamperManifest: mode}
 		srv := s.server(t)
 		defer srv.Close()
 		err := runStore(t.Context(), testCfg(srv.URL, "tok", now, &bytes.Buffer{}), dir, sha, "10", "1")
-		if err == nil || (mode == "zero-second" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
-			t.Fatalf("%s: expected failure, got err=%v events=%v", mode, err, s.events)
+		if (mode == "") != (err == nil) || (mode == "zero-second" && slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })) {
+			t.Fatalf("mode %q: unexpected result err=%v events=%v", mode, err, s.events)
 		}
 	}
 }

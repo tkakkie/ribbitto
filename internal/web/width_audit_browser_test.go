@@ -176,7 +176,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 								b.value = 'pending';
 								b.form.requestSubmit();
 							}`)
-							p.MustWait(`() => !document.querySelector('#message-pending [data-pending-form].htmx-request')`)
+							p.MustWait(`() => document.querySelector('#message-pending [data-pending-form][data-state="failed"]') !== null`)
 							defer func() {
 								_ = (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: ""}}}).Call(p)
 								p.MustEval(`() => document.querySelector('#message-pending [data-pending-remove]')?.click()`)

@@ -683,6 +683,10 @@ func launchScenarioBrowser(t *testing.T, ctx context.Context, bin string) *rod.B
 	return browser
 }
 
+// Keep local runs usable without Chrome: TestBrowser skips a missing or
+// unlaunchable browser unless RIBBITTO_REQUIRE_BROWSER=1 requires failure.
+// CI sets that flag; TestTopicPostBrowser in cmd/ribbitto follows the same
+// policy through its own launchBrowser helper.
 func browserUnavailable(t *testing.T, reason string) {
 	t.Helper()
 	if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {

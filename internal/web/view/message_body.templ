@@ -65,9 +65,9 @@ func UnknownMember(ctx context.Context) string {
 // unresolved-member placeholder, so the stream's shared renders stay valid.
 templ messageBody(entry Message) {
 	if entry.Blocks == nil {
-		<p id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words text-title">{ entry.Body }</p>
+		<p id={ BodyMessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words text-title">{ entry.Body }</p>
 	} else {
-		<div id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="flex flex-col gap-2 break-words text-title">
+		<div id={ BodyMessageDOMID(entry.ID) } dir="auto" class="flex flex-col gap-2 break-words text-title">
 			for _, block := range entry.Blocks {
 				switch block.Kind {
 					case BodyCodeBlock:
@@ -116,7 +116,7 @@ templ bodyInlines(nodes []BodyInline) {
 				}
 			case BodyMember:
 				<bdi
-					data-quote-handle={ node.Handle }
+					{ QuoteHandleAttribute }={ node.Handle }
 					if node.MemberID != (kernel.ID{}) {
 						{ MemberIDAttribute }={ idValue(node.MemberID) }
 					}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,7 +21,8 @@ import (
 // A message's actions menu (#1159) opens below its button at desktop width
 // and as a bottom sheet on a phone. "Copy link" copies the absolute message
 // URL, shows and announces "Link copied" (the status keeping ten entries),
-// and forgets it when the menu closes, also when the copy settles after
+// ignores an older overlapping copy that settles after a newer one, and
+// forgets it when the menu closes, also when the copy settles after
 // that; when copying fails the link opens instead.
 func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -28,11 +31,21 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 	conversation := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
 		Current:  view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: "general"},
 		Messages: []view.Message{{ID: id, TopicID: kernel.ID{2}, Handle: "author", Body: "hello", URL: view.MessageURL("acme", id)}}}
+	allowNavigation := make(chan struct{})
+	var releaseNavigation sync.Once
+	release := func() { releaseNavigation.Do(func() { close(allowNavigation) }) }
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.Handle("GET /conversation", templ.Handler(view.ChannelScreen("/static/css/app.css", conversation)))
+	mux.HandleFunc("GET "+view.MessageURL("acme", id), func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-allowNavigation:
+		case <-r.Context().Done():
+		}
+	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
+	defer release()
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	defer page.MustClose()
 	if err := (proto.BrowserGrantPermissions{Origin: server.URL, Permissions: []proto.BrowserPermissionType{proto.BrowserPermissionTypeClipboardReadWrite, proto.BrowserPermissionTypeClipboardSanitizedWrite}}).Call(page); err != nil {
@@ -99,6 +112,75 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		await new Promise(r => setTimeout(r, 300)); navigator.clipboard.writeText = write; return location.pathname; }`, menu).Str(); path != "/conversation" {
 		t.Fatalf("a copy that failed after the menu closed navigated to %s", path)
 	}
+	// Overlapping copies on the same link settle out of order: a late older
+	// resolution or rejection neither changes the visible state, adds an
+	// announcement nor navigates after the newer copy has settled.
+	wantOverlap := strings.Join([]string{
+		"2|false|0",
+		"true|message.link_copied|1|message.link_copied|/conversation|",
+		"true|message.link_copied|1|message.link_copied|/conversation|",
+		"true|message.link_copied|1|message.link_copied|/conversation|",
+		"false|message.copy_link|0||/conversation|" + view.MessageURL("acme", id),
+	}, "\n")
+	if got := page.MustEval(`async menu => {
+		const m = document.querySelector(menu), a = m.querySelector('a'), status = document.getElementById('message-status');
+		const write = navigator.clipboard.writeText.bind(navigator.clipboard);
+		const calls = [], navigations = [];
+		const onNavigate = e => navigations.push(new URL(e.destination.url).pathname);
+		window.navigation.addEventListener('navigate', onNavigate);
+		navigator.clipboard.writeText = () => {
+			let resolve, reject;
+			const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+			calls.push({ resolve, reject, settled: () => promise.then(() => {}, () => {}) });
+			return promise;
+		};
+		const reset = () => {
+			m.hidePopover();
+			m.showPopover();
+			status.replaceChildren();
+			calls.length = 0;
+			navigations.length = 0;
+		};
+		const state = () => [a.hasAttribute('data-copied'), a.innerText, status.childNodes.length, status.textContent.trim(), location.pathname, navigations.join(',')].join('|');
+
+		reset();
+		a.click();
+		a.click();
+		const before = [calls.length, a.hasAttribute('data-copied'), status.childNodes.length].join('|');
+		calls[1].resolve();
+		await calls[1].settled();
+		const afterNewerSuccess = state();
+		calls[0].resolve();
+		await calls[0].settled();
+		const afterLateSuccess = state();
+
+		reset();
+		a.click();
+		a.click();
+		calls[1].resolve();
+		await calls[1].settled();
+		calls[0].reject(new Error('denied'));
+		await calls[0].settled();
+		const afterLateFailure = state();
+
+		reset();
+		a.click();
+		a.click();
+		calls[1].reject(new Error('denied'));
+		await calls[1].settled();
+		calls[0].resolve();
+		await calls[0].settled();
+		const afterNewerFailure = state();
+
+		window.navigation.removeEventListener('navigate', onNavigate);
+		navigator.clipboard.writeText = write;
+		return [before, afterNewerSuccess, afterLateSuccess, afterLateFailure, afterNewerFailure].join('\n');
+	}`, menu).Str(); got != wantOverlap {
+		t.Fatalf("overlapping copies state =\n%s\nwant\n%s", got, wantOverlap)
+	}
+	release()
+	page.MustWait(`path => location.pathname === path`, view.MessageURL("acme", id))
+	page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
 	// A failed copy opens the link, as without JavaScript.
 	page.MustEval(`button => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); document.querySelector(button).click(); }`, button)
 	page.MustElement(menu + " a").MustClick()

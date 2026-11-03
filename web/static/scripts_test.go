@@ -163,18 +163,21 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 	if err != nil || err2 != nil || len(workflows) == 0 {
 		t.Fatalf("listing workflows: %v / %v", err, err2)
 	}
+	var hasStoreWF bool
 	for _, wf := range workflows {
 		data, err := os.ReadFile(wf)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Contains(data, []byte("upload-artifact")) || (filepath.Base(wf) != "sourcemaps-store.yml" && bytes.Contains(data, []byte("bin/sourcemaps"))) {
-			t.Errorf("workflow %s exposes source maps in public artifact", wf)
+		isStore := filepath.Base(wf) == "sourcemaps-store.yml"
+		hasStoreWF = hasStoreWF || isStore
+		if bytes.Contains(data, []byte("upload-artifact")) || bytes.Contains(data, []byte("bin/sourcemaps")) || bytes.Count(data, []byte("make sourcemaps-store")) != map[bool]int{true: 1}[isStore] {
+			t.Errorf("workflow %s exposes or miswires source maps", wf)
 		}
 	}
 	makefile, err := os.ReadFile("../../Makefile")
-	if err != nil || bytes.Count(makefile, []byte("bin/sourcemaps")) != 0 {
-		t.Errorf("Makefile references bin/sourcemaps: %v", err)
+	if err != nil || !hasStoreWF || bytes.Count(makefile, []byte("bin/sourcemaps")) != 1 || !bytes.Contains(makefile, []byte("\nsourcemaps-store:\n\tgo -C tools run ./sourcemaps ../bin/sourcemaps ")) {
+		t.Errorf("unexpected sourcemaps wiring in workflow or Makefile: %v", err)
 	}
 }
 

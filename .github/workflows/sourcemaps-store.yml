@@ -1,0 +1,41 @@
+name: sourcemaps-store
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One concurrency group per commit without cancelling in-progress runs: a shared
+# group would cancel queued commits and silently drop their source maps.
+concurrency:
+  group: sourcemaps-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  store:
+    if: github.repository == 'tkakkie/ribbitto'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: sourcemaps
+    steps:
+      - name: record job start time
+        run: printf 'SOURCEMAPS_NOW=%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: generate production bundles and source maps
+        run: make bundles
+
+      - name: store source maps and apply retention
+        env:
+          SOURCEMAPS_TOKEN: ${{ secrets.SOURCEMAPS_TOKEN }}
+        run: make sourcemaps-store

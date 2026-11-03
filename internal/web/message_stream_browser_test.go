@@ -157,6 +157,7 @@ func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) 
 		}
 	}
 	run("message-actions", testMessageActionsBrowser)
+	run("message-actions-page", testMessageActionsPageBrowser)
 	run("message-link", testMessageLinkBrowser)
 	run("branch-form", testBranchFormBrowser)
 	run("arrival", testArrivalBrowser)

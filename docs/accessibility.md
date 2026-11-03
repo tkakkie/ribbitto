@@ -76,14 +76,16 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
-The account menu or sheet (`#account-menu`) and the create popover
-(`#channel-create`) and a message's actions menu (`message-actions-<hex>`,
-#1159) are non-modal native popovers. Tab/Shift-Tab leaving closes it
-and keeps focus on the reached control (#1092) (`web/src/popover-focus.ts`, on every page;
-it suits all three, which nest no popover). They close on Tab exit because outside clicks already close them. Escape closes it and focuses its button; outside clicks close it, keeping
-clicked focus; inside clicks keep it open except Quote. Without JavaScript, Tab can still move behind an open
-popover. `testPopoverFocusBrowser` checks each at desktop and
-phone width.
+The [message actions page](ui.md#markup-and-accessibility) uses native links,
+forms and Tab/Shift-Tab order, with no popover or script needed.
+
+The account menu (`#account-menu`), create popover (`#channel-create`) and
+message actions menus (`message-actions-<hex>`, #1159) are non-modal native
+popovers. `web/src/popover-focus.ts` closes them on Tab/Shift-Tab exit,
+keeping focus on the reached control (#1092). Escape closes and focuses
+the trigger; outside clicks close and keep clicked focus. Inside clicks
+keep them open except Quote. Without JavaScript, Tab may move behind an
+open popover. `testPopoverFocusBrowser` checks desktop and phone.
 
 Opening the account menu, by keyboard or pointer, moves focus to its first
 line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's

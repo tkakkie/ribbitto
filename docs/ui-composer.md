@@ -30,6 +30,28 @@ viewport but not `dvh`; height plus `offsetTop` keeps the frame's bottom at the
 visible bottom when Safari pans. The frame is outside every htmx swap target;
 navigation uses full pages, so no htmx history restore replaces it.
 
+Under `keyboard:` (`@media (height < 27.25rem)` when `#organization-stream`
+carries `--composer-viewport-h`, #2086), a phone in landscape with the
+software keyboard open switches `#message-composer` to a compact one-row
+layout: `<label for="message-body">` becomes `sr-only` (keeping the
+textarea's accessible name), any quote chip and the help/alert/sending status
+wrap onto full-width rows above, and the 16 px textarea (`flex-1`) sits
+beside the 44 × 44 px send button at the bottom of the form with vertical
+frame and composer padding cleared and `#organization-stream` inset at the top
+by `--composer-viewport-top`. While the textarea is focused in this state,
+the script scrolls `#conversation` to the composer on focus and resize. A
+pending send scrolls only `#message-list`; after a response or stream swap,
+the script lets the stream finish its posted-message scroll, then restores
+the composer before saving the list position. At 90 px (iOS Safari in landscape
+with one tab open), both the textarea (up to its 82 px three-line cap) and
+the 44 × 44 px send button fit inside the visible band. At 40 px (four tabs
+open, tab bar showing), a 44 px button cannot fit without relaxing the target
+size, so the 38 px resting textarea stays fully inside the 40 px band,
+sending uses the keyboard's send key (`enterkeyhint="send"`) in the default
+Enter mode, and the full 44 × 44 px send button remains reachable by
+scrolling `#conversation` with the keyboard open (which modifier+Enter users
+need). Portrait and desktop layouts are unchanged.
+
 First layout measurements wait for the list/textarea/form ResizeObserver,
 before paint. It scrolls to newest (or keeps the native message fragment;
 without JavaScript, CSS starts the latest page at the newest entry),

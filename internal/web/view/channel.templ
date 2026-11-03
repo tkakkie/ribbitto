@@ -296,7 +296,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					// keeps its space so the message list neither shrinks nor scrolls.
 					// Below the short height the form takes its place in the column,
 					// and the fixed list still neither shrinks nor scrolls.
-					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "") }>
+					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4 keyboard:pb-0", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "") }>
 						if latest(page) && page.EventCursor != nil {
 							<div id={ TypingStatusID } sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}
@@ -525,10 +525,10 @@ templ messageComposer(page ChannelPage) {
 			// htmx sets no timeout of its own: a hung send would never end.
 			hx-request={ `{"timeout":30000}` }
 		}
-		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3"
+		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3 keyboard:flex-row keyboard:flex-wrap keyboard:items-end keyboard:py-0"
 	>
 		@ComposerQuote(page, false)
-		<label for={ MessageBodyID } class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
+		<label for={ MessageBodyID } class="font-semibold keyboard:sr-only">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
 		<textarea
 			id={ MessageBodyID }
@@ -540,12 +540,12 @@ templ messageComposer(page ChannelPage) {
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
 			aria-describedby={ MessageHelpID + " composer-quote-description" }
 			aria-description={ i18n.T(ctx, "mention.help") }
-			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry"
+			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry keyboard:min-w-0 keyboard:flex-1"
 		>{ "\n" + page.Body }</textarea>
-		<div class="flex items-end justify-between gap-3">
+		<div class="flex items-end justify-between gap-3 keyboard:contents">
 			// The sending status covers the help, which keeps its space, so the
 			// composer does not change height while a post is in flight.
-			<div class="relative min-w-0">
+			<div class="relative min-w-0 keyboard:order-first keyboard:w-full">
 				@composerState(page)
 				// Outside the swapped state, so a 422's answer keeps it; the script
 				// inserts one of these texts with textContent (#1179).

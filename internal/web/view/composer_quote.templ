@@ -10,6 +10,7 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 		if oob {
 			hx-swap-oob="outerHTML"
 		}
+		class="keyboard:order-first keyboard:w-full"
 	>
 		if page.Quote != nil {
 			<div class="flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1">

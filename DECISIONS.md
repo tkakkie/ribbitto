@@ -75,3 +75,4 @@ coverage and the normal document size limit for both the index and entries.
 - [44. Remove the retired launcher language-list entries](docs/decisions/44-remove-the-launcher-language-entries.md)
 - [45. Client unit tests are type-checked TypeScript](docs/decisions/45-type-checked-client-unit-tests.md)
 - [46. The role of documentation](docs/decisions/46-the-role-of-documentation.md)
+- [47. Minimal Node declarations for client unit tests](docs/decisions/47-minimal-node-declarations-for-client-unit-tests.md)

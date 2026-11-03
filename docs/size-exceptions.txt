@@ -1,3 +1,3 @@
-# Legacy size-exception list. Do not add entries.
-# Retained with docscheck support until a later cleanup removes both after the list is empty.
+# Legacy list: delete narration rather than split (decision 46); docscheck still accepts entries and requests splitting until issue B changes its message.
+# Until then, an unavoidable entry needs the maintainer's say-so in its issue.
 docs/decisions/43-typescript-with-a-go-driven-build.md #2103

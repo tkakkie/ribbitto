@@ -117,9 +117,9 @@ By subject only: [credentials](docs/workflow/ai-credentials.md),
 - UI strings go in `internal/web/i18n/locales/{en,ja}.toml` (dotted neutral IDs
   like `hello.title`, never a product word; update both in the same PR) via
   `i18n.T(ctx, "message.id")`.
-- Update `docs/` in the same PR when a requirement, rationale, operator action
-  or promise changes, and only then; never document how code works. Near limits,
-  delete narration, do not split. Apply the [sentence test](docs/README.md#the-sentence-test).
+- Update `docs/` in the same PR only when requirements, rationale, operator actions
+  or promises change; never narrate code. Near limits, delete narration; see
+  [exceptions](docs/size-exceptions.txt) and [sentence test](docs/README.md#the-sentence-test).
 
 ## Tests
 

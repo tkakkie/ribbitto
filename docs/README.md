@@ -16,9 +16,11 @@ but `org` decides authorisation), cross-module rules (org-first lock order;
 sequence order is commit order), operator procedures (restore, collation
 upgrade, reverse-proxy contract) and the AI workflow gates. Unbuilt
 implementation designs belong in their issue, not in living documents (keep
-product direction, reserved vocabulary and explicit non-goals). When a document
-nears its limit, delete narration, do not split (and do not move prose into
-`doc.go`). Deleting prose needs no justification; adding it must pass the
+product direction, reserved vocabulary and explicit non-goals).
+Existing designs move to their issues, or are deleted, in the per-area cleanup issues after A; A does not move them.
+When a document nears its limit, delete narration rather than split; interim
+exceptions follow `size-exceptions.txt` (do not move prose into `doc.go`).
+Deleting prose needs no justification; adding it must pass the
 sentence test below. Keep a new decision within 80 lines (review, not a check).
 
 ### The sentence test

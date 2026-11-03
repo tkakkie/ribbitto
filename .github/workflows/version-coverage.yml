@@ -1,0 +1,38 @@
+name: version-coverage
+
+on:
+  schedule:
+    - cron: "17 5 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-coverage
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: github.repository == 'tkakkie/ribbitto' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: build version coverage tool
+        run: go -C tools build -mod=readonly -o "$RUNNER_TEMP/versioncheck" ./versioncheck
+      - name: check version coverage and update tracking issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: '"$RUNNER_TEMP/versioncheck" -sync-issue .'

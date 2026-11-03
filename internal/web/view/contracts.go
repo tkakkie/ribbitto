@@ -360,8 +360,8 @@ const (
 	PinnedAttribute = "data-pinned"
 )
 
-// Message-link and member-mention hooks cover actions-menu link copying and
-// own-mention highlighting.
+// Message-link, member-mention and selection-quoting hooks cover actions-menu
+// link copying, own-mention highlighting and selection quotes.
 const (
 	// CopyLinkAttribute marks an actions-menu link that copies its resolved href.
 	//dom:attribute
@@ -378,4 +378,16 @@ const (
 	// OwnMentionAttribute marks a resolved mention whose member matches the viewer.
 	//dom:attribute
 	OwnMentionAttribute = "data-own-mention"
+	// BodyMessageDOMPrefix identifies a message body container by hexadecimal message id.
+	//dom:suffix HTMLElement
+	BodyMessageDOMPrefix = "body-message-"
+	// QuoteTextField names the selection quote text hidden input and request parameter.
+	//dom:field HTMLInputElement
+	QuoteTextField = "quote_text"
+	// QuoteHandleAttribute carries a resolved mention's handle for selection quoting.
+	//dom:attribute
+	QuoteHandleAttribute = "data-quote-handle"
+	// QuoteSelectionAttribute marks a message's selection-quote submit button.
+	//dom:attribute
+	QuoteSelectionAttribute = "data-quote-selection"
 )

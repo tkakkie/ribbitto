@@ -49,7 +49,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   `part=<UUID>` starts an editable part with the original's extracted text.
   A part chip submits `quote_text`, including empty text; whole chips omit it.
   The chip and posting paths answer 422 for empty or absent-from-original parts.
-  `quote-selection-v1.js` reveals one shared selection button after the body.
+  `web/src/quote-selection.ts` reveals one shared selection button after the body.
   Its `quote_text` hidden input is disabled by default in `#quote-form`, outside
   the chip swap. The chip textarea belongs only to `#message-composer`: each
   submitting form has at most one enabled `quote_text` control. Selection sends

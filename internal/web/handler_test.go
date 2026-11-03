@@ -54,7 +54,7 @@ func TestHandler(t *testing.T) {
 		{"/static/dist/manifest.json", http.StatusNotFound},
 		{"/static/dist/unknown-ABCDEFGH.js", http.StatusNotFound},
 		{"/static/vendor/htmx-2.0.7.min.js", http.StatusOK},
-		{"/static/quote-selection-v1.js", http.StatusOK},
+		{"/static/branch-selection-v1.js", http.StatusOK},
 		{"/static/vendor/htmx-ext-sse-2.2.4.min.js", http.StatusOK},
 		{"/static/vendor/idiomorph-ext-0.7.4.min.js", http.StatusOK},
 		{"/static/missing.js", http.StatusNotFound},

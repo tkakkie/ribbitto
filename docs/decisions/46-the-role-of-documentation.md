@@ -1,4 +1,4 @@
-# 45. The role of documentation
+# 46. The role of documentation
 
 **Decided** (#2102, approved by the maintainer on 2026-11-03; pre-migration
 commit `8abf2d878ec9327f5d027f110132cd4903f6a139`).

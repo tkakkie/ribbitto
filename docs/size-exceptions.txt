@@ -1,2 +1,3 @@
-# Legacy size-exception list; intentionally empty. Do not add entries.
-# Retained with docscheck support until a later cleanup pull request.
+# Legacy size-exception list. Do not add entries.
+# Retained with docscheck support until a later cleanup removes both after the list is empty.
+docs/decisions/43-typescript-with-a-go-driven-build.md #2103

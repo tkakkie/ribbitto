@@ -153,7 +153,7 @@ func inspect(files map[string]string) []string {
 				counts[match[1]]++
 			}
 		case ".ts", ".tsx", ".mts", ".cts":
-			if path.Ext(name) != ".ts" || !strings.HasPrefix(name, "web/src/") {
+			if !typeChecked(name) {
 				problems = append(problems, name+": not type-checked")
 			}
 			if strings.Contains(source, "@ts-nocheck") {
@@ -221,7 +221,18 @@ func validConfig(config map[string]json.RawMessage) bool {
 	return !hasCaseVariant(config, "include", "exclude", "files", "extends", "compilerOptions") &&
 		!hasCaseVariant(options, "strict", "noEmit", "noCheck") &&
 		config["exclude"] == nil && config["files"] == nil && config["extends"] == nil &&
-		slices.Equal(include, []string{"web/src/**/*.ts"}) && strict && noEmit
+		slices.Equal(include, []string{"web/src/**/*.ts", "web/test/*.test.ts", "web/test/node-test.d.ts"}) && strict && noEmit
+}
+
+func typeChecked(name string) bool {
+	if path.Ext(name) != ".ts" {
+		return false
+	}
+	if strings.HasPrefix(name, "web/src/") || name == "web/test/node-test.d.ts" {
+		return true
+	}
+	match, _ := path.Match("web/test/*.test.ts", name)
+	return match
 }
 
 func hasCaseVariant(fields map[string]json.RawMessage, names ...string) bool {

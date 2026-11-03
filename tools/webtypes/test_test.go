@@ -31,10 +31,14 @@ func TestNodeTestCommand(t *testing.T) {
 		return
 	}
 	root, _ := fakeNodeRoot(t)
-	a := writeHarness(t, root, "a.test.mjs", "")
+	a := writeHarness(t, root, "a.test.ts", "")
 	b := writeHarness(t, root, "b.test.mjs", "")
+	writeHarness(t, root, "node-test.d.ts", "")
+	writeHarness(t, root, "ignored.ts", "")
 	writeHarness(t, root, "ignored.mjs", "")
+	writeHarness(t, root, "nested/ignored.test.ts", "")
 	writeHarness(t, root, "nested/ignored.test.mjs", "")
+	writeHarness(t, root, "directory.test.ts/nested.test.ts", "")
 	writeHarness(t, root, "directory.test.mjs/nested.test.mjs", "")
 	script := `#!/bin/sh
 if [ "$1" = --version ]; then printf 'v26.8.1\n'; exit; fi
@@ -86,6 +90,7 @@ func TestNodeTestReadiness(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "no-harness":
+				writeHarness(t, root, "directory.test.ts/nested.test.ts", "")
 				writeHarness(t, root, "directory.test.mjs/nested.test.mjs", "")
 			case "absent":
 				if err := os.Remove(filepath.Join(root, "node")); err != nil {
@@ -120,27 +125,42 @@ func TestRealNodeTests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".node-version"), pin, 0600); err != nil {
-		t.Fatal(err)
+	for name, content := range map[string]string{
+		".node-version":         string(pin),
+		"package.json":          `{"private":true}` + "\n",
+		"web/src/package.json":  `{"type": "module"}` + "\n",
+		"web/test/package.json": `{"type": "module"}` + "\n",
+		"web/src/value.ts":      "export const value: number = 42;\n",
+		"web/src/logic.ts": `import { value } from './value.ts';
+const result: { value: number; state: 'ready' } = { value, state: 'ready' as const };
+export default result;
+`,
+	} {
+		full := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	for _, value := range []string{"false", "true"} {
-		writeHarness(t, root, "probe.test.mjs", `import test from 'node:test'; import assert from 'node:assert/strict'; test('wrapper probe', () => assert.ok(`+value+`));`)
+	for _, want := range []string{"0", "42"} {
+		writeHarness(t, root, "probe.test.ts", `import test from 'node:test'; import assert from 'node:assert/strict'; import result from '../src/logic.ts'; const expected: { value: number; state: 'ready' } = { value: `+want+`, state: 'ready' }; test('wrapper probe', () => assert.deepEqual(result, expected));`)
 		out, err := runOutput(t, "test", root)
-		if value == "false" {
+		if want == "0" {
 			if err == nil || !strings.Contains(out, "ERR_ASSERTION") {
 				t.Fatalf("expected failing harness assertion, got %v: %s", err, out)
 			}
-		} else if err != nil || !strings.Contains(out, "wrapper probe") {
-			t.Fatalf("expected passing harness, got %v: %s", err, out)
+		} else if err != nil || !strings.Contains(out, "wrapper probe") || strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
+			t.Fatalf("expected passing harness without warning, got %v: %s", err, out)
 		}
 	}
 	t.Run("moduleScopeWarning", func(t *testing.T) {
 		control := t.TempDir()
 		for name, content := range map[string]string{
-			".node-version": string(pin),
-			"package.json":  `{"private":true}` + "\n",
-			"web/src/probe.ts": `export const value: number = 1;
-`,
+			".node-version":    string(pin),
+			"package.json":     `{"private":true}` + "\n",
+			"web/src/probe.ts": "export const value: number = 1;\n",
 		} {
 			full := filepath.Join(control, name)
 			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
@@ -150,17 +170,28 @@ func TestRealNodeTests(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		writeHarness(t, control, "probe.test.mjs", `import test from 'node:test'; import assert from 'node:assert/strict'; import { value } from '../src/probe.ts'; test('module scope probe', () => assert.equal(value, 1));`)
+		writeHarness(t, control, "probe.test.ts", `import test from 'node:test'; import assert from 'node:assert/strict'; import { value } from '../src/probe.ts'; const expected: number = 1; test('module scope probe', () => assert.equal(value, expected));`)
+		for _, onlyManifest := range []string{"", "web/src/package.json", "web/test/package.json"} {
+			_ = os.Remove(filepath.Join(control, "web/src/package.json"))
+			_ = os.Remove(filepath.Join(control, "web/test/package.json"))
+			if onlyManifest != "" {
+				if err := os.WriteFile(filepath.Join(control, onlyManifest), []byte(`{"type": "module"}`+"\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, err := runOutput(t, "test", control)
+			if err != nil || !strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
+				t.Fatalf("expected MODULE_TYPELESS_PACKAGE_JSON with only %q, got %v: %s", onlyManifest, err, out)
+			}
+		}
+		for _, manifest := range []string{"web/src/package.json", "web/test/package.json"} {
+			if err := os.WriteFile(filepath.Join(control, manifest), []byte(`{"type": "module"}`+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		out, err := runOutput(t, "test", control)
-		if err != nil || !strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
-			t.Fatalf("expected MODULE_TYPELESS_PACKAGE_JSON without web/src/package.json, got %v: %s", err, out)
-		}
-		if err := os.WriteFile(filepath.Join(control, "web/src/package.json"), []byte(`{"type": "module"}`+"\n"), 0600); err != nil {
-			t.Fatal(err)
-		}
-		out, err = runOutput(t, "test", control)
 		if err != nil || strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
-			t.Fatalf("unexpected MODULE_TYPELESS_PACKAGE_JSON with web/src/package.json, got %v: %s", err, out)
+			t.Fatalf("unexpected MODULE_TYPELESS_PACKAGE_JSON with both package.json files, got %v: %s", err, out)
 		}
 		out, err = runOutput(t, "test", "../..")
 		if err != nil || strings.Contains(out, "MODULE_TYPELESS_PACKAGE_JSON") {
@@ -173,12 +204,14 @@ func TestModuleScopeManifest(t *testing.T) {
 	validScope := func(data []byte) bool {
 		return strings.TrimSpace(string(data)) == `{"type": "module"}`
 	}
-	data, err := os.ReadFile("../../web/src/package.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !validScope(data) {
-		t.Fatalf("web/src/package.json = %q; want exact {\"type\": \"module\"}", data)
+	for _, rel := range []string{"web/src/package.json", "web/test/package.json"} {
+		data, err := os.ReadFile(filepath.Join("../..", rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !validScope(data) {
+			t.Fatalf("%s = %q; want exact {\"type\": \"module\"}", rel, data)
+		}
 	}
 	for _, invalid := range []struct {
 		name string
@@ -194,7 +227,7 @@ func TestModuleScopeManifest(t *testing.T) {
 			}
 		})
 	}
-	data, err = os.ReadFile("../../package.json")
+	data, err := os.ReadFile("../../package.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +248,7 @@ func TestModuleScopeManifest(t *testing.T) {
 			manifests = append(manifests, name)
 		}
 	}
-	if !slices.Equal(manifests, []string{"web/src/package.json"}) {
-		t.Fatalf("tracked web package.json files = %q, want [\"web/src/package.json\"]", manifests)
+	if !slices.Equal(manifests, []string{"web/src/package.json", "web/test/package.json"}) {
+		t.Fatalf("tracked web package.json files = %q, want [\"web/src/package.json\" \"web/test/package.json\"]", manifests)
 	}
 }

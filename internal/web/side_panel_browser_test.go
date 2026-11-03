@@ -20,7 +20,8 @@ import (
 )
 
 // The members panel keeps the conversation live on the page's one stream;
-// Escape closes it with a page load and returns focus to its control (#874).
+// Escape closes it with a page load and returns focus to its control (#874),
+// and opening, closing and navigating still work without sessionStorage.
 func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -107,6 +108,59 @@ func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 	page.MustWait(`() => !document.getElementById('side-panel') && document.activeElement?.id === 'panel-control-members'`)
 	if got := page.MustInfo().URL; got != server.URL+conversationPath {
 		t.Fatalf("closed to %s", got)
+	}
+	stream("sidebar,messages,typing", "")
+	// With sessionStorage unavailable, opening the panel (the read) and closing
+	// it by Escape or the close link (the write) and navigating still work.
+	page.MustEvalOnNewDocument(`(() => {
+		const record = delta => {
+			const [throws = '0', errors = ''] = window.name.split('|');
+			window.name = (Number(throws) + delta) + '|' + errors;
+		};
+		addEventListener('error', e => {
+			const [throws = '0', errors = ''] = window.name.split('|');
+			window.name = throws + '|' + (errors ? errors + ';' : '') + e.message;
+		});
+		Object.defineProperty(window, 'sessionStorage', {
+			configurable: true,
+			get() {
+				record(1);
+				throw new DOMException('storage disabled', 'SecurityError');
+			},
+		});
+	})()`)
+	navigate := func(start func(), want string) {
+		t.Helper()
+		page.MustEval(`() => { window.leaving = true; }`)
+		start()
+		mustWaitAcrossNavigation(t, page, `() => Boolean(window.name.split('|')[1]) || !window.leaving && document.readyState === 'complete' && `+want)
+	}
+	navigate(func() { page.MustElement("#panel-control-members").MustClick() },
+		`!!document.getElementById('side-panel') && document.activeElement?.id === 'panel-heading'`)
+	if got := page.MustEval(`() => window.name`).Str(); got != "1|" {
+		t.Fatalf("after opening without sessionStorage, throws|errors = %q, want 1|", got)
+	}
+	stream("sidebar,messages,typing,presence", "process:7")
+	navigate(func() { page.Keyboard.MustType(input.Escape) }, `!document.getElementById('side-panel')`)
+	if got := page.MustEval(`() => window.name`).Str(); got != "3|" {
+		t.Fatalf("after Escape without sessionStorage, throws|errors = %q, want 3|", got)
+	}
+	if got := page.MustInfo().URL; got != server.URL+conversationPath {
+		t.Fatalf("Escape without sessionStorage closed to %s", got)
+	}
+	stream("sidebar,messages,typing", "")
+	navigate(func() { page.MustElement("#panel-control-members").MustClick() },
+		`!!document.getElementById('side-panel') && document.activeElement?.id === 'panel-heading'`)
+	if got := page.MustEval(`() => window.name`).Str(); got != "4|" {
+		t.Fatalf("after reopening without sessionStorage, throws|errors = %q, want 4|", got)
+	}
+	stream("sidebar,messages,typing,presence", "process:7")
+	navigate(func() { page.MustElement("#panel-close").MustClick() }, `!document.getElementById('side-panel')`)
+	if got := page.MustEval(`() => window.name`).Str(); got != "6|" {
+		t.Fatalf("after close link without sessionStorage, throws|errors = %q, want 6|", got)
+	}
+	if got := page.MustInfo().URL; got != server.URL+conversationPath {
+		t.Fatalf("close link without sessionStorage closed to %s", got)
 	}
 	stream("sidebar,messages,typing", "")
 }

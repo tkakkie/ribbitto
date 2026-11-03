@@ -73,4 +73,5 @@ coverage and the normal document size limit for both the index and entries.
 - [42. Repository languages and formats need explicit approval](docs/decisions/42-repository-languages-and-formats.md)
 - [43. TypeScript with a Go-driven front-end build](docs/decisions/43-typescript-with-a-go-driven-build.md)
 - [44. Remove the retired launcher language-list entries](docs/decisions/44-remove-the-launcher-language-entries.md)
-- [45. The role of documentation](docs/decisions/45-the-role-of-documentation.md)
+- [45. Client unit tests are type-checked TypeScript](docs/decisions/45-type-checked-client-unit-tests.md)
+- [46. The role of documentation](docs/decisions/46-the-role-of-documentation.md)

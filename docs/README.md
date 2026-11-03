@@ -1,7 +1,7 @@
 # Documentation
 
 Index of the [ribbitto](../README.md) documentation and how it is written
-([decision 45](decisions/45-the-role-of-documentation.md)).
+([decision 46](decisions/46-the-role-of-documentation.md)).
 
 ## What belongs in documentation
 

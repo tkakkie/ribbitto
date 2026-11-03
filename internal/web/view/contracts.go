@@ -360,8 +360,8 @@ const (
 	PinnedAttribute = "data-pinned"
 )
 
-// Message-link and member-mention hooks cover actions-menu link copying and
-// own-mention highlighting.
+// Message-link, member-mention and selection-quoting hooks cover actions-menu
+// link copying, own-mention highlighting and selection quotes.
 const (
 	// CopyLinkAttribute marks an actions-menu link that copies its resolved href.
 	//dom:attribute
@@ -378,4 +378,71 @@ const (
 	// OwnMentionAttribute marks a resolved mention whose member matches the viewer.
 	//dom:attribute
 	OwnMentionAttribute = "data-own-mention"
+	// MentionPickerID identifies the mention candidate popup container.
+	//dom:id HTMLDivElement
+	MentionPickerID = "mention-picker"
+	// MentionSearchID identifies the hidden mention candidate search form.
+	//dom:id HTMLFormElement
+	MentionSearchID = "mention-search"
+	// MentionQueryField names the hidden mention query input inside MentionSearchID.
+	//dom:field HTMLInputElement
+	MentionQueryField = "q"
+	// MentionStatusID identifies the mention candidate count live region.
+	//dom:id HTMLParagraphElement
+	MentionStatusID = "mention-status"
+	// MentionListboxID identifies the mention candidate listbox swapped by htmx.
+	//dom:id HTMLUListElement
+	MentionListboxID = "mention-listbox"
+	// QueryAttribute carries the query string that produced the current mention listbox.
+	//dom:attribute
+	QueryAttribute = "data-query"
+	// CountAttribute carries the localized candidate count message on the mention listbox.
+	//dom:attribute
+	CountAttribute = "data-count"
+	// HandleAttribute carries a mention candidate option's handle.
+	//dom:attribute
+	HandleAttribute = "data-handle"
+	// MentionQueryEvent triggers the htmx mention candidate search form.
+	//dom:event
+	MentionQueryEvent = "mention-query"
+	// BodyMessageDOMPrefix identifies a message body container by hexadecimal message id.
+	//dom:suffix HTMLElement
+	BodyMessageDOMPrefix = "body-message-"
+	// QuoteTextField names the selection quote text hidden input, composer textarea and request parameter.
+	//dom:field HTMLInputElement|HTMLTextAreaElement
+	QuoteTextField = "quote_text"
+	// QuoteHandleAttribute carries a resolved mention's handle for selection quoting.
+	//dom:attribute
+	QuoteHandleAttribute = "data-quote-handle"
+	// QuoteSelectionAttribute marks a message's selection-quote submit button.
+	//dom:attribute
+	QuoteSelectionAttribute = "data-quote-selection"
+)
+
+// Stream hooks not already shared by the composer, sidebar or read form.
+const (
+	// StreamStoppedID identifies the held reset notice.
+	//dom:id HTMLParagraphElement
+	StreamStoppedID = "stream-stopped"
+	// LoadOlderID identifies the server-owned history boundary.
+	//dom:id HTMLDivElement
+	LoadOlderID = "load-older"
+	// UnreadDividerID identifies the first-unread marker removed with a moved item.
+	//dom:id HTMLLIElement
+	UnreadDividerID = "unread-divider"
+	// BranchToID identifies the selection control refreshed after live swaps.
+	//dom:id HTMLSelectElement
+	BranchToID = "branch-to"
+	// OldestSeqAttribute carries the loaded history boundary.
+	//dom:attribute
+	OldestSeqAttribute = "data-oldest-seq"
+	// ToTopicAttribute carries a move's destination.
+	//dom:attribute
+	ToTopicAttribute = "data-to-topic"
+	// EventSeqAttribute carries an item's ordering sequence.
+	//dom:attribute
+	EventSeqAttribute = "data-event-seq"
+	// AnnouncementAttribute carries the server-rendered live announcement.
+	//dom:attribute
+	AnnouncementAttribute = "data-announcement"
 )

@@ -45,7 +45,7 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   Script owns swaps, suppressing htmx autofocus replay; native autofocus serves
   plain part loads. Chip/gap reduce [growth cap](../ui-composer.md); resize observer
   keeps reader. Plain Quote/Remove GET `#message-composer`; Remove loses text.
-- **Mention picker:** `mention-picker-v1.js` enhances all composers.
+- **Mention picker:** `web/src/mention-picker.ts` (with DOM-free rules in `web/src/mention-token.ts`, tested in `web/test/mention-token.test.mjs`) enhances all composers.
   `#mention-search`: htmx 120 ms debounce,
   replace sync and `outerHTML` into `#mention-listbox`. Only matching `data-query`
   responses open; picks recheck the token. Empty results hide the picker;

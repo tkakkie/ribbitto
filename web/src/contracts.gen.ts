@@ -338,7 +338,68 @@ export const CopiedAttribute = "data-copied";
 export const CopiedLabelAttribute = "data-copied-label";
 export const MemberIDAttribute = "data-member-id";
 export const OwnMentionAttribute = "data-own-mention";
+export const MentionPickerID = "mention-picker";
+export const mentionPickerSelector = (): string => "#" + MentionPickerID;
+export const getMentionPicker = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(mentionPickerSelector());
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute;
+export const MentionSearchID = "mention-search";
+export const mentionSearchSelector = (): string => "#" + MentionSearchID;
+export const getMentionSearch = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(mentionSearchSelector());
+
+export const MentionQueryField = "q";
+export const getMentionQueryField = (form: HTMLFormElement): HTMLInputElement => (form.elements as HTMLFormControlsCollection & Record<typeof MentionQueryField, HTMLInputElement>)[MentionQueryField];
+
+export const MentionStatusID = "mention-status";
+export const mentionStatusSelector = (): string => "#" + MentionStatusID;
+export const getMentionStatus = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(mentionStatusSelector());
+
+export const MentionListboxID = "mention-listbox";
+export const mentionListboxSelector = (): string => "#" + MentionListboxID;
+export const getMentionListbox = (root: ParentNode = document): HTMLUListElement | null => root.querySelector<HTMLUListElement>(mentionListboxSelector());
+
+export const QueryAttribute = "data-query";
+export const CountAttribute = "data-count";
+export const HandleAttribute = "data-handle";
+export const MentionQueryEvent = "mention-query";
+export function dispatchMentionQueryEvent(target: EventTarget): boolean {
+  return target.dispatchEvent(new Event(MentionQueryEvent));
+}
+export function listenMentionQueryEvent(target: EventTarget, listener: () => void): () => void {
+  target.addEventListener(MentionQueryEvent, listener);
+  return () => target.removeEventListener(MentionQueryEvent, listener);
+}
+
+export const BodyMessageDOMPrefix = "body-message-";
+export const bodyMessageEntryID = (suffix: string): string => BodyMessageDOMPrefix + suffix;
+export const bodyMessageEntrySelector = (suffix: string): string => "#" + bodyMessageEntryID(suffix);
+export const getBodyMessageEntry = (suffix: string, root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(bodyMessageEntrySelector(suffix));
+
+export const QuoteTextField = "quote_text";
+export const getQuoteTextField = (form: HTMLFormElement): HTMLInputElement|HTMLTextAreaElement => (form.elements as HTMLFormControlsCollection & Record<typeof QuoteTextField, HTMLInputElement|HTMLTextAreaElement>)[QuoteTextField];
+
+export const QuoteHandleAttribute = "data-quote-handle";
+export const QuoteSelectionAttribute = "data-quote-selection";
+export const StreamStoppedID = "stream-stopped";
+export const streamStoppedSelector = (): string => "#" + StreamStoppedID;
+export const getStreamStopped = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(streamStoppedSelector());
+
+export const LoadOlderID = "load-older";
+export const loadOlderSelector = (): string => "#" + LoadOlderID;
+export const getLoadOlder = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(loadOlderSelector());
+
+export const UnreadDividerID = "unread-divider";
+export const unreadDividerSelector = (): string => "#" + UnreadDividerID;
+export const getUnreadDivider = (root: ParentNode = document): HTMLLIElement | null => root.querySelector<HTMLLIElement>(unreadDividerSelector());
+
+export const BranchToID = "branch-to";
+export const branchToSelector = (): string => "#" + BranchToID;
+export const getBranchTo = (root: ParentNode = document): HTMLSelectElement | null => root.querySelector<HTMLSelectElement>(branchToSelector());
+
+export const OldestSeqAttribute = "data-oldest-seq";
+export const ToTopicAttribute = "data-to-topic";
+export const EventSeqAttribute = "data-event-seq";
+export const AnnouncementAttribute = "data-announcement";
+
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute | typeof QueryAttribute | typeof CountAttribute | typeof HandleAttribute | typeof QuoteHandleAttribute | typeof QuoteSelectionAttribute | typeof OldestSeqAttribute | typeof ToTopicAttribute | typeof EventSeqAttribute | typeof AnnouncementAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

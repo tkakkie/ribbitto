@@ -21,7 +21,7 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 						<textarea
 							id={ QuoteTextID }
 							autofocus?={ !page.QuoteInvalid && page.BodyError == "" }
-							name="quote_text"
+							name={ QuoteTextField }
 							dir="auto"
 							rows="3"
 							class="min-h-11 w-full rounded-md border border-border bg-surface px-2 text-body max-desk:text-entry coarse:text-entry"

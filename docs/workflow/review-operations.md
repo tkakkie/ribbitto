@@ -48,8 +48,8 @@ Copilot is skipped when all four hold (#1234):
 - risk `normal` ([Risk](reviewing.md#risk));
 - no loosened check (a `docs/size-exceptions.txt` change that loosens one is not exempt).
 
-All other lifecycle steps and [checks](../../AGENTS.md#commands) stay; note the
-docs-only rule in the PR body. Handle any unsolicited Copilot review as in the
+Other lifecycle steps and [checks](delivery.md#local-checks-by-change-type) stay;
+note the docs-only rule in the PR body. Unsolicited Copilot reviews use the
 [follow-up check](review-followups.md#copilot-follow-up-check).
 If a condition stops holding, restore the normal chain, Copilot included.
 

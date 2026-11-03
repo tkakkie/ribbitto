@@ -16,8 +16,8 @@ One set of rules binds every AI; see [Where things are explained](#where-things-
 
 ## Commands
 
-- `make check` — checks formatting (Go and templ), vets, lints, builds and
-  tests (race detector on); must pass before you open a pull request.
+- `make check` — format, vet, lint, build, test (race); choose
+  [local checks](docs/workflow/delivery.md#local-checks-by-change-type).
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.

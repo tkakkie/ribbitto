@@ -25,7 +25,8 @@ risk and issue text:
 > 2. Implement the issue in this worktree (diff under ~400 lines excluding
 >    generated files). Stop and report if a maintainer decision or a new
 >    language/tool is needed. For a behaviour-preserving conversion of a script to a module, before opening the PR run a test or script that exercises a copy of the old script (taken from the baseline SHA, since the conversion deletes it) and the new module on the same inputs and compares outputs — clock, storage failures, malformed values included — (`node --test` in `web/test` for DOM-free logic, the existing `TestBrowser` suites (or a new case in them) as the comparison when real browser behaviour is needed); the PR body names the baseline SHA and records the commands and the result (kept as evidence there, not as a permanent file); a restructuring with no old/new pair records what was compared instead ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
-> 3. Run `make check` and `make prepush` (plus `make deps` if imports change);
+> 3. Run the [local checks by change type](#local-checks-by-change-type)
+>    (plus `make deps` if imports change);
 >    fix failures without deleting, skipping or weakening a test.
 > 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
 >    branch, run the credential scan (docs/workflow/delivery.md#pr-body-credential-scan)
@@ -35,6 +36,25 @@ risk and issue text:
 >    follow-up push), and stop once CI is green. Do not set labels, request or
 >    run reviews, mark ready, merge, or touch `main`, other branches, settings
 >    or tokens.
+
+## Local checks by change type
+
+Rows are exclusive and checked top to bottom by the files a pull request
+changes. A pull request that spans several rows, or touches anything no row
+names (`go.mod`, `go.sum`, `Makefile`, configuration files, the locale TOML
+files, `web/static/vendor/README.md`, generated documents such as `docs/api`,
+`docs/dependencies.md` and `docs/schema`, or anything else), uses the last row.
+
+| Change | Before opening the pull request | Each later push |
+|---|---|---|
+| Markdown under `docs/` and the root documents, `docs/size-exceptions.txt` (not the files listed above) | `make prepush` and `make check-tools` | `make prepush` |
+| `.github/**` only | `make prepush`, `make check-tools` and `go test -race ./web/static` (it reads the workflows) | `make prepush` |
+| `tools/**` only | `make prepush`, `make check-static` and `make check-tools` | `make prepush` |
+| Go test files only | `make prepush`, `make check-static`, `make check-tools` and `go test -race` of the touched packages, with `RIBBITTO_TEST_DATABASE_URL` and `RIBBITTO_REQUIRE_DB=1` set (without them database tests skip silently) | `make prepush` |
+| Anything else, including Go production code, TypeScript, templ, CSS, SQL and generated files | `make check` once (test database set via `RIBBITTO_TEST_DATABASE_URL`, `RIBBITTO_REQUIRE_DB=1`) and `make prepush` | `make prepush` |
+
+Run `make prepush` before every push. CI stays the full gate. A result obtained
+without the test database must not be reported as a full `make check`.
 
 ## Waking the orchestrator
 

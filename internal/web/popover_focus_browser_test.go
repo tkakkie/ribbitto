@@ -35,7 +35,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		conversation.Channels = append(conversation.Channels, view.Channel{ID: kernel.ID{byte(i + 1)}, Name: fmt.Sprintf("room%02d", i+1)})
 	}
 	conversation.Messages = []view.Message{{ID: kernel.ID{9}, TopicID: kernel.ID{2}, Handle: "author", Body: "hello", URL: view.MessageURL("acme", kernel.ID{9})}}
-	actions := fmt.Sprintf("message-actions-%x", kernel.ID{9})
+	actions := messageMenu(kernel.ID{9})
 	list := conversation
 	list.List = true
 	mux := http.NewServeMux()
@@ -79,28 +79,28 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		}
 	}
 	// The visible one of a popover's invokers: the account menu has two.
-	const invoker = `id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].find(e => e.checkVisibility())`
-	const isOpen = `id => document.getElementById(id).matches(':popover-open')`
-	const inside = `id => document.getElementById(id).matches(':popover-open') && document.getElementById(id).contains(document.activeElement)`
+	const invoker = browserPopoverInvoker
+	const isOpen = `id => (` + browserPopoverElement + `)(id).matches(':popover-open')`
+	const inside = `id => (` + browserPopoverElement + `)(id).matches(':popover-open') && (` + browserPopoverElement + `)(id).contains(document.activeElement)`
 	// closeAndFocus starts from the closed popover with focus on its button;
 	// Shift-Tab may have left it open, which the rule allows.
-	const closeAndFocus = `id => { const p = document.getElementById(id); if (p.matches(':popover-open')) p.hidePopover(); (` + invoker + `)(id).focus(); }`
+	const closeAndFocus = `id => { const p = (` + browserPopoverElement + `)(id); if (p.matches(':popover-open')) p.hidePopover(); (` + invoker + `)(id).focus(); }`
 	const onInvoker = `id => document.activeElement === (` + invoker + `)(id)`
 	// settled is the rule: focus is inside the open popover, or it is closed.
-	const settled = `id => !document.getElementById(id).matches(':popover-open') || document.getElementById(id).contains(document.activeElement)`
+	const settled = `id => !(` + browserPopoverElement + `)(id).matches(':popover-open') || (` + browserPopoverElement + `)(id).contains(document.activeElement)`
 
 	for _, c := range []struct {
 		name, path    string
 		width, height int
-		popover       string
+		popover       browserMessageMenu
 		// outside is a control the popover does not cover, and landed the
 		// element a click on it focuses.
 		outside, landed string
 	}{
-		{"desktop/create", "/conversation", 1440, 900, "channel-create", "#message-body", "#message-body"},
-		{"desktop/account", "/conversation", 1440, 900, "account-menu", "#message-body", "#message-body"},
-		{"phone/create", "/list", 390, 844, "channel-create", "main h1", "body"},
-		{"phone/account", "/list", 390, 844, "account-menu", "main h1", "body"},
+		{"desktop/create", "/conversation", 1440, 900, popoverMenu("channel-create"), "#message-body", "#message-body"},
+		{"desktop/account", "/conversation", 1440, 900, popoverMenu("account-menu"), "#message-body", "#message-body"},
+		{"phone/create", "/list", 390, 844, popoverMenu("channel-create"), "main h1", "body"},
+		{"phone/account", "/list", 390, 844, popoverMenu("account-menu"), "main h1", "body"},
 		{"desktop/message", "/conversation", 1440, 900, actions, "#message-body", "#message-body"},
 		{"phone/message", "/conversation", 390, 844, actions, "main h1", "body"},
 	} {
@@ -122,7 +122,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		// its button runs; that timer must leave the new popover open.
 		step(c.name + ": opening before a Tab's timer")
 		if !page.MustEval(`async id => {
-			const p = document.getElementById(id), button = (`+invoker+`)(id);
+			const p = (`+browserPopoverElement+`)(id), button = (`+invoker+`)(id);
 			if (p.matches(':popover-open')) p.hidePopover();
 			button.focus();
 			document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
@@ -135,7 +135,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		// The same for a popover open at the Tab, closed and reopened before
 		// its timer, with focus outside it.
 		if !page.MustEval(`async id => {
-			const p = document.getElementById(id), button = (`+invoker+`)(id);
+			const p = (`+browserPopoverElement+`)(id), button = (`+invoker+`)(id);
 			if (!p.matches(':popover-open')) p.showPopover();
 			button.focus();
 			document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
@@ -152,7 +152,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		// since the phone sheet covers its own button (#1102). The create
 		// popover is left out: focus stays on its button, which it overlaps
 		// at the lower edge.
-		if c.popover == "account-menu" {
+		if c.popover.selector("menu") == "#account-menu" {
 			form := page.MustElement(`#account-menu form[action="/signout/others"]`)
 			if method := form.MustAttribute("method"); method == nil || *method != "post" {
 				t.Fatal("other-session action must POST")

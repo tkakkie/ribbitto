@@ -166,7 +166,7 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 				action = "/unpin"
 			}
 			lastRequest.Store(fmt.Sprintf("%+v", q))
-			if q.path != entry.PinURL+action || q.hx != "true" || q.source != fmt.Sprintf("pin-%t-", pinned)+view.MessageDOMID(entry.ID) || q.target != "pin-form-"+view.MessageDOMID(entry.ID) {
+			if q.path != entry.PinURL+action || q.hx != "true" || q.source != messageMenu(entry.ID).pinSource(pinned) || q.target != messageMenu(entry.ID).formID() {
 				panic(fmt.Sprintf("wrong delegated request: %+v", q))
 			}
 			if !p.MustEval(`id => window.lastRequest.event === 'submit' && window.lastRequest.sameEvent && window.lastRequest.form === id`, q.target).Bool() {
@@ -189,9 +189,9 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 		t.Helper()
 		name := fmt.Sprintf("%x pinned=%t key=%v", entry.ID, pinned, key)
 		step("open menu "+name, func(p *rod.Page) {
-			p.MustEval(`id => { const m = document.getElementById(id); if (!m.matches(':popover-open')) m.showPopover(); }`, fmt.Sprintf("message-actions-%x", entry.ID))
+			messageMenu(entry.ID).show(p)
 		})
-		button := fmt.Sprintf("#pin-%t-", pinned) + view.MessageDOMID(entry.ID)
+		button := messageMenu(entry.ID).pinSelector(pinned)
 		for attempt := range 2 {
 			step(fmt.Sprintf("activate %s attempt=%d", name, attempt+1), func(p *rod.Page) {
 				if key == 0 {
@@ -224,7 +224,7 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 			q.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(changed, "")))}
 			wait("ok")
 			step("swapped state and button focus", func(p *rod.Page) {
-				p.MustWait(`state => document.activeElement.dataset.pinAction === state && document.activeElement.form.dataset.pinned === state`, fmt.Sprint(!pinned))
+				messageMenu(a.ID).waitPinFocus(p, !pinned)
 			})
 			noExtra() // duplicates must be dropped, never queued after completion
 		}
@@ -236,7 +236,7 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 		q := next(a, false)
 		noExtra()
 		step(fmt.Sprintf("remember control before status %d", status), func(p *rod.Page) {
-			p.MustEval(`() => window.beforePin = document.querySelector('[data-pin-control]')`)
+			messageMenu(a.ID).eval(p, `({form}) => window.beforePin = form`)
 		})
 		q.reply <- browserReply{status, []byte(renderIn(t, "en", view.PinControl(a, "pins.error.limit")))}
 		outcome := "ok"
@@ -245,9 +245,8 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 		}
 		wait(outcome)
 		step(fmt.Sprintf("status %d state, alert and swap policy", status), func(p *rod.Page) {
-			if !p.MustEval(`status => {
-			  const f = document.querySelector('[data-pin-control]');
-			  return f.dataset.pinned === 'false' && !f.querySelector('[data-pin-action=false]').hidden &&
+			if !messageMenu(a.ID).eval(p, `({form: f, pin}, status) => {
+			  return f.dataset.pinned === 'false' && !pin.hidden &&
 			    (status === 409 ? !!f.querySelector('[role=alert]')?.checkVisibility() : true) &&
 			    ([404,503,0].includes(status) ? f === window.beforePin : f !== window.beforePin);
 			}`, status).Bool() {
@@ -260,24 +259,24 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 	// Cover detail.elt and the surviving-ancestor/detached-source lookup.
 	for _, ancestor := range []bool{false, true} {
 		step(fmt.Sprintf("onLoadError ancestor=%t", ancestor), func(p *rod.Page) {
-			p.MustEval(`(id, ancestor) => {
+			messageMenu(a.ID).eval(p, `({form}, ancestor) => {
 			  const ajax = htmx.ajax;
 			  htmx.ajax = (method, url, options) => {
 			    htmx.ajax = ajax;
 			    const source = options.source, elt = ancestor ? document.body : source;
-			    const form = source.closest("[data-pin-control]"), parent = form.parentElement, next = form.nextSibling;
+			    const parent = form.parentElement, next = form.nextSibling;
 			    if (ancestor) form.remove();
 			    elt.dispatchEvent(new CustomEvent('htmx:onLoadError', {bubbles: true,
 			      detail: ancestor ? {elt, requestConfig: {elt: source}} : {elt}}));
 			    if (ancestor) parent.insertBefore(form, next);
 			    return new Promise(() => {});
 			  };
-			  document.getElementById(id).requestSubmit();
-			}`, "pin-form-"+view.MessageDOMID(a.ID), ancestor)
+			  form.requestSubmit();
+			}`, ancestor)
 		})
 		noExtra()
 		step("requestSubmit without submitter retries visible action", func(p *rod.Page) {
-			p.MustEval(`id => document.getElementById(id).requestSubmit()`, "pin-form-"+view.MessageDOMID(a.ID))
+			messageMenu(a.ID).eval(p, `({form}) => form.requestSubmit()`)
 		})
 		q := next(a, ancestor) // first Pin, then Unpin: choose the non-hidden action
 		changed := a
@@ -297,14 +296,14 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 	qb.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(b, "")))}
 	wait("ok")
 	step("independent state and focus", func(p *rod.Page) {
-		if !p.MustEval(`() => [...document.querySelectorAll('[data-pin-control]')].every(f => f.dataset.pinned === 'true') && document.activeElement === document.querySelector('[data-pin-action=true]')`).Bool() {
+		if !messagePinsIndependent(p, a.ID, b.ID) {
 			panic("independent requests changed another control or stole focus")
 		}
 	})
 	noExtra()
 	step("native fallback without htmx", func(p *rod.Page) {
 		p.MustEval(`() => { window.htmx = undefined; }`)
-		p.MustElement("#pin-true-" + view.MessageDOMID(a.ID)).MustClick()
+		messageMenu(a.ID).control(p, "unpin").MustClick()
 	})
 	step("native POST and 303 redirect", func(p *rod.Page) {
 		select {
@@ -363,14 +362,14 @@ func testPinFrameBrowser(t *testing.T, browser *rod.Browser) {
   document.addEventListener('htmx:beforeRequest', () => window.pinRequests++);
   document.addEventListener('htmx:afterSwap', e => { if (e.detail.elt?.id === 'pins-section') window.pinFrameSwapped = true; });
  }`)
-	page.MustElement("[popovertarget='message-actions-" + fmt.Sprintf("%x", entry.ID) + "']").MustClick()
-	if !page.MustEval(`() => document.querySelector('[data-pin-control]').dataset.pinned === 'false' && document.querySelector('[data-pin-action=false]').innerText.trim() === 'Pin' && document.querySelector('[data-pin-action=false]').getClientRects().length > 0 && document.querySelector('[data-pin-action=true]').hidden`).Bool() {
+	messageMenu(entry.ID).open(page)
+	if !messageMenu(entry.ID).eval(page, `({form, pin, unpin}) => form.dataset.pinned === 'false' && pin.innerText.trim() === 'Pin' && pin.getClientRects().length > 0 && unpin.hidden`).Bool() {
 		t.Fatal("loaded control does not show Pin")
 	}
 	// Only the stream delivers the change; this page makes no htmx request.
 	close(release)
 	page.MustWait(`() => window.pinFrameSwapped === true`)
-	if !page.MustEval(`() => window.pinRequests === 0 && document.getElementById('pins-section').dataset.pinsSeq === '43' && document.querySelector('[data-pin-control]').dataset.pinned === 'true' && document.querySelector('[data-pin-action=true]').innerText.trim() === 'Unpin' && document.querySelector('[data-pin-action=true]').getClientRects().length > 0 && document.querySelector('[data-pin-action=false]').hidden`).Bool() {
+	if !messageMenu(entry.ID).eval(page, `({form, pin, unpin}) => window.pinRequests === 0 && document.getElementById('pins-section').dataset.pinsSeq === '43' && form.dataset.pinned === 'true' && unpin.innerText.trim() === 'Unpin' && unpin.getClientRects().length > 0 && pin.hidden`).Bool() {
 		t.Fatal("pins frame did not switch the loaded control to Unpin without an htmx request")
 	}
 }
@@ -419,8 +418,8 @@ func testPinRaceBrowser(t *testing.T, browser *rod.Browser, refused bool) {
 		t.Fatal(err)
 	}
 	page.MustEval(`() => { document.addEventListener('htmx:afterRequest', () => { window.pinAnswered = true; }); document.getElementById('message-body').value = 'keep draft'; window.range = Array.from(document.querySelectorAll('#message-items > li'), e => e.id + ':' + e.dataset.eventSeq).join(); }`)
-	button := "#pin-false-" + view.MessageDOMID(entry.ID)
-	page.MustElement("[popovertarget='message-actions-" + fmt.Sprintf("%x", entry.ID) + "']").MustClick()
+	button := messageMenu(entry.ID).pinSelector(false)
+	messageMenu(entry.ID).open(page)
 	page.MustElement(button).MustClick()
 	// The newer frame arrives before the response. Then an old frame follows it.
 	deliver := func(html string) {
@@ -432,12 +431,12 @@ func testPinRaceBrowser(t *testing.T, browser *rod.Browser, refused bool) {
 	deliver(current)
 	release <- struct{}{}
 	page.MustWait(`() => window.pinAnswered === true`)
-	page.MustWait(`() => !document.querySelector('[data-pin-control]').classList.contains('htmx-settling')`)
-	if got := page.MustEval(`() => { const alert = document.querySelector('[data-pin-control] [role=alert]'); return !!alert && alert.getClientRects().length > 0; }`).Bool(); got != refused {
+	messageMenu(entry.ID).wait(page, `({form}) => !form.classList.contains('htmx-settling')`)
+	if got := messageMenu(entry.ID).eval(page, `({form}) => { const alert = form.querySelector('[role=alert]'); return !!alert && alert.getClientRects().length > 0; }`).Bool(); got != refused {
 		t.Fatalf("refused=%t: alert visible=%t", refused, got)
 	}
 	deliver(old)
-	if !page.MustEval(`() => document.getElementById('pins-section').dataset.pinsSeq === '43' && document.getElementById('message-body').value === 'keep draft' && Array.from(document.querySelectorAll('#message-items > li'), e => e.id + ':' + e.dataset.eventSeq).join() === window.range && document.activeElement.dataset.pinAction === 'true' && document.querySelector('[data-pin-control]').dataset.pinned === 'true' && !document.querySelector('[data-pin-action=true]').hidden && document.querySelector('[data-pin-action=false]').hidden`).Bool() {
+	if !messageMenu(entry.ID).eval(page, `({form, pin, unpin}) => document.getElementById('pins-section').dataset.pinsSeq === '43' && document.getElementById('message-body').value === 'keep draft' && Array.from(document.querySelectorAll('#message-items > li'), e => e.id + ':' + e.dataset.eventSeq).join() === window.range && document.activeElement.dataset.pinAction === 'true' && form.dataset.pinned === 'true' && !unpin.hidden && pin.hidden`).Bool() {
 		t.Fatal("pins lost snapshot or draft")
 	}
 	if got := <-marker; got != "true" {

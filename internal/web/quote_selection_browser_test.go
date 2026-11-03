@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -301,8 +300,8 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 		return
 	case "menu", "part":
 		step(t, "menu Quote after selection: whole chip has no part textarea", func(p *rod.Page) {
-			p.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, first.ID)).MustClick()
-			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, first.ID)).MustClick()
+			messageMenu(first.ID).open(p)
+			messageMenu(first.ID).control(p, "quote").MustClick()
 			p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
 		})
 		select {
@@ -386,11 +385,11 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 	})
 	if scenario == "selection-menu" {
 		step(t, "menu after quoted post: another message's actions open", func(p *rod.Page) {
-			p.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, second.ID)).MustClick()
-			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustWaitVisible()
+			messageMenu(second.ID).open(p)
+			messageMenu(second.ID).control(p, "quote").MustWaitVisible()
 		})
 		step(t, "menu after quoted post: whole Quote creates another message's whole chip", func(p *rod.Page) {
-			p.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, second.ID)).MustClick()
+			messageMenu(second.ID).control(p, "quote").MustClick()
 			p.MustWait(`id => document.querySelector('#composer-quote [name=part]')?.value === id &&
    document.querySelector('#composer-quote input[name=quote]')?.value === id && !document.getElementById('quote-text')`, realtime.FormatPayloadID(second.ID))
 		})

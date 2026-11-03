@@ -35,6 +35,9 @@ func rules() []rule {
 		{"web/src/*.ts", "TypeScript source and declarations"},
 		{"web/src/package.json", "TypeScript module scope manifest"},
 		{"web/test/*.test.mjs", "client unit-test harness"},
+		{"web/test/*.test.ts", "client unit-test harness"},
+		{"web/test/node-test.d.ts", "client unit-test declarations"},
+		{"web/test/package.json", "TypeScript module scope manifest"},
 		{"web/styles/*.css", "CSS source"},
 		{"web/static/css/*.css", "CSS output"},
 		// The pattern follows web/static/javascript_test.go; the kind also checks its regexp.

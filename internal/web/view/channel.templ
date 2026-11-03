@@ -233,7 +233,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
-					<p id="stream-stopped" role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
+					<p id={ StreamStoppedID } role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
 						{ i18n.T(ctx, "stream.stopped") }
 						<a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "stream.reload") }</a>
 					</p>
@@ -247,7 +247,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						<div class={ "contents", templ.KV("noscript:block noscript:grow noscript:shrink-0", latest(page)) }>
 							// Always present, empty on the oldest page: loading older
 							// messages replaces it out of band with the next control.
-							<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
+							<div id={ LoadOlderID } { OldestSeqAttribute }={ fmt.Sprint(oldestSequence(page)) }>
 								if page.Older {
 									<p class="flex justify-center px-6 pt-4">
 										@historyLink(olderURL(page), true) {
@@ -426,7 +426,7 @@ templ historyLink(url string, older bool) {
 			hx-target={ "#" + MessageItemsID }
 			hx-swap="afterbegin"
 			hx-select={ "#" + MessageItemsID + " > li" }
-			hx-select-oob="#load-older"
+			hx-select-oob={ "#" + LoadOlderID }
 		}
 		class="inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96"
 	>
@@ -438,7 +438,7 @@ templ historyLink(url string, older bool) {
 // lets move insertion order it alongside messages without special JavaScript.
 templ unreadDivider(seq, firstUnread int64) {
 	if firstUnread > 0 && seq == firstUnread {
-		<li id="unread-divider" data-event-seq={ fmt.Sprint(firstUnread) } class="flex items-center gap-3">
+		<li id={ UnreadDividerID } { EventSeqAttribute }={ fmt.Sprint(firstUnread) } class="flex items-center gap-3">
 			<span aria-hidden="true" class="flex-1 border-t border-accent-line"></span>
 			<p class="rounded-sm bg-accent px-2 py-1 text-caption font-semibold text-on-accent">{ i18n.T(ctx, "reading.new_messages") }</p>
 			<span aria-hidden="true" class="flex-1 border-t border-accent-line"></span>

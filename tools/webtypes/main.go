@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -140,21 +141,24 @@ func run(mode, root string, files ...string) error {
 		// CLI policy overrides env/.npmrc; lockfile integrity also covers registry overrides.
 		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
 	} else if mode == "test" {
-		matches, err := filepath.Glob(filepath.Join(root, "web/test/*.test.mjs"))
-		if err != nil {
-			return fmt.Errorf("listing client unit-test harnesses: %w", err)
-		}
 		var files []string
-		for _, name := range matches {
-			info, err := os.Stat(name)
+		for _, pattern := range []string{"web/test/*.test.ts", "web/test/*.test.mjs"} {
+			matches, err := filepath.Glob(filepath.Join(root, pattern))
 			if err != nil {
-				return fmt.Errorf("inspecting client unit-test harness: %w", err)
+				return fmt.Errorf("listing client unit-test harnesses: %w", err)
 			}
-			// Node would recursively discover tests inside a matching directory.
-			if info.Mode().IsRegular() {
-				files = append(files, name)
+			for _, name := range matches {
+				info, err := os.Stat(name)
+				if err != nil {
+					return fmt.Errorf("inspecting client unit-test harness: %w", err)
+				}
+				// Node would recursively discover tests inside a matching directory.
+				if info.Mode().IsRegular() {
+					files = append(files, name)
+				}
 			}
 		}
+		slices.Sort(files)
 		if len(files) == 0 {
 			return fmt.Errorf("no client unit-test harnesses found")
 		}

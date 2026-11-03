@@ -5,5 +5,5 @@
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["web/src/**/*.ts"]
+  "include": ["web/src/**/*.ts", "web/test/*.test.ts", "web/test/node-test.d.ts"]
 }

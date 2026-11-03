@@ -5,6 +5,7 @@ maintainer's request on 2026-10-20;
 [direction](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6270882217),
 [spike
 report](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6282382453)).
+Amended by [decision 45](45-type-checked-client-unit-tests.md) on 2026-11-03 in #2090.
 Adopt TypeScript for maintainability, type safety and testability as the front
 end grows. New client code is TypeScript by default; existing code converts
 stateful-first. JSDoc is the measured comparison baseline, not a migration

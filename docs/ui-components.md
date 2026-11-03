@@ -83,3 +83,5 @@ Text precedes the avatar in both page and live markup; a fixed gutter reserves
 its space without loading an image or web font.
 
 Side panels, short heights and arrival motion are in [`ui-panels-and-motion.md`](ui-panels-and-motion.md).
+
+Live message swaps and the last ten polite announcements are handled by the registered `message-stream` bundle (`web/src/message-stream.ts`), using server-rendered items.

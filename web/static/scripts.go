@@ -50,6 +50,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"sidebar-unread",
 		"pins-sync",
 		"message-drafts",
+		"message-stream",
 		"member-mentions",
 		"message-link",
 	}

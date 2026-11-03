@@ -27,13 +27,16 @@ Composer attributes in the generated set:
 | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-edit`, `data-pending-edit-help`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
 | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
 
-The unwired DOM-free `web/src/stream-cursor.ts` prepares the stream conversion:
-its `web/test/stream-cursor.test.mjs` case tables cover BigInt cursor ordering,
-visibility, move admission/insertion, the ten-announcement cap and reset holds/jitter.
-Lifecycle tables cover persisted/non-persisted pagehide/pageshow, CONNECTING/open/CLOSED
-sources, existing parking, cleanup completion, and restoration that requests one
-error and forgets only after successful dispatch. State and actions contain no DOM
-objects. The served v15 script still owns these decisions until the adapter is converted.
+The registered `web/src/message-stream.ts` adapter delegates decisions to the
+DOM-free `web/src/stream-cursor.ts`. Its `web/test/stream-cursor.test.mjs` case tables
+cover BigInt cursor ordering, visibility, move admission/insertion, the
+ten-announcement cap and reset holds/jitter. Lifecycle tables cover persisted and
+non-persisted pagehide/pageshow, CONNECTING/open/CLOSED sources, existing parking,
+cleanup completion, and restoration that requests one error and forgets only after
+successful dispatch. State and actions contain no DOM objects.
+The adapter has typed `sse-connect` read/write accessors and uses event constants
+with native constructors to retain the plain, non-bubbling `read-applied` and
+non-bubbling query envelopes.
 
 Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:field` and its

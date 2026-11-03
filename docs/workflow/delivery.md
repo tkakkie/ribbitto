@@ -31,24 +31,35 @@ risk and issue text:
 > 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
 >    branch, run the credential scan (docs/workflow/delivery.md#pr-body-credential-scan)
 >    on the PR body file, and open a DRAFT PR (`.github/pull_request_template.md`,
->    `Closes #<N>`, except `Refs #<N>` for deferred after-merge measurements
->    and fix or revert PRs following an out-of-tolerance result[^measurement]).
+>    `Closes #<N>` for your own issue; deferred measurements and any PR fixing,
+>    reverting or otherwise changing what they measure before completion use
+>    `Refs #<measured issue>`; a separate problem issue may still use
+>    `Closes #<N>`[^measurement]).
 > 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before any
 >    follow-up push), and stop once CI is green. Do not set labels, request or
 >    run reviews, mark ready, merge, or touch `main`, other branches, settings
 >    or tokens.
 >
-> [^measurement]: Follow [after-merge measurements](measure-after-merge.md):
->     replace the template's first line with `Refs #N` for a deferred measurement
->     or a fix or revert following an out-of-tolerance result. Before publishing,
->     the implementer greps title, body and all commit messages for closing
->     keywords naming the issue and removes closing references; after opening
->     the PR, check that `gh pr view <N> --json closingIssuesReferences` excludes
->     it. Remove closing links in the PR's Development sidebar (`gh` has no
->     unlink); report an unremovable link or a commit message needing a history
->     rewrite and new head to the orchestrator. The linked procedure assigns
->     the orchestrator's checks when asking for merge, immediately before
->     merging, and after merge; it holds the merge if prevention is incomplete.
+> [^measurement]: `<N>` is the implementer's own issue number;
+>     `<measured issue>` is the issue whose deferred measurement is still pending
+>     judgement. Follow [after-merge measurements](measure-after-merge.md#keep-the-issue-open-through-merge):
+>     replace the template's first line with `Refs #<measured issue>` when it is
+>     your own deferred-measurement issue. Any PR that fixes, reverts or otherwise
+>     changes what that measurement measures before the measured issue is judged
+>     complete also uses `Refs #<measured issue>`, including condition violations
+>     and defects found before a run; it may still `Closes #<N>` for a separate
+>     problem issue. Before publishing, the implementer greps title, body and all
+>     commit messages using the linked pattern and removes closing references to
+>     the measured issue; after opening the PR, check that
+>     `gh pr view <PR> --json closingIssuesReferences` excludes that issue.
+>     Remove closing links in the PR's Development sidebar (`gh` has no unlink);
+>     report an unremovable link or a commit message needing a history rewrite
+>     and new head to the orchestrator. The linked procedure requires the
+>     orchestrator's grep and closing-link checks when asking for merge and
+>     immediately before merging, and the issue-open check after merge, at the
+>     pending entry and at judgement; it holds the merge if prevention is
+>     incomplete. Reopening and recording accidental closure repairs it and
+>     never replaces prevention.
 
 ## Local checks by change type
 

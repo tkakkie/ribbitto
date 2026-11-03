@@ -145,17 +145,16 @@ Pull request:
 
 1. The implementer works in its worktree and passes the
    [local checks by change type](delivery.md#local-checks-by-change-type).
-2. Draft pull request with "Closes #N", except `Refs #N` for
-   [deferred after-merge measurements](measure-after-merge.md) and fix or revert
-   PRs following an out-of-tolerance result; CI goes green. For that exception,
-   when asking for merge and again immediately before merging, the orchestrator
-   greps the title, body and all commit messages for closing keywords naming
-   the issue and checks that `gh pr view <N> --json closingIssuesReferences`
-   excludes it. Remove closing references and links as the linked procedure
-   requires; an unremovable link or a commit message needing a history rewrite
-   holds the merge and is reported to the maintainer. After merge, the
-   orchestrator confirms the issue is open; otherwise reopens it at once and
-   records the repair on the issue.
+2. Draft pull request with "Closes #N", except `Refs #<measured issue>` for
+   [deferred measurements and PRs changing what they measure](measure-after-merge.md#keep-the-issue-open-through-merge)
+   before completion; CI goes green. The linked procedure defines the numbers,
+   permits `Closes` for a separate problem issue, and requires the orchestrator's
+   keyword grep and `closingIssuesReferences` check when asking for merge and
+   immediately before merging. An unremovable link or a commit message needing
+   a history rewrite holds the merge and is reported to the maintainer.
+   Confirm the measured issue is open after merge, at the pending entry and at
+   judgement; otherwise reopen it and record the repair, without replacing
+   prevention.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each

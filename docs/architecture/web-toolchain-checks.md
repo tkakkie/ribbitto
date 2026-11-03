@@ -37,10 +37,8 @@ root `package.json` module scope; the real-Node `TestRealNodeTests` probe (only
 with that flag) checks pass/fail propagation and fails if
 `MODULE_TYPELESS_PACKAGE_JSON` returns (with a temporary-root positive control).
 The setup harness creates temporary annotated `.ts` modules and proves relative
-`.ts` imports and type stripping. Harnesses import DOM-free `web/src/<concern>.ts`
-by relative `.ts` path, using `node:test` and `node:assert/strict` with the
-hand-written `node-test.d.ts` declarations from #2092 (no `@types/node`) and no
-DOM emulator. Stripping types in `node --test` is not checking them, so both checks remain required.
+`.ts` imports and type stripping. See [`web-tests.md`](web-tests.md) for the
+test layers and harness rules.
 
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned

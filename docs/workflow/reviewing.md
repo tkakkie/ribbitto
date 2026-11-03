@@ -79,12 +79,12 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   `go -C tools run ./deps --diff origin/main ..` locally for the same list.
 - Tests prove the behaviour (authorization: someone who must not see the
   data does not see it). No test was deleted, skipped or weakened.
-- A test-only pull request meant to catch a regression records, in
-  *Verified by*, one deliberate defect in the code under test that breaks
-  the behaviour the test guards and fails its assertion (not a crash or a
-  compile error), and that the test passes again once it is reverted
-  (#360). Evidence may come from local checks or CI; record the deliberate
-  defect and its failing assertion, then revert it.
+- A test-only pull request meant to catch a regression, or any pull request
+  that adds or changes a client unit test
+  ([`web-tests.md`](../architecture/web-tests.md)), records in *Verified by*
+  (from local checks or CI) one deliberate defect in the code under test that
+  breaks the behaviour the test guards and fails its assertion (not a crash or
+  a compile error), and that the test passes again once reverted (#360).
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 - For each exception in `docs/language-exceptions.txt`, verify that its

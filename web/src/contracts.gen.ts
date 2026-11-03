@@ -338,7 +338,27 @@ export const CopiedAttribute = "data-copied";
 export const CopiedLabelAttribute = "data-copied-label";
 export const MemberIDAttribute = "data-member-id";
 export const OwnMentionAttribute = "data-own-mention";
+export const StreamStoppedID = "stream-stopped";
+export const streamStoppedSelector = (): string => "#" + StreamStoppedID;
+export const getStreamStopped = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(streamStoppedSelector());
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute;
+export const LoadOlderID = "load-older";
+export const loadOlderSelector = (): string => "#" + LoadOlderID;
+export const getLoadOlder = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(loadOlderSelector());
+
+export const UnreadDividerID = "unread-divider";
+export const unreadDividerSelector = (): string => "#" + UnreadDividerID;
+export const getUnreadDivider = (root: ParentNode = document): HTMLLIElement | null => root.querySelector<HTMLLIElement>(unreadDividerSelector());
+
+export const BranchToID = "branch-to";
+export const branchToSelector = (): string => "#" + BranchToID;
+export const getBranchTo = (root: ParentNode = document): HTMLSelectElement | null => root.querySelector<HTMLSelectElement>(branchToSelector());
+
+export const OldestSeqAttribute = "data-oldest-seq";
+export const ToTopicAttribute = "data-to-topic";
+export const EventSeqAttribute = "data-event-seq";
+export const AnnouncementAttribute = "data-announcement";
+
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute | typeof OldestSeqAttribute | typeof ToTopicAttribute | typeof EventSeqAttribute | typeof AnnouncementAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

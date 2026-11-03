@@ -78,9 +78,9 @@ templ LiveMessageItem(entry Message) {
 templ messageItem(entry Message, announcement string) {
 	<li
 		id={ MessageDOMID(entry.ID) }
-		data-event-seq={ fmt.Sprint(entry.EventSeq) }
+		{ EventSeqAttribute }={ fmt.Sprint(entry.EventSeq) }
 		if announcement != "" {
-			data-announcement={ announcement }
+			{ AnnouncementAttribute }={ announcement }
 		}
 		// A message's URL lands on it (decision 36): :target highlights it
 		// without JavaScript, and the outline widens the fill past the text
@@ -211,7 +211,7 @@ templ PinControl(entry Message, errorKey string) {
 
 // MovedMessageItems carries replacement items without new-post announcements.
 templ MovedMessageItems(entries []Message, from, to kernel.ID) {
-	<ul { FromTopicAttribute }={ idValue(from) } data-to-topic={ idValue(to) }>
+	<ul { FromTopicAttribute }={ idValue(from) } { ToTopicAttribute }={ idValue(to) }>
 		for _, entry := range entries {
 			@MessageItem(entry)
 		}

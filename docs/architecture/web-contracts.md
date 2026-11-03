@@ -41,10 +41,11 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `method`, `action` | pin form | always | normal POST fallback; no `hx-*` on this form or its buttons |
   | `formaction`, `hidden` | pin button | action always; hidden on inactive action | native submit with no `type` or `hx-*`; delegated submit uses `event.submitter`, or the non-hidden pin button when absent |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
+  | `data-announcement` | live message `<li>` | new-post delivery only | server-rendered text appended to the polite live region, which retains ten additions |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
-  | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
+  | `data-event-seq` | each message `<li>` and unread divider | always | its `event_seq`, which orders an inserted item |
   | `data-quote-handle` | body member reference | always, empty if unresolved | viewer-independent handle for selection extraction |
   | `data-quote-selection` | submit button immediately after each body | always, initially `hidden` | selection-only submitter of `#quote-form`; no `type` or `hx-*`; shared across viewers |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |

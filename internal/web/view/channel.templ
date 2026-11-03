@@ -540,7 +540,7 @@ templ messageComposer(page ChannelPage) {
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
 			aria-describedby={ MessageHelpID + " composer-quote-description" }
 			aria-description={ i18n.T(ctx, "mention.help") }
-			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry keyboard:min-w-0 keyboard:flex-1"
+			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry keyboard:min-h-0 keyboard:min-w-0 keyboard:flex-1"
 		>{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3 keyboard:contents">
 			// The sending status covers the help, which keeps its space, so the

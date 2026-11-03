@@ -39,8 +39,10 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   const keyboardOpen = () => Boolean(dom.getOrganizationStream()?.style.getPropertyValue("--composer-viewport-h")) &&
     Boolean(conversation && getComputedStyle(conversation).overflowY === "auto");
   const revealComposer = () => {
-    const b = dom.getMessageBody();
-    if (keyboardOpen() && document.activeElement === b) conversation!.scrollTop = conversation!.scrollHeight;
+    if (!keyboardOpen()) return;
+    const active = document.activeElement;
+    if (active === dom.getMessageBody()) conversation!.scrollTop = conversation!.scrollHeight;
+    else if (active === dom.getQuoteText()) active?.scrollIntoView({ block: "nearest" });
   };
   let rememberPost = () => {};
   let freshRestoredKey: string | null = null;
@@ -192,7 +194,6 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     if (keyboardOpen()) {
       const listPane = dom.getMessageList();
       if (listPane) listPane.scrollTop = listPane.scrollHeight;
-      revealComposer();
     } else {
       item.scrollIntoView({ block: "nearest" });
     }
@@ -459,7 +460,10 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     });
     resize.observe(pane);
     if (conversation) resize.observe(conversation);
-    if (body) { resize.observe(body); resize.observe(body.form); body.addEventListener("focus", revealComposer); }
+    if (body) { resize.observe(body); resize.observe(body.form); }
+    document.addEventListener("focusin", (event) => {
+      if (event.target === dom.getMessageBody() || event.target === dom.getQuoteText()) revealComposer();
+    });
     document.addEventListener("htmx:afterSwap", (native) => {
       const event = native as HtmxEvent;
       if (event.target.id === dom.MessageComposerStateID && dom.readAttribute(event.target, dom.PostedMessageAttribute)) settling = true;
@@ -468,11 +472,13 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       const event = native as HtmxEvent;
       const posted = event.target.id === dom.MessageComposerStateID && settling;
       if (!posted && !pane.contains(event.target)) return;
+      const top = conversation?.scrollTop;
       // History and the stream finish scrolling synchronously after this
-      // listener, including delivery after a response. Restore the focused
-      // composer without changing their list position, then save it.
+      // listener. Only our response forces the composer into view; other
+      // settles preserve the reader's conversation position.
       queueMicrotask(() => {
-        revealComposer();
+        if (posted) revealComposer();
+        else if (keyboardOpen() && top !== undefined) conversation!.scrollTop = top;
         rememberPost();
         if (posted) settling = false;
       });

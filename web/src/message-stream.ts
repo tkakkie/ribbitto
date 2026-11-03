@@ -24,7 +24,8 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     if (!sourceState.hiding) return;
     const transition = parkSource(sourceState, event.detail.source.readyState);
     if (transition.action === "park") parked = event.detail.source;
-    sourceState = transition.state;
+    // An accessor-backed event can return a falsy source on the second read.
+    sourceState = { ...transition.state, parked: Boolean(parked) };
   });
   window.addEventListener("pagehide", (event) => {
     const transition = pageHide(sourceState, event.persisted);
@@ -129,7 +130,7 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     const applied = shownCursor(document.visibilityState === "visible",
       () => connection ? data(connection, dom.AppliedCursorAttribute) : undefined);
     if (!applied) return;
-    dom.writeAttribute(connection!, dom.EventCursorAttribute, applied);
+    dom.writeAttribute(connection!, dom.EventCursorAttribute, data(connection, dom.AppliedCursorAttribute)!);
     document.dispatchEvent(new Event(dom.ReadAppliedEvent));
   };
   document.addEventListener("visibilitychange", showApplied);

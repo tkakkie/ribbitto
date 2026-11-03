@@ -30,6 +30,7 @@ import (
 var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 const (
+	syntaxTarget           = api.ES2018
 	prodDistDir            = "web/static/dist"
 	prodMapDir             = "bin/sourcemaps"
 	devDistDir             = "bin/dev-dist"
@@ -187,7 +188,7 @@ func build(root, commit, runID string, dev bool) error {
 	opts := api.BuildOptions{
 		AbsWorkingDir: root, EntryPoints: inputs, Outdir: dist,
 		EntryNames: "[name]-[hash]", Bundle: true, Format: api.FormatIIFE,
-		Platform: api.PlatformBrowser, Target: api.ES2017,
+		Platform: api.PlatformBrowser, Target: syntaxTarget,
 		MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
 		Sourcemap: sourcemap, SourcesContent: api.SourcesContentInclude,
 		LegalComments: api.LegalCommentsNone,

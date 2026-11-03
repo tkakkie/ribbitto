@@ -34,9 +34,11 @@ need no table entries.
 **Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
-dynamic imports. ES2017 is the syntax target approved by the maintainer on
-2026-10-26 ([browser target rule 4](browser-targets.md#design-rules)); it adds
-no Web API polyfills, and browser verification of the served bundle belongs to #1820.
+dynamic imports. The maintainer raised ES2017 to ES2018 on 2026-11-03 (#2119):
+supported browsers run ES2018; lowering object spread/rest adds needless
+per-bundle helpers ([browser target rule 4](browser-targets.md#design-rules)).
+This syntax floor adds no Web API polyfills and does not complete browser
+verification; #1820 checks the served bundle.
 
 The builder validates esbuild's metafile and output, writes
 `manifest.json` last, then replaces the whole ignored `dist` directory

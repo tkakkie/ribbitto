@@ -41,7 +41,7 @@ risk and issue text:
 
 Rows are exclusive. A pull request whose files fall in more than one row,
 or in none, uses the last row. So does any pull request touching
-`tools/go.mod`, `tools/go.sum`, `tools/tbls/go.mod`, `tools/webbuild`,
+any `go.mod` or `go.sum`, `tools/webbuild`,
 `tools/sourcemaps` or `tools/webtypes` (they feed bundles or root tests).
 Anything no row names also uses the last row (`go.mod`, `go.sum`, `Makefile`,
 configuration files, the locale TOML
@@ -57,7 +57,7 @@ the new row's "before opening" commands before that push.
 | `.github/**` only | `make prepush`, `make check-tools` and `go test -race ./web/static` (it reads the workflows) | `make prepush` |
 | Other `tools/**` only (excluding the paths above) | `make prepush`, `make check-static` and `make check-tools` | `make prepush` |
 | Root-module `*_test.go` files only (fixture packages such as `identitytest`, `orgtest` and `conversationtest`, other helper packages and `testdata/` are not test files and use the last row) | `make prepush`, `make check-static`, `make check-tools` and `make check-test GO_TEST_PACKAGES="<touched packages>"`, with `RIBBITTO_TEST_DATABASE_URL` and `RIBBITTO_REQUIRE_DB=1` set (without them database tests skip silently) | `make prepush` |
-| Anything else, including Go production code, TypeScript, templ, CSS, SQL and generated files | `make check` once (test database set via `RIBBITTO_TEST_DATABASE_URL`, `RIBBITTO_REQUIRE_DB=1`) and `make prepush`; if TypeScript changed, first run `make web-install`, then require Node verification with `RIBBITTO_REQUIRE_NODE=1 make check-web test-web` | `make prepush` |
+| Anything else, including Go production code, TypeScript, templ, CSS, SQL and generated files | `make check` once (test database set via `RIBBITTO_TEST_DATABASE_URL`, `RIBBITTO_REQUIRE_DB=1`) and `make prepush`; if TypeScript or its toolchain (`web/src`, `tools/webtypes`, `tools/webbuild`, `tsconfig.json`, any `package.json` or `package-lock.json`, `.node-version`) changed, first run `make web-install`, then require Node verification with `RIBBITTO_REQUIRE_NODE=1 make check-web test-web` | `make prepush` |
 
 Run `make prepush` before every push. CI stays the full gate. In the pull
 request body's **Verified by**, name the row used and the commands actually

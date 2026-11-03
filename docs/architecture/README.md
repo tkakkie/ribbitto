@@ -58,6 +58,7 @@ Read the file for the area you change:
 | [`web-conventions.md`](web-conventions.md) | *planned* (decision 43): front-end module layout, pure logic versus DOM code, typed state, script registry, shared helpers and generated DOM contracts |
 | [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
 | [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1469, #1819) |
+| [`web-source-maps-store.md`](web-source-maps-store.md) | the private source-map store's job, release naming, lifecycle and retention (#1819) |
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
 | [`web-tests.md`](web-tests.md) | client test layers (unit, glue, browser, Go checks), when not to write a test, `.test.ts` harness rules, test deletion and review checks (#2089) |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |

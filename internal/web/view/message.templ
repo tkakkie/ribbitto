@@ -128,7 +128,7 @@ templ messageItem(entry Message, announcement string) {
 				</a>
 				// Every checkbox shows the same label, so its message's body describes it.
 				<label class="ml-auto inline-flex min-h-9 min-w-0 items-center gap-2 rounded-md px-2 text-caption text-muted hover:bg-hover max-desk:min-h-11">
-					<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ BodyMessageDOMID(entry.ID) }/>
+					<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form={ BranchFormID } name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } { SourceAttribute }={ idValue(entry.TopicID) } aria-describedby={ BodyMessageDOMID(entry.ID) }/>
 					{ i18n.T(ctx, "topic.branch_select") }
 				</label>
 				@messageActions(entry)

@@ -38,10 +38,10 @@ type mockRelease struct {
 type mockStore struct {
 	token, expiryHeader, tamperManifest, failTagDel, failTagDel422, tagDel404, tagDel422, recheckTagRel, failRunsSHA string
 	releases                                                                                                         []mockRelease
-	tags, events                                                                                        []string
-	activeSHAs                                                                                          map[string]bool
-	failUpload                                                                                          bool
-	failRelDelID, relDel404ID, wrongLookupID, nextID                                                    int64
+	tags, events                                                                                                     []string
+	activeSHAs                                                                                                       map[string]bool
+	failUpload                                                                                                       bool
+	failRelDelID, relDel404ID, wrongLookupID, nextID                                                                 int64
 }
 
 func (s *mockStore) server(t *testing.T) *httptest.Server {

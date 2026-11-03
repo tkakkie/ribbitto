@@ -34,8 +34,10 @@ changes ([third-AI review](../workflow/review-operations.md#third-ai-review)).
   reused, renamed, retagged or returned to draft; they target store `main`
   (`target_commitish: "main"`, README-only store) and tags are created/deleted
   with their release. Reruns or second pushes make new releases; #2049 and
-  lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id>]]`)
-  resolve a SHA to its newest complete published release.
+  lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`)
+  resolve a SHA to its newest complete published release within the supplied
+  run/attempt filters. An attempt requires a run id; exact selection never
+  falls back to another run or attempt.
 - **Release lifecycle:** each run creates a draft, uploads maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verifies
   them against that manifest, publishes, and verifies lookup and per-ID
@@ -77,5 +79,37 @@ changes ([third-AI review](../workflow/review-operations.md#third-ai-review)).
   control chars, without secrets or headers. Failed uploads, refused/expired
   auth or failed deletions fail visibly; upload failures skip retention and
   delete nothing.
+
+## Exact-build verification — #2049 (Part 1/2)
+
+Before any future distribution or deployment step, run
+`go -C tools run ./sourcemaps -verify <bundle dir> <SHA> <run id> <attempt>`
+with store access (the existing credential rules still apply). Use the actual
+production bundle directory, containing the complete set of top-level `.js`
+bundles from that producing run/attempt, such as `../web/static/dist` (relative
+to `tools/` because of `-C tools`). Only top-level names ending exactly in `.js`
+are checked; their targets must be regular files (symlinks are followed).
+Other names, including `manifest.json`, `X.JS` and nested bundles, are ignored.
+The command requires a complete published release for that exact SHA, run id
+and attempt, hashes every bundle's bytes with SHA-256, and checks both its file
+name and hash against the stored index. Missing releases, mismatched bytes or
+names, missing/extra bundles, non-regular targets, empty indexes and read failures
+exit nonzero. Each indexed map must have a non-empty uploaded release asset;
+verification does not download maps or check their contents. It only reads the
+store and never uploads a substitute for a missing release.
+
+On success, stdout is a JSON receipt with `commit`, `run_id`, `attempt`,
+`release` (the full store release name), and `entries` (each bundle's `file`,
+`sha256` and indexed map asset name `map`). The future distribution/deploy step must
+retain this receipt outside public assets with the build's distribution record,
+stop on verification failure, and distribute those exact verified bytes without rebuilding or
+changing them. For investigation, use the receipt's SHA, bundle hash, run id
+and attempt with `-lookup`; this selects the corresponding map even when a
+later same-SHA rebuild differs. SHA-only lookup is insufficient evidence for
+distribution. `TestExactBuildVerification` exercises this against a fake store.
+
+This introduces no distribution step. The production gate remains closed
+until Part 2 (production markers and retention) also merges; future distribution
+and deployment implementations must wire this verification before distribution.
 
 [i1819]: https://github.com/tkakkie/ribbitto/issues/1819

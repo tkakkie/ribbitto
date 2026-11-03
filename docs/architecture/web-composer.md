@@ -32,8 +32,8 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 - **Pending own posts:** see [web-composer-pending.md](web-composer-pending.md).
 - **Idempotency key** (#1155): hidden `idempotency_key`, fresh on load, success/409; kept on 422. Scoped to authorised membership; never in streams. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
-- **Stream reset:** the [reload guard](web-javascript.md#javascript) reads form
-  `data-state` projected from the queue, the composer's request class and
+- **Stream reset:** the [reload guard](web-javascript.md#javascript) receives the queue's
+  `message-pending-changed` predicate and reads the composer's request class and
   #1179's failure alert. `internal/web/stream_reset_browser_test.go` specifies
   holds and release through the real composer; Edit's restored text is a draft. Dispatched
   requests time out at 30 s; queues/retries/failed text can extend the hold.

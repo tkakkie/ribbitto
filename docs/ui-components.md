@@ -40,8 +40,8 @@ Two uses make a look an `internal/web/view` component; pages reuse it.
 
 Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
 for 48 px phone targets; `textField` sets `inputProps.Tall` for the same
-height. Every `textInput` has `text-entry` (16 px) text below `desk`, so
-iOS Safari does not zoom on focus (#1120). The move form's `<select>`
+height. Every `textInput` has `text-entry` (16 px) text below `desk` and under `coarse:`, so
+iOS Safari does not zoom on focus (#1120, #2081). The move form's `<select>`
 has it too.
 
 Topic links wrap anywhere, keeping messages and the overview within their

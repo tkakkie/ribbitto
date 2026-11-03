@@ -21,7 +21,7 @@ func resetClock(page *rod.Page) {
   window.name='1'; window.reloadTimers=new Map(); let id=-1;
   const schedule=window.setTimeout, cancel=window.clearTimeout;
   window.setTimeout=(fn,ms,...args)=>{
-   if(!new Error().stack.includes('message-stream-v14.js')) return schedule(fn,ms,...args);
+   if(!new Error().stack.includes('message-stream-v15.js')) return schedule(fn,ms,...args);
    if(ms<0 || ms>5000) throw new Error('reset jitter out of range');
    window.reloadTimers.set(id,()=>fn(...args)); return id--;
   };
@@ -55,6 +55,85 @@ func resetReload(t *testing.T, page *rod.Page) {
 }
 
 func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
+	for _, delayed := range []string{"composer-", "message-stream-"} {
+		t.Run("handshake/late-"+delayed, func(t *testing.T) {
+			page, events, _, _ := pendingBrowser(t, browser, false, delayed)
+			resetClock(page)
+			load := func() {
+				t.Helper()
+				page.MustEval(`part => new Promise((resolve,reject)=>{
+ const script=document.createElement('script');
+ script.src=[...document.scripts].find(s=>s.src.includes(part)).src+'?late=1';
+ script.onload=()=>resolve(true);script.onerror=()=>reject(new Error("script load failed"));document.head.append(script);
+})`, delayed)
+			}
+			queue := func() {
+				page.MustEval(`() => {
+ document.addEventListener('htmx:beforeRequest',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true});
+ const b=document.getElementById('message-body');b.value='queued before reload';b.form.requestSubmit();
+}`)
+				page.MustWait(`() => !!document.querySelector('[data-state=queued]')`)
+			}
+			if delayed == "composer-" {
+				events <- realtime.Outgoing{Name: "reset"}
+				page.MustWait(`() => window.reloadTimers.size===1`)
+				page.MustEval(`() => {window.startup=[];document.addEventListener('message-pending-changed',e=>startup.push(e.detail.holdsReload))}`)
+				load()
+				if page.MustEval(`() => JSON.stringify(startup)`).Str() != "[false]" {
+					t.Fatal("late composer did not publish its initial reload predicate")
+				}
+				queue()
+			} else {
+				queue()
+				load()
+				page.MustEval(`() => document.getElementById("organization-stream").dispatchEvent(new CustomEvent("htmx:sseOpen",{bubbles:true,detail:{source:window.source}}))`)
+				events <- realtime.Outgoing{Name: "reset"}
+				page.MustWait(`() => window.source.readyState===EventSource.CLOSED`)
+			}
+			resetHeld(t, page)
+			page.MustEval(`() => document.querySelector('[data-pending-remove]').click()`)
+			resetReload(t, page)
+		})
+	}
+
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reload-then-notify/held=%t", held), func(t *testing.T) {
+			page, events, posts, _ := pendingBrowser(t, browser, false)
+			resetClock(page)
+			page.MustEval(`() => {const b=document.getElementById('message-body');b.value='confirmed';b.form.requestSubmit()}`)
+			receivePending(t, page, posts).reply <- pendingAnswer(t, kernel.ID{51})
+			page.MustWait(`() => window.answers===1`)
+			events <- realtime.Outgoing{Name: "reset"}
+			page.MustWait(`() => window.reloadTimers.size===1`)
+			// Keep the old document alive while its reload navigation is in flight.
+			release := make(chan struct{})
+			router := page.HijackRequests()
+			router.MustAdd("*", func(h *rod.Hijack) {
+				if h.Request.Type() == proto.NetworkResourceTypeDocument {
+					<-release
+					h.Response.Fail(proto.NetworkErrorReasonAborted)
+					return
+				}
+				h.ContinueRequest(&proto.FetchContinueRequest{})
+			})
+			go router.Run()
+			t.Cleanup(func() { close(release); _ = router.Stop() })
+			if !page.MustEval(`held => {
+ // Removal queues a recheck before the timer fires in this same task.
+ document.querySelector('[data-pending-remove]').click();
+ window.fireReset();
+ // A later notification must also be inert throughout the navigation.
+ if(held){
+  document.addEventListener('htmx:beforeRequest',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true});
+  const b=document.getElementById('message-body');b.value='next';b.form.requestSubmit();
+ } else document.dispatchEvent(new CustomEvent('message-pending-query',{detail:{}}));
+ return Promise.resolve().then(()=>reloadTimers.size===0 && document.getElementById('stream-stopped').hidden);
+}`, held).Bool() {
+				t.Fatal("queue notification after reload rearmed a timer or revealed the notice")
+			}
+		})
+	}
+
 	// Isolate each predicate: another at-stake state must not mask its removal.
 	for _, test := range []struct {
 		state string
@@ -77,7 +156,7 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 		{"draft", false},
 	} {
 		t.Run(test.state, func(t *testing.T) {
-			page, events, _, _ := pendingBrowser(t, browser, false)
+			page, events, posts, _ := pendingBrowser(t, browser, false)
 			resetClock(page)
 			page.MustEval(`state=>{
     const form=document.getElementById('message-composer');
@@ -87,13 +166,27 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
      alert.textContent=state==='alert-other'?'arbitrary text':alert.dataset[state.slice(6)];
     }
     else if(state==='draft') form.elements.body.value='draft';
-    else {
-     const item=document.getElementById('message-pending-template').content.firstElementChild.cloneNode(true);
-     item.querySelector('form').dataset.state=state==='unconfirmed'?'failed':state;
-     if(state==='unconfirmed') item.querySelector('form').dataset.unconfirmed='true';
-     document.getElementById('message-pending').append(item);
-    }
    }`, test.state)
+			if test.state == "queued" || test.state == "sending" || test.state == "failed" || test.state == "unconfirmed" || test.state == "confirmed" {
+				if test.state == "queued" {
+					page.MustEval(`() => document.addEventListener('htmx:beforeRequest',e=>{e.preventDefault();e.stopImmediatePropagation()},{capture:true,once:true})`)
+				}
+				page.MustEval(`() => {const b=document.getElementById('message-body');b.value='pending';b.form.requestSubmit()}`)
+				if test.state != "queued" {
+					request := receivePending(t, page, posts)
+					if test.state != "sending" {
+						reply := browserReply{status: 400, body: []byte("refused")}
+						if test.state == "unconfirmed" {
+							reply.status = 500
+						}
+						if test.state == "confirmed" {
+							reply = pendingAnswer(t, kernel.ID{51})
+						}
+						request.reply <- reply
+						page.MustWait(`() => window.answers===1`)
+					}
+				}
+			}
 			events <- realtime.Outgoing{Name: "reset"}
 			page.MustWait(`() => window.source.readyState===EventSource.CLOSED`)
 			if test.holds {
@@ -101,7 +194,7 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 				page.MustEval(`() => {
      document.getElementById('message-composer').classList.remove('htmx-request');
      document.getElementById('message-send-alert').firstChild?.replaceData(0,100,'');
-     document.querySelector('#message-pending form')?.setAttribute('data-state','confirmed');
+     document.querySelector('[data-pending-remove]')?.click();
     }`)
 			}
 			resetReload(t, page)
@@ -186,6 +279,72 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 		}
 	}
+	for _, state := range []string{"queued", "sending", "failed", "unconfirmed"} {
+		for _, action := range []string{"retry", "edit", "remove"} {
+			t.Run("output-only/"+state+"/"+action, func(t *testing.T) {
+				page, events, posts, _ := pendingBrowser(t, browser, false)
+				resetClock(page)
+				page.MustEval(`() => {const b=document.getElementById('message-body');for(const text of ['first','second']){b.value=text;b.form.requestSubmit()}}`)
+				first := receivePending(t, page, posts)
+				if state == "failed" || state == "unconfirmed" {
+					status := 400
+					if state == "unconfirmed" {
+						status = 500
+					}
+					first.reply <- browserReply{status: status, body: []byte("refused")}
+					page.MustWait(`() => window.answers===1`)
+				}
+				// Corrupt every projection before reset, without notifying the queue.
+				if !page.MustEval(`state => {
+ const forms=[...document.querySelectorAll('[data-pending-form]')];
+ window.subject=forms[state==='queued'?1:0];
+ for(const f of forms){f.dataset.state='confirmed';f.dataset.unconfirmed=f.hasAttribute('data-unconfirmed')?'':'true'}
+ const b=document.getElementById('message-body');b.dispatchEvent(new Event('input',{bubbles:true}));
+ return subject.querySelector('[data-pending-edit]').disabled===(state==='queued'||state==='sending') && !subject.querySelector('[data-pending-remove]').disabled;
+}`, state).Bool() {
+					t.Fatal("external projections changed action availability")
+				}
+				events <- realtime.Outgoing{Name: "reset"}
+				page.MustWait(`() => window.source.readyState===EventSource.CLOSED`)
+				resetHeld(t, page)
+				page.MustEval(`action => {
+ if(action==='retry')subject.requestSubmit();
+ else {const button=subject.querySelector('[data-pending-'+action+']');button.disabled=false;button.click()}
+}`, action)
+				failed := state == "failed" || state == "unconfirmed"
+				if action == "edit" && !page.MustEval(`failed => document.getElementById('message-body').value===(failed?'first':'')`, failed).Bool() {
+					t.Fatal("external projections changed Edit eligibility or text")
+				}
+				if state == "queued" || state == "sending" {
+					first.reply <- pendingAnswer(t, kernel.ID{51})
+				}
+				if state == "unconfirmed" && action == "retry" {
+					retry := receivePending(t, page, posts)
+					if retry.values.Encode() != first.values.Encode() {
+						t.Fatal("unconfirmed Retry lost its place or identity")
+					}
+					retry.reply <- pendingAnswer(t, kernel.ID{51})
+				}
+				if state != "queued" || action != "remove" {
+					next := receivePending(t, page, posts)
+					if next.values.Get("body") != "second" {
+						t.Fatal("external projections changed FIFO dispatch")
+					}
+					resetHeld(t, page)
+					next.reply <- pendingAnswer(t, kernel.ID{52})
+				}
+				if state == "failed" && action == "retry" {
+					retry := receivePending(t, page, posts)
+					if retry.values.Encode() != first.values.Encode() {
+						t.Fatal("refused Retry changed identity")
+					}
+					retry.reply <- pendingAnswer(t, kernel.ID{51})
+				}
+				resetReload(t, page)
+			})
+		}
+	}
+
 	for _, lost := range []bool{false, true} {
 		t.Run(fmt.Sprintf("queue/lost=%t", lost), func(t *testing.T) {
 			page, events, posts, _ := pendingBrowser(t, browser, false)

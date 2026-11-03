@@ -1,5 +1,5 @@
 import * as dom from "./contracts.gen.ts";
-import { createComposerQueue, type PendingItem, type Delivery } from "./composer-queue.ts";
+import { createComposerQueue, holdsReload, type PendingItem, type Delivery } from "./composer-queue.ts";
 
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
@@ -39,12 +39,14 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   let freshRestoredKey: string | null = null;
   let admitting: ComposerForm | undefined;
   const forms = new Map<PendingItem, ComposerForm>();
+  const elements = new WeakMap<PendingItem, HTMLLIElement>();
   const identities = new WeakMap<ComposerForm, PendingItem>();
   const projected = new WeakMap<PendingItem, PendingItem>();
   const queue = createComposerQueue(() => performance.now(), () => crypto.randomUUID(), (settled, notice) => {
     for (const item of queue.items) if (!forms.has(item) && admitting) {
       forms.set(item, admitting);
       identities.set(admitting, item);
+      elements.set(item, admitting.closest("li")!);
     }
     for (const [item, form] of forms) {
       const previous = projected.get(item);
@@ -57,10 +59,15 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       if (previous?.state !== item.state) dom.writeAttribute(form, dom.StateAttribute, item.state);
       if (previous && (previous.unconfirmed !== item.unconfirmed || (settled === item && notice === "unconfirmed"))) uncertainty();
       if (item.postedMessage !== null && previous?.postedMessage !== item.postedMessage)
-        dom.writeAttribute(form.closest("li")!, dom.PostedMessageAttribute, item.postedMessage);
+        dom.writeAttribute(elements.get(item)!, dom.PostedMessageAttribute, item.postedMessage);
       projected.set(item, { ...item });
     }
+    notifyPending();
   });
+  // Query/reply covers either script order, including changes before the listener.
+  const notifyPending = () => dom.dispatchMessagePendingChangedEvent(document, { holdsReload: holdsReload(queue.items) });
+  dom.listenMessagePendingQueryEvent(document, notifyPending);
+  notifyPending();
   const releaseRestored = (body: ComposerBody) => {
     body.form.removeAttribute(dom.UnconfirmedKeyAttribute);
     body.form.elements.idempotency_key.value = crypto.randomUUID ? crypto.randomUUID() : freshRestoredKey!;
@@ -85,15 +92,16 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   const updateEdits = () => {
     const body = (dom.getMessageBody() as ComposerBody);
     const occupied = body.value !== "" || composing.has(body);
-    for (const form of pendingForms()) {
+    for (const pending of queue.items) {
+      const form = forms.get(pending)!;
+      if (!elements.get(pending)!.isConnected) continue;
       const edit = form.querySelector<HTMLButtonElement>(`[${dom.PendingEditAttribute}]`)!;
       const help = form.querySelector<HTMLElement>(`[${dom.PendingEditHelpAttribute}]`)!;
-      edit.disabled = occupied || identities.get(form)?.state !== "failed";
+      edit.disabled = occupied || pending.state !== "failed";
       help.hidden = !occupied;
       edit.setAttribute("aria-describedby", form.closest("li")!.querySelector(`[${dom.PendingBodyAttribute}]`)!.id + (occupied ? " " + help.id : ""));
     }
   };
-  const pendingForms = () => [...document.querySelectorAll<ComposerForm>(`${dom.messagePendingSelector()} [${dom.PendingFormAttribute}]`)];
   const dispatch = () => {
     const head = queue.next((dom.getMessageComposer() as ComposerForm | null)?.classList.contains("htmx-request"));
     if (head) htmx.trigger(forms.get(head)!, dom.PendingSendEvent);
@@ -108,7 +116,13 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       if (pending.state !== "failed") return;
       // A refused send will now be stored after the later sends. An unknown
       // outcome keeps its place until its same-key retry resolves it.
-      if (!pending.unconfirmed) form.closest("li")!.parentElement!.append(form.closest("li")!);
+      if (!pending.unconfirmed) {
+        const element = elements.get(pending)!;
+        element.parentElement!.append(element);
+        // Reconciliation must remove batched deliveries in the rendered order.
+        forms.delete(pending);
+        forms.set(pending, form);
+      }
       queue.retry(pending);
       form.querySelector("[role=status]")!.textContent = "";
       form.querySelector<HTMLElement>(`[${dom.PendingActionsAttribute}]`)!.hidden = true;
@@ -154,14 +168,14 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     }
     sending.elements.idempotency_key.value = pending.requestKey;
     form.removeAttribute(dom.UnconfirmedKeyAttribute);
-    sending.elements.body.value = body.value;
+    sending.elements.body.value = pending.text;
     const shownBody = item.querySelector(`[${dom.PendingBodyAttribute}]`)!;
     shownBody.textContent = pending.text.replace(/\r\n?/g, "\n").trim();
-    shownBody.id += "-" + sending.elements.idempotency_key.value;
-    sending.querySelector<HTMLElement>(`[${dom.PendingEditHelpAttribute}]`)!.id += "-" + sending.elements.idempotency_key.value;
+    shownBody.id += "-" + pending.requestKey;
+    sending.querySelector<HTMLElement>(`[${dom.PendingEditHelpAttribute}]`)!.id += "-" + pending.requestKey;
     for (const button of sending.querySelectorAll("button")) button.setAttribute("aria-describedby", shownBody.id);
     list.append(item);
-    dom.dispatchMessageSendingEvent((dom.getMessageBody() as ComposerBody), { key: sending.elements.idempotency_key.value, body: body.value, inPlace: false });
+    dom.dispatchMessageSendingEvent((dom.getMessageBody() as ComposerBody), { key: pending.requestKey, body: pending.text, inPlace: false });
     body.value = "";
     form.elements.idempotency_key.value = crypto.randomUUID();
     body.focus({ preventScroll: true });
@@ -186,10 +200,10 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   const reconcile = () => {
     const list = dom.getMessagePending()!;
     if (list) queue.deliver(delivery());
-    for (const form of pendingForms()) {
-      const pending = identities.get(form);
-      if (pending && !queue.items.includes(pending)) {
-        form.closest("li")!.remove();
+    for (const [pending] of forms) {
+      const element = elements.get(pending)!;
+      if (element.isConnected && !queue.items.includes(pending)) {
+        element.remove();
         if (pending.state !== "sending") forms.delete(pending);
         say("");
       }
@@ -240,7 +254,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     }
     dom.dispatchMessagePendingActionEvent((dom.getMessageBody() as ComposerBody), { key: pending.draftKey, restoredKey: edit ? queue.restoration!.key : null, kind: edit ? "edit" : "remove" });
     if (pending.state !== "sending") forms.delete(pending);
-    event.target.closest("li")!.remove();
+    elements.get(pending)!.remove();
     updateEdits();
     say("");
     reconcile();
@@ -499,7 +513,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       const checkCursor = view.topic && topic === view.topic && !view.ids.includes(id) && applied;
       if (checkCursor) view.applied = BigInt(applied);
       if (queue.route(item, { id, topic, seq: checkCursor ? BigInt(dom.readAttribute(state, dom.PostedSeqAttribute)!) : 0n }, view)) {
-        pending.closest("li")!.remove();
+        elements.get(item)!.remove();
         say("");
       }
       reconcile();

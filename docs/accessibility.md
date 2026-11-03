@@ -55,7 +55,10 @@ the right field, and run neither JavaScript nor `hx-*`.
 
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
-state when populated. Its labelled, keyboard-focusable pane scrolls independently.
+state when populated. Its labelled, keyboard-focusable pane scrolls independently;
+without JavaScript, the latest page wraps the pane's children in one child of a
+`column-reverse` flex container so it opens at the newest entry with DOM,
+reading and Tab order and focus unchanged.
 `#message-status` is empty, with `role="status"`, `aria-live="polite"` and
 `aria-relevant="additions"`. It announces only live appends' stream-only text and
 "Copy link" confirmation (#1159), keeping 10 entries. History, paging,

@@ -207,6 +207,28 @@ export function listenMessagePendingActionEvent(target: EventTarget, listener: (
   return () => target.removeEventListener(MessagePendingActionEvent, handle);
 }
 
+export const MessagePendingChangedEvent = "message-pending-changed";
+export type MessagePendingChangedDetail = { "holdsReload": boolean; };
+export function dispatchMessagePendingChangedEvent(target: EventTarget, detail: MessagePendingChangedDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessagePendingChangedEvent, { bubbles: true, detail }));
+}
+export function listenMessagePendingChangedEvent(target: EventTarget, listener: (detail: MessagePendingChangedDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingChangedDetail>).detail);
+  target.addEventListener(MessagePendingChangedEvent, handle);
+  return () => target.removeEventListener(MessagePendingChangedEvent, handle);
+}
+
+export const MessagePendingQueryEvent = "message-pending-query";
+export type MessagePendingQueryDetail = Record<string, never>;
+export function dispatchMessagePendingQueryEvent(target: EventTarget, detail: MessagePendingQueryDetail): boolean {
+  return target.dispatchEvent(new CustomEvent(MessagePendingQueryEvent, { bubbles: true, detail }));
+}
+export function listenMessagePendingQueryEvent(target: EventTarget, listener: (detail: MessagePendingQueryDetail) => void): () => void {
+  const handle = (event: Event): void => listener((event as CustomEvent<MessagePendingQueryDetail>).detail);
+  target.addEventListener(MessagePendingQueryEvent, handle);
+  return () => target.removeEventListener(MessagePendingQueryEvent, handle);
+}
+
 export const MessageDraftRestoredEvent = "message-draft-restored";
 export type MessageDraftRestoredDetail = { "key": string; };
 export function dispatchMessageDraftRestoredEvent(target: EventTarget, detail: MessageDraftRestoredDetail): boolean {
@@ -311,7 +333,12 @@ export const PinnedIDsAttribute = "data-pinned-ids";
 export const PinControlAttribute = "data-pin-control";
 export const PinActionAttribute = "data-pin-action";
 export const PinnedAttribute = "data-pinned";
+export const CopyLinkAttribute = "data-copy-link";
+export const CopiedAttribute = "data-copied";
+export const CopiedLabelAttribute = "data-copied-label";
+export const MemberIDAttribute = "data-member-id";
+export const OwnMentionAttribute = "data-own-mention";
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute;
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

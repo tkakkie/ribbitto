@@ -145,16 +145,7 @@ Pull request:
 
 1. The implementer works in its worktree and passes the
    [local checks by change type](delivery.md#local-checks-by-change-type).
-2. Draft pull request with "Closes #N", except `Refs #<measured issue>` for
-   [deferred measurements and PRs changing what they measure](measure-after-merge.md#keep-the-issue-open-through-merge)
-   before completion; CI goes green. The linked procedure defines the numbers,
-   permits `Closes` for a separate problem issue, and requires the orchestrator's
-   keyword grep and `closingIssuesReferences` check when asking for merge and
-   immediately before merging. An unremovable link or a commit message needing
-   a history rewrite holds the merge and is reported to the maintainer.
-   Confirm the measured issue is open after merge, at the pending entry and at
-   judgement; otherwise reopen it and record the repair, without replacing
-   prevention.
+2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
@@ -203,7 +194,6 @@ check the result against *Done when*.
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
 [review operations](review-operations.md), [review follow-ups](review-followups.md),
-[investigations](investigations.md), [after-merge measurements](measure-after-merge.md)
-and [credentials](ai-credentials.md)
+[investigations](investigations.md) and [credentials](ai-credentials.md)
 supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
 is built or extended (#2002).

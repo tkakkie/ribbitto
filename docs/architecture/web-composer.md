@@ -62,8 +62,8 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
 
 ### Drafts
 
-Only `web/src/message-drafts.ts` may use `localStorage` (checked). Pure rules
-live in `web/src/drafts.ts` (`web/test/drafts.test.mjs`) and the thin adapter
+Only `web/src/message-drafts.ts` may use `localStorage` (checked). Rules
+live in `web/src/drafts.ts` (`web/test/drafts.test.ts`) and the adapter
 `web/src/message-drafts.ts` owns storage, timers, events and marker `hidden`:
 cleanup (#1178, #1181), saving (#1186), feed/topic restore (#1162), never history.
 Restore seeds `at` without input/typing/focus;
@@ -72,14 +72,14 @@ its unchanged snapshot. Snapshot keys survive 409 rotation.
 At dispatch, save raw text and its send key before the request leaves or the
 textarea empties (#1328), including in-flight reload/navigation. Restore and
 reuse the key only with valid unchanged text (`restoredSendKey`, tested in
-`web/test/drafts.test.mjs`); any edit or emptying renews it. A 200 or stored-key
+`web/test/drafts-saving.test.ts`); any edit or emptying renews it. A 200 or stored-key
 confirmation clears the saved key while keeping newer text. Only the latest send
 dispatched in a place is kept: an unconfirmed item followed by another send loses
 its key on reload, as its text did before.
 Retry keeps unsaved edits. In-place 409 confirms recovered prefixes;
 dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
 
-- **Key and value (`web/test/drafts.test.mjs`):**
+- **Key and value (`web/test/drafts.test.ts`):**
   `ribbitto.draft.v1:<member>:<session>:<channel>:<place>` (lowercase UUIDs;
   UUIDv7 session; `feed` or topic ID) and JSON
   `{member, session, expires, text, at, key}` (≤4,000 code points, 50 entries
@@ -87,7 +87,7 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   Restore a send key only for the current member/session/place. `expires` and
   `at` are Unix milliseconds; `key` is a send UUID or null, and older entries
   may omit it.
-- **Saving and cap (`web/test/drafts.test.mjs`):** latest htmx forms carry
+- **Saving and cap (`web/test/drafts-saving.test.ts`):** htmx forms carry
   `data-draft-channel`/optional `data-draft-topic` outside state swaps.
   Tab-monotonic edit times (`nextEditTime`), 300 ms debounce, `pagehide`/hidden
   flush, wait for `compositionend`; clean tabs never flush. Blank/over-limit
@@ -100,7 +100,7 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   or writing foreign keys. Overlapping writes can retain older text, and
   eviction can remove a concurrent update; neither race is repaired, textarea
   text stays unchanged, and only subsequent input saves again.
-- **Stopping and expiry (`web/test/drafts.test.mjs`):** sign-out notices
+- **Stopping and expiry (`web/test/drafts-saving.test.ts`):** sign-out notices
   (`ribbitto.signed-out.v1`) call `stop()`, which only cancels saves and stops
   writes; either expiry clock (`checkSessionExpired`:
   `performance.now() >= expires - rendered` or `Date.now() >= expires`, latched
@@ -110,7 +110,7 @@ dirty cleanup keeps edit time/debounce. Lost replies can leave drafts (#1177).
   typing/sending usable. The monotonic deadline uses the document time origin;
   chained waits do not poll. An ahead device clock may expire drafts early
   (#1798).
-- **Cleanup (`web/test/drafts.test.mjs`):** once per document load (never on
+- **Cleanup (`web/test/drafts.test.ts`):** once per document load (never on
   bfcache restore), first match per key wins: `sweepKeys` removes malformed
   `ribbitto.draft.v1:` keys, own-session keys under another member, invalid own
   entries (own values are removed for invalid JSON, missing or mistyped required

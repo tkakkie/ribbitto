@@ -17,8 +17,8 @@ All conditions apply:
 
 1. Cross-review, Copilot and adversarial review approve
 with measurement pending; CI passes at that head before `ai-reviewed`.
-Measure after that label. Before asking for merge, the orchestrator
-checks results against the issue's *Done when*.
+Then measure. The orchestrator checks results against *Done when* per
+[merge timing](measure-after-merge.md).
 2. Match full build/run SHA to reviews and CI; labels do not suffice.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
@@ -46,8 +46,9 @@ on its chosen `127.0.0.1` port, with disposable data and credentials,
 cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. In PR, record host measurement, SHAs, conditions (toolchain,
-image digest, restrictions), exact commands, results and the generation diff listing. Redact credentials.
+10. In PR (issue comments and PR result link after merge), record host
+measurement, SHAs, conditions (toolchain, image digest, restrictions), exact
+commands, results and generation diff listing. Redact credentials.
 
 **Reproducibility (#1149).** Alternate base/head in one session: same
 host, Chrome, profile, dataset, build/run route, toolchain, flags, user,

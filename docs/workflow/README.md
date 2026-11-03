@@ -145,7 +145,13 @@ Pull request:
 
 1. The implementer works in its worktree and passes the
    [local checks by change type](delivery.md#local-checks-by-change-type).
-2. Draft pull request with "Closes #N"; CI goes green.
+2. Draft pull request with "Closes #N", except `Refs #N` for
+   [deferred after-merge measurements](measure-after-merge.md); CI goes green.
+   For that exception, before asking for merge, grep the title, body and all
+   commit messages for closing keywords naming the issue and remove them;
+   ensure `gh pr view <N> --json closingIssuesReferences` excludes it,
+   unlinking it if needed. After merge, confirm the issue is open; otherwise
+   reopen it at once and record the repair on the issue.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each
@@ -194,6 +200,7 @@ check the result against *Done when*.
 
 [Reviewing](reviewing.md), [delivery](delivery.md),
 [review operations](review-operations.md), [review follow-ups](review-followups.md),
-[investigations](investigations.md) and [credentials](ai-credentials.md)
+[investigations](investigations.md), [after-merge measurements](measure-after-merge.md)
+and [credentials](ai-credentials.md)
 supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
 is built or extended (#2002).

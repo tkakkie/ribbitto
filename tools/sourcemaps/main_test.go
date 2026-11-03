@@ -372,10 +372,38 @@ func TestStoreCoreAndLookup(t *testing.T) {
 			t.Errorf("tag %s was wrongly deleted", keptTag)
 		}
 	}
-	for _, warn := range []string{"abandoned draft", "younger draft", "prerelease", "unparsable", "name/tag mismatch", "future-dated"} {
+	for _, warn := range []string{
+		fmt.Sprintf("abandoned draft %q", draftDel),
+		fmt.Sprintf("younger draft %q", draftYoung),
+		fmt.Sprintf("prerelease %q", preTag),
+		`unparsable release "map-bad-name"`,
+		fmt.Sprintf("name/tag mismatch %q != %q", relNameAt(now.Add(-120*day), shaOf(63), 1, 1), mismatchTag),
+		fmt.Sprintf("future-dated release %q", futureTag),
+	} {
 		if !strings.Contains(summary.String(), warn) {
 			t.Errorf("job summary missing %q warning:\n%s", warn, summary.String())
 		}
+	}
+	wfBytes, err := os.ReadFile("../../.github/workflows/sourcemaps-store.yml")
+	wfText := string(wfBytes)
+	wfSteps := strings.Split(wfText, "\n      - ")
+	if err != nil || len(wfSteps) < 2 ||
+		!strings.Contains(wfText, "on:\n  push:\n    branches: [main]\n\npermissions:\n  contents: read\n") ||
+		!strings.Contains(wfText, "group: sourcemaps-${{ github.sha }}\n  cancel-in-progress: false\n") ||
+		!strings.Contains(wfText, "if: github.repository == 'tkakkie/ribbitto'\n") ||
+		!strings.Contains(wfText, "environment: sourcemaps\n") ||
+		!strings.Contains(wfText, "persist-credentials: false\n") ||
+		!strings.Contains(wfText, "cache: false\n") ||
+		strings.Contains(wfText, "cache-dependency-path") ||
+		strings.Contains(wfText, "pull_request") ||
+		strings.Contains(wfText, "workflow_dispatch") ||
+		strings.Count(wfText, "secrets.") != 1 ||
+		strings.Count(wfText, "SOURCEMAPS_TOKEN") != 2 ||
+		strings.Contains(strings.Join(wfSteps[:len(wfSteps)-1], "\n"), "SOURCEMAPS_TOKEN") ||
+		strings.Contains(strings.Join(wfSteps[:len(wfSteps)-1], "\n"), "secrets.") ||
+		!strings.Contains(wfSteps[len(wfSteps)-1], "SOURCEMAPS_TOKEN: ${{ secrets.SOURCEMAPS_TOKEN }}") ||
+		!strings.Contains(wfSteps[len(wfSteps)-1], "run: make sourcemaps-store") {
+		t.Fatalf("workflow shape check failed:\n%s", wfText)
 	}
 	for _, wantLog := range []string{
 		fmt.Sprintf("deleted release %q (id 11, sha %s, age 95d)\n", oldTag, shaOf(11)),

@@ -229,7 +229,7 @@ func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 		code, _, err = c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
 	}
 	if err != nil || (code != 204 && code != 404) {
-		return fmt.Errorf("deleting tag %s: status %d (%v)", tag, code, err)
+		return fmt.Errorf("deleting tag %q: status %d (%v)", tag, code, err)
 	}
 	if code == 204 {
 		c.delTags++
@@ -244,7 +244,7 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 		return nil
 	}
 	if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
-		return fmt.Errorf("rechecking tag %s: status %d (%v)", tag, tCode, err)
+		return fmt.Errorf("rechecking tag %q: status %d (%v)", tag, tCode, err)
 	} else if tCode == 200 {
 		return nil
 	}
@@ -255,7 +255,7 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 	}
 	var refObj struct{ Ref string }
 	if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+tag) {
-		return fmt.Errorf("verifying tag ref %s: status %d (%v)", tag, rCode, err)
+		return fmt.Errorf("verifying tag ref %q: status %d (%v)", tag, rCode, err)
 	}
 	return c.deleteTagByRef(ctx, tag)
 }
@@ -303,10 +303,10 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		seenFiles[b.File] = true
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
 		if err != nil {
-			return fmt.Errorf("reading source map %s: %w", b.Map, err)
+			return fmt.Errorf("reading source map %q: %w", b.Map, err)
 		}
 		if !bytes.Contains(data, []byte(`"sourcesContent"`)) {
-			return fmt.Errorf("invalid source map %s: missing sourcesContent", b.Map)
+			return fmt.Errorf("invalid source map %q: missing sourcesContent", b.Map)
 		}
 		assets[b.Map] = data
 	}
@@ -322,7 +322,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, name := range slices.Sorted(maps.Keys(assets)) {
 		u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", cfg.storeRepo, created.ID, url.QueryEscape(name))
 		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], nil); err != nil || (code != 201 && code != 200) {
-			return fmt.Errorf("uploading asset %s: status %d (%v)", name, code, err)
+			return fmt.Errorf("uploading asset %q: status %d (%v)", name, code, err)
 		}
 	}
 	relPath := fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, created.ID)
@@ -347,7 +347,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	assetIDs := make(map[string]int64, len(draftRel.Assets))
 	for _, a := range draftRel.Assets {
 		if sz, ok := wantAssets[a.Name]; !ok || !validAsset(a) || a.Size != sz {
-			return fmt.Errorf("uploaded asset %s does not match manifest", a.Name)
+			return fmt.Errorf("uploaded asset %q does not match manifest", a.Name)
 		}
 		assetIDs[a.Name] = a.ID
 		delete(wantAssets, a.Name)
@@ -365,10 +365,10 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 		e := m.Entries[k]
 		if code, gotBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", cfg.storeRepo, assetIDs[e.Map]), "application/octet-stream", nil, nil); err != nil || code != 200 || !bytes.Equal(gotBytes, assets[e.Map]) {
-			return fmt.Errorf("fetching back stored map %s: status %d (%v)", e.Map, code, err)
+			return fmt.Errorf("fetching back stored map %q: status %d (%v)", e.Map, code, err)
 		}
 	}
-	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(m.Entries))
+	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %q (%d maps)\n", relName, len(m.Entries))
 	if err := runRetention(ctx, c, sha); err != nil {
 		return err
 	}
@@ -401,15 +401,15 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 		p, ok := parseReleaseName(r.Name)
 		switch {
 		case r.Prerelease:
-			_, _ = fmt.Fprintf(sum, "warning: prerelease %s (id %d)\n", r.Name, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: prerelease %q (id %d)\n", r.Name, r.ID)
 		case r.Name != r.TagName:
-			_, _ = fmt.Fprintf(sum, "warning: name/tag mismatch %s != %s (id %d)\n", r.Name, r.TagName, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: name/tag mismatch %q != %q (id %d)\n", r.Name, r.TagName, r.ID)
 		case !ok:
-			_, _ = fmt.Fprintf(sum, "warning: unparsable release %s (id %d)\n", r.Name, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: unparsable release %q (id %d)\n", r.Name, r.ID)
 		case p.Start.After(now.Add(24 * time.Hour)):
-			_, _ = fmt.Fprintf(sum, "warning: future-dated release %s (id %d)\n", r.Name, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: future-dated release %q (id %d)\n", r.Name, r.ID)
 		case r.Draft && now.Sub(p.Start) > 7*24*time.Hour:
-			_, _ = fmt.Fprintf(sum, "warning: abandoned draft %s (id %d)\n", r.Name, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: abandoned draft %q (id %d)\n", r.Name, r.ID)
 			active := p.SHA == currentSHA
 			if !active {
 				if active, err = c.hasActiveRun(ctx, p.SHA); err != nil {
@@ -420,7 +420,7 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 				delDrafts = append(delDrafts, r)
 			}
 		case r.Draft:
-			_, _ = fmt.Fprintf(sum, "warning: younger draft %s (id %d)\n", r.Name, r.ID)
+			_, _ = fmt.Fprintf(sum, "warning: younger draft %q (id %d)\n", r.Name, r.ID)
 		default:
 			bySHA[p.SHA] = append(bySHA[p.SHA], parsedRel{r, p})
 		}
@@ -514,27 +514,27 @@ candLoop:
 		assets := make(map[string]ghAsset, len(best.Assets))
 		for _, a := range best.Assets {
 			if !validAsset(a) {
-				lastErr = fmt.Errorf("invalid asset %s in %s", a.Name, best.Name)
+				lastErr = fmt.Errorf("invalid asset %q in %q", a.Name, best.Name)
 				continue candLoop
 			}
 			assets[a.Name] = a
 		}
 		idxAsset, ok := assets["index.json"]
 		if !ok {
-			lastErr = fmt.Errorf("missing index.json in %s", best.Name)
+			lastErr = fmt.Errorf("missing index.json in %q", best.Name)
 			continue
 		}
 		code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
 		var m manifest
 		if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
-			lastErr = fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", best.Name, code, err)
+			lastErr = fmt.Errorf("reading or verifying index.json from %q: status %d (%v)", best.Name, code, err)
 			continue
 		}
 		seen := make(map[string]bool, len(m.Entries)*2)
 		for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 			e := m.Entries[k]
 			if !validBundleEntry(e) || seen[e.File] || seen[e.Map] || assets[e.Map].ID == 0 {
-				lastErr = fmt.Errorf("incomplete or invalid manifest entry %s in %s", e.Map, best.Name)
+				lastErr = fmt.Errorf("incomplete or invalid manifest entry %q in %q", e.Map, best.Name)
 				continue candLoop
 			}
 			seen[e.File], seen[e.Map] = true, true
@@ -547,12 +547,12 @@ candLoop:
 				ma := assets[e.Map]
 				code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
 				if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
-					return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", e.Map, code, err)
+					return "", "", nil, fmt.Errorf("downloading map %q: status %d (%v)", e.Map, code, err)
 				}
 				return best.Name, e.Map, mapBytes, nil
 			}
 		}
-		return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, best.Name)
+		return "", "", nil, fmt.Errorf("bundle hash %s not found in %q", bundleSHA256, best.Name)
 	}
 	return "", "", nil, lastErr
 }
@@ -574,7 +574,7 @@ func main() {
 		a := append(args, "", "")
 		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2])
 		if err = lerr; err == nil {
-			_, _ = fmt.Fprintf(os.Stdout, "%s %s (%d bytes)\n", rel, name, len(data))
+			_, _ = fmt.Fprintf(os.Stdout, "%q %q (%d bytes)\n", rel, name, len(data))
 		}
 	case !*lookup && len(args) == 5:
 		if cfg.now, err = time.Parse("20060102T150405Z", args[1]); err != nil || cfg.now.UTC().Format("20060102T150405Z") != args[1] {

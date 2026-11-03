@@ -1,7 +1,7 @@
 # Web toolchain
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
-including the checker and `.mjs` harnesses. The maintainer confirmed mechanics
+including the checker and `.test.ts` harnesses. The maintainer confirmed mechanics
 marked **confirmed** on 2026-10-21
 ([record][cf]). #1410–#1415 build the foundation; #1416–#1421 convert scripts;
 #1409 writes module conventions.
@@ -21,7 +21,7 @@ package.json/package-lock.json and .node-version, updating decision 42 and
 type of `web/src/*.ts` so `node --test` loads them without typeless-package
 reparsing while root and `web/static/` files keep their existing scope.
 Later PRs add rows to both tables with the first file of a new kind or location:
-direct web/test/*.test.mjs harnesses (#1412); Go builders under tools/ are covered.
+direct web/test/*.test.ts harnesses, node-test.d.ts and package.json (#2090); Go builders under tools/ are covered.
 Unlisted files fail; exact-path exceptions use
 [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
@@ -110,7 +110,7 @@ then runs the real checker/runner tests with `go -C tools test -count=1 -v ./web
 that the generated sidebar contract's valid consumers compile and its
 ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
-no-emit config includes only web/src/**/*.ts; scripts outside it are bounded by
+no-emit config includes web/src/**/*.ts, web/test/*.test.ts and node-test.d.ts; scripts outside it are bounded by
 `web/legacy-scripts.txt` (#1414). `globals.d.ts` supplies the first input and the htmx global.
 
 **Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
@@ -128,10 +128,10 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. Direct `web/test/*.test.mjs` harnesses use `node:test` and
-`node:assert` without `@types/node` and import DOM-free `.ts` logic by relative
-`.ts` path. `make test-web` runs them with `node --test`, separately from type
-checking and not type-checked itself ([checks](web-toolchain-checks.md)).
+path aliases. Direct `web/test/*.test.ts` harnesses use `node:test` and
+`node:assert/strict` with `node-test.d.ts` (no `@types/node`) and import DOM-free
+`.ts` logic by relative `.ts` path. `make test-web` runs `node --test`
+separately from type checking ([checks](web-toolchain-checks.md)).
 
 ## Generated contract and state — #1413, #1416, #1417
 

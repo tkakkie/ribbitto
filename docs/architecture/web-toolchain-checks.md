@@ -17,14 +17,16 @@ hashed-manifest check. Syntax fixtures preserve the checks' intent; regex is
 no parser or security boundary. Types do not cure alias, computed-property,
 multiline or interpolation blind spots. Keep review and browser tests.
 
-`make test-web` runs direct `web/test/*.test.mjs` harnesses through the existing
-Go wrapper's test mode, also in `make check`. It checks `.node-version`, scrubs
-`NODE_OPTIONS`, expands the glob itself (no matches fails), needs no
-`node_modules` and runs `node --test <files>` from the repository root,
-propagating failure. `web/src/package.json` (`{"type": "module"}`) scopes
-`web/src/*.ts` as ES modules for Node's file-location package lookup without
-changing the root `package.json`, avoiding `MODULE_TYPELESS_PACKAGE_JSON`
-reparsing (#1854). Missing/mismatched Node prints `NOT VERIFIED` and skips
+`make test-web` runs direct `web/test/*.test.ts` harnesses through the existing
+Go wrapper's test mode, also in `make check`
+([decision 45](../decisions/45-type-checked-client-unit-tests.md)). It checks
+`.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
+fails), needs no `node_modules` and runs `node --test <files>` from the
+repository root, propagating failure. `web/src/package.json` and `web/test/`'s
+`package.json` (`{"type": "module"}`) scope `web/src/*.ts` and
+`web/test/*.test.ts` as ES modules for Node's file-location package lookup
+without changing the root `package.json`, avoiding `MODULE_TYPELESS_PACKAGE_JSON`
+reparsing (#1854, #2090). Missing/mismatched Node prints `NOT VERIFIED` and skips
 unless `RIBBITTO_REQUIRE_NODE=1` makes it fail. CI runs tests after type checking
 in `web-types`, even if that check fails, unless cancelled. Hermetic wrapper
 tests in `check-tools` (without Node) also check the `web/src/package.json` and
@@ -33,25 +35,25 @@ with that flag) checks pass/fail propagation and fails if
 `MODULE_TYPELESS_PACKAGE_JSON` returns (with a temporary-root positive control).
 The setup harness creates temporary annotated `.ts` modules and proves relative
 `.ts` imports and type stripping. Harnesses import DOM-free `web/src/<concern>.ts`
-by relative `.ts` path, using `node:test` and `node:assert`, without Node typings
-or a DOM emulator. Harnesses are outside tsconfig's inputs: stripping types is
-not checking them, so both checks remain required.
+by relative `.ts` path, using `node:test` and `node:assert/strict` with the
+hand-written `node-test.d.ts` declarations (no `@types/node`) and no DOM
+emulator. Stripping types in `node --test` is not checking them, so both checks remain required.
 
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
 exactly one file per stem. Exempt paths are the three named vendor scripts
-in `web/static/vendor/` (pinned by `vendor_test.go`)
-and direct `web/test/*.test.mjs` harnesses. On conversion, delete the old
+in `web/static/vendor/` (pinned by `vendor_test.go`). On conversion, delete the old
 script and its list line together; version bumps keep the stem. The list may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule
 prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
-exactly `include: ["web/src/**/*.ts"]`, `strict: true`, `noEmit: true`,
-`noCheck` absent or `false`, and no `exclude`, `files` or `extends`;
-checked keys are case-sensitive. Strict-family
-overrides must be `true`. Only `.ts` under `web/src/` is type-checked; other
+exactly `include: ["web/src/**/*.ts", "web/test/*.test.ts", "web/test/node-test.d.ts"]`,
+`strict: true`, `noEmit: true`, `noCheck` absent or `false`, and no `exclude`,
+`files` or `extends`; checked keys are case-sensitive. Strict-family
+overrides must be `true`. Only `.ts` under `web/src/` and direct
+`web/test/*.test.ts` plus `node-test.d.ts` are type-checked; other
 TypeScript files fail. Raw-source checks reject `@ts-nocheck` in tracked
 `.ts`, `.tsx`, `.mts`, `.cts`, inline script tags without `src` (any case)
 and templ script components in every tracked `.templ`. These checks are not

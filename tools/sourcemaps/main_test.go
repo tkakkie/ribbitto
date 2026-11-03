@@ -873,6 +873,33 @@ func TestLookupHardening(t *testing.T) {
 	}
 }
 
+func TestStorePostPublishAttempt(t *testing.T) {
+	now, sha := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC), shaOf(1)
+	s := &mockStore{token: "tok"}
+	srv := s.server(t)
+	defer srv.Close()
+	dir, _, _ := writeMapDir(t, sha, "10")
+	// Finish the higher attempt first so newest-for-run lookup cannot verify
+	// the lower attempt that publishes afterwards.
+	for _, attempt := range []string{"2", "1"} {
+		var out bytes.Buffer
+		cfg := testCfg(srv.URL, "tok", now, &out)
+		if err := runStore(t.Context(), cfg, dir, sha, "10", attempt); err != nil {
+			t.Fatalf("storing attempt %s: %v", attempt, err)
+		}
+		want := fmt.Sprintf("map-%s-%s-10.%s", now.Format("20060102T150405Z"), sha, attempt)
+		if !strings.Contains(out.String(), "stored and fetched "+safeQuote(want)) {
+			t.Fatalf("post-publish check did not resolve %s: %s", want, out.String())
+		}
+	}
+	if len(s.releases) != 2 || s.releases[0].Draft || s.releases[1].Draft {
+		t.Fatalf("both attempts must be published: %+v", s.releases)
+	}
+	if rel, _, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, io.Discard), sha, "", "10", ""); err != nil || rel != s.releases[0].Name {
+		t.Fatalf("lookup without attempt must still resolve attempt 2: %s (%v)", rel, err)
+	}
+}
+
 func TestExactBuildVerification(t *testing.T) {
 	now, sha := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC), shaOf(1)
 	s := &mockStore{token: "tok"}
@@ -928,6 +955,62 @@ func TestExactBuildVerification(t *testing.T) {
 			t.Fatalf("wrong rebuild map: %s/%s %s (%v)", rel, name, data, err)
 		}
 	}
+	t.Run("lookup attempt without run", func(t *testing.T) {
+		if rel, name, data, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, io.Discard), sha, hashes[2], "", "1"); err == nil || rel != "" || name != "" || len(data) != 0 {
+			t.Fatalf("must refuse attempt without run: %s/%s %s (%v)", rel, name, data, err)
+		}
+	})
+	for _, prefix := range []int{8, 16, 63} {
+		t.Run(fmt.Sprintf("hash prefix %d", prefix), func(t *testing.T) {
+			// Change a later hex digit without needing a SHA-256 prefix collision.
+			wrongHash := []byte(hashes[0])
+			wrongHash[prefix] = '0'
+			if hashes[0][prefix] == '0' {
+				wrongHash[prefix] = '1'
+			}
+			for i := range s.releases[0].Assets {
+				a := &s.releases[0].Assets[i]
+				if a.Name == "index.json" {
+					original := a.data
+					a.data = bytes.ReplaceAll(original, []byte(hashes[0]), wrongHash)
+					t.Cleanup(func() { a.data = original })
+				}
+			}
+			var out bytes.Buffer
+			if err := runVerify(t.Context(), testCfg(srv.URL, "tok", now, &out), dirs[0], sha, "10", "1"); err == nil || out.Len() != 0 {
+				t.Fatalf("must refuse matching hash prefix without a receipt: err=%v output=%s", err, out.String())
+			}
+		})
+	}
+	t.Run("bundle directory files", func(t *testing.T) {
+		dir := dirs[0]
+		if err := os.Mkdir(filepath.Join(dir, "nested"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"manifest.json", "X.JS", "nested/extra.js"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var out bytes.Buffer
+		cfg := testCfg(srv.URL, "tok", now, &out)
+		if err := runVerify(t.Context(), cfg, dir, sha, "10", "1"); err != nil || out.Len() == 0 {
+			t.Fatalf("must ignore non-.js files and nested bundles: %v", err)
+		}
+		extra := filepath.Join(dir, "extra.js")
+		if err := os.WriteFile(extra, []byte("extra"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := os.Remove(extra); err != nil {
+				t.Error(err)
+			}
+		})
+		out.Reset()
+		if err := runVerify(t.Context(), cfg, dir, sha, "10", "1"); err == nil || out.Len() != 0 {
+			t.Fatalf("must refuse extra top-level .js without a receipt: err=%v output=%s", err, out.String())
+		}
+	})
 	for _, tc := range []struct{ name, commit, run, attempt, change string }{
 		{"wrong SHA", shaOf(2), "10", "1", ""},
 		{"missing run", sha, "12", "1", ""},

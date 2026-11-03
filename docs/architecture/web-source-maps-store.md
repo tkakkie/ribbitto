@@ -87,6 +87,8 @@ Before any future distribution or deployment step, run
 with store access (the existing credential rules still apply). Use the actual
 production bundle directory, containing the complete set of top-level `.js`
 bundles from that producing run/attempt, such as `web/static/dist`.
+Only top-level files ending exactly in `.js` are checked (symlinks are followed);
+other files, including `manifest.json`, `X.JS` and nested bundles, are ignored.
 The command requires a complete published release for that exact SHA, run id
 and attempt, hashes every bundle's bytes with SHA-256, and checks both its file
 name and hash against the stored index. Missing releases, mismatched bytes or

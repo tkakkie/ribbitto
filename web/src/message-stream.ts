@@ -142,6 +142,8 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     url.searchParams.set("after", message.lastEventId);
     streamURL.write(connection, url.pathname + url.search);
   };
+  // Native reconnects reopen the same source, so keep one listener identity.
+  const onCheckpoint = (event: Event) => progress(event as MessageEvent);
   const resume = (message: StreamMessage) => {
     const connection = dom.getOrganizationStream()!;
     // Hidden applications may resume replay, but reading/composing must wait
@@ -158,7 +160,7 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     if (connection.id !== dom.OrganizationStreamID) return;
     const source = event.detail.source;
     source.addEventListener("reset", reset, { once: true });
-    source.addEventListener("checkpoint", (event) => progress(event as MessageEvent));
+    source.addEventListener("checkpoint", onCheckpoint);
   });
   const applyMove = (items: HTMLElement, markup: string, payload: Document) => {
     const moved = payload.querySelectorAll("li");

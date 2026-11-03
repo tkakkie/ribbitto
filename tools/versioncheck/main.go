@@ -86,11 +86,13 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 		evalRow("Go runtime", "`go.mod`, `tools/go.mod`, `tools/tbls/go.mod`", goPin, true, goErr, fetchVer(ctx, c, cfg.goURL, "", true, true)),
 		evalRow("Node runtime", "`.node-version`", nodePin, true, nodeErr, fetchVer(ctx, c, cfg.nodeURL, "", true, false)),
 		evalRow("PostgreSQL 18 image", "`compose.yml`, `.github/workflows/ci.yml`", pgPin, false, pgErr, func() (string, error) {
-			var tok map[string]string
-			if _, err := doJSON(ctx, c, "GET", cfg.dockerTokenURL, "", "", nil, &tok); err != nil || tok["token"] == "" {
+			var tok struct {
+				Token string `json:"token"`
+			}
+			if _, err := doJSON(ctx, c, "GET", cfg.dockerTokenURL, "", "", nil, &tok); err != nil || tok.Token == "" {
 				return "", cmp.Or(err, fmt.Errorf("empty registry token"))
 			}
-			h, err := doJSON(ctx, c, "HEAD", cfg.dockerManifestURL, tok["token"], "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json", nil, nil)
+			h, err := doJSON(ctx, c, "HEAD", cfg.dockerManifestURL, tok.Token, "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json", nil, nil)
 			if d := strings.TrimSpace(h.Get("Docker-Content-Digest")); err == nil && regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(d) {
 				return d, nil
 			}
@@ -114,15 +116,20 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 			return fmt.Errorf("missing GITHUB_TOKEN for -sync-issue")
 		}
 		base := ghBase + "/repos/" + cfg.repo + "/issues"
-		var issues []map[string]any
-		if _, err := doJSON(ctx, c, "GET", base+"?state=open&per_page=100", cfg.token, "application/vnd.github+json", nil, &issues); err != nil {
-			return fmt.Errorf("listing issues: %w", err)
-		}
 		method, target, payload := "POST", base, map[string]string{"title": issueTitle, "body": report}
-		for _, it := range issues {
-			user, _ := it["user"].(map[string]any)
-			if it["pull_request"] == nil && it["title"] == issueTitle && (user["login"] == "github-actions[bot]" || it["author_association"] == "OWNER") {
-				method, target, payload = "PATCH", fmt.Sprintf("%s/%.0f", base, it["number"]), map[string]string{"body": report}
+		for page := 1; ; page++ {
+			var issues []map[string]any
+			if _, err := doJSON(ctx, c, "GET", fmt.Sprintf("%s?state=open&per_page=100&page=%d", base, page), cfg.token, "application/vnd.github+json", nil, &issues); err != nil {
+				return fmt.Errorf("listing issues (check-failed): %w", err)
+			}
+			for _, it := range issues {
+				user, _ := it["user"].(map[string]any)
+				if it["pull_request"] == nil && it["title"] == issueTitle && (user["login"] == "github-actions[bot]" || it["author_association"] == "OWNER") {
+					method, target, payload = "PATCH", fmt.Sprintf("%s/%.0f", base, it["number"]), map[string]string{"body": report}
+					break
+				}
+			}
+			if method == "PATCH" || len(issues) < 100 {
 				break
 			}
 		}
@@ -140,9 +147,11 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 func fetchVer(ctx context.Context, c *http.Client, u, token string, list, stableOnly bool) func() (string, error) {
 	return func() (string, error) {
 		if !list {
-			var rel map[string]string
+			var rel struct {
+				TagName string `json:"tag_name"`
+			}
 			_, err := doJSON(ctx, c, "GET", u, token, "application/vnd.github+json", nil, &rel)
-			return rel["tag_name"], err
+			return rel.TagName, err
 		}
 		var rels []map[string]any
 		_, err := doJSON(ctx, c, "GET", u, "", "", nil, &rels)

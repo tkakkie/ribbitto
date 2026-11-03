@@ -35,10 +35,13 @@ func TestVersionCheck(t *testing.T) {
 		name, goVer, nodeVer, pgDigest, twVer, lintVer string
 		failNode, driftGo, existingIssue, wantErr      bool
 		wantSummary, wantRow                           string
+		laterPage, failPage                            bool
 	}{
-		{"up to date", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "| Go runtime | `go.mod`, `tools/go.mod`, `tools/tbls/go.mod` | `1.27.3` | `1.27.3` | `up-to-date` |"},
-		{"outdated pins", "go1.27.4", "v26.9.0", strings.Replace(testDigest, "3a", "4b", 1), "v4.4.0", "v2.15.0", false, false, true, false, "Summary: 0 up-to-date, 5 outdated, 0 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `26.9.0` | `outdated` |"},
-		{"failed check", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", true, true, true, true, "Summary: 3 up-to-date, 0 outdated, 2 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `HTTP 502` | `check-failed` |"},
+		{"up to date", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "| Go runtime | `go.mod`, `tools/go.mod`, `tools/tbls/go.mod` | `1.27.3` | `1.27.3` | `up-to-date` |", false, false},
+		{"outdated pins", "go1.27.4", "v26.9.0", strings.Replace(testDigest, "3a", "4b", 1), "v4.4.0", "v2.15.0", false, false, true, false, "Summary: 0 up-to-date, 5 outdated, 0 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `26.9.0` | `outdated` |", false, false},
+		{"failed check", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", true, true, true, true, "Summary: 3 up-to-date, 0 outdated, 2 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `HTTP 502` | `check-failed` |", false, false},
+		{"later page match", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, true, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "", true, false},
+		{"pagination failure", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, true, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := "../.."
@@ -54,10 +57,12 @@ func TestVersionCheck(t *testing.T) {
 				}
 			}
 			var created, patched string
+			var issuePages int
 			responses := map[string]string{
-				"/go": `[{"version":"` + tc.goVer + `","stable":true}]`, "/node": `[{"version":"` + tc.nodeVer + `"}]`, "/token": `{"token":"reg-tok"}`,
-				"/repos/tailwindlabs/tailwindcss/releases/latest": `{"tag_name":"` + tc.twVer + `"}`, "/repos/golangci/golangci-lint/releases/latest": `{"tag_name":"` + tc.lintVer + `"}`,
-				"/repos/tkakkie/ribbitto/issues": map[bool]string{false: `[]`, true: `[{"number":9,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"stranger"}},{"number":42,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"github-actions[bot]"}}]`}[tc.existingIssue],
+				"/go": `[{"version":"` + tc.goVer + `","stable":true}]`, "/node": `[{"version":"` + tc.nodeVer + `"}]`, "/token": `{"token":"reg-tok","expires_in":300,"issued_at":"2026-11-03T05:17:00Z"}`,
+				"/repos/tailwindlabs/tailwindcss/releases/latest": `{"tag_name":"` + tc.twVer + `","id":123,"draft":false,"prerelease":false,"author":{"login":"maintainer"},"assets":[{"id":456,"name":"tailwindcss"}]}`,
+				"/repos/golangci/golangci-lint/releases/latest":   `{"tag_name":"` + tc.lintVer + `","id":789,"draft":false,"prerelease":false,"author":{"login":"maintainer"},"assets":[{"id":987,"name":"golangci-lint"}]}`,
+				"/repos/example/project/issues":                   map[bool]string{false: `[]`, true: `[{"number":9,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"stranger"}},{"number":42,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"github-actions[bot]"}}]`}[tc.existingIssue],
 			}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
@@ -65,13 +70,32 @@ func TestVersionCheck(t *testing.T) {
 					w.WriteHeader(http.StatusBadGateway)
 				case r.URL.Path == "/manifest":
 					w.Header().Set("Docker-Content-Digest", tc.pgDigest)
+				case r.Method == http.MethodGet && r.URL.Path == "/repos/example/project/issues":
+					issuePages++
+					wantPage := "1"
+					if issuePages == 2 {
+						wantPage = "2"
+					}
+					if r.URL.Query().Get("state") != "open" || r.URL.Query().Get("per_page") != "100" || r.URL.Query().Get("page") != wantPage || issuePages > 2 {
+						t.Errorf("unexpected issue-list query: %s", r.URL.RawQuery)
+						w.WriteHeader(http.StatusBadRequest)
+					} else if tc.laterPage && issuePages == 1 {
+						_, _ = io.WriteString(w, "["+strings.Repeat(`{"title":"unrelated"},`, 98)+`{"number":8,"title":"`+issueTitle+`","author_association":"OWNER","pull_request":{},"user":{"login":"github-actions[bot]"}},{"number":9,"title":"`+issueTitle+`","author_association":"NONE","user":{"login":"stranger"}}]`)
+					} else if tc.failPage {
+						w.WriteHeader(http.StatusBadGateway)
+					} else {
+						_, _ = io.WriteString(w, responses[r.URL.Path])
+					}
 				case r.Method == http.MethodGet && responses[r.URL.Path] != "":
 					_, _ = io.WriteString(w, responses[r.URL.Path])
-				case r.URL.Path == "/repos/tkakkie/ribbitto/issues":
+				case r.URL.Path == "/repos/example/project/issues":
 					raw, _ := io.ReadAll(r.Body)
 					created = string(raw)
 					w.WriteHeader(http.StatusCreated)
-				case r.URL.Path == "/repos/tkakkie/ribbitto/issues/42":
+				case r.URL.Path == "/repos/example/project/issues/42":
+					if r.Method != http.MethodPatch {
+						t.Errorf("issue update method = %s, want PATCH", r.Method)
+					}
 					raw, _ := io.ReadAll(r.Body)
 					patched = string(raw)
 				default:
@@ -79,13 +103,23 @@ func TestVersionCheck(t *testing.T) {
 				}
 			}))
 			defer srv.Close()
-			cfg := config{goURL: srv.URL + "/go", nodeURL: srv.URL + "/node", dockerTokenURL: srv.URL + "/token", dockerManifestURL: srv.URL + "/manifest", githubAPIBase: srv.URL, repo: "tkakkie/ribbitto", token: "gh-tok", now: time.Date(2026, 11, 3, 5, 17, 0, 0, time.UTC)}
+			cfg := config{goURL: srv.URL + "/go", nodeURL: srv.URL + "/node", dockerTokenURL: srv.URL + "/token", dockerManifestURL: srv.URL + "/manifest", githubAPIBase: srv.URL, repo: "example/project", token: "gh-tok", now: time.Date(2026, 11, 3, 5, 17, 0, 0, time.UTC)}
 			var out bytes.Buffer
-			if err := run(context.Background(), root, true, cfg, &out); (err != nil) != tc.wantErr {
+			err := run(context.Background(), root, true, cfg, &out)
+			if (err != nil) != tc.wantErr {
 				t.Fatalf("run error = %v, wantErr = %v", err, tc.wantErr)
 			}
 			if !strings.Contains(out.String(), tc.wantSummary) || !strings.Contains(out.String(), tc.wantRow) {
 				t.Fatalf("unexpected output:\n%s", out.String())
+			}
+			if tc.laterPage && issuePages != 2 {
+				t.Fatalf("listed %d issue pages, want 2", issuePages)
+			}
+			if tc.failPage {
+				if err == nil || !strings.Contains(err.Error(), "listing issues (check-failed): HTTP 502") || created != "" || patched != "" {
+					t.Fatalf("pagination failure: err=%v created=%q patched=%q", err, created, patched)
+				}
+				return
 			}
 			if (tc.existingIssue && (!strings.Contains(patched, tc.wantSummary) || created != "")) || (!tc.existingIssue && (!strings.Contains(created, tc.wantSummary) || patched != "")) {
 				t.Fatalf("unexpected issue sync: created=%q patched=%q", created, patched)

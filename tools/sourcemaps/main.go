@@ -104,6 +104,7 @@ type ghRelease struct {
 	Draft      bool      `json:"draft"`
 	Prerelease bool      `json:"prerelease"`
 	Assets     []ghAsset `json:"assets"`
+	bodyAbsent bool
 }
 
 type releaseName struct {
@@ -202,10 +203,21 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 	var all []ghRelease
 	for page := 1; page <= maxReleasePages; page++ {
-		var batch []ghRelease
+		var batch []struct {
+			ghRelease
+			Body *string `json:"body"`
+		}
 		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
 			return nil, fmt.Errorf("listing releases: status %d (%v)", code, err)
-		} else if all = append(all, batch...); len(batch) < 100 {
+		}
+		for _, r := range batch {
+			r.ghRelease.bodyAbsent = r.Body == nil
+			if r.Body != nil {
+				r.ghRelease.Body = *r.Body
+			}
+			all = append(all, r.ghRelease)
+		}
+		if len(batch) < 100 {
 			return all, nil
 		}
 	}
@@ -225,7 +237,7 @@ func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
 		return fmt.Errorf("release lookup mismatch for id %d (status %d)", r.ID, code)
 	}
 	if keep, err := keepProduction(got.Body, c.cfg.now); err != nil || keep || got.Body != r.Body {
-		return fmt.Errorf("production marker protected or changed for release %d (%v)", r.ID, err)
+		return fmt.Errorf("production marker protected or changed for release %d tag %s (%v)", r.ID, safeQuote(r.TagName), err)
 	}
 	if code, _, err := c.do(ctx, true, "DELETE", u, "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
@@ -422,15 +434,18 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 	}
 	// Validate every marker before even draft or orphan cleanup can delete anything.
 	for i, r := range rels {
-		var fresh ghRelease
-		code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID), "", nil, &fresh)
-		if err != nil || code != 200 || fresh.ID != r.ID || fresh.Name != r.Name || fresh.TagName != r.TagName || fresh.Draft != r.Draft || fresh.Prerelease != r.Prerelease {
-			return fmt.Errorf("reading production marker: release lookup mismatch or unreadable for id %d (status %d, %v)", r.ID, code, err)
+		if r.bodyAbsent {
+			var fresh ghRelease
+			code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID), "", nil, &fresh)
+			if err != nil || code != 200 || fresh.ID != r.ID || fresh.Name != r.Name || fresh.TagName != r.TagName || fresh.Draft != r.Draft || fresh.Prerelease != r.Prerelease {
+				return fmt.Errorf("reading production marker: release %d tag %s lookup mismatch or unreadable (status %d, %v)", r.ID, safeQuote(r.TagName), code, err)
+			}
+			r.Body = fresh.Body
 		}
-		if _, err := keepProduction(fresh.Body, c.cfg.now); err != nil {
-			return err
+		if _, err := keepProduction(r.Body, c.cfg.now); err != nil {
+			return fmt.Errorf("release %d tag %s: %w", r.ID, safeQuote(r.TagName), err)
 		}
-		rels[i].Body = fresh.Body
+		rels[i].Body = r.Body
 	}
 	now, sum, deletedIDs, bySHA := c.cfg.now, c.cfg.summary, make(map[int64]bool), make(map[string][]parsedRel)
 	var delDrafts []ghRelease

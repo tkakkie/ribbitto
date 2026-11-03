@@ -20,7 +20,10 @@ func keepProduction(body string, now time.Time) (bool, error) {
 	case strings.HasPrefix(body, productionRetired):
 		s := strings.TrimPrefix(body, productionRetired)
 		retired, err := time.Parse(time.RFC3339, s)
-		if err == nil && retired.UTC().Format(time.RFC3339) == s && !retired.After(now) {
+		if err == nil && retired.UTC().Format(time.RFC3339) == s {
+			if retired.After(now) {
+				return true, fmt.Errorf("retirement time is in the future; retention refused")
+			}
 			return now.Sub(retired) < 90*24*time.Hour, nil
 		}
 	}
@@ -38,7 +41,7 @@ func runProduction(ctx context.Context, cfg config, name, state string) error {
 		return fmt.Errorf("reading production release: status %d (%v)", code, err)
 	}
 	if _, err := keepProduction(r.Body, cfg.now); err != nil {
-		return err
+		return fmt.Errorf("release %d tag %s: %w", r.ID, safeQuote(r.TagName), err)
 	}
 	body := productionActive
 	if state == "retired" {
@@ -55,5 +58,6 @@ func runProduction(ctx context.Context, cfg config, name, state string) error {
 	if code, _, err := c.do(ctx, true, "PATCH", fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, r.ID), "", data, &updated); err != nil || code != 200 || updated.ID != r.ID || updated.Name != name || updated.TagName != name || updated.Draft || updated.Prerelease || updated.Body != body {
 		return fmt.Errorf("writing production marker: status %d (%v)", code, err)
 	}
+	logf(cfg.stdout, "production release %d tag %s: %s\n", r.ID, safeQuote(r.TagName), state)
 	return nil
 }

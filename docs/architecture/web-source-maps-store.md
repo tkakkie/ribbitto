@@ -84,14 +84,13 @@ changes ([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
 ## Production markers — #2049 (Part 2/2)
 
-The future distribution/deploy step writes the production status on the exact
-store release named by the verification receipt, using
+The future distribution/deploy step marks the exact store release in the
+verification receipt using
 `go -C tools run ./sourcemaps -production <release name> active` with store
-access. It must verify the build, mark it successfully **before** distributing
-or starting it, and stop on failure. No distribution/deploy step is introduced
-here. The writer owns the status across all instances: retire only after the
-last production instance stops; for rollback, verify and re-mark the target
-`active` before starting it (this clears retirement).
+access. Verify and mark successfully **before** distribution or startup; stop
+on failure. No distribution/deploy step is introduced here. The writer owns
+status across all instances: retire only after the last stops; for rollback,
+verify and re-mark the target `active` before startup (clearing retirement).
 
 The release body is reserved for the marker: empty or null means an ordinary
 release; exactly `sourcemaps-production-v1 active` means still in production;
@@ -99,31 +98,33 @@ release; exactly `sourcemaps-production-v1 active` means still in production;
 (e.g. `sourcemaps-production-v1 retired 2026-11-03T12:00:00Z`). No extra text,
 whitespace, offsets or fractional seconds are accepted. Unknown versions,
 malformed or future retirement times are errors. To retire, use the same command
-with `retired` instead of `active`; it writes the current UTC time, retains the
-marker and preserves the first retirement time on retry. An unmarked release
+with `retired` instead of `active`; it retains the marker and first retirement
+time on retry. Retirement uses the writer’s clock: a clock set far back shortens
+the margin, so the writer must use a trusted time source. An unmarked release
 cannot be retired; invalid markers are never overwritten by the tool. Marker
 writes patch only the body of a canonical published non-prerelease release,
 never its assets, name or tag. A failed write must be retried before proceeding.
 
-The storing command's retention cleanup reads every release's body by exact ID
-before any deletion, including draft/orphan-tag cleanup. Any unreadable, invalid
-or unknown-version marker aborts cleanup with **nothing deleted**. Active releases
-are kept regardless of age or SHA position. Retired releases stay until at least
-90 days after retirement; afterwards deletion still requires **both** existing
-floors (the SHA's newest release older than 90 days and outside the newest 10
-distinct SHAs). Other releases of the same SHA keep their own markers and margins.
-An absent marker adds no protection. The provisional age floor and margin are
-minimums, with deletion still opportunistic after successful uploads.
+Before any deletion, including draft/orphan-tag cleanup, retention validates
+every listed body (GET by exact ID if absent or null). Any unreadable, invalid
+or unknown-version marker aborts with **nothing deleted**. Active releases stay
+regardless of age or SHA position. Retired releases stay for at least 90 days
+after retirement; deletion then requires **both** existing floors (the SHA's
+newest release older than 90 days and outside the newest 10 distinct SHAs).
+Same-SHA releases keep separate markers and margins. An absent marker adds no
+protection. The provisional floor and margin are minimums; deletion remains
+opportunistic after successful uploads.
 
 Immediately before each release DELETE, cleanup re-reads that exact release and
 compares its body with the validated snapshot. Any read error or marker change
 (including a concurrent mark or retirement) aborts that delete and the remaining
 cleanup; prior deletions cannot be undone. Thus a marker written between listing
 and this final read cancels a pending delete. GitHub provides no atomic marker
-read-and-delete here: future deploy writers must also serialize marking with
-cleanup to cover the final GET/DELETE interval, and serialize status writers
-with each other. The existing per-SHA upload groups do not provide that lock.
-`TestProductionRetention` and `TestProductionTransitions` use only a fake store.
+read-and-delete here. Serializing marking with cleanup and status writers with
+each other is a prerequisite of the first distribution/deploy issue, covering
+the final GET/DELETE interval. Cleanup takes no lock; per-SHA upload concurrency
+groups provide none. `TestProductionRetention` and `TestProductionTransitions`
+use only a fake store.
 
 ## Exact-build verification — #2049 (Part 1/2)
 

@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Rules for AI coding tools and their users (about 100 lines; a PR adding a rule
-states what it removed); explanations belong in `docs/`.
+AI rules (target cap: ~100 lines; a PR adding a rule states what it
+removed). Explanations belong in `docs/`.
 
 ## Project
 
@@ -9,6 +9,10 @@ ribbitto is a self-hostable team chat: Go, `net/http`, templ, htmx with
 Server-Sent Events, Tailwind CSS, PostgreSQL (pgx, sqlc, goose). One
 maintainer, public repository. Everything in the repository — code,
 comments, docs, commits, issues, pull requests — is written in English.
+
+## Workflow
+
+One set of rules binds every AI; see [Where things are explained](#where-things-are-explained).
 
 ## Commands
 
@@ -113,10 +117,9 @@ By subject only: [credentials](docs/workflow/ai-credentials.md),
 - UI strings go in `internal/web/i18n/locales/{en,ja}.toml` (dotted neutral IDs
   like `hello.title`, never a product word; update both in the same PR) via
   `i18n.T(ctx, "message.id")`.
-- Never document how the code works; update `docs/` only when a requirement,
-  rationale, operator action or promise changes; when a document nears its
-  limit, delete narration, do not split. Apply the sentence test in
-  [`docs/README.md`](docs/README.md#the-sentence-test).
+- Update `docs/` in the same PR when a requirement, rationale, operator action
+  or promise changes, and only then; never document how code works. Near limits,
+  delete narration, do not split. Apply the [sentence test](docs/README.md#the-sentence-test).
 
 ## Tests
 

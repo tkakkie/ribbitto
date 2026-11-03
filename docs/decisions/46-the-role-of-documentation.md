@@ -1,7 +1,8 @@
 # 46. The role of documentation
 
 **Decided** (#2102, approved by the maintainer on 2026-11-03; pre-migration
-commit `8abf2d878ec9327f5d027f110132cd4903f6a139`).
+commit `e91787814314a05a00c37b293a375bb7d1c9ae3e`, the `origin/main` tip at
+the final merge of main into this PR).
 
 Documentation holds what the code cannot say about itself: **why** (rationale,
 trade-offs, rejected alternatives), **direction** (vision, vocabulary,
@@ -30,35 +31,35 @@ Apply in order; the first match decides:
 
 ## Document kinds
 
-- **Vision, roadmap and domain** (`docs/vision.md`, `docs/roadmap*.md`, `docs/domain/`):
-  product aims, milestone goals and non-goals, product and code vocabulary
-  (`docs/domain/vocabulary.md`), domain terms, cross-cutting invariants
-  (`docs/domain/invariants.md`) and user-visible domain rules.
-- **Architecture, UI and operations** (`docs/architecture/`, `docs/ui*.md`,
-  `docs/accessibility*.md`, `docs/database*.md`, `docs/setup-and-backup.md`,
-  `docs/development.md`, `docs/worktree-env.md`): package boundaries, allowed imports,
-  cross-feature access rules, real-time or security contracts across packages, visual
-  direction, tokens, accessibility and operator procedures.
+- **Vision, roadmap and domain:** product aims, milestone goals and non-goals,
+  product and code vocabulary, domain terms, cross-cutting invariants and
+  user-visible domain rules.
+- **Architecture, UI and operations:** package boundaries, allowed imports,
+  cross-feature access rules, real-time or security contracts across packages,
+  visual direction, tokens, accessibility and operator procedures.
 - **Unbuilt designs (`planned`):** unbuilt implementation designs belong in their issue,
-  not in living documents, and a plan that no longer matches reality is deleted. Kept:
-  product direction, reserved vocabulary and explicit non-goals, such as "Not planned"
-  (`docs/roadmap.md#not-planned`, `docs/roadmap-m9.md`), the `planned` status column of
-  `docs/domain/vocabulary.md`, and `docs/ui.md#planned-directions-from-the-maintainer-9`.
-- **Measurements** (`docs/measurements/` and the paging and recount plans): a short
-  frozen record of conclusions, measurement conditions and the measured SHA; raw results
-  are deleted and the actual pre-deletion SHA is recorded (maintainer decision 1).
-- **Decisions** (`docs/decisions/`, indexed by `DECISIONS.md`): historical records of
-  long-lived choices, why they were made and what was considered.
+  not in living documents, and a plan that no longer matches reality is deleted. Keep
+  product direction, reserved vocabulary and explicit non-goals.
+- **Measurements:** short frozen records of conclusions, conditions and measured SHA;
+  delete raw results and record the actual pre-deletion SHA (answer 1 below).
+- **Decisions:** historical records of long-lived choices, why they were made and
+  what was considered.
+
+## Maintainer questions and answers
+
+1. Measurements and paging/recount plans? Keep short frozen records; delete raw results.
+2. Decisions 26–44? Keep their text, numbers and files unchanged, now and later.
+3. Workflow consolidation? Remove duplication only; preserve independence, gates and failure handling.
+4. Generated references? Keep them unchanged; whether to stop committing them is a separate issue.
 
 ## Rules
 
 - **Decisions are not edited after merge.** Old decisions stay as written, now and later;
   decisions 26 to 44 keep their text, numbers and files unchanged because code cites them
-  (maintainer decision 2). The only permitted later edits are (a) a "Superseded by N" line
+  (answer 2 above). The only permitted later edits are (a) a "Superseded by N" line
   and (b) repairing a link whose target moved or was deleted (retarget it, or replace it
   with plain text naming the path and the pre-migration SHA
-  `8abf2d878ec9327f5d027f110132cd4903f6a139`, including the links from decisions 31, 32
-  and 34 to `docs/measurements/`).
+  above, including measurement links from decisions 31, 32 and 34).
 - **Delete rather than split.** A growing total is cured by deleting implementation
   narration and consolidating, never by splitting a topic across files. Prose does not
   move into `doc.go`, where comments explain why, not what.

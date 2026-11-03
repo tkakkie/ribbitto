@@ -85,8 +85,10 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   compile error), and that the test passes again once it is reverted
   (#360). Evidence may come from local checks or CI; record the deliberate
   defect and its failing assertion, then revert it.
-- Comments explain *why*; flag new prose that describes behaviour, and check
-  that the PR states which documented requirement changed (or `none`).
+- Comments explain *why*; flag behaviour narration. PRs must name the
+  changed requirement (or `none`) and change its document in the diff;
+  `none` with a changed invariant, boundary, table-ownership or operator contract
+  is a finding.
 - For each exception in `docs/language-exceptions.txt`, verify that its
   approving comment is the maintainer's and approves that exact path.
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and

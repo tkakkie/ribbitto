@@ -4,9 +4,8 @@
 
 [#1819][i1819]: on `main`, `tools/sourcemaps` (`make sourcemaps-store`) uploads
 production `.js.map` (`sourcesContent`, outside `web/static/dist`, no
-`sourceMappingURL`) and `bin/sourcemaps/index.json` (outside `web/static`),
-runs retention and checks real credentials. Tests: `httptest` (`make check-tools`)
-and leak tests. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
+`sourceMappingURL`) and `bin/sourcemaps/index.json` (outside `web/static`).
+Tests: `make check-tools`. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
 `GITHUB_TOKEN` `contents: read`, `SOURCEMAPS_TOKEN` only.
 `.github/workflows/ci.yml`: `cancel-in-progress: true`, no secret.
 
@@ -23,7 +22,7 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>`: runner
   clock read once at job start is the only "now", passed to the command;
   lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros
-  avoid same-SHA same-second collisions. Maps and index are assets. Age/order
+  avoid same-SHA same-second collisions. Age/order
   use the parsed name, never `created_at`: `(start time, run id, attempt)`,
   with numeric run id/attempt. Never reuse, rename, retag or return releases
   to draft. They target README-only store `main` (`target_commitish: "main"`);
@@ -34,7 +33,7 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
 - **Release lifecycle:** create a draft, upload maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
   against that manifest, publish, then verify lookup and per-ID fetch-back.
-  Only drafts are incomplete.
+  Published releases are complete by construction; only drafts are incomplete.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
   strict-`map-` drafts older than 7 days by parsed start time (retried creates
   included), by release ID, unless that SHA's concurrency group holds a run.
@@ -51,7 +50,7 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   (publication run order), potentially pushing a deployed SHA past 90 days;
   production markers independently protect individual releases.
 - **Retention, deletion and failure handling:** **90 days provisionally**
-  (2026-11-01), plus a **90-day post-retirement investigation margin** (#2049).
+  plus a **90-day post-retirement investigation margin** (#2049).
   **90 days is a floor, not a deadline:** retention runs only **after a
   successful upload** on `main`; without pushes, old releases stay. Delete
   eligible published releases only if their SHA's newest release is **both**
@@ -100,8 +99,7 @@ since listing) abort that delete and remaining cleanup; prior deletions stand. G
 has no atomic marker read-and-delete. The first distribution/deploy issue must
 serialize marking with cleanup and status writers with each other, covering the
 final GET/DELETE interval. Cleanup takes no lock; per-SHA upload concurrency
-groups provide none. `TestProductionRetention` and `TestProductionTransitions`
-use only a fake store.
+groups provide none. Tests: `TestProductionRetention`, `TestProductionTransitions`.
 
 ## Exact-build verification — #2049 (Part 1/2)
 
@@ -124,9 +122,9 @@ with the build's distribution record, stop on verification failure, and distribu
 those exact bytes without rebuilding/changing them. Use receipt SHA, bundle hash,
 run id and attempt in `-lookup` for the right map across differing same-SHA
 rebuilds; SHA-only lookup is insufficient for distribution.
-`TestExactBuildVerification` uses a fake store.
+Test: `TestExactBuildVerification`.
 
-No distribution step is introduced. Both #2049 parts must merge to close the
+Both #2049 parts must merge to close the
 production gate; future distribution/deploy must verify and mark first. #1819's
 real deletion record remains pending (first run: zero releases/tags deleted);
 no production release while missing.

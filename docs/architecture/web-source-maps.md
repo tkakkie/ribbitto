@@ -1,6 +1,6 @@
 # Web source maps
 
-Source-map storage and delivery for the [web toolchain](web-toolchain.md).
+[Web toolchain](web-toolchain.md).
 
 ## Source maps — #1411
 
@@ -28,7 +28,7 @@ before adoption, preserving nonce-only CSP.
 Under [decision 43](../decisions/43-typescript-with-a-go-driven-build.md), use
 **private GitHub Release assets** for production maps/index in maintainer-only
 `tkakkie/ribbitto-sourcemaps`: no external service; **never commit maps to Git**.
-Public-repo Actions artifacts cannot keep them private.
+Actions artifacts do not fit public-repo CI because they cannot be private.
 
 - **Store, access and setup:** private `tkakkie/ribbitto-sourcemaps` (README
   only, no collaborators/Pages; Issues/Wiki/Projects disabled). Only the
@@ -39,15 +39,17 @@ Public-repo Actions artifacts cannot keep them private.
   automatic); (3) in `tkakkie/ribbitto` (`Settings → Environments`), create
   `sourcemaps` (`main` only), secret `SOURCEMAPS_TOKEN`. Never log/expose tokens.
 - **Evidence:** `gh api repos/tkakkie/ribbitto/environments/sourcemaps` and
-  `.../deployment-branch-policies` confirm the `sourcemaps` `main` policy. AI
-  tokens get 403 on secrets and cannot inspect the store/token scope; #1469
-  comments [6403307193][c1], [6403484872][c2] record setup and scope.
+  `.../deployment-branch-policies`. AI tokens get 403 on secrets and cannot
+  inspect the store/token scope; setup/scope: #1469 [6403307193][c1], [6403484872][c2].
+  Naming the private repo, token scope, permission and expiry is intentional;
+  never write a value, token id or private URL.
 
 See [storing job, release naming and retention](web-source-maps-store.md#storing-job-release-naming-and-retention--1819).
 
 ### Constraints: production gate, rotation and residual risk
 
-- **Gate before the first production release ([#2049][i2049]):** require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
+- **Gate before the first production release ([#2049][i2049]):** at AI merge pace,
+  the newest 10 protect almost nothing; only the 90 days do. Require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
   of exact SHA/run id/attempt/bundle hashes for every distributed/deployed build;
   [production markers, retention and retirement margin](web-source-maps-store.md#storing-job-release-naming-and-retention--1819)
   are tested in #1819's command. Until both #2049 parts merge: no container

@@ -3,10 +3,7 @@
 How ribbitto is put together and why. Read this before changing package
 boundaries, the request flow or anything real-time.
 
-**Keep it current:** update these files in the same pull request whenever
-package responsibilities, allowed imports, the request or data flow, or the
-real-time design change. Parts marked *planned* describe agreed designs that
-are not implemented yet; move them out of *planned* when they land.
+Parts marked *planned* describe agreed designs that are not implemented yet.
 
 ## Index
 

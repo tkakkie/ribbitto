@@ -33,9 +33,8 @@ Task B — enforcement. For each rule in AGENTS.md, choose one:
 - no repository enforcement found: list what you searched;
 - unknown: enforcement may exist outside the repository (for example GitHub branch rules), which you cannot inspect.
 
-Task C — documented behaviour. For sessions, sign-in, sign-up, setup, rate limits and the reverse-proxy contract, list:
-- behaviour a document promises that you cannot find in the code;
-- behaviour the code has that no document mentions.
-Quote the side that exists (file:line). For the side you could not find, list the files, symbols and search terms you checked, and say "not found within this scope". Skip anything the documents mark as planned.
+Task C — documented promises. For sessions, sign-in, sign-up, setup, rate limits and the reverse-proxy contract, list:
+- any requirement, invariant or operator contract a document promises that you cannot find in the code.
+Quote the document (file:line), list the files, symbols and search terms you checked, and say "not found within this scope". Skip anything the documents mark as planned.
 
 End with a short list of the areas you checked.

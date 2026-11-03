@@ -85,8 +85,8 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   compile error), and that the test passes again once it is reverted
   (#360). Evidence may come from local checks or CI; record the deliberate
   defect and its failing assertion, then revert it.
-- Comments explain *why*; `docs/` is updated when terminology,
-  invariants, data flow or dependencies change.
+- Comments explain *why*; flag new prose that describes behaviour, and check
+  that the PR states which documented requirement changed (or `none`).
 - For each exception in `docs/language-exceptions.txt`, verify that its
   approving comment is the maintainer's and approves that exact path.
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and
@@ -136,8 +136,7 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   changed), **scenario**, **difference**, **occurrence condition** (concrete
   reachability: exact sequence or environment), **likelihood** in real
   deployments (origins, browsers, extensions, documented self-hosted setups),
-  **user effect**, **reason accepted**, and **document location** where the
-  behaviour is described; merge authorization stays separate
+  **user effect**, and **reason accepted**; merge authorization stays separate
   ([What no AI does](README.md#what-no-ai-does)). Accepting a difference skips
   none of the other required reviews (cross-review limits and
   [closure verification](review-followups.md#closure-verification) stay), the

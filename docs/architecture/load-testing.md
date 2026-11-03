@@ -5,10 +5,9 @@ reconnect storm) assume about ribbitto's limits before they run. The
 in-process cost per post is in [stream cost](stream-cost.md). Server
 counters are described in [development metrics](dev-metrics.md).
 
-**Keep it current:** #216's results and commands are in
-[load results](../measurements/load-results.md), #219's in
-[reconnect storm results](../measurements/load-results-restart.md), and their measurements
-for the dispositions are below. Change a disposition here when a measurement changes it.
+#216's results and commands are in
+[load results](../measurements/load-results.md) and #219's in
+[reconnect storm results](../measurements/load-results-restart.md).
 
 ## Assumptions and dispositions
 

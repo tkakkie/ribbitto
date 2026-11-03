@@ -4,9 +4,6 @@ Each feature's packages and its table-ownership registry, and the known exceptio
 table ownership. [Packages](packages.md) lists every package and its allowed
 imports.
 
-**Keep it current:** update this file in the same pull request whenever a
-feature gains or loses a package or a table, or an exception is added.
-
 The code is a modular monolith by feature ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)):
 `identity`, `realtime`, `org`, `conversation`, `presence`, `typing` and `unread` are modules
 ([modules](modules.md)).

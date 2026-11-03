@@ -1,6 +1,40 @@
 # Documentation
 
-Index of the [ribbitto](../README.md) documentation.
+Index of the [ribbitto](../README.md) documentation and how it is written
+([decision 45](decisions/45-the-role-of-documentation.md)).
+
+## What belongs in documentation
+
+Documentation holds what the code cannot say about itself: **why** (rationale,
+trade-offs, rejected alternatives), **direction** (vision, vocabulary,
+boundaries) and **what must never change** (invariants, cross-module rules,
+operator procedures). Never document how the code works; update `docs/` only
+when a requirement, rationale, operator action or promise changes.
+
+Keep, briefly, even when the code shows them: negative constraints (no package
+but `org` decides authorisation), cross-module rules (org-first lock order;
+sequence order is commit order), operator procedures (restore, collation
+upgrade, reverse-proxy contract) and the AI workflow gates. Unbuilt
+implementation designs belong in their issue, not in living documents (keep
+product direction, reserved vocabulary and explicit non-goals). When a document
+nears its limit, delete narration, do not split (and do not move prose into
+`doc.go`). Deleting prose needs no justification; adding it must pass the
+sentence test below. Keep a new decision within 80 lines (review, not a check).
+
+### The sentence test
+
+Apply in order while writing; the first match decides:
+
+1. Could a check or test enforce it? Write that instead; keep at most one line
+   of why and the check's name.
+2. Does it describe what the code does, so it would turn false after a
+   behaviour-preserving refactor? Put it in a code comment at that place, or
+   nowhere.
+3. After reading the code it is about to change, would a competent AI still get
+   this wrong, or need to read many other packages to learn it? Then it belongs
+   in `docs/`, in the right kind of document.
+4. Is it about how we got here (issue numbers, dates, who approved)? Put it in
+   the issue or pull request.
 
 ## Documentation
 

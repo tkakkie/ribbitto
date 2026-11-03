@@ -3,8 +3,7 @@
 Rules that must always hold, for all code and migrations. Terms are in the
 [glossary](README.md#glossary); tables are in [`entities.md`](entities.md).
 
-**Keep it current:** update this file in the same pull request whenever an
-invariant changes. Keep the numbers stable: other documents cite them.
+Keep the numbers stable: other documents cite them.
 
 1. **Everything an organisation owns carries `organization_id`**, and every
    query on it filters by `organization_id` — including simple examples in

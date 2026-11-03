@@ -3,8 +3,6 @@
 Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
 Writing rules: [`ui-code.md`](ui-code.md).
 
-**Keep current:** update this file with shared component changes.
-
 ## Shared components
 
 Two uses make a look an `internal/web/view` component; pages reuse it.

@@ -76,8 +76,8 @@ workflow's `GOFLAGS` line is redundant. Web runs as `web-nonbrowser`, `web-1/3`,
 `web-2/3` and `web-3/3`; `cmd` runs `cmd/ribbitto` as a whole package.
 Local `make check-test` runs every package with the same default timeout;
 CI's package coverage and browser selection remain checked by `-check`.
-Unset `RIBBITTO_BROWSER_SHARD` for all scenarios; exporting `k/n` makes
-`make check` silently run a subset. Invalid or empty shards fail.
+Unset or empty `RIBBITTO_BROWSER_SHARD` runs all scenarios; `k/n` silently limits
+`make check`. Invalid shards or shards with no scenarios fail.
 Registration filters full scenario names: the six slowest are pinned in
 serpentine order, and the rest use FNV-1a modulo n. The real-name coverage test
 and `-check` share `internal/web/testdata/browser-shard-totals.txt`.

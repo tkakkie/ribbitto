@@ -71,7 +71,7 @@ type HtmxSwapEvent = CustomEvent<{ target?: HTMLElement | null }>;
   };
   body.addEventListener("compositionstart", () => { startMentionComposition(state); close(); });
   body.addEventListener("compositionend", (event) => {
-    endMentionComposition(state, event.timeStamp);
+    endMentionComposition(state, () => event.timeStamp);
     update();
   });
   body.addEventListener("input", (native) => {

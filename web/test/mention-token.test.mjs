@@ -143,9 +143,22 @@ test("stale-result, dismissal and query step rules guard opening, picking and du
   startMentionComposition(state);
   assert.equal(state.composing, true);
   assert.equal(state.query, null);
-  endMentionComposition(state, 420);
+  let composingDuringTimestampRead = true;
+  endMentionComposition(state, () => {
+    composingDuringTimestampRead = state.composing;
+    return 420;
+  });
+  assert.equal(composingDuringTimestampRead, false);
   assert.equal(state.composing, false);
   assert.equal(state.ended, 420);
+  startMentionComposition(state);
+  assert.throws(() => endMentionComposition(state, () => { throw new Error("timeStamp boom"); }), /timeStamp boom/);
+  assert.equal(state.composing, false);
+  assert.equal(state.ended, 420);
+  startMentionComposition(state);
+  endMentionComposition(state, 500);
+  assert.equal(state.composing, false);
+  assert.equal(state.ended, 500);
 });
 
 test("option index cycling and pick formatting", () => {

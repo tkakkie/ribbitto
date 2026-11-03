@@ -84,9 +84,9 @@ export const startMentionComposition = (state: Pick<MentionPickerState, "composi
   state.query = null;
 };
 
-export const endMentionComposition = (state: Pick<MentionPickerState, "composing" | "ended">, timeStamp: number): void => {
+export const endMentionComposition = (state: Pick<MentionPickerState, "composing" | "ended">, timeStamp: number | (() => number)): void => {
   state.composing = false;
-  state.ended = timeStamp;
+  state.ended = typeof timeStamp === "function" ? timeStamp() : timeStamp;
 };
 
 export const activateMentionOptionIndex = (state: Pick<MentionPickerState, "activeIndex">, index: number, count: number): number => {

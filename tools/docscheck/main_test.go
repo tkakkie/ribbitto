@@ -23,6 +23,31 @@ func repo(t *testing.T, files map[string]string) string {
 	return root
 }
 
+func TestParseArgs(t *testing.T) {
+	for _, tt := range []struct {
+		name, root, base string
+		args             []string
+		invalid          bool
+	}{
+		{name: "default", root: "."},
+		{name: "root", args: []string{".."}, root: ".."},
+		{name: "base before root", args: []string{"--base", "HEAD^1", ".."}, root: "..", base: "HEAD^1"},
+		{name: "base without root", args: []string{"--base=HEAD"}, root: ".", base: "HEAD"},
+		{name: "base after root", args: []string{"..", "--base", "HEAD"}, invalid: true},
+		{name: "unknown flag", args: []string{"--unknown"}, invalid: true},
+		{name: "missing value", args: []string{"--base"}, invalid: true},
+		{name: "empty value", args: []string{"--base", ""}, invalid: true},
+		{name: "empty equals value", args: []string{"--base="}, invalid: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root, base, err := parseArgs(tt.args)
+			if (err != nil) != tt.invalid || !tt.invalid && (root != tt.root || base != tt.base) {
+				t.Fatalf("got root %q, base %q, error %v", root, base, err)
+			}
+		})
+	}
+}
+
 func TestSizes(t *testing.T) {
 	for _, tt := range []struct {
 		name  string

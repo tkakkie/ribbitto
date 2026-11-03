@@ -1,4 +1,4 @@
-# Legacy list: delete narration rather than split (decision 46); docscheck still accepts entries and requests splitting until issue B changes its message.
+# Legacy list: docscheck accepts entries and tells authors to delete narration and consolidate (decision 46); this file and its parser go in stage 2.
 # Until then, an unavoidable entry needs the maintainer's say-so in its issue.
 # Format: <path> #<issue>. Remove the entry when its document is brought under
 # the limit by deleting narration or consolidating, never splitting (decision 46).

@@ -1,5 +1,5 @@
 // Command docscheck keeps the repository's documents usable by AI: each
-// file stays within a size limit (one topic per file), and every link or
+// file and directory stays within a size limit, and every link or
 // reference to a Markdown file and its #anchor resolves. Repository paths
 // in code spans must exist outside historical decision records. Documentation
 // images meet decision 42's size, destination and alt text rules. make check
@@ -11,8 +11,10 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"html"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -44,9 +46,15 @@ const (
 const exceptionsFile = "docs/size-exceptions.txt"
 
 func main() {
-	root := "."
-	if len(os.Args) > 1 {
-		root = os.Args[1]
+	root, base, err := parseArgs(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
+		os.Exit(2)
+	}
+	policy, err := checkPolicy(root, base, os.Stdout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
+		os.Exit(2)
 	}
 	sizes, err := checkSizes(root)
 	if err != nil {
@@ -73,15 +81,38 @@ func main() {
 		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
 	}
-	for _, p := range append(append(append(append(sizes, links...), decisions...), paths...), images...) {
+	for _, p := range append(append(append(append(append(sizes, links...), decisions...), paths...), images...), policy...) {
 		fmt.Fprintln(os.Stderr, p)
 	}
 	if len(sizes) > 0 {
-		fmt.Fprintln(os.Stderr, "\nA file over its limit keeps its pull request small: open an issue to split it, add \"<path> #<issue>\" to "+exceptionsFile+", and split it in a separate pull request.")
+		fmt.Fprintln(os.Stderr, "\nDelete implementation narration and consolidate documents to fit their limits; see "+exceptionsFile+" and decision 46.")
 	}
-	if len(sizes)+len(links)+len(decisions)+len(paths)+len(images) > 0 {
+	if len(sizes)+len(links)+len(decisions)+len(paths)+len(images)+len(policy) > 0 {
 		os.Exit(1)
 	}
+}
+
+func parseArgs(args []string) (root, base string, err error) {
+	flags := flag.NewFlagSet("docscheck", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.Func("base", "comparison revision for directory limits (default: merge base of origin/main and HEAD)", func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("comparison revision must not be empty")
+		}
+		base = value
+		return nil
+	})
+	if err := flags.Parse(args); err != nil {
+		return "", "", err
+	}
+	if flags.NArg() > 1 {
+		return "", "", fmt.Errorf("usage: docscheck [--base <rev>] [repository root]; flags must precede the root")
+	}
+	root = "."
+	if flags.NArg() == 1 {
+		root = flags.Arg(0)
+	}
+	return root, base, nil
 }
 
 // limitFor returns the size limit for a repository path, or 0 when the

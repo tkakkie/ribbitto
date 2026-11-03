@@ -76,8 +76,8 @@ Conventions for browser modules under
 
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) owns state,
 uncertainty, original text, confirmed ID and immutable `draftKey`; `requestKey`
-may rotate after a 409. Its [tests](../../web/test/composer-queue.test.mjs)
-(not yet converted to `.test.ts`; #2095) specify transitions and ordering. The entry keeps item/form references in maps,
+may rotate after a 409. Its [tests](../../web/test/composer-queue.test.ts)
+specify transitions and ordering. The entry keeps item/form references in maps,
 clones the server template and writes DOM projections from these typed objects.
 It never reads pending state, identity or original text back from those outputs.
 

@@ -63,7 +63,7 @@ See [storing job, release naming and retention](web-source-maps-store.md#storing
   protects almost nothing at AI merge pace, only the 90 days do. #2049 ensures a
   release exists for the SHA of every distributed or deployed build and decides
   how production releases' maps are kept (marker, revised retention rule and
-  post-retirement margin here, and tests in #1819's command). No container
+  post-retirement margin in [the store page](web-source-maps-store.md#storing-job-release-naming-and-retention--1819), and tests in #1819's command). No container
   image, Dockerfile, release workflow, tagged or distributed binary (including
   `go install`), manual deployment or other build distribution outside CI is
   allowed before #2049.

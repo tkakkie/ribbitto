@@ -52,6 +52,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		"message-drafts",
 		"member-mentions",
 		"message-link",
+		"mention-picker",
 	}
 	scripts := &Scripts{
 		urls:    make(map[string]string, len(names)),

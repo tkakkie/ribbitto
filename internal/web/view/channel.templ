@@ -316,7 +316,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("message-time")
 		@pageScript("member-mentions")
-		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("mention-picker")
 		@pageScript("composer")
 		@pageScript("pins-sync")
 		<script defer src="/static/quote-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>

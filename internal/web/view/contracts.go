@@ -378,4 +378,31 @@ const (
 	// OwnMentionAttribute marks a resolved mention whose member matches the viewer.
 	//dom:attribute
 	OwnMentionAttribute = "data-own-mention"
+	// MentionPickerID identifies the mention candidate popup container.
+	//dom:id HTMLDivElement
+	MentionPickerID = "mention-picker"
+	// MentionSearchID identifies the hidden mention candidate search form.
+	//dom:id HTMLFormElement
+	MentionSearchID = "mention-search"
+	// MentionQueryField names the hidden mention query input inside MentionSearchID.
+	//dom:field HTMLInputElement
+	MentionQueryField = "q"
+	// MentionStatusID identifies the mention candidate count live region.
+	//dom:id HTMLParagraphElement
+	MentionStatusID = "mention-status"
+	// MentionListboxID identifies the mention candidate listbox swapped by htmx.
+	//dom:id HTMLUListElement
+	MentionListboxID = "mention-listbox"
+	// QueryAttribute carries the query string that produced the current mention listbox.
+	//dom:attribute
+	QueryAttribute = "data-query"
+	// CountAttribute carries the localized candidate count message on the mention listbox.
+	//dom:attribute
+	CountAttribute = "data-count"
+	// HandleAttribute carries a mention candidate option's handle.
+	//dom:attribute
+	HandleAttribute = "data-handle"
+	// MentionQueryEvent triggers the htmx mention candidate search form.
+	//dom:event
+	MentionQueryEvent = "mention-query"
 )

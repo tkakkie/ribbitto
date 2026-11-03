@@ -127,9 +127,8 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. `web/test/*.test.ts` (#2092; `.test.mjs` until #2098) imports
-DOM-free `.ts` with `node:test`, `node:assert/strict` and `node-test.d.ts` (no
-`@types/node`); `make test-web` runs `node --test` ([checks](web-toolchain-checks.md)).
+path aliases. Client unit tests and `make test-web` follow
+[`web-tests.md`](web-tests.md) and [checks](web-toolchain-checks.md).
 
 ## Generated contract and state — #1413, #1416, #1417
 

@@ -39,7 +39,6 @@ Apply in order; the first match decides:
 - **Unbuilt designs (`planned`):** unbuilt implementation designs belong in their issue,
   not in living documents, and a plan that no longer matches reality is deleted. Keep
   product direction, reserved vocabulary and explicit non-goals.
-  The per-area cleanup issues move existing designs to their issues or delete them; this change does not.
 - **Measurements:** short frozen records of conclusions, conditions and measured SHA;
   delete raw results and record the actual pre-deletion SHA where they existed (answer 1 below).
 - **Decisions:** historical records of long-lived choices, why they were made and

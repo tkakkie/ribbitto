@@ -4,23 +4,22 @@ Read when: cross-reviewers review an issue or pull request, or check independenc
 
 ## Review independence and rounds
 
-**Who reviews:** an AI that neither wrote nor changed the work, decided from
-the actual history ([review independence](README.md#principles)): for an
-issue, an AI other than its writer; for a pull request, an AI other than the
-implementer and anyone who pushed to it. Copilot and adversarial follow-up
-checks use [an AI that did not write the change](review-followups.md#copilot-follow-up-check).
+**Who reviews:** an AI that neither wrote nor changed the work, based on
+actual history ([review independence](README.md#principles)): not the issue
+writer, PR implementer or anyone who pushed to the PR. Copilot and adversarial
+follow-up checks use [an AI that did not write the change](review-followups.md#copilot-follow-up-check).
 A failed, timed-out or empty run is handled as the README says. If independence
 cannot be kept, ask the maintainer.
 
-**Who changed it** is read from the orchestration record: the issue or pull
-request body and comments (process notes included), the review reports, the
+**Who changed it** comes from the orchestration record: issue or PR
+body and comments (including process notes), review reports,
 branch prefix (`claude/`, `codex/`, `argon/`) and commit trailers where
 present. GitHub's Author, Committer and token name are not evidence: every AI
-acts as the same account. If it cannot be told who wrote or changed the work,
-do not guess a reviewer: ask the maintainer.
+acts as the same account. If authorship is unclear, ask the maintainer;
+never guess a reviewer.
 
-**How many rounds:** at most **two** reviews, by AIs eligible under *Who reviews*, per issue or
-pull request, counting re-reviews together.
+**How many rounds:** at most **two** reviews per issue or PR, including
+re-reviews, by AIs eligible under *Who reviews*.
 Copilot and the adversarial review do not count. If round two still has
 blocking findings, a pull request may go through [*closure verification*](review-followups.md#closure-verification) when it qualifies; in every other
 case, stop and ask the maintainer. In round two, an issue gets a full re-read
@@ -77,32 +76,33 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   added and removed edges, crossing units first; added edges also appear
   as notices on `docs/dependencies.md`. Authors can run
   `go -C tools run ./deps --diff origin/main ..` locally for the same list.
-- Tests prove the behaviour (authorization: someone who must not see the
-  data does not see it). No test was deleted, skipped or weakened.
-- A test-only pull request meant to catch a regression records, in
-  *Verified by*, one deliberate defect in the code under test that breaks
-  the behaviour the test guards and fails its assertion (not a crash or a
-  compile error), and that the test passes again once it is reverted
-  (#360). Evidence may come from local checks or CI; record the deliberate
-  defect and its failing assertion, then revert it.
-- Comments explain *why*; flag behaviour narration. PRs must name the
-  changed requirement (or `none`) and change its document in the diff;
-  `none` with a changed invariant, boundary, table-ownership or operator contract
-  is a finding.
+- Tests prove behaviour (authorization: unauthorized users see no data).
+  No test was skipped or weakened. Removing Go tests, `TestBrowser` or any
+  authorization or scoping test requires a replacement test or the maintainer's
+  decision. Other removals are limited to client unit tests in `web/test/` under
+  the [deletion rules](../architecture/web-tests.md#deleting-or-merging-tests).
+- In *Verified by* (local checks or CI), a regression-test-only PR records one
+  deliberate defect per test file added or changed; a PR adding or changing
+  client unit tests ([`web-tests.md`](../architecture/web-tests.md)) records
+  one per added or changed client harness. Each defect is in the code under
+  test, breaks guarded behaviour and
+  fails an assertion (not a crash or compile error); the test passes once
+  reverted (#360).
+- Comments explain *why*, not behaviour. PRs name a changed
+  requirement (or `none`) and edit its doc; `none` with a changed invariant,
+  boundary, table-ownership or operator contract is a finding.
 - For each exception in `docs/language-exceptions.txt`, verify that its
   approving comment is the maintainer's and approves that exact path.
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and
   *Accepted parity differences* match
   [third-AI review](review-operations.md#third-ai-review) and below.
-- On a conversion (a pull request whose issue says it keeps today's
-  behaviour), any difference from the old behaviour is a `[blocking]` finding
-  (and blocks in [third-AI review](review-operations.md#third-ai-review) too) unless it
-  is provably unreachable, the issue itself lists it as intended, or the
-  maintainer accepts it below;
-  the PR body shows the pre-review comparison against the old script (baseline
-  SHA, commands and result, or what was compared for a restructuring;
-  [implementer brief](delivery.md#standard-implementer-brief)) and its absence
-  is also a `[blocking]` finding ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+- On a conversion (the issue says it preserves behaviour), any difference is
+  `[blocking]` (also in [third-AI review](review-operations.md#third-ai-review))
+  unless provably unreachable, listed as intended in the issue, or accepted by the
+  maintainer below. The PR body shows the pre-review comparison with the old
+  script (baseline SHA, commands and result, or the restructuring comparison;
+  [implementer brief](delivery.md#standard-implementer-brief)); missing evidence
+  is `[blocking]` ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
   Behaviour is what leaves the module and is observable outside it — DOM
   writes, events dispatched, request parameters, stored values, timer delays,
   escaping exceptions and their order — not internal call traces.

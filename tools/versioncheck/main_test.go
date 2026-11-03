@@ -26,10 +26,18 @@ func TestVersionCheck(t *testing.T) {
 			t.Fatalf("dependabot.yml missing %q", want)
 		}
 	}
-	for _, want := range []string{"schedule:\n    - cron: \"17 5 1 * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n", "if: github.repository == 'tkakkie/ribbitto' && github.ref == 'refs/heads/main'\n", "permissions:\n      contents: read\n      issues: write\n", "with:\n          ref: refs/heads/main\n          persist-credentials: false\n", "run: go -C tools run ./versioncheck -sync-issue .."} {
+	for _, want := range []string{"schedule:\n    - cron: \"17 5 1 * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n", "if: github.repository == 'tkakkie/ribbitto' && github.ref == 'refs/heads/main'\n", "permissions:\n      contents: read\n      issues: write\n", "with:\n          ref: refs/heads/main\n          persist-credentials: false\n", "      - name: build version coverage tool\n        run: go -C tools build -mod=readonly -o \"$RUNNER_TEMP/versioncheck\" ./versioncheck\n      - name: check version coverage and update tracking issue\n", "run: '\"$RUNNER_TEMP/versioncheck\" -sync-issue .'"} {
 		if !bytes.Contains(wf, []byte(want)) {
 			t.Fatalf("version-coverage.yml missing %q", want)
 		}
+	}
+	runStep := bytes.Index(wf, []byte("      - name: check version coverage and update tracking issue\n"))
+	if runStep < 0 || bytes.Contains(wf[:runStep], []byte("GITHUB_TOKEN")) {
+		t.Fatal("GITHUB_TOKEN must only be present in the binary execution step")
+	}
+	policy, err := os.ReadFile("../../docs/dependency-updates.md")
+	if err != nil || !bytes.Contains(policy, []byte("Node major upgrades and end-of-life transitions are a manual-only gap; the Node row checks only the pinned major.")) {
+		t.Fatalf("Node major/EOL manual-only gap must be documented: %v", err)
 	}
 	for _, tc := range []struct {
 		name, goVer, nodeVer, pgDigest, twVer, lintVer string
@@ -38,6 +46,8 @@ func TestVersionCheck(t *testing.T) {
 		laterPage, failPage                            bool
 	}{
 		{"up to date", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "| Go runtime | `go.mod`, `tools/go.mod`, `tools/tbls/go.mod` | `1.27.3` | `1.27.3` | `up-to-date` |", false, false},
+		{"pin newer than latest", "go1.27.3", "v26.8.1", testDigest, "v3.4.20", "v2.14.0", false, false, false, true, "Summary: 4 up-to-date, 0 outdated, 1 check-failed.", "| Tailwind CSS binary | `tools/download/main.go` | `v4.3.3` | `v3.4.20 (pin newer than upstream latest)` | `check-failed` |", false, false},
+		{"redirect limit", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, true, "Summary: 4 up-to-date, 0 outdated, 1 check-failed.", "stopped after 10 redirects", false, false},
 		{"outdated pins", "go1.27.4", "v26.9.0", strings.Replace(testDigest, "3a", "4b", 1), "v4.4.0", "v2.15.0", false, false, true, false, "Summary: 0 up-to-date, 5 outdated, 0 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `26.9.0` | `outdated` |", false, false},
 		{"newer Node major only", "go1.27.3", "v27.0.0", testDigest, "v4.3.3", "v2.14.0", false, false, false, true, "Summary: 4 up-to-date, 0 outdated, 1 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `no release found` | `check-failed` |", false, false},
 		{"failed check", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", true, true, true, true, "Summary: 3 up-to-date, 0 outdated, 2 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `HTTP 502` | `check-failed` |", false, false},
@@ -59,6 +69,7 @@ func TestVersionCheck(t *testing.T) {
 			}
 			var created, patched string
 			var issuePages int
+			var nodeRedirects int
 			responses := map[string]string{
 				"/go": `[{"version":"` + tc.goVer + `","stable":true}]`, "/node": `[{"version":"v27.0.0"},{"version":"` + tc.nodeVer + `"},{"version":"v24.10.0"}]`, "/token": `{"token":"reg-tok","expires_in":300,"issued_at":"2026-11-03T05:17:00Z"}`,
 				"/repos/tailwindlabs/tailwindcss/releases/latest": `{"tag_name":"` + tc.twVer + `","id":123,"draft":false,"prerelease":false,"author":{"login":"maintainer"},"assets":[{"id":456,"name":"tailwindcss"}]}`,
@@ -67,6 +78,9 @@ func TestVersionCheck(t *testing.T) {
 			}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
+				case r.URL.Path == "/node" && tc.name == "redirect limit" && nodeRedirects < 11:
+					nodeRedirects++
+					http.Redirect(w, r, "/node", http.StatusFound)
 				case r.URL.Path == "/node" && tc.failNode:
 					w.WriteHeader(http.StatusBadGateway)
 				case r.URL.Path == "/manifest":
@@ -107,6 +121,9 @@ func TestVersionCheck(t *testing.T) {
 			cfg := config{goURL: srv.URL + "/go", nodeURL: srv.URL + "/node", dockerTokenURL: srv.URL + "/token", dockerManifestURL: srv.URL + "/manifest", githubAPIBase: srv.URL, repo: "example/project", token: "gh-tok", now: time.Date(2026, 11, 3, 5, 17, 0, 0, time.UTC)}
 			var out bytes.Buffer
 			err := run(context.Background(), root, true, cfg, &out)
+			if tc.name == "redirect limit" && nodeRedirects != 10 {
+				t.Fatalf("followed %d redirect responses, want 10", nodeRedirects)
+			}
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("run error = %v, wantErr = %v", err, tc.wantErr)
 			}

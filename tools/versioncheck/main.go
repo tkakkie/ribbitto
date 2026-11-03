@@ -58,7 +58,13 @@ func main() {
 }
 
 func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Writer) error {
-	c := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, _ []*http.Request) error { req.Header.Del("Authorization"); return nil }}
+	c := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		req.Header.Del("Authorization")
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		return nil
+	}}
 	var goPin, pgPin string
 	var goErr error
 	for _, rel := range []string{"go.mod", "tools/go.mod", "tools/tbls/go.mod"} {
@@ -193,6 +199,9 @@ func evalRow(class, src, pin string, semver bool, pinErr error, fetch func() (st
 	var va, vb [3]int
 	_, _ = fmt.Sscanf(strings.TrimPrefix(pin, "v"), "%d.%d.%d", &va[0], &va[1], &va[2])
 	_, _ = fmt.Sscanf(strings.TrimPrefix(latest, "v"), "%d.%d.%d", &vb[0], &vb[1], &vb[2])
+	if semver && slices.Compare(va[:], vb[:]) > 0 {
+		return [5]string{class, src, pin, latest + " (pin newer than upstream latest)", "check-failed"}
+	}
 	if (!semver && pin != latest) || (semver && slices.Compare(va[:], vb[:]) < 0) {
 		return [5]string{class, src, pin, latest, "outdated"}
 	}

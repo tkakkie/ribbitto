@@ -4,14 +4,11 @@
 
 ## Source maps — #1411
 
-Development (`webbuild -dev` / `-watch`, #1821): `bin/dev-dist` holds bundles,
-external `<name>-<hash>.js.map` (`sourcesContent`,
-`//# sourceMappingURL=<name>-<hash>.js.map`) and `manifest.json` (`"map"` fields);
-retain recent generations. `RIBBITTO_DEV_ASSETS=bin/dev-dist` serves registered
-bundles/maps from disk with `Cache-Control: no-store`.
+Development (`webbuild -dev` / `-watch`, #1821): retain recent generations.
+`RIBBITTO_DEV_ASSETS=bin/dev-dist`: `Cache-Control: no-store`.
 
-Production (`make bundles`): `web/static/dist` has no maps, `sourceMappingURL`
-comments or `"map"` fields. Keep dev output outside the embedded tree, whose
+Production (`make bundles`): no maps, `sourceMappingURL` comments or `"map"` fields
+in `web/static/dist`. Keep dev output outside the embedded tree; its
 handler never serves `.map`. Production maps (#1819, #1469,
 [decision 43](../decisions/43-typescript-with-a-go-driven-build.md)) use a private
 index beside maps outside `web/static`, never in `manifest.json`, matching
@@ -56,6 +53,10 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
   are tested in #1819's `tools/sourcemaps` storing command. Until both #2049 parts merge: no container
   images, Dockerfiles, release workflows, tagged/distributed binaries (including
   `go install`), manual deployment or other build distribution outside CI.
+  No real production distribution/deployment until #2145 holds.
+  Required: #1819's first real store AND fetch record (main run 41571339027 recorded).
+  Real deletion pending on #1819 (first run: zero releases/tags deleted) does not block
+  the first production release; its preparation states deletion recorded or still pending.
 - **Token rotation ([#2050][i2050]):** maintainer rotates `SOURCEMAPS_TOKEN`,
   expiring about `2027-01-23`. Best-effort reminders: desktop `2027-01-09`,
   `2027-01-20` (if Claude is open or next launches); assigned

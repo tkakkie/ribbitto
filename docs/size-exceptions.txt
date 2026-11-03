@@ -2,4 +2,3 @@
 # Format: <path> #<issue>. docscheck (make check) fails when a listed file is
 # back under its limit, so remove the line with the split.
 docs/decisions/43-typescript-with-a-go-driven-build.md #2103
-docs/roadmap.md #2071

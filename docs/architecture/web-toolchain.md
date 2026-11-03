@@ -1,7 +1,7 @@
 # Web toolchain
 
-[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules,
-including the checker and `.test.ts` harnesses. The maintainer confirmed mechanics
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules
+and checker; decision 45 sets `.test.ts` harnesses. The maintainer confirmed mechanics
 marked **confirmed** on 2026-10-21
 ([record][cf]). #1410–#1415 build the foundation; #1416–#1421 convert scripts;
 #1409 writes module conventions.
@@ -21,7 +21,7 @@ package.json/package-lock.json and .node-version, updating decision 42 and
 type of `web/src/*.ts` so `node --test` loads them without typeless-package
 reparsing while root and `web/static/` files keep their existing scope.
 Later PRs add rows to both tables with the first file of a new kind or location:
-direct web/test/*.test.ts harnesses, node-test.d.ts and package.json (#2090); Go builders under tools/ are covered.
+direct web/test/*.test.ts harnesses, node-test.d.ts and package.json (#2092); Go builders under tools/ are covered.
 Unlisted files fail; exact-path exceptions use
 [`docs/language-exceptions.txt`](../language-exceptions.txt).
 

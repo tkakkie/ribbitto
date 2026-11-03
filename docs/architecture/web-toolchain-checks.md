@@ -19,7 +19,10 @@ multiline or interpolation blind spots. Keep review and browser tests.
 
 `make test-web` runs direct `web/test/*.test.ts` harnesses through the existing
 Go wrapper's test mode, also in `make check`
-([decision 45](../decisions/45-type-checked-client-unit-tests.md)). It checks
+([decision 45](../decisions/45-type-checked-client-unit-tests.md); during the
+transition the runner runs both the existing `web/test/*.test.mjs` harnesses and
+the new `web/test/*.test.ts` files, as decision 45 keeps `.mjs` accepted until
+#2093–#2095 convert them and #2098 removes the allowance). It checks
 `.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
 fails), needs no `node_modules` and runs `node --test <files>` from the
 repository root, propagating failure. `web/src/package.json` and `web/test/`'s

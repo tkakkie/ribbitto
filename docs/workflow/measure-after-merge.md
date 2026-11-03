@@ -7,12 +7,13 @@ It applies only when the issue's *Done when*, approved by `ready`, defers the
 measurement until after merge. It changes timing and record location only:
 all [investigations conditions](investigations.md#host-measurements) apply,
 including review, CI, host isolation, build/run routes, caps, approval,
-cleanup and credential redaction. No review or CI requirement can be skipped,
-including at the maintainer's individual judgement.
+cleanup and credential redaction. This document grants no waiver of any
+review or CI requirement.
 
-For measurements that gate merge, the orchestrator checks results against the
-issue's *Done when* before asking for merge and records them in the PR. For
-deferred measurements, that check happens after merge as follows.
+Unless the issue's *Done when* explicitly defers measurement until after
+merge, including when it is silent about timing, the orchestrator checks
+results against *Done when* before asking for merge and records them in the
+PR. For deferred measurements, that check happens after merge as follows.
 
 ## Keep the issue open through merge
 
@@ -49,12 +50,16 @@ approval for any run:
   squash SHA, every required check successful, and their run URLs. For example,
   use `gh api --method GET repos/tkakkie/ribbitto/actions/runs -f head_sha=<full-squash-SHA>`
   and verify the returned head SHAs and checks. Listing runs on `main` alone
-  does not establish CI at this commit.
+  does not establish CI at this commit. A cancelled or missing run is not
+  success: re-run it or await another push until a run whose head SHA is the
+  squash commit completes successfully, with every required check successful,
+  before requesting anything. A successful run at another SHA cannot substitute.
 
 If the trees differ, the difference must get an independent
 [follow-up check](review-followups.md#copilot-follow-up-check) of
-`<reviewed-head>..<squash>` under the existing review requirements, and CI
-must pass at the squash commit, before requesting approval. Neither review
+the tree diff `git diff <reviewed-head> <squash-commit>` under the existing
+review requirements, and CI must pass at the squash commit, before
+requesting approval. Neither review
 nor CI may be waived. This evidence reconciles the squash SHA with
 investigations condition 2; it does not replace any required review or check.
 

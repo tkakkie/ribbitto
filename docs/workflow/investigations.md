@@ -1,6 +1,6 @@
 # Investigations and the performance target
 
-Read when: proposing, approving or running a benchmark, load test, host measurement or investigation.
+Read for benchmark/load test/host measurement/investigation proposals, approvals or runs.
 
 - New measurement/verification stages, prototypes and measurement
 infrastructure need explicit maintainer preapproval.
@@ -12,13 +12,13 @@ when available; development-machine runs decide until then.
 
 ## Host measurements
 
-Performance measurements on the host need the maintainer's approval (#1308).
-All conditions apply:
+Host performance measurements need maintainer approval (#1308).
+All apply:
 
-1. Cross-review, Copilot and adversarial review approve
-with measurement pending; CI passes at that head before `ai-reviewed`.
-Then measure. The orchestrator checks results against *Done when* per
-[merge timing](measure-after-merge.md).
+1. Cross-review, Copilot and adversarial review approve (measurement pending);
+CI passes at that head, then `ai-reviewed`, then measure. Before asking for
+merge, the orchestrator checks results against *Done when*, unless it defers
+the run ([order](measure-after-merge.md)).
 2. Match full build/run SHA to reviews and CI; labels do not suffice.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
@@ -46,7 +46,7 @@ on its chosen `127.0.0.1` port, with disposable data and credentials,
 cleaned up by its recorded container ID.
 9. Afterwards, even on failure, stop all servers; remove database/container,
 volume, checkouts/worktrees, caches and binaries. Keep only setup/results.
-10. In PR (issue comments and PR result link after merge), record host
+10. In PR (after merge: issue result comment linked by PR), record host
 measurement, SHAs, conditions (toolchain, image digest, restrictions), exact
 commands, results and generation diff listing. Redact credentials.
 

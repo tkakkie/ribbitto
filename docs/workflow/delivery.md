@@ -36,14 +36,14 @@ risk and issue text:
 >    follow-up push), and stop once CI is green. Do not set labels, request or
 >    run reviews, mark ready, merge, or touch `main`, other branches, settings
 >    or tokens.
-
-[^measurement]: Follow [after-merge measurements](measure-after-merge.md):
-    replace the template's first line with `Refs #N`. Before asking for merge,
-    grep title, body and all commit messages for closing keywords naming the
-    issue and remove them; ensure
-    `gh pr view <N> --json closingIssuesReferences` excludes it, unlinking it
-    if needed. After merge, confirm the issue is open; otherwise reopen it at
-    once and record the repair on the issue.
+>
+> [^measurement]: Follow [after-merge measurements](measure-after-merge.md):
+>     replace the template's first line with `Refs #N`. Before asking for merge,
+>     grep title, body and all commit messages for closing keywords naming the
+>     issue and remove them; ensure
+>     `gh pr view <N> --json closingIssuesReferences` excludes it, unlinking it
+>     if needed. After merge, confirm the issue is open; otherwise reopen it at
+>     once and record the repair on the issue.
 
 ## Local checks by change type
 

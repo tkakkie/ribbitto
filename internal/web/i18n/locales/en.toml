@@ -247,6 +247,12 @@ other = "Ribbit actions"
 ["message.copy_link"]
 other = "Copy link"
 
+["message.copy_link_help"]
+other = "Copy this link using your browser’s Copy link address command."
+
+["message.actions_back"]
+other = "Back to the conversation"
+
 ["message.quote_link"]
 other = "Original ribbit"
 

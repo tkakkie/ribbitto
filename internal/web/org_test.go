@@ -191,6 +191,16 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Run(route.method+" "+path+" member", func(t *testing.T) {
 			w := get(route.method, path, aliceToken, now)
 			switch route.method + " " + route.path {
+			case "GET /messages/{messageID}/actions":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "linked message") {
+					t.Fatalf("actions: %d %s", w.Code, w.Body.String())
+				}
+				// Alice belongs to acme but cannot read Globex's message.
+				for _, id := range []kernel.ID{foreignMessage.ID, {0xee}} {
+					if w := get("GET", view.MessageURL("acme", id)+"/actions", aliceToken, now); w.Code != http.StatusNotFound || w.Body.String() != "404 page not found\n" {
+						t.Fatalf("hidden actions: %d %s", w.Code, w.Body.String())
+					}
+				}
 			case "POST /send-key":
 				if w.Code != 303 || w.Header().Get("Location") != "/organizations/acme/channels" {
 					t.Fatalf("preference: %d %s", w.Code, w.Header().Get("Location"))

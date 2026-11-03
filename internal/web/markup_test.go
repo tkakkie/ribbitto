@@ -692,6 +692,15 @@ func TestPagesMarkup(t *testing.T) {
 			return s
 		}, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {""}}, status: status, alerts: alerts})
 	}
+	for _, pinned := range []bool{false, true} {
+		cases = append(cases, markupCase{name: fmt.Sprintf("message actions pinned=%t", pinned), route: "GET /organizations/{slug}/messages/{messageID}/actions", services: func() Services {
+			s := signedIn(oneOrganisation{})()
+			fixture := actionsFixture()
+			fixture.entry.Pinned = pinned
+			s.Messages = fixture
+			return s
+		}, method: "GET", path: view.MessageURL("acme", kernel.ID{8}) + "/actions", cookie: true})
+	}
 	// Without JavaScript only a full channel renders a page; success is 303.
 	cases = append(cases, markupCase{name: "pin limit", route: "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/pin", services: func() Services {
 		s := signedIn(oneOrganisation{})()

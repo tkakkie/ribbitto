@@ -1,3 +1,5 @@
+/** DOM-free stream decisions. Part 2 owns v15's alert text/attribute matching
+ * before resetHeld, and the appliedCursor || eventCursor choice before comparison. */
 /** BigInt preserves sequence precision and the legacy exceptions for malformed cursors. */
 export function advancesCursor(incoming: string, current: string | null | undefined): boolean {
   return BigInt(incoming) >= BigInt(current as string);

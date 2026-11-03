@@ -3,7 +3,7 @@
 **Decided** ([#2125](https://github.com/tkakkie/ribbitto/issues/2125) and
 [#2124](https://github.com/tkakkie/ribbitto/issues/2124), approved by the
 maintainer on 2026-11-03;
-[approval](https://github.com/tkakkie/ribbitto/issues/2125#issuecomment-6602538749)).
+[approval](https://github.com/tkakkie/ribbitto/issues/2125), recorded in its body).
 This supersedes in part the **Node test declarations** bullet of
 [decision 45](45-type-checked-client-unit-tests.md): its module list is
 extended narrowly below. Decision 45 remains unchanged as history.

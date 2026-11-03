@@ -1,8 +1,7 @@
 # 46. The role of documentation
 
-**Decided** (#2102, approved by the maintainer on 2026-11-03; pre-migration
-commit `e91787814314a05a00c37b293a375bb7d1c9ae3e`, the `origin/main` tip at
-the final merge of main into this PR).
+**Decided** (#2102, approved by the maintainer on 2026-11-03; `main` when written:
+`e91787814314a05a00c37b293a375bb7d1c9ae3e`).
 
 Documentation holds what the code cannot say about itself: **why** (rationale,
 trade-offs, rejected alternatives), **direction** (vision, vocabulary,
@@ -42,13 +41,14 @@ Apply in order; the first match decides:
   product direction, reserved vocabulary and explicit non-goals.
   The per-area cleanup issues move existing designs to their issues or delete them; this change does not.
 - **Measurements:** short frozen records of conclusions, conditions and measured SHA;
-  delete raw results and record the actual pre-deletion SHA (answer 1 below).
+  delete raw results and record the actual pre-deletion SHA where they existed (answer 1 below).
 - **Decisions:** historical records of long-lived choices, why they were made and
   what was considered.
 
 ## Maintainer questions and answers
 
-1. Measurements and paging/recount plans? Keep short frozen records; delete raw results.
+1. Measurements and paging/recount plans? Keep short frozen records; delete raw results
+   and record the actual pre-deletion SHA where the deleted records existed.
 2. Decisions 26–44? Keep their text, numbers and files unchanged, now and later.
 3. Workflow consolidation? Remove duplication only; preserve independence, gates and failure handling.
 4. Generated references? Keep them unchanged; whether to stop committing them is a separate issue.
@@ -59,8 +59,8 @@ Apply in order; the first match decides:
   decisions 26 to 44 keep their text, numbers and files unchanged because code cites them
   (answer 2 above). The only permitted later edits are (a) a "Superseded by N" line
   and (b) repairing a link whose target moved or was deleted (retarget it, or replace it
-  with plain text naming the path and the pre-migration SHA
-  above, including measurement links from decisions 31, 32 and 34).
+  with plain text naming the path and a commit SHA where that document existed,
+  recorded when the repair is made; this includes measurement links from decisions 31, 32 and 34).
 - **Delete rather than split.** A growing total is cured by deleting implementation
   narration and consolidating, never by splitting a topic across files. Prose does not
   move into `doc.go`, where comments explain why, not what.

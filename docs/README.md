@@ -49,4 +49,5 @@ Apply in order while writing; the first match decides:
 - [Roadmap](roadmap.md) · [AI development workflow](workflow/README.md) · [Database development](database.md) · [Database tests](database-tests.md)
 - [Message paging plan measurements](message-paging-plans.md)
 - [Local development](development.md) — running locally, Make targets and [checks](development.md#checks)
+- [Dependency and runtime update coverage](dependency-updates.md) — version-pin inventory, monthly review and triage rules
 - [First-run setup and backup restore](setup-and-backup.md) — [first-run setup](setup-and-backup.md#first-run-setup) (`RIBBITTO_SETUP_TOKEN` and `/setup`), sign-up and [restoring a backup](setup-and-backup.md#restoring-a-backup)

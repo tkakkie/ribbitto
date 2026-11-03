@@ -1,6 +1,5 @@
 # Database development
 
-**Keep current:** configuration and migrations.
 See [database tests](database-tests.md) and [database locales](database-locales.md).
 
 `RIBBITTO_DATABASE_URL` configures the server and explicit

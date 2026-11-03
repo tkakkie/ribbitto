@@ -97,9 +97,12 @@ Do not write a client unit test for:
   `web/test/<name>.test.ts` (flat; no subdirectories or helper `.ts` files in
   `web/test/`), named for the `web/src/<name>.ts` module they test. Harnesses
   import DOM-free `web/src/<concern>.ts` modules by relative `.ts` path
-  (`../src/<concern>.ts`) and import `node:test` and `node:assert/strict` typed
-  by the hand-written `web/test/node-test.d.ts` declaration file (no
-  `@types/node`). Stripping types in `node --test` (`make test-web`) does not
+  (`../src/<concern>.ts`). The hand-written `web/test/node-test.d.ts` types
+  `node:test` and `node:assert/strict`, with only the narrow `node:fs`
+  `readFileSync` exception approved by
+  [decision 47](../decisions/47-minimal-node-declarations-for-client-unit-tests.md)
+  (no `@types/node` or wholesale Node typings). Stripping types in
+  `node --test` (`make test-web`) does not
   type-check them, so both `make check-web` and `make test-web` remain required
   ([`web-toolchain-checks.md`](web-toolchain-checks.md)).
 - **Splitting a harness that grows past one concern:** each harness covers one

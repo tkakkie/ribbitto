@@ -3,8 +3,6 @@
 Shared templ components ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
 Writing rules: [`ui-code.md`](ui-code.md).
 
-**Keep current:** update this file with shared component changes.
-
 ## Shared components
 
 Two uses make a look an `internal/web/view` component; pages reuse it.
@@ -83,3 +81,5 @@ Text precedes the avatar in both page and live markup; a fixed gutter reserves
 its space without loading an image or web font.
 
 Side panels, short heights and arrival motion are in [`ui-panels-and-motion.md`](ui-panels-and-motion.md).
+
+Live message swaps and the last ten polite announcements are handled by the registered `message-stream` bundle (`web/src/message-stream.ts`), using server-rendered items.

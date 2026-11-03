@@ -1,8 +1,6 @@
 # Database tests
 
-**Keep it current:** update this file when the integration-test setup or
-the module test fixtures change. Configuration, migrations and generated
-code are in [database development](database.md).
+Configuration, migrations and generated code are in [database development](database.md).
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` (now in

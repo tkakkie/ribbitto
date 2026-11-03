@@ -16,6 +16,8 @@ Past useful findings were all of this kind, which the other reviewers miss:
 - The PR description, the linked issue's *Done when*, `docs/`, `AGENTS.md`
   or code comments disagree with the code in this diff (for example a
   description still naming an old path or behaviour).
+- New prose in `docs/` that describes behaviour (how the code works), or a PR
+  that does not state which documented requirement changed (or `none`).
 - Commands, code examples or config snippets that would not run as written.
 - Personal data, secrets, or machine-specific paths (such as a home
   directory) in committed files.

@@ -4,13 +4,6 @@ The words ribbitto uses, the things it stores and the rules that must always
 hold. Code identifiers use the terms in the glossary; the frog-themed product
 words (ribbit, pond, marsh, …) appear only in UI message files.
 
-**Keep it current:** update the relevant file in this directory in the same
-pull request whenever a term, an entity, a relation, an invariant, a
-validation rule or the unread rules change: this README for terms,
-[`entities.md`](entities.md) for entities and relations,
-[`invariants.md`](invariants.md) for invariants, and the topic file in the
-index below for everything else.
-
 ## Index
 
 | File | Covers |

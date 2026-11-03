@@ -2,10 +2,8 @@
 
 How ribbitto looks and why. Read this before building a screen.
 
-**Keep it current:** update this file in the same pull request whenever a
-token or a layout principle changes; colours and contrast are in
-[`ui-colours.md`](ui-colours.md). The tokens themselves live only in
-`web/styles/app.css`; these files explain them.
+Colours and contrast are in [`ui-colours.md`](ui-colours.md); the tokens live
+only in `web/styles/app.css`.
 
 ## Direction
 

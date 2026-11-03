@@ -1,4 +1,3 @@
 branch-selection
 message-history
-message-stream
 sidebar-scroll

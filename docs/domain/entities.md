@@ -4,9 +4,8 @@ The things ribbitto stores and how they relate. Terms are in the
 [glossary](README.md#glossary); the rules that must always hold are in
 [`invariants.md`](invariants.md).
 
-**Keep it current:** update this file in the same pull request whenever an
-entity or a relation changes. Entities marked *planned* do not have tables
-yet; `db/migrations/` is the source of truth for what exists. See the
+Entities marked *planned* do not have tables yet; `db/migrations/` is the
+source of truth for what exists. See the
 [generated schema reference](../schema/README.md) for the current tables,
 columns and constraints.
 

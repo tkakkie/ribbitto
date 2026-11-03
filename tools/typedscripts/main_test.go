@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-const config = `{"compilerOptions":{"strict":true,"noEmit":true},"include":["web/src/**/*.ts"]}`
+const config = `{"compilerOptions":{"strict":true,"noEmit":true},"include":["web/src/**/*.ts","web/test/*.test.ts","web/test/node-test.d.ts"]}`
 
 func fixture() map[string]string {
-	return map[string]string{listFile: "example\n", "tsconfig.json": config, "web/static/example-v1.js": ""}
+	return map[string]string{listFile: "example\n", "tsconfig.json": config, "web/static/example-v1.js": "", "web/test/package.json": "{\"type\": \"module\"}\n"}
 }
 
 func TestRules(t *testing.T) {
@@ -22,8 +22,8 @@ func TestRules(t *testing.T) {
 		{"exclude", "tsconfig.json", config, strings.Replace(config, `"include"`, `"exclude":[],"include"`, 1), "exact typed include"},
 		{"files", "tsconfig.json", config, strings.Replace(config, `"include"`, `"files":[],"include"`, 1), "exact typed include"},
 		{"extends", "tsconfig.json", config, strings.Replace(config, `"include"`, `"extends":"./base.json","include"`, 1), "exact typed include"},
-		{"case shadow include", "tsconfig.json", config, strings.Replace(config, `"include":["web/src/**/*.ts"]`, `"include":["web/src/one.ts"],"Include":["web/src/**/*.ts"]`, 1), "exact typed include"},
-		{"case shadow exact include", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Include":["web/src/**/*.ts"],"include"`, 1), "exact typed include"},
+		{"case shadow include", "tsconfig.json", config, strings.Replace(config, `"include":["web/src/**/*.ts","web/test/*.test.ts","web/test/node-test.d.ts"]`, `"include":["web/src/one.ts"],"Include":["web/src/**/*.ts","web/test/*.test.ts","web/test/node-test.d.ts"]`, 1), "exact typed include"},
+		{"case shadow exact include", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Include":["web/src/**/*.ts","web/test/*.test.ts","web/test/node-test.d.ts"],"include"`, 1), "exact typed include"},
 		{"case include", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Include"`, 1), "exact typed include"},
 		{"case exclude", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Exclude":[],"include"`, 1), "exact typed include"},
 		{"case files", "tsconfig.json", config, strings.Replace(config, `"include"`, `"Files":[],"include"`, 1), "exact typed include"},
@@ -31,14 +31,19 @@ func TestRules(t *testing.T) {
 		{"case noEmit", "tsconfig.json", config, strings.Replace(config, `"noEmit"`, `"NoEmit"`, 1), "exact typed include"},
 		{"case shadow strict", "tsconfig.json", config, strings.Replace(config, `"strict"`, `"Strict":true,"strict"`, 1), "exact typed include"},
 		{"case shadow noEmit", "tsconfig.json", config, strings.Replace(config, `"noEmit"`, `"NoEmit":true,"noEmit"`, 1), "exact typed include"},
-		{"missing include", "tsconfig.json", config, strings.Replace(config, `,"include":["web/src/**/*.ts"]`, "", 1), "exact typed include"},
+		{"missing include", "tsconfig.json", config, strings.Replace(config, `,"include":["web/src/**/*.ts","web/test/*.test.ts","web/test/node-test.d.ts"]`, "", 1), "exact typed include"},
+		{"missing test include", "tsconfig.json", config, strings.Replace(config, `,"web/test/*.test.ts"`, "", 1), "exact typed include"},
+		{"missing declaration include", "tsconfig.json", config, strings.Replace(config, `,"web/test/node-test.d.ts"`, "", 1), "exact typed include"},
 		{"narrow include", "tsconfig.json", config, strings.Replace(config, "**/*.ts", "one.ts", 1), "exact typed include"},
 		{"wide include", "tsconfig.json", config, strings.Replace(config, "web/src/**/*.ts", "**/*.ts", 1), "exact typed include"},
+		{"wide test include", "tsconfig.json", config, strings.Replace(config, "web/test/*.test.ts", "web/test/**/*.ts", 1), "exact typed include"},
 		{"strict false", "tsconfig.json", config, strings.Replace(config, `"strict":true`, `"strict":false`, 1), "exact typed include"},
 		{"strict missing", "tsconfig.json", config, strings.Replace(config, `"strict":true,`, "", 1), "exact typed include"},
 		{"noEmit false", "tsconfig.json", config, strings.Replace(config, `"noEmit":true`, `"noEmit":false`, 1), "exact typed include"},
 		{"noEmit missing", "tsconfig.json", config, strings.Replace(config, `,"noEmit":true`, "", 1), "exact typed include"},
 		{"line directive", "web/src/one.ts", "// checked\n", "// @ts-nocheck\n", "@ts-nocheck"},
+		{"test directive", "web/test/one.test.ts", "// checked\n", "// @ts-nocheck\n", "@ts-nocheck"},
+		{"declaration directive", "web/test/node-test.d.ts", "// checked\n", "// @ts-nocheck\n", "@ts-nocheck"},
 		{"generated block directive", "web/src/contracts.gen.ts", "/* checked\n */", "/* @ts-nocheck\n */", "@ts-nocheck"},
 		{"outside typed input", "web/src/nested/other.ts", "// checked", "// @ts-nocheck", "@ts-nocheck"},
 		{"regex literal directive", "web/src/one.ts", `const q = /"/g; // checked`, `const q = /"/g; // @ts-nocheck`, "@ts-nocheck"},
@@ -139,7 +144,7 @@ func TestStrictFamily(t *testing.T) {
 }
 
 func TestTypeScriptDirectives(t *testing.T) {
-	for _, name := range []string{"web/src/one.tsx", "web/src/one.mts", "web/src/one.cts", "other/one.ts", "other/one.d.ts"} {
+	for _, name := range []string{"web/src/one.tsx", "web/src/one.mts", "web/src/one.cts", "web/test/helper.ts", "web/test/other.d.ts", "web/test/nested/one.test.ts", "web/test/one.test.tsx", "web/test/one.test.mts", "web/test/one.test.cts", "other/one.ts", "other/one.d.ts"} {
 		t.Run(name, func(t *testing.T) {
 			files := fixture()
 			files[name] = ""
@@ -163,6 +168,12 @@ func TestTrackedTypeScriptPaths(t *testing.T) {
 		{"web/src/one.ts", "other/one.ts"},
 		{"web/src/one.d.ts", "other/one.d.ts"},
 		{"web/src/nested/one.ts", "other/nested/one.ts"},
+		{"web/test/one.test.ts", "web/test/helper.ts"},
+		{"web/test/node-test.d.ts", "web/test/other.d.ts"},
+		{"web/test/one.test.ts", "web/test/nested/one.test.ts"},
+		{"web/test/one.test.ts", "web/test/one.test.tsx"},
+		{"web/test/one.test.ts", "web/test/one.test.mts"},
+		{"web/test/one.test.ts", "web/test/one.test.cts"},
 	} {
 		t.Run(tc.bad, func(t *testing.T) {
 			root := t.TempDir()

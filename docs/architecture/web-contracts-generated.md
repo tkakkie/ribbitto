@@ -4,10 +4,16 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link and member-mentions ids, dynamic id
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link, member-mentions and stream ids, dynamic id
 prefixes, field names, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
 other scripts' private hooks remain outside the generated contract.
+
+The stream adds `stream-stopped`, `load-older`, `unread-divider` and `branch-to`,
+plus `data-oldest-seq`, `data-to-topic`, `data-event-seq` and `data-announcement`.
+Its cursor/topic attributes and application events already belong to the shared
+sets; no duplicate definitions are added. SSE frame names, htmx/browser events
+and the extension's `sse-connect` attribute remain outside the generator.
 
 Composer attributes in the generated set:
 
@@ -20,6 +26,12 @@ Composer attributes in the generated set:
 | `data-unconfirmed`, `data-not-sent`, `data-still-unconfirmed`, `data-recovered`, `data-repeat`, `data-busy`, `data-capacity` | `#message-send-alert` | latest composers | localised alert texts |
 | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-edit`, `data-pending-edit-help`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
 | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
+
+The unwired DOM-free `web/src/stream-cursor.ts` prepares the stream conversion:
+its `web/test/stream-cursor.test.mjs` case tables cover BigInt cursor ordering,
+visibility, move admission/insertion, the ten-announcement cap, reset holds/jitter
+and persisted-source parking/restoration. The served v15 script still owns these
+decisions until the adapter is converted.
 
 Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:field` and its

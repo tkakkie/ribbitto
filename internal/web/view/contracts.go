@@ -379,3 +379,31 @@ const (
 	//dom:attribute
 	OwnMentionAttribute = "data-own-mention"
 )
+
+// Stream hooks not already shared by the composer, sidebar or read form.
+const (
+	// StreamStoppedID identifies the held reset notice.
+	//dom:id HTMLParagraphElement
+	StreamStoppedID = "stream-stopped"
+	// LoadOlderID identifies the server-owned history boundary.
+	//dom:id HTMLDivElement
+	LoadOlderID = "load-older"
+	// UnreadDividerID identifies the first-unread marker removed with a moved item.
+	//dom:id HTMLLIElement
+	UnreadDividerID = "unread-divider"
+	// BranchToID identifies the selection control refreshed after live swaps.
+	//dom:id HTMLSelectElement
+	BranchToID = "branch-to"
+	// OldestSeqAttribute carries the loaded history boundary.
+	//dom:attribute
+	OldestSeqAttribute = "data-oldest-seq"
+	// ToTopicAttribute carries a move's destination.
+	//dom:attribute
+	ToTopicAttribute = "data-to-topic"
+	// EventSeqAttribute carries an item's ordering sequence.
+	//dom:attribute
+	EventSeqAttribute = "data-event-seq"
+	// AnnouncementAttribute carries the server-rendered live announcement.
+	//dom:attribute
+	AnnouncementAttribute = "data-announcement"
+)

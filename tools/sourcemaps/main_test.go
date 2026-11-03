@@ -467,9 +467,11 @@ func TestStoreCoreFailures(t *testing.T) {
 			}
 			published := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "publish:") })
 			deleted := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "del-rel:") })
+			delTag := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "del-tag:") })
 			wantWarn, hasWarn := strings.CutPrefix(tc.name, "warn:")
 			if (published && !strings.Contains(tc.name, "publish") && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "lookup") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
 				(deleted && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
+				(delTag && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
 				((strings.Contains(tc.name, "expiry") || hasWarn) && !slices.Contains(s.events, "del-rel:2")) ||
 				(hasWarn && !strings.Contains(summary.String(), wantWarn)) {
 				t.Fatalf("unexpected events %v or summary %q", s.events, summary.String())

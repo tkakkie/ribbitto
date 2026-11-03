@@ -402,10 +402,13 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 		if s := shas[idx]; now.Sub(bySHA[s][0].parsed.Start) > 90*24*time.Hour {
 			for i := len(bySHA[s]) - 1; i >= 0; i-- {
 				item := bySHA[s][i]
-				if err := cmp.Or(c.deleteReleaseByID(ctx, item.rel), c.deleteTagByRef(ctx, item.rel.TagName)); err != nil {
+				if err := c.deleteReleaseByID(ctx, item.rel); err != nil {
 					return err
 				}
 				deletedIDs[item.rel.ID] = true
+				if err := c.deleteTagByRef(ctx, item.rel.TagName); err != nil {
+					return err
+				}
 			}
 		}
 	}

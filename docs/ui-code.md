@@ -14,7 +14,7 @@ in [`ui-components.md`](ui-components.md).
 Channels are listed by name, and the current channel nests its topics: the
 default first, then by name, at most 50 ([`topics.md`](domain/topics.md)).
 The order never changes to bring the current row forward (#922). Instead
-`sidebar-scroll-v2.js`, once on load, scrolls the sidebar's own pane (the
+`web/src/sidebar-scroll.ts`, once on load, scrolls the sidebar's own pane (the
 `<aside>` around `#sidebar-channels`, or the list page's `<main>`) so that the target row is in view,
 centred, when it is not already: the selected topic's row when it is
 listed, otherwise the current channel's row (an unlisted topic, or the

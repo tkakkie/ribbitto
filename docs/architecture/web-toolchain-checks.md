@@ -5,9 +5,9 @@ Checks and measurement requirements for the [web toolchain](web-toolchain.md).
 ## Checks and measurement — #1412, #1414, #1426
 
 `web/static/javascript_test.go` inspects every direct `web/src/*.ts` file
-(including `.d.ts`) and every direct `web/static/*.js` file, regardless of
-version; neither scan descends into subdirectories. Both sets are checked;
-missing application JavaScript still fails until #1831. The same comment/string
+(including `.d.ts`) and rejects any direct `web/static/*.js` file;
+neither scan descends into subdirectories. An empty TypeScript set fails.
+Vendor scripts and generated `dist` bundles are separate categories. The same comment/string
 masking and per-line forbidden-API, request, storage, HTML and global-write
 rules apply to both. TypeScript permits module-level declarations and exports,
 has no versioned-name rule, rejects casts of `window`/`globalThis` that could
@@ -49,7 +49,7 @@ in `web/static/vendor/` (pinned by `vendor_test.go`) and untouched direct
 `web/test/*.test.mjs` harnesses (not type-checked; changing one converts it in
 the same PR). #2098 removes this allowance only after the empty-glob condition
 above is met. On conversion, delete the
-old script and its list line together; version bumps keep the stem. The list may
+old script and its list line together. The list is now empty and may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule

@@ -446,3 +446,16 @@ const (
 	//dom:attribute
 	AnnouncementAttribute = "data-announcement"
 )
+
+// Selection and scroll hooks shared by the leaf adapters.
+const (
+	// BranchFormID identifies the message selection form.
+	//dom:id HTMLFormElement
+	BranchFormID = "branch-form"
+	// SourceAttribute carries a selectable message's source topic.
+	//dom:attribute
+	SourceAttribute = "data-source"
+	// AriaCurrentAttribute marks the current page or section.
+	//dom:attribute
+	AriaCurrentAttribute = "aria-current"
+)

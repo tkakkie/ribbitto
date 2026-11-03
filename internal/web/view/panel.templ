@@ -67,7 +67,7 @@ templ panelControl(page ChannelPage, panel, label string) {
 		id={ PanelControlPrefix + panel }
 		href={ templ.SafeURL(panelURL(page, panel)) }
 		if open {
-			aria-current="true"
+			{ AriaCurrentAttribute }="true"
 		}
 		if label == "" {
 			aria-label={ i18n.T(ctx, panelTitle(panel)) }

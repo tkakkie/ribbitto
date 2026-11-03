@@ -1,4 +1,5 @@
 import {
+  AriaCurrentAttribute,
   AriaModalAttribute,
   getPanelBackdrop,
   getPanelClose,
@@ -30,7 +31,7 @@ import {
     return;
   }
   const remember = () => {
-    const control = document.querySelector<HTMLElement>(`[id^='${PanelControlPrefix}'][aria-current]`);
+    const control = document.querySelector<HTMLElement>(`[id^='${PanelControlPrefix}'][${AriaCurrentAttribute}]`);
     try {
       if (control) sessionStorage.setItem(key, control.id);
     } catch {

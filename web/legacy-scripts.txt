@@ -1,3 +1,0 @@
-branch-selection
-message-history
-sidebar-scroll

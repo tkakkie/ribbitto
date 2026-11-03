@@ -18,7 +18,7 @@ index beside maps outside `web/static`, never in `manifest.json`, matching
 bundles by build SHA, run id and content hash.
 
 Keep production maps out of images, embedded files and public static routes
-(no inline maps/public `sourceMappingURL`); match stacks to exact output.
+(no inline maps/public `sourceMappingURL`).
 Verify CSP/delivery in [target browsers](browser-targets.md) with version-specific
 evidence under its rules: classic-bundle browser check; verify module/shared/lazy/preload
 before adoption, preserving nonce-only CSP.
@@ -30,7 +30,7 @@ Under [decision 43](../decisions/43-typescript-with-a-go-driven-build.md), use
 `tkakkie/ribbitto-sourcemaps`: no external service; **never commit maps to Git**.
 Actions artifacts do not fit public-repo CI because they cannot be private.
 
-- **Store, access and setup:** private `tkakkie/ribbitto-sourcemaps` (README
+- **Setup:** private `tkakkie/ribbitto-sourcemaps` (README
   only, no collaborators/Pages; Issues/Wiki/Projects disabled). Only the
   maintainer reads/administers it; only CI writes. No AI holds the token or
   reads the store; AIs read only `tkakkie/ribbitto` runs via `gh` with their own
@@ -42,17 +42,18 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
   `.../deployment-branch-policies` confirm the `main`-only environment.
   AI tokens get 403 on secrets and cannot
   inspect the store/token scope; setup/scope: #1469 [6403307193][c1], [6403484872][c2].
+  Naming the private repo, token scope, permission and expiry is intentional.
   Never write a value, token id or private URL.
 
 See [storing job, release naming and retention](web-source-maps-store.md#storing-job-release-naming-and-retention--1819).
 
-### Constraints: production gate, rotation and residual risk
+### Constraints
 
 - **Gate before the first production release ([#2049][i2049]):** at AI merge pace,
   the newest 10 protect almost nothing; only the 90 days do. Require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
-  of exact SHA/run id/attempt/bundle hashes for every distributed/deployed build and
+  of exact SHA/run id/attempt/bundle hashes for every distributed/deployed build;
   [production markers, retention and retirement margin](web-source-maps-store.md#storing-job-release-naming-and-retention--1819)
-  (#1819). Until both #2049 parts merge: no container
+  are tested in #1819's `tools/sourcemaps` storing command. Until both #2049 parts merge: no container
   images, Dockerfiles, release workflows, tagged/distributed binaries (including
   `go install`), manual deployment or other build distribution outside CI.
 - **Token rotation ([#2050][i2050]):** maintainer rotates `SOURCEMAPS_TOKEN`,

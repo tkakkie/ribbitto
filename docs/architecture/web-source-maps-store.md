@@ -2,8 +2,8 @@
 
 ## Storing job, release naming and retention — #1819
 
-[#1819][i1819]: on `main`, `tools/sourcemaps` (`make sourcemaps-store`) uploads
-production `.js.map` (`sourcesContent`, outside `web/static/dist`, no
+[#1819][i1819]: on `main`, `tools/sourcemaps` (`make sourcemaps-store`):
+`.js.map` (`sourcesContent`, outside `web/static/dist`, no
 `sourceMappingURL`) and `bin/sourcemaps/index.json` (outside `web/static`).
 Tests: `make check-tools`, including leak tests. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
 `GITHUB_TOKEN` `contents: read`, `SOURCEMAPS_TOKEN` only.
@@ -18,7 +18,7 @@ Secret: upload step-level `env` only, never build/install/test.
 Actions are SHA-pinned; command, Go dependencies and Makefile targets/tools need
 workflow review ([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
-- **Release naming:** tag and name are
+- **Naming:** tag and name are
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>`: runner
   clock read once at job start is the only "now", passed to the command;
   lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros
@@ -30,25 +30,26 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   #2049 lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
   newest complete published release per SHA within run/attempt filters; attempt
   requires run id, with no fallback.
-- **Release lifecycle:** create a draft, upload maps and `index.json`
+- **Lifecycle:** create a draft, upload maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
-  against that manifest, publish. Only drafts are incomplete.
+  against that manifest, publish, then verify lookup and per-ID fetch-back
+  (exact SHA/run/attempt release; identical index and every map's bytes).
+  Published releases are complete by construction; only drafts are incomplete.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
   strict-`map-` drafts older than 7 days by parsed start time (retried creates
   included), by release ID, unless that SHA's concurrency group holds a run.
   Paginate runs; errors/incomplete/1,000-capped listings fail closed before deletion.
-- **Population and bounds:** eligible releases are published non-prereleases
-  whose tag equals their canonical `map-` name, parsed time at most "now" plus
+- **Population:** eligible releases are canonical published non-prereleases,
+  parsed time at most "now" plus
   one day. Younger/non-strict drafts (outside 7-day cleanup), prereleases,
-  unparsable names (invalid time, SHA, run id or attempt), future-dated
+  unparsable names, future-dated
   out-of-range names and name/tag mismatches are neither counted nor deleted;
-  warn in the job summary. Count **distinct SHAs**, not releases: each SHA's
-  newest complete published release by the above order counts toward the
-  newest 10 and 90-day floor. Older duplicates take no slot and stay until
-  that SHA expires. A rerun of an old SHA takes a newest-10 slot by start time
+  warn in the job summary. Count each SHA's newest complete published release
+  toward the newest 10 and 90-day floor (**distinct SHAs**, not releases).
+  A rerun of an old SHA takes a newest-10 slot by start time
   (publication run order), potentially pushing a deployed SHA past 90 days;
   production markers independently protect individual releases.
-- **Retention, deletion and failure handling:** **90 days provisionally**
+- **Retention:** **90 days provisionally**
   plus a **90-day post-retirement investigation margin** (#2049).
   **90 days is a floor, not a deadline:** retention runs only **after a
   successful upload** on `main`; without pushes, old releases stay. Delete
@@ -60,7 +61,7 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   name lookup alone. Retry failed tag deletions next run via **orphan tags**:
   canonical `map-` tags older than 7 days, referenced by no release of any kind
   (published, draft, prerelease, unparsable, out-of-range or mismatched), with
-  that re-check confirming orphanhood. Log actual deletions (`%q` name, ID, SHA,
+  the same re-check. Log actual deletions (`%q` name, ID, SHA,
   age in days), warnings and summary; escape command introducers (`##[`, `::`)
   and control chars, with no secrets/headers. Upload, refused/expired auth or
   deletion failures fail visibly; failed uploads skip

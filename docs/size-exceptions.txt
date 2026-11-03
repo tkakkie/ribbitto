@@ -1,3 +1,5 @@
 # Legacy list: delete narration rather than split (decision 46); docscheck still accepts entries and requests splitting until issue B changes its message.
 # Until then, an unavoidable entry needs the maintainer's say-so in its issue.
+# Format: <path> #<issue>. docscheck (make check) fails when a listed file is
+# back under its limit, so remove the line with the split.
 docs/decisions/43-typescript-with-a-go-driven-build.md #2103

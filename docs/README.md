@@ -17,7 +17,7 @@ sequence order is commit order), operator procedures (restore, collation
 upgrade, reverse-proxy contract) and the AI workflow gates. Unbuilt
 implementation designs belong in their issue, not in living documents (keep
 product direction, reserved vocabulary and explicit non-goals).
-Existing designs move to their issues, or are deleted, in the per-area cleanup issues after A; A does not move them.
+The per-area cleanup issues move existing designs to their issues or delete them; this change does not.
 When a document nears its limit, delete narration rather than split; interim
 exceptions follow `size-exceptions.txt` (do not move prose into `doc.go`).
 Deleting prose needs no justification; adding it must pass the

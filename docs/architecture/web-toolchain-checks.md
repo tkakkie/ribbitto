@@ -19,14 +19,14 @@ multiline or interpolation blind spots. Keep review and browser tests.
 
 `make test-web` runs direct `web/test/*.test.ts` harnesses through the existing
 Go wrapper's test mode, also in `make check`
-([decision 45](../decisions/45-type-checked-client-unit-tests.md); during the
-transition the runner runs both the existing `web/test/*.test.mjs` harnesses and
-the new `web/test/*.test.ts` files, as decision 45 keeps `.mjs` accepted until
-#2093–#2095 convert them and #2098 removes the allowance). It checks
+([decision 45](../decisions/45-type-checked-client-unit-tests.md); the runner
+accepts the existing `web/test/*.test.mjs` harnesses now, runs both
+`web/test/*.test.mjs` and `web/test/*.test.ts` from #2092 while #2093–#2095
+convert them, and removes the `.mjs` glob in #2098). It checks
 `.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
 fails), needs no `node_modules` and runs `node --test <files>` from the
-repository root, propagating failure. `web/src/package.json` and `web/test/`'s
-`package.json` (`{"type": "module"}`) scope `web/src/*.ts` and
+repository root, propagating failure. `web/src/package.json` and (from #2092)
+`web/test/`'s `package.json` (`{"type": "module"}`) scope `web/src/*.ts` and
 `web/test/*.test.ts` as ES modules for Node's file-location package lookup
 without changing the root `package.json`, avoiding `MODULE_TYPELESS_PACKAGE_JSON`
 reparsing (#1854, #2090). Missing/mismatched Node prints `NOT VERIFIED` and skips
@@ -39,23 +39,26 @@ with that flag) checks pass/fail propagation and fails if
 The setup harness creates temporary annotated `.ts` modules and proves relative
 `.ts` imports and type stripping. Harnesses import DOM-free `web/src/<concern>.ts`
 by relative `.ts` path, using `node:test` and `node:assert/strict` with the
-hand-written `node-test.d.ts` declarations (no `@types/node`) and no DOM
-emulator. Stripping types in `node --test` is not checking them, so both checks remain required.
+hand-written `node-test.d.ts` declarations from #2092 (no `@types/node`) and no
+DOM emulator. Stripping types in `node --test` is not checking them, so both checks remain required.
 
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
 exactly one file per stem. Exempt paths are the three named vendor scripts
-in `web/static/vendor/` (pinned by `vendor_test.go`). On conversion, delete the old
+in `web/static/vendor/` (pinned by `vendor_test.go`) and, until #2098 removes
+the allowance, direct `web/test/*.test.mjs` harnesses (not type-checked; they
+are converted by #2093–#2095). On conversion, delete the old
 script and its list line together; version bumps keep the stem. The list may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule
 prints `NOT VERIFIED`, while all other rules still run. The JSON check requires
-exactly `include: ["web/src/**/*.ts", "web/test/*.test.ts", "web/test/node-test.d.ts"]`,
+exactly `include: ["web/src/**/*.ts"]`, and from #2092
+`include: ["web/src/**/*.ts", "web/test/*.test.ts", "web/test/node-test.d.ts"]`,
 `strict: true`, `noEmit: true`, `noCheck` absent or `false`, and no `exclude`,
 `files` or `extends`; checked keys are case-sensitive. Strict-family
-overrides must be `true`. Only `.ts` under `web/src/` and direct
+overrides must be `true`. Only `.ts` under `web/src/` and, from #2092, direct
 `web/test/*.test.ts` plus `node-test.d.ts` are type-checked; other
 TypeScript files fail. Raw-source checks reject `@ts-nocheck` in tracked
 `.ts`, `.tsx`, `.mts`, `.cts`, inline script tags without `src` (any case)

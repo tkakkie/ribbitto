@@ -74,8 +74,8 @@ rejecting independent package lists or flags. `-run` sets `GOFLAGS=-count=1`
 for every shard, whatever the workflow sets, because setup-go restores Go's test result cache; the
 workflow's `GOFLAGS` line is redundant. Web runs as `web-nonbrowser`, `web-1/3`,
 `web-2/3` and `web-3/3`; `cmd` runs `cmd/ribbitto` as a whole package.
-Local `make check-test` runs every package with the same default timeout;
-CI's package coverage and browser selection remain checked by `-check`.
+When Chrome is missing or cannot launch, `TestBrowser` and `TestTopicPostBrowser`
+skip locally. `RIBBITTO_REQUIRE_BROWSER=1` turns that skip into a failure; CI sets it.
 Unset or empty `RIBBITTO_BROWSER_SHARD` runs all scenarios; `k/n` silently limits
 `make check`. Invalid shards or shards with no scenarios fail.
 Registration filters full scenario names: the six slowest are pinned in

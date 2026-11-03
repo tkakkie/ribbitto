@@ -50,8 +50,6 @@ Apply in order; the first match decides:
 1. Measurements and paging/recount plans? Keep short frozen records; delete raw results
    and record the actual pre-deletion SHA where the deleted records existed.
 2. Decisions 26–44? Keep their text, numbers and files unchanged, now and later.
-3. Workflow consolidation? Remove duplication only; preserve independence, gates and failure handling.
-4. Generated references? Keep them unchanged; whether to stop committing them is a separate issue.
 
 ## Rules
 

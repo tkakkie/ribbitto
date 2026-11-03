@@ -146,12 +146,16 @@ Pull request:
 1. The implementer works in its worktree and passes the
    [local checks by change type](delivery.md#local-checks-by-change-type).
 2. Draft pull request with "Closes #N", except `Refs #N` for
-   [deferred after-merge measurements](measure-after-merge.md); CI goes green.
-   For that exception, before asking for merge, grep the title, body and all
-   commit messages for closing keywords naming the issue and remove them;
-   ensure `gh pr view <N> --json closingIssuesReferences` excludes it,
-   unlinking it if needed. After merge, confirm the issue is open; otherwise
-   reopen it at once and record the repair on the issue.
+   [deferred after-merge measurements](measure-after-merge.md) and fix or revert
+   PRs following an out-of-tolerance result; CI goes green. For that exception,
+   when asking for merge and again immediately before merging, the orchestrator
+   greps the title, body and all commit messages for closing keywords naming
+   the issue and checks that `gh pr view <N> --json closingIssuesReferences`
+   excludes it. Remove closing references and links as the linked procedure
+   requires; an unremovable link or a commit message needing a history rewrite
+   holds the merge and is reported to the maintainer. After merge, the
+   orchestrator confirms the issue is open; otherwise reopens it at once and
+   records the repair on the issue.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).
    Each report names its SHA; a substantive push makes older ones non-final. Each

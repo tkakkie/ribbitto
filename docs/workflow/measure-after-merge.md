@@ -10,26 +10,33 @@ including review, CI, host isolation, build/run routes, caps, approval,
 cleanup and credential redaction. This document grants no waiver of any
 review or CI requirement.
 
-Unless the issue's *Done when* explicitly defers measurement until after
-merge, including when it is silent about timing, the orchestrator checks
+If the issue's *Done when* does not explicitly defer the measurement until
+after merge (silence about timing is not deferral), the orchestrator checks
 results against *Done when* before asking for merge and records them in the
 PR. For deferred measurements, that check happens after merge as follows.
 
 ## Keep the issue open through merge
 
 Use `Refs #N` as the first line of the PR body, replacing the template's
-`Closes #` line for the issue whose measurement is deferred. No closing
+`Closes #` line for the issue whose measurement is deferred. A fix or revert
+PR following an out-of-tolerance result also uses `Refs #N`, so its merge
+cannot close the issue before re-measurement. No closing
 keyword (`close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`,
 `resolves`, `resolved`) naming that issue may appear in the PR title, body or
-any commit message: GitHub builds the squash message from them.
+any commit message. The squash message is exactly the PR title plus body.
 
-Before asking for merge, the orchestrator greps all three for those keywords
-and removes any closing reference to that issue. Also check
-`gh pr view <N> --json closingIssuesReferences`: the issue must not appear.
-Unlink it if it does; a Development-sidebar link can close it too. Check the
-final squash message for closing references as well. After merge, confirm the
-issue is still open. If GitHub closed it anyway, reopen it at once and record
-that on the issue; reopening repairs closure and does not replace prevention.
+When asking for merge and again immediately before merging, the orchestrator
+greps the current title, body and all commit messages for those keywords and
+checks `gh pr view <N> --json closingIssuesReferences`: neither a closing
+reference nor a closing link to the issue may remain. A Development-sidebar
+link can close it too; `gh` has no unlink command, so remove it in the PR's
+Development sidebar. If a link cannot be removed, or a keyword in a commit
+message needs a history rewrite and a new head, the merge waits and the
+orchestrator tells the maintainer. A rewritten head follows the normal
+[push and review rules](README.md#lifecycle). After merge, the orchestrator
+confirms the issue is still open. If GitHub closed it anyway, reopen it at
+once and record that on the issue; reopening repairs closure and does not
+replace prevention.
 
 Review and CI still complete at the PR head before `ai-reviewed`, as in
 [investigations condition 1](investigations.md#host-measurements) and the
@@ -44,24 +51,40 @@ approval for any run:
 - The PR head that last had every required review and green CI.
 - The squash commit (measurement head) and its first parent (measurement
   base); show the first-parent relationship with `git rev-parse <squash>^1`.
-- Both tree values from `git rev-parse <reviewed-head>^{tree}` and
-  `git rev-parse <squash>^{tree}`, and whether they match.
-- CI on the squash commit itself: workflow runs whose head SHA is that full
-  squash SHA, every required check successful, and their run URLs. For example,
-  use `gh api --method GET repos/tkakkie/ribbitto/actions/runs -f head_sha=<full-squash-SHA>`
-  and verify the returned head SHAs and checks. Listing runs on `main` alone
-  does not establish CI at this commit. A cancelled or missing run is not
-  success: re-run it or await another push until a run whose head SHA is the
-  squash commit completes successfully, with every required check successful,
-  before requesting anything. A successful run at another SHA cannot substitute.
+- The expected tree from
+  `git merge-tree --write-tree <squash>^1 <reviewed-head>` (Git 2.38+).
+  Check the exit status: 0 is clean, 1 means conflicts; on a conflict or any
+  error, stop, compare no tree and request no measurement approval.
+- On exit 0, the actual tree from `git rev-parse <squash>^{tree}`, both tree
+  values and the comparison result. Compare the expected tree with the actual
+  tree, not the reviewed head's tree directly with the squash tree: unrelated
+  changes on `main` may have arrived since review. If equal, no extra review
+  of the squash integration is needed; the existing PR reviews and the squash
+  commit's own CI remain required. If different, the actual difference
+  `git diff <expected-tree> <actual-tree>` needs an independent
+  [follow-up check](review-followups.md#copilot-follow-up-check) under the
+  existing review requirements. Anything substantive or not judgeable stops
+  the procedure and is reported to the maintainer under the
+  [substantive-delta rule](review-operations.md#third-ai-review).
+- CI on the squash commit itself and its run URL. Here the required check is
+  the `ci` job of the `ci.yml` push workflow run on that exact full SHA;
+  the ruleset requires only `ci`. For example, use
+  `gh api --method GET repos/tkakkie/ribbitto/actions/runs -f head_sha=<full-squash-SHA>`
+  and verify the workflow, event, head SHA and successful `ci` job. Listing
+  runs on `main` alone does not establish CI at this commit. `ci.yml` cancels
+  in-progress runs on `main`. A cancelled or missing run is not success:
+  locate the push run for that SHA and re-run it with `gh run rerun <run-id>`
+  only when no newer run on `main` is in progress. If no run can be found,
+  stop and report to the maintainer; request nothing until that exact SHA's
+  push run has a successful `ci` job. A later push cannot produce a run at
+  this SHA, and a successful run at another SHA never substitutes.
 
-If the trees differ, the difference must get an independent
-[follow-up check](review-followups.md#copilot-follow-up-check) of
-the tree diff `git diff <reviewed-head> <squash-commit>` under the existing
-review requirements, and CI must pass at the squash commit, before
-requesting approval. Neither review
-nor CI may be waived. This evidence reconciles the squash SHA with
-investigations condition 2; it does not replace any required review or check.
+The issue record must include the reviewed head, squash commit, its first
+parent, expected tree, actual tree, comparison result and CI run URL before
+any run is requested for approval. This corrects the object of the comparison
+and loosens no condition: no review or CI requirement may be skipped.
+This evidence reconciles the squash SHA with investigations condition 2;
+it does not replace any required review or check.
 
 The maintainer must approve the exact two full build/run SHAs, the method and
 the cap, and give an explicit start instruction. A measurement is never
@@ -77,13 +100,15 @@ At merge, the orchestrator posts one pending entry as a comment on the issue:
 |---|---|---|---|---|
 | #N | #PR | full first-parent SHA | full squash SHA | pending approval |
 
-Edit that same entry at each step. Issue comments are the authoritative state
+Edit that same entry at each step; each edit is a new comment-edit with the
+status change dated. Issue comments are the authoritative state
 and result record: the pending entry, approval, explicit start instruction and
 result. Record chat approvals and start instructions there with their exact
 scope. A result whose SHAs differ from the pending entry is invalid; establish
 and approve the pair again before running it.
 
-The result comment contains everything investigations condition 10 requires:
+The result comment quotes the entry's base and head SHAs at the time of the
+run and contains everything investigations condition 10 requires:
 host measurement, SHAs, conditions (toolchain, image digest, restrictions),
 exact commands, results and the generation diff listing, with credentials
 redacted. The orchestrator comments on the merged PR with a link to that

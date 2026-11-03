@@ -1,6 +1,6 @@
 # Investigations and the performance target
 
-Read for benchmark/load test/host measurement/investigation proposals, approvals or runs.
+Read when: benchmark/load test/host measurement/investigation proposals/approvals/runs.
 
 - New measurement/verification stages, prototypes and measurement
 infrastructure need explicit maintainer preapproval.
@@ -16,9 +16,10 @@ Host performance measurements need maintainer approval (#1308).
 All apply:
 
 1. Cross-review, Copilot and adversarial review approve (measurement pending);
-CI passes at that head, then `ai-reviewed`, then measure. Before asking for
-merge, the orchestrator checks results against *Done when*, unless it defers
-the run ([order](measure-after-merge.md)).
+CI passes at that head, then `ai-reviewed`, then measure. Unless the issue's
+*Done when* explicitly defers measurement until [after merge](measure-after-merge.md),
+the orchestrator checks results against it
+before asking for merge.
 2. Match full build/run SHA to reviews and CI; labels do not suffice.
 Each push needs reviews and CI at its SHA before another run. Until setup
 is validated, each run also needs case-by-case maintainer approval for
@@ -155,8 +156,7 @@ Record results/profiles in PR. Denial stops; widening needs review and
 maintainer approval.
 
 Minimal profile: system runtime reads exclude developer files; no broad
-imports. SBPL needs `localhost` (loopback only), not numeric hosts;
-commands still use `127.0.0.1`:
+imports. SBPL needs `localhost` for loopback, not numbers; commands use `127.0.0.1`:
 
 ```scheme
 (version 1)
@@ -169,7 +169,7 @@ commands still use `127.0.0.1`:
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/usr/lib")
   (subpath "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"))
 (allow file-read* file-write* (subpath "/private/var/ribbitto-measure/data"))
-; dyld opens / as its lookup root.
+; dyld's lookup root is /.
 (allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom"))
 (allow network-bind (local tcp "localhost:18080"))
 (allow network-inbound (local tcp "localhost:18080"))
@@ -183,7 +183,7 @@ sockets. Run in foreground.
 Trusted Perl forks into a new session, replaces fds 0-2 with `/dev/null` and
 fresh `data/server.log`, and closes higher fds (directory handle included)
 before the profile; `env -i` alone leaves files open.
-Ctrl-C stops only the waiting parent; stop the server by PID.
+Ctrl-C stops only the parent; stop the server by PID.
 
 ```sh
 cd /private/var/ribbitto-measure/data &&
@@ -211,7 +211,7 @@ cd /private/var/ribbitto-measure/data &&
   /private/var/ribbitto-measure/server serve
 ```
 
-Administrator after start: `lsof -a -p "$pid" -d 0-65535` (`pid`: server).
+Admin after start: `lsof -a -p "$pid" -d 0-65535` (`pid`: server).
 Require 0: `/dev/null`; 1-2: fresh log; higher: server-opened allowed files,
 runtime kqueue/pipes or permitted sockets only. Stop on inherited operator
 files/terminals/sockets.

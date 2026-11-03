@@ -31,19 +31,24 @@ risk and issue text:
 > 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
 >    branch, run the credential scan (docs/workflow/delivery.md#pr-body-credential-scan)
 >    on the PR body file, and open a DRAFT PR (`.github/pull_request_template.md`,
->    `Closes #<N>`, except `Refs #<N>` for deferred after-merge measurements[^measurement]).
+>    `Closes #<N>`, except `Refs #<N>` for deferred after-merge measurements
+>    and fix or revert PRs following an out-of-tolerance result[^measurement]).
 > 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before any
 >    follow-up push), and stop once CI is green. Do not set labels, request or
 >    run reviews, mark ready, merge, or touch `main`, other branches, settings
 >    or tokens.
 >
 > [^measurement]: Follow [after-merge measurements](measure-after-merge.md):
->     replace the template's first line with `Refs #N`. Before asking for merge,
->     grep title, body and all commit messages for closing keywords naming the
->     issue and remove them; ensure
->     `gh pr view <N> --json closingIssuesReferences` excludes it, unlinking it
->     if needed. After merge, confirm the issue is open; otherwise reopen it at
->     once and record the repair on the issue.
+>     replace the template's first line with `Refs #N` for a deferred measurement
+>     or a fix or revert following an out-of-tolerance result. Before publishing,
+>     the implementer greps title, body and all commit messages for closing
+>     keywords naming the issue and removes closing references; after opening
+>     the PR, check that `gh pr view <N> --json closingIssuesReferences` excludes
+>     it. Remove closing links in the PR's Development sidebar (`gh` has no
+>     unlink); report an unremovable link or a commit message needing a history
+>     rewrite and new head to the orchestrator. The linked procedure assigns
+>     the orchestrator's checks when asking for merge, immediately before
+>     merging, and after merge; it holds the merge if prevention is incomplete.
 
 ## Local checks by change type
 

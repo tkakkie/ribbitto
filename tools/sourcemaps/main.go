@@ -598,11 +598,14 @@ func runVerify(ctx context.Context, cfg config, dir, sha, runID, attempt string)
 	}
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("reading distribution directory: %w", err)
+		return fmt.Errorf("reading distribution directory %s: %v", safeQuote(dir), errors.Unwrap(err))
 	}
 	byFile := make(map[string]bundle, len(receipt.Entries))
 	for _, e := range receipt.Entries {
 		byFile[e.File] = e
+	}
+	if len(byFile) == 0 {
+		return fmt.Errorf("empty distribution index in %s", safeQuote(rel))
 	}
 	count := 0
 	for _, f := range files {
@@ -610,9 +613,17 @@ func runVerify(ctx context.Context, cfg config, dir, sha, runID, attempt string)
 			continue
 		}
 		e, ok := byFile[f.Name()]
-		data, err := os.ReadFile(filepath.Join(dir, f.Name()))
+		path := filepath.Join(dir, f.Name())
+		info, err := os.Stat(path)
 		if err != nil {
-			return fmt.Errorf("reading distributed bundle %s: %w", safeQuote(f.Name()), err)
+			return fmt.Errorf("checking distributed bundle %s in %s: %v", safeQuote(f.Name()), safeQuote(dir), errors.Unwrap(err))
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("distributed bundle %s in %s is not a regular file", safeQuote(f.Name()), safeQuote(dir))
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading distributed bundle %s in %s: %v", safeQuote(f.Name()), safeQuote(dir), errors.Unwrap(err))
 		}
 		if !ok || fmt.Sprintf("%x", sha256.Sum256(data)) != e.SHA256 {
 			return fmt.Errorf("distributed bundle %s does not match %s", safeQuote(f.Name()), safeQuote(rel))
@@ -631,7 +642,7 @@ func runVerify(ctx context.Context, cfg config, dir, sha, runID, attempt string)
 
 func main() {
 	lookup := flag.Bool("lookup", false, "find and fetch a production source map by commit SHA, bundle SHA-256 and optional run id and attempt")
-	verify := flag.Bool("verify", false, "verify a distribution directory against an exact stored build and emit a JSON receipt")
+	verify := flag.Bool("verify", false, "check bundle names and hashes against an exact stored index with uploaded map assets (maps are not downloaded); emit a JSON receipt")
 	flag.Parse()
 	args := flag.Args()
 	var summary io.Writer = os.Stderr

@@ -86,18 +86,21 @@ Before any future distribution or deployment step, run
 `go -C tools run ./sourcemaps -verify <bundle dir> <SHA> <run id> <attempt>`
 with store access (the existing credential rules still apply). Use the actual
 production bundle directory, containing the complete set of top-level `.js`
-bundles from that producing run/attempt, such as `web/static/dist`.
-Only top-level files ending exactly in `.js` are checked (symlinks are followed);
-other files, including `manifest.json`, `X.JS` and nested bundles, are ignored.
+bundles from that producing run/attempt, such as `../web/static/dist` (relative
+to `tools/` because of `-C tools`). Only top-level names ending exactly in `.js`
+are checked; their targets must be regular files (symlinks are followed).
+Other names, including `manifest.json`, `X.JS` and nested bundles, are ignored.
 The command requires a complete published release for that exact SHA, run id
 and attempt, hashes every bundle's bytes with SHA-256, and checks both its file
 name and hash against the stored index. Missing releases, mismatched bytes or
-names, missing/extra bundles and read failures exit nonzero. Verification only
-reads the store; it never uploads a substitute for a missing release.
+names, missing/extra bundles, non-regular targets, empty indexes and read failures
+exit nonzero. Each indexed map must have a non-empty uploaded release asset;
+verification does not download maps or check their contents. It only reads the
+store and never uploads a substitute for a missing release.
 
 On success, stdout is a JSON receipt with `commit`, `run_id`, `attempt`,
 `release` (the full store release name), and `entries` (each bundle's `file`,
-`sha256` and corresponding `map`). The future distribution/deploy step must
+`sha256` and indexed map asset name `map`). The future distribution/deploy step must
 retain this receipt outside public assets with the build's distribution record,
 stop on verification failure, and distribute those exact verified bytes without rebuilding or
 changing them. For investigation, use the receipt's SHA, bundle hash, run id

@@ -907,7 +907,8 @@ func TestExactBuildVerification(t *testing.T) {
 	defer srv.Close()
 	var dirs, names []string
 	var hashes, wantMaps []string
-	for i, identity := range [][2]string{{"10", "1"}, {"10", "2"}, {"11", "1"}} {
+	identities := [][2]string{{"10", "1"}, {"10", "2"}, {"11", "1"}, {"1", "1"}, {"10", "10"}}
+	for i, identity := range identities {
 		dir, mapDir := t.TempDir(), t.TempDir()
 		m := manifest{Commit: sha, RunID: identity[0], Entries: map[string]bundle{}}
 		for _, key := range []string{"a", "z"} {
@@ -944,8 +945,9 @@ func TestExactBuildVerification(t *testing.T) {
 			t.Fatalf("wrong receipt: %s (%v)", out.String(), err)
 		}
 	}
-	// The newest same-SHA output must not replace either earlier run/attempt.
-	for i, identity := range [][2]string{{"10", "1"}, {"10", "2"}, {"11", "1"}} {
+	storedEvents := slices.Clone(s.events)
+	// The newest same-SHA output must not replace earlier runs/attempts, even prefixes.
+	for i, identity := range identities {
 		cfg := testCfg(srv.URL, "tok", now, &bytes.Buffer{})
 		if err := runVerify(t.Context(), cfg, dirs[i], sha, identity[0], identity[1]); err != nil {
 			t.Fatal(err)
@@ -958,6 +960,16 @@ func TestExactBuildVerification(t *testing.T) {
 	t.Run("lookup attempt without run", func(t *testing.T) {
 		if rel, name, data, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, io.Discard), sha, hashes[2], "", "1"); err == nil || rel != "" || name != "" || len(data) != 0 {
 			t.Fatalf("must refuse attempt without run: %s/%s %s (%v)", rel, name, data, err)
+		}
+	})
+	t.Run("empty index and directory", func(t *testing.T) {
+		original := s.releases[0].Assets
+		t.Cleanup(func() { s.releases[0].Assets = original })
+		idx, _ := json.Marshal(manifest{Commit: sha, RunID: "10", Entries: map[string]bundle{}})
+		s.releases[0].Assets = []mockAsset{{ID: original[0].ID, Name: "index.json", Size: int64(len(idx)), data: idx}}
+		var out bytes.Buffer
+		if err := runVerify(t.Context(), testCfg(srv.URL, "tok", now, &out), t.TempDir(), sha, "10", "1"); err == nil || out.Len() != 0 {
+			t.Fatalf("must refuse empty index without a receipt: err=%v output=%s", err, out.String())
 		}
 	})
 	for _, prefix := range []int{8, 16, 63} {
@@ -1055,7 +1067,7 @@ func TestExactBuildVerification(t *testing.T) {
 			}
 		})
 	}
-	if len(s.events) != 15 {
+	if !slices.Equal(s.events, storedEvents) {
 		t.Fatalf("verification mutated store: %v", s.events)
 	}
 }

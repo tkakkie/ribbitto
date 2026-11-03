@@ -373,6 +373,28 @@ func TestStoreCoreAndLookup(t *testing.T) {
 			t.Errorf("job summary missing %q warning:\n%s", warn, summary.String())
 		}
 	}
+	for _, wantLog := range []string{
+		fmt.Sprintf("deleted release %q (id 11, sha %s, age 95d)\n", oldTag, shaOf(11)),
+		fmt.Sprintf("deleted release %q (id 30, sha %s, age 8d)\n", draftDel, shaOf(50)),
+		fmt.Sprintf("deleted tag %q (sha %s, age 95d)\n", oldTag, shaOf(11)),
+		fmt.Sprintf("deleted tag %q (sha %s, age 8d)\n", orphanOld, shaOf(70)),
+		"retention summary: deleted 6 releases, 2 tags\n",
+	} {
+		if !strings.Contains(out.String(), wantLog) {
+			t.Errorf("stdout missing deletion log %q:\n%s", wantLog, out.String())
+		}
+	}
+	for _, absentLog := range []string{
+		fmt.Sprintf("deleted release %q", oldTag404),
+		fmt.Sprintf("deleted tag %q", oldTag404),
+		fmt.Sprintf("deleted tag %q", oldTag500),
+		store.token,
+		store.expiryHeader,
+	} {
+		if strings.Contains(out.String(), absentLog) || strings.Contains(summary.String(), absentLog) {
+			t.Errorf("unexpected log or leaked secret/header %q in output", absentLog)
+		}
+	}
 	for _, run := range []struct{ id, att int }{{9, 1}, {10, 1}, {510, 9}, {510, 10}} {
 		dirN, _, _ := writeMapDir(t, currSHA, strconv.Itoa(run.id))
 		if err := runStore(t.Context(), cfg, dirN, currSHA, strconv.Itoa(run.id), strconv.Itoa(run.att)); err != nil {

@@ -123,8 +123,9 @@ func compareOrder(a, b releaseName) int {
 }
 
 type apiClient struct {
-	cfg    config
-	expiry string
+	cfg              config
+	expiry           string
+	delRels, delTags int
 }
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
@@ -198,24 +199,29 @@ func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 }
 
 func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
-	if _, ok := parseReleaseName(r.Name); !ok || r.ID <= 0 || r.Prerelease || r.Name != r.TagName {
+	p, ok := parseReleaseName(r.Name)
+	if !ok || r.ID <= 0 || r.Prerelease || r.Name != r.TagName {
 		return fmt.Errorf("refusing to delete non-canonical release %d", r.ID)
 	}
-	p := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID)
+	u := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID)
 	var got ghRelease
-	if code, _, err := c.do(ctx, true, "GET", p, "", nil, &got); err != nil || code == 404 {
+	if code, _, err := c.do(ctx, true, "GET", u, "", nil, &got); err != nil || code == 404 {
 		return err
 	} else if code != 200 || got.ID != r.ID || got.Name != r.Name || got.TagName != r.TagName || got.Draft != r.Draft || got.Prerelease {
 		return fmt.Errorf("release lookup mismatch for id %d (status %d)", r.ID, code)
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", p, "", nil, nil); err != nil || (code != 204 && code != 404) {
+	if code, _, err := c.do(ctx, true, "DELETE", u, "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
+	} else if code == 204 {
+		c.delRels++
+		_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "deleted release %q (id %d, sha %s, age %dd)\n", r.Name, r.ID, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
 }
 
 func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
-	if _, ok := parseReleaseName(tag); !ok {
+	p, ok := parseReleaseName(tag)
+	if !ok {
 		return fmt.Errorf("refusing to delete non-canonical tag %q", tag)
 	}
 	code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
@@ -224,6 +230,10 @@ func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 	}
 	if err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting tag %s: status %d (%v)", tag, code, err)
+	}
+	if code == 204 {
+		c.delTags++
+		_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "deleted tag %q (sha %s, age %dd)\n", tag, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
 }
@@ -468,6 +478,7 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 			return err
 		}
 	}
+	_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "retention summary: deleted %d releases, %d tags\n", c.delRels, c.delTags)
 	return nil
 }
 

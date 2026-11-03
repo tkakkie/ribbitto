@@ -94,7 +94,7 @@ and so is HTML or CSS that fails one of the four points.
 - **`web/src/popover-focus.ts` (closing on `Tab`):** popovers are
   non-modal, so `Tab` or `Shift+Tab` can leave `:popover-open` open over the
   newly focused control; the script hides it once `Tab` moves focus outside.
-- **`web/static/branch-selection-v1.js` (`disabled`):** checking a message
+- **`web/src/branch-selection.ts` (`disabled`):** checking a message
   disables checkboxes from other source topics (`data-source`), the source
   topic's `<option>` in `#branch-to`, and `#branch-name` when an existing topic
   is selected, including on `htmx:load` (points 1 and 3: CSS cannot set
@@ -113,8 +113,8 @@ and so is HTML or CSS that fails one of the four points.
   `--composer-viewport-top` on `#organization-stream` when `visualViewport`
   differs from `innerHeight` or `0` by more than 1 px, with `100dvh` as the CSS
   fallback ([`ui-composer.md`](../ui-composer.md)).
-- **Scroll position (`web/static/message-history-v2.js`,
-  `web/static/sidebar-scroll-v2.js`, and list anchoring in
+- **Scroll position (`web/src/message-history.ts`,
+  `web/src/sidebar-scroll.ts`, and list anchoring in
   `web/src/composer.ts`):** these with-JavaScript anchoring scripts stay.
   Replacing with-JavaScript message-list anchoring with
   `flex-direction: column-reverse` (#1480) or `overflow-anchor` fails point 4

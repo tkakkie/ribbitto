@@ -36,27 +36,40 @@ func applicationSources(files fs.FS) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(names) == 0 {
-		return nil, fmt.Errorf("no application JavaScript found")
+	if len(names) != 0 {
+		return nil, fmt.Errorf("authored JavaScript outside web/src: %v", names)
 	}
 	typed, err := fs.Glob(files, "src/*.ts")
-	return append(names, typed...), err
+	if err != nil {
+		return nil, err
+	}
+	if len(typed) == 0 {
+		return nil, fmt.Errorf("no application TypeScript found")
+	}
+	return typed, nil
 }
 
 func TestApplicationSources(t *testing.T) {
 	files := fstest.MapFS{
-		"static/plain.js": {}, "static/example-v2.js": {}, "src/logic.ts": {}, "src/globals.d.ts": {},
+		"src/logic.ts": {}, "src/globals.d.ts": {},
 		"static/vendor/lib.js": {}, "src/nested/logic.ts": {},
 	}
 	got, err := applicationSources(files)
-	want := []string{"static/example-v2.js", "static/plain.js", "src/globals.d.ts", "src/logic.ts"}
+	want := []string{"src/globals.d.ts", "src/logic.ts"}
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("sources = %v, %v; want %v", got, err, want)
 	}
-	for _, files := range []fstest.MapFS{{}, {"src/logic.ts": {}}} {
-		if _, err := applicationSources(files); err == nil || err.Error() != "no application JavaScript found" {
-			t.Fatalf("expected no application JavaScript found, got %v", err)
+	for _, files := range []fstest.MapFS{{}, {"static/vendor/lib.js": {}, "static/dist/bundle.js": {}, "src/nested/logic.ts": {}}} {
+		if _, err := applicationSources(files); err == nil || err.Error() != "no application TypeScript found" {
+			t.Fatalf("expected no application TypeScript found, got %v", err)
 		}
+	}
+	for _, name := range []string{"static/plain.js", "static/example-v2.js"} {
+		files[name] = &fstest.MapFile{}
+		if _, err := applicationSources(files); err == nil || !strings.Contains(err.Error(), "authored JavaScript outside web/src") {
+			t.Fatalf("expected authored JavaScript rejection for %s, got %v", name, err)
+		}
+		delete(files, name)
 	}
 }
 

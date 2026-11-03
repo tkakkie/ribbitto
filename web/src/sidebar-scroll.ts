@@ -1,16 +1,18 @@
+import * as dom from "./contracts.gen.ts";
+
 (() => {
   // Channels are ordered by name, so the current one and its nested topics
   // can sit far down a long sidebar (#922). This runs once, on load: live
   // list replacements happen inside the scrolling pane, which keeps its own
   // position, and moving it then would fight a member who has scrolled.
-  const list = document.getElementById("sidebar-channels");
+  const list = document.getElementById(dom.SidebarChannelsID);
   // The pane is the sidebar's <aside>, or the list page's <main>.
-  const pane = list?.closest("aside, main");
+  const pane = list?.closest<HTMLElement>("aside, main");
   if (!pane) return;
   // A listed selection is the row marked as the current page. An unlisted
   // topic falls back to its channel, the row that nests the topic list.
-  const row = list.querySelector("[aria-current='page']") ??
-    document.getElementById("sidebar-topics")?.closest("li")?.querySelector(":scope > a");
+  const row = list!.querySelector(`[${dom.AriaCurrentAttribute}='page']`) ??
+    document.getElementById(dom.SidebarTopicsID)?.closest("li")?.querySelector(":scope > a");
   if (!row) return;
   const port = pane.getBoundingClientRect();
   const box = row.getBoundingClientRect();

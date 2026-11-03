@@ -22,7 +22,7 @@ func idValue(id kernel.ID) string {
 // form takes the hidden composer's place in the column instead (#1056).
 templ branchForm(page ChannelPage) {
 	<form
-		id="branch-form"
+		id={ BranchFormID }
 		method="post"
 		action={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/branch" }
 		hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/branch" }

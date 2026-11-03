@@ -107,7 +107,7 @@ message on the page ([decision 36](../decisions/36-one-message-has-a-stable-url.
 keeping the browser's scroll to that `:target`-highlighted message. Focus left on the disabled send button returns to the
 textarea. Scripts stay outside the swap.
 
-`message-history-v2.js` keeps the reader's place when "Load older"
+`web/src/message-history.ts` keeps the reader's place when "Load older"
 prepends a page: the link selects the older page's `<li>` elements into
 `#message-items` (`afterbegin`) and replaces `#load-older` out of band. The
 script restores the distance from the pane's bottom after the swap and again

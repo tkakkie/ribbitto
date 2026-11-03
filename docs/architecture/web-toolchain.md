@@ -46,14 +46,15 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-`static.NewScripts` in `web/static/scripts.go` holds the single `names`
-declaration of converted page entries (each conversion adds its entry name) and
-validates the manifest and bundle hashes at startup; `tools/webbuild` reads it
-from the repository root instead of CLI entry names (#2022); non-entry
-`web/src/` modules are never bundled standalone. templ uses context; direct renders
-use the embedded registry without mutable globals. Their legacy assets and
-`web/legacy-scripts.txt` entries are removed; remaining stems stay on versioned
-assets. Missing/unknown entries or bundles fail startup; undeclared renders fail.
+`static.NewScripts` in `web/static/scripts.go` owns the single `names` list of
+page entries and validates the manifest and bundle hashes at startup.
+`tools/webbuild` reads this list from the repository root (#2022); non-entry
+`web/src/` modules are never bundled standalone. templ uses context; direct
+renders use the embedded registry without mutable globals.
+`web/legacy-scripts.txt` is empty. Type checking covers authored TypeScript,
+excluding SHA-256-pinned `web/static/vendor` and generated `web/static/dist`
+scripts. Missing/unknown entries or bundles fail
+startup; undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
 Converted bundles are strict-mode scripts (assignments to non-writable properties throw, which sloppy legacy scripts silently ignored).
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
@@ -111,8 +112,8 @@ then runs the real checker/runner tests with `go -C tools test -count=1 -v ./web
 that the generated sidebar contract's valid consumers compile and its
 ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
 lockfile tests run in `check-tools` in `checks`, without Node. The strict,
-no-emit config includes web/src/**/*.ts (web/test/*.test.ts, node-test.d.ts from #2092); scripts outside it are bounded by
-`web/legacy-scripts.txt` (#1414). `globals.d.ts` supplies the first input and the htmx global.
+no-emit config includes web/src/**/*.ts (web/test/*.test.ts, node-test.d.ts from #2092); the empty
+`web/legacy-scripts.txt` rejects later additions (#1414). `globals.d.ts` supplies the first input and the htmx global.
 
 **Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
 checker pin and lockfile together; for a Node update also change `.node-version`.
@@ -148,8 +149,8 @@ contract selectors, `dataset` keys, attribute names or custom event strings
 outside the adapter. A Go check with negative fixtures (#1822) rejects those literal
 bypasses in authored sources; exporting constants alone would let stale
 literals type-check. Review covers indirect/computed bypasses the check cannot
-prove. Unconverted scripts retain their current contract until their
-conversion; the coverage ratchet expands with them (#1414).
+prove. All authored scripts use the generated contract; the empty legacy list keeps
+contract coverage from shrinking (#1414).
 
 Keep server controls/attributes and necessary derived CSS/test projections.
 Typed modules hold the working copy of already-allowed state: pending posts,
@@ -174,7 +175,8 @@ See [checks and measurement](web-toolchain-checks.md#checks-and-measurement--141
 Preserve current contracts, server HTML, the no-JavaScript core, request
 ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
-intent and browser tests; IIFEs, `-vN` assets and adapters stay until replaced.
+intent and browser tests. Authored code is typed;
+`web/static/embed.go` embeds only vendor and generated scripts.
 
 Routine Node use starts at #1415's merge, after #1410; the one-time #1410
 exception ended with its last PR.

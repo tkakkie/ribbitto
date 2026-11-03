@@ -77,14 +77,17 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   added and removed edges, crossing units first; added edges also appear
   as notices on `docs/dependencies.md`. Authors can run
   `go -C tools run ./deps --diff origin/main ..` locally for the same list.
-- Tests prove the behaviour (authorization: someone who must not see the
-  data does not see it). No test was deleted, skipped or weakened.
-- A test-only pull request meant to catch a regression, or any pull request
-  that adds or changes a client unit test
+- Tests prove behaviour (authorization: unauthorized users see no data).
+  No test was deleted, skipped or weakened, except for removals allowed by the
+  [deletion rules](../architecture/web-tests.md#deleting-or-merging-tests):
+  name its guarded behaviour and remaining coverage, or explain why it tested
+  only an implementation detail.
+- A regression-test-only PR, or one adding or changing client unit tests
   ([`web-tests.md`](../architecture/web-tests.md)), records in *Verified by*
-  (from local checks or CI) one deliberate defect in the code under test that
-  breaks the behaviour the test guards and fails its assertion (not a crash or
-  a compile error), and that the test passes again once reverted (#360).
+  (local checks or CI) a deliberate defect in the code under test, one per
+  added or changed client harness. It breaks guarded behaviour and
+  fails an assertion (not a crash or compile error); the test passes once
+  reverted (#360).
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 - For each exception in `docs/language-exceptions.txt`, verify that its
@@ -92,15 +95,13 @@ Self-contained instructions for cross-reviewing a pull request (alongside
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and
   *Accepted parity differences* match
   [third-AI review](review-operations.md#third-ai-review) and below.
-- On a conversion (a pull request whose issue says it keeps today's
-  behaviour), any difference from the old behaviour is a `[blocking]` finding
-  (and blocks in [third-AI review](review-operations.md#third-ai-review) too) unless it
-  is provably unreachable, the issue itself lists it as intended, or the
-  maintainer accepts it below;
-  the PR body shows the pre-review comparison against the old script (baseline
-  SHA, commands and result, or what was compared for a restructuring;
-  [implementer brief](delivery.md#standard-implementer-brief)) and its absence
-  is also a `[blocking]` finding ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+- On a conversion (the issue says it preserves behaviour), any difference is
+  `[blocking]` (also in [third-AI review](review-operations.md#third-ai-review))
+  unless provably unreachable, listed as intended in the issue, or accepted by the
+  maintainer below. The PR body shows the pre-review comparison with the old
+  script (baseline SHA, commands and result, or the restructuring comparison;
+  [implementer brief](delivery.md#standard-implementer-brief)); missing evidence
+  is `[blocking]` ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
   Behaviour is what leaves the module and is observable outside it — DOM
   writes, events dispatched, request parameters, stored values, timer delays,
   escaping exceptions and their order — not internal call traces.

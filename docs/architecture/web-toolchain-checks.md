@@ -21,8 +21,8 @@ multiline or interpolation blind spots. Keep review and browser tests.
 Go wrapper's test mode, also in `make check`
 ([decision 45](../decisions/45-type-checked-client-unit-tests.md); the runner
 accepts the existing `web/test/*.test.mjs` harnesses now, runs both
-`web/test/*.test.mjs` and `web/test/*.test.ts` from #2092 while #2093–#2095
-convert them, and removes the `.mjs` glob in #2098). It checks
+`web/test/*.test.mjs` and `web/test/*.test.ts` from #2092 until their owners
+convert all `.mjs` harnesses; #2098 then removes the `.mjs` glob). It checks
 `.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
 fails), needs no `node_modules` and runs `node --test <files>` from the
 repository root, propagating failure. `web/src/package.json` and (from #2092)
@@ -45,9 +45,9 @@ Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
 exactly one file per stem. Exempt paths are the three named vendor scripts
 in `web/static/vendor/` (pinned by `vendor_test.go`) and, until #2098 removes
-the allowance, direct `web/test/*.test.mjs` harnesses (not type-checked; they
-are converted by #2093–#2095). On conversion, delete the old
-script and its list line together; version bumps keep the stem. The list may
+the allowance after all are converted, direct `web/test/*.test.mjs` harnesses
+(not type-checked; converted by their owning issues). On conversion, delete the
+old script and its list line together; version bumps keep the stem. The list may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule

@@ -9,9 +9,9 @@ M11 ([#2089](https://github.com/tkakkie/ribbitto/issues/2089); motivated by the
 [#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6594314637)).
 
 **When this page applies:** from the merge of #2092, every new or converted
-client unit test is a type-checked `web/test/<name>.test.ts` file;
-`web/test/*.test.mjs` files that still exist are only files that #2093–#2095 have
-not yet converted (the `.mjs` allowance is removed in #2098). Tests are not kept for
+client unit test is a type-checked `web/test/<name>.test.ts` file.
+Remaining `web/test/*.test.mjs` files await their owning conversion issues;
+#2098 removes the allowance only after none remain. Tests are not kept for
 their own count or length: test count and line total are not targets.
 
 ## Layers and what each owns
@@ -53,9 +53,12 @@ Do not write a client unit test for:
   or degenerate-environment cases (such as an API that is present but throws in
   a way no browser or repository script produces, or an accepted parity
   difference) into permanent unit tests. Pre-review parity evidence stays in the
-  pull request body.
-- **Helpers no glue imports:** do not extract or keep a DOM-free helper (or its
-  unit tests) that no production module in `web/src/` imports.
+  pull request body. Here, legacy quirks exclude normal-use or documented
+  behaviour, including reading data stored by an earlier version; keep tests
+  for that behaviour.
+- **Helpers no glue imports:** do not newly extract a DOM-free helper that no
+  production module in `web/src/` imports. An unwired module that a documented
+  open issue will import keeps its tests until that issue lands.
 
 ## Rules
 
@@ -68,10 +71,10 @@ Do not write a client unit test for:
   - New or changed DOM/htmx integration or user-visible browser flow requires a
     `TestBrowser` case when existing browser scenarios do not cover it.
   - Every pull request that adds or changes a client unit test records the
-    deliberate-defect proof in *Verified by*: one deliberate defect in the
-    production code under test that breaks the guarded behaviour and fails the
-    test's assertion (not a crash or a compile/type error), and that the test
-    passes again once reverted
+    deliberate-defect proof in *Verified by*: one deliberate defect per harness
+    added or changed, in the production code under test, that breaks the guarded
+    behaviour and fails the test's assertion (not a crash or a compile/type
+    error), and that the test passes again once reverted
     ([`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review)).
 - **One `test()` per rule with named table rows:** group each behavioural rule
   or invariant into one `test()` block with a table of named rows
@@ -84,7 +87,7 @@ Do not write a client unit test for:
   adapters (`getItem`/`setItem`/`removeItem` or a narrow interface) as explicit
   parameters or options to the DOM-free module. Never patch or mutate
   `globalThis`, `window`, `document`, `Date.now`, `Math.random` or `crypto`, and
-  never construct a fake `window`, `document`, `Element` or `CustomEvent` (or
+  never construct a fake `window`, `document` or `Element` (or
   add a DOM emulator such as `jsdom` or `happy-dom`) in `web/test/`.
 - **File naming, imports and checks:** unit test harnesses live directly in
   `web/test/<name>.test.ts` (flat; no subdirectories or helper `.ts` files in
@@ -108,16 +111,19 @@ Do not write a client unit test for:
   and malformed values) is recorded in the pull request body
   ([`delivery.md`](../workflow/delivery.md#standard-implementer-brief),
   [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review)), not
-  kept as a permanent file or permanent "as `-vN` did" unit tests.
-- **Deleting or merging tests:**
-  - Removing or merging a test that guarded behaviour must name in the pull
-    request the place (`web/test/*.test.ts` case, `TestBrowser` scenario or Go
-    check) that still covers that behaviour.
-  - A test that checked only an implementation detail (such as call counts or
-    order of clocks and helpers), a conversion-parity quirk, or an
-    equivalence-class duplicate may be removed with the reason stated in the
-    pull request.
-  - No replacement test is written to keep a test count or line total.
+  kept as a permanent file or permanent "as `-vN` did" unit tests. Normal-use
+  or documented behaviour keeps tests, as above.
+
+## Deleting or merging tests
+
+- Removing or merging a test that guarded behaviour must name in the pull
+  request the place (`web/test/*.test.ts` case, `TestBrowser` scenario or Go
+  check) that still covers that behaviour.
+- A test that checked only an implementation detail (such as call counts or
+  order of clocks and helpers), a conversion-parity quirk, or an
+  equivalence-class duplicate may be removed with the reason stated in the
+  pull request.
+- No replacement test is written to keep a test count or line total.
 
 ## Cross-reviewer checks
 
@@ -128,4 +134,7 @@ Alongside [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review):
   or DOM fakes in `web/test/`; removing or merging a behaviour-guarding test
   without naming what still covers it; or a missing deliberate-defect proof in
   *Verified by* when a pull request adds or changes a client unit test.
+- **`[blocking]`:** a removed test whose stated reason is false: it was not
+  merely an implementation detail, conversion-parity quirk or duplicate, or
+  its assertions guarded observable behaviour without remaining coverage.
 - **`[nit]`:** redundant table rows within an already-covered equivalence class.

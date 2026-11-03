@@ -46,15 +46,14 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-`static.NewScripts` in `web/static/scripts.go` holds the single `names`
-declaration of converted page entries (each conversion adds its entry name) and
-validates the manifest and bundle hashes at startup; `tools/webbuild` reads it
-from the repository root instead of CLI entry names (#2022); non-entry
-`web/src/` modules are never bundled standalone. templ uses context; direct renders
-use the embedded registry without mutable globals. `web/legacy-scripts.txt` is
-empty. Only authored TypeScript is type-checked;
-SHA-256-pinned `web/static/vendor` files and generated `web/static/dist`
-bundles are separate categories. Missing/unknown entries or bundles fail
+`static.NewScripts` in `web/static/scripts.go` owns the single `names` list of
+page entries and validates the manifest and bundle hashes at startup.
+`tools/webbuild` reads this list from the repository root (#2022); non-entry
+`web/src/` modules are never bundled standalone. templ uses context; direct
+renders use the embedded registry without mutable globals.
+`web/legacy-scripts.txt` is empty. Type checking covers authored TypeScript,
+excluding SHA-256-pinned `web/static/vendor` and generated `web/static/dist`
+scripts. Missing/unknown entries or bundles fail
 startup; undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
 Converted bundles are strict-mode scripts (assignments to non-writable properties throw, which sloppy legacy scripts silently ignored).
@@ -176,8 +175,11 @@ See [checks and measurement](web-toolchain-checks.md#checks-and-measurement--141
 Preserve current contracts, server HTML, the no-JavaScript core, request
 ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
-intent and browser tests. All authored sources are now typed modules;
-`web/static/embed.go` embeds vendor files and generated bundles, with no direct
-authored JavaScript pattern.
+intent and browser tests. Authored code is typed;
+`web/static/embed.go` embeds only vendor and generated scripts.
+
+Routine Node use starts at #1415's merge, after #1410; the one-time #1410
+exception ended with its last PR.
+The wrapper's `node --version` probe in `make check` is not routine Node use.
 
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -141,6 +142,7 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 		{"invalid-value", `put('feed',{at:0})`, `marked('` + channel + `') === false`},
 		{"malformed-key", `localStorage.setItem(put()+':invalid',localStorage.getItem(put())); localStorage.removeItem(put())`, `marked('` + channel + `') === false`},
 		{"tombstone", `put('feed',{text:''})`, `marked('` + channel + `') === false`},
+		{"retention", `put(); put('02000000-0000-0000-0000-000000000000',{at:Date.now()-7*86400000})`, `marked('` + channel + `') && !marked('` + topic + `')`},
 		{"open-conversation", `put('03000000-0000-0000-0000-000000000000')`, `marked('` + channel + `') && !marked('` + sibling + `')`},
 		{"page-deadline", `put(); elapsed=2*86400000`, `marked('` + channel + `') === false`},
 	} {
@@ -178,6 +180,69 @@ func testDraftMarkersBrowser(t *testing.T, browser *rod.Browser) {
 			}
 		})
 	}
+	t.Run("cleanup-retention", func(t *testing.T) {
+		p := open(t, path, true)
+		clock := step(t, p, "seed retention boundary").MustEval(`() => {
+   const now=Date.now();
+   put('feed',{at:now-7*86400000+1});
+   put('02000000-0000-0000-0000-000000000000',{at:now-7*86400000});
+   return now;
+  }`).Int()
+		step(t, p, "freeze cleanup clock").MustEvalOnNewDocument(`Date.now=()=>` + strconv.Itoa(clock))
+		step(t, p, "reload at retention boundary").MustReload().MustWaitLoad()
+		if !step(t, p, "read retention cleanup").MustEval(`() => {
+   const d=document.querySelector('#organization-stream').dataset;
+   const prefix='ribbitto.draft.v1:'+d.member+':'+d.session+':01000000-0000-0000-0000-000000000000:';
+   return localStorage.getItem(prefix+'feed')!==null && localStorage.getItem(prefix+'02000000-0000-0000-0000-000000000000')===null;
+  }`).Bool() {
+			t.Fatal("cleanup must keep drafts younger than seven days and remove drafts at seven days")
+		}
+	})
+	t.Run("sending-snapshot", func(t *testing.T) {
+		p := open(t, path, true)
+		if !step(t, p, "save sending snapshot at edit time").MustEval(`() => {
+   const now=Date.now(), key=put('03000000-0000-0000-0000-000000000000',{at:now-1000});
+   Date.now=()=>now;
+   const body=document.querySelector('#message-body'); body.value='typed';
+   body.dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:'sent',inPlace:false}}));
+   const saved=JSON.parse(localStorage.getItem(key));
+   return saved.at===now && saved.text==='sent' && saved.key==='00000000-0000-4000-8000-000000000001';
+  }`).Bool() {
+			t.Fatal("sending must save the sent body and key at the edit time")
+		}
+	})
+	t.Run("sending-with-stored-json-string", func(t *testing.T) {
+		p := open(t, path, true)
+		if !step(t, p, "trim and send with malformed stored values").MustEval(`() => {
+   const now=Date.now(), keys=[];
+   Date.now=()=>now;
+   for(let i=0;i<50;i++) keys.push(put('feed',{at:now-1000+i},null,null,'02000000-0000-4000-8000-'+String(i+10).padStart(12,'0')));
+   const key=put('03000000-0000-0000-0000-000000000000',{at:now});
+   localStorage.setItem(keys[1],'"abc"'); localStorage.setItem(key,'"abc"');
+   const removed=[], remove=Storage.prototype.removeItem;
+   Storage.prototype.removeItem=function(k){removed.push(k); return remove.call(this,k);};
+   document.querySelector('#message-body').dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:'sent',inPlace:true}}));
+   return removed.length===1 && removed[0]===keys[0] && localStorage.getItem(keys[0])===null && localStorage.getItem(keys[1])==='"abc"' && JSON.parse(localStorage.getItem(key)).at===null;
+  }`).Bool() {
+			t.Fatal("sending with stored JSON strings must preserve the trim and timestamp results")
+		}
+	})
+	t.Run("sending-detects-expiry", func(t *testing.T) {
+		p := open(t, path, true)
+		step(t, p, "send after wall-clock expiry").MustEval(`() => {
+   const keys=[put(),put('02000000-0000-0000-0000-000000000000')]; refresh();
+   const body=document.querySelector('#message-body'); body.value='kept';
+   const expires=Number(document.querySelector('#organization-stream').dataset.sessionExpires);
+   Date.now=()=>expires+1;
+   window.draftWrites=0; const set=Storage.prototype.setItem;
+   Storage.prototype.setItem=function(k,v){ if(k.startsWith('ribbitto.draft.v1:')) draftWrites++; return set.call(this,k,v); };
+   body.dispatchEvent(new CustomEvent('message-sending',{bubbles:true,detail:{key:'00000000-0000-4000-8000-000000000001',body:'sent',inPlace:false}}));
+   window.expiredSend={removed:keys.every(k=>localStorage.getItem(k)===null),text:body.value,writes:draftWrites};
+  }`)
+		if got := step(t, p, "read expired send result").MustEval(`() => expiredSend`); !got.Get("removed").Bool() || got.Get("writes").Int() != 0 || got.Get("text").Str() != "kept" {
+			t.Fatalf("expired send: %s", got)
+		}
+	})
 	for _, name := range []string{"switch-away", "channel-list", "persisted-pageshow", "message-sent", "notice-storage", "deadline-expiry", "draft-storage", "send-another-tab", "sidebar-sse", "sidebar-resync"} {
 		t.Run(name, func(t *testing.T) {
 			p := open(t, path, true)

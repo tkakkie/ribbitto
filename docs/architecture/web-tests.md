@@ -10,8 +10,8 @@ M11 ([#2089](https://github.com/tkakkie/ribbitto/issues/2089); motivated by the
 
 **When this page applies:** from the merge of #2092, every new or converted
 client unit test is a type-checked `web/test/<name>.test.ts` file;
-`web/test/*.test.mjs` files that still exist are only those #2093–#2095 have not
-yet converted (the `.mjs` allowance is removed in #2098). Tests are not kept for
+`web/test/*.test.mjs` files that still exist are only files that #2093–#2095 have
+not yet converted (the `.mjs` allowance is removed in #2098). Tests are not kept for
 their own count or length: test count and line total are not targets.
 
 ## Layers and what each owns

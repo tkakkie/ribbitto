@@ -106,7 +106,7 @@ check-tools: bundles $(TEMPL)
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
 	go -C tools run ./testshard -check ..
-	go -C tools run ./docscheck ..
+	go -C tools run ./docscheck $(if $(DOCSCHECK_BASE),--base $(DOCSCHECK_BASE)) ..
 	go -C tools run ./sourcecheck ..
 	go -C tools run ./measurementskip ..
 
@@ -123,7 +123,7 @@ prepush: bundles $(TEMPL) $(TAILWIND)
 	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..
-	go -C tools run ./docscheck ..
+	go -C tools run ./docscheck $(if $(DOCSCHECK_BASE),--base $(DOCSCHECK_BASE)) ..
 	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI

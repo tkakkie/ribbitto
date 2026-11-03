@@ -399,6 +399,19 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		c.deleteTagByRef(t.Context(), "non-canonical") == nil {
 		t.Fatal("expected exact-ID deletion guard to refuse invalid release or tag")
 	}
+	for _, nOrphans := range []int{100, 101} {
+		var oTags []string
+		for i := range nOrphans {
+			oTags = append(oTags, relNameAt(now.Add(-8*day), shaOf(800+i), i+1, 1))
+		}
+		oStore := &mockStore{token: "test-token", expiryHeader: now.Add(20 * day).Format("2006-01-02 15:04:05 UTC"), tags: oTags}
+		oSrv := oStore.server(t)
+		defer oSrv.Close()
+		oCfg := testCfg(oSrv.URL, "test-token", now, &bytes.Buffer{})
+		if err := runRetention(t.Context(), &apiClient{cfg: oCfg}, currSHA); err != nil || len(oStore.tags) != 0 {
+			t.Fatalf("orphan cleanup for %d tags: remaining=%d err=%v", nOrphans, len(oStore.tags), err)
+		}
+	}
 	tenStore := &mockStore{token: "test-token", expiryHeader: now.Add(20 * day).Format("2006-01-02 15:04:05 UTC")}
 	tenSrv := tenStore.server(t)
 	defer tenSrv.Close()

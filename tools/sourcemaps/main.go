@@ -434,24 +434,30 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 			}
 		}
 	}
-	for page := 1; page <= maxReleasePages; page++ {
+	var orphanCands []string
+	for page := 1; ; page++ {
+		if page > maxReleasePages {
+			return fmt.Errorf("listing tags: exceeded %d pages", maxReleasePages)
+		}
 		var batch []struct{ Name string }
 		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/tags?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
 			return fmt.Errorf("listing tags: status %d (%v)", code, err)
 		}
 		for _, t := range batch {
-			if p, ok := parseReleaseName(t.Name); !ok || now.Sub(p.Start) <= 7*24*time.Hour {
-				continue
-			}
-			if err := c.deleteUnreferencedTag(ctx, t.Name, rels, deletedIDs); err != nil {
-				return err
+			if p, ok := parseReleaseName(t.Name); ok && now.Sub(p.Start) > 7*24*time.Hour {
+				orphanCands = append(orphanCands, t.Name)
 			}
 		}
 		if len(batch) < 100 {
-			return nil
+			break
 		}
 	}
-	return fmt.Errorf("listing tags: exceeded %d pages", maxReleasePages)
+	for _, tag := range orphanCands {
+		if err := c.deleteUnreferencedTag(ctx, tag, rels, deletedIDs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runLookup(ctx context.Context, cfg config, sha, bundleSHA256, runID string) (string, string, []byte, error) {

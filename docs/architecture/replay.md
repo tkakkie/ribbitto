@@ -140,7 +140,7 @@ sequenceDiagram
   database back under a running process is unsupported. Every batch, including
   on open streams and cache hits, checks both inclusive bounds, even on an
   empty log; at `event_seq` it waits. Any gap resets before delivering the batch.
-  The message-stream script closes htmx's source on `reset`, then reloads after
+  The typed `message-stream` bundle closes htmx's source on `reset`, then reloads after
   0–5 s jitter when no send, queue or failed text is at stake
   ([guard](web-javascript.md#javascript)). A status offers a reload link while
   held; confirmed items do not hold it.

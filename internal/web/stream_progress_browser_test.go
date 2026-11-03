@@ -30,6 +30,7 @@ func (l progressLog) EventsAfter(_ context.Context, _ kernel.ID, after int64, _ 
 }
 
 func testStreamProgressBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("checkpoint-reopen", func(t *testing.T) { testCheckpointReopenBrowser(t, browser) })
 	for _, scope := range []string{"sidebar", "quiet channel"} {
 		for _, reconnect := range []string{"native", "htmx"} {
 			t.Run(scope+"/"+reconnect, func(t *testing.T) {
@@ -117,5 +118,46 @@ func testStreamProgressBrowser(t *testing.T, browser *rod.Browser) {
 				}
 			})
 		}
+	}
+}
+
+func testCheckpointReopenBrowser(t *testing.T, browser *rod.Browser) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	script, err := static.ScriptURL(ctx, "message-stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = fmt.Fprintf(w, `<!doctype html><div id="organization-stream" sse-connect="/events?after=42"></div><script src="%s"></script>`, script)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	defer page.MustClose()
+	page.MustNavigate(server.URL).MustWaitLoad()
+	// Native reconnects reopen the same source; htmx retries create a fresh one.
+	got := page.MustEval(`() => {
+ const connection = document.getElementById('organization-stream');
+ const observer = new MutationObserver(() => {});
+ observer.observe(connection, {attributes: true, attributeFilter: ['sse-connect']});
+ const open = source => connection.dispatchEvent(new CustomEvent('htmx:sseOpen', {bubbles: true, detail: {source}}));
+ const source = new EventTarget();
+ open(source);
+ open(source);
+ source.dispatchEvent(new MessageEvent('checkpoint', {lastEventId: '43'}));
+ const counts = [observer.takeRecords().length];
+ const fresh = new EventTarget();
+ open(fresh);
+ fresh.dispatchEvent(new MessageEvent('checkpoint', {lastEventId: '44'}));
+ counts.push(observer.takeRecords().length);
+ observer.disconnect();
+ return JSON.stringify(counts);
+}`).String()
+	if got != "[1,1]" {
+		t.Fatalf("checkpoint sse-connect writes (reopened, fresh) = %s, want [1,1] (v15)", got)
 	}
 }

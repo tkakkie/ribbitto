@@ -91,7 +91,10 @@ leave the desktop classes as they are. The second is `--breakpoint-wide`
 (#972): below it (`max-wide:`) an open panel is a modal over the dimmed
 page ([side panels](ui-panels-and-motion.md#side-panels)). The custom variant
 `short:` (#1056) applies below 27.25 rem (436 px) tall, where the header and
-composer leave under 128 px for the list ([short heights](ui-panels-and-motion.md#short-heights)).
+composer leave under 128 px for the list ([short heights](ui-panels-and-motion.md#short-heights));
+`keyboard:` (#2086) combines that height with `#organization-stream[style*="--composer-viewport-h"]`
+so the composer compacts to one row only while a landscape software keyboard
+shrinks the visual viewport ([composer growth](ui-composer.md)).
 The custom variant `noscript:` (`@media (scripting: none)`, #1489) has one use:
 on the latest conversation page it makes `#message-list` a `column-reverse`
 flex container around its single wrapper child (`contents noscript:block noscript:grow noscript:shrink-0`),

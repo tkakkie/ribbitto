@@ -20,7 +20,7 @@ templ appBar(page ChannelPage) {
 		// with the one conversation link in the sidebar.
 		<ul class="flex w-full flex-col items-center">
 			<li>
-				<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-current="true" class="flex w-16 flex-col items-center gap-1 py-1 text-caption font-semibold text-on-selected">
+				<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } { AriaCurrentAttribute }="true" class="flex w-16 flex-col items-center gap-1 py-1 text-caption font-semibold text-on-selected">
 					<span class="flex h-8 w-11 items-center justify-center rounded-lg bg-selected text-brand">
 						@Icon("home-filled", 20)
 					</span>
@@ -42,7 +42,7 @@ templ appBar(page ChannelPage) {
 // no row scrolls behind it; its padding keeps the items above the safe area.
 templ bottomNav(page ChannelPage) {
 	<nav aria-label={ i18n.T(ctx, "app.navigation") } class="-mx-2 flex shrink-0 border-t border-border bg-rail pb-safe-0 desk:hidden">
-		<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/channels") } aria-current="page" class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-caption font-semibold text-on-selected">
+		<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/channels") } { AriaCurrentAttribute }="page" class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-caption font-semibold text-on-selected">
 			<span class="flex h-8 w-11 items-center justify-center rounded-lg bg-selected text-brand">
 				@Icon("home-filled", 20)
 			</span>

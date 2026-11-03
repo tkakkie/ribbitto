@@ -349,8 +349,12 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sidebarScrollURL, err := static.ScriptURL(t.Context(), "sidebar-scroll")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The list has no composer or read form, so their scripts must be absent.
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts[streamURL] || hasRead || scripts[pinsSyncURL] || hasComposer {
+	if !scripts[sidebarScrollURL] || !scripts[streamURL] || hasRead || scripts[pinsSyncURL] || hasComposer {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {

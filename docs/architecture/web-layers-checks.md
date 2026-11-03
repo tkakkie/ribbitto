@@ -91,9 +91,10 @@ Cursor, move-boundary, announcement, reset and parking decisions have DOM-free c
 ### JavaScript pattern check
 
 `TestApplicationJavaScript` in `web/static/javascript_test.go` checks direct
-`web/static/*.js` and `web/src/*.ts` (including `.d.ts`), never subdirectories.
-Both run; absent JavaScript fails until #1831. JavaScript names require
-`-vN.js` (decimal N); TypeScript names do not.
+`web/src/*.ts` (including `.d.ts`), never subdirectories; an empty source set
+fails. Any direct `web/static/*.js` file fails as authored code outside
+`web/src`. Vendor files and generated `dist` bundles are separate categories.
+The legacy JavaScript pattern fixtures, including versioned names, stay.
 
 Comments and quoted contents (with escapes) are masked before per-line checks;
 quote delimiters remain for string timers. It rejects:

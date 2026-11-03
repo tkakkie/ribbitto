@@ -75,6 +75,112 @@ test("serializeSelection handles single-P bodies, all allowed chat_v1 tags, bloc
       "lead bold both italic inline() https://example.com\nnext line @bob",
     ],
     [
+      "two adjacent P blocks [P, P] join with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("P", [txt("first paragraph")]),
+          el("P", [txt("second paragraph")]),
+        ],
+      },
+      "first paragraph\nsecond paragraph",
+    ],
+    [
+      "partially selected P block followed by P block [P (partially selected), P] joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("P", [el("STRONG", [txt("tail")]), txt(" of first")]),
+          el("P", [txt("second paragraph")]),
+        ],
+      },
+      "tail of first\nsecond paragraph",
+    ],
+    [
+      "two adjacent PRE code blocks [PRE, PRE] join with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("PRE", [el("CODE", [txt("a")])]),
+          el("PRE", [el("CODE", [txt("b")])]),
+        ],
+      },
+      "a\nb",
+    ],
+    [
+      "partially selected PRE block followed by PRE block [PRE (partially selected), PRE] joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("PRE", [txt("tail of first")]),
+          el("PRE", [el("CODE", [txt("second block")])]),
+        ],
+      },
+      "tail of first\nsecond block",
+    ],
+    [
+      "P block followed by PRE block [P, PRE] joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("P", [txt("intro")]),
+          el("PRE", [el("CODE", [txt("code()")])]),
+        ],
+      },
+      "intro\ncode()",
+    ],
+    [
+      "PRE block followed by P block [PRE, P] joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [
+          el("PRE", [el("CODE", [txt("code()")])]),
+          el("P", [txt("outro")]),
+        ],
+      },
+      "code()\noutro",
+    ],
+    [
+      "inline node followed by P block joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [txt("lead"), el("P", [txt("second")])],
+      },
+      "lead\nsecond",
+    ],
+    [
+      "P block followed by inline node joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [el("P", [txt("first")]), txt("tail")],
+      },
+      "first\ntail",
+    ],
+    [
+      "inline node followed by PRE block joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [txt("lead"), el("PRE", [el("CODE", [txt("code()")])])],
+      },
+      "lead\ncode()",
+    ],
+    [
+      "PRE block followed by inline node joins with single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [el("PRE", [el("CODE", [txt("code()")])]), txt("tail")],
+      },
+      "code()\ntail",
+    ],
+    [
+      "block between inline nodes still selects newline joining",
+      {
+        bodyTag: "DIV",
+        nodes: [txt("lead"), el("PRE", [txt("middle")]), txt("tail")],
+      },
+      "lead\nmiddle\ntail",
+    ],
+    [
       "multiple P and PRE blocks in fragment join with single newline",
       {
         bodyTag: "DIV",
@@ -126,6 +232,22 @@ test("serializeSelection handles single-P bodies, all allowed chat_v1 tags, bloc
         nodes: [mention("alice", "SPAN")],
       },
       "@alice",
+    ],
+    [
+      "allowed element with explicit null handle serializes its children as a normal element",
+      {
+        bodyTag: "DIV",
+        nodes: [el("P", [txt("plain paragraph")], null)],
+      },
+      "plain paragraph",
+    ],
+    [
+      "BR element with children still serializes as a single newline",
+      {
+        bodyTag: "DIV",
+        nodes: [el("BR", [txt("ignored")])],
+      },
+      "\n",
     ],
     [
       "element with omitted children defaults to empty content",
@@ -274,6 +396,13 @@ test("updateSelectionQuote and isSelectionSubmitter enforce non-empty trimmed te
       "cut mention or invalid range in adapter (null ClonedSelection) clears current and text to null",
       body1,
       null,
+      null,
+      null,
+    ],
+    [
+      "undefined selection with an eligible body clears current and text to null",
+      body1,
+      undefined,
       null,
       null,
     ],

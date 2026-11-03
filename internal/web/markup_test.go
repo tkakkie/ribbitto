@@ -776,6 +776,13 @@ func TestPagesMarkup(t *testing.T) {
 				for _, problem := range checkMarkup(doc, !fragment) {
 					t.Error(problem)
 				}
+				if strings.HasPrefix(c.name, "message actions pinned=") {
+					for n := range find(doc, atom.Main).Descendants() {
+						if n.DataAtom == atom.Img && strings.HasPrefix(attr(n, "src"), "/static/brand/") {
+							t.Error("in-organisation actions page must not render the welcome hero")
+						}
+					}
+				}
 				if c.name == "channel" || c.name == "channel with messages" {
 					items := find(doc, atom.Ol)
 					if items == nil || attr(items, "id") != "message-items" {

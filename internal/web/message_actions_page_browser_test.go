@@ -71,6 +71,12 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 				if got := page.MustElement("main h1").MustText(); got != "Ribbit actions" {
 					t.Fatal(got)
 				}
+				if page.MustEval(`() => document.querySelector('main img[src^="/static/brand/"]') !== null`).Bool() {
+					t.Fatal("in-organisation actions page must not render the welcome hero")
+				}
+				if page.MustEval(`() => document.querySelectorAll('main').length !== 1 || document.querySelectorAll('h1').length !== 1 || document.title !== 'Ribbit actions · ribbitto'`).Bool() {
+					t.Fatal("actions page lost its title, main landmark or heading")
+				}
 				if got := page.MustElement("main a").MustProperty("href").Str(); got != server.URL+permalink {
 					t.Fatalf("copyable permalink = %q", got)
 				}
@@ -93,7 +99,7 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			open()
 			// Native Tab order: copyable link, Quote, pin action, back link.
-			for _, selector := range []string{"main a", "[name=quote]", "form[method=post] button", "main > div > div:last-child > a:last-child"} {
+			for _, selector := range []string{"main a", "[name=quote]", "form[method=post] button", "main > div > a:last-child"} {
 				page.Keyboard.MustType(input.Tab)
 				if !page.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
 					t.Fatalf("Tab missed %s", selector)
@@ -130,7 +136,7 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatalf("quote = %q", got)
 			}
 			open()
-			activate("main > div > div:last-child > a:last-child")
+			activate("main > div > a:last-child")
 			page.MustElement("#" + view.MessageDOMID(message.ID)).MustWaitVisible()
 		})
 	}

@@ -5,30 +5,32 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // MessageActionsPage offers native navigation and forms for one message.
 templ MessageActionsPage(stylesheetURL string, entry Message, conversationURL string) {
 	@layout(stylesheetURL, i18n.T(ctx, "message.actions")) {
-		@welcomeLayout() {
-			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "message.actions") }</h1>
-			<div class="text-body text-fg">
-				@MemberName(entry.DisplayName, entry.Handle)
-				@messageBody(entry)
+		<main class="min-h-screen bg-base p-4 max-desk:pb-safe-4 lg:p-8">
+			<div class="mx-auto flex w-full min-w-0 max-w-reading flex-col gap-6 rounded-xl bg-bg p-6 shadow-block max-desk:p-4">
+				<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "message.actions") }</h1>
+				<div class="text-body text-fg">
+					@MemberName(entry.DisplayName, entry.Handle)
+					@messageBody(entry)
+				</div>
+				<div class="flex flex-col gap-2 text-body text-fg">
+					<h2 class="text-title font-semibold">{ i18n.T(ctx, "message.copy_link") }</h2>
+					<p class="text-muted">{ i18n.T(ctx, "message.copy_link_help") }</p>
+					<a href={ templ.SafeURL(entry.URL) } class="flex min-h-11 items-center text-brand underline wrap-anywhere">{ entry.URL }</a>
+				</div>
+				<form method="get" action={ templ.SafeURL(conversationURL + "#" + MessageComposerID) }>
+					<button type="submit" name="quote" value={ idValue(entry.ID) } class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
+				</form>
+				{{
+					action, label := entry.PinURL+"/pin", "message.pin"
+					if entry.Pinned {
+						action, label = entry.PinURL+"/unpin", "message.unpin"
+					}
+				}}
+				<form method="post" action={ templ.SafeURL(action) }>
+					<button type="submit" class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, label) }</button>
+				</form>
+				@textLink(entry.URL, "message.actions_back", "")
 			</div>
-			<div class="flex flex-col gap-2 text-body text-fg">
-				<h2 class="text-title font-semibold">{ i18n.T(ctx, "message.copy_link") }</h2>
-				<p class="text-muted">{ i18n.T(ctx, "message.copy_link_help") }</p>
-				<a href={ templ.SafeURL(entry.URL) } class="flex min-h-11 items-center text-brand underline wrap-anywhere">{ entry.URL }</a>
-			</div>
-			<form method="get" action={ templ.SafeURL(conversationURL + "#" + MessageComposerID) }>
-				<button type="submit" name="quote" value={ idValue(entry.ID) } class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
-			</form>
-			{{
-				action, label := entry.PinURL+"/pin", "message.pin"
-				if entry.Pinned {
-					action, label = entry.PinURL+"/unpin", "message.unpin"
-				}
-			}}
-			<form method="post" action={ templ.SafeURL(action) }>
-				<button type="submit" class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, label) }</button>
-			</form>
-			@textLink(entry.URL, "message.actions_back", "")
-		}
+		</main>
 	}
 }

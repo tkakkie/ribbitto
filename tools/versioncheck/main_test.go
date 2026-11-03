@@ -26,7 +26,7 @@ func TestVersionCheck(t *testing.T) {
 			t.Fatalf("dependabot.yml missing %q", want)
 		}
 	}
-	for _, want := range []string{"schedule:\n    - cron: \"17 5 1 * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n", "if: github.repository == 'tkakkie/ribbitto'\n", "permissions:\n      contents: read\n      issues: write\n", "persist-credentials: false\n", "run: go -C tools run ./versioncheck -sync-issue .."} {
+	for _, want := range []string{"schedule:\n    - cron: \"17 5 1 * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n", "if: github.repository == 'tkakkie/ribbitto' && github.ref == 'refs/heads/main'\n", "permissions:\n      contents: read\n      issues: write\n", "with:\n          ref: refs/heads/main\n          persist-credentials: false\n", "run: go -C tools run ./versioncheck -sync-issue .."} {
 		if !bytes.Contains(wf, []byte(want)) {
 			t.Fatalf("version-coverage.yml missing %q", want)
 		}
@@ -39,6 +39,7 @@ func TestVersionCheck(t *testing.T) {
 	}{
 		{"up to date", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "| Go runtime | `go.mod`, `tools/go.mod`, `tools/tbls/go.mod` | `1.27.3` | `1.27.3` | `up-to-date` |", false, false},
 		{"outdated pins", "go1.27.4", "v26.9.0", strings.Replace(testDigest, "3a", "4b", 1), "v4.4.0", "v2.15.0", false, false, true, false, "Summary: 0 up-to-date, 5 outdated, 0 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `26.9.0` | `outdated` |", false, false},
+		{"newer Node major only", "go1.27.3", "v27.0.0", testDigest, "v4.3.3", "v2.14.0", false, false, false, true, "Summary: 4 up-to-date, 0 outdated, 1 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `no release found` | `check-failed` |", false, false},
 		{"failed check", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", true, true, true, true, "Summary: 3 up-to-date, 0 outdated, 2 check-failed.", "| Node runtime | `.node-version` | `26.8.1` | `HTTP 502` | `check-failed` |", false, false},
 		{"later page match", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, true, false, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "", true, false},
 		{"pagination failure", "go1.27.3", "v26.8.1", testDigest, "v4.3.3", "v2.14.0", false, false, false, true, "Summary: 5 up-to-date, 0 outdated, 0 check-failed.", "", true, true},
@@ -59,7 +60,7 @@ func TestVersionCheck(t *testing.T) {
 			var created, patched string
 			var issuePages int
 			responses := map[string]string{
-				"/go": `[{"version":"` + tc.goVer + `","stable":true}]`, "/node": `[{"version":"` + tc.nodeVer + `"}]`, "/token": `{"token":"reg-tok","expires_in":300,"issued_at":"2026-11-03T05:17:00Z"}`,
+				"/go": `[{"version":"` + tc.goVer + `","stable":true}]`, "/node": `[{"version":"v27.0.0"},{"version":"` + tc.nodeVer + `"},{"version":"v24.10.0"}]`, "/token": `{"token":"reg-tok","expires_in":300,"issued_at":"2026-11-03T05:17:00Z"}`,
 				"/repos/tailwindlabs/tailwindcss/releases/latest": `{"tag_name":"` + tc.twVer + `","id":123,"draft":false,"prerelease":false,"author":{"login":"maintainer"},"assets":[{"id":456,"name":"tailwindcss"}]}`,
 				"/repos/golangci/golangci-lint/releases/latest":   `{"tag_name":"` + tc.lintVer + `","id":789,"draft":false,"prerelease":false,"author":{"login":"maintainer"},"assets":[{"id":987,"name":"golangci-lint"}]}`,
 				"/repos/example/project/issues":                   map[bool]string{false: `[]`, true: `[{"number":9,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"stranger"}},{"number":42,"title":"` + issueTitle + `","author_association":"NONE","user":{"login":"github-actions[bot]"}}]`}[tc.existingIssue],

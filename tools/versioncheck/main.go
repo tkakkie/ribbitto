@@ -83,8 +83,8 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 	lintPin, lintErr := readMatch(root, "tools/download/main.go", `(?m)^const lintVersion = "(\d+\.\d+\.\d+)"\s*$`)
 	ghBase := strings.TrimRight(cfg.githubAPIBase, "/")
 	rows := [][5]string{
-		evalRow("Go runtime", "`go.mod`, `tools/go.mod`, `tools/tbls/go.mod`", goPin, true, goErr, fetchVer(ctx, c, cfg.goURL, "", true, true)),
-		evalRow("Node runtime", "`.node-version`", nodePin, true, nodeErr, fetchVer(ctx, c, cfg.nodeURL, "", true, false)),
+		evalRow("Go runtime", "`go.mod`, `tools/go.mod`, `tools/tbls/go.mod`", goPin, true, goErr, fetchVer(ctx, c, cfg.goURL, "", true, true, "")),
+		evalRow("Node runtime", "`.node-version`", nodePin, true, nodeErr, fetchVer(ctx, c, cfg.nodeURL, "", true, false, strings.Split(nodePin, ".")[0])),
 		evalRow("PostgreSQL 18 image", "`compose.yml`, `.github/workflows/ci.yml`", pgPin, false, pgErr, func() (string, error) {
 			var tok struct {
 				Token string `json:"token"`
@@ -98,8 +98,8 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 			}
 			return "", cmp.Or(err, fmt.Errorf("invalid digest header"))
 		}),
-		evalRow("Tailwind CSS binary", "`tools/download/main.go`", twPin, true, twErr, fetchVer(ctx, c, ghBase+"/repos/tailwindlabs/tailwindcss/releases/latest", cfg.token, false, false)),
-		evalRow("golangci-lint binary", "`tools/download/main.go`", "v"+lintPin, true, lintErr, fetchVer(ctx, c, ghBase+"/repos/golangci/golangci-lint/releases/latest", cfg.token, false, false)),
+		evalRow("Tailwind CSS binary", "`tools/download/main.go`", twPin, true, twErr, fetchVer(ctx, c, ghBase+"/repos/tailwindlabs/tailwindcss/releases/latest", cfg.token, false, false, "")),
+		evalRow("golangci-lint binary", "`tools/download/main.go`", "v"+lintPin, true, lintErr, fetchVer(ctx, c, ghBase+"/repos/golangci/golangci-lint/releases/latest", cfg.token, false, false, "")),
 	}
 	var counts [3]int
 	var b strings.Builder
@@ -144,7 +144,7 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 	return nil
 }
 
-func fetchVer(ctx context.Context, c *http.Client, u, token string, list, stableOnly bool) func() (string, error) {
+func fetchVer(ctx context.Context, c *http.Client, u, token string, list, stableOnly bool, major string) func() (string, error) {
 	return func() (string, error) {
 		if !list {
 			var rel struct {
@@ -155,9 +155,13 @@ func fetchVer(ctx context.Context, c *http.Client, u, token string, list, stable
 		}
 		var rels []map[string]any
 		_, err := doJSON(ctx, c, "GET", u, "", "", nil, &rels)
+		// Release indexes list newest first; Node stays on its pinned major.
 		for _, r := range rels {
 			if s, _ := r["version"].(string); err == nil && s != "" && (!stableOnly || r["stable"] == true) {
-				return strings.TrimLeft(s, "gov"), nil
+				s = strings.TrimLeft(s, "gov")
+				if major == "" || strings.HasPrefix(s, major+".") {
+					return s, nil
+				}
 			}
 		}
 		return "", cmp.Or(err, fmt.Errorf("no release found"))

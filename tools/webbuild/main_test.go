@@ -48,6 +48,40 @@ func fixture(t *testing.T, source []byte) string {
 	return root
 }
 
+func TestSyntaxTarget(t *testing.T) {
+	if syntaxTarget != api.ES2018 {
+		t.Fatalf("syntax target = %v, want ES2018", syntaxTarget)
+	}
+}
+
+func TestBuildNativeObjectSpreadRest(t *testing.T) {
+	root := fixture(t, []byte(`
+		const source = window.source;
+		console.log({ ...source, added: true });
+		const { removed, ...rest } = source;
+		console.log(removed, rest);
+	`))
+	if err := build(root, "commit", "run", false); err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(root, prodDistDir, "*.js"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("expected one bundle: %v, %v", files, err)
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(data, []byte("...")) != 2 {
+		t.Errorf("expected native object spread and rest, got %s", data)
+	}
+	for _, helper := range []string{"__spread", "__objRest", "Object.assign", "Object.defineProperty", "Object.getOwnPropertySymbols", "propertyIsEnumerable"} {
+		if bytes.Contains(data, []byte(helper)) {
+			t.Errorf("unexpected spread/rest helper %q in %s", helper, data)
+		}
+	}
+}
+
 func TestBuild(t *testing.T) {
 	source, err := os.ReadFile("../../web/src/message-time.ts")
 	if err != nil {
@@ -98,7 +132,7 @@ func TestBuild(t *testing.T) {
 		noneRes := api.Build(api.BuildOptions{
 			AbsWorkingDir: root, EntryPoints: []string{"web/src/message-time.ts"}, Outdir: dist,
 			EntryNames: "[name]-[hash]", Bundle: true, Format: api.FormatIIFE,
-			Platform: api.PlatformBrowser, Target: api.ES2017,
+			Platform: api.PlatformBrowser, Target: syntaxTarget,
 			MinifyWhitespace: true, MinifyIdentifiers: true, MinifySyntax: true,
 			Sourcemap: api.SourceMapNone, LegalComments: api.LegalCommentsNone,
 		})

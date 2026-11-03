@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -322,5 +324,384 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 				check("newest without visual viewport", newest)
 			}
 		})
+	}
+	t.Run("landscape-keyboard", func(t *testing.T) {
+		testComposerLandscapeKeyboard(t, browser, catalogues)
+	})
+}
+
+func testComposerLandscapeKeyboard(t *testing.T, browser *rod.Browser, catalogues *i18n.Catalogues) {
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	seqs := make([]int, 40)
+	for i := range seqs {
+		seqs[i] = i + 1
+	}
+	topic, cursor, key := kernel.ID{2}, int64(40), "00000000-0000-4000-8000-000000000001"
+	snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Current: view.Channel{ID: kernel.ID{1}, Name: "general"}, EventCursor: &cursor, IdempotencyKey: &key, Messages: streamTestMessages(topic, seqs...)}
+	events, releaseInFlight := make(chan realtime.Outgoing, 4), make(chan struct{})
+	holdNext := make(chan struct{}, 1)
+	var posted atomic.Int64
+	posted.Store(cursor)
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/events"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+			for err := sender.Heartbeat(r.Context()); err == nil; {
+				select {
+				case out := <-events:
+					err = sender.Send(r.Context(), out)
+				case <-r.Context().Done():
+					return
+				}
+			}
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/quote"):
+			response := snapshot
+			if r.FormValue("quote") != "" || r.FormValue("part") != "" {
+				response.Quote = &snapshot.Messages[0]
+			}
+			if r.FormValue("part") != "" {
+				response.QuoteText = &response.Quote.Body
+			}
+			templ.Handler(view.ComposerQuote(response, false)).ServeHTTP(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/typing"):
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost:
+			select {
+			case <-holdNext:
+				select {
+				case <-releaseInFlight:
+				case <-r.Context().Done():
+					return
+				}
+			default:
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			response, body := snapshot, r.FormValue("body")
+			switch {
+			case strings.HasPrefix(body, "fail500"):
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			case len(body) > 4000:
+				response.BodyError = "message.error.body"
+				w.WriteHeader(http.StatusUnprocessableEntity)
+			default:
+				seq := posted.Add(1)
+				response.PostedMessageID = &kernel.ID{byte(seq)}
+				response.PostedTopicID, response.PostedEventSeq = topic, seq
+			}
+			templ.Handler(view.MessageComposer(response)).ServeHTTP(w, r)
+		default:
+			response := snapshot
+			if r.URL.Query().Has("ordinary") {
+				response.IdempotencyKey = nil
+			}
+			templ.Handler(view.ChannelScreen("/static/css/app.css", response)).ServeHTTP(w, r)
+		}
+	})
+	server := httptest.NewServer(catalogues.Middleware(mux))
+	defer server.Close()
+	page, closePage := boundedPage(t, browser, ctx, "composer landscape keyboard")
+	defer closePage()
+	page = page.WithPanic(func(v any) { t.Fatal(v) })
+	// iPhone 18 Pro landscape (874 × 402 pt) crosses desk (852 px) and short
+	// (436 px) with a coarse primary pointer. In headless Chrome innerHeight is
+	// 402 and visualViewport.offsetTop is 0; setting --composer-viewport-h on
+	// #organization-stream stands in for iOS Safari's visualViewport.height
+	// (90 px with one tab open, 40 px with four tabs and the tab bar showing).
+	page.MustSetViewport(874, 402, 1, true)
+	if err := (proto.EmulationSetTouchEmulationEnabled{Enabled: true}).Call(page); err != nil {
+		t.Fatal(err)
+	}
+	page.MustNavigate(server.URL).MustWaitLoad()
+	settle := func() {
+		page.MustEval(`() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
+	}
+	check := func(what, js string, args ...any) {
+		t.Helper()
+		settle()
+		if problem := page.MustEval(js, args...).Str(); problem != "" {
+			t.Fatalf("%s: %s", what, problem)
+		}
+	}
+	setBand := func(height int) {
+		page.MustEval(`h => {
+			const s = document.getElementById('organization-stream').style;
+			if (h > 0) s.setProperty('--composer-viewport-h', h + 'px');
+			else { s.removeProperty('--composer-viewport-h'); s.removeProperty('--composer-viewport-top'); }
+		}`, height)
+		settle()
+	}
+	set := func(text string) {
+		page.MustEval(`text => { const b = document.getElementById('message-body'); b.value = text;
+			b.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertFromPaste'})); }`, text)
+		settle()
+	}
+	const reachable = `(selector, h) => {
+		const el = document.querySelector(selector), c = document.getElementById('conversation');
+		if (!el?.textContent.trim() || getComputedStyle(el).display === 'none' || getComputedStyle(el).visibility !== 'visible') return 'missing visible text: ' + selector;
+		c.scrollTop += el.getBoundingClientRect().top;
+		const top = el.getBoundingClientRect();
+		if (top.top < 0 || top.top >= h || top.bottom <= 0) return 'top unreachable: ' + top.top + '..' + top.bottom;
+		c.scrollTop += el.getBoundingClientRect().bottom - h;
+		const bottom = el.getBoundingClientRect();
+		return bottom.bottom <= h && bottom.bottom > 0 && bottom.top < h ? '' : 'bottom unreachable: ' + bottom.top + '..' + bottom.bottom;
+	}`
+	const newest = `() => { const l = document.getElementById('message-list'); return l.scrollHeight - l.scrollTop - l.clientHeight <= 2 ? '' : 'lost newest'; }`
+	const stacked = `(rest, font) => {
+		const form = document.getElementById('message-composer'), b = document.getElementById('message-body');
+		const label = document.querySelector('label[for="message-body"]').getBoundingClientRect();
+		const tr = b.getBoundingClientRect(), br = form.querySelector('button[type="submit"]:not([form])').getBoundingClientRect();
+		if (getComputedStyle(form).flexDirection !== 'column') return 'not column';
+		if (label.height < 16 || label.bottom > tr.top || tr.bottom > br.top) return 'not stacked';
+		if (b.clientHeight !== rest) return 'resting height ' + b.clientHeight + ' want ' + rest;
+		if (br.width !== 44 || br.height !== 44) return 'button ' + br.width + 'x' + br.height;
+		return parseFloat(getComputedStyle(b).fontSize) === font ? '' : 'font ' + getComputedStyle(b).fontSize;
+	}`
+	coords := func(state string) {
+		t.Log(page.MustEval(`s => { const tr = document.getElementById('message-body').getBoundingClientRect(), br = document.querySelector('#message-composer button[type="submit"]:not([form])').getBoundingClientRect();
+			return s + ': textarea=' + tr.left + ',' + tr.top + '..' + tr.right + ',' + tr.bottom + ' (' + tr.width + 'x' + tr.height + ') button=' + br.left + ',' + br.top + '..' + br.right + ',' + br.bottom + ' (' + br.width + 'x' + br.height + ')'; }`, state).Str())
+	}
+	check("keyboard closed stacked layout", `() => innerWidth === 874 && innerHeight === 402 ? '' : 'viewport ' + innerWidth + 'x' + innerHeight`)
+	check("keyboard closed geometry", stacked, 38, 16)
+	coords("874x402 keyboard-closed")
+	page.MustEval(`() => document.getElementById('message-body').focus()`)
+	// 90 px stands for iOS Safari in landscape with one tab open: both the
+	// focused textarea and the 44 × 44 send button must lie inside 0..90.
+	setBand(90)
+	const checkBand90 = `() => {
+		const b = document.getElementById('message-body'), btn = document.querySelector('#message-composer button[type="submit"]:not([form])');
+		const tr = b.getBoundingClientRect(), br = btn.getBoundingClientRect(), label = b.labels?.[0];
+		if (document.activeElement !== b) return 'textarea not focused';
+		if (!label || !label.textContent.trim()) return 'accessible label missing';
+		if (parseFloat(getComputedStyle(b).fontSize) < 16) return 'font-size ' + getComputedStyle(b).fontSize;
+		if (br.width !== 44 || br.height !== 44) return 'button size ' + br.width + 'x' + br.height;
+		if (tr.top < 0 || tr.bottom > 90 || br.top < 0 || br.bottom > 90) return 'textarea ' + tr.top + '..' + tr.bottom + ', send button ' + br.top + '..' + br.bottom + ' outside 0..90';
+		if (tr.right > br.left) return 'textarea not beside send button: textarea.right=' + tr.right + ' button.left=' + br.left;
+		return '';
+	}`
+	check("90px one-tab band shows textarea and send button", checkBand90)
+	coords("90px one-tab resting")
+	tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: page.MustElement("#message-body").Object.ObjectID}).Call(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := page.MustEval(`() => document.getElementById('message-body').labels[0].textContent.trim()`).Str()
+	if len(tree.Nodes) == 0 || tree.Nodes[0].Name == nil || tree.Nodes[0].Name.Value.Str() != label || label == "" {
+		t.Fatalf("textarea accessible name must equal label %q: %+v", label, tree)
+	}
+	page.MustEval(`() => { const c = document.getElementById('conversation'); c.scrollTop -= 60; window.kbReaderTop = c.scrollTop; }`)
+	foreign := int(posted.Add(1))
+	message := streamTestMessages(topic, foreign)[0]
+	message.MemberID, message.DisplayName, message.Handle = kernel.ID{9}, "Other member", "other"
+	events <- realtime.Outgoing{ID: int64(foreign), Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(message))}
+	page.MustWait(`seq => !!document.querySelector('#message-items > li[data-event-seq="' + seq + '"]')`, fmt.Sprint(foreign))
+	check("foreign live message preserves keyboard-open reader", `() => Math.abs(document.getElementById('conversation').scrollTop - window.kbReaderTop) <= 1 ? '' : 'conversation moved from ' + window.kbReaderTop + ' to ' + document.getElementById('conversation').scrollTop`)
+
+	// 40 px stands for iOS Safari in landscape with four tabs (tab bar
+	// showing): the 38 px textarea lies inside 0..40, and the full 44 × 44
+	// send button is reached by scrolling #conversation with the keyboard open.
+	setBand(40)
+	const checkBand40 = `() => {
+		const b = document.getElementById('message-body'), btn = document.querySelector('#message-composer button[type="submit"]:not([form])');
+		const tr = b.getBoundingClientRect(), br = btn.getBoundingClientRect();
+		if (document.activeElement !== b) return 'textarea not focused';
+		if (parseFloat(getComputedStyle(b).fontSize) < 16) return 'font-size ' + getComputedStyle(b).fontSize;
+		if (br.width !== 44 || br.height !== 44) return 'button size ' + br.width + 'x' + br.height;
+		return tr.top >= 0 && tr.bottom <= 40 ? '' : 'textarea ' + tr.top + '..' + tr.bottom + ' outside 0..40';
+	}`
+	check("40px four-tab band shows textarea", checkBand40)
+	coords("40px four-tab resting")
+	const reachButton = `() => {
+		const c = document.getElementById('conversation'), b = document.getElementById('message-body');
+		const btn = document.querySelector('#message-composer button[type="submit"]:not([form])');
+		c.scrollTop = c.scrollHeight;
+		const low = btn.getBoundingClientRect();
+		if (low.width !== 44 || low.height !== 44 || low.bottom > 40 || low.bottom < 38) return 'button bottom not in 0..40: ' + low.top + '..' + low.bottom;
+		c.scrollTop += low.top;
+		const high = btn.getBoundingClientRect();
+		window.kbButtonScroll = '40px button scroll: bottom=' + low.top + '..' + low.bottom + ', top=' + high.top + '..' + high.bottom;
+		c.scrollTop = c.scrollHeight;
+		if (document.activeElement !== b || document.getElementById('organization-stream').style.getPropertyValue('--composer-viewport-h') !== '40px') return 'keyboard state or focus lost';
+		return high.width === 44 && high.height === 44 && Math.abs(high.top) <= 1 && high.bottom >= 40 ? '' : 'button top not reached in 0..40: ' + high.top + '..' + high.bottom;
+	}`
+	check("40px four-tab band reaches full 44x44 send button by scrolling #conversation", reachButton)
+	t.Log(page.MustEval(`() => window.kbButtonScroll`).Str())
+	page.MustSetViewport(844, 390, 1, true)
+	settle()
+	setBand(40)
+	check("40px band at 844px width shows 38px textarea", checkBand40)
+	coords("40px at 844x390 resting")
+	check("40px band at 844px width reaches full 44x44 send button by scrolling", reachButton)
+	t.Log(page.MustEval(`() => window.kbButtonScroll`).Str())
+	page.MustSetViewport(874, 402, 1, true)
+	settle()
+	setBand(40)
+
+	// Verify iOS Safari's visualViewport.offsetTop pan (238 at 90 px, 252 at 40 px).
+	for _, pan := range [][2]int{{90, 238}, {40, 252}} {
+		page.MustEval(`(h, top) => { const s = document.getElementById('organization-stream').style;
+			s.setProperty('--composer-viewport-h', h + 'px'); s.setProperty('--composer-viewport-top', top + 'px'); }`, pan[0], pan[1])
+		check(fmt.Sprintf("offsetTop=%d at %dpx band", pan[1], pan[0]), `(h, top) => {
+			const tr = document.getElementById('message-body').getBoundingClientRect(), br = document.querySelector('#message-composer button[type="submit"]:not([form])').getBoundingClientRect();
+			if (tr.top - top < 0 || tr.bottom - top > h) return 'textarea ' + (tr.top - top) + '..' + (tr.bottom - top) + ' outside 0..' + h;
+			return h === 90 && (br.top - top < 0 || br.bottom - top > h) ? 'button ' + (br.top - top) + '..' + (br.bottom - top) + ' outside 0..90' : '';
+		}`, pan[0], pan[1])
+		coords(fmt.Sprintf("%dpx band offsetTop=%d (layout coordinates)", pan[0], pan[1]))
+	}
+	page.MustEval(`() => document.getElementById('organization-stream').style.removeProperty('--composer-viewport-top')`)
+
+	// Multi-line growth, quote chip, and saved scroll position of #message-list.
+	setBand(90)
+	page.MustEval(`() => { const l = document.getElementById('message-list'); l.scrollTop = l.scrollHeight; }`)
+	set("line1\nline2\nline3")
+	check("three-line growth fits inside 90px band", `() => document.getElementById('message-body').clientHeight === 82 ? '' : 'not 82px'`)
+	check("90px band holds 82px textarea and 44px button", checkBand90)
+	coords("90px three-line growth")
+	check("newest preserved on growth", newest)
+	set(strings.Repeat("capped\n", 20) + "tail")
+	check("inner scroll at cap keeps caret visible", `() => {
+		const b = document.getElementById('message-body');
+		b.focus(); b.setSelectionRange(b.value.length, b.value.length); b.scrollTop = b.scrollHeight;
+		return b.clientHeight === 82 && b.scrollHeight > 82 && b.scrollHeight - b.scrollTop - b.clientHeight <= parseFloat(getComputedStyle(b).paddingBottom) + 1 ? '' : 'cap/scroll';
+	}`)
+	set("")
+	page.MustEval(`() => document.getElementById('message-list').scrollTop = 500`)
+	settle()
+	anchor := page.MustEval(`() => { const l = document.getElementById('message-list'), top = l.getBoundingClientRect().top;
+		const item = [...document.querySelectorAll('#message-items > li')].find(i => i.getBoundingClientRect().bottom > top);
+		return {id: item.id, offset: item.getBoundingClientRect().top - top}; }`)
+	const anchored = `a => Math.abs(document.getElementById(a.id).getBoundingClientRect().top - document.getElementById('message-list').getBoundingClientRect().top - a.offset) <= 1 ? '' : 'reader moved'`
+	set("first\nsecond\nthird")
+	check("reader preserved on growth in keyboard band", anchored, anchor)
+	set("")
+	check("reader preserved on shrink in keyboard band", anchored, anchor)
+	for _, quoted := range []bool{true, false} {
+		page.MustEval(`quoted => document.getElementById('quote-form').requestSubmit(document.querySelector(quoted ? '#message-items [name=quote]' : '#composer-quote button'))`, quoted)
+		page.MustWait(`quoted => !!document.querySelector('#composer-quote input') === quoted && !document.querySelector('.htmx-settling')`, quoted)
+		if quoted {
+			page.MustEval(`() => document.getElementById('message-body').focus()`)
+		}
+		check(fmt.Sprintf("quote=%t keeps reader anchor", quoted), anchored, anchor)
+		check(fmt.Sprintf("quote=%t keeps 90px band", quoted), checkBand90)
+		if quoted {
+			page.MustEval(`() => document.getElementById('quote-form').requestSubmit(document.querySelector('#composer-quote [name=part]'))`)
+			page.MustWait(`() => document.activeElement?.id === 'quote-text' && !document.querySelector('.htmx-settling')`)
+			check("quote edit focus reveals its textarea", `() => { const r = document.getElementById('quote-text').getBoundingClientRect(); return r.top >= 0 && r.bottom <= 90 ? '' : 'quote textarea ' + r.top + '..' + r.bottom; }`)
+		}
+	}
+	check("quote removal focuses and reveals body", checkBand90)
+
+	// IME composition: Enter during composition or within 100 ms of compositionend does not submit.
+	page.MustEval(`() => {
+		window.kbSubmits = 0;
+		document.addEventListener('submit', e => { if (e.target.id === 'message-composer') window.kbSubmits++; }, true);
+		const b = document.getElementById('message-body');
+		b.focus();
+		b.dispatchEvent(new CompositionEvent('compositionstart', {bubbles: true}));
+		b.value = '日本語\n変換';
+		b.dispatchEvent(new InputEvent('input', {bubbles: true, isComposing: true}));
+		b.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true, isComposing: true, keyCode: 229}));
+		b.dispatchEvent(new CompositionEvent('compositionend', {bubbles: true}));
+		window.kbEndedAt = performance.now();
+		b.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}));
+	}`)
+	page.MustWait(`() => performance.now() - window.kbEndedAt >= 120`)
+	check("IME Enter does not submit", `() => window.kbSubmits === 0 && document.getElementById('message-body').enterKeyHint === 'send' ? '' : 'submits=' + window.kbSubmits`)
+
+	// 422 field error alert and post-send band recovery at 90 px and 40 px.
+	set(strings.Repeat("x", 4005))
+	page.MustEval(`() => { document.getElementById('message-body').focus(); document.getElementById('message-composer').requestSubmit(); }`)
+	page.MustWait(`() => document.getElementById('message-body').getAttribute('aria-invalid') === 'true' && !document.querySelector('.htmx-settling')`)
+	check("422 error alert in keyboard band", `() => document.querySelector('#message-help[role="alert"]')?.textContent.trim() ? '' : 'missing 422 alert'`)
+	for _, height := range []int{90, 40} {
+		setBand(height)
+		check(fmt.Sprintf("422 alert reachable by scrolling at %dpx with capped textarea", height), reachable, "#message-help[role=alert]", height)
+	}
+	for _, height := range []int{90, 40} {
+		for _, streamFirst := range []bool{false, true} {
+			setBand(height)
+			set(fmt.Sprintf("sent at %d", height))
+			if streamFirst {
+				holdNext <- struct{}{}
+			}
+			page.MustEval(`() => { document.getElementById('message-list').scrollTop = 0; document.getElementById('message-body').focus();
+			document.getElementById('message-body').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true})); }`)
+			seq := int(posted.Load()) + 1
+			if !streamFirst {
+				page.MustWait(`() => document.getElementById('message-body').value === '' && !!document.querySelector('#message-pending [data-state="confirmed"]') && !document.querySelector('.htmx-settling')`)
+				seq = int(posted.Load())
+			}
+			events <- realtime.Outgoing{ID: int64(seq), Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, seq)[0]))}
+			page.MustWait(`seq => !!document.querySelector('#message-items > li[data-event-seq="' + seq + '"]')`, fmt.Sprint(seq))
+			if streamFirst {
+				page.MustWait(`() => !!document.querySelector('#message-pending [data-state="sending"]')`)
+				releaseInFlight <- struct{}{}
+			}
+			page.MustWait(`() => !document.querySelector('#message-pending > li') && !document.querySelector('.htmx-settling')`)
+			check(fmt.Sprintf("newest after send at %dpx", height), newest)
+			if height == 90 {
+				check("composer back inside 90px band after send", checkBand90)
+			} else {
+				check("textarea back inside 40px band after send", checkBand40)
+			}
+			coords(fmt.Sprintf("%dpx after pending send (stream-first=%t)", height, streamFirst))
+		}
+	}
+
+	// Ordinary send path: #message-send-alert on 500, #message-sending in flight, and 40 px band recovery.
+	page.MustNavigate(server.URL + "?ordinary").MustWaitLoad()
+	page.MustEval(`() => document.getElementById('message-body').focus()`)
+	setBand(40)
+	set("fail500")
+	page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+	page.MustWait(`() => document.getElementById('message-send-alert').textContent.trim() !== '' && !document.querySelector('.htmx-settling')`)
+	check("send alert populated on 500", `() => document.getElementById('message-send-alert').textContent.trim() ? '' : 'empty send alert'`)
+	for _, height := range []int{90, 40} {
+		setBand(height)
+		set(strings.Repeat("capped\n", 20))
+		check(fmt.Sprintf("500 alert reachable by scrolling at %dpx with capped textarea", height), reachable, "#message-send-alert", height)
+	}
+	holdNext <- struct{}{}
+	set("ordinary at 40")
+	page.MustEval(`() => { document.getElementById('message-list').scrollTop = 0; document.getElementById('message-body').focus(); document.getElementById('message-composer').requestSubmit(); }`)
+	page.MustWait(`() => document.getElementById('message-composer').classList.contains('htmx-request')`)
+	check("sending status visible in flight", `() => getComputedStyle(document.querySelector('#message-sending span')).display !== 'none' ? '' : 'sending hidden'`)
+	for _, height := range []int{90, 40} {
+		setBand(height)
+		set(strings.Repeat("new draft\n", 20))
+		check(fmt.Sprintf("sending status reachable by scrolling at %dpx with capped textarea", height), reachable, "#message-sending span", height)
+	}
+	set("ordinary at 40")
+	releaseInFlight <- struct{}{}
+	page.MustWait(`() => document.getElementById('message-body').value === '' && !document.querySelector('.htmx-settling')`)
+	seq := int(posted.Load())
+	events <- realtime.Outgoing{ID: int64(seq), Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, seq)[0]))}
+	page.MustWait(`seq => document.getElementById('message-body').value === '' && !!document.querySelector('#message-items > li[data-event-seq="' + seq + '"]') && !document.querySelector('.htmx-settling')`, fmt.Sprint(seq))
+	check("ordinary post newest at 40px", newest)
+	check("ordinary post composer back inside 40px band", checkBand40)
+	coords("40px after ordinary send and stream delivery")
+
+	// Guard leaf: portrait phone (390 × 844, closed and keyboard open) and desktop (1280 × 800) are unchanged.
+	for _, g := range []struct {
+		name              string
+		w, h, vh, rest, f int
+		mobile            bool
+	}{
+		{"portrait-closed", 390, 844, 0, 44, 16, true},
+		{"portrait-keyboard", 390, 844, 500, 44, 16, true},
+		{"desktop", 1280, 800, 0, 38, 15, false},
+	} {
+		page.MustSetViewport(g.w, g.h, 1, g.mobile)
+		if err := (proto.EmulationSetTouchEmulationEnabled{Enabled: g.mobile}).Call(page); err != nil {
+			t.Fatal(err)
+		}
+		setBand(g.vh)
+		check("guard "+g.name, stacked, g.rest, g.f)
+		coords("guard " + g.name)
 	}
 }

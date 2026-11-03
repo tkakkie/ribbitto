@@ -148,7 +148,7 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		page.MustEvalOnNewDocument(`(() => {
 			const add = window.addEventListener;
 			window.addEventListener = function (type, ...rest) {
-				if (type === 'pagehide' && /message-stream-v15\.js/.test(new Error().stack)) return;
+				if (type === 'pagehide' && /message-stream-[A-Z0-9]{8}\.js/.test(new Error().stack)) return;
 				return add.call(this, type, ...rest);
 			};
 		})()`)

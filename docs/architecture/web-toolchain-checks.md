@@ -20,9 +20,10 @@ multiline or interpolation blind spots. Keep review and browser tests.
 `make test-web` runs direct `web/test/*.test.ts` harnesses through the existing
 Go wrapper's test mode, also in `make check`
 ([decision 45](../decisions/45-type-checked-client-unit-tests.md); the runner
-accepts the existing `web/test/*.test.mjs` harnesses now, runs both
-`web/test/*.test.mjs` and `web/test/*.test.ts` from #2092 while #2093–#2095
-convert them, and removes the `.mjs` glob in #2098). It checks
+accepts existing `web/test/*.test.mjs` harnesses and runs both forms from
+#2092). Changing a `.test.mjs` harness converts it to `.test.ts` in the same
+PR. #2098 starts only when `ls web/test/*.test.mjs` is empty, then removes the
+`.mjs` glob. The wrapper checks
 `.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
 fails), needs no `node_modules` and runs `node --test <files>` from the
 repository root, propagating failure. `web/src/package.json` and (from #2092)
@@ -37,19 +38,18 @@ root `package.json` module scope; the real-Node `TestRealNodeTests` probe (only
 with that flag) checks pass/fail propagation and fails if
 `MODULE_TYPELESS_PACKAGE_JSON` returns (with a temporary-root positive control).
 The setup harness creates temporary annotated `.ts` modules and proves relative
-`.ts` imports and type stripping. Harnesses import DOM-free `web/src/<concern>.ts`
-by relative `.ts` path, using `node:test` and `node:assert/strict` with the
-hand-written `node-test.d.ts` declarations from #2092 (no `@types/node`) and no
-DOM emulator. Stripping types in `node --test` is not checking them, so both checks remain required.
+`.ts` imports and type stripping. See [`web-tests.md`](web-tests.md) for the
+test layers and harness rules.
 
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
 exactly one file per stem. Exempt paths are the three named vendor scripts
-in `web/static/vendor/` (pinned by `vendor_test.go`) and, until #2098 removes
-the allowance, direct `web/test/*.test.mjs` harnesses (not type-checked; they
-are converted by #2093–#2095). On conversion, delete the old
-script and its list line together; version bumps keep the stem. The list may
+in `web/static/vendor/` (pinned by `vendor_test.go`) and untouched direct
+`web/test/*.test.mjs` harnesses (not type-checked; changing one converts it in
+the same PR). #2098 removes this allowance only after the empty-glob condition
+above is met. On conversion, delete the
+old script and its list line together; version bumps keep the stem. The list may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked
 versioned scripts. An unreadable base fails CI; locally only the growth rule

@@ -60,15 +60,17 @@ changes ([third-AI review](../workflow/review-operations.md#third-ai-review)).
   newest 10 and the 90-day floor; older published duplicates take no slot and
   stay until that SHA expires. A rerun of an old SHA takes a newest-10 slot by
   start time and can push a deployed SHA past 90 days; slot order is by
-  publication run, and deployed-SHA protection is the #2049 gate's job.
+  publication run; production markers protect individual releases independently.
 - **Retention, deletion and failure handling:** **90 days provisionally**
-  (2026-11-01), revisited at #2049 so a map outlives its release plus an
-  investigation margin. **90 days is a floor, not a deadline:** retention runs
+  (2026-11-01), with a **90-day post-retirement investigation margin** (#2049).
+  **90 days is a floor, not a deadline:** retention runs
   opportunistically only **after a successful upload** on `main` (without new
   `main` pushes, old releases stay: push-time, not automatic expiry). It deletes
   a SHA's eligible published releases only when that SHA's newest release is
   **both** older than 90 days (from "now") and outside the newest 10 distinct
-  SHAs — each release first by exact ID, and only after that succeeds its tag by
+  SHAs, and that individual release has no active marker and has completed any
+  post-retirement margin — each release first by exact ID, and only after that
+  succeeds its tag by
   exact ref once the reference and fresh-list re-check confirms no release
   shares it (never by name lookup alone). Failed tag deletions wait for the next
   run, which collects and deletes **orphan tags** — canonical `map-` tags older
@@ -79,6 +81,49 @@ changes ([third-AI review](../workflow/review-operations.md#third-ai-review)).
   control chars, without secrets or headers. Failed uploads, refused/expired
   auth or failed deletions fail visibly; upload failures skip retention and
   delete nothing.
+
+## Production markers — #2049 (Part 2/2)
+
+The future distribution/deploy step writes the production status on the exact
+store release named by the verification receipt, using
+`go -C tools run ./sourcemaps -production <release name> active` with store
+access. It must verify the build, mark it successfully **before** distributing
+or starting it, and stop on failure. No distribution/deploy step is introduced
+here. The writer owns the status across all instances: retire only after the
+last production instance stops; for rollback, verify and re-mark the target
+`active` before starting it (this clears retirement).
+
+The release body is reserved for the marker: empty or null means an ordinary
+release; exactly `sourcemaps-production-v1 active` means still in production;
+`sourcemaps-production-v1 retired <UTC RFC3339 timestamp>` records retirement
+(e.g. `sourcemaps-production-v1 retired 2026-11-03T12:00:00Z`). No extra text,
+whitespace, offsets or fractional seconds are accepted. Unknown versions,
+malformed or future retirement times are errors. To retire, use the same command
+with `retired` instead of `active`; it writes the current UTC time, retains the
+marker and preserves the first retirement time on retry. An unmarked release
+cannot be retired; invalid markers are never overwritten by the tool. Marker
+writes patch only the body of a canonical published non-prerelease release,
+never its assets, name or tag. A failed write must be retried before proceeding.
+
+The storing command's retention cleanup reads every release's body by exact ID
+before any deletion, including draft/orphan-tag cleanup. Any unreadable, invalid
+or unknown-version marker aborts cleanup with **nothing deleted**. Active releases
+are kept regardless of age or SHA position. Retired releases stay until at least
+90 days after retirement; afterwards deletion still requires **both** existing
+floors (the SHA's newest release older than 90 days and outside the newest 10
+distinct SHAs). Other releases of the same SHA keep their own markers and margins.
+An absent marker adds no protection. The provisional age floor and margin are
+minimums, with deletion still opportunistic after successful uploads.
+
+Immediately before each release DELETE, cleanup re-reads that exact release and
+compares its body with the validated snapshot. Any read error or marker change
+(including a concurrent mark or retirement) aborts that delete and the remaining
+cleanup; prior deletions cannot be undone. Thus a marker written between listing
+and this final read cancels a pending delete. GitHub provides no atomic marker
+read-and-delete here: future deploy writers must also serialize marking with
+cleanup to cover the final GET/DELETE interval, and serialize status writers
+with each other. The existing per-SHA upload groups do not provide that lock.
+`TestProductionRetention` and `TestProductionTransitions` use only a fake store.
 
 ## Exact-build verification — #2049 (Part 1/2)
 
@@ -108,8 +153,10 @@ and attempt with `-lookup`; this selects the corresponding map even when a
 later same-SHA rebuild differs. SHA-only lookup is insufficient evidence for
 distribution. `TestExactBuildVerification` exercises this against a fake store.
 
-This introduces no distribution step. The production gate remains closed
-until Part 2 (production markers and retention) also merges; future distribution
-and deployment implementations must wire this verification before distribution.
+This introduces no distribution step. The #2049 production gate closes when both
+parts have merged; future distribution and deployment implementations must wire
+verification and production marking before distribution. #1819's real deletion
+record is still pending (the first run deleted zero releases/tags); no production
+release is made while that record is missing.
 
 [i1819]: https://github.com/tkakkie/ribbitto/issues/1819

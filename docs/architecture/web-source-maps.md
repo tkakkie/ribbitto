@@ -62,12 +62,12 @@ See [storing job, release naming and retention](web-source-maps-store.md#storing
 - **Gate before the first production release ([#2049][i2049]):** "the newest 10"
   protects almost nothing at AI merge pace, only the 90 days do. #2049 ensures a
   release exists for the exact SHA, run id, attempt and bundle hashes of every
-  distributed or deployed build ([verification](web-source-maps-store.md#exact-build-verification--2049-part-12)) and decides
+  distributed or deployed build ([verification](web-source-maps-store.md#exact-build-verification--2049-part-12)) and defines
   how production releases' maps are kept (marker, revised retention rule and
   post-retirement margin in [the store page](web-source-maps-store.md#storing-job-release-naming-and-retention--1819), and tests in #1819's command). No container
   image, Dockerfile, release workflow, tagged or distributed binary (including
   `go install`), manual deployment or other build distribution outside CI is
-  allowed before #2049.
+  allowed until both parts of #2049 have merged.
 - **Token rotation ([#2050][i2050]):** `SOURCEMAPS_TOKEN` expires about
   `2027-01-23`; the maintainer rotates it. Reminders are best effort (desktop
   reminders for `2027-01-09` and `2027-01-20` set `2026-11-01` running if the

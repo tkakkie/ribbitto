@@ -31,6 +31,7 @@ type mockRelease struct {
 	ID              int64       `json:"id"`
 	TagName         string      `json:"tag_name"`
 	Name            string      `json:"name"`
+	Body            string      `json:"body"`
 	TargetCommitish string      `json:"target_commitish"`
 	Draft           bool        `json:"draft"`
 	Prerelease      bool        `json:"prerelease"`
@@ -38,6 +39,7 @@ type mockRelease struct {
 }
 
 type mockStore struct {
+	before                                                                                                           func(http.ResponseWriter, *http.Request) bool
 	token, expiryHeader, tamperManifest, failTagDel, failTagDel422, tagDel404, tagDel422, recheckTagRel, failRunsSHA string
 	releases                                                                                                         []mockRelease
 	tags, events                                                                                                     []string
@@ -90,6 +92,9 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/repos/tkakkie/ribbitto-sourcemaps")
+		if s.before != nil && s.before(w, r) {
+			return
+		}
 		switch {
 		case r.Method == "GET" && path == "/releases":
 			p, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -191,8 +196,16 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 						http.Error(w, "expected application/json", 415)
 						return
 					}
-					var p struct{ Draft, Prerelease bool }
+					var p struct {
+						Draft, Prerelease bool
+						Body              *string
+					}
 					_ = json.NewDecoder(r.Body).Decode(&p)
+					if p.Body != nil {
+						s.releases[i].Body = *p.Body
+						_ = json.NewEncoder(w).Encode(s.releases[i])
+						return
+					}
 					s.releases[i].Draft, s.releases[i].Prerelease = p.Draft || s.tamperManifest == "pub-still-draft", p.Prerelease || s.tamperManifest == "pub-prerelease"
 					if s.tamperManifest == "pub-bad-name" {
 						s.releases[i].Name = "wrong"

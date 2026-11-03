@@ -7,16 +7,17 @@ import {
   serializeSelection,
   updateSelectionQuote,
 } from "../src/selection-quote.ts";
+import type { QuoteNode, SelectionQuoteState } from "../src/selection-quote.ts";
 
-const txt = (text) => ({ kind: "text", text });
-const el = (tag, children = [], handle = undefined) => ({
+const txt = (text: string): QuoteNode => ({ kind: "text", text });
+const el = (tag: string, children: readonly QuoteNode[] = [], handle: string | null | undefined = undefined): QuoteNode => ({
   kind: "element",
   tag,
   ...(handle !== undefined ? { handle } : {}),
   children,
 });
-const mention = (handle, tag = "BDI") => ({ kind: "element", tag, handle });
-const other = () => ({ kind: "other" });
+const mention = (handle: string, tag = "BDI"): QuoteNode => ({ kind: "element", tag, handle });
+const other = (): QuoteNode => ({ kind: "other" });
 
 test("isQuotableText rejects missing, empty or whitespace-only strings", () => {
   for (const [name, value, want] of [
@@ -27,7 +28,7 @@ test("isQuotableText rejects missing, empty or whitespace-only strings", () => {
     ["single newline from <br>", "\n", false],
     ["visible text", "hello", true],
     ["visible text with surrounding whitespace", "  hello  ", true],
-  ]) {
+  ] as const) {
     assert.equal(isQuotableText(value), want, name);
   }
 });
@@ -334,7 +335,7 @@ test("serializeSelection handles single-P bodies, all allowed chat_v1 tags, bloc
       },
       null,
     ],
-  ]) {
+  ] as const) {
     assert.equal(serializeSelection(selection), want, name);
   }
 });
@@ -352,7 +353,7 @@ test("updateSelectionQuote and isSelectionSubmitter enforce non-empty trimmed te
     ["null active body with null sibling", null, null, false],
     ["undefined active body with undefined sibling", undefined, undefined, false],
     ["empty-string body never matches empty-string sibling", "", "", false],
-  ]) {
+  ] as const) {
     assert.equal(isSelectionSubmitter(activeBody, previousSibling), want, name);
   }
 
@@ -420,8 +421,8 @@ test("updateSelectionQuote and isSelectionSubmitter enforce non-empty trimmed te
       null,
       null,
     ],
-  ]) {
-    const state = { current: body2, text: "stale" };
+  ] as const) {
+    const state: SelectionQuoteState<typeof body1> = { current: body2, text: "stale" };
     updateSelectionQuote(state, body, selection);
     assert.equal(state.current, wantBody, `${name} (current)`);
     assert.equal(state.text, wantText, `${name} (text)`);

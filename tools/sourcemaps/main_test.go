@@ -335,6 +335,9 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		mockRelease{ID: 43, Name: relNameAt(now.Add(-120*day), shaOf(63), 1, 1), TagName: mismatchTag},
 		mockRelease{ID: 44, Name: futureTag, TagName: futureTag},
 		mockRelease{ID: 45, Name: relNameAt(now.Add(-5*day), shaOf(65), 1, 1), TagName: oldSharedPubTag},
+		mockRelease{ID: 46, Name: "##[error]forged", TagName: "##[error]forged", Prerelease: true},
+		mockRelease{ID: 47, Name: "##[add-mask]secret", TagName: "::error::forged\n::add-mask::secret\r::stop-commands::x"},
+		mockRelease{ID: 48, Name: "###[error]overlap\n\r:::stop-commands:::x", TagName: "###[error]overlap\n\r:::stop-commands:::x", Draft: true},
 	)
 	tags = append(tags, oldTag, oldTag404, oldTag500, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, draftCurr, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
 	store := &mockStore{
@@ -366,7 +369,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 			t.Errorf("release ID %d was not deleted", gone)
 		}
 	}
-	for _, kept := range []int64{2, 20, 13, 21, 32, 33, 34, 35, 36, 40, 41, 42, 43, 44, 45} {
+	for _, kept := range []int64{2, 20, 13, 21, 32, 33, 34, 35, 36, 40, 41, 42, 43, 44, 45, 46, 47, 48} {
 		if !hasRel(kept) {
 			t.Errorf("release ID %d was wrongly deleted", kept)
 		}
@@ -463,10 +466,37 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		t.Fatalf("lookup with runID=9 failed: rel=%s err=%v", gotRel9, err)
 	}
 	c := &apiClient{cfg: cfg}
-	if c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
+	tagInjecErr := c.deleteTagByRef(t.Context(), "##[error]bad\n::add-mask::secret\r::stop-commands::x")
+	if tagInjecErr == nil ||
+		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
 		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-abc-1.1") == nil ||
 		c.deleteTagByRef(t.Context(), "non-canonical") == nil {
 		t.Fatal("expected exact-ID deletion guard to refuse invalid tag")
+	}
+	var rawLog bytes.Buffer
+	logf(&rawLog, "raw %s\n", "line1\n::error::nl\r##[add-mask]secret\r\n::stop-commands::x")
+	combinedLogs := out.String() + summary.String() + tagInjecErr.Error() + rawLog.String()
+	for _, wantID := range []string{"(id 46)\n", "(id 47)\n", "(id 48)\n"} {
+		if !strings.Contains(summary.String(), wantID) {
+			t.Errorf("summary missing warning for %q:\n%s", wantID, summary.String())
+		}
+	}
+	if strings.Count(rawLog.String(), "\n") != 1 {
+		t.Errorf("logf failed to collapse embedded newlines: %q", rawLog.String())
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(summary.String(), "\n"), "\n") {
+		if !strings.HasPrefix(line, "warning: ") {
+			t.Errorf("embedded newline broke out of warning line: %q", line)
+		}
+	}
+	for _, forbidden := range []string{"##[", "##[error]", "##[add-mask]secret", "::", "::error::", "::add-mask::", "::stop-commands::x", "\r"} {
+		if strings.Contains(combinedLogs, forbidden) {
+			t.Errorf("log or error output contains unsanitised workflow command introducer %q", forbidden)
+		}
+	}
+	mainSrc, srcErr := os.ReadFile("main.go")
+	if srcErr != nil || bytes.Contains(mainSrc, []byte("fmt.Print")) || bytes.Contains(mainSrc, []byte("fmt.Fprint")) || bytes.Contains(mainSrc, []byte("%q")) {
+		t.Errorf("main.go must route all logs through logf and all quoted strings through safeQuote (err=%v)", srcErr)
 	}
 	baseRel := ghRelease{ID: 1, Name: oldTag, TagName: oldTag}
 	for _, tc := range []struct {

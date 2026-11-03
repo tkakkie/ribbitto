@@ -29,7 +29,18 @@ var (
 	shaRe       = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	sha256Re    = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	numIDRe     = regexp.MustCompile(`^[1-9][0-9]*$`)
+	cmdReplacer = strings.NewReplacer("##[", `\x23\x23[`, "::", `\x3a\x3a`, "\r", `\r`, "\n", `\n`)
 )
+
+// safeQuote quotes s with strconv.Quote (escaping newlines, CR and control characters)
+// and hex-escapes GitHub Actions workflow-command introducers ("##[" and "::") so
+// untrusted names, tags or URLs cannot forge annotations or alter log masking.
+func safeQuote(s string) string { return cmdReplacer.Replace(strconv.Quote(s)) }
+
+func logf(w io.Writer, format string, args ...any) {
+	s := fmt.Sprintf(format, args...)
+	_, _ = io.WriteString(cmp.Or(w, io.Discard), cmdReplacer.Replace(strings.TrimSuffix(s, "\n"))+"\n")
+}
 
 func isPlainFilename(s string) bool {
 	return s != "" && s != "." && s != ".." && s != "index.json" && filepath.Base(s) == s && !filepath.IsAbs(s) && !strings.ContainsAny(s, `/\`)
@@ -147,7 +158,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 		base = strings.TrimRight(cmp.Or(c.cfg.uploadBase, strings.Replace(base, "://api.github.com", "://uploads.github.com", 1)), "/")
 	}
 	if !c.cfg.allowTestEndpoint && !strings.HasPrefix(base, "https://") {
-		return 0, nil, fmt.Errorf("refusing non-https base %s", base)
+		return 0, nil, fmt.Errorf("refusing non-https base %s", safeQuote(base))
 	}
 	var r io.Reader
 	if body != nil {
@@ -170,7 +181,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	client := &http.Client{Timeout: 2 * time.Minute, Transport: c.cfg.transport, CheckRedirect: checkRedirect}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, path, errors.Unwrap(err))
+		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, safeQuote(path), errors.Unwrap(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if storeAuth {
@@ -178,7 +189,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err == nil && int64(len(raw)) > maxResponseBytes {
-		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
+		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, safeQuote(path), maxResponseBytes)
 	}
 	if err == nil && out != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && len(raw) > 0 {
 		err = json.Unmarshal(raw, out)
@@ -215,7 +226,7 @@ func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
 	} else if code == 204 {
 		c.delRels++
-		_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "deleted release %q (id %d, sha %s, age %dd)\n", r.Name, r.ID, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
+		logf(c.cfg.stdout, "deleted release %s (id %d, sha %s, age %dd)\n", safeQuote(r.Name), r.ID, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
 }
@@ -223,18 +234,18 @@ func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
 func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 	p, ok := parseReleaseName(tag)
 	if !ok {
-		return fmt.Errorf("refusing to delete non-canonical tag %q", tag)
+		return fmt.Errorf("refusing to delete non-canonical tag %s", safeQuote(tag))
 	}
 	code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
 	if err == nil && code == 422 {
 		code, _, err = c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
 	}
 	if err != nil || (code != 204 && code != 404) {
-		return fmt.Errorf("deleting tag %q: status %d (%v)", tag, code, err)
+		return fmt.Errorf("deleting tag %s: status %d (%v)", safeQuote(tag), code, err)
 	}
 	if code == 204 {
 		c.delTags++
-		_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "deleted tag %q (sha %s, age %dd)\n", tag, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
+		logf(c.cfg.stdout, "deleted tag %s (sha %s, age %dd)\n", safeQuote(tag), p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
 }
@@ -245,7 +256,7 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 		return nil
 	}
 	if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
-		return fmt.Errorf("rechecking tag %q: status %d (%v)", tag, tCode, err)
+		return fmt.Errorf("rechecking tag %s: status %d (%v)", safeQuote(tag), tCode, err)
 	} else if tCode == 200 {
 		return nil
 	}
@@ -256,7 +267,7 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 	}
 	var refObj struct{ Ref string }
 	if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+tag) {
-		return fmt.Errorf("verifying tag ref %q: status %d (%v)", tag, rCode, err)
+		return fmt.Errorf("verifying tag ref %s: status %d (%v)", safeQuote(tag), rCode, err)
 	}
 	return c.deleteTagByRef(ctx, tag)
 }
@@ -299,28 +310,28 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	idxBytes, err := os.ReadFile(filepath.Join(mapDir, "index.json"))
 	var m manifest
 	if err = cmp.Or(err, json.Unmarshal(idxBytes, &m)); err != nil {
-		return fmt.Errorf("reading map index in %s: %w", mapDir, err)
+		return fmt.Errorf("reading map index in %s: %w", safeQuote(mapDir), err)
 	}
 	if m.Commit != sha || m.RunID != runID || len(m.Entries) == 0 {
-		return fmt.Errorf("invalid map index in %s", mapDir)
+		return fmt.Errorf("invalid map index in %s", safeQuote(mapDir))
 	}
 	assets, seenFiles := map[string][]byte{"index.json": idxBytes}, make(map[string]bool, len(m.Entries))
 	for _, b := range m.Entries {
 		if !validBundleEntry(b) || seenFiles[b.File] || assets[b.Map] != nil {
-			return fmt.Errorf("invalid source map entry %q", b.Map)
+			return fmt.Errorf("invalid source map entry %s", safeQuote(b.Map))
 		}
 		seenFiles[b.File] = true
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
 		if err != nil {
-			return fmt.Errorf("reading source map %q: %w", b.Map, err)
+			return fmt.Errorf("reading source map %s: %w", safeQuote(b.Map), err)
 		}
 		if !bytes.Contains(data, []byte(`"sourcesContent"`)) {
-			return fmt.Errorf("invalid source map %q: missing sourcesContent", b.Map)
+			return fmt.Errorf("invalid source map %s: missing sourcesContent", safeQuote(b.Map))
 		}
 		assets[b.Map] = data
 	}
 	if entries, err := os.ReadDir(mapDir); err != nil || len(entries) != len(assets) {
-		return fmt.Errorf("unexpected files in %s", mapDir)
+		return fmt.Errorf("unexpected files in %s", safeQuote(mapDir))
 	}
 	c := &apiClient{cfg: cfg}
 	createBody, _ := json.Marshal(map[string]any{"tag_name": relName, "name": relName, "target_commitish": "main", "draft": true, "prerelease": false})
@@ -331,7 +342,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, name := range slices.Sorted(maps.Keys(assets)) {
 		u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", cfg.storeRepo, created.ID, url.QueryEscape(name))
 		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], nil); err != nil || (code != 201 && code != 200) {
-			return fmt.Errorf("uploading asset %q: status %d (%v)", name, code, err)
+			return fmt.Errorf("uploading asset %s: status %d (%v)", safeQuote(name), code, err)
 		}
 	}
 	relPath := fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, created.ID)
@@ -356,7 +367,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	assetIDs := make(map[string]int64, len(draftRel.Assets))
 	for _, a := range draftRel.Assets {
 		if sz, ok := wantAssets[a.Name]; !ok || !validAsset(a) || a.Size != sz {
-			return fmt.Errorf("uploaded asset %q does not match manifest", a.Name)
+			return fmt.Errorf("uploaded asset %s does not match manifest", safeQuote(a.Name))
 		}
 		assetIDs[a.Name] = a.ID
 		delete(wantAssets, a.Name)
@@ -374,15 +385,15 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 		e := m.Entries[k]
 		if code, gotBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", cfg.storeRepo, assetIDs[e.Map]), "application/octet-stream", nil, nil); err != nil || code != 200 || !bytes.Equal(gotBytes, assets[e.Map]) {
-			return fmt.Errorf("fetching back stored map %q: status %d (%v)", e.Map, code, err)
+			return fmt.Errorf("fetching back stored map %s: status %d (%v)", safeQuote(e.Map), code, err)
 		}
 	}
-	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %q (%d maps)\n", relName, len(m.Entries))
+	logf(cfg.stdout, "stored and fetched %s (%d maps)\n", safeQuote(relName), len(m.Entries))
 	if err := runRetention(ctx, c, sha); err != nil {
 		return err
 	}
 	if c.expiry == "" {
-		_, _ = fmt.Fprintf(cmp.Or(cfg.summary, io.Discard), "warning: missing github-authentication-token-expiration header\n")
+		logf(cfg.summary, "warning: missing github-authentication-token-expiration header\n")
 		return nil
 	}
 	exp, err := time.Parse("2006-01-02 15:04:05 UTC", c.expiry)
@@ -390,7 +401,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		exp, err = time.Parse("2006-01-02 15:04:05 -0700", c.expiry)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(cmp.Or(cfg.summary, io.Discard), "warning: unparsable github-authentication-token-expiration header\n")
+		logf(cfg.summary, "warning: unparsable github-authentication-token-expiration header\n")
 		return nil
 	}
 	if exp.Sub(cfg.now) < 14*24*time.Hour {
@@ -404,21 +415,21 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 	if err != nil {
 		return err
 	}
-	now, sum, deletedIDs, bySHA := c.cfg.now, cmp.Or(c.cfg.summary, io.Discard), make(map[int64]bool), make(map[string][]parsedRel)
+	now, sum, deletedIDs, bySHA := c.cfg.now, c.cfg.summary, make(map[int64]bool), make(map[string][]parsedRel)
 	var delDrafts []ghRelease
 	for _, r := range rels {
 		p, ok := parseReleaseName(r.Name)
 		switch {
 		case r.Prerelease:
-			_, _ = fmt.Fprintf(sum, "warning: prerelease %q (id %d)\n", r.Name, r.ID)
+			logf(sum, "warning: prerelease %s (id %d)\n", safeQuote(r.Name), r.ID)
 		case r.Name != r.TagName:
-			_, _ = fmt.Fprintf(sum, "warning: name/tag mismatch %q != %q (id %d)\n", r.Name, r.TagName, r.ID)
+			logf(sum, "warning: name/tag mismatch %s != %s (id %d)\n", safeQuote(r.Name), safeQuote(r.TagName), r.ID)
 		case !ok:
-			_, _ = fmt.Fprintf(sum, "warning: unparsable release %q (id %d)\n", r.Name, r.ID)
+			logf(sum, "warning: unparsable release %s (id %d)\n", safeQuote(r.Name), r.ID)
 		case p.Start.After(now.Add(24 * time.Hour)):
-			_, _ = fmt.Fprintf(sum, "warning: future-dated release %q (id %d)\n", r.Name, r.ID)
+			logf(sum, "warning: future-dated release %s (id %d)\n", safeQuote(r.Name), r.ID)
 		case r.Draft && now.Sub(p.Start) > 7*24*time.Hour:
-			_, _ = fmt.Fprintf(sum, "warning: abandoned draft %q (id %d)\n", r.Name, r.ID)
+			logf(sum, "warning: abandoned draft %s (id %d)\n", safeQuote(r.Name), r.ID)
 			active := p.SHA == currentSHA
 			if !active {
 				if active, err = c.hasActiveRun(ctx, p.SHA); err != nil {
@@ -429,7 +440,7 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 				delDrafts = append(delDrafts, r)
 			}
 		case r.Draft:
-			_, _ = fmt.Fprintf(sum, "warning: younger draft %q (id %d)\n", r.Name, r.ID)
+			logf(sum, "warning: younger draft %s (id %d)\n", safeQuote(r.Name), r.ID)
 		default:
 			bySHA[p.SHA] = append(bySHA[p.SHA], parsedRel{r, p})
 		}
@@ -487,7 +498,7 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 			return err
 		}
 	}
-	_, _ = fmt.Fprintf(cmp.Or(c.cfg.stdout, io.Discard), "retention summary: deleted %d releases, %d tags\n", c.delRels, c.delTags)
+	logf(c.cfg.stdout, "retention summary: deleted %d releases, %d tags\n", c.delRels, c.delTags)
 	return nil
 }
 
@@ -523,27 +534,27 @@ candLoop:
 		assets := make(map[string]ghAsset, len(best.Assets))
 		for _, a := range best.Assets {
 			if !validAsset(a) {
-				lastErr = fmt.Errorf("invalid asset %q in %q", a.Name, best.Name)
+				lastErr = fmt.Errorf("invalid asset %s in %s", safeQuote(a.Name), safeQuote(best.Name))
 				continue candLoop
 			}
 			assets[a.Name] = a
 		}
 		idxAsset, ok := assets["index.json"]
 		if !ok {
-			lastErr = fmt.Errorf("missing index.json in %q", best.Name)
+			lastErr = fmt.Errorf("missing index.json in %s", safeQuote(best.Name))
 			continue
 		}
 		code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
 		var m manifest
 		if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
-			lastErr = fmt.Errorf("reading or verifying index.json from %q: status %d (%v)", best.Name, code, err)
+			lastErr = fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", safeQuote(best.Name), code, err)
 			continue
 		}
 		seen := make(map[string]bool, len(m.Entries)*2)
 		for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 			e := m.Entries[k]
 			if !validBundleEntry(e) || seen[e.File] || seen[e.Map] || assets[e.Map].ID == 0 {
-				lastErr = fmt.Errorf("incomplete or invalid manifest entry %q in %q", e.Map, best.Name)
+				lastErr = fmt.Errorf("incomplete or invalid manifest entry %s in %s", safeQuote(e.Map), safeQuote(best.Name))
 				continue candLoop
 			}
 			seen[e.File], seen[e.Map] = true, true
@@ -556,12 +567,12 @@ candLoop:
 				ma := assets[e.Map]
 				code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
 				if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
-					return "", "", nil, fmt.Errorf("downloading map %q: status %d (%v)", e.Map, code, err)
+					return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", safeQuote(e.Map), code, err)
 				}
 				return best.Name, e.Map, mapBytes, nil
 			}
 		}
-		return "", "", nil, fmt.Errorf("bundle hash %s not found in %q", bundleSHA256, best.Name)
+		return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, safeQuote(best.Name))
 	}
 	return "", "", nil, lastErr
 }
@@ -583,11 +594,11 @@ func main() {
 		a := append(args, "", "")
 		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2])
 		if err = lerr; err == nil {
-			_, _ = fmt.Fprintf(os.Stdout, "%q %q (%d bytes)\n", rel, name, len(data))
+			logf(os.Stdout, "%s %s (%d bytes)\n", safeQuote(rel), safeQuote(name), len(data))
 		}
 	case !*lookup && len(args) == 5:
 		if cfg.now, err = time.Parse("20060102T150405Z", args[1]); err != nil || cfg.now.UTC().Format("20060102T150405Z") != args[1] {
-			err = fmt.Errorf("invalid UTC start timestamp %q", args[1])
+			err = fmt.Errorf("invalid UTC start timestamp %s", safeQuote(args[1]))
 		} else {
 			err = runStore(context.Background(), cfg, args[0], args[2], args[3], args[4])
 		}
@@ -595,7 +606,7 @@ func main() {
 		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id>]]")
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }

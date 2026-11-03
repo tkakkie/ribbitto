@@ -29,7 +29,12 @@ brief's `<N>` is the implementer's own issue, which may be that separate
 problem issue.
 
 No closing keyword naming the measured issue may appear in the PR title, body
-or any commit message. The squash message is exactly the PR title plus body.
+or any commit message. By the repository setting (`squash_merge_commit_title` =
+`PR_TITLE`, `squash_merge_commit_message` = `PR_BODY`; readable with
+`gh api repos/tkakkie/ribbitto`), the squash message defaults to the PR title
+plus body. Whoever merges can edit it in the merge dialog or command, so the
+pre-merge scan cannot prove the final message; the issue-open check after
+merge below stays required.
 Use `grep -niE` with this pattern on all three texts; check every reference
 on each matched line against the measured issue, including lists of issues
 (unqualified `#N` means this repository). It covers any letter case, optional colons, qualified

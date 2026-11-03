@@ -8,13 +8,13 @@ for (const [incoming, current, advances] of [
   ['9007199254740992', '9007199254740993', false],
   ['9007199254740993', '9007199254740992', true],
   ['', '', true], [' 42 ', '42', true], ['0x2b', '42', true],
-]) test(`transport/applied cursor ${incoming} against ${current}`, () => {
+] satisfies [string, string, boolean][]) test(`transport/applied cursor ${incoming} against ${current}`, () => {
   assert.equal(advancesCursor(incoming, current), advances);
 });
 for (const [incoming, current, error] of [
   ['bad', '42', SyntaxError], ['43', 'bad', SyntaxError],
   ['1.5', '42', SyntaxError], ['43', undefined, TypeError], ['43', null, TypeError],
-]) test(`malformed cursor ${incoming} against ${current}`, () => {
+] satisfies [string, string | null | undefined, ErrorConstructor][]) test(`malformed cursor ${incoming} against ${current}`, () => {
   assert.throws(() => advancesCursor(incoming, current), error);
 });
 for (const visible of [false, true]) {
@@ -30,18 +30,18 @@ test('hidden shown-cursor decision never reads a throwing cursor', () => {
 for (const [sequence, boundary, admitted] of [
   ['0', 0n, true], ['1', 0n, true], ['39', 40n, false], ['40', 40n, true], ['41', 40n, true],
   ['9007199254740992', 9007199254740993n, false], ['9007199254740993', 9007199254740993n, true],
-]) test(`move ${sequence} at boundary ${boundary}`, () => {
+] satisfies [string, bigint, boolean][]) test(`move ${sequence} at boundary ${boundary}`, () => {
   assert.equal(admitsMove(sequence, boundary), admitted);
 });
 for (const [child, incoming, higher] of [
   ['39', '40', false], ['40', '40', false], ['41', '40', true],
   ['9007199254740993', '9007199254740992', true],
-]) test(`insertion before ${child} for ${incoming}`, () => {
+] satisfies [string, string, boolean][]) test(`insertion before ${child} for ${incoming}`, () => {
   assert.equal(higherSequence(child, incoming), higher);
 });
 test('moved insertion selects first higher child, including zero boundary', () => {
   const children = ['20', '40', '60'];
-  for (const [seq, expected] of [['10', '20'], ['40', '60'], ['61', undefined]]) {
+  for (const [seq, expected] of [['10', '20'], ['40', '60'], ['61', undefined]] satisfies [string, string | undefined][]) {
     assert.equal(admitsMove(seq, 0n), true);
     assert.equal(children.find(child => higherSequence(child, seq)), expected);
   }
@@ -62,7 +62,7 @@ for (const request of [undefined, false, true]) {
     });
   }
 }
-for (const [random, delay] of [[0, 0], [0.5, 2500], [0.999999, 4999.995]]) {
+for (const [random, delay] of [[0, 0], [0.5, 2500], [0.999999, 4999.995]] satisfies [number, number][]) {
   test(`reset jitter ${random}`, () => assert.equal(resetDelay(random), delay));
 }
 for (const persisted of [false, true]) {

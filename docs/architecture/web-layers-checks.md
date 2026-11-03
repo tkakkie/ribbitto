@@ -86,7 +86,7 @@ queued success, tombstones, backspacing, newer text.
 See [shared browser tests](web-layers-browser-tests.md#shared-browser-tests) and the [M3 audit](web-layers-browser-tests.md#audit-2026-10-01-m3).
 
 The `message-stream` registry entry keeps its own hashed bundle, so the reset, sidebar and bfcache browser fixtures still isolate its timers/listeners by filename.
-Cursor, move-boundary, announcement, reset and parking decisions have DOM-free case tables in `web/test/stream-cursor.test.mjs`.
+Cursor, move-boundary, announcement, reset and parking decisions have DOM-free case tables in `web/test/stream-cursor.test.ts`.
 
 ### JavaScript pattern check
 

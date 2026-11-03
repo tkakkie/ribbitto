@@ -28,7 +28,7 @@ Composer attributes in the generated set:
 | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
 
 The registered `web/src/message-stream.ts` adapter delegates decisions to the
-DOM-free `web/src/stream-cursor.ts`. Its `web/test/stream-cursor.test.mjs` case tables
+DOM-free `web/src/stream-cursor.ts`. Its `web/test/stream-cursor.test.ts` case tables
 cover BigInt cursor ordering, visibility, move admission/insertion, the
 ten-announcement cap and reset holds/jitter. Lifecycle tables cover persisted and
 non-persisted pagehide/pageshow, CONNECTING/open/CLOSED sources, existing parking,

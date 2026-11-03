@@ -16,7 +16,7 @@ Recreated sources have no `Last-Event-ID`; replay, deduplication and reset
 remain unchanged. Already-CLOSED sources are not parked; any pending
 extension retry remains its only retry.
 
-- `web/src/message-stream.ts` uses DOM-free `web/src/stream-cursor.ts` decisions with case tables in `web/test/stream-cursor.test.mjs`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `web/src/read-visibility.ts` (`web/src/read-cursor.ts`) initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
+- `web/src/message-stream.ts` uses DOM-free `web/src/stream-cursor.ts` decisions with case tables in `web/test/stream-cursor.test.ts`: `checkpoint` updates only `sse-connect`'s `after`, monotonically, independent of applied/shown cursors. `read-applied` emits only after successful DOM application is visibly shown, including hidden-tab return. `web/src/read-visibility.ts` (`web/src/read-cursor.ts`) initializes on scoped `htmx:load`; automatic triggers send snapshot then latest applied cursor. One request/timer per page coalesce
   cursors. A 429 retries until success/hide/removal/navigation: jittered exponential backoff, initial 8 s cap; `Retry-After` is a minimum even above it. Success resets backoff, flushes newer shown work; other failures flush strictly newer work only. Same cursor awaits another trigger. Cleanup clears timers. Composer responses/unapplied events cannot advance it.
 - `web/src/sidebar-unread.ts` is the registered `sidebar-unread` bundle,
   before the stream script on channel, topic and channel-list pages. It attaches

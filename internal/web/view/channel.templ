@@ -319,7 +319,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/mention-picker-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("composer")
 		@pageScript("pins-sync")
-		<script defer src="/static/quote-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		@pageScript("quote-selection")
 		@pageScript("message-link")
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		@pageScript("side-panel")
@@ -497,7 +497,7 @@ templ messageComposer(page ChannelPage) {
 	@mentionPicker(page)
 	<form id={ QuoteFormID } hidden method="get" action={ conversationURL(page) + "#" + MessageComposerID } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/quote" } hx-target={ "#" + ComposerQuoteID } hx-swap="outerHTML" hx-sync={ "#" + MessageComposerID + ":drop" }>
 		// Separate form ownership keeps this out of the chip textarea's POST.
-		<input type="hidden" name="quote_text" disabled/>
+		<input type="hidden" name={ QuoteTextField } disabled/>
 		if page.Before > 0 {
 			<input type="hidden" name="before" value={ fmt.Sprint(page.Before) }/>
 		}

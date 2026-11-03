@@ -344,7 +344,7 @@ export const bodyMessageEntrySelector = (suffix: string): string => "#" + bodyMe
 export const getBodyMessageEntry = (suffix: string, root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(bodyMessageEntrySelector(suffix));
 
 export const QuoteTextField = "quote_text";
-export const getQuoteTextField = (form: HTMLFormElement): HTMLInputElement => (form.elements as HTMLFormControlsCollection & Record<typeof QuoteTextField, HTMLInputElement>)[QuoteTextField];
+export const getQuoteTextField = (form: HTMLFormElement): HTMLInputElement|HTMLTextAreaElement => (form.elements as HTMLFormControlsCollection & Record<typeof QuoteTextField, HTMLInputElement|HTMLTextAreaElement>)[QuoteTextField];
 
 export const QuoteHandleAttribute = "data-quote-handle";
 export const QuoteSelectionAttribute = "data-quote-selection";

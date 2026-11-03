@@ -381,8 +381,8 @@ const (
 	// BodyMessageDOMPrefix identifies a message body container by hexadecimal message id.
 	//dom:suffix HTMLElement
 	BodyMessageDOMPrefix = "body-message-"
-	// QuoteTextField names the selection quote text hidden input and request parameter.
-	//dom:field HTMLInputElement
+	// QuoteTextField names the selection quote text hidden input, composer textarea and request parameter.
+	//dom:field HTMLInputElement|HTMLTextAreaElement
 	QuoteTextField = "quote_text"
 	// QuoteHandleAttribute carries a resolved mention's handle for selection quoting.
 	//dom:attribute

@@ -3,9 +3,7 @@
 The colour tokens, their light and dark values, and the contrast they
 meet. The direction behind them is in [`ui.md`](ui.md#direction).
 
-**Keep it current:** update this file in the same pull request whenever a
-colour token or the contrast table changes. The tokens themselves live
-only in `web/styles/app.css`; this file explains them.
+The tokens themselves live only in `web/styles/app.css`.
 
 ## Colour tokens
 

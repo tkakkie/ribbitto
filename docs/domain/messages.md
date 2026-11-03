@@ -1,7 +1,6 @@
 # Messages
 
-Message identity, accepted bodies and rendering. Read before changes;
-update in the same pull request when rules change.
+Message identity, accepted bodies and rendering. Read before changes.
 
 ## Identity and format
 

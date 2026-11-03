@@ -1,6 +1,6 @@
 # Dependency and runtime update coverage
 
-**Keep it current:** update this inventory and policy in the same pull request whenever a runtime, dependency manifest, container image or tool-binary pin changes location or detector.
+Update this document only when dependency or runtime update requirements, rationale, operator actions or promises change.
 
 Passing nightly CI (`make check`) and `make vuln` (`govulncheck`) prove that current pins build, pass tests and have no reachable Go vulnerability; they do not show whether runtimes, container digests or downloaded binaries are current.
 

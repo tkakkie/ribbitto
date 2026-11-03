@@ -84,9 +84,7 @@ showing streams that are already live slowing while others replay.
 
 ## Implementation issues
 
-Ordered; each about one pull request with its own tests and with the
-documentation of what it changes (the architecture and package docs, as
-AGENTS.md requires), `high` risk
+Ordered; each about one pull request with its own tests, `high` risk
 (`internal/realtime/**`). None starts before #695's profiles are taken and
 the maintainer applies the [criterion](shared-reader.md#deciding-whether-to-build-it).
 Each pull request gets its final review from the AI that did not
@@ -95,8 +93,8 @@ Production changes only with the fifth; until then a stream without
 readers runs today's path, which also stays selectable for the benchmark.
 
 1. **The reader and its window:** registry, lifecycle, loop, count bound
-   (256), floor, and failure on any error; no stream uses it yet. Package
-   documentation. Codex, third-AI review.
+   (256), floor, and failure on any error; no stream uses it yet.
+   Codex, third-AI review.
 2. **Retry and shutdown:** the bounded retry of ordinary errors, with
    deterministic tests, and the wait for every reader at shutdown. Codex,
    third-AI review.
@@ -108,8 +106,7 @@ readers runs today's path, which also stays selectable for the benchmark.
    the wait on the reader only, with deterministic gap, duplicate and
    expired-cursor tests. Claude, third-AI review.
 5. **Wiring:** `cmd/ribbitto` builds the registry, wraps retention's
-   boundary and waits for the readers at shutdown, and streams use it. It
-   moves the built parts out of *planned* and updates
+   boundary and waits for the readers at shutdown, and streams use it. Contracts:
    [streaming](streaming.md), [replay](replay.md), [real time](realtime.md),
    [stream limits](stream-limits.md) and decision 23. Codex, third-AI review.
 6. **Measurement:** `TestStreamCost` runs on the reader and records its
@@ -121,5 +118,3 @@ readers runs today's path, which also stays selectable for the benchmark.
    [review conditions](../workflow/README.md#lifecycle); only a pull request
    that records results in `stream-cost.md` and touches none of those areas
    is exempt).
-
-The issue numbers are added here once they are filed.

@@ -182,7 +182,6 @@ check the result against *Done when*.
   end of a unit of work, overwrite its body (under 30 lines).
 - **AI workflow log (#2):** one comment per incident: what happened · cost
   · likely cause · (optional) idea. No secrets or personal data.
-- **Roadmap:** `docs/roadmap.md`, updated when the plan changes.
 
 ## Labels
 

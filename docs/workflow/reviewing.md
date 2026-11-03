@@ -88,8 +88,9 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   test, breaks guarded behaviour and
   fails an assertion (not a crash or compile error); the test passes once
   reverted (#360).
-- Comments explain *why*; `docs/` is updated when terminology,
-  invariants, data flow or dependencies change.
+- Comments explain *why*, not behaviour. PRs name a changed
+  requirement (or `none`) and edit its doc; `none` with a changed invariant,
+  boundary, table-ownership or operator contract is a finding.
 - For each exception in `docs/language-exceptions.txt`, verify that its
   approving comment is the maintainer's and approves that exact path.
 - *Risk* in the PR description matches [Risk](#risk), and *Adversarial* and
@@ -137,8 +138,7 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   changed), **scenario**, **difference**, **occurrence condition** (concrete
   reachability: exact sequence or environment), **likelihood** in real
   deployments (origins, browsers, extensions, documented self-hosted setups),
-  **user effect**, **reason accepted**, and **document location** where the
-  behaviour is described; merge authorization stays separate
+  **user effect**, and **reason accepted**; merge authorization stays separate
   ([What no AI does](README.md#what-no-ai-does)). Accepting a difference skips
   none of the other required reviews (cross-review limits and
   [closure verification](review-followups.md#closure-verification) stay), the

@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Rules for AI tools and users. Keep this short;
-explanations belong in `docs/`.
+AI rules (target cap: ~100 lines; a PR adding a rule states what it
+removed). Explanations belong in `docs/`.
 
 ## Project
 
@@ -33,9 +33,7 @@ One set of rules binds every AI; see [Where things are explained](#where-things-
   edges); commit it with any edge change.
 - `make check` also checks documents: links and `#anchors`, repository
   paths in code spans, documentation image sizes, destinations and alt text,
-  and each document's size limit (one topic per file).
-  When a file goes over, open an issue, add `<path> #<issue>` to
-  `docs/size-exceptions.txt`, and split it in its own pull request.
+  and each document's size limit.
 
 ## Layout and dependency direction
 
@@ -71,7 +69,7 @@ Features ([map](docs/architecture/features.md)):
 
 ## Where things are explained
 
-Read and update the relevant doc in the same PR:
+Read the relevant doc before touching an area:
 [`docs/architecture/`](docs/architecture/README.md) (packages, imports, data flow, real-time),
 [`docs/domain/README.md`](docs/domain/README.md) (terms, entities, invariants, unread),
 [`DECISIONS.md`](DECISIONS.md) (`docs/decisions/` index — change via issue),
@@ -120,15 +118,16 @@ By subject only: [credentials](docs/workflow/ai-credentials.md),
 - UI strings go in `internal/web/i18n/locales/{en,ja}.toml` (dotted neutral IDs
   like `hello.title`, never a product word; update both in the same PR) via
   `i18n.T(ctx, "message.id")`.
-- Update `docs/` in the same PR when terminology, invariants, data flow or
-  dependency direction changes.
+- Update `docs/` in the same PR only when requirements, rationale, operator actions
+  or promises change; never narrate code. Near limits, delete narration; see
+  [exceptions](docs/size-exceptions.txt) and [sentence test](docs/README.md#the-sentence-test).
 
 ## Tests
 
 - Module roots: table-driven unit tests, with no database.
 - Stores and wiring: integration tests against a real PostgreSQL.
 - `web`: unit tests without a DB for handlers, middleware and validation; real
-  PostgreSQL only for end-to-end persistence or authentication, keeping most `web` tests fast.
+  PostgreSQL only for end-to-end persistence or authentication.
 - Authorization changes need a test proving an unauthorized user cannot see the data.
 - Never delete, skip or weaken a test to pass CI; report it in the PR instead.
 

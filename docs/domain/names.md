@@ -4,9 +4,7 @@ How ribbitto names members: display names, handles and member ids. Read
 this before showing a member's name, adding mentions, or changing the rules
 for either name.
 
-**Keep it current:** update this file in the same pull request whenever the
-display-name or handle rules, or how names are shown, change. The general
-validation rules (UTF-8, controls, NFC, printable characters) are in
+The general validation rules (UTF-8, controls, NFC, printable characters) are in
 [`validation.md`](validation.md#validation).
 
 ## Three jobs, three things

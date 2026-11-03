@@ -6,8 +6,7 @@ designing or changing topics, the channel page, branching, or anything
 that counts messages per topic. It was settled in
 [decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md) (#274).
 
-**Keep it current:** update this file in the same pull request whenever
-these rules change. The *Model* and *Tables* below exist (#301, #307):
+The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
 labels, topic views with live updates (#304), posting into a topic, a

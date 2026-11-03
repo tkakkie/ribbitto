@@ -4,9 +4,7 @@ What a channel is, how it is identified and the rules about the default
 channel. Read this before changing channel creation, setup, or anything that
 finds, renames, archives or deletes channels.
 
-**Keep it current:** update this file in the same pull request whenever
-these rules change. Validation of the name is in
-[`validation.md`](validation.md#validation).
+Validation of the name is in [`validation.md`](validation.md#validation).
 
 ## Identity and names
 

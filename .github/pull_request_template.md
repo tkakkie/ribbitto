@@ -4,11 +4,13 @@ Closes #
 
 **Boundaries:** <!-- features touched; new edges in docs/dependencies.md, each with its reason; or n/a. Added/removed edges appear in the CI run's summary (crossing units first), with added-edge notices on docs/dependencies.md. Locally: go -C tools run ./deps --diff origin/main .. -->
 
+**Documented requirement changed:** <!-- which documented requirement, rationale, operator action or promise changed, or "none" (never document how the code works) -->
+
 **Look here:** <!-- file:line, or "nothing in particular" -->
 
 **Language exception approved by the maintainer (comment link), or n/a:**
 
-**Accepted parity differences (maintainer chat decision), or n/a:** <!-- PR and finding, at <decision head SHA> (plus re-confirmation check <SHA> if head changed): scenario, difference, occurrence condition (concrete reachability: exact sequence or environment), likelihood in real deployments, user effect, reason accepted, document location where the behaviour is described; also record any post-cap escalation chat decision, applicable SHA and required verification here — see docs/workflow/reviewing.md#pull-request-cross-review and docs/workflow/review-operations.md#third-ai-review -->
+**Accepted parity differences (maintainer chat decision), or n/a:** <!-- PR and finding, at <decision head SHA> (plus re-confirmation check <SHA> if head changed): scenario, difference, occurrence condition (concrete reachability: exact sequence or environment), likelihood in real deployments, user effect, reason accepted; also record any post-cap escalation chat decision, applicable SHA and required verification here — see docs/workflow/reviewing.md#pull-request-cross-review and docs/workflow/review-operations.md#third-ai-review -->
 
 **Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 

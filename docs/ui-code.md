@@ -5,9 +5,7 @@ people and AIs still look like one product ([decision 33](decisions/33-ui-code-s
 What the UI looks like is in [`ui.md`](ui.md); markup and accessibility
 rules are in [`accessibility.md`](accessibility.md).
 
-**Keep it current:** update this file in the same pull request when a
-dimension token or one of these rules changes. The shared components are
-in [`ui-components.md`](ui-components.md).
+The shared components are in [`ui-components.md`](ui-components.md).
 
 ## Sidebar order and position
 

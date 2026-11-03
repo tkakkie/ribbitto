@@ -42,6 +42,7 @@ func validBundleEntry(b bundle) bool {
 const (
 	maxResponseBytes = 64 << 20
 	maxReleasePages  = 100
+	maxWorkflowRuns  = 1000
 	prodAPIBase      = "https://api.github.com"
 	prodUploadBase   = "https://uploads.github.com"
 	prodStoreRepo    = "tkakkie/ribbitto-sourcemaps"
@@ -260,12 +261,15 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 	return c.deleteTagByRef(ctx, tag)
 }
 
-// hasActiveRun paginates workflow runs and fails closed on API errors or page-cap
-// overflow so retention aborts before any deletion when active-run status is unknown.
+// hasActiveRun paginates workflow runs and fails closed on API errors, incomplete
+// or 1,000-run-capped listings, or page-cap overflow so retention aborts before
+// any deletion when active-run status is unknown.
 func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) {
+	seen, total := 0, 0
 	for page := 1; page <= maxReleasePages; page++ {
 		var res struct {
-			Runs []struct{ Status, Path string } `json:"workflow_runs"`
+			TotalCount int                             `json:"total_count"`
+			Runs       []struct{ Status, Path string } `json:"workflow_runs"`
 		}
 		if code, _, err := c.do(ctx, false, "GET", fmt.Sprintf("/repos/%s/actions/runs?head_sha=%s&per_page=100&page=%d", c.cfg.sourceRepo, sha, page), "", nil, &res); err != nil || code != 200 {
 			return false, fmt.Errorf("checking concurrency group for %s: status %d (%v)", sha, code, err)
@@ -275,7 +279,12 @@ func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) 
 				return true, nil
 			}
 		}
+		seen += len(res.Runs)
+		total = max(total, res.TotalCount)
 		if len(res.Runs) < 100 {
+			if total >= maxWorkflowRuns || seen >= maxWorkflowRuns || seen < total {
+				return false, fmt.Errorf("checking concurrency group for %s: capped or incomplete workflow runs (%d/%d)", sha, seen, total)
+			}
 			return false, nil
 		}
 	}

@@ -40,6 +40,8 @@ type mockStore struct {
 	releases                                                                                                         []mockRelease
 	tags, events                                                                                                     []string
 	activeSHAs                                                                                                       map[string]bool
+	runCounts                                                                                                        map[string]int
+	runsTotalCount                                                                                                   int
 	failUpload                                                                                                       bool
 	failRelDelID, relDel404ID, wrongLookupID, nextID                                                                 int64
 }
@@ -58,18 +60,24 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				return
 			}
 			p, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			nRuns := cmp.Or(s.runCounts[headSHA], 100)
 			var allRuns []map[string]string
-			for range 50 {
-				allRuns = append(allRuns,
-					map[string]string{"status": "in_progress", "path": ".github/workflows/ci.yml"},
-					map[string]string{"status": "completed", "path": ".github/workflows/sourcemaps-store.yml"},
-				)
+			for i := range nRuns {
+				if i%2 == 0 {
+					allRuns = append(allRuns, map[string]string{"status": "in_progress", "path": ".github/workflows/ci.yml"})
+				} else {
+					allRuns = append(allRuns, map[string]string{"status": "completed", "path": ".github/workflows/sourcemaps-store.yml"})
+				}
 			}
 			if s.activeSHAs[headSHA] {
 				allRuns = append(allRuns, map[string]string{"status": "in_progress", "path": ".github/workflows/sourcemaps-store.yml"})
 			}
-			start := min((max(p, 1)-1)*100, len(allRuns))
-			_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": allRuns[start:min(start+100, len(allRuns))]})
+			capped := allRuns[:min(len(allRuns), 1000)]
+			start := min((max(p, 1)-1)*100, len(capped))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"total_count":   cmp.Or(s.runsTotalCount, len(allRuns)),
+				"workflow_runs": capped[start:min(start+100, len(capped))],
+			})
 			return
 		}
 		if s.expiryHeader != "" {
@@ -332,6 +340,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	store := &mockStore{
 		token: "test-token", expiryHeader: now.Add(14 * day).Format("2006-01-02 15:04:05 UTC"),
 		releases: rels, tags: tags, activeSHAs: map[string]bool{shaOf(99): true},
+		runCounts:   map[string]int{shaOf(50): 999},
 		relDel404ID: 12, tagDel404: oldTag404, tagDel422: oldTag500, recheckTagRel: orphanRecheck,
 	}
 	srv := store.server(t)
@@ -559,6 +568,21 @@ func TestStoreCoreFailures(t *testing.T) {
 			d1, d2 := relNameAt(now.Add(-8*day), shaOf(97), 1, 1), relNameAt(now.Add(-8*day), shaOf(98), 1, 1)
 			s.releases = append(s.releases, mockRelease{ID: 30, Name: d1, TagName: d1, Draft: true}, mockRelease{ID: 31, Name: d2, TagName: d2, Draft: true})
 			s.failRunsSHA = shaOf(98)
+		}},
+		{"active run check fails closed on capped 1001 response", "tok", "checking concurrency group", func(s *mockStore) {
+			d := relNameAt(now.Add(-8*day), shaOf(98), 1, 1)
+			s.releases = append(s.releases, mockRelease{ID: 30, Name: d, TagName: d, Draft: true})
+			s.runCounts, s.activeSHAs = map[string]int{shaOf(98): 1000}, map[string]bool{shaOf(98): true}
+		}},
+		{"active run check fails closed at 1000 cap boundary", "tok", "checking concurrency group", func(s *mockStore) {
+			d := relNameAt(now.Add(-8*day), shaOf(98), 1, 1)
+			s.releases = append(s.releases, mockRelease{ID: 30, Name: d, TagName: d, Draft: true})
+			s.runCounts = map[string]int{shaOf(98): 1000}
+		}},
+		{"active run check fails closed on incomplete listing", "tok", "checking concurrency group", func(s *mockStore) {
+			d := relNameAt(now.Add(-8*day), shaOf(98), 1, 1)
+			s.releases = append(s.releases, mockRelease{ID: 30, Name: d, TagName: d, Draft: true})
+			s.runsTotalCount = 250
 		}},
 		{"refused tag deletion 422 while present", "tok", "deleting tag", func(s *mockStore) { s.failTagDel422 = relNameAt(now.Add(-100*day), shaOf(2), 2, 1) }},
 		{"wrong lookup release refused", "tok", "mismatch", func(s *mockStore) { s.wrongLookupID = 2 }},

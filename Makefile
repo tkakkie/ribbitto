@@ -13,6 +13,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
+DOCSCHECK_BASE ?= origin/main
 # CI passes GO_TEST_PACKAGES through tools/testshard; unset runs every package.
 
 .PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles sourcemaps-store
@@ -106,7 +107,7 @@ check-tools: bundles $(TEMPL)
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
 	go -C tools run ./testshard -check ..
-	go -C tools run ./docscheck ..
+	go -C tools run ./docscheck --base $(DOCSCHECK_BASE) ..
 	go -C tools run ./sourcecheck ..
 	go -C tools run ./measurementskip ..
 
@@ -123,7 +124,7 @@ prepush: bundles $(TEMPL) $(TAILWIND)
 	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..
-	go -C tools run ./docscheck ..
+	go -C tools run ./docscheck --base $(DOCSCHECK_BASE) ..
 	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI

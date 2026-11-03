@@ -1,5 +1,5 @@
 // Command docscheck keeps the repository's documents usable by AI: each
-// file stays within a size limit (one topic per file), and every link or
+// file and directory stays within a size limit, and every link or
 // reference to a Markdown file and its #anchor resolves. Repository paths
 // in code spans must exist outside historical decision records. Documentation
 // images meet decision 42's size, destination and alt text rules. make check
@@ -11,6 +11,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"html"
 	"io/fs"
@@ -44,9 +45,20 @@ const (
 const exceptionsFile = "docs/size-exceptions.txt"
 
 func main() {
+	base := flag.String("base", "origin/main", "comparison revision for directory limits")
+	flag.Parse()
 	root := "."
-	if len(os.Args) > 1 {
-		root = os.Args[1]
+	if flag.NArg() > 1 {
+		fmt.Fprintln(os.Stderr, "usage: docscheck [--base <rev>] [repository root]")
+		os.Exit(2)
+	}
+	if flag.NArg() == 1 {
+		root = flag.Arg(0)
+	}
+	policy, err := checkPolicy(root, *base, os.Stdout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
+		os.Exit(2)
 	}
 	sizes, err := checkSizes(root)
 	if err != nil {
@@ -73,13 +85,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
 	}
-	for _, p := range append(append(append(append(sizes, links...), decisions...), paths...), images...) {
+	for _, p := range append(append(append(append(append(sizes, links...), decisions...), paths...), images...), policy...) {
 		fmt.Fprintln(os.Stderr, p)
 	}
 	if len(sizes) > 0 {
-		fmt.Fprintln(os.Stderr, "\nA file over its limit keeps its pull request small: open an issue to split it, add \"<path> #<issue>\" to "+exceptionsFile+", and split it in a separate pull request.")
+		fmt.Fprintln(os.Stderr, "\nDelete implementation narration and consolidate documents to fit their limits; see "+exceptionsFile+" and decision 46.")
 	}
-	if len(sizes)+len(links)+len(decisions)+len(paths)+len(images) > 0 {
+	if len(sizes)+len(links)+len(decisions)+len(paths)+len(images)+len(policy) > 0 {
 		os.Exit(1)
 	}
 }

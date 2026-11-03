@@ -154,13 +154,14 @@ poses, the channel illustrations and details are in [`brand.md`](brand.md).
 
 ## Markup and accessibility
 
-The markup and accessibility rules, which `TestPagesMarkup` checks, and how to check a UI
-change in a browser are in [`accessibility.md`](accessibility.md).
-Each message has a native actions popover with a Copy link anchor, a Quote
-button and a two-action pin form. Quote, Pin, Unpin and the hidden Quote
-selection button omit `type` and `hx-*`, retaining native submit behavior
-(#1500). The popover trigger keeps `type="button"`. Delegated pin submits use
-htmx and preserve keyboard and pointer focus; native POST/303 is the fallback.
+[Accessibility](accessibility.md) covers markup checks and browser verification.
+Each message's native actions popover offers Copy link, Quote and Pin/Unpin;
+htmx enhances pins, preserving focus, with native POST/303 as fallback.
+
+`/organizations/{slug}/messages/{messageID}/actions` also offers these actions,
+the message, its permalink for the browser's Copy link address command, and
+Back to the conversation. It checks message visibility; Quote opens the
+composer and pins use POST/303 without JavaScript.
 
 ## Planned directions (from the maintainer, #9)
 

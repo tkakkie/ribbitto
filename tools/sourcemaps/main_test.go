@@ -35,8 +35,8 @@ type mockRelease struct {
 }
 
 type mockStore struct {
-	token, expiryHeader, tamperManifest, failTagDel, failTagDel422, tagDel404, tagDel422, recheckTagRel string
-	releases                                                                                            []mockRelease
+	token, expiryHeader, tamperManifest, failTagDel, failTagDel422, tagDel404, tagDel422, recheckTagRel, failRunsSHA string
+	releases                                                                                                         []mockRelease
 	tags, events                                                                                        []string
 	activeSHAs                                                                                          map[string]bool
 	failUpload                                                                                          bool
@@ -52,14 +52,23 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 				t.Errorf("store token leaked to source repo: %s", r.URL.Path)
 			}
 			headSHA := r.URL.Query().Get("head_sha")
-			runs := []map[string]string{
-				{"status": "in_progress", "path": ".github/workflows/ci.yml"},
-				{"status": "completed", "path": ".github/workflows/sourcemaps-store.yml"},
+			if headSHA == s.failRunsSHA {
+				http.Error(w, "runs check failed", 500)
+				return
+			}
+			p, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			var allRuns []map[string]string
+			for range 50 {
+				allRuns = append(allRuns,
+					map[string]string{"status": "in_progress", "path": ".github/workflows/ci.yml"},
+					map[string]string{"status": "completed", "path": ".github/workflows/sourcemaps-store.yml"},
+				)
 			}
 			if s.activeSHAs[headSHA] {
-				runs = append(runs, map[string]string{"status": "in_progress", "path": ".github/workflows/sourcemaps-store.yml"})
+				allRuns = append(allRuns, map[string]string{"status": "in_progress", "path": ".github/workflows/sourcemaps-store.yml"})
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": runs})
+			start := min((max(p, 1)-1)*100, len(allRuns))
+			_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": allRuns[start:min(start+100, len(allRuns))]})
 			return
 		}
 		if s.expiryHeader != "" {
@@ -465,6 +474,11 @@ func TestStoreCoreFailures(t *testing.T) {
 		{"publish response bad tag", "tok", "publishing release", func(s *mockStore) { s.tamperManifest = "pub-bad-tag" }},
 		{"post-publish lookup verification", "tok", "verifying published release", func(s *mockStore) { s.tamperManifest = "post-publish-tag-mismatch" }},
 		{"refused release deletion", "tok", "500", func(s *mockStore) { s.failRelDelID = 2 }},
+		{"active run check fails closed", "tok", "checking concurrency group", func(s *mockStore) {
+			d1, d2 := relNameAt(now.Add(-8*day), shaOf(97), 1, 1), relNameAt(now.Add(-8*day), shaOf(98), 1, 1)
+			s.releases = append(s.releases, mockRelease{ID: 30, Name: d1, TagName: d1, Draft: true}, mockRelease{ID: 31, Name: d2, TagName: d2, Draft: true})
+			s.failRunsSHA = shaOf(98)
+		}},
 		{"refused tag deletion 422 while present", "tok", "deleting tag", func(s *mockStore) { s.failTagDel422 = relNameAt(now.Add(-100*day), shaOf(2), 2, 1) }},
 		{"wrong lookup release refused", "tok", "mismatch", func(s *mockStore) { s.wrongLookupID = 2 }},
 		{"13 days expiry fails after upload and retention", "tok", "expires", func(s *mockStore) { s.expiryHeader = now.Add(13 * day).Format("2006-01-02 15:04:05 UTC") }},
@@ -488,7 +502,7 @@ func TestStoreCoreFailures(t *testing.T) {
 			deleted := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "del-rel:") })
 			delTag := slices.ContainsFunc(s.events, func(e string) bool { return strings.HasPrefix(e, "del-tag:") })
 			wantWarn, hasWarn := strings.CutPrefix(tc.name, "warn:")
-			if (published && !strings.Contains(tc.name, "publish") && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "lookup") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
+			if (published && !strings.Contains(tc.name, "publish") && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "lookup") && !strings.Contains(tc.name, "active run") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
 				(deleted && !strings.Contains(tc.name, "deletion") && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
 				(delTag && !strings.Contains(tc.name, "expiry") && !hasWarn) ||
 				((strings.Contains(tc.name, "expiry") || hasWarn) && !slices.Contains(s.events, "del-rel:2")) ||

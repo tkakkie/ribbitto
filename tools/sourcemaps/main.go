@@ -250,19 +250,26 @@ func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels 
 	return c.deleteTagByRef(ctx, tag)
 }
 
+// hasActiveRun paginates workflow runs and fails closed on API errors or page-cap
+// overflow so retention aborts before any deletion when active-run status is unknown.
 func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) {
-	var res struct {
-		Runs []struct{ Status, Path string } `json:"workflow_runs"`
-	}
-	if code, _, err := c.do(ctx, false, "GET", fmt.Sprintf("/repos/%s/actions/runs?head_sha=%s&per_page=100", c.cfg.sourceRepo, sha), "", nil, &res); err != nil || code != 200 {
-		return false, fmt.Errorf("checking concurrency group for %s: status %d (%v)", sha, code, err)
-	}
-	for _, r := range res.Runs {
-		if r.Status != "completed" && strings.TrimPrefix(strings.Split(r.Path, "@")[0], ".github/workflows/") == "sourcemaps-store.yml" {
-			return true, nil
+	for page := 1; page <= maxReleasePages; page++ {
+		var res struct {
+			Runs []struct{ Status, Path string } `json:"workflow_runs"`
+		}
+		if code, _, err := c.do(ctx, false, "GET", fmt.Sprintf("/repos/%s/actions/runs?head_sha=%s&per_page=100&page=%d", c.cfg.sourceRepo, sha, page), "", nil, &res); err != nil || code != 200 {
+			return false, fmt.Errorf("checking concurrency group for %s: status %d (%v)", sha, code, err)
+		}
+		for _, r := range res.Runs {
+			if r.Status != "completed" && strings.TrimPrefix(strings.Split(r.Path, "@")[0], ".github/workflows/") == "sourcemaps-store.yml" {
+				return true, nil
+			}
+		}
+		if len(res.Runs) < 100 {
+			return false, nil
 		}
 	}
-	return false, nil
+	return false, fmt.Errorf("checking concurrency group for %s: exceeded %d pages", sha, maxReleasePages)
 }
 
 func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt string) error {
@@ -379,6 +386,7 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 		return err
 	}
 	now, sum, deletedIDs, bySHA := c.cfg.now, cmp.Or(c.cfg.summary, io.Discard), make(map[int64]bool), make(map[string][]parsedRel)
+	var delDrafts []ghRelease
 	for _, r := range rels {
 		p, ok := parseReleaseName(r.Name)
 		switch {
@@ -399,16 +407,19 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 				}
 			}
 			if !active {
-				if err := c.deleteReleaseByID(ctx, r); err != nil {
-					return err
-				}
-				deletedIDs[r.ID] = true
+				delDrafts = append(delDrafts, r)
 			}
 		case r.Draft:
 			_, _ = fmt.Fprintf(sum, "warning: younger draft %s (id %d)\n", r.Name, r.ID)
 		default:
 			bySHA[p.SHA] = append(bySHA[p.SHA], parsedRel{r, p})
 		}
+	}
+	for _, r := range delDrafts {
+		if err := c.deleteReleaseByID(ctx, r); err != nil {
+			return err
+		}
+		deletedIDs[r.ID] = true
 	}
 	var shas []string
 	for s, list := range bySHA {

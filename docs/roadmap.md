@@ -4,8 +4,7 @@ A coarse plan without dates: ribbitto is a hobby project. Current work is
 in the pinned **Status** issue (#1); tasks are issues grouped by GitHub
 milestone.
 
-Update this file when a milestone finishes or the plan changes, not for
-day-to-day progress. The steps' aims are in the [vision](vision.md).
+The steps' aims are in the [vision](vision.md).
 
 ## MVP
 

@@ -4,9 +4,6 @@ ribbitto's logo and mascot, chosen by the maintainer on 2026-10-12 (#883),
 and the channel illustrations (#875).
 How the rest of the UI looks is in [`ui.md`](ui.md).
 
-**Keep it current:** update this file in the same pull request when a brand
-file or one of these rules changes.
-
 - **Logo:** the speech-bubble frog — a chat bubble with a tail, two eye
   bumps and three dots for a mouth (echoed by the typing dots). Files
   in `web/static/brand/`: `logo-v2.svg` (scheme-aware brand colour), `logo-mono-v1.svg`

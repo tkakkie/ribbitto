@@ -29,9 +29,11 @@ Composer attributes in the generated set:
 
 The unwired DOM-free `web/src/stream-cursor.ts` prepares the stream conversion:
 its `web/test/stream-cursor.test.mjs` case tables cover BigInt cursor ordering,
-visibility, move admission/insertion, the ten-announcement cap, reset holds/jitter
-and persisted-source parking/restoration. The served v15 script still owns these
-decisions until the adapter is converted.
+visibility, move admission/insertion, the ten-announcement cap and reset holds/jitter.
+Lifecycle tables cover persisted/non-persisted pagehide/pageshow, CONNECTING/open/CLOSED
+sources, existing parking, cleanup completion, and restoration that requests one
+error and forgets only after successful dispatch. State and actions contain no DOM
+objects. The served v15 script still owns these decisions until the adapter is converted.
 
 Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:field` and its

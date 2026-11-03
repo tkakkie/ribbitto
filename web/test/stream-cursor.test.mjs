@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { advancesCursor, shownCursor, admitsMove, higherSequence, announcementOverflow,
-  resetHeld, resetDelay, shouldParkSource, restoreSource } from '../src/stream-cursor.ts';
+  resetHeld, resetDelay, pageHide, finishPageHide, parkSource, restoreSource, forgetSource } from '../src/stream-cursor.ts';
 
 for (const [incoming, current, advances] of [
   ['41', '42', false], ['42', '42', true], ['43', '42', true],
@@ -65,19 +65,48 @@ for (const request of [undefined, false, true]) {
 for (const [random, delay] of [[0, 0], [0.5, 2500], [0.999999, 4999.995]]) {
   test(`reset jitter ${random}`, () => assert.equal(resetDelay(random), delay));
 }
-for (const hiding of [false, true]) {
-  for (const readyState of [0, 1, 2]) test(`park hiding=${hiding}, source=${readyState}`, () => {
-    const source = { readyState };
-    assert.equal(shouldParkSource(hiding, source.readyState), hiding && readyState !== 2);
+for (const persisted of [false, true]) {
+  for (const readyState of [0, 1, 2]) {
+    for (const parked of [false, true]) test(`pagehide persisted=${persisted}, source=${readyState}, parked=${parked}`, () => {
+      const initial = { hiding: false, parked };
+      const hide = pageHide(initial, persisted);
+      assert.deepEqual(hide, { state: { hiding: persisted, parked }, action: persisted ? 'cleanup' : 'none' });
+      const close = parkSource(hide.state, readyState);
+      const parks = persisted && readyState !== 2;
+      assert.deepEqual(close, { state: { hiding: persisted, parked: parked || parks }, action: parks ? 'park' : 'none' });
+      const finished = finishPageHide(close.state);
+      assert.deepEqual(finished, { hiding: false, parked: parked || parks });
+      // A later close must neither replace an existing source nor park a new one.
+      assert.deepEqual(parkSource(finished, 1), { state: finished, action: 'none' });
+      assert.deepEqual(initial, { hiding: false, parked });
+    });
+  }
+}
+for (const persisted of [false, true]) {
+  for (const parked of [false, true]) test(`pageshow persisted=${persisted}, parked=${parked}`, () => {
+    const state = { hiding: false, parked };
+    assert.deepEqual(restoreSource(state, persisted), { state, action: persisted && parked ? 'error' : 'none' });
   });
 }
-test('persisted restore dispatches once; nonpersisted show retains parking', () => {
-  const source = { readyState: 1 };
-  let parked = shouldParkSource(true, source.readyState) ? source : null, errors = 0;
-  for (const persisted of [false, true, true]) {
-    const restore = restoreSource(parked, persisted);
-    if (restore) { assert.equal(restore, source); errors++; parked = null; }
-  }
-  assert.equal(errors, 1);
-  assert.equal(restoreSource(shouldParkSource(true, 2) ? source : null, true), null);
+test('nonpersisted show retains parking; successful persisted restore requests error once', () => {
+  const hidden = pageHide({ hiding: false, parked: false }, true);
+  const closed = parkSource(hidden.state, 0);
+  const state = finishPageHide(closed.state);
+  assert.deepEqual(state, { hiding: false, parked: true });
+  const ignored = restoreSource(state, false);
+  assert.deepEqual(ignored, { state, action: 'none' });
+  const restored = restoreSource(ignored.state, true);
+  assert.deepEqual(restored, { state, action: 'error' });
+  const forgotten = forgetSource(restored.state);
+  assert.deepEqual(forgotten, { hiding: false, parked: false });
+  assert.deepEqual(restoreSource(forgotten, true), { state: forgotten, action: 'none' });
+  assert.deepEqual(restoreSource(forgotten, false), { state: forgotten, action: 'none' });
+});
+test('failed dispatch retains parking until completion; failed cleanup ends the hiding window', () => {
+  const state = { hiding: false, parked: true };
+  assert.deepEqual(restoreSource(state, true), { state, action: 'error' });
+  assert.deepEqual(restoreSource(state, true), { state, action: 'error' });
+  const finished = finishPageHide(pageHide(state, true).state);
+  assert.deepEqual(finished, state);
+  assert.deepEqual(forgetSource({ hiding: true, parked: true }), { hiding: true, parked: false });
 });

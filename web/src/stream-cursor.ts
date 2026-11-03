@@ -31,12 +31,33 @@ export function resetHeld(request: boolean | undefined, failedAlert: boolean, pe
 /** Uniform reset jitter, sampled only when a new reload timer is needed. */
 export function resetDelay(random: number): number { return random * 5000; }
 
-/** Parking never replaces a source outside persisted cleanup or with a CLOSED source. */
-export function shouldParkSource(hiding: boolean, readyState: number): boolean {
-  return hiding && readyState !== 2;
+/** Plain lifecycle state; the adapter retains the actual source for requested actions. */
+export type SourceState = { hiding: boolean; parked: boolean };
+type SourceTransition = { state: SourceState; action: "none" | "cleanup" | "park" | "error" };
+
+/** Only persisted pagehide opens the synchronous cleanup window. */
+export function pageHide(state: SourceState, persisted: boolean): SourceTransition {
+  return persisted ? { state: { ...state, hiding: true }, action: "cleanup" } : { state, action: "none" };
 }
 
-/** Forget only after dispatch succeeds, so a throwing dispatch retains the parked source. */
-export function restoreSource<T>(parked: T | null, persisted: boolean): T | null {
-  return persisted ? parked : null;
+/** Run in the adapter's finally block, including when cleanup throws. */
+export function finishPageHide(state: SourceState): SourceState {
+  return { ...state, hiding: false };
+}
+
+/** The adapter must test state.hiding before reading detail.source.readyState,
+ * then reread detail.source only when the park action is requested, as in v15. */
+export function parkSource(state: SourceState, readyState: number): SourceTransition {
+  return state.hiding && readyState !== 2
+    ? { state: { ...state, parked: true }, action: "park" } : { state, action: "none" };
+}
+
+/** Dispatch first; a throwing dispatch must retain the parked state. */
+export function restoreSource(state: SourceState, persisted: boolean): SourceTransition {
+  return { state, action: persisted && state.parked ? "error" : "none" };
+}
+
+/** A successful error dispatch completes restoration exactly once. */
+export function forgetSource(state: SourceState): SourceState {
+  return { ...state, parked: false };
 }

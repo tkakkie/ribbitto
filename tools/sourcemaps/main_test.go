@@ -275,6 +275,8 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	oldTag := relNameAt(now.Add(-95*day), shaOf(11), 9, 1)
 	oldTag404 := relNameAt(now.Add(-100*day), shaOf(11), 8, 1)
 	oldTag500 := relNameAt(now.Add(-105*day), shaOf(11), 7, 1)
+	oldSharedDraftTag := relNameAt(now.Add(-110*day), shaOf(11), 6, 1)
+	oldSharedPubTag := relNameAt(now.Add(-115*day), shaOf(11), 5, 1)
 	var rels []mockRelease
 	var tags []string
 	addPub := func(id int64, ts time.Time, sha string, run, att int) string {
@@ -298,18 +300,22 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		mockRelease{ID: 11, Name: oldTag, TagName: oldTag},
 		mockRelease{ID: 12, Name: oldTag404, TagName: oldTag404},
 		mockRelease{ID: 15, Name: oldTag500, TagName: oldTag500},
+		mockRelease{ID: 16, Name: oldSharedDraftTag, TagName: oldSharedDraftTag},
+		mockRelease{ID: 17, Name: oldSharedPubTag, TagName: oldSharedPubTag},
 		mockRelease{ID: 30, Name: draftDel, TagName: draftDel, Draft: true},
 		mockRelease{ID: 31, Name: draftDel, TagName: draftDel, Draft: true},
 		mockRelease{ID: 32, Name: draftActive, TagName: draftActive, Draft: true},
 		mockRelease{ID: 33, Name: draftYoung, TagName: draftYoung, Draft: true},
 		mockRelease{ID: 34, Name: "draft-non-strict", TagName: "draft-non-strict", Draft: true},
+		mockRelease{ID: 35, Name: "draft-sharing-tag", TagName: oldSharedDraftTag, Draft: true},
 		mockRelease{ID: 40, Name: preTag, TagName: preTag, Prerelease: true},
 		mockRelease{ID: 41, Name: "map-bad-name", TagName: "map-bad-name"},
 		mockRelease{ID: 42, Name: subName, TagName: subName},
 		mockRelease{ID: 43, Name: relNameAt(now.Add(-120*day), shaOf(63), 1, 1), TagName: mismatchTag},
 		mockRelease{ID: 44, Name: futureTag, TagName: futureTag},
+		mockRelease{ID: 45, Name: relNameAt(now.Add(-5*day), shaOf(65), 1, 1), TagName: oldSharedPubTag},
 	)
-	tags = append(tags, oldTag, oldTag404, oldTag500, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
+	tags = append(tags, oldTag, oldTag404, oldTag500, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
 	store := &mockStore{
 		token: "test-token", expiryHeader: now.Add(15 * day).Format("2006-01-02 15:04:05 UTC"),
 		releases: rels, tags: tags, activeSHAs: map[string]bool{shaOf(99): true},
@@ -333,12 +339,12 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	hasRel := func(id int64) bool {
 		return slices.ContainsFunc(store.releases, func(r mockRelease) bool { return r.ID == id })
 	}
-	for _, gone := range []int64{11, 12, 15, 30, 31} {
+	for _, gone := range []int64{11, 12, 15, 16, 17, 30, 31} {
 		if hasRel(gone) {
 			t.Errorf("release ID %d was not deleted", gone)
 		}
 	}
-	for _, kept := range []int64{2, 20, 13, 32, 33, 34, 40, 41, 42, 43, 44} {
+	for _, kept := range []int64{2, 20, 13, 32, 33, 34, 35, 40, 41, 42, 43, 44, 45} {
 		if !hasRel(kept) {
 			t.Errorf("release ID %d was wrongly deleted", kept)
 		}
@@ -348,7 +354,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 			t.Errorf("tag %s was not deleted", goneTag)
 		}
 	}
-	for _, keptTag := range []string{wantRel, dupOld, kept89d, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanRecheck, orphanYoung} {
+	for _, keptTag := range []string{wantRel, dupOld, kept89d, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanRecheck, orphanYoung} {
 		if !slices.Contains(store.tags, keptTag) {
 			t.Errorf("tag %s was wrongly deleted", keptTag)
 		}

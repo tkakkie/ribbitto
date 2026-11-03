@@ -228,6 +228,28 @@ func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
 	return nil
 }
 
+func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels []ghRelease, deletedIDs map[int64]bool) error {
+	isRef := func(r ghRelease) bool { return !deletedIDs[r.ID] && (r.TagName == tag || r.Name == tag) }
+	if slices.ContainsFunc(rels, isRef) {
+		return nil
+	}
+	if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
+		return fmt.Errorf("rechecking tag %s: status %d (%v)", tag, tCode, err)
+	} else if tCode == 200 {
+		return nil
+	}
+	if fresh, err := c.listReleases(ctx); err != nil {
+		return err
+	} else if slices.ContainsFunc(fresh, isRef) {
+		return nil
+	}
+	var refObj struct{ Ref string }
+	if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+tag) {
+		return fmt.Errorf("verifying tag ref %s: status %d (%v)", tag, rCode, err)
+	}
+	return c.deleteTagByRef(ctx, tag)
+}
+
 func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) {
 	var res struct {
 		Runs []struct{ Status, Path string } `json:"workflow_runs"`
@@ -406,16 +428,10 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 					return err
 				}
 				deletedIDs[item.rel.ID] = true
-				if err := c.deleteTagByRef(ctx, item.rel.TagName); err != nil {
+				if err := c.deleteUnreferencedTag(ctx, item.rel.TagName, rels, deletedIDs); err != nil {
 					return err
 				}
 			}
-		}
-	}
-	refTags := make(map[string]bool)
-	for _, r := range rels {
-		if !deletedIDs[r.ID] {
-			refTags[r.TagName], refTags[r.Name] = true, true
 		}
 	}
 	for page := 1; page <= maxReleasePages; page++ {
@@ -424,24 +440,10 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 			return fmt.Errorf("listing tags: status %d (%v)", code, err)
 		}
 		for _, t := range batch {
-			if p, ok := parseReleaseName(t.Name); !ok || now.Sub(p.Start) <= 7*24*time.Hour || refTags[t.Name] {
+			if p, ok := parseReleaseName(t.Name); !ok || now.Sub(p.Start) <= 7*24*time.Hour {
 				continue
 			}
-			if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, t.Name), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
-				return fmt.Errorf("rechecking tag %s: status %d (%v)", t.Name, tCode, err)
-			} else if tCode == 200 {
-				continue
-			}
-			if fresh, err := c.listReleases(ctx); err != nil {
-				return err
-			} else if slices.ContainsFunc(fresh, func(r ghRelease) bool { return r.TagName == t.Name || r.Name == t.Name }) {
-				continue
-			}
-			var refObj struct{ Ref string }
-			if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, t.Name), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+t.Name) {
-				return fmt.Errorf("verifying tag ref %s: status %d (%v)", t.Name, rCode, err)
-			}
-			if err := c.deleteTagByRef(ctx, t.Name); err != nil {
+			if err := c.deleteUnreferencedTag(ctx, t.Name, rels, deletedIDs); err != nil {
 				return err
 			}
 		}

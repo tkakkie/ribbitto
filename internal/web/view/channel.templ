@@ -536,7 +536,7 @@ templ messageComposer(page ChannelPage) {
 			rows="3"
 			dir="auto"
 			aria-autocomplete="list"
-			aria-controls="mention-listbox"
+			aria-controls={ MentionListboxID }
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
 			aria-describedby={ MessageHelpID + " composer-quote-description" }
 			aria-description={ i18n.T(ctx, "mention.help") }

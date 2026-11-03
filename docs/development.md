@@ -88,8 +88,9 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` must pass before a pull request.
-It runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
+Choose the [local checks by change type](workflow/delivery.md#local-checks-by-change-type)
+before a pull request and each push.
+`make check` runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
 `check-static` and `check-tools` in `checks`, each `testshard` shard
 in a parallel `test` matrix job, `rest` in `test-rest`,
 and TypeScript in `web-types` (`.github/workflows/ci.yml`).

@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -256,7 +257,7 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 	}))
 }
 
-func testCfg(apiBase, token string, now time.Time, stdout *bytes.Buffer) config {
+func testCfg(apiBase, token string, now time.Time, stdout io.Writer) config {
 	return config{apiBase: apiBase, uploadBase: apiBase, storeRepo: prodStoreRepo, sourceRepo: prodSourceRepo, token: token, now: now, stdout: stdout, allowTestEndpoint: true}
 }
 
@@ -300,11 +301,13 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		d := relNameAt(now.Add(-time.Duration(i+1)*time.Hour), shaOf(200+i), i+1, 1)
 		rels, tags = append(rels, mockRelease{ID: int64(200 + i), Name: d, TagName: d, Draft: true}), append(tags, d)
 	}
-	dupOld, kept89d := addPub(20, now.Add(-100*day), shaOf(2), 50, 1), addPub(13, now.Add(-89*day), shaOf(12), 7, 1)
-	draftDel, draftActive, draftYoung := relNameAt(now.Add(-8*day), shaOf(50), 1, 1), relNameAt(now.Add(-9*day), shaOf(99), 1, 1), relNameAt(now.Add(-3*day), shaOf(51), 1, 1)
+	dupOld, kept89d := addPub(20, now.Add(-100*day), shaOf(2), 50, 1), addPub(13, now.Add(-90*day), shaOf(12), 7, 1)
+	dup12Old, oldBoundary := addPub(21, now.Add(-100*day), shaOf(12), 6, 1), addPub(18, now.Add(-90*day-time.Second), shaOf(13), 1, 1)
+	draftDel, draftActive, draftYoung := relNameAt(now.Add(-7*day-time.Second), shaOf(50), 1, 1), relNameAt(now.Add(-9*day), shaOf(99), 1, 1), relNameAt(now.Add(-7*day), shaOf(51), 1, 1)
+	draftCurr := relNameAt(now.Add(-8*day), currSHA, 1, 1)
 	preTag, subName := relNameAt(now.Add(-120*day), shaOf(60), 1, 1), "prefix-"+relNameAt(now.Add(-120*day), shaOf(61), 1, 1)
 	mismatchTag, futureTag := relNameAt(now.Add(-120*day), shaOf(62), 1, 1), relNameAt(now.Add(2*day), shaOf(64), 1, 1)
-	orphanOld, orphanRecheck, orphanYoung := relNameAt(now.Add(-8*day), shaOf(70), 1, 1), relNameAt(now.Add(-8*day), shaOf(71), 1, 1), relNameAt(now.Add(-2*day), shaOf(72), 1, 1)
+	orphanOld, orphanRecheck, orphanYoung := relNameAt(now.Add(-7*day-time.Second), shaOf(70), 1, 1), relNameAt(now.Add(-8*day), shaOf(71), 1, 1), relNameAt(now.Add(-7*day), shaOf(72), 1, 1)
 	rels = append(rels,
 		mockRelease{ID: 11, Name: oldTag, TagName: oldTag},
 		mockRelease{ID: 12, Name: oldTag404, TagName: oldTag404},
@@ -317,6 +320,7 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		mockRelease{ID: 33, Name: draftYoung, TagName: draftYoung, Draft: true},
 		mockRelease{ID: 34, Name: "draft-non-strict", TagName: "draft-non-strict", Draft: true},
 		mockRelease{ID: 35, Name: "draft-sharing-tag", TagName: oldSharedDraftTag, Draft: true},
+		mockRelease{ID: 36, Name: draftCurr, TagName: draftCurr, Draft: true},
 		mockRelease{ID: 40, Name: preTag, TagName: preTag, Prerelease: true},
 		mockRelease{ID: 41, Name: "map-bad-name", TagName: "map-bad-name"},
 		mockRelease{ID: 42, Name: subName, TagName: subName},
@@ -324,9 +328,9 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		mockRelease{ID: 44, Name: futureTag, TagName: futureTag},
 		mockRelease{ID: 45, Name: relNameAt(now.Add(-5*day), shaOf(65), 1, 1), TagName: oldSharedPubTag},
 	)
-	tags = append(tags, oldTag, oldTag404, oldTag500, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
+	tags = append(tags, oldTag, oldTag404, oldTag500, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, draftCurr, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanOld, orphanRecheck, orphanYoung)
 	store := &mockStore{
-		token: "test-token", expiryHeader: now.Add(15 * day).Format("2006-01-02 15:04:05 UTC"),
+		token: "test-token", expiryHeader: now.Add(14 * day).Format("2006-01-02 15:04:05 UTC"),
 		releases: rels, tags: tags, activeSHAs: map[string]bool{shaOf(99): true},
 		relDel404ID: 12, tagDel404: oldTag404, tagDel422: oldTag500, recheckTagRel: orphanRecheck,
 	}
@@ -348,22 +352,22 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	hasRel := func(id int64) bool {
 		return slices.ContainsFunc(store.releases, func(r mockRelease) bool { return r.ID == id })
 	}
-	for _, gone := range []int64{11, 12, 15, 16, 17, 30, 31} {
+	for _, gone := range []int64{11, 12, 15, 16, 17, 18, 30, 31} {
 		if hasRel(gone) {
 			t.Errorf("release ID %d was not deleted", gone)
 		}
 	}
-	for _, kept := range []int64{2, 20, 13, 32, 33, 34, 35, 40, 41, 42, 43, 44, 45} {
+	for _, kept := range []int64{2, 20, 13, 21, 32, 33, 34, 35, 36, 40, 41, 42, 43, 44, 45} {
 		if !hasRel(kept) {
 			t.Errorf("release ID %d was wrongly deleted", kept)
 		}
 	}
-	for _, goneTag := range []string{oldTag, oldTag404, oldTag500, orphanOld} {
+	for _, goneTag := range []string{oldTag, oldTag404, oldTag500, oldBoundary, orphanOld} {
 		if slices.Contains(store.tags, goneTag) {
 			t.Errorf("tag %s was not deleted", goneTag)
 		}
 	}
-	for _, keptTag := range []string{wantRel, dupOld, kept89d, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanRecheck, orphanYoung} {
+	for _, keptTag := range []string{wantRel, dupOld, kept89d, dup12Old, oldSharedDraftTag, oldSharedPubTag, draftActive, draftYoung, draftCurr, preTag, "map-bad-name", subName, mismatchTag, futureTag, orphanRecheck, orphanYoung} {
 		if !slices.Contains(store.tags, keptTag) {
 			t.Errorf("tag %s was wrongly deleted", keptTag)
 		}
@@ -375,10 +379,10 @@ func TestStoreCoreAndLookup(t *testing.T) {
 	}
 	for _, wantLog := range []string{
 		fmt.Sprintf("deleted release %q (id 11, sha %s, age 95d)\n", oldTag, shaOf(11)),
-		fmt.Sprintf("deleted release %q (id 30, sha %s, age 8d)\n", draftDel, shaOf(50)),
+		fmt.Sprintf("deleted release %q (id 30, sha %s, age 7d)\n", draftDel, shaOf(50)),
 		fmt.Sprintf("deleted tag %q (sha %s, age 95d)\n", oldTag, shaOf(11)),
-		fmt.Sprintf("deleted tag %q (sha %s, age 8d)\n", orphanOld, shaOf(70)),
-		"retention summary: deleted 6 releases, 2 tags\n",
+		fmt.Sprintf("deleted tag %q (sha %s, age 7d)\n", orphanOld, shaOf(70)),
+		"retention summary: deleted 7 releases, 3 tags\n",
 	} {
 		if !strings.Contains(out.String(), wantLog) {
 			t.Errorf("stdout missing deletion log %q:\n%s", wantLog, out.String())
@@ -422,13 +426,40 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		t.Fatalf("lookup with runID=9 failed: rel=%s err=%v", gotRel9, err)
 	}
 	c := &apiClient{cfg: cfg}
-	if c.deleteReleaseByID(t.Context(), ghRelease{ID: 40, Name: oldTag, TagName: oldTag, Prerelease: true}) == nil ||
-		c.deleteReleaseByID(t.Context(), ghRelease{ID: 41, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}) == nil ||
-		c.deleteReleaseByID(t.Context(), ghRelease{ID: 42, Name: oldTag, TagName: oldTag404}) == nil ||
-		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
+	if c.deleteTagByRef(t.Context(), "map-20261102T120000Z-"+currSHA+"-01.1") == nil ||
 		c.deleteTagByRef(t.Context(), "map-20261102T120000Z-abc-1.1") == nil ||
 		c.deleteTagByRef(t.Context(), "non-canonical") == nil {
-		t.Fatal("expected exact-ID deletion guard to refuse invalid release or tag")
+		t.Fatal("expected exact-ID deletion guard to refuse invalid tag")
+	}
+	baseRel := ghRelease{ID: 1, Name: oldTag, TagName: oldTag}
+	for _, tc := range []struct {
+		in, got ghRelease
+	}{
+		{ghRelease{ID: 1, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}, ghRelease{ID: 1, Name: "prefix-" + oldTag, TagName: "prefix-" + oldTag}},
+		{ghRelease{ID: 0, Name: oldTag, TagName: oldTag}, ghRelease{ID: 0, Name: oldTag, TagName: oldTag}},
+		{ghRelease{ID: 1, Name: oldTag, TagName: oldTag, Prerelease: true}, baseRel},
+		{ghRelease{ID: 1, Name: oldTag, TagName: oldTag404}, ghRelease{ID: 1, Name: oldTag, TagName: oldTag404}},
+		{baseRel, ghRelease{ID: 2, Name: oldTag, TagName: oldTag}},
+		{baseRel, ghRelease{ID: 1, Name: oldTag404, TagName: oldTag}},
+		{baseRel, ghRelease{ID: 1, Name: oldTag, TagName: oldTag404}},
+		{baseRel, ghRelease{ID: 1, Name: oldTag, TagName: oldTag, Draft: true}},
+		{baseRel, ghRelease{ID: 1, Name: oldTag, TagName: oldTag, Prerelease: true}},
+	} {
+		delCalled := false
+		gSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "DELETE" {
+				delCalled = true
+				w.WriteHeader(204)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(tc.got)
+		}))
+		gClient := &apiClient{cfg: testCfg(gSrv.URL, "tok", now, nil)}
+		err := gClient.deleteReleaseByID(t.Context(), tc.in)
+		gSrv.Close()
+		if err == nil || delCalled {
+			t.Fatalf("expected deleteReleaseByID(%+v) with got=%+v to refuse before DELETE, got err=%v delCalled=%v", tc.in, tc.got, err, delCalled)
+		}
 	}
 	for _, nOrphans := range []int{100, 101} {
 		var oTags []string
@@ -503,7 +534,7 @@ func TestStoreCoreFailures(t *testing.T) {
 		}},
 		{"refused tag deletion 422 while present", "tok", "deleting tag", func(s *mockStore) { s.failTagDel422 = relNameAt(now.Add(-100*day), shaOf(2), 2, 1) }},
 		{"wrong lookup release refused", "tok", "mismatch", func(s *mockStore) { s.wrongLookupID = 2 }},
-		{"13 days expiry fails after upload and retention", "tok", "expires", func(s *mockStore) { s.expiryHeader = now.Add(13 * day).Format("2006-01-02 15:04:05 UTC") }},
+		{"13 days expiry fails after upload and retention", "tok", "expires", func(s *mockStore) { s.expiryHeader = now.Add(14*day - time.Second).Format("2006-01-02 15:04:05 UTC") }},
 		{"warn:missing github-authentication-token-expiration", "tok", "", func(s *mockStore) { s.expiryHeader = "" }},
 		{"warn:unparsable github-authentication-token-expiration", "tok", "", func(s *mockStore) { s.expiryHeader = "not-a-date" }},
 	} {

@@ -1,14 +1,14 @@
 # AGENTS.md
 
-Rules for AI coding tools and their users. Keep this file short;
+Rules for AI tools and users. Keep this short;
 explanations belong in `docs/`.
 
 ## Project
 
 ribbitto is a self-hostable team chat: Go, `net/http`, templ, htmx with
 Server-Sent Events, Tailwind CSS, PostgreSQL (pgx, sqlc, goose). One
-maintainer, public repository. Everything in the repository — code,
-comments, docs, commits, issues, pull requests — is written in English.
+maintainer, public repository. Write all code, comments, docs, commits,
+issues and pull requests in English.
 
 ## Workflow
 
@@ -16,8 +16,9 @@ One set of rules binds every AI; see [Where things are explained](#where-things-
 
 ## Commands
 
-- `make check` — format, vet, lint, build, test (race); choose
-  [local checks](docs/workflow/delivery.md#local-checks-by-change-type).
+- `make check` — format, vet, lint, build, test (race); run the
+  [local checks by change type](docs/workflow/delivery.md#local-checks-by-change-type);
+  they must pass before opening a pull request.
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.

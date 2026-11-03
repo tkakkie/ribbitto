@@ -8,11 +8,12 @@ M11 ([#2089](https://github.com/tkakkie/ribbitto/issues/2089); motivated by the
 `409d680` survey recorded on
 [#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6594314637)).
 
-**When this page applies:** from the merge of #2092, every new or converted
+**When this page applies:** from the merge of #2092, every new or changed
 client unit test is a type-checked `web/test/<name>.test.ts` file.
-Remaining `web/test/*.test.mjs` files await their owning conversion issues;
-#2098 removes the allowance only after none remain. Tests are not kept for
-their own count or length: test count and line total are not targets.
+Changing an existing `.test.mjs` harness converts it to `.test.ts` in the same
+PR. Untouched `web/test/*.test.mjs` files await their owning conversion issues;
+#2098 starts only when `ls web/test/*.test.mjs` is empty, then removes the
+allowance. Test count and line total are not targets.
 
 ## Layers and what each owns
 
@@ -49,16 +50,16 @@ Do not write a client unit test for:
   ([`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review)) — not
   how many times an injected clock, storage getter or internal helper was read,
   nor internal call traces when the observable output is unchanged.
-- **Degenerate-environment parity:** do not turn legacy quirks ("as `-vN` did")
+- **Degenerate-environment parity:** do not turn conversion-parity quirks
+  ([defined below](#deleting-or-merging-tests))
   or degenerate-environment cases (such as an API that is present but throws in
   a way no browser or repository script produces, or an accepted parity
   difference) into permanent unit tests. Pre-review parity evidence stays in the
-  pull request body. Here, legacy quirks exclude normal-use or documented
-  behaviour, including reading data stored by an earlier version; keep tests
-  for that behaviour.
+  pull request body.
 - **Helpers no glue imports:** do not newly extract a DOM-free helper that no
-  production module in `web/src/` imports. An unwired module that a documented
-  open issue will import keeps its tests until that issue lands.
+  production module in `web/src/` imports. Exception: a new unwired module is
+  allowed only when the PR body cites the open issue that will wire it (for
+  `stream-cursor`, #1827). It keeps its tests until that issue lands.
 
 ## Rules
 
@@ -73,8 +74,9 @@ Do not write a client unit test for:
   - Every pull request that adds or changes a client unit test records the
     deliberate-defect proof in *Verified by*: one deliberate defect per harness
     added or changed, in the production code under test, that breaks the guarded
-    behaviour and fails the test's assertion (not a crash or a compile/type
-    error), and that the test passes again once reverted
+    behaviour and fails an assertion in at least one added or changed `test()`
+    block in that harness (name the block; not a crash or a compile/type error),
+    and that the test passes again once reverted
     ([`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review)).
 - **One `test()` per rule with named table rows:** group each behavioural rule
   or invariant into one `test()` block with a table of named rows
@@ -87,8 +89,10 @@ Do not write a client unit test for:
   adapters (`getItem`/`setItem`/`removeItem` or a narrow interface) as explicit
   parameters or options to the DOM-free module. Never patch or mutate
   `globalThis`, `window`, `document`, `Date.now`, `Math.random` or `crypto`, and
-  never construct a fake `window`, `document` or `Element` (or
-  add a DOM emulator such as `jsdom` or `happy-dom`) in `web/test/`.
+  never use a hand-built object standing in for a DOM type (for example
+  `window`, `document`, `Element`, `Range` or `Selection`) or a DOM emulator
+  such as `jsdom` or `happy-dom` in `web/test/`. A real `Event` or `CustomEvent`
+  needs no fake.
 - **File naming, imports and checks:** unit test harnesses live directly in
   `web/test/<name>.test.ts` (flat; no subdirectories or helper `.ts` files in
   `web/test/`), named for the `web/src/<name>.ts` module they test. Harnesses
@@ -111,18 +115,25 @@ Do not write a client unit test for:
   and malformed values) is recorded in the pull request body
   ([`delivery.md`](../workflow/delivery.md#standard-implementer-brief),
   [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review)), not
-  kept as a permanent file or permanent "as `-vN` did" unit tests. Normal-use
-  or documented behaviour keeps tests, as above.
+  kept as a permanent file or permanent conversion-parity quirk unit tests
+  ([definition below](#deleting-or-merging-tests)).
 
 ## Deleting or merging tests
 
-- Removing or merging a test that guarded behaviour must name in the pull
-  request the place (`web/test/*.test.ts` case, `TestBrowser` scenario or Go
-  check) that still covers that behaviour.
+- These allowances apply only to client unit tests in `web/test/`.
+  Authorization or scoping tests require a replacement test or the maintainer's
+  decision, as do Go tests and `TestBrowser`
+  ([review gate](../workflow/reviewing.md#pull-request-cross-review)).
+- Removing or merging a test guarding normal-use or documented behaviour must
+  name in the pull request the place (`web/test/*.test.ts` case, `TestBrowser`
+  scenario or Go check) that still covers that behaviour.
 - A test that checked only an implementation detail (such as call counts or
   order of clocks and helpers), a conversion-parity quirk, or an
   equivalence-class duplicate may be removed with the reason stated in the
   pull request.
+- A **conversion-parity quirk** is legacy behaviour ("as `-vN` did") outside
+  normal use and documented behaviour. Reading data stored by an earlier
+  version is normal-use behaviour and keeps a test.
 - No replacement test is written to keep a test count or line total.
 
 ## Cross-reviewer checks
@@ -131,10 +142,11 @@ Alongside [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review):
 
 - **`[blocking]`:** a missing required test for new or changed behaviour;
   global patching (`globalThis`, `window`, `document`, `Date`, `Math`, `crypto`)
-  or DOM fakes in `web/test/`; removing or merging a behaviour-guarding test
-  without naming what still covers it; or a missing deliberate-defect proof in
-  *Verified by* when a pull request adds or changes a client unit test.
-- **`[blocking]`:** a removed test whose stated reason is false: it was not
-  merely an implementation detail, conversion-parity quirk or duplicate, or
-  its assertions guarded observable behaviour without remaining coverage.
+  or DOM fakes in `web/test/`; removing or merging a test guarding normal-use
+  or documented behaviour without naming what still covers it; or a missing
+  deliberate-defect proof in *Verified by* when a pull request adds or changes
+  a client unit test.
+- **`[blocking]`:** a removed test whose stated category (implementation detail,
+  conversion-parity quirk or duplicate) is false, or whose assertions guarded
+  normal-use or documented behaviour with no named remaining coverage.
 - **`[nit]`:** redundant table rows within an already-covered equivalence class.

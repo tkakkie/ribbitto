@@ -4,23 +4,22 @@ Read when: cross-reviewers review an issue or pull request, or check independenc
 
 ## Review independence and rounds
 
-**Who reviews:** an AI that neither wrote nor changed the work, decided from
-the actual history ([review independence](README.md#principles)): for an
-issue, an AI other than its writer; for a pull request, an AI other than the
-implementer and anyone who pushed to it. Copilot and adversarial follow-up
-checks use [an AI that did not write the change](review-followups.md#copilot-follow-up-check).
+**Who reviews:** an AI that neither wrote nor changed the work, based on
+actual history ([review independence](README.md#principles)): not the issue
+writer, PR implementer or anyone who pushed to the PR. Copilot and adversarial
+follow-up checks use [an AI that did not write the change](review-followups.md#copilot-follow-up-check).
 A failed, timed-out or empty run is handled as the README says. If independence
 cannot be kept, ask the maintainer.
 
-**Who changed it** is read from the orchestration record: the issue or pull
-request body and comments (process notes included), the review reports, the
+**Who changed it** comes from the orchestration record: issue or PR
+body and comments (including process notes), review reports,
 branch prefix (`claude/`, `codex/`, `argon/`) and commit trailers where
 present. GitHub's Author, Committer and token name are not evidence: every AI
-acts as the same account. If it cannot be told who wrote or changed the work,
-do not guess a reviewer: ask the maintainer.
+acts as the same account. If authorship is unclear, ask the maintainer;
+never guess a reviewer.
 
-**How many rounds:** at most **two** reviews, by AIs eligible under *Who reviews*, per issue or
-pull request, counting re-reviews together.
+**How many rounds:** at most **two** reviews per issue or PR, including
+re-reviews, by AIs eligible under *Who reviews*.
 Copilot and the adversarial review do not count. If round two still has
 blocking findings, a pull request may go through [*closure verification*](review-followups.md#closure-verification) when it qualifies; in every other
 case, stop and ask the maintainer. In round two, an issue gets a full re-read
@@ -78,14 +77,15 @@ Self-contained instructions for cross-reviewing a pull request (alongside
   as notices on `docs/dependencies.md`. Authors can run
   `go -C tools run ./deps --diff origin/main ..` locally for the same list.
 - Tests prove behaviour (authorization: unauthorized users see no data).
-  No test was deleted, skipped or weakened, except for removals allowed by the
-  [deletion rules](../architecture/web-tests.md#deleting-or-merging-tests):
-  name its guarded behaviour and remaining coverage, or explain why it tested
-  only an implementation detail.
-- A regression-test-only PR, or one adding or changing client unit tests
-  ([`web-tests.md`](../architecture/web-tests.md)), records in *Verified by*
-  (local checks or CI) a deliberate defect in the code under test, one per
-  added or changed client harness. It breaks guarded behaviour and
+  No test was skipped or weakened. Removing Go tests, `TestBrowser` or any
+  authorization or scoping test requires a replacement test or the maintainer's
+  decision. Other removals are limited to client unit tests in `web/test/` under
+  the [deletion rules](../architecture/web-tests.md#deleting-or-merging-tests).
+- In *Verified by* (local checks or CI), a regression-test-only PR records one
+  deliberate defect per test file added or changed; a PR adding or changing
+  client unit tests ([`web-tests.md`](../architecture/web-tests.md)) records
+  one per added or changed client harness. Each defect is in the code under
+  test, breaks guarded behaviour and
   fails an assertion (not a crash or compile error); the test passes once
   reverted (#360).
 - Comments explain *why*; `docs/` is updated when terminology,

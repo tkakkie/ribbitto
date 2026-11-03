@@ -1,6 +1,6 @@
 import * as dom from "./contracts.gen.ts";
 import { advancesCursor, shownCursor, admitsMove, higherSequence, announcementOverflow,
-  resetHeld, resetDelay, shouldParkSource, restoreSource } from "./stream-cursor.ts";
+  resetHeld, resetDelay, pageHide, finishPageHide, parkSource, restoreSource, forgetSource, type SourceState } from "./stream-cursor.ts";
 
 // These structural read contracts describe htmx/extension inputs, not new transports.
 type StreamSource = EventTarget & { readyState: number; close(): void };
@@ -17,26 +17,32 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
 
 (() => {
   let parked: StreamSource | null = null;
-  let hiding = false;
+  let sourceState: SourceState = { hiding: false, parked: false };
   document.addEventListener("htmx:sseClose", (native) => {
     const event = native as HtmxEvent;
     // Keep the source/detail read short-circuited outside persisted cleanup.
-    if (hiding && shouldParkSource(hiding, event.detail.source.readyState)) parked = event.detail.source;
+    if (!sourceState.hiding) return;
+    const transition = parkSource(sourceState, event.detail.source.readyState);
+    if (transition.action === "park") parked = event.detail.source;
+    sourceState = transition.state;
   });
   window.addEventListener("pagehide", (event) => {
-    if (!event.persisted) return;
-    hiding = true;
+    const transition = pageHide(sourceState, event.persisted);
+    sourceState = transition.state;
+    if (transition.action !== "cleanup") return;
     try {
       htmx.trigger(dom.getOrganizationStream()!, "htmx:beforeCleanupElement");
     } finally {
-      hiding = false;
+      sourceState = finishPageHide(sourceState);
     }
   });
   window.addEventListener("pageshow", (event) => {
-    const source = restoreSource(parked, event.persisted);
-    if (!source) return;
+    const transition = restoreSource(sourceState, event.persisted);
+    sourceState = transition.state;
+    if (transition.action !== "error") return;
     // The extension retries CLOSED sources and rebinds their children.
-    source.dispatchEvent(new Event("error"));
+    parked!.dispatchEvent(new Event("error"));
+    sourceState = forgetSource(sourceState);
     parked = null;
   });
   // Successful posts may arrive through the stream only after a reconnect.

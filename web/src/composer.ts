@@ -35,6 +35,15 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   viewport?.addEventListener("scroll", updateViewport);
   window.addEventListener("resize", updateViewport);
   window.addEventListener("orientationchange", updateViewport);
+  const conversation = dom.getMessageList()?.parentElement;
+  const keyboardOpen = () => Boolean(dom.getOrganizationStream()?.style.getPropertyValue("--composer-viewport-h")) &&
+    Boolean(conversation && getComputedStyle(conversation).overflowY === "auto");
+  const revealComposer = () => {
+    if (!keyboardOpen()) return;
+    const active = document.activeElement;
+    if (active === dom.getMessageBody()) conversation!.scrollTop = conversation!.scrollHeight;
+    else if (active === dom.getQuoteText()) active?.scrollIntoView({ block: "nearest" });
+  };
   let rememberPost = () => {};
   let freshRestoredKey: string | null = null;
   let admitting: ComposerForm | undefined;
@@ -182,7 +191,12 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     say("");
     reconcile();
     updateEdits();
-    item.scrollIntoView({ block: "nearest" });
+    if (keyboardOpen()) {
+      const listPane = dom.getMessageList();
+      if (listPane) listPane.scrollTop = listPane.scrollHeight;
+    } else {
+      item.scrollIntoView({ block: "nearest" });
+    }
     rememberPost();
     htmx.process(sending);
     dispatch();
@@ -442,22 +456,32 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
         remember();
       }
       if (body) revealEnd(body);
+      revealComposer();
     });
     resize.observe(pane);
+    if (conversation) resize.observe(conversation);
     if (body) { resize.observe(body); resize.observe(body.form); }
+    document.addEventListener("focusin", (event) => {
+      if (event.target === dom.getMessageBody() || event.target === dom.getQuoteText()) revealComposer();
+    });
     document.addEventListener("htmx:afterSwap", (native) => {
       const event = native as HtmxEvent;
       if (event.target.id === dom.MessageComposerStateID && dom.readAttribute(event.target, dom.PostedMessageAttribute)) settling = true;
     });
     document.addEventListener("htmx:afterSettle", (native) => {
       const event = native as HtmxEvent;
-      // History restores and the stream's afterSettleCallback scroll run
-      // synchronously after this listener. Save their result before resizing.
-      if (pane.contains(event.target)) queueMicrotask(rememberPost);
-      if (event.target.id !== dom.MessageComposerStateID || !settling) return;
-      // The stream's scrollPosted runs in this same settle event. Its scroll
-      // wins even when clearing the sent text also resizes the pane.
-      queueMicrotask(() => { rememberPost(); settling = false; });
+      const posted = event.target.id === dom.MessageComposerStateID && settling;
+      if (!posted && !pane.contains(event.target)) return;
+      const top = conversation?.scrollTop;
+      // History and the stream finish scrolling synchronously after this
+      // listener. Only our response forces the composer into view; other
+      // settles preserve the reader's conversation position.
+      queueMicrotask(() => {
+        if (posted) revealComposer();
+        else if (keyboardOpen() && top !== undefined) conversation!.scrollTop = top;
+        rememberPost();
+        if (posted) settling = false;
+      });
     });
   }
   const quoteFocus = new WeakMap<HtmxEvent["detail"]["xhr"], { selector: string; start: number | null; end: number | null; direction: "forward" | "backward" | "none" | null }>();

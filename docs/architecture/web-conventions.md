@@ -23,13 +23,8 @@ checks until migrated.
 - **One concern per module; pure logic apart from DOM code:** each module owns
   one concern, and logic that decides something (state transitions, queue
   order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
-  module. Only that DOM-free `.ts` logic is unit-tested through the `.mjs`
-  harnesses directly in `web/test/<name>.test.mjs` that
-  [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
-  `make test-web` runs (Node's test runner, `node --test`, without `@types/node`),
-  separately from strict, no-emit type checking (#1410). DOM code stays thin and
-  is covered by the go-rod browser tests
-  ([`web-layers-checks.md`](web-layers-checks.md)).
+  module, while DOM code stays thin; see [`web-tests.md`](web-tests.md) for the
+  test layers and harness rules.
 
 - **State:** a module's own working state is held in typed in-memory objects,
   never in `dataset`, limited to what
@@ -58,10 +53,8 @@ checks until migrated.
   duplication appears, as
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
   states. A helper with a second user in another module moves to its own
-  `web/src/<helper>.ts` module, imported by relative `.ts` path, and its
-  DOM-free `.ts` logic is unit-tested through direct `web/test/*.test.mjs` harnesses that
-  [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets and
-  `make test-web` runs.
+  `web/src/<helper>.ts` module, imported by relative `.ts` path, and is tested
+  as [`web-tests.md`](web-tests.md) sets out.
 
 - **How DOM ids and data attributes come from the DOM contract:** Go definitions
   used by `templ` own DOM ids (including dynamic id suffixes), data attributes,
@@ -87,7 +80,7 @@ checks until migrated.
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) owns state,
 uncertainty, original text, confirmed ID and immutable `draftKey`; `requestKey`
 may rotate after a 409. Its [tests](../../web/test/composer-queue.test.mjs)
-specify transitions and ordering. The entry keeps item/form references in maps,
+(not yet converted to `.test.ts`; #2095) specify transitions and ordering. The entry keeps item/form references in maps,
 clones the server template and writes DOM projections from these typed objects.
 It never reads pending state, identity or original text back from those outputs.
 

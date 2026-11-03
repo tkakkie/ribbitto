@@ -143,7 +143,8 @@ Issue: template from `.github/ISSUE_TEMPLATE/` → reviews as above →
 
 Pull request:
 
-1. The implementer works in its worktree and `make check` passes.
+1. The implementer works in its worktree and passes the
+   [local checks by change type](delivery.md#local-checks-by-change-type).
 2. Draft pull request with "Closes #N"; CI goes green.
 3. Reviews as above, in parallel on one head SHA: the cross-reviewer, the third
    AI where required (at most two completed runs; [cap, follow-ups and parity triage](review-operations.md#third-ai-review)), and Copilot (once, unless docs-only; [review operations](review-operations.md)).

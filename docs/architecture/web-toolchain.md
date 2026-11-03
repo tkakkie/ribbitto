@@ -35,9 +35,8 @@ need no table entries.
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
 dynamic imports. ES2017 is the syntax target approved by the maintainer on
-2026-10-26 and recorded in [browser target rule 4](browser-targets.md#design-rules).
-It adds no Web API polyfills and does not constitute browser verification.
-Browser verification of the served bundle belongs to #1820.
+2026-10-26 ([browser target rule 4](browser-targets.md#design-rules)); it adds
+no Web API polyfills, and browser verification of the served bundle belongs to #1820.
 
 The builder validates esbuild's metafile and output, writes
 `manifest.json` last, then replaces the whole ignored `dist` directory
@@ -46,15 +45,15 @@ commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulti
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
 `static.NewScripts` in `web/static/scripts.go` holds the single `names`
-declaration of converted page entries (a conversion adds its entry name there) and
-validates the manifest and bundle hashes at startup; `tools/webbuild` reads that
-declaration from the repository root instead of CLI entry names (#2022); non-entry
+declaration of converted page entries (each conversion adds its entry name) and
+validates the manifest and bundle hashes at startup; `tools/webbuild` reads it
+from the repository root instead of CLI entry names (#2022); non-entry
 `web/src/` modules are never bundled standalone. templ uses context; direct renders
 use the embedded registry without mutable globals. Their legacy assets and
-`web/legacy-scripts.txt` entries are removed; the stems still listed in
-`web/legacy-scripts.txt` stay on versioned assets. Missing/unknown entries or
-bundles fail startup; undeclared renders fail.
+`web/legacy-scripts.txt` entries are removed; remaining stems stay on versioned
+assets. Missing/unknown entries or bundles fail startup; undeclared renders fail.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
+Converted bundles are strict-mode scripts (assignments to non-writable properties throw, which sloppy legacy scripts silently ignored).
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
 
 Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
@@ -128,9 +127,8 @@ or parameter properties.
 
 **Imports — confirmed:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
-path aliases. `web/test/*.test.ts` (#2092; `.test.mjs` until #2098) imports
-DOM-free `.ts` with `node:test`, `node:assert/strict` and `node-test.d.ts` (no
-`@types/node`); `make test-web` runs `node --test` ([checks](web-toolchain-checks.md)).
+path aliases. Client unit tests and `make test-web` follow
+[`web-tests.md`](web-tests.md) and [checks](web-toolchain-checks.md).
 
 ## Generated contract and state — #1413, #1416, #1417
 

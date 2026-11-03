@@ -59,6 +59,7 @@ Read the file for the area you change:
 | [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
 | [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1469, #1819) |
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
+| [`web-tests.md`](web-tests.md) | client test layers (unit, glue, browser, Go checks), when not to write a test, `.test.ts` harness rules, test deletion and review checks (#2089) |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 | [`web-layers-browser-tests.md`](web-layers-browser-tests.md) | shared go-rod browser tests and the M3 web-layer audit |

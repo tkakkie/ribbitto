@@ -88,8 +88,9 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` must pass before a pull request.
-It runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
+Choose the [local checks by change type](workflow/delivery.md#local-checks-by-change-type)
+before a pull request and each push.
+`make check` runs `check-static`, `check-test`, `check-tools`, `check-web`, `test-web`. CI runs
 `check-static` and `check-tools` in `checks`, each `testshard` shard
 in a parallel `test` matrix job, `rest` in `test-rest`,
 and TypeScript in `web-types` (`.github/workflows/ci.yml`).
@@ -145,7 +146,9 @@ bump the dependency in its own pull request, or upgrade Go for a
 standard-library finding; without a fix, the maintainer decides.
 
 CodeQL (`.github/workflows/codeql.yml`) runs on `main` and weekly, not on
-pull requests; alerts are in the Security tab.
+pull requests; alerts are in the Security tab. See
+[dependency and runtime update coverage](dependency-updates.md) for the
+version-pin inventory, Dependabot rules and `.github/workflows/version-coverage.yml`.
 
 ### README screenshot
 

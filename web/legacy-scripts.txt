@@ -1,4 +1,3 @@
 branch-selection
-mention-picker
 message-history
 sidebar-scroll

@@ -58,11 +58,19 @@ func checkPolicy(root, base string, out io.Writer) ([]string, error) {
 	git := func(args ...string) ([]byte, error) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = root
-		result, err := cmd.Output()
+		result, err := cmd.CombinedOutput()
 		if err != nil {
-			return nil, fmt.Errorf("reading comparison base %q: %w; fetch it with `git fetch origin main` (use `git fetch --unshallow origin` if history is too short), or fetch the revision and pass --base <rev>", base, err)
+			return nil, fmt.Errorf("reading comparison base %q: %w: %s; fetch the needed revision from your remote (use `git fetch --unshallow <remote>` if history is too short), or choose an available revision with --base <rev> or DOCSCHECK_BASE=<rev> for make", base, err, strings.TrimSpace(string(result)))
 		}
 		return result, nil
+	}
+	if base == "" {
+		base = "merge base of origin/main and HEAD"
+		rev, err := git("merge-base", "origin/main", "HEAD")
+		if err != nil {
+			return nil, err
+		}
+		base = strings.TrimSpace(string(rev))
 	}
 	rev, err := git("rev-parse", "--verify", "--end-of-options", base+"^{commit}")
 	if err != nil {

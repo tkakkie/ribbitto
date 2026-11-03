@@ -25,7 +25,8 @@ func TestDocumentPolicy(t *testing.T) {
 		{"undeclared directory", "docs/new/a.md", "", "why", "neither capped nor exempt", 2},
 		{"nested capped directory", "docs/domain/nested/a.md", "あ\n", "why", "over its total limit", 1},
 		{"decisions exempt", "docs/decisions/a.md", "", "", "", 0},
-		{"schema exempt", "docs/schema/a.md", "", "", "", 0},
+		{"schema exempt", "docs/schema/x.md", "", "", "", 0},
+		{"schema lookalike", "docs/schemata/x.md", "", "", "allow-list entry", 0},
 		{"dependencies exempt", "docs/dependencies.md", "", "", "", 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,6 +61,9 @@ func TestPolicyComparison(t *testing.T) {
 		{"equal", baseline(2), baseline(2), "HEAD", ""},
 		{"raised", baseline(2), baseline(3), "HEAD", "limit removed or raised"},
 		{"lowered", baseline(2), baseline(1), "HEAD", ""},
+		{"default behind main", baseline(2), baseline(2), "", ""},
+		{"default raised", baseline(2), baseline(3), "", "limit removed or raised"},
+		{"default missing origin/main", baseline(2), baseline(2), "", "comparison base \"merge base of origin/main and HEAD\""},
 		{"unreadable", baseline(2), baseline(2), "absent", "comparison base \"absent\""},
 		{"missing parent", baseline(2), baseline(2), "HEAD^1", "comparison base \"HEAD^1\""},
 		{"introducing", "", baseline(2), "HEAD", "introducing directory limits"},
@@ -90,22 +94,43 @@ func TestPolicyComparison(t *testing.T) {
 				}
 			}
 			write(tt.before)
-			for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "baseline"}} {
+			git := func(args ...string) {
+				t.Helper()
 				cmd := exec.Command("git", args...)
 				cmd.Dir = root
 				if output, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("git: %v: %s", err, output)
 				}
 			}
+			commit := func() {
+				t.Helper()
+				git("add", ".")
+				git("-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "baseline")
+			}
+			git("init", "-q")
+			commit()
+			if tt.base == "" && tt.name != "default missing origin/main" {
+				write(baseline(1))
+				commit()
+				git("update-ref", "refs/remotes/origin/main", "HEAD")
+				git("checkout", "-qb", "topic", "HEAD^1")
+			}
 			write(tt.head)
+			if tt.base == "" {
+				commit()
+			}
 			var notice bytes.Buffer
 			problems, err := checkPolicy(root, tt.base, &notice)
 			got := fmt.Sprint(err, problems, notice.String())
 			if tt.want == "" && (err != nil || len(problems) != 0 || notice.Len() != 0) || tt.want != "" && !strings.Contains(got, tt.want) {
 				t.Fatalf("got %s, want %q", got, tt.want)
 			}
-			if tt.name == "unreadable" && (err == nil || !strings.Contains(err.Error(), "git fetch")) {
-				t.Fatalf("missing fetch guidance: %v", err)
+			if tt.name == "unreadable" || tt.name == "default missing origin/main" {
+				for _, want := range []string{"fatal:", "git fetch --unshallow <remote>", "--base <rev>", "DOCSCHECK_BASE=<rev>"} {
+					if err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("missing git stderr or hint %q: %v", want, err)
+					}
+				}
 			}
 		})
 	}

@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"html"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -45,17 +46,12 @@ const (
 const exceptionsFile = "docs/size-exceptions.txt"
 
 func main() {
-	base := flag.String("base", "origin/main", "comparison revision for directory limits")
-	flag.Parse()
-	root := "."
-	if flag.NArg() > 1 {
-		fmt.Fprintln(os.Stderr, "usage: docscheck [--base <rev>] [repository root]")
+	root, base, err := parseArgs(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
 	}
-	if flag.NArg() == 1 {
-		root = flag.Arg(0)
-	}
-	policy, err := checkPolicy(root, *base, os.Stdout)
+	policy, err := checkPolicy(root, base, os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
@@ -94,6 +90,29 @@ func main() {
 	if len(sizes)+len(links)+len(decisions)+len(paths)+len(images)+len(policy) > 0 {
 		os.Exit(1)
 	}
+}
+
+func parseArgs(args []string) (root, base string, err error) {
+	flags := flag.NewFlagSet("docscheck", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.Func("base", "comparison revision for directory limits (default: merge base of origin/main and HEAD)", func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("comparison revision must not be empty")
+		}
+		base = value
+		return nil
+	})
+	if err := flags.Parse(args); err != nil {
+		return "", "", err
+	}
+	if flags.NArg() > 1 {
+		return "", "", fmt.Errorf("usage: docscheck [--base <rev>] [repository root]; flags must precede the root")
+	}
+	root = "."
+	if flags.NArg() == 1 {
+		root = flags.Arg(0)
+	}
+	return root, base, nil
 }
 
 // limitFor returns the size limit for a repository path, or 0 when the

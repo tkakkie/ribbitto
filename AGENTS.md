@@ -7,8 +7,8 @@ removed). Explanations belong in `docs/`.
 
 ribbitto is a self-hostable team chat: Go, `net/http`, templ, htmx with
 Server-Sent Events, Tailwind CSS, PostgreSQL (pgx, sqlc, goose). One
-maintainer, public repository. Everything in the repository — code,
-comments, docs, commits, issues, pull requests — is written in English.
+maintainer, public repository. Write all code, comments, docs, commits,
+issues and pull requests in English.
 
 ## Workflow
 
@@ -16,8 +16,9 @@ One set of rules binds every AI; see [Where things are explained](#where-things-
 
 ## Commands
 
-- `make check` — checks formatting (Go and templ), vets, lints, builds and
-  tests (race detector on); must pass before you open a pull request.
+- `make check` — format, vet, lint, build, test (race); run the
+  [local checks by change type](docs/workflow/delivery.md#local-checks-by-change-type);
+  they must pass before opening a pull request.
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.
@@ -126,7 +127,7 @@ By subject only: [credentials](docs/workflow/ai-credentials.md),
 - Module roots: table-driven unit tests, with no database.
 - Stores and wiring: integration tests against a real PostgreSQL.
 - `web`: unit tests without a DB for handlers, middleware and validation; real
-  PostgreSQL only for end-to-end persistence or authentication, keeping most `web` tests fast.
+  PostgreSQL only for end-to-end persistence or authentication.
 - Authorization changes need a test proving an unauthorized user cannot see the data.
 - Never delete, skip or weaken a test to pass CI; report it in the PR instead.
 

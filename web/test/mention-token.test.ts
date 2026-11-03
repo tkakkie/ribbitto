@@ -84,7 +84,7 @@ test("detectMentionToken matches @-token boundaries, quotes, autolinks, fences a
     ["backslash-escaped backtick does not open code span", "\\` @tom", true, false, { start: 3, value: "tom" }],
     ["escaped backslash before backtick still opens code span", "\\\\` @tom", true, false, null],
     ["unclosed code span containing escaped backtick", "`code\\` @tom", true, false, null],
-  ]) {
+  ] as const) {
     assert.deepEqual(detectMentionToken(text, collapsed, composing), want, name);
   }
 });
@@ -100,11 +100,11 @@ test("stale-result, dismissal and query step rules guard opening, picking and du
     ["missing listbox data-query rejects show", true, null, { start: 0, value: "tom" }, true, null, false],
     ["matching ready focused non-dismissed query opens", true, null, { start: 0, value: "tom" }, true, "tom", true],
     ["different dismissed value allows new query to open", true, "to", { start: 0, value: "tom" }, true, "tom", true],
-  ]) {
+  ] as const) {
     const state = { ...createMentionPickerState(), ready, dismissed };
     assert.equal(canShowMentionCandidates(state, token, focused, listQuery), want, name);
   }
-  const never = (label) => () => { throw new Error(`${label} must not be read`); };
+  const never = (label: string) => () => { throw new Error(`${label} must not be read`); };
   assert.equal(canShowMentionCandidates(createMentionPickerState(), { start: 0, value: "tom" }, never("bodyFocused"), never("listQuery")), false);
   assert.equal(canShowMentionCandidates({ ...createMentionPickerState(), ready: true, dismissed: "tom" }, { start: 0, value: "tom" }, true, never("listQuery")), false);
 
@@ -115,7 +115,7 @@ test("stale-result, dismissal and query step rules guard opening, picking and du
     ["stale listbox data-query rejects pick", true, { start: 0, value: "other" }, false, "tomoy", false],
     ["missing listbox data-query rejects pick", true, { start: 0, value: "tom" }, false, null, false],
     ["matching open listbox query allows pick", true, { start: 0, value: "tom" }, false, "tom", true],
-  ]) {
+  ] as const) {
     assert.equal(canPickMentionCandidate(hasOption, token, hidden, listQuery), want, name);
   }
   assert.equal(canPickMentionCandidate(true, { start: 0, value: "tom" }, true, never("listQuery")), false);
@@ -185,7 +185,7 @@ test("option index cycling and pick formatting", () => {
     ["single option ArrowUp stays at 0", 0, 1, "ArrowUp", 0],
     ["ArrowDown when none active (-1) selects 0", -1, 3, "ArrowDown", 0],
     ["ArrowUp when none active (-1) selects count - 2", -1, 3, "ArrowUp", 1],
-  ]) {
+  ] as const) {
     assert.equal(cycleMentionOptionIndex(active, count, key), want, name);
   }
   assert.equal(cycleMentionOptionIndex(0, 0, () => { throw new Error("key getter must not be read when count is 0"); }), null);
@@ -242,7 +242,7 @@ test("classifyMentionKey handles consumed keys, repeat Enter/Tab, modifiers and 
     ["Tab within 100 ms of compositionend still picks", { key: "Tab", timeStamp: 1050 }, recentIME, false, "pick", true],
     ["ArrowDown within 100 ms of compositionend still cycles", { key: "ArrowDown", timeStamp: 1050 }, recentIME, false, "cycle", true],
     ["Escape within 100 ms of compositionend still dismisses", { key: "Escape", timeStamp: 1050 }, recentIME, false, "dismiss", true],
-  ]) {
+  ] as const) {
     let consumed = false;
     const got = classifyMentionKey(event, state, hidden, () => { consumed = true; });
     assert.equal(got, wantAction, name);

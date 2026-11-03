@@ -2,9 +2,8 @@
 
 Conventions for browser modules under
 [decision 43](../decisions/43-typescript-with-a-go-driven-build.md) and the
-[web toolchain](web-toolchain.md). They apply as scripts convert (#1416–#1421)
-and to new client code (#1414); unconverted scripts keep their current files and
-checks until migrated.
+[web toolchain](web-toolchain.md). All authored client code is now in `web/src/*.ts`;
+`web/legacy-scripts.txt` is empty.
 
 ## Rules
 
@@ -16,9 +15,8 @@ checks until migrated.
   Go API) compiles page entries into uncommitted
   `web/static/dist/[name]-[hash].js` bundles selected through the manifest and
   Go registry; authors never write the served content-hashed name. The
-  `<concern>-v<N>` pattern (`web/static/<concern>-v<N>.js`, required by
-  `^.+-v[0-9]+\.js$` in `web/static/javascript_test.go`) applies only to legacy
-  JavaScript in `web/static/`.
+  legacy `<concern>-v<N>` pattern remains covered by syntax fixtures; authored
+  JavaScript directly in `web/static/` is rejected.
 
 - **One concern per module; pure logic apart from DOM code:** each module owns
   one concern, and logic that decides something (state transitions, queue
@@ -46,8 +44,7 @@ checks until migrated.
   from that registry; a template never names a script file or hashed bundle. The
   registry resolves logical entries through the manifest to embedded
   `web/static/dist/[name]-[hash].js` bundles (or serves rebuilt disk bundles
-  with `no-store` in development), while unconverted scripts keep their `-vN`
-  tags until replaced.
+  with `no-store` in development).
 
 - **When a shared helper is extracted:** a shared helper is extracted only once
   duplication appears, as
@@ -72,8 +69,8 @@ checks until migrated.
   generated file is exempt. It matches whole names/tokens and the current
   dynamic id families' 32-hex suffixes, not arbitrary substrings. This text
   check is not a security boundary; computed/indirect bypasses (concatenation,
-  aliasing, runtime names) remain for review. Legacy `web/static/` scripts
-  are outside its scope. Removing or weakening it needs its own review (#1414).
+  aliasing, runtime names) remain for review. Removing or weakening it needs its
+  own review (#1414).
 
 ## Composer queue example
 

@@ -131,11 +131,20 @@ func testBranchFormBrowser(t *testing.T, browser *rod.Browser) {
 			if checked.List != before.List || checked.Checkbox != before.Checkbox {
 				t.Fatalf("list or checkbox moved: %+v, before %+v", checked, before)
 			}
+			if js && !page.MustEval(`() => {
+				const items = [...document.querySelectorAll('#message-items input[type=checkbox]')];
+				return !items[0].disabled && items[1].disabled && !document.getElementById('branch-name').disabled;
+			}`).Bool() {
+				t.Fatal("a selection must disable messages from other source topics")
+			}
 			if got := tabFrom(); got.Active != "branch-to" || got.FormControl != "branch-form" {
 				t.Fatalf("Tab reached %q while checked; want the move form", got.Active)
 			}
 			checkbox.MustFocus()
 			page.Keyboard.MustType(input.Space)
+			if js && page.MustEval(`() => [...document.querySelectorAll('#message-items input[type=checkbox]')].some(e => e.disabled)`).Bool() {
+				t.Fatal("clearing the selection must enable all message checkboxes")
+			}
 			if got := layout(); got.Form || !got.Composer || page.MustElement("#message-body").MustProperty("value").Str() != "draft" {
 				t.Fatalf("unchecked: %+v; want the composer back with its draft", got)
 			}

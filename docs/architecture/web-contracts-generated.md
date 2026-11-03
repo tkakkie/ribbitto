@@ -4,10 +4,10 @@ Generated DOM-contract constants, TypeScript accessors and literal checks for [`
 
 ## Generated contract
 
-`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link, member-mentions and stream ids, dynamic id
+`internal/web/view/contracts.go` owns the sidebar, composer, arrival, side-panel, read-visibility, pins, message-link, member-mentions, stream and leaf-adapter ids, dynamic id
 prefixes, field names, attribute names, custom events and htmx triggers. The composer set
 includes the draft channel/topic hooks and the stream cursor/topic names it reads;
-other scripts' private hooks remain outside the generated contract.
+the leaf adapters add `branch-form`, `data-source` and `aria-current`.
 
 The stream adds `stream-stopped`, `load-older`, `unread-divider` and `branch-to`,
 plus `data-oldest-seq`, `data-to-topic`, `data-event-seq` and `data-announcement`.
@@ -37,6 +37,10 @@ successful dispatch. State and actions contain no DOM objects.
 The adapter has typed `sse-connect` read/write accessors and uses event constants
 with native constructors to retain the plain, non-bubbling `read-applied` and
 non-bubbling query envelopes.
+
+The `message-history`, `branch-selection` and `sidebar-scroll` entries keep
+scroll/focus restoration and selection constraints in thin DOM adapters; the
+existing browser scenarios cover them.
 
 Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:field` and its

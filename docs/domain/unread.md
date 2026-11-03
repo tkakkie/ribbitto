@@ -10,8 +10,7 @@ the counting queries are in
 [unread counts](../architecture/unread-counts.md), their cost in
 [unread count costs](../architecture/unread-count-costs.md), the writes in
 [unread writes](../architecture/unread-writes.md), the reading scopes and posting in
-[unread reading](unread-reading.md), the worked examples in
-[unread examples](unread-examples.md).
+[unread reading](unread-reading.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and

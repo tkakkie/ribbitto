@@ -10,7 +10,7 @@ make requests. It stores only non-sensitive UX settings, and does
 focus, scroll, keyboard, local time and SSE glue. Details, checks and the
 audit: [`web-layers.md`](../architecture/web-layers.md),
 [`web-javascript.md`](../architecture/web-javascript.md) and
-[`web-layers-checks.md`](../architecture/web-layers-checks.md).
+[`web-toolchain-checks.md`](../architecture/web-toolchain-checks.md).
 
 **Current exceptions:**
 [decision 34](34-live-unread-counts.md) allows one script to own sidebar badge

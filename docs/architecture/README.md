@@ -18,7 +18,6 @@ Read the file for the area you change:
 | [`cross-feature-access.md`](cross-feature-access.md) | how features reach each other's data: stores, posting's transaction, history and the page snapshot |
 | [`modules.md`](modules.md) | module construction, the modules, what they own and may import |
 | [`request-flow.md`](request-flow.md) | the request flow, the organisation membership check, server timeouts, middleware order |
-| [`routes.md`](routes.md) | each route under `/organizations/{slug}/` and its result |
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication and member limits; the reverse-proxy contract |
@@ -59,8 +58,6 @@ Read the file for the area you change:
 | [`web-toolchain-checks.md`](web-toolchain-checks.md) | checks and measurement requirements; `make test-web` (#1412) is in force, #1414 and #1426 are *planned* |
 | [`web-tests.md`](web-tests.md) | client test layers (unit, glue, browser, Go checks), when not to write a test, `.test.ts` harness rules, test deletion and review checks (#2089) |
 | [`web-performance-guard.md`](web-performance-guard.md) | markup budgets, initial htmx processing and milestone timing reviews |
-| [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
-| [`web-layers-browser-tests.md`](web-layers-browser-tests.md) | shared go-rod browser tests and the M3 web-layer audit |
 | [`browser-targets.md`](browser-targets.md) | target browsers and versions, compatibility and fallback rules, and per-browser verification status |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
@@ -73,7 +70,7 @@ Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 ## See also
 
 - [Measurements](../measurements/README.md) — load tests, benchmarks and investigation results
-- [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`entities.md`](../domain/entities.md), [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)
+- [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)
 - [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
 - [`docs/database.md`](../database.md) — local database, migrations; [`docs/database-tests.md`](../database-tests.md) — integration tests and fixtures; [`docs/seed-data.md`](../seed-data.md) — development seed data
 - [`docs/worktree-env.md`](../worktree-env.md) — dev databases, port allocation, health checks and cleanup

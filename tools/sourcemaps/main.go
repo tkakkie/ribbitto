@@ -1,5 +1,6 @@
 // Command sourcemaps uploads production source maps to the private release store,
-// verifies the uploaded manifest and assets, and looks up stored maps.
+// verifies the uploaded manifest and assets, applies distinct-SHA retention,
+// draft/orphan-tag cleanup and token-expiry checks, and looks up stored maps.
 package main
 
 import (
@@ -28,7 +29,18 @@ var (
 	shaRe       = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	sha256Re    = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	numIDRe     = regexp.MustCompile(`^[1-9][0-9]*$`)
+	cmdReplacer = strings.NewReplacer("##[", `\x23\x23[`, "::", `\x3a\x3a`, "\r", `\r`, "\n", `\n`)
 )
+
+// safeQuote quotes s with strconv.Quote (escaping newlines, CR and control characters)
+// and hex-escapes GitHub Actions workflow-command introducers ("##[" and "::") so
+// untrusted names, tags or URLs cannot forge annotations or alter log masking.
+func safeQuote(s string) string { return cmdReplacer.Replace(strconv.Quote(s)) }
+
+func logf(w io.Writer, format string, args ...any) {
+	s := fmt.Sprintf(format, args...)
+	_, _ = io.WriteString(cmp.Or(w, io.Discard), cmdReplacer.Replace(strings.TrimSuffix(s, "\n"))+"\n")
+}
 
 func isPlainFilename(s string) bool {
 	return s != "" && s != "." && s != ".." && s != "index.json" && filepath.Base(s) == s && !filepath.IsAbs(s) && !strings.ContainsAny(s, `/\`)
@@ -41,6 +53,7 @@ func validBundleEntry(b bundle) bool {
 const (
 	maxResponseBytes = 64 << 20
 	maxReleasePages  = 100
+	maxWorkflowRuns  = 1000
 	prodAPIBase      = "https://api.github.com"
 	prodUploadBase   = "https://uploads.github.com"
 	prodStoreRepo    = "tkakkie/ribbitto-sourcemaps"
@@ -121,7 +134,11 @@ func compareOrder(a, b releaseName) int {
 	return cmp.Or(a.Start.Compare(b.Start), cmp.Compare(a.RunID, b.RunID), cmp.Compare(a.Attempt, b.Attempt))
 }
 
-type apiClient struct{ cfg config }
+type apiClient struct {
+	cfg              config
+	expiry           string
+	delRels, delTags int
+}
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 || req.Method != http.MethodGet || via[0].Method != http.MethodGet || req.URL.Scheme != "https" {
@@ -132,7 +149,7 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 }
 
 func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept string, body []byte, out any) (int, []byte, error) {
-	if !c.cfg.allowTestEndpoint && (c.cfg.apiBase != prodAPIBase || c.cfg.uploadBase != prodUploadBase || c.cfg.storeRepo != prodStoreRepo) {
+	if !c.cfg.allowTestEndpoint && (c.cfg.apiBase != prodAPIBase || c.cfg.uploadBase != prodUploadBase || c.cfg.storeRepo != prodStoreRepo || c.cfg.sourceRepo != prodSourceRepo) {
 		return 0, nil, fmt.Errorf("refusing non-production endpoint configuration")
 	}
 	base := strings.TrimRight(c.cfg.apiBase, "/")
@@ -141,7 +158,7 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 		base = strings.TrimRight(cmp.Or(c.cfg.uploadBase, strings.Replace(base, "://api.github.com", "://uploads.github.com", 1)), "/")
 	}
 	if !c.cfg.allowTestEndpoint && !strings.HasPrefix(base, "https://") {
-		return 0, nil, fmt.Errorf("refusing non-https base %s", base)
+		return 0, nil, fmt.Errorf("refusing non-https base %s", safeQuote(base))
 	}
 	var r io.Reader
 	if body != nil {
@@ -164,12 +181,15 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 	client := &http.Client{Timeout: 2 * time.Minute, Transport: c.cfg.transport, CheckRedirect: checkRedirect}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, path, errors.Unwrap(err))
+		return 0, nil, fmt.Errorf("%s %s: request failed (%v)", method, safeQuote(path), errors.Unwrap(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if storeAuth {
+		c.expiry = cmp.Or(resp.Header.Get("github-authentication-token-expiration"), c.expiry)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err == nil && int64(len(raw)) > maxResponseBytes {
-		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
+		return resp.StatusCode, nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, safeQuote(path), maxResponseBytes)
 	}
 	if err == nil && out != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && len(raw) > 0 {
 		err = json.Unmarshal(raw, out)
@@ -191,30 +211,95 @@ func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 }
 
 func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
-	if _, ok := parseReleaseName(r.Name); !ok || r.ID <= 0 || r.Prerelease || r.Name != r.TagName {
+	p, ok := parseReleaseName(r.Name)
+	if !ok || r.ID <= 0 || r.Prerelease || r.Name != r.TagName {
 		return fmt.Errorf("refusing to delete non-canonical release %d", r.ID)
 	}
-	p := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID)
+	u := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID)
 	var got ghRelease
-	if code, _, err := c.do(ctx, true, "GET", p, "", nil, &got); err != nil || code == 404 {
+	if code, _, err := c.do(ctx, true, "GET", u, "", nil, &got); err != nil || code == 404 {
 		return err
 	} else if code != 200 || got.ID != r.ID || got.Name != r.Name || got.TagName != r.TagName || got.Draft != r.Draft || got.Prerelease {
 		return fmt.Errorf("release lookup mismatch for id %d (status %d)", r.ID, code)
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", p, "", nil, nil); err != nil || (code != 204 && code != 404) {
+	if code, _, err := c.do(ctx, true, "DELETE", u, "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
+	} else if code == 204 {
+		c.delRels++
+		logf(c.cfg.stdout, "deleted release %s (id %d, sha %s, age %dd)\n", safeQuote(r.Name), r.ID, p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
 }
 
 func (c *apiClient) deleteTagByRef(ctx context.Context, tag string) error {
-	if _, ok := parseReleaseName(tag); !ok {
-		return fmt.Errorf("refusing to delete non-canonical tag %q", tag)
+	p, ok := parseReleaseName(tag)
+	if !ok {
+		return fmt.Errorf("refusing to delete non-canonical tag %s", safeQuote(tag))
 	}
-	if code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (code != 204 && code != 404) {
-		return fmt.Errorf("deleting tag %s: status %d (%v)", tag, code, err)
+	code, _, err := c.do(ctx, true, "DELETE", fmt.Sprintf("/repos/%s/git/refs/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
+	if err == nil && code == 422 {
+		code, _, err = c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, nil)
+	}
+	if err != nil || (code != 204 && code != 404) {
+		return fmt.Errorf("deleting tag %s: status %d (%v)", safeQuote(tag), code, err)
+	}
+	if code == 204 {
+		c.delTags++
+		logf(c.cfg.stdout, "deleted tag %s (sha %s, age %dd)\n", safeQuote(tag), p.SHA, int(c.cfg.now.Sub(p.Start)/(24*time.Hour)))
 	}
 	return nil
+}
+
+func (c *apiClient) deleteUnreferencedTag(ctx context.Context, tag string, rels []ghRelease, deletedIDs map[int64]bool) error {
+	isRef := func(r ghRelease) bool { return !deletedIDs[r.ID] && (r.TagName == tag || r.Name == tag) }
+	if slices.ContainsFunc(rels, isRef) {
+		return nil
+	}
+	if tCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/tags/%s", c.cfg.storeRepo, tag), "", nil, nil); err != nil || (tCode != 404 && tCode != 200) {
+		return fmt.Errorf("rechecking tag %s: status %d (%v)", safeQuote(tag), tCode, err)
+	} else if tCode == 200 {
+		return nil
+	}
+	if fresh, err := c.listReleases(ctx); err != nil {
+		return err
+	} else if slices.ContainsFunc(fresh, isRef) {
+		return nil
+	}
+	var refObj struct{ Ref string }
+	if rCode, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/git/ref/tags/%s", c.cfg.storeRepo, tag), "", nil, &refObj); err != nil || (rCode != 200 && rCode != 404) || (rCode == 200 && refObj.Ref != "refs/tags/"+tag) {
+		return fmt.Errorf("verifying tag ref %s: status %d (%v)", safeQuote(tag), rCode, err)
+	}
+	return c.deleteTagByRef(ctx, tag)
+}
+
+// hasActiveRun paginates workflow runs and fails closed on API errors, incomplete
+// or 1,000-run-capped listings, or page-cap overflow so retention aborts before
+// any deletion when active-run status is unknown.
+func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) {
+	seen, total := 0, 0
+	for page := 1; page <= maxReleasePages; page++ {
+		var res struct {
+			TotalCount int                             `json:"total_count"`
+			Runs       []struct{ Status, Path string } `json:"workflow_runs"`
+		}
+		if code, _, err := c.do(ctx, false, "GET", fmt.Sprintf("/repos/%s/actions/runs?head_sha=%s&per_page=100&page=%d", c.cfg.sourceRepo, sha, page), "", nil, &res); err != nil || code != 200 {
+			return false, fmt.Errorf("checking concurrency group for %s: status %d (%v)", sha, code, err)
+		}
+		for _, r := range res.Runs {
+			if r.Status != "completed" && strings.TrimPrefix(strings.Split(r.Path, "@")[0], ".github/workflows/") == "sourcemaps-store.yml" {
+				return true, nil
+			}
+		}
+		seen += len(res.Runs)
+		total = max(total, res.TotalCount)
+		if len(res.Runs) < 100 {
+			if total >= maxWorkflowRuns || seen >= maxWorkflowRuns || seen < total {
+				return false, fmt.Errorf("checking concurrency group for %s: capped or incomplete workflow runs (%d/%d)", sha, seen, total)
+			}
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("checking concurrency group for %s: exceeded %d pages", sha, maxReleasePages)
 }
 
 func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt string) error {
@@ -225,28 +310,28 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	idxBytes, err := os.ReadFile(filepath.Join(mapDir, "index.json"))
 	var m manifest
 	if err = cmp.Or(err, json.Unmarshal(idxBytes, &m)); err != nil {
-		return fmt.Errorf("reading map index in %s: %w", mapDir, err)
+		return fmt.Errorf("reading map index in %s: %w", safeQuote(mapDir), err)
 	}
 	if m.Commit != sha || m.RunID != runID || len(m.Entries) == 0 {
-		return fmt.Errorf("invalid map index in %s", mapDir)
+		return fmt.Errorf("invalid map index in %s", safeQuote(mapDir))
 	}
 	assets, seenFiles := map[string][]byte{"index.json": idxBytes}, make(map[string]bool, len(m.Entries))
 	for _, b := range m.Entries {
 		if !validBundleEntry(b) || seenFiles[b.File] || assets[b.Map] != nil {
-			return fmt.Errorf("invalid source map entry %q", b.Map)
+			return fmt.Errorf("invalid source map entry %s", safeQuote(b.Map))
 		}
 		seenFiles[b.File] = true
 		data, err := os.ReadFile(filepath.Join(mapDir, b.Map))
 		if err != nil {
-			return fmt.Errorf("reading source map %s: %w", b.Map, err)
+			return fmt.Errorf("reading source map %s: %w", safeQuote(b.Map), err)
 		}
 		if !bytes.Contains(data, []byte(`"sourcesContent"`)) {
-			return fmt.Errorf("invalid source map %s: missing sourcesContent", b.Map)
+			return fmt.Errorf("invalid source map %s: missing sourcesContent", safeQuote(b.Map))
 		}
 		assets[b.Map] = data
 	}
 	if entries, err := os.ReadDir(mapDir); err != nil || len(entries) != len(assets) {
-		return fmt.Errorf("unexpected files in %s", mapDir)
+		return fmt.Errorf("unexpected files in %s", safeQuote(mapDir))
 	}
 	c := &apiClient{cfg: cfg}
 	createBody, _ := json.Marshal(map[string]any{"tag_name": relName, "name": relName, "target_commitish": "main", "draft": true, "prerelease": false})
@@ -257,7 +342,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	for _, name := range slices.Sorted(maps.Keys(assets)) {
 		u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", cfg.storeRepo, created.ID, url.QueryEscape(name))
 		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], nil); err != nil || (code != 201 && code != 200) {
-			return fmt.Errorf("uploading asset %s: status %d (%v)", name, code, err)
+			return fmt.Errorf("uploading asset %s: status %d (%v)", safeQuote(name), code, err)
 		}
 	}
 	relPath := fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, created.ID)
@@ -282,7 +367,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	assetIDs := make(map[string]int64, len(draftRel.Assets))
 	for _, a := range draftRel.Assets {
 		if sz, ok := wantAssets[a.Name]; !ok || !validAsset(a) || a.Size != sz {
-			return fmt.Errorf("uploaded asset %s does not match manifest", a.Name)
+			return fmt.Errorf("uploaded asset %s does not match manifest", safeQuote(a.Name))
 		}
 		assetIDs[a.Name] = a.ID
 		delete(wantAssets, a.Name)
@@ -291,16 +376,129 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 		return fmt.Errorf("uploaded asset set missing manifest entries")
 	}
 	pubBody, _ := json.Marshal(map[string]any{"draft": false, "prerelease": false})
-	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.Draft || pubRel.Prerelease {
+	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.ID != created.ID || pubRel.Draft || pubRel.Prerelease || pubRel.Name != relName || pubRel.TagName != relName {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
+	}
+	if gotRel, _, gotIdx, err := lookupWithClient(ctx, c, sha, "", runID); err != nil || gotRel != relName || !bytes.Equal(gotIdx, idxBytes) {
+		return fmt.Errorf("verifying published release: %v", err)
 	}
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 		e := m.Entries[k]
 		if code, gotBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", cfg.storeRepo, assetIDs[e.Map]), "application/octet-stream", nil, nil); err != nil || code != 200 || !bytes.Equal(gotBytes, assets[e.Map]) {
-			return fmt.Errorf("fetching back stored map %s: status %d (%v)", e.Map, code, err)
+			return fmt.Errorf("fetching back stored map %s: status %d (%v)", safeQuote(e.Map), code, err)
 		}
 	}
-	_, _ = fmt.Fprintf(cfg.stdout, "stored and fetched %s (%d maps)\n", relName, len(m.Entries))
+	logf(cfg.stdout, "stored and fetched %s (%d maps)\n", safeQuote(relName), len(m.Entries))
+	if err := runRetention(ctx, c, sha); err != nil {
+		return err
+	}
+	if c.expiry == "" {
+		logf(cfg.summary, "warning: missing github-authentication-token-expiration header\n")
+		return nil
+	}
+	exp, err := time.Parse("2006-01-02 15:04:05 UTC", c.expiry)
+	if err != nil {
+		exp, err = time.Parse("2006-01-02 15:04:05 -0700", c.expiry)
+	}
+	if err != nil {
+		logf(cfg.summary, "warning: unparsable github-authentication-token-expiration header\n")
+		return nil
+	}
+	if exp.Sub(cfg.now) < 14*24*time.Hour {
+		return fmt.Errorf("SOURCEMAPS_TOKEN expires within 14 days (%s)", exp.UTC().Format(time.RFC3339))
+	}
+	return nil
+}
+
+func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
+	rels, err := c.listReleases(ctx)
+	if err != nil {
+		return err
+	}
+	now, sum, deletedIDs, bySHA := c.cfg.now, c.cfg.summary, make(map[int64]bool), make(map[string][]parsedRel)
+	var delDrafts []ghRelease
+	for _, r := range rels {
+		p, ok := parseReleaseName(r.Name)
+		switch {
+		case r.Prerelease:
+			logf(sum, "warning: prerelease %s (id %d)\n", safeQuote(r.Name), r.ID)
+		case r.Name != r.TagName:
+			logf(sum, "warning: name/tag mismatch %s != %s (id %d)\n", safeQuote(r.Name), safeQuote(r.TagName), r.ID)
+		case !ok:
+			logf(sum, "warning: unparsable release %s (id %d)\n", safeQuote(r.Name), r.ID)
+		case p.Start.After(now.Add(24 * time.Hour)):
+			logf(sum, "warning: future-dated release %s (id %d)\n", safeQuote(r.Name), r.ID)
+		case r.Draft && now.Sub(p.Start) > 7*24*time.Hour:
+			logf(sum, "warning: abandoned draft %s (id %d)\n", safeQuote(r.Name), r.ID)
+			active := p.SHA == currentSHA
+			if !active {
+				if active, err = c.hasActiveRun(ctx, p.SHA); err != nil {
+					return err
+				}
+			}
+			if !active {
+				delDrafts = append(delDrafts, r)
+			}
+		case r.Draft:
+			logf(sum, "warning: younger draft %s (id %d)\n", safeQuote(r.Name), r.ID)
+		default:
+			bySHA[p.SHA] = append(bySHA[p.SHA], parsedRel{r, p})
+		}
+	}
+	for _, r := range delDrafts {
+		if err := c.deleteReleaseByID(ctx, r); err != nil {
+			return err
+		}
+		deletedIDs[r.ID] = true
+	}
+	var shas []string
+	for s, list := range bySHA {
+		slices.SortFunc(list, func(a, b parsedRel) int {
+			return cmp.Or(compareOrder(b.parsed, a.parsed), cmp.Compare(b.rel.ID, a.rel.ID))
+		})
+		bySHA[s], shas = list, append(shas, s)
+	}
+	slices.SortFunc(shas, func(a, b string) int {
+		return cmp.Or(compareOrder(bySHA[b][0].parsed, bySHA[a][0].parsed), cmp.Compare(bySHA[b][0].rel.ID, bySHA[a][0].rel.ID))
+	})
+	for idx := len(shas) - 1; idx >= 10; idx-- {
+		if s := shas[idx]; now.Sub(bySHA[s][0].parsed.Start) > 90*24*time.Hour {
+			for i := len(bySHA[s]) - 1; i >= 0; i-- {
+				item := bySHA[s][i]
+				if err := c.deleteReleaseByID(ctx, item.rel); err != nil {
+					return err
+				}
+				deletedIDs[item.rel.ID] = true
+				if err := c.deleteUnreferencedTag(ctx, item.rel.TagName, rels, deletedIDs); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	var orphanCands []string
+	for page := 1; ; page++ {
+		if page > maxReleasePages {
+			return fmt.Errorf("listing tags: exceeded %d pages", maxReleasePages)
+		}
+		var batch []struct{ Name string }
+		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/tags?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
+			return fmt.Errorf("listing tags: status %d (%v)", code, err)
+		}
+		for _, t := range batch {
+			if p, ok := parseReleaseName(t.Name); ok && now.Sub(p.Start) > 7*24*time.Hour {
+				orphanCands = append(orphanCands, t.Name)
+			}
+		}
+		if len(batch) < 100 {
+			break
+		}
+	}
+	for _, tag := range orphanCands {
+		if err := c.deleteUnreferencedTag(ctx, tag, rels, deletedIDs); err != nil {
+			return err
+		}
+	}
+	logf(c.cfg.stdout, "retention summary: deleted %d releases, %d tags\n", c.delRels, c.delTags)
 	return nil
 }
 
@@ -336,27 +534,27 @@ candLoop:
 		assets := make(map[string]ghAsset, len(best.Assets))
 		for _, a := range best.Assets {
 			if !validAsset(a) {
-				lastErr = fmt.Errorf("invalid asset %s in %s", a.Name, best.Name)
+				lastErr = fmt.Errorf("invalid asset %s in %s", safeQuote(a.Name), safeQuote(best.Name))
 				continue candLoop
 			}
 			assets[a.Name] = a
 		}
 		idxAsset, ok := assets["index.json"]
 		if !ok {
-			lastErr = fmt.Errorf("missing index.json in %s", best.Name)
+			lastErr = fmt.Errorf("missing index.json in %s", safeQuote(best.Name))
 			continue
 		}
 		code, idxBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, idxAsset.ID), "application/octet-stream", nil, nil)
 		var m manifest
 		if err != nil || code != 200 || int64(len(idxBytes)) != idxAsset.Size || json.Unmarshal(idxBytes, &m) != nil || m.Commit != p.SHA || m.RunID != strconv.FormatUint(p.RunID, 10) || len(m.Entries) == 0 || len(assets) != 1+len(m.Entries) {
-			lastErr = fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", best.Name, code, err)
+			lastErr = fmt.Errorf("reading or verifying index.json from %s: status %d (%v)", safeQuote(best.Name), code, err)
 			continue
 		}
 		seen := make(map[string]bool, len(m.Entries)*2)
 		for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
 			e := m.Entries[k]
 			if !validBundleEntry(e) || seen[e.File] || seen[e.Map] || assets[e.Map].ID == 0 {
-				lastErr = fmt.Errorf("incomplete or invalid manifest entry %s in %s", e.Map, best.Name)
+				lastErr = fmt.Errorf("incomplete or invalid manifest entry %s in %s", safeQuote(e.Map), safeQuote(best.Name))
 				continue candLoop
 			}
 			seen[e.File], seen[e.Map] = true, true
@@ -369,12 +567,12 @@ candLoop:
 				ma := assets[e.Map]
 				code, mapBytes, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/assets/%d", c.cfg.storeRepo, ma.ID), "application/octet-stream", nil, nil)
 				if err != nil || code != 200 || int64(len(mapBytes)) != ma.Size || !bytes.Contains(mapBytes, []byte(`"sourcesContent"`)) {
-					return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", e.Map, code, err)
+					return "", "", nil, fmt.Errorf("downloading map %s: status %d (%v)", safeQuote(e.Map), code, err)
 				}
 				return best.Name, e.Map, mapBytes, nil
 			}
 		}
-		return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, best.Name)
+		return "", "", nil, fmt.Errorf("bundle hash %s not found in %s", bundleSHA256, safeQuote(best.Name))
 	}
 	return "", "", nil, lastErr
 }
@@ -396,11 +594,11 @@ func main() {
 		a := append(args, "", "")
 		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2])
 		if err = lerr; err == nil {
-			_, _ = fmt.Fprintf(os.Stdout, "%s %s (%d bytes)\n", rel, name, len(data))
+			logf(os.Stdout, "%s %s (%d bytes)\n", safeQuote(rel), safeQuote(name), len(data))
 		}
 	case !*lookup && len(args) == 5:
 		if cfg.now, err = time.Parse("20060102T150405Z", args[1]); err != nil || cfg.now.UTC().Format("20060102T150405Z") != args[1] {
-			err = fmt.Errorf("invalid UTC start timestamp %q", args[1])
+			err = fmt.Errorf("invalid UTC start timestamp %s", safeQuote(args[1]))
 		} else {
 			err = runStore(context.Background(), cfg, args[0], args[2], args[3], args[4])
 		}
@@ -408,7 +606,7 @@ func main() {
 		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id>]]")
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }

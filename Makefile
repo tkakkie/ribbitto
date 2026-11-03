@@ -15,10 +15,13 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 GO_TEST_FLAGS ?= -p 2
 # CI passes GO_TEST_PACKAGES through tools/testshard; unset runs every package.
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools web-install check-web test-web prepush lint lint-fixtures vuln vuln-root vuln-tools vuln-tbls db-up db-down generate schema-docs deps api css dev bundles sourcemaps-store
 
 bundles:
 	go -C tools run ./webbuild .. "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}"
+
+sourcemaps-store:
+	go -C tools run ./sourcemaps ../bin/sourcemaps "$${SOURCEMAPS_NOW:-$$(date -u +%Y%m%dT%H%M%SZ)}" "$$(git rev-parse HEAD)" "$${GITHUB_RUN_ID:?}" "$${GITHUB_RUN_ATTEMPT:-1}"
 
 generate: bundles $(TEMPL)
 	go generate ./internal/web/view

@@ -25,8 +25,8 @@ before adoption, preserving nonce-only CSP.
 
 ## Private production store — #1469, #1819
 
-Under [decision 43](../decisions/43-typescript-with-a-go-driven-build.md), use
-**private GitHub Release assets** for production maps/index in maintainer-only
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md): use
+**private GitHub Release assets** in maintainer-only
 `tkakkie/ribbitto-sourcemaps`: no external service; **never commit maps to Git**.
 Actions artifacts do not fit public-repo CI because they cannot be private.
 
@@ -45,14 +45,14 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
   Naming the private repo, token scope, permission and expiry is intentional.
   Never write a value, token id or private URL.
 
-See [storing job, release naming and retention](web-source-maps-store.md#storing-job-release-naming-and-retention--1819).
+[Store](web-source-maps-store.md#storing-job-release-naming-and-retention--1819).
 
 ### Constraints
 
 - **Gate before the first production release ([#2049][i2049]):** at AI merge pace,
   the newest 10 protect almost nothing; only the 90 days do. Require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
   of exact SHA/run id/attempt/bundle hashes for every distributed/deployed build;
-  [production markers, retention and retirement margin](web-source-maps-store.md#storing-job-release-naming-and-retention--1819)
+  [production markers, retention and retirement margin](web-source-maps-store.md#production-markers--2049-part-22)
   are tested in #1819's `tools/sourcemaps` storing command. Until both #2049 parts merge: no container
   images, Dockerfiles, release workflows, tagged/distributed binaries (including
   `go install`), manual deployment or other build distribution outside CI.

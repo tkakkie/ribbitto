@@ -29,12 +29,14 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   create/delete tags with releases.
   #2049 lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
   newest complete published release per SHA within run/attempt filters; attempt
-  requires run id, with no fallback.
+  requires run id; lookup never falls back to another run or attempt.
 - **Lifecycle:** create a draft, upload maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
   against that manifest, publish, then verify lookup and per-ID fetch-back
   (exact SHA/run/attempt release; identical index and every map's bytes).
   Published releases are complete by construction; only drafts are incomplete.
+  Failed/interrupted runs leave drafts or published duplicates, both harmless;
+  older duplicates take no slot and stay until their SHA expires.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
   strict-`map-` drafts older than 7 days by parsed start time (retried creates
   included), by release ID, unless that SHA's concurrency group holds a run.
@@ -46,8 +48,8 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   out-of-range names and name/tag mismatches are neither counted nor deleted;
   warn in the job summary. Count each SHA's newest complete published release
   toward the newest 10 and 90-day floor (**distinct SHAs**, not releases).
-  A rerun of an old SHA takes a newest-10 slot by start time
-  (publication run order), potentially pushing a deployed SHA past 90 days;
+  A rerun of an old SHA takes a newest-10 slot by start time,
+  potentially pushing a deployed SHA past 90 days;
   production markers independently protect individual releases.
 - **Retention:** **90 days provisionally**
   plus a **90-day post-retirement investigation margin** (#2049).
@@ -120,17 +122,16 @@ mismatched bytes/names, missing/extra bundles, non-regular targets, empty indexe
 or read failures exit nonzero. Each indexed map needs a non-empty uploaded asset.
 Verification is read-only: no map downloads/content checks or substitute uploads.
 
-Success stdout is a JSON receipt: `commit`, `run_id`, `attempt`, `release`
+Success JSON on stdout: `commit`, `run_id`, `attempt`, `release`
 (full store release name), `entries` (per bundle: `file`, `sha256`, indexed map
 asset `map`). Future distribution/deploy must retain it outside public assets
 with the build's distribution record, stop on verification failure, and distribute
 those exact bytes without rebuilding/changing them. Use receipt SHA, bundle hash,
-run id and attempt in `-lookup` for the right map across differing same-SHA
-rebuilds; SHA-only lookup is insufficient for distribution.
+run id and attempt in `-lookup`; SHA-only lookup is insufficient for distribution.
 Test: `TestExactBuildVerification`.
 
-Both #2049 parts must merge to close the
-production gate; future distribution/deploy must verify and mark first. #1819's
+The production gate stays closed until both #2049 parts merge.
+Future distribution/deploy must verify and mark first. #1819's
 real deletion record remains pending (first run: zero releases/tags deleted);
 no production release while missing.
 

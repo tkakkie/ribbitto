@@ -133,7 +133,7 @@ func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 		t.Helper()
 		page.MustEval(`() => { window.leaving = true; }`)
 		start()
-		mustWaitAcrossNavigation(t, page, `() => !window.name.endsWith('|') || !window.leaving && document.readyState === 'complete' && `+want)
+		mustWaitAcrossNavigation(t, page, `() => Boolean(window.name.split('|')[1]) || !window.leaving && document.readyState === 'complete' && `+want)
 	}
 	navigate(func() { page.MustElement("#panel-control-members").MustClick() },
 		`!!document.getElementById('side-panel') && document.activeElement?.id === 'panel-heading'`)

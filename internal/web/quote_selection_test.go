@@ -9,10 +9,15 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"github.com/tkakkie/ribbitto/web/static"
 	"golang.org/x/net/html"
 )
 
 func TestQuoteSelectionMarkup(t *testing.T) {
+	scriptURL, err := static.ScriptURL(t.Context(), "quote-selection")
+	if err != nil {
+		t.Fatal(err)
+	}
 	entry := view.Message{ID: kernel.ID{1}, Body: "original"}
 	var previous string
 	for _, member := range []kernel.ID{{2}, {3}} {
@@ -53,7 +58,7 @@ func TestQuoteSelectionMarkup(t *testing.T) {
 					t.Fatal("selection input must be disabled in the separate quote form")
 				}
 			}
-			if n.Data == "script" && attr(n, "src") == "/static/quote-selection-v1.js" {
+			if n.Data == "script" && attr(n, "src") == scriptURL {
 				scripts++
 			}
 		}

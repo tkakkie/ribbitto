@@ -2,14 +2,14 @@
 
 Pending-post rules for the [web composer](web-composer.md#composer).
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) and its
-[table-driven tests](../../web/test/composer-queue.test.mjs) specify transitions,
+[table-driven tests](../../web/test/composer-queue.test.ts) specify transitions,
 refusals, ordering and identity; `web/src/composer.ts` adapts these decisions to
 htmx and the existing pending DOM. It clones the server-provided template and sets
 textContent, field values, hidden and contract attributes with DOM APIs. Each typed
 item has held form/item references in the adapter; no pending-state query or DOM read-back occurs.
 The adapter supplies `now`, `newKey` and a place identity covering channel and
 feed/topic. Timers call `expire(item)` to clear only their own hold even with a
-frozen or throwing clock. Remove sweeps aged holds; admission consumes only its
+frozen clock. Remove sweeps aged holds; admission consumes only its
 own hold and checks age only without a restored key. `pagehide`/`sent` clear holds.
 Before `admit`, the adapter calls `changeText` with a renewal callback that clears
 the uncertainty mark before generating/writing the composer key, including when

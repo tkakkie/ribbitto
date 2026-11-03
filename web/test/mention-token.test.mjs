@@ -140,6 +140,8 @@ test("stale-result, dismissal and query step rules guard opening, picking and du
   assert.equal(stepMentionQuery(state, { start: 0, value: "t" }), "search");
   assert.equal(stepMentionQuery(state, null), "closed");
   assert.equal(state.query, null);
+  assert.equal(stepMentionQuery(state, { start: 0, value: "t" }), "search");
+  assert.equal(state.query, "t");
   startMentionComposition(state);
   assert.equal(state.composing, true);
   assert.equal(state.query, null);

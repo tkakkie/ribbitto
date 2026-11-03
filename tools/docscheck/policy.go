@@ -18,6 +18,20 @@ import (
 
 const baselineFile = "tools/docscheck/baseline.go"
 
+// Moving the introduction path requires a maintainer decision.
+const introducedBaselineFile = "tools/docscheck/baseline.go"
+
+func gitEnvironment() []string {
+	// Match tools/languagecheck/main.go: hooks export repository/index selectors.
+	var env []string
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GIT_") {
+			env = append(env, entry)
+		}
+	}
+	return append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+}
+
 func readBaseline(source []byte) (map[string]int, error) {
 	file, err := parser.ParseFile(token.NewFileSet(), baselineFile, source, 0)
 	if err != nil {
@@ -54,13 +68,29 @@ func readBaseline(source []byte) (map[string]int, error) {
 }
 
 func checkPolicy(root, base string, out io.Writer) ([]string, error) {
+	return checkPolicyBaseline(root, base, baselineFile, out)
+}
+
+func checkPolicyBaseline(root, base, baselinePath string, out io.Writer) ([]string, error) {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolving repository root: %w", err)
+	}
 	// Resolve first so an unreadable revision cannot masquerade as an absent file.
 	git := func(args ...string) ([]byte, error) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = root
+		cmd.Env = append(gitEnvironment(), "GIT_CEILING_DIRECTORIES="+filepath.Dir(root))
 		result, err := cmd.CombinedOutput()
 		if err != nil {
-			return nil, fmt.Errorf("reading comparison base %q: %w: %s; fetch the needed revision from your remote (use `git fetch --unshallow <remote>` if history is too short), or choose an available revision with --base <rev> or DOCSCHECK_BASE=<rev> for make", base, err, strings.TrimSpace(string(result)))
+			detail := strings.TrimSpace(string(result))
+			if failure, ok := err.(*exec.ExitError); ok && failure.ExitCode() == 1 && len(result) == 0 && args[0] == "merge-base" {
+				err = fmt.Errorf("no common ancestor with origin/main")
+			}
+			if detail != "" {
+				detail = ": " + detail
+			}
+			return nil, fmt.Errorf("reading comparison base %q: %w%s; fetch the needed revision from your remote (use `git fetch --unshallow <remote>` if history is too short), or choose an available revision with --base <rev> or DOCSCHECK_BASE=<rev> for make", base, err, detail)
 		}
 		return result, nil
 	}
@@ -76,17 +106,26 @@ func checkPolicy(root, base string, out io.Writer) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := git("ls-tree", "--name-only", strings.TrimSpace(string(rev)), "--", baselineFile)
+	files, err := git("ls-tree", "--name-only", strings.TrimSpace(string(rev)), "--", introducedBaselineFile)
 	if err != nil {
 		return nil, err
 	}
+	if len(files) != 0 && baselinePath != introducedBaselineFile {
+		return nil, fmt.Errorf("baseline moved or removed: comparison base %q has %s; the limits at the base are the reference", base, introducedBaselineFile)
+	}
+	if baselinePath != introducedBaselineFile {
+		files, err = git("ls-tree", "--name-only", strings.TrimSpace(string(rev)), "--", baselinePath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	before := map[string]int{}
 	if len(files) == 0 {
-		if _, err := fmt.Fprintf(out, "docscheck: comparison base %q has no %s; introducing directory limits\n", base, baselineFile); err != nil {
+		if _, err := fmt.Fprintf(out, "docscheck: comparison base %q has no %s; introducing directory limits\n", base, baselinePath); err != nil {
 			return nil, fmt.Errorf("writing baseline notice: %w", err)
 		}
 	} else {
-		source, err := git("show", strings.TrimSpace(string(rev))+":"+baselineFile)
+		source, err := git("show", strings.TrimSpace(string(rev))+":"+baselinePath)
 		if err != nil {
 			return nil, err
 		}
@@ -95,15 +134,15 @@ func checkPolicy(root, base string, out io.Writer) ([]string, error) {
 			return nil, fmt.Errorf("comparison base %q: %w", base, err)
 		}
 	}
-	source, err := os.ReadFile(filepath.Join(root, baselineFile))
+	source, err := os.ReadFile(filepath.Join(root, baselinePath))
 	if err != nil {
-		return nil, fmt.Errorf("reading current baseline: %w", err)
+		return nil, fmt.Errorf("reading current baseline (baseline moved or removed; the limits at the base are the reference): %w", err)
 	}
 	limits, err := readBaseline(source)
 	if err != nil {
 		return nil, err
 	}
-	problems, err := checkDocuments(root, limits, documentAllowlist())
+	problems, err := checkDocuments(root, limits, before, documentAllowlist())
 	for dir, previous := range before {
 		if limit, ok := limits[dir]; !ok || limit > previous {
 			problems = append(problems, fmt.Sprintf("%s: %s limit removed or raised above %d at %s", baselineFile, dir, previous, base))
@@ -117,7 +156,7 @@ func policyExempt(path string) bool {
 	return path == "docs/dependencies.md" || strings.HasPrefix(path, "docs/schema/") || strings.HasPrefix(path, decisionsDir+"/")
 }
 
-func checkDocuments(root string, limits map[string]int, allowed map[string]string) ([]string, error) {
+func checkDocuments(root string, limits, before map[string]int, allowed map[string]string) ([]string, error) {
 	files, err := markdownFiles(root)
 	if err != nil {
 		return nil, fmt.Errorf("listing policy documents: %w", err)
@@ -155,8 +194,12 @@ func checkDocuments(root string, limits map[string]int, allowed map[string]strin
 			problems = append(problems, file+": stale allow-list entry or empty reason")
 		}
 	}
-	for dir, total := range totals {
-		if total > limits[dir] {
+	for dir, limit := range limits {
+		total := totals[dir]
+		if _, exists := before[dir]; !exists && limit > total {
+			problems = append(problems, fmt.Sprintf("%s: new limit %d must equal its measured total of %d", dir, limit, total))
+		}
+		if total > limit {
 			problems = append(problems, fmt.Sprintf("%s: %d characters, over its total limit of %d; delete narration and consolidate", dir, total, limits[dir]))
 		}
 	}

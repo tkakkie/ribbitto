@@ -145,7 +145,9 @@ bump the dependency in its own pull request, or upgrade Go for a
 standard-library finding; without a fix, the maintainer decides.
 
 CodeQL (`.github/workflows/codeql.yml`) runs on `main` and weekly, not on
-pull requests; alerts are in the Security tab.
+pull requests; alerts are in the Security tab. See
+[dependency and runtime update coverage](dependency-updates.md) for the
+version-pin inventory, Dependabot rules and `.github/workflows/version-coverage.yml`.
 
 ### README screenshot
 

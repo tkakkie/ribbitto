@@ -25,10 +25,10 @@ extension retry remains its only retry.
   DOM-free pure transitions in `web/src/unread-counts.ts` specify count updates,
   frame validation, eligibility, bounded retention, stream-order snapshots and
   loss-aware recovery with jittered backoff; their positive and negative cases
-  live in [`unread-counts.test.mjs`](../../web/test/unread-counts.test.mjs).
-  A 429 is a request failure: recovery stays open and retries with backoff (`429 request failure` in the [unit tests](../../web/test/unread-counts.test.mjs)).
-  Losses during a request, including repeated losses, reserve another request (`recovery new loss` / `repeated losses` in the [unit tests](../../web/test/unread-counts.test.mjs)).
-  Retention itself is not loss (`retention` in the [unit tests](../../web/test/unread-counts.test.mjs)).
+  live in [`unread-counts.test.ts`](../../web/test/unread-counts.test.ts).
+  A 429 is a request failure: recovery stays open and retries with backoff (`429 request failure` in the [unit tests](../../web/test/unread-counts.test.ts)).
+  Losses during a request, including repeated losses, reserve another request (`recovery new loss` / `repeated losses` in the [unit tests](../../web/test/unread-counts.test.ts)).
+  Retention itself is not loss (`retention` in the [unit tests](../../web/test/unread-counts.test.ts)).
   `message` frames never increment. Missing rows wait for the next resync;
   malformed badges enter recovery. The adapter changes only server-rendered
   badge text and visibility; htmx owns resync requests. Duplicate triggers merge

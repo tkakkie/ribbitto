@@ -205,7 +205,8 @@ func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 	for page := 1; page <= maxReleasePages; page++ {
 		var batch []struct {
 			ghRelease
-			Body *string `json:"body"`
+			// Only a missing key needs a fallback read; null is an empty body.
+			Body json.RawMessage `json:"body"`
 		}
 		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
 			return nil, fmt.Errorf("listing releases: status %d (%v)", code, err)
@@ -213,7 +214,9 @@ func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 		for _, r := range batch {
 			r.ghRelease.bodyAbsent = r.Body == nil
 			if r.Body != nil {
-				r.ghRelease.Body = *r.Body
+				if err := json.Unmarshal(r.Body, &r.ghRelease.Body); err != nil {
+					return nil, fmt.Errorf("decoding listed release body: %w", err)
+				}
 			}
 			all = append(all, r.ghRelease)
 		}

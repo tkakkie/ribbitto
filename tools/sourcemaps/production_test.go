@@ -32,6 +32,7 @@ func TestProductionRetention(t *testing.T) {
 		{name: "active older duplicate", body: productionActive, age: 500, newer: 10, duplicate: true},
 		{name: "active newest", body: productionActive, age: 500},
 		{name: "active young", body: productionActive, age: 1, newer: 10},
+		{name: "active old draft", body: productionActive, class: "draft", age: 200, newer: 10},
 		{name: "retired before margin", body: retired(90*day - time.Second), age: 200, newer: 10},
 		{name: "retired at margin", body: retired(90 * day), age: 200, newer: 10, del: true},
 		{name: "retired after margin", body: retired(91 * day), age: 200, newer: 10, del: true},
@@ -138,7 +139,7 @@ func TestProductionRetention(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
 			}
-			if tc.wantErr && tc.concurrent == "" && len(s.events) != 0 {
+			if tc.wantErr && tc.concurrent == "" && tc.class != "null" && len(s.events) != 0 {
 				t.Fatalf("initial marker failure must delete nothing: %v", s.events)
 			}
 			if tc.wantErr && tc.body != "" {
@@ -146,13 +147,17 @@ func TestProductionRetention(t *testing.T) {
 				if tc.name == "future retirement" {
 					reason = "retirement time is in the future"
 				}
-				if !strings.Contains(err.Error(), fmt.Sprintf("release 1 tag %s: %s", safeQuote(target.TagName), reason)) || strings.Contains(err.Error(), tc.body) {
+				wantDiagnostic := fmt.Sprintf("release 1 tag %s: %s", safeQuote(target.TagName), reason)
+				if tc.class == "null" {
+					wantDiagnostic = fmt.Sprintf("production marker protected or changed for release 1 tag %s", safeQuote(target.TagName))
+				}
+				if !strings.Contains(err.Error(), wantDiagnostic) || strings.Contains(err.Error(), tc.body) {
 					t.Fatalf("marker diagnostic: %v", err)
 				}
 			}
 			if tc.del {
 				wantGETs := c.delRels
-				if tc.class == "absent" || tc.class == "null" {
+				if tc.class == "absent" {
 					wantGETs += population
 				}
 				t.Logf("N=%d, D=%d: release GETs=%d", population, c.delRels, releaseGETs)
@@ -169,7 +174,7 @@ func TestProductionRetention(t *testing.T) {
 }
 
 func TestProductionTransitions(t *testing.T) {
-	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 11, 3, 12, 0, 0, 123456789, time.UTC)
 	name := relNameAt(now.Add(-200*24*time.Hour), shaOf(1), 1, 1)
 	for _, tc := range []struct {
 		name, initial, state, want string
@@ -213,6 +218,167 @@ func TestProductionTransitions(t *testing.T) {
 			if !tc.wantErr && out.String() != fmt.Sprintf("production release 1 tag %s: %s\n", safeQuote(name), tc.state) {
 				t.Fatalf("success log: %q", out.String())
 			}
+		})
+	}
+}
+
+func TestProductionMarkerStrictness(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	for _, body := range []string{
+		" ", "\n", "null", productionActive + "\n", productionActive + " ",
+		productionRetired + "2026-08-01T00:00:00Z\n",
+		productionRetired + "2026-08-01T00:00:00Z ",
+		productionRetired + "2026-08-01T00:00:00z",
+	} {
+		t.Run(fmt.Sprintf("%q", body), func(t *testing.T) {
+			if keep, err := keepProduction(body, now); err == nil || !keep {
+				t.Fatalf("invalid marker must fail closed: keep=%v err=%v", keep, err)
+			}
+		})
+	}
+}
+
+func TestProductionWriteRefusals(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	for _, mode := range []string{"future start", "id", "name", "tag_name", "patch body"} {
+		t.Run(mode, func(t *testing.T) {
+			start := now.Add(-200 * 24 * time.Hour)
+			if mode == "future start" {
+				start = now.Add(24*time.Hour + time.Second)
+			}
+			name := relNameAt(start, shaOf(1), 1, 1)
+			s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: name, TagName: name}}}
+			gets, patches := 0, 0
+			s.before = func(w http.ResponseWriter, r *http.Request) bool {
+				if r.Method == "GET" {
+					gets++
+					got := s.releases[0]
+					switch mode {
+					case "id":
+						got.ID = 0
+					case "name":
+						got.Name = "other"
+					case "tag_name":
+						got.TagName = "other"
+					}
+					_ = json.NewEncoder(w).Encode(got)
+					return true
+				}
+				if r.Method == "PATCH" {
+					patches++
+					got := s.releases[0]
+					got.Body = productionActive
+					if mode == "patch body" {
+						got.Body = ""
+					}
+					_ = json.NewEncoder(w).Encode(got)
+					return true
+				}
+				return false
+			}
+			srv := s.server(t)
+			defer srv.Close()
+			var out bytes.Buffer
+			err := runProduction(t.Context(), testCfg(srv.URL, "tok", now, &out), name, "active")
+			wantGets, wantPatches := 1, 0
+			if mode == "future start" {
+				wantGets = 0
+			} else if mode == "patch body" {
+				wantPatches = 1
+			}
+			if err == nil || out.Len() != 0 || gets != wantGets || patches != wantPatches {
+				t.Fatalf("refusal: err=%v output=%q GETs=%d PATCHes=%d", err, out.String(), gets, patches)
+			}
+		})
+	}
+}
+
+func TestProductionListedBodies(t *testing.T) {
+	now, day := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC), 24*time.Hour
+	for _, mode := range []string{"null", "absent", "null active", "absent active", "absent concurrent active"} {
+		t.Run(mode, func(t *testing.T) {
+			s := &mockStore{token: "tok"}
+			for i := range 14 {
+				name := relNameAt(now.Add(-time.Duration(200+i)*day), shaOf(i+1), i+1, 1)
+				s.releases = append(s.releases, mockRelease{ID: int64(i + 1), Name: name, TagName: name})
+				s.tags = append(s.tags, name)
+			}
+			if mode == "null active" || mode == "absent active" {
+				s.releases[12].Body = productionActive
+			}
+			gets, preflightGETs, targetReads := 0, 0, 0
+			s.before = func(w http.ResponseWriter, r *http.Request) bool {
+				if r.Method == "GET" && r.URL.Path == "/repos/"+prodStoreRepo+"/releases" {
+					// Change only the target's key for absent cases; every null
+					// body exercises the ordinary-release request budget.
+					listed := make([]map[string]any, len(s.releases))
+					for i, rel := range s.releases {
+						data, _ := json.Marshal(rel)
+						_ = json.Unmarshal(data, &listed[i])
+						if strings.HasPrefix(mode, "null") {
+							listed[i]["body"] = nil
+						} else if rel.ID == 13 {
+							delete(listed[i], "body")
+						}
+					}
+					_ = json.NewEncoder(w).Encode(listed)
+					return true
+				}
+				if r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/repos/"+prodStoreRepo+"/releases/") && !strings.Contains(r.URL.Path, "/tags/") {
+					gets++
+					if len(s.events) == 0 {
+						preflightGETs++
+					}
+					if r.URL.Path == "/repos/"+prodStoreRepo+"/releases/13" {
+						targetReads++
+						if mode == "absent concurrent active" && targetReads == 2 {
+							for i := range s.releases {
+								if s.releases[i].ID == 13 {
+									s.releases[i].Body = productionActive
+								}
+							}
+						}
+					}
+				}
+				return false
+			}
+			srv := s.server(t)
+			defer srv.Close()
+			c := &apiClient{cfg: testCfg(srv.URL, "tok", now, io.Discard)}
+			err := runRetention(t.Context(), c, "")
+			stale := mode == "null active" || mode == "absent concurrent active"
+			if (err != nil) != stale {
+				t.Fatalf("err=%v events=%v", err, s.events)
+			}
+			if stale {
+				if !slices.Equal(s.events, []string{"del-rel:14", "del-tag:" + relNameAt(now.Add(-213*day), shaOf(14), 14, 1)}) {
+					t.Fatalf("only prior deletion may stand: %v", s.events)
+				}
+			} else {
+				wantDeleted := 4
+				if mode == "absent active" {
+					wantDeleted = 3
+				}
+				if c.delRels != wantDeleted || slices.Contains(s.events, "del-rel:13") == (mode == "absent active") {
+					t.Fatalf("deleted=%d events=%v", c.delRels, s.events)
+				}
+			}
+			wantFallback := 0
+			if strings.HasPrefix(mode, "absent") {
+				wantFallback = 1
+			}
+			// The first authoritative read precedes the first DELETE too.
+			if preflightGETs-1 != wantFallback {
+				t.Fatalf("preflight GETs=%d, want %d", preflightGETs-1, wantFallback)
+			}
+			wantGets := wantFallback + c.delRels
+			if stale {
+				wantGets++
+			}
+			if gets != wantGets {
+				t.Fatalf("release GETs=%d, want %d", gets, wantGets)
+			}
+			t.Logf("N=14, D=%d: preflight GETs=%d, total release GETs=%d", c.delRels, wantFallback, gets)
 		})
 	}
 }

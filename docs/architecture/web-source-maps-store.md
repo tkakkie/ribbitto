@@ -5,7 +5,7 @@
 [#1819][i1819]: on `main`, `tools/sourcemaps` (`make sourcemaps-store`) uploads
 production `.js.map` (`sourcesContent`, outside `web/static/dist`, no
 `sourceMappingURL`) and `bin/sourcemaps/index.json` (outside `web/static`).
-Tests: `make check-tools`. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
+Tests: `make check-tools`, including leak tests. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
 `GITHUB_TOKEN` `contents: read`, `SOURCEMAPS_TOKEN` only.
 `.github/workflows/ci.yml`: `cancel-in-progress: true`, no secret.
 
@@ -18,7 +18,7 @@ Secret: upload step-level `env` only, never build/install/test.
 Actions are SHA-pinned; command, Go dependencies and Makefile targets/tools need
 workflow review ([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
-- **Release naming, order and uniqueness:** tag and name are
+- **Release naming:** tag and name are
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>`: runner
   clock read once at job start is the only "now", passed to the command;
   lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros
@@ -26,14 +26,13 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   use the parsed name, never `created_at`: `(start time, run id, attempt)`,
   with numeric run id/attempt. Never reuse, rename, retag or return releases
   to draft. They target README-only store `main` (`target_commitish: "main"`);
-  create/delete tags with releases. Reruns and second pushes create releases.
+  create/delete tags with releases.
   #2049 lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
   newest complete published release per SHA within run/attempt filters; attempt
   requires run id, with no fallback.
 - **Release lifecycle:** create a draft, upload maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
-  against that manifest, publish, then verify lookup and per-ID fetch-back.
-  Published releases are complete by construction; only drafts are incomplete.
+  against that manifest, publish. Only drafts are incomplete.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
   strict-`map-` drafts older than 7 days by parsed start time (retried creates
   included), by release ID, unless that SHA's concurrency group holds a run.
@@ -81,12 +80,15 @@ exactly `sourcemaps-production-v1 active` means in production;
 whitespace, offsets, fractional seconds, unknown versions, malformed/future
 times. Retire with the same command using `retired` instead of `active`;
 retries retain the marker and first retirement time. Use a trusted writer clock:
-a clock set far back shortens the margin. Unmarked releases cannot be retired;
+a clock set far back shortens the margin; one set far forward writes a future
+retirement time, making `-production` and cleanup refuse until the maintainer
+replaces the release body with a valid marker by hand in the private store repository.
+Unmarked releases cannot be retired;
 never overwrite invalid markers. Patch only the body of a canonical published
 non-prerelease, never assets/name/tag. Retry failed writes before proceeding.
 
 Before **any** deletion, including draft/orphan-tag cleanup, validate every
-listed body (GET by exact ID if absent/null). Unreadable, invalid or
+listed body (GET by exact ID only if absent, not null). Unreadable, invalid or
 unknown-version markers abort with **nothing deleted**. Active releases stay
 regardless of age/SHA position; retired releases stay at least 90 days after
 retirement. Then **both** floors still apply: the SHA's newest release older
@@ -95,7 +97,9 @@ separate markers/margins; absent markers add no protection.
 
 Immediately before each release DELETE, re-read its exact ID and compare body
 with the validated snapshot. Read errors or changes (including marks/retirements
-since listing) abort that delete and remaining cleanup; prior deletions stand. GitHub
+since listing) abort that delete and remaining cleanup; prior deletions stand.
+A stale listing can leave earlier deletions standing before this re-read stops
+the run, so **nothing deleted** is guaranteed only for the listed bodies. GitHub
 has no atomic marker read-and-delete. The first distribution/deploy issue must
 serialize marking with cleanup and status writers with each other, covering the
 final GET/DELETE interval. Cleanup takes no lock; per-SHA upload concurrency

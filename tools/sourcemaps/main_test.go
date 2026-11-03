@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"cmp"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -456,13 +458,13 @@ func TestStoreCoreAndLookup(t *testing.T) {
 		{ID: 903, Name: relNameAt(now.Add(3*time.Hour), currSHA, 602, 1), TagName: relNameAt(now.Add(3*time.Hour), currSHA, 601, 1)},
 		{ID: 904, Name: relNameAt(now.Add(25*time.Hour), currSHA, 603, 1), TagName: relNameAt(now.Add(25*time.Hour), currSHA, 603, 1)},
 	}, store.releases...)
-	if gotRel, gotIdx, _, err := runLookup(t.Context(), cfg, currSHA, "", ""); err != nil || gotRel != relNameAt(now, currSHA, 510, 10) || gotIdx != "index.json" {
+	if gotRel, gotIdx, _, err := runLookup(t.Context(), cfg, currSHA, "", "", ""); err != nil || gotRel != relNameAt(now, currSHA, 510, 10) || gotIdx != "index.json" {
 		t.Fatalf("lookup by SHA alone failed: rel=%s asset=%s err=%v", gotRel, gotIdx, err)
 	}
-	if gotRel, gotMapName, gotMap, err := runLookup(t.Context(), cfg, currSHA, bundleHash, ""); err != nil || gotRel != relNameAt(now, currSHA, 510, 10) || gotMapName != "message-time-ABCDEF12.js.map" || !bytes.Equal(gotMap, wantMap) {
+	if gotRel, gotMapName, gotMap, err := runLookup(t.Context(), cfg, currSHA, bundleHash, "", ""); err != nil || gotRel != relNameAt(now, currSHA, 510, 10) || gotMapName != "message-time-ABCDEF12.js.map" || !bytes.Equal(gotMap, wantMap) {
 		t.Fatalf("lookup failed: rel=%s map=%s err=%v", gotRel, gotMapName, err)
 	}
-	if gotRel9, _, _, err := runLookup(t.Context(), cfg, currSHA, bundleHash, "9"); err != nil || gotRel9 != relNameAt(now, currSHA, 9, 1) {
+	if gotRel9, _, _, err := runLookup(t.Context(), cfg, currSHA, bundleHash, "9", ""); err != nil || gotRel9 != relNameAt(now, currSHA, 9, 1) {
 		t.Fatalf("lookup with runID=9 failed: rel=%s err=%v", gotRel9, err)
 	}
 	c := &apiClient{cfg: cfg}
@@ -838,7 +840,7 @@ func TestLookupHardening(t *testing.T) {
 		s := &mockStore{token: "tok", releases: []mockRelease{{ID: 1, Name: tc.relName, TagName: tc.relName, Assets: tc.assets}}}
 		srv := s.server(t)
 		defer srv.Close()
-		if _, _, _, err := runLookup(t.Context(), testCfg(srv.URL, tc.tok, tc.clk, nil), sha, h, ""); err == nil {
+		if _, _, _, err := runLookup(t.Context(), testCfg(srv.URL, tc.tok, tc.clk, nil), sha, h, "", ""); err == nil {
 			t.Fatalf("expected %s to fail lookup", tc.name)
 		}
 	}
@@ -858,15 +860,119 @@ func TestLookupHardening(t *testing.T) {
 	}}
 	srv := s.server(t)
 	defer srv.Close()
-	if gotRel, gotIdx, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, "", ""); err != nil || gotRel != rel || gotIdx != "index.json" {
+	if gotRel, gotIdx, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, "", "", ""); err != nil || gotRel != rel || gotIdx != "index.json" {
 		t.Fatalf("expected SHA-only lookup to skip incomplete newer releases and pick %s, got rel=%q asset=%q err=%v", rel, gotRel, gotIdx, err)
 	}
-	if gotRel, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, ""); err != nil || gotRel != rel || gotMap != "a.js.map" {
+	if gotRel, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "", ""); err != nil || gotRel != rel || gotMap != "a.js.map" {
 		t.Fatalf("expected hash lookup to skip incomplete newer releases and pick %s/a.js.map, got rel=%q map=%q err=%v", rel, gotRel, gotMap, err)
 	}
 	for i := range 30 {
-		if _, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "10"); err != nil || gotMap != "a.js.map" {
+		if _, gotMap, _, err := runLookup(t.Context(), testCfg(srv.URL, "tok", now, nil), sha, h, "10", ""); err != nil || gotMap != "a.js.map" {
 			t.Fatalf("iter %d: expected deterministic a.js.map, got %q (err=%v)", i, gotMap, err)
 		}
+	}
+}
+
+func TestExactBuildVerification(t *testing.T) {
+	now, sha := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC), shaOf(1)
+	s := &mockStore{token: "tok"}
+	srv := s.server(t)
+	defer srv.Close()
+	var dirs, names []string
+	var hashes, wantMaps []string
+	for i, identity := range [][2]string{{"10", "1"}, {"10", "2"}, {"11", "1"}} {
+		dir, mapDir := t.TempDir(), t.TempDir()
+		m := manifest{Commit: sha, RunID: identity[0], Entries: map[string]bundle{}}
+		for _, key := range []string{"a", "z"} {
+			data := []byte(fmt.Sprintf("console.log(%q, %d)", key, i))
+			hash := fmt.Sprintf("%x", sha256.Sum256(data))
+			mapData := fmt.Sprintf(`{"sourcesContent":[%q]}`, string(data))
+			m.Entries[key] = bundle{key + ".js", hash, key + ".js.map"}
+			if err := cmp.Or(os.WriteFile(filepath.Join(dir, key+".js"), data, 0644), os.WriteFile(filepath.Join(mapDir, key+".js.map"), []byte(mapData), 0644)); err != nil {
+				t.Fatal(err)
+			}
+			if key == "z" {
+				hashes, wantMaps = append(hashes, hash), append(wantMaps, mapData)
+			}
+		}
+		idx, _ := json.Marshal(m)
+		if err := os.WriteFile(filepath.Join(mapDir, "index.json"), idx, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := runStore(t.Context(), testCfg(srv.URL, "tok", now, io.Discard), mapDir, sha, identity[0], identity[1]); err != nil {
+			t.Fatal(err)
+		}
+		dirs = append(dirs, dir)
+		names = append(names, s.releases[len(s.releases)-1].Name)
+		var out bytes.Buffer
+		cfg := testCfg(srv.URL, "tok", now, &out)
+		if err := runVerify(t.Context(), cfg, dir, sha, identity[0], identity[1]); err != nil {
+			t.Fatal(err)
+		}
+		var receipt struct {
+			manifest
+			Release, Attempt string
+		}
+		if err := json.Unmarshal(out.Bytes(), &receipt); err != nil || receipt.Commit != sha || receipt.RunID != identity[0] || receipt.Attempt != identity[1] || receipt.Release != names[i] || !maps.Equal(receipt.Entries, m.Entries) {
+			t.Fatalf("wrong receipt: %s (%v)", out.String(), err)
+		}
+	}
+	// The newest same-SHA output must not replace either earlier run/attempt.
+	for i, identity := range [][2]string{{"10", "1"}, {"10", "2"}, {"11", "1"}} {
+		cfg := testCfg(srv.URL, "tok", now, &bytes.Buffer{})
+		if err := runVerify(t.Context(), cfg, dirs[i], sha, identity[0], identity[1]); err != nil {
+			t.Fatal(err)
+		}
+		rel, name, data, err := runLookup(t.Context(), cfg, sha, hashes[i], identity[0], identity[1])
+		if err != nil || rel != names[i] || name != "z.js.map" || string(data) != wantMaps[i] {
+			t.Fatalf("wrong rebuild map: %s/%s %s (%v)", rel, name, data, err)
+		}
+	}
+	for _, tc := range []struct{ name, commit, run, attempt, change string }{
+		{"wrong SHA", shaOf(2), "10", "1", ""},
+		{"missing run", sha, "12", "1", ""},
+		{"missing attempt", sha, "10", "3", ""},
+		{"no run", sha, "", "1", ""},
+		{"no attempt", sha, "11", "", ""},
+		{"invalid attempt", sha, "10", "01", ""},
+		{"other rebuild", sha, "10", "2", ""},
+		{"changed last bundle", sha, "10", "1", "tamper"},
+		{"renamed bundle", sha, "10", "1", "rename"},
+		{"missing bundle", sha, "10", "1", "missing"},
+		{"extra bundle", sha, "10", "1", "extra"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			source := dirs[0]
+			if tc.name == "no attempt" {
+				source = dirs[2]
+			}
+			for _, key := range []string{"a", "z"} {
+				data, err := os.ReadFile(filepath.Join(source, key+".js"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, key+".js"), data, 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			switch tc.change {
+			case "tamper":
+				_ = os.WriteFile(filepath.Join(dir, "z.js"), []byte("changed"), 0644)
+			case "rename":
+				_ = os.Rename(filepath.Join(dir, "z.js"), filepath.Join(dir, "renamed.js"))
+			case "missing":
+				_ = os.Remove(filepath.Join(dir, "z.js"))
+			case "extra":
+				_ = os.WriteFile(filepath.Join(dir, "extra.js"), []byte("extra"), 0644)
+			}
+			var out bytes.Buffer
+			if err := runVerify(t.Context(), testCfg(srv.URL, "tok", now, &out), dir, tc.commit, tc.run, tc.attempt); err == nil || out.Len() != 0 {
+				t.Fatalf("must refuse without a receipt: err=%v output=%s", err, out.String())
+			}
+		})
+	}
+	if len(s.events) != 15 {
+		t.Fatalf("verification mutated store: %v", s.events)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -379,7 +380,7 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	if code, _, err = c.do(ctx, true, "PATCH", relPath, "", pubBody, &pubRel); err != nil || code != 200 || pubRel.ID != created.ID || pubRel.Draft || pubRel.Prerelease || pubRel.Name != relName || pubRel.TagName != relName {
 		return fmt.Errorf("publishing release: status %d (%v)", code, err)
 	}
-	if gotRel, _, gotIdx, err := lookupWithClient(ctx, c, sha, "", runID); err != nil || gotRel != relName || !bytes.Equal(gotIdx, idxBytes) {
+	if gotRel, _, gotIdx, err := lookupWithClient(ctx, c, sha, "", runID, attempt); err != nil || gotRel != relName || !bytes.Equal(gotIdx, idxBytes) {
 		return fmt.Errorf("verifying published release: %v", err)
 	}
 	for _, k := range slices.Sorted(maps.Keys(m.Entries)) {
@@ -502,12 +503,12 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 	return nil
 }
 
-func runLookup(ctx context.Context, cfg config, sha, bundleSHA256, runID string) (string, string, []byte, error) {
-	return lookupWithClient(ctx, &apiClient{cfg: cfg}, sha, bundleSHA256, runID)
+func runLookup(ctx context.Context, cfg config, sha, bundleSHA256, runID, attempt string) (string, string, []byte, error) {
+	return lookupWithClient(ctx, &apiClient{cfg: cfg}, sha, bundleSHA256, runID, attempt)
 }
 
-func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runID string) (string, string, []byte, error) {
-	if !shaRe.MatchString(sha) || (runID != "" && !numIDRe.MatchString(runID)) || (bundleSHA256 != "" && !sha256Re.MatchString(bundleSHA256)) || c.cfg.token == "" || c.cfg.now.IsZero() {
+func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runID, attempt string) (string, string, []byte, error) {
+	if (attempt != "" && (!numIDRe.MatchString(attempt) || runID == "")) || !shaRe.MatchString(sha) || (runID != "" && !numIDRe.MatchString(runID)) || (bundleSHA256 != "" && !sha256Re.MatchString(bundleSHA256)) || c.cfg.token == "" || c.cfg.now.IsZero() {
 		return "", "", nil, fmt.Errorf("invalid lookup configuration or arguments")
 	}
 	rels, err := c.listReleases(ctx)
@@ -517,7 +518,7 @@ func lookupWithClient(ctx context.Context, c *apiClient, sha, bundleSHA256, runI
 	var cands []parsedRel
 	for _, r := range rels {
 		p, ok := parseReleaseName(r.Name)
-		if ok && !r.Draft && !r.Prerelease && r.Name == r.TagName && p.SHA == sha && !p.Start.After(c.cfg.now.Add(24*time.Hour)) && (runID == "" || strconv.FormatUint(p.RunID, 10) == runID) {
+		if ok && !r.Draft && !r.Prerelease && r.Name == r.TagName && p.SHA == sha && !p.Start.After(c.cfg.now.Add(24*time.Hour)) && (runID == "" || strconv.FormatUint(p.RunID, 10) == runID) && (attempt == "" || strconv.FormatUint(p.Attempt, 10) == attempt) {
 			cands = append(cands, parsedRel{r, p})
 		}
 	}
@@ -577,8 +578,60 @@ candLoop:
 	return "", "", nil, lastErr
 }
 
+// runVerify emits a receipt only after checking the actual distribution directory.
+// The caller must preserve these bytes through distribution and retain the receipt.
+func runVerify(ctx context.Context, cfg config, dir, sha, runID, attempt string) error {
+	if runID == "" || attempt == "" {
+		return fmt.Errorf("verification requires run id and attempt")
+	}
+	rel, _, idx, err := runLookup(ctx, cfg, sha, "", runID, attempt)
+	if err != nil {
+		return fmt.Errorf("verifying distribution: %w", err)
+	}
+	var receipt struct {
+		manifest
+		Release string `json:"release"`
+		Attempt string `json:"attempt"`
+	}
+	if err := json.Unmarshal(idx, &receipt.manifest); err != nil {
+		return fmt.Errorf("reading distribution index: %w", err)
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("reading distribution directory: %w", err)
+	}
+	byFile := make(map[string]bundle, len(receipt.Entries))
+	for _, e := range receipt.Entries {
+		byFile[e.File] = e
+	}
+	count := 0
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".js") {
+			continue
+		}
+		e, ok := byFile[f.Name()]
+		data, err := os.ReadFile(filepath.Join(dir, f.Name()))
+		if err != nil {
+			return fmt.Errorf("reading distributed bundle %s: %w", safeQuote(f.Name()), err)
+		}
+		if !ok || fmt.Sprintf("%x", sha256.Sum256(data)) != e.SHA256 {
+			return fmt.Errorf("distributed bundle %s does not match %s", safeQuote(f.Name()), safeQuote(rel))
+		}
+		count++
+	}
+	if count != len(byFile) {
+		return fmt.Errorf("distributed bundle set does not match %s", safeQuote(rel))
+	}
+	receipt.Release, receipt.Attempt = rel, attempt
+	if err := json.NewEncoder(cfg.stdout).Encode(receipt); err != nil {
+		return fmt.Errorf("recording distribution identity: %w", err)
+	}
+	return nil
+}
+
 func main() {
-	lookup := flag.Bool("lookup", false, "find and fetch a production source map by commit SHA, bundle SHA-256 and optional run id")
+	lookup := flag.Bool("lookup", false, "find and fetch a production source map by commit SHA, bundle SHA-256 and optional run id and attempt")
+	verify := flag.Bool("verify", false, "verify a distribution directory against an exact stored build and emit a JSON receipt")
 	flag.Parse()
 	args := flag.Args()
 	var summary io.Writer = os.Stderr
@@ -589,21 +642,24 @@ func main() {
 	cfg := prodConfig(os.Getenv("SOURCEMAPS_TOKEN"), os.Stdout, summary)
 	var err error
 	switch {
-	case *lookup && len(args) >= 1 && len(args) <= 3:
+	case *verify && !*lookup && len(args) == 4:
 		cfg.now = time.Now().UTC()
-		a := append(args, "", "")
-		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2])
+		err = runVerify(context.Background(), cfg, args[0], args[1], args[2], args[3])
+	case *lookup && !*verify && len(args) >= 1 && len(args) <= 4:
+		cfg.now = time.Now().UTC()
+		a := append(args, "", "", "")
+		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2], a[3])
 		if err = lerr; err == nil {
 			logf(os.Stdout, "%s %s (%d bytes)\n", safeQuote(rel), safeQuote(name), len(data))
 		}
-	case !*lookup && len(args) == 5:
+	case !*lookup && !*verify && len(args) == 5:
 		if cfg.now, err = time.Parse("20060102T150405Z", args[1]); err != nil || cfg.now.UTC().Format("20060102T150405Z") != args[1] {
 			err = fmt.Errorf("invalid UTC start timestamp %s", safeQuote(args[1]))
 		} else {
 			err = runStore(context.Background(), cfg, args[0], args[2], args[3], args[4])
 		}
 	default:
-		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id>]]")
+		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id> [<attempt>]]] | sourcemaps -verify <bundle dir> <commit SHA> <run id> <attempt>")
 	}
 	if err != nil {
 		logf(os.Stderr, "%v\n", err)

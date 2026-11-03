@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -138,8 +137,8 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 		if hold {
 			quoteHolds <- release
 		}
-		page.MustElement(fmt.Sprintf(`[popovertarget="message-actions-%x"]`, message.ID)).MustClick()
-		page.MustElement(fmt.Sprintf(`#message-actions-%x [name=quote]`, message.ID)).MustClick()
+		messageMenu(message.ID).open(page)
+		messageMenu(message.ID).control(page, "quote").MustClick()
 		if hold {
 			page.MustWait(`() => document.getElementById('quote-form').classList.contains('htmx-request')`)
 			page.MustElement("#message-body").MustFocus()
@@ -252,12 +251,12 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		p.MustElement("#body-" + view.MessageDOMID(original.ID)).MustWaitVisible()
 	})
 	step(t, "keyboard menu: Enter opens the original's actions", func(p *rod.Page) {
-		tabTo(p, fmt.Sprintf(`[popovertarget="message-actions-%x"]`, original.ID))
+		tabTo(p, messageMenu(original.ID).selector("button"))
 		p.Keyboard.MustType(input.Enter)
-		p.MustElement(fmt.Sprintf(`#message-actions-%x`, original.ID)).MustWaitVisible()
+		p.MustElement(messageMenu(original.ID).selector("menu")).MustWaitVisible()
 	})
 	step(t, "keyboard Quote: whole chip appears with no part textarea", func(p *rod.Page) {
-		tabTo(p, fmt.Sprintf(`#message-actions-%x [name=quote]`, original.ID))
+		tabTo(p, messageMenu(original.ID).selector("quote"))
 		p.Keyboard.MustType(input.Enter)
 		p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
 	})

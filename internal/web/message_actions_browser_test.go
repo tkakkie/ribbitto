@@ -51,65 +51,65 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 	if err := (proto.BrowserGrantPermissions{Origin: server.URL, Permissions: []proto.BrowserPermissionType{proto.BrowserPermissionTypeClipboardReadWrite, proto.BrowserPermissionTypeClipboardSanitizedWrite}}).Call(page); err != nil {
 		t.Fatal(err)
 	}
-	menu, button := fmt.Sprintf("#message-actions-%x", id), fmt.Sprintf(`[popovertarget="message-actions-%x"]`, id)
+	menu := messageMenu(id)
 	for _, size := range [][2]int{{1280, 800}, {390, 844}} {
 		what := fmt.Sprintf("width %d", size[0])
 		page.MustActivate().MustSetViewport(size[0], size[1], 1, size[0] < 768)
 		page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
-		page.MustElement(button).MustClick()
+		menu.open(page)
 		// Desktop: below the button, ending at its end. Phone: a sheet on the bottom edge.
-		placed := page.MustEval(`(menu, button, phone) => {
-			const m = document.querySelector(menu), b = document.querySelector(button).getBoundingClientRect(), r = m.getBoundingClientRect();
+		placed := menu.eval(page, `({menu: m, button}, phone) => {
+			const b = button.getBoundingClientRect(), r = m.getBoundingClientRect();
 			if (!m.matches(':popover-open')) return false;
 			return phone ? Math.abs(r.bottom - innerHeight) < 1 && r.left === 0
 				: r.top >= b.bottom - 1 && Math.abs(r.right - b.right) < 1;
-		}`, menu, button, size[0] < 768).Bool()
+		}`, size[0] < 768).Bool()
 		if !placed {
 			t.Fatalf("%s: the menu is not open where it belongs", what)
 		}
-		for selector, name := range map[string]string{button: "message.actions", menu + " a": "message.copy_link", menu + " button[form=quote-form]": "message.quote", menu + " [data-pin-action=false]": "message.pin"} {
-			tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: page.MustElement(selector).Object.ObjectID}).Call(page)
+		for selector, name := range map[string]string{"button": "message.actions", "copy": "message.copy_link", "quote": "message.quote", "pin": "message.pin"} {
+			tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: menu.control(page, selector).Object.ObjectID}).Call(page)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if len(tree.Nodes) == 0 || tree.Nodes[0].Ignored || tree.Nodes[0].Name == nil || tree.Nodes[0].Name.Value.Str() != name {
 				t.Fatalf("%s: %s lost its accessible name", what, selector)
 			}
-			if selector == button && (tree.Nodes[0].Description == nil || tree.Nodes[0].Description.Value.Str() != "hello") {
+			if selector == "button" && (tree.Nodes[0].Description == nil || tree.Nodes[0].Description.Value.Str() != "hello") {
 				t.Fatalf("%s: actions button lost its message description", what)
 			}
 		}
-		page.MustElement(menu + " a").MustClick()
-		page.MustWait(`menu => document.querySelector(menu + ' a').hasAttribute('data-copied')`, menu)
-		got := page.MustEval(`async menu => [await navigator.clipboard.readText(), location.pathname,
-			document.querySelector(menu + ' a').innerText, document.getElementById('message-status').textContent].join('|')`, menu).Str()
+		menu.control(page, "copy").MustClick()
+		menu.wait(page, `({copy}) => copy.hasAttribute('data-copied')`)
+		got := menu.eval(page, `async ({copy}) => [await navigator.clipboard.readText(), location.pathname,
+			copy.innerText, document.getElementById('message-status').textContent].join('|')`).Str()
 		// Served without the catalogues, the label is its message ID.
 		if want := server.URL + view.MessageURL("acme", id) + "|/conversation|message.link_copied|message.link_copied\n"; got != want {
 			t.Fatalf("%s: clipboard, path, label, status = %q; want %q", what, got, want)
 		}
-		page.MustEval(`menu => document.querySelector(menu).hidePopover()`, menu)
-		if page.MustEval(`menu => document.querySelector(menu + ' a').hasAttribute('data-copied')`, menu).Bool() {
+		menu.eval(page, `({menu: m}) => m.hidePopover()`)
+		if menu.eval(page, `({copy}) => copy.hasAttribute('data-copied')`).Bool() {
 			t.Fatalf("%s: a closed menu keeps the confirmation", what)
 		}
 	}
 	// Twelve copies leave ten announcements, without a live message to prune them.
-	if n := page.MustEval(`async menu => { const m = document.querySelector(menu);
-		for (let i = 0; i < 11; i++) { m.showPopover(); m.querySelector('a').click(); await new Promise(r => setTimeout(r, 50)); m.hidePopover(); }
-		return document.getElementById('message-status').childNodes.length; }`, menu).Int(); n != 10 {
+	if n := menu.eval(page, `async ({menu: m, copy}) => {
+		for (let i = 0; i < 11; i++) { m.showPopover(); copy.click(); await new Promise(r => setTimeout(r, 50)); m.hidePopover(); }
+		return document.getElementById('message-status').childNodes.length; }`).Int(); n != 10 {
 		t.Fatalf("the status region holds %d announcements, want 10", n)
 	}
 	// A copy that settles after the menu closed leaves it saying "Copy link".
-	if page.MustEval(`async menu => { const m = document.querySelector(menu), a = m.querySelector('a'), write = navigator.clipboard.writeText.bind(navigator.clipboard);
+	if menu.eval(page, `async ({menu: m, copy}) => { const a = copy, write = navigator.clipboard.writeText.bind(navigator.clipboard);
 		navigator.clipboard.writeText = text => new Promise(r => setTimeout(r, 100)).then(() => write(text));
 		m.hidePopover(); m.showPopover(); a.click(); m.hidePopover(); m.showPopover();
-		await new Promise(r => setTimeout(r, 300)); const copied = a.hasAttribute('data-copied'); navigator.clipboard.writeText = write; m.hidePopover(); return copied; }`, menu).Bool() {
+		await new Promise(r => setTimeout(r, 300)); const copied = a.hasAttribute('data-copied'); navigator.clipboard.writeText = write; m.hidePopover(); return copied; }`).Bool() {
 		t.Fatal("a copy that settled after the menu closed marked it copied")
 	}
 	// A copy that fails after the menu closed does not open the link.
-	if path := page.MustEval(`async menu => { const m = document.querySelector(menu), write = navigator.clipboard.writeText.bind(navigator.clipboard);
+	if path := menu.eval(page, `async ({menu: m, copy}) => { const write = navigator.clipboard.writeText.bind(navigator.clipboard);
 		navigator.clipboard.writeText = () => new Promise((_, reject) => setTimeout(() => reject(new Error('denied')), 100));
-		m.showPopover(); m.querySelector('a').click(); m.hidePopover();
-		await new Promise(r => setTimeout(r, 300)); navigator.clipboard.writeText = write; return location.pathname; }`, menu).Str(); path != "/conversation" {
+		m.showPopover(); copy.click(); m.hidePopover();
+		await new Promise(r => setTimeout(r, 300)); navigator.clipboard.writeText = write; return location.pathname; }`).Str(); path != "/conversation" {
 		t.Fatalf("a copy that failed after the menu closed navigated to %s", path)
 	}
 	// Overlapping copies on the same link settle out of order: a late older
@@ -122,8 +122,8 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		"true|message.link_copied|1|message.link_copied|/conversation|",
 		"false|message.copy_link|0||/conversation|" + view.MessageURL("acme", id),
 	}, "\n")
-	if got := page.MustEval(`async menu => {
-		const m = document.querySelector(menu), a = m.querySelector('a'), status = document.getElementById('message-status');
+	if got := menu.eval(page, `async ({menu: m, copy}) => {
+		const a = copy, status = document.getElementById('message-status');
 		const write = navigator.clipboard.writeText.bind(navigator.clipboard);
 		const calls = [], navigations = [];
 		const onNavigate = e => navigations.push(new URL(e.destination.url).pathname);
@@ -175,14 +175,14 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		window.navigation.removeEventListener('navigate', onNavigate);
 		navigator.clipboard.writeText = write;
 		return [before, afterNewerSuccess, afterLateSuccess, afterLateFailure, afterNewerFailure].join('\n');
-	}`, menu).Str(); got != wantOverlap {
+	}`).Str(); got != wantOverlap {
 		t.Fatalf("overlapping copies state =\n%s\nwant\n%s", got, wantOverlap)
 	}
 	release()
 	page.MustWait(`path => location.pathname === path`, view.MessageURL("acme", id))
 	page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
 	// A failed copy opens the link, as without JavaScript.
-	page.MustEval(`button => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); document.querySelector(button).click(); }`, button)
-	page.MustElement(menu + " a").MustClick()
+	menu.eval(page, `({button}) => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); button.click(); }`)
+	menu.control(page, "copy").MustClick()
 	page.MustWait(`path => location.pathname === path`, view.MessageURL("acme", id))
 }

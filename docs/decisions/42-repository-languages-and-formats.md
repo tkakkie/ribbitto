@@ -6,6 +6,7 @@ Amended by the maintainer on 2026-10-20 in #1437.
 Amended by the maintainer on 2026-10-24 in #1695.
 Amended by the maintainer on 2026-10-28 in #1902.
 Amended by the maintainer on 2026-11-02 in #1854.
+Amended by [decision 45](45-type-checked-client-unit-tests.md) on 2026-11-03 in #2090.
 Use the language list below. A task needing another language, runtime,
 dependency or format stops for the maintainer's explicit approval in its issue. The
 path-and-kind table in [`tools/languagecheck`](../../tools/languagecheck/rules.go)

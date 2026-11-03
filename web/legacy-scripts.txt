@@ -1,5 +1,4 @@
 branch-selection
 message-history
 message-stream
-quote-selection
 sidebar-scroll

@@ -331,6 +331,45 @@ func TestRealTypeScript(t *testing.T) {
 	if err == nil || !strings.Contains(string(out), "TS2322") {
 		t.Fatalf("expected TS2322, got %v: %s", err, out)
 	}
+	t.Run("nodeTestDeclarations", func(t *testing.T) {
+		decl := filepath.Join(root, "web/test/node-test.d.ts")
+		check := func(source string) (string, error) {
+			testFile := filepath.Join(t.TempDir(), "probe.test.ts")
+			if err := os.WriteFile(testFile, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			out, err := command(root, "node", append(append([]string{"node_modules/typescript/bin/tsc", "--ignoreConfig"}, fileFlags()...), decl, testFile)...).CombinedOutput()
+			return string(out), err
+		}
+		valid := `import test from "node:test";
+import assert from "node:assert/strict";
+test("sync", () => {
+	assert.equal(1, 1, "msg");
+	assert.notEqual(1, 2);
+	assert.deepEqual({ a: 1 }, { a: 1 });
+	assert.throws(() => { throw new SyntaxError("bad"); }, SyntaxError);
+	assert.throws(() => { throw new Error("clock"); }, /clock/);
+});
+test("async", async () => {});
+`
+		if out, err := check(valid); err != nil {
+			t.Fatalf("valid test declarations failed: %v: %s", err, out)
+		}
+		for _, tc := range []struct{ name, body, code string }{
+			{"undeclaredAssertMember", `assert.strictEqual(1, 1);`, "TS2339"},
+			{"undeclaredTestMember", `test.skip("x", () => {});`, "TS2339"},
+			{"wrongTestNameType", `test(123, () => {});`, "TS2345"},
+			{"wrongEqualMessageType", `assert.equal(1, 1, 123);`, "TS2345"},
+			{"wrongThrowsPredicateType", `assert.throws(() => {}, 123);`, "TS2345"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				source := `import test from "node:test"; import assert from "node:assert/strict"; ` + tc.body + "\n"
+				if out, err := check(source); err == nil || !strings.Contains(out, tc.code) {
+					t.Fatalf("expected %s, got %v: %s", tc.code, err, out)
+				}
+			})
+		}
+	})
 }
 
 func TestFilesReadiness(t *testing.T) {

@@ -64,6 +64,9 @@ const (
 	prodSourceRepo    = "tkakkie/ribbitto"
 )
 
+// 30s comfortably covers the 10–13s slow uploads in #2164 without consuming reads' 15s.
+const assetReuploadTimeout = 30 * time.Second
+
 type config struct {
 	apiBase, uploadBase, storeRepo, sourceRepo, token string
 	now                                               time.Time
@@ -358,8 +361,23 @@ func (c *apiClient) uploadAsset(ctx context.Context, id int64, name string, data
 	u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", c.cfg.storeRepo, id, url.QueryEscape(name))
 	var a ghAsset
 	if code, _, err := c.do(ctx, true, "POST", u, "", data, &a); err != nil || (code != 201 && code != 200) || !validAsset(a) || a.Name != name || a.Size != int64(len(data)) {
-		// Decoder errors can contain response values; only log trusted metadata.
-		return fmt.Errorf("uploading asset %s: status %d (request or asset response invalid)", safeQuote(name), code)
+		class := "validation"
+		var syntax *json.SyntaxError
+		var field *json.UnmarshalTypeError
+		switch {
+		case ctx.Err() != nil:
+			class = "timeout"
+		case errors.As(err, &syntax) || errors.As(err, &field):
+			class = "decode"
+		case err != nil || (code != 200 && code != 201):
+			class = "status"
+		}
+		// Decoder errors can contain response values; log only decoded receipt metadata.
+		logf(c.cfg.stdout, "upload failed %s: id=%d size=%d name-equal=%t name=%s state=%s re-upload=%t class=%s", safeQuote(name), a.ID, a.Size, a.Name == name, safeQuote(a.Name), safeQuote(a.State), retry, class)
+		if ctx.Err() != nil {
+			return fmt.Errorf("uploading asset %s: %w (re-upload=%t)", safeQuote(name), ctx.Err(), retry)
+		}
+		return fmt.Errorf("uploading asset %s: status %d (%s)", safeQuote(name), code, class)
 	}
 	uploaded[name] = a.ID
 	logf(c.cfg.stdout, "uploaded asset %s: id=%d size=%d state=%s re-upload=%t", safeQuote(name), a.ID, a.Size, safeQuote(a.State), retry)
@@ -367,13 +385,16 @@ func (c *apiClient) uploadAsset(ctx context.Context, id int64, name string, data
 }
 
 func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relName string, want map[string][]byte, uploaded map[string]int64) (ghRelease, error) {
-	ctx, cancel := context.WithTimeout(ctx, assetReadTimeout)
+	readCtx, cancel := context.WithTimeout(ctx, assetReadTimeout)
 	defer cancel()
 	path := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, created.ID)
 	present := make(map[string]bool)
 	for attempt := 1; ; attempt++ {
 		var rel ghRelease
-		if code, _, err := c.do(ctx, true, "GET", path, "", nil, &rel); err != nil || code != 200 || rel.ID != created.ID || !rel.Draft || rel.Prerelease || rel.Name != relName || rel.TagName != relName {
+		if code, _, err := c.do(readCtx, true, "GET", path, "", nil, &rel); err != nil || code != 200 || rel.ID != created.ID || !rel.Draft || rel.Prerelease || rel.Name != relName || rel.TagName != relName {
+			if readCtx.Err() != nil {
+				return ghRelease{}, fmt.Errorf("verifying draft release: %w", readCtx.Err())
+			}
 			return ghRelease{}, fmt.Errorf("verifying draft release: status %d (request, response or identity invalid)", code)
 		}
 		var listed []ghAsset
@@ -382,7 +403,10 @@ func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relN
 				return ghRelease{}, fmt.Errorf("listing draft assets: exceeded %d pages", maxReleasePages)
 			}
 			var batch []ghAsset
-			if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("%s/assets?per_page=100&page=%d", path, page), "", nil, &batch); err != nil || code != 200 {
+			if code, _, err := c.do(readCtx, true, "GET", fmt.Sprintf("%s/assets?per_page=100&page=%d", path, page), "", nil, &batch); err != nil || code != 200 {
+				if readCtx.Err() != nil {
+					return ghRelease{}, fmt.Errorf("listing draft assets: %w", readCtx.Err())
+				}
 				return ghRelease{}, fmt.Errorf("listing draft assets: status %d (request or response invalid)", code)
 			}
 			listed = append(listed, batch...)
@@ -410,20 +434,26 @@ func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relN
 		}
 		// One fresh pair of views gates a single round, never a per-name retry loop.
 		if attempt == assetReadAttempts+1 {
+			cancel()
 			for _, name := range slices.Sorted(maps.Keys(want)) {
 				if !present[name] {
-					if err := c.uploadAsset(ctx, created.ID, name, want[name], uploaded, true); err != nil {
+					uploadCtx, uploadCancel := context.WithTimeout(ctx, assetReuploadTimeout)
+					err := c.uploadAsset(uploadCtx, created.ID, name, want[name], uploaded, true)
+					uploadCancel()
+					if err != nil {
 						return ghRelease{}, err
 					}
 				}
 			}
+			readCtx, cancel = context.WithTimeout(ctx, assetReadTimeout)
+			defer cancel()
 		}
 		if attempt == assetReadAttempts || attempt == assetReadAttempts+1 {
 			continue
 		}
 		select {
-		case <-ctx.Done():
-			return ghRelease{}, fmt.Errorf("waiting for draft assets: %w", ctx.Err())
+		case <-readCtx.Done():
+			return ghRelease{}, fmt.Errorf("waiting for draft assets: %w", readCtx.Err())
 		case <-time.After(assetReadDelay):
 		}
 	}

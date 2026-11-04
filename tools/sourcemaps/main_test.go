@@ -53,9 +53,13 @@ type mockStore struct {
 }
 
 func (s *mockStore) server(t *testing.T) *httptest.Server {
+	return httptest.NewServer(s.handler(t))
+}
+
+func (s *mockStore) handler(t *testing.T) http.Handler {
 	t.Helper()
 	s.nextID = max(s.nextID, 100)
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/repos/tkakkie/ribbitto/actions/runs") {
 			if r.Header.Get("Authorization") != "" {
 				t.Errorf("store token leaked to source repo: %s", r.URL.Path)
@@ -290,7 +294,7 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
 }
 
 func testCfg(apiBase, token string, now time.Time, stdout io.Writer) config {

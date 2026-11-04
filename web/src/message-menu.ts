@@ -52,7 +52,6 @@ import * as dom from "./contracts.gen.ts";
         action.formAction = dom.readAttribute(link, state === "true" ? dom.UnpinURLAttribute : dom.PinURLAttribute)!;
         action.hidden = state !== pinned;
       }
-      form.action = form.querySelector<HTMLButtonElement>("button:not([hidden])")!.formAction;
     }
     menu.querySelector<HTMLAnchorElement>(`[${dom.CopyLinkAttribute}]`)!.href = dom.readAttribute(link, dom.MessageURLAttribute)!;
     menu.querySelector<HTMLButtonElement>(`[form="${dom.QuoteFormID}"]`)!.value = id;

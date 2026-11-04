@@ -103,11 +103,20 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		other.eval(page, `({menu}) => menu.hidePopover()`)
 		menu.open(page)
 		menu.eval(page, `({menu}) => menu.hidePopover()`)
-		for _, removal := range []string{"swap", "move"} {
-			t.Run(fmt.Sprintf("cleanup/%d/%s", size[0], removal), func(t *testing.T) {
+		for _, cleanup := range []struct {
+			removal  string
+			focusPin bool
+		}{
+			{"swap", true}, {"move", true},
+			{"swap", false}, {"move", false},
+		} {
+			removal := cleanup.removal
+			t.Run(fmt.Sprintf("cleanup/%d/%s/focusPin=%t", size[0], removal, cleanup.focusPin), func(t *testing.T) {
 				page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
 				menu.open(page)
-				menu.control(page, "pin").MustFocus()
+				if cleanup.focusPin {
+					menu.control(page, "pin").MustFocus()
+				}
 				if !menu.eval(page, `async ({menu, button, form}, removal, markup) => {
 					const item = button.closest('li'), pane = document.getElementById('message-list');
 					const clean = () => !menu.matches(':popover-open') && !form.isConnected && document.activeElement === pane;

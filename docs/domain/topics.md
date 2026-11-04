@@ -77,7 +77,7 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   page's composer posts into that topic with htmx, replacing only the
   composer's state, never the textarea (#1173). A pending own post shows
   immediately until confirmed delivery or move-out (#1188;
-  [composer contract](../architecture/web-composer-pending.md#pending-own-posts)); the real
+  [decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#a-pending-own-post-1156-1174)); the real
   message arrives over the topic's stream. Without
   JavaScript, and on older pages, it posts plainly and redirects back.
   Invalid bodies preserve the draft (422). Its latest page updates live through a stream of that
@@ -106,7 +106,7 @@ default topic included, and moves them to another topic of the same
 channel, a new one or an existing one. In **one transaction**:
 
 1. the organisation's move and notice sequences are taken first, locking
-   the organisation before any topic read or write ([posting](../architecture/posting.md));
+   the organisation before any topic read or write;
 2. the destination topic is created if it is new;
 3. the selected messages move into it: the same UPDATE sets `topic_id` and
    `moved_event_seq` to the move's sequence, keeping their `id` and original

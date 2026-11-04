@@ -22,7 +22,6 @@ Read the file for the area you change:
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication and member limits; the reverse-proxy contract |
 | [`member-admission.md`](member-admission.md) | posting, pin-change and image-change admission, provisional budgets and retries |
-| [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`ephemeral-state.md`](ephemeral-state.md) | presence and typing as current state: generations, owners, delivery and reset |
 | [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress, delivery and the page's status region |
@@ -45,7 +44,6 @@ Read the file for the area you change:
 | [`web-htmx.md`](web-htmx.md) | htmx requests and swaps, composer and quote fragments, SSE stream targets, read forms and `htmx-config` |
 | [`web-css-first.md`](web-css-first.md) | the criterion for using HTML or CSS instead of a script, review findings, and current examples |
 | [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, the idempotency key, drafts and the send key |
-| [`web-composer-pending.md`](web-composer-pending.md) | pending own posts and the Remove hold |
 | [`web-javascript-unread.md`](web-javascript-unread.md) | stream checkpoints, visible reads and sidebar badge scripts |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
 | [`web-contracts-generated.md`](web-contracts-generated.md) | the generated DOM contract (`internal/web/view/contracts.go`, `web/src/contracts.gen.ts` and `tools/contractliterals`) |

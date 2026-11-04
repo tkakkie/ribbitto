@@ -54,9 +54,9 @@ Not sent Retry goes last; unknown Retry stays. Edit restores failed text/key onl
 empty composer outside IME, preserving drafts; removes item, frees slot, resumes queue.
 Else visible disabled button explains why. Restored keys survive state swaps,
 move to pending forms on send, renew on emptying.
-[Remove hold](web-composer-pending.md#remove-hold) defines its lifetime and reload limit.
+[Remove hold](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#a-pending-own-post-1156-1174) defines its lifetime and reload limit.
 Unused keys post;
-[matching bodies](posting.md) return stored ID; different bodies under used keys get
+[matching bodies](../domain/message-posting.md#posting-from-the-channel-page) return stored ID; different bodies under used keys get
 409/fresh Retry keys. Topic items settle by confirmed ID, response topic/applied sequence
 or later move from shown topic; no move history ([decision 37][d37]).
 
@@ -65,4 +65,4 @@ or later move from shown topic; no move history ([decision 37][d37]).
 
 [c]: web-composer.md#composer
 [dr]: web-composer.md#drafts
-[p]: web-composer-pending.md#pending-own-posts
+[p]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#a-pending-own-post-1156-1174

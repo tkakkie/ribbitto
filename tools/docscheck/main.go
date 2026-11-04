@@ -385,6 +385,22 @@ func checkLinks(root string) ([]string, error) {
 			}
 		}
 	}
+	identifier := regexp.MustCompile(`^[\pL_][\pL\p{Nd}_]*$`)
+	err = walkSourceComments(root, func(path string, l line) {
+		for _, ref := range bareReferences(l.text) {
+			if strings.HasPrefix(ref[0], "docs/") {
+				resolve(path, ref[0], ref[1], l.number)
+			}
+		}
+		for _, target := range commentPaths(l.text) {
+			if !repositoryPathExists(repo, target, identifier) {
+				problems = append(problems, fmt.Sprintf("%s:%d: %s does not exist", path, l.number, target))
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
 	sort.Strings(problems)
 	return compact(problems), nil
 }

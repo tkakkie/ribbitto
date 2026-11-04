@@ -27,7 +27,7 @@ htmx does only requests/swaps; the server and templ own HTML.
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it; every post reads only its own message.
-  Feed/topic pending items use the [composer contract](web-composer-pending.md#pending-own-posts):
+  Feed/topic pending items use the [composer contract](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#a-pending-own-post-1156-1174):
   ordinary and pending requests never overlap; valid sends queue behind pending requests.
   `web/src/composer.ts` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,

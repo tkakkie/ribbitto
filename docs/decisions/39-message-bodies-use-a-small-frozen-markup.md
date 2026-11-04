@@ -141,7 +141,7 @@ A keyed send separately stores the normalized typed input's byte length and
 SHA-256 digest. A same-key retry verifies that proof without resolving handles
 again; different typed input is a conflict. Recovery offers only a prefix
 verified by that proof; legacy rows without it keep the draft
-([posting](../architecture/posting.md)). The body grammar stays frozen.
+(`docs/architecture/posting.md` at `72f3383c228b1b1cc07b973912954a1a73a7e3d0`). The body grammar stays frozen.
 
 ## Rendering and security
 

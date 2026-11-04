@@ -42,6 +42,8 @@ type TxRunner interface {
 	// commit, such as event_log's deferred gap check, is returned too. An error
 	// may wrap platform.ErrCommitUnknown when the outcome is unknown. Callers
 	// treat every error as not confirmed and never raise on it.
+	// A rolled-back transaction can leave sequence N available, so the next
+	// raise must still wake streams at N-1.
 	InTx(ctx context.Context, fn func(platform.Tx) error) error
 }
 

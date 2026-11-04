@@ -51,7 +51,7 @@ it refuses changed member IDs. Joins and unchanged access values do not bump.
 including CASCADE; it has no separate refusal. Bumps share the write's
 transaction, and Down removes the epoch objects. Writers lock organisations
 before members (`SELECT … FOR NO KEY UPDATE`), taking both organisation locks
-in ID order for moves, as in [posting](architecture/posting.md). Direct SQL in
+in ID order for moves. Direct SQL in
 the opposite lock order can abort with `40P01`; retry the whole transaction
 using the organisation-first protocol. While ribbitto runs, `setval`, `ALTER
 SEQUENCE … RESTART`, `SET session_replication_role = replica`, `ALTER TABLE …
@@ -109,7 +109,7 @@ Migration 00019 adds nullable `message.typed_body_proof` (bytea): a 4-byte
 big-endian byte length followed by SHA-256 of the normalized typed body.
 A CHECK requires NULL or 36 bytes. No default or backfill: legacy rows stay
 NULL. Keyed posts store it atomically with body/key; unkeyed posts and notices
-store NULL. Down drops it. See [retry rules](architecture/posting.md).
+store NULL. Down drops it.
 
 [Migration 00020: channel names](channel-name-upgrade.md).
 

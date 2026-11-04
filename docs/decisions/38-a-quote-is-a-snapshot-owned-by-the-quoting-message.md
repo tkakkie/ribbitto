@@ -49,7 +49,7 @@ the snapshot always stay together.
 ## Posting checks
 
 Posting checks the quote in the posting transaction, under the organisation-first
-lock ([posting](../architecture/posting.md)), before the insert:
+lock (`docs/architecture/posting.md` at `72f3383c228b1b1cc07b973912954a1a73a7e3d0`), before the insert:
 
 1. the original is read scoped to the membership's organisation **and** the
    posting channel, so the poster may read it and it is in the same

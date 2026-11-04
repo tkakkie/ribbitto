@@ -33,7 +33,7 @@ Read the file for the area you change:
 | [`csp.md`](csp.md) | the Content Security Policy and script delivery |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
-| [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
+| [`unread-counts.md`](unread-counts.md) | read-state storage and the counting contract |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | write ownership and the unknown-COMMIT recount exception |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |

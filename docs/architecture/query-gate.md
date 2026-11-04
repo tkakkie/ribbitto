@@ -48,8 +48,8 @@ shadow tables; derived INSERT/UPDATE/DELETE sources fail. Tablecheck's
 ownership walk is unchanged for them.
 
 Read SELECTs accept `UNION ALL` at the top level and inside derived relations
-(#742). Step 3 combines ranges and topic floors in one statement; step 4
-combines two disjoint message branches under one cap. Every branch's tables
+(#742). Topic state combines ranges and floors; topic counting combines two
+disjoint message branches under one cap. Every branch's tables
 need that branch's own WHERE scope, never ON or an outer predicate. `UNION`
 (distinct), `INTERSECT` and `EXCEPT` (including ALL) fail with named errors.
 Any set operation in a statement containing INSERT, UPDATE or DELETE,

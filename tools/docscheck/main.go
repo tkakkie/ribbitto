@@ -6,6 +6,7 @@
 // runs it with the repository root as its argument. Markdown is parsed with
 // goldmark (GFM); this tools module, not the application's, carries that
 // dependency.
+//
 // Paths under docs/... in source comments must resolve.
 package main
 

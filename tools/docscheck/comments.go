@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +17,7 @@ func walkSourceComments(root string, visit func(string, line)) error {
 		return err
 	}
 	// Only tracked files reach CI; local build leftovers must not change results.
+	// Add new files with git add before checking them.
 	cmd := exec.Command("git", "ls-files", "-z")
 	cmd.Dir = root
 	cmd.Env = append(gitEnvironment(), "GIT_CEILING_DIRECTORIES="+filepath.Dir(root))
@@ -37,6 +40,9 @@ files:
 		}
 		path := filepath.Join(root, rel)
 		info, err := os.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("reading source comments: %w", err)
 		}

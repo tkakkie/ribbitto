@@ -104,8 +104,8 @@ func TestSourceCommentTrackedFiles(t *testing.T) {
 	if err := os.Rename(filepath.Join(root, "a.go"), filepath.Join(root, "web/static/.dist-leftover/a.go")); err != nil {
 		t.Fatal(err)
 	}
-	if err := walkSourceComments(root, func(string, line) {}); err == nil {
-		t.Fatal("missing tracked source must fail")
+	if err := walkSourceComments(root, func(path string, l line) { t.Errorf("deleted comment: %s:%d", path, l.number) }); err != nil {
+		t.Fatal(err)
 	}
 	policyGit(t, root, "rm", "a.go")
 	if err := walkSourceComments(root, func(path string, l line) { t.Errorf("untracked comment: %s:%d", path, l.number) }); err != nil {
@@ -113,6 +113,48 @@ func TestSourceCommentTrackedFiles(t *testing.T) {
 	}
 	if err := walkSourceComments(t.TempDir(), func(string, line) {}); err == nil {
 		t.Fatal("unreadable git index must fail")
+	}
+}
+
+func TestSourceCommentDeletedFile(t *testing.T) {
+	root := repo(t, map[string]string{"a.go": "// docs/gone.md"})
+	if err := os.Remove(filepath.Join(root, "a.go")); err != nil {
+		t.Fatal(err)
+	}
+	problems, err := checkLinks(root)
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("problems %q, error %v", problems, err)
+	}
+}
+
+func TestSourceCommentStatError(t *testing.T) {
+	root := repo(t, map[string]string{"p/a.go": "// docs/gone.md"})
+	if err := os.RemoveAll(filepath.Join(root, "p")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "p"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := walkSourceComments(root, func(string, line) {}); err == nil {
+		t.Fatal("non-directory path component must fail")
+	}
+}
+
+func TestSourceCommentBacktickNewline(t *testing.T) {
+	for _, tt := range []struct{ file, comment, want string }{
+		{"a.go", "//", ""}, {"a.ts", "//", ""},
+		{"a.sql", "--", "a.sql:2: docs/gone.md does not exist"},
+		{"a.yaml", "#", "a.yaml:2: docs/gone.md does not exist"},
+		{"Makefile", "#", "Makefile:2: docs/gone.md does not exist"},
+		{"a.css", "/*", "a.css:2: docs/gone.md does not exist"},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			root := repo(t, map[string]string{tt.file: "`\n" + tt.comment + " docs/gone.md"})
+			problems, err := checkLinks(root)
+			if err != nil || strings.Join(problems, "\n") != tt.want {
+				t.Fatalf("problems %q, error %v, want %q", problems, err, tt.want)
+			}
+		})
 	}
 }
 

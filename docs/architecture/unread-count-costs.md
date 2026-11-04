@@ -42,10 +42,10 @@ not a ceiling on filtering, planner work or latency.
 
 ## Fragmentation
 
-A member who reads only topic views while another topic keeps gaining
-messages adds one range per skipped run. Channel counting reads only the
-first 101 ranges; topic counting and a topic-view write handle all `R`
-ranges. A feed read merges them back into one, at `O(R)`.
+Reading topics while another gains messages adds one range per skipped run.
+Channel counting reads the first 101 ranges; topic counts and topic-view
+writes handle all the member's ranges in that channel. A feed read through
+them merges them into one, visiting each range.
 
 ### Running the benchmark
 

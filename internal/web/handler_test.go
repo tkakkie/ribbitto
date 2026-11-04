@@ -60,7 +60,6 @@ func TestHandler(t *testing.T) {
 		{"/static/vendor/htmx-2.0.7.min.js", http.StatusOK},
 		{quoteSelectionURL, http.StatusOK},
 		{"/static/vendor/htmx-ext-sse-2.2.4.min.js", http.StatusOK},
-		{"/static/vendor/idiomorph-ext-0.7.4.min.js", http.StatusOK},
 		{"/static/missing.js", http.StatusNotFound},
 		{"/static/css/", http.StatusNotFound},
 		{"/missing", http.StatusNotFound},
@@ -344,7 +343,7 @@ func TestHello(t *testing.T) {
 	}
 	previous := -1
 	nonce := responseNonce(t, w)
-	for _, file := range []string{"htmx-2.0.7.min.js", "htmx-ext-sse-2.2.4.min.js", "idiomorph-ext-0.7.4.min.js"} {
+	for _, file := range []string{"htmx-2.0.7.min.js", "htmx-ext-sse-2.2.4.min.js"} {
 		index := strings.Index(body, `<script defer src="/static/vendor/`+file+`" nonce="`+nonce+`"></script>`)
 		if index <= previous {
 			t.Errorf("script %s missing or out of order", file)
@@ -455,10 +454,10 @@ func TestHTMLSecurity(t *testing.T) {
 				}
 				previous = nonce
 				tags := scripts.FindAllString(w.Body.String(), -1)
-				// The layout's arrival script, htmx with its two extensions and
+				// The layout's arrival script, htmx with its SSE extension and
 				// the popover focus script.
-				if len(tags) != 5 {
-					t.Fatalf("got %d scripts, want 5", len(tags))
+				if len(tags) != 4 {
+					t.Fatalf("got %d scripts, want 4", len(tags))
 				}
 				for _, tag := range tags {
 					if !strings.Contains(tag, ` nonce="`+nonce+`"`) {

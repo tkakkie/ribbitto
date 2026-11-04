@@ -101,9 +101,8 @@ func additions(base, current []string) []string {
 var legacy = regexp.MustCompile(`^web/static/([^/]+)-v[0-9]+\.js$`)
 
 var vendorScripts = map[string]bool{
-	"web/static/vendor/htmx-2.0.7.min.js":          true,
-	"web/static/vendor/htmx-ext-sse-2.2.4.min.js":  true,
-	"web/static/vendor/idiomorph-ext-0.7.4.min.js": true,
+	"web/static/vendor/htmx-2.0.7.min.js":         true,
+	"web/static/vendor/htmx-ext-sse-2.2.4.min.js": true,
 }
 
 func baseStems(root string, ci bool) ([]string, error) {

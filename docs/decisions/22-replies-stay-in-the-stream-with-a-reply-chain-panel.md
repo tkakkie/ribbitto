@@ -10,7 +10,7 @@ channel history, the chain opens at the selected message with a bounded
 page and links to earlier and later parts; without JavaScript it is an
 ordinary page (17, 19). Exact limits are left to implementation. There is
 no separate place to post or unread count; opening the chain leaves the
-read position unchanged. Rules: [`docs/domain/replies.md`](../domain/replies.md).
+read position unchanged. Rules: `docs/domain/replies.md` at `caea532b5eb08661f4e730905c9c49e05aea856c`.
 **Why:** answers in a busy topic need context without leaving the stream
 or competing with topics as a place to talk (#275).
 **Considered:** Slack-style threads (answers leave the stream and need

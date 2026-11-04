@@ -80,6 +80,23 @@ func testTabUnreadBrowser(t *testing.T, browser *rod.Browser) {
 			current.Before = 1
 			current.Messages = nil
 		}
+		if missing := r.URL.Query().Get("missing"); missing != "" {
+			var rendered strings.Builder
+			if err := view.ChannelScreen("/static/css/app.css", current).Render(r.Context(), &rendered); err != nil {
+				t.Error(err)
+				return
+			}
+			// Pages without a sidebar do not attach the live unread stream.
+			markup := strings.ReplaceAll(rendered.String(), `id="organization-stream"`, `id="absent-stream"`)
+			if missing == "icon" || missing == "both" {
+				markup = strings.ReplaceAll(markup, `rel="icon"`, `rel="alternate"`)
+			}
+			if missing == "sidebar" || missing == "both" {
+				markup = strings.ReplaceAll(markup, `id="sidebar-channels"`, `id="absent-channels"`)
+			}
+			_, _ = fmt.Fprint(w, markup)
+			return
+		}
 		templ.Handler(view.ChannelScreen("/static/css/app.css", current)).ServeHTTP(w, r)
 	})
 	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
@@ -88,6 +105,20 @@ func testTabUnreadBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	server := httptest.NewServer(middleware.SecurityHeaders(catalogues.Middleware(mux)))
 	defer server.Close()
+	for _, missing := range []string{"icon", "sidebar", "both"} {
+		t.Run("missing-"+missing, func(t *testing.T) {
+			page, closePage := boundedPage(t, browser, ctx, "tab unread no-op")
+			defer closePage()
+			page.MustEvalOnNewDocument(`window.errors=[]; addEventListener('error', e => errors.push(e.message));`)
+			page.MustNavigate(server.URL + "?missing=" + missing).MustWaitLoad()
+			if got := page.MustEval(`() => errors.join('; ')`).Str(); got != "" {
+				t.Fatalf("no-op script errors: %s", got)
+			}
+			if got := page.MustEval(`() => document.title`).Str(); got != "general · Acme · ribbitto" {
+				t.Fatalf("no-op title: %q", got)
+			}
+		})
+	}
 	page, closePage := boundedPage(t, browser, ctx, "tab unread")
 	defer closePage()
 	page.MustEvalOnNewDocument(`window.violations=[]; window.errors=[]; addEventListener('error', e => errors.push(e.message)); document.addEventListener('htmx:sseOpen', () => window.opened=true); document.addEventListener('securitypolicyviolation', e => violations.push(e.violatedDirective));`)

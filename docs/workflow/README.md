@@ -96,15 +96,15 @@ fix run; no `[nit]` unless the maintainer asks ([only blocking holds](reviewing.
 Claude writes issues/briefs, orchestrates and explains PRs in Japanese chat.
 [Models/effort](delivery.md#model-and-effort).
 
-Headless runs: **close stdin, set a time limit**
-(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). Start each implementer
-run as one blocking background command so its end wakes the orchestrator
+Headless: **close stdin; set a timeout**
+(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). One blocking background command per implementer wakes the orchestrator
 ([delivery](delivery.md#waking-the-orchestrator)).
 
-- **Codex**, from the worktree (`high` for H1–H6):
+- **Codex** (worktree):
+  Implement: `gpt-6.1-sol`/`medium` (`high` for H1–H6); reviews/checks: `gpt-6-astra`/`high`.
 
   ```sh
-  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec -m gpt-6.1-sol -c 'model_reasoning_effort="medium"' --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
+  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec -m <model> -c 'model_reasoning_effort="<effort>"' --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
   ```
 
 - **Argon** (Antigravity), from the worktree:
@@ -115,9 +115,9 @@ run as one blocking background command so its end wakes the orchestrator
   ```
 
   Pin/home/permissions: [credentials](ai-credentials.md#argon-antigravity).
-- **Reviews:** same recipes, with [selected model](delivery.md#model-and-effort).
-  Follow [cross-review](reviewing.md#pull-request-cross-review) for PRs;
-  other prompts/context: [credentials](ai-credentials.md#review-context).
+- **Reviews/checks:** recipes/values above;
+  PR [cross-review](reviewing.md#pull-request-cross-review),
+  other [context](ai-credentials.md#review-context).
 
 ## Reviews (issues and pull requests)
 

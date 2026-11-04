@@ -19,8 +19,8 @@ Every implementer run (after `ready`) receives:
 >    PR scan: docs/workflow/delivery.md#pr-body-credential-scan;
 >    measurements: docs/workflow/investigations.md#investigations-and-the-performance-target.
 > 2. Implement here, <~400 non-generated lines.
->    Stop/report to the orchestrator for maintainer decisions, new languages/tools or reclassification
->    (docs/workflow/README.md#roles-and-running-the-ais).
+>    Stop/report to the orchestrator for maintainer decisions, new languages/tools, reclassification
+>    (docs/workflow/README.md#roles-and-running-the-ais) or H1–H6 first holding.
 >    For behaviour-preserving script-to-module PRs, before opening the PR run
 >    an output comparison: baseline-SHA old script vs new module, same inputs
 >    (clock, storage failures, malformed values); `node --test` in `web/test`
@@ -64,8 +64,7 @@ a subset, `NOT VERIFIED` or skipped checks (no Node/DB) is never a passing
 
 ## Model and effort
 
-Record model/effort and conditions on issue/PR or brief; never by quota
-or maintainer judgment.
+Record model/effort/conditions in issue/PR/brief; never by quota or maintainer judgment.
 Codex: `gpt-6.1-sol`, `medium`; `high` if *Done when* or *Notes* cites:
 
 | ID | Condition |
@@ -79,8 +78,8 @@ Codex: `gpt-6.1-sol`, `medium`; `high` if *Done when* or *Notes* cites:
 
 Comparison-tested conversions: `medium` unless H1–H4/H6; [comparison required](#standard-implementer-brief) (#2052).
 Reading/moving/testing unchanged behaviour: not H6; [third-AI rules](README.md#lifecycle) stay.
-Headless effort is fixed at launch: H1–H6 first holds → stop/restart at `high`
-for next run. Size alone never qualifies.
+Effort fixed at launch: implementer stops/reports when H1–H6 first holds;
+orchestrator restarts the branch at `high`. Size alone never qualifies.
 Codex reviews/checks: `gpt-6-astra`; no implementation rule.
 
 Argon: only `gemini-4-argon-high`. Claude: Sonnet for orchestration, issues,

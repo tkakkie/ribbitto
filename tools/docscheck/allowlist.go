@@ -50,7 +50,6 @@ func documentAllowlist() map[string]string {
 		"docs/architecture/typing.md":                          "existing at the baseline commit",
 		"docs/architecture/unread-count-costs.md":              "existing at the baseline commit",
 		"docs/architecture/unread-counts.md":                   "existing at the baseline commit",
-		"docs/architecture/unread-scope-writes.md":             "existing at the baseline commit",
 		"docs/architecture/unread-writes.md":                   "existing at the baseline commit",
 		"docs/architecture/web-composer.md":                    "existing at the baseline commit",
 		"docs/architecture/web-contracts-generated.md":         "existing at the baseline commit",

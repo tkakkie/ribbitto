@@ -351,14 +351,27 @@ func assetSetMismatch(got []ghAsset, want map[string][]byte, uploaded map[string
 	for _, names := range [][]string{missing, extra, duplicate, invalid} {
 		slices.Sort(names)
 	}
-	return fmt.Sprintf("manifest asset mismatch: expected=%d actual=%d missing=%v extra=%v duplicate=%v invalid=%v", len(want), len(got), missing, extra, duplicate, invalid), len(duplicate) > 0
+	return fmt.Sprintf("manifest asset mismatch: expected=%d actual=%d missing=%v extra=%v duplicate=%v invalid=%v", len(want), len(got), missing, extra, duplicate, invalid), len(extra)+len(duplicate)+len(invalid) > 0
+}
+
+func (c *apiClient) uploadAsset(ctx context.Context, id int64, name string, data []byte, uploaded map[string]int64, retry bool) error {
+	u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", c.cfg.storeRepo, id, url.QueryEscape(name))
+	var a ghAsset
+	if code, _, err := c.do(ctx, true, "POST", u, "", data, &a); err != nil || (code != 201 && code != 200) || !validAsset(a) || a.Name != name || a.Size != int64(len(data)) {
+		// Decoder errors can contain response values; only log trusted metadata.
+		return fmt.Errorf("uploading asset %s: status %d (request or asset response invalid)", safeQuote(name), code)
+	}
+	uploaded[name] = a.ID
+	logf(c.cfg.stdout, "uploaded asset %s: id=%d size=%d state=%s re-upload=%t", safeQuote(name), a.ID, a.Size, safeQuote(a.State), retry)
+	return nil
 }
 
 func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relName string, want map[string][]byte, uploaded map[string]int64) (ghRelease, error) {
 	ctx, cancel := context.WithTimeout(ctx, assetReadTimeout)
 	defer cancel()
 	path := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, created.ID)
-	for attempt := 1; attempt <= assetReadAttempts; attempt++ {
+	present := make(map[string]bool)
+	for attempt := 1; ; attempt++ {
 		var rel ghRelease
 		if code, _, err := c.do(ctx, true, "GET", path, "", nil, &rel); err != nil || code != 200 || rel.ID != created.ID || !rel.Draft || rel.Prerelease || rel.Name != relName || rel.TagName != relName {
 			return ghRelease{}, fmt.Errorf("verifying draft release: status %d (request, response or identity invalid)", code)
@@ -378,14 +391,15 @@ func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relN
 			}
 		}
 		matched := true
-		for _, source := range []struct {
-			name   string
-			assets []ghAsset
-		}{{"release", rel.Assets}, {"assets list", listed}} {
-			if mismatch, duplicate := assetSetMismatch(source.assets, want, uploaded); mismatch != "" {
-				logf(c.cfg.stdout, "draft %d read %d %s: %s", created.ID, attempt, source.name, mismatch)
-				if duplicate || attempt == assetReadAttempts {
-					return ghRelease{}, fmt.Errorf("verifying draft %s: %s: %s", safeQuote(relName), source.name, mismatch)
+		for i, view := range [][]ghAsset{rel.Assets, listed} {
+			source := []string{"release", "assets list"}[i]
+			for _, a := range view {
+				present[a.Name] = true
+			}
+			if mismatch, unsafe := assetSetMismatch(view, want, uploaded); mismatch != "" {
+				logf(c.cfg.stdout, "draft %d read %d %s: %s", created.ID, attempt, source, mismatch)
+				if unsafe || attempt == 2*assetReadAttempts+1 {
+					return ghRelease{}, fmt.Errorf("verifying draft %s: %s: %s", safeQuote(relName), source, mismatch)
 				}
 				matched = false
 			}
@@ -394,14 +408,25 @@ func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relN
 			rel.Assets = listed
 			return rel, nil
 		}
-		// Absence in a lagging listing cannot prove that another POST is safe.
+		// One fresh pair of views gates a single round, never a per-name retry loop.
+		if attempt == assetReadAttempts+1 {
+			for _, name := range slices.Sorted(maps.Keys(want)) {
+				if !present[name] {
+					if err := c.uploadAsset(ctx, created.ID, name, want[name], uploaded, true); err != nil {
+						return ghRelease{}, err
+					}
+				}
+			}
+		}
+		if attempt == assetReadAttempts || attempt == assetReadAttempts+1 {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return ghRelease{}, fmt.Errorf("waiting for draft assets: %w", ctx.Err())
 		case <-time.After(assetReadDelay):
 		}
 	}
-	return ghRelease{}, fmt.Errorf("draft asset read limit exceeded")
 }
 
 func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt string) error {
@@ -443,14 +468,9 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	}
 	uploaded := make(map[string]int64, len(assets))
 	for _, name := range slices.Sorted(maps.Keys(assets)) {
-		u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", cfg.storeRepo, created.ID, url.QueryEscape(name))
-		var a ghAsset
-		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], &a); err != nil || (code != 201 && code != 200) || !validAsset(a) || a.Name != name || a.Size != int64(len(assets[name])) {
-			// Decoder errors can contain response values; only log trusted metadata.
-			return fmt.Errorf("uploading asset %s: status %d (request or asset response invalid)", safeQuote(name), code)
+		if err := c.uploadAsset(ctx, created.ID, name, assets[name], uploaded, false); err != nil {
+			return err
 		}
-		uploaded[name] = a.ID
-		logf(cfg.stdout, "uploaded asset %s: id=%d size=%d state=%s", safeQuote(name), a.ID, a.Size, safeQuote(a.State))
 	}
 	relPath := fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, created.ID)
 	if draftRel, err = c.readDraftAssets(ctx, created, relName, assets, uploaded); err != nil {

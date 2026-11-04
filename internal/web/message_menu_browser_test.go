@@ -14,9 +14,9 @@ import (
 type browserMessageMenu map[string]string
 
 func messageMenu(id kernel.ID) browserMessageMenu {
-	menu := fmt.Sprintf("#message-actions-%x", id)
+	menu := "#" + view.MessageActionsID
 	return browserMessageMenu{
-		"menu": menu, "button": fmt.Sprintf(`[popovertarget="message-actions-%x"]`, id),
+		"menu": menu, "button": fmt.Sprintf("#message-actions-%x + button", id),
 		"copy": menu + " a", "quote": menu + " button[form=quote-form][name=quote]",
 		"form": "#pin-form-" + view.MessageDOMID(id),
 		"pin":  "#pin-false-" + view.MessageDOMID(id), "unpin": "#pin-true-" + view.MessageDOMID(id),
@@ -39,7 +39,16 @@ func (m browserMessageMenu) control(p *rod.Page, name string) *rod.Element {
 func (m browserMessageMenu) open(p *rod.Page) { m.control(p, "button").MustClick() }
 
 func (m browserMessageMenu) show(p *rod.Page) {
-	m.eval(p, `({menu}) => { if (!menu.matches(':popover-open')) menu.showPopover(); }`)
+	m.eval(p, `({menu, button, form}) => { if (!menu.matches(':popover-open') || !menu.contains(form)) button.click(); }`)
+}
+
+// Prepare Quote without scrolling an offscreen message into view: growth tests
+// must keep their reader anchor while the composer chip changes.
+func (m browserMessageMenu) submitQuote(p *rod.Page, quoted bool) {
+	m.eval(p, `({button, menu, quote}, quoted) => {
+		if (quoted) { button.click(); menu.hidePopover(); }
+		document.getElementById('quote-form').requestSubmit(quoted ? quote : document.querySelector('#composer-quote button'));
+	}`, quoted)
 }
 
 // Resolve controls on every evaluation: pin responses replace the form.
@@ -72,9 +81,9 @@ func (m browserMessageMenu) formID() string               { return m.selector("f
 // The concurrency assertion includes both messages even when only A's menu
 // is open: B's late response must preserve A's state and focused action.
 func messagePinsIndependent(p *rod.Page, a, b kernel.ID) bool {
-	return messageMenu(a).eval(p, `({unpin}, b) => [...document.querySelectorAll('[data-pin-control]')].every(f => f.dataset.pinned === 'true') && document.activeElement === unpin && document.querySelector(b).dataset.pinned === 'true'`, messageMenu(b).selector("form")).Bool()
+	return messageMenu(a).eval(p, `({menu, form, unpin}, b) => menu.contains(form) && form.dataset.pinned === 'true' && document.activeElement === unpin && document.querySelector(b).dataset.pinned === 'true' && !document.querySelector(b).checkVisibility()`, messageMenu(b).selector("form")).Bool()
 }
 
 func (m browserMessageMenu) waitPinFocus(p *rod.Page, pinned bool) {
-	m.wait(p, `({form}, state) => document.activeElement.dataset.pinAction === state && document.activeElement.form.dataset.pinned === state`, fmt.Sprint(pinned))
+	m.wait(p, `({form, pin, unpin}, state) => document.activeElement === (state === 'true' ? unpin : pin) && document.activeElement.form === form && form.dataset.pinned === state`, fmt.Sprint(pinned))
 }

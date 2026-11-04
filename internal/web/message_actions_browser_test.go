@@ -14,6 +14,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -25,12 +26,55 @@ import (
 // forgets it when the menu closes, also when the copy settles after
 // that; when copying fails the link opens instead.
 func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("enhancement", func(t *testing.T) { testMessageActionsEnhancementBrowser(t, browser) })
+	t.Run("interaction", func(t *testing.T) { testMessageActionsInteractionBrowser(t, browser) })
+}
+
+func testMessageActionsEnhancementBrowser(t *testing.T, browser *rod.Browser) {
+	id := kernel.ID{10}
+	conversation := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Current: view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: "general"},
+		Messages: []view.Message{
+			{ID: kernel.ID{9}, Body: "unpinned"},
+			{ID: id, Body: "pinned", Pinned: true},
+		}}
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.Handle("GET /conversation", templ.Handler(view.ChannelScreen("/static/css/app.css", conversation)))
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	for _, tt := range []struct {
+		name, check string
+	}{
+		{"pinned-without-panel", `({menu, pin, unpin}) => !document.getElementById('pins-section') && menu.matches(':popover-open') && !pin.checkVisibility() && unpin.checkVisibility()`},
+		{"fallback-hidden", `({button}) => !button.previousElementSibling.checkVisibility() && button.checkVisibility()`},
+		{"second-click-closes", `({menu, button}) => { button.click(); return !menu.matches(':popover-open'); }`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
+			defer page.MustClose()
+			page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
+			menu := messageMenu(id)
+			menu.open(page)
+			if !menu.eval(page, tt.check).Bool() {
+				t.Fatal("message actions enhancement: " + tt.name)
+			}
+		})
+	}
+}
+
+func testMessageActionsInteractionBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	id := kernel.ID{9}
 	conversation := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Topic:    &view.Topic{ID: kernel.ID{2}, Name: "topic"},
 		Current:  view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: "general"},
 		Messages: []view.Message{{ID: id, TopicID: kernel.ID{2}, Handle: "author", Body: "hello", URL: view.MessageURL("acme", id)}}}
+	otherID := kernel.ID{10}
+	conversation.Messages = append(conversation.Messages, view.Message{ID: otherID, Body: "other message", URL: view.MessageURL("acme", otherID)})
 	allowNavigation := make(chan struct{})
 	var releaseNavigation sync.Once
 	release := func() { releaseNavigation.Do(func() { close(allowNavigation) }) }
@@ -91,6 +135,49 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		if menu.eval(page, `({copy}) => copy.hasAttribute('data-copied')`).Bool() {
 			t.Fatalf("%s: a closed menu keeps the confirmation", what)
 		}
+		other := messageMenu(otherID)
+		other.open(page)
+		if !other.eval(page, `({menu, copy, quote, form}, url, id) => document.querySelectorAll('[popover][id="message-actions"]').length === 1 && menu.contains(form) && copy.getAttribute('href') === url && quote.value === id && form.dataset.pinControl === id && !copy.hasAttribute('data-copied')`, view.MessageURL("acme", otherID), realtime.FormatPayloadID(otherID)).Bool() {
+			t.Fatalf("%s: shared menu did not retarget all actions to the second message", what)
+		}
+		other.eval(page, `({menu}) => menu.hidePopover()`)
+		menu.open(page)
+		menu.eval(page, `({menu}) => menu.hidePopover()`)
+		for _, cleanup := range []struct {
+			removal  string
+			focusPin bool
+		}{
+			{"swap", true}, {"move", true},
+			{"swap", false}, {"move", false},
+		} {
+			removal := cleanup.removal
+			t.Run(fmt.Sprintf("cleanup/%d/%s/focusPin=%t", size[0], removal, cleanup.focusPin), func(t *testing.T) {
+				page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
+				menu.open(page)
+				if cleanup.focusPin {
+					menu.control(page, "pin").MustFocus()
+				}
+				if !menu.eval(page, `async ({menu, button, form}, removal, markup) => {
+					const item = button.closest('li'), pane = document.getElementById('message-list');
+					const clean = () => !menu.matches(':popover-open') && !form.isConnected && document.activeElement === pane;
+					if (removal === 'swap') htmx.swap(item, '', {swapStyle: 'outerHTML', settleDelay: 0});
+					else htmx.trigger(document.getElementById('message-items'), 'htmx:sseBeforeMessage', {type: 'messages-moved', data: markup, lastEventId: '1'});
+					// Swaps must release focus synchronously, before htmx detaches the opener.
+					const synchronous = removal !== 'swap' || clean();
+					await new Promise(requestAnimationFrame);
+					return synchronous && !item.isConnected && clean();
+				}`, removal, renderIn(t, "en", view.MovedMessageItems(conversation.Messages[:1], kernel.ID{2}, kernel.ID{3}))).Bool() {
+					t.Fatal("removing the opener kept its menu/form or lost message-pane focus")
+				}
+				other.open(page)
+				if !other.eval(page, `({menu, form, copy, quote}, id, url) => menu.matches(':popover-open') && menu.contains(form) && form.dataset.pinControl === id && quote.value === id && copy.getAttribute('href') === url`, realtime.FormatPayloadID(otherID), view.MessageURL("acme", otherID)).Bool() {
+					t.Fatal("menu did not retarget after opener removal")
+				}
+			})
+		}
+		page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
+		menu.open(page)
+		menu.eval(page, `({menu}) => menu.hidePopover()`)
 	}
 	// Twelve copies leave ten announcements, without a live message to prune them.
 	if n := menu.eval(page, `async ({menu: m, copy}) => {

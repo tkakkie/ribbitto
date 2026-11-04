@@ -227,11 +227,7 @@ func testComposerGrowthBrowser(t *testing.T, browser *rod.Browser) {
 					check("quote cap on load "+query, quoteSpace)
 				}
 				setQuote := func(quoted bool) {
-					// Submit without scrolling an offscreen message action into view.
-					page.MustEval(`quoted => {
-						const button = document.querySelector(quoted ? '#message-items [name=quote]' : '#composer-quote button');
-						document.getElementById('quote-form').requestSubmit(button);
-					}`, quoted)
+					messageMenu(snapshot.Messages[0].ID).submitQuote(page, quoted)
 					page.MustWait(`quoted => !!document.querySelector('#composer-quote input') === quoted && !document.querySelector('.htmx-settling')`, quoted)
 					settle()
 				}
@@ -581,7 +577,7 @@ func testComposerLandscapeKeyboard(t *testing.T, browser *rod.Browser, catalogue
 	set("")
 	check("reader preserved on shrink in keyboard band", anchored, anchor)
 	for _, quoted := range []bool{true, false} {
-		page.MustEval(`quoted => document.getElementById('quote-form').requestSubmit(document.querySelector(quoted ? '#message-items [name=quote]' : '#composer-quote button'))`, quoted)
+		messageMenu(snapshot.Messages[0].ID).submitQuote(page, quoted)
 		page.MustWait(`quoted => !!document.querySelector('#composer-quote input') === quoted && !document.querySelector('.htmx-settling')`, quoted)
 		if quoted {
 			page.MustEval(`() => document.getElementById('message-body').focus()`)

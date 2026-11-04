@@ -155,13 +155,12 @@ poses, the channel illustrations and details are in [`brand.md`](brand.md).
 ## Markup and accessibility
 
 [Accessibility](accessibility.md) covers markup checks and browser verification.
-Each message's native actions popover offers Copy link, Quote and Pin/Unpin;
-htmx enhances pins, preserving focus, with native POST/303 as fallback.
-
-`/organizations/{slug}/messages/{messageID}/actions` also offers these actions,
-the message, its permalink for the browser's Copy link address command, and
-Back to the conversation. It checks message visibility; Quote opens the
-composer and pins use POST/303 without JavaScript.
+Messages share one native actions popover: Copy link, Quote and Pin/Unpin.
+htmx enhances pins with focus restoration; requests keep their message identity.
+Without JavaScript the control links to
+`/organizations/{slug}/messages/{messageID}/actions`: the visible message,
+copyable permalink, Quote, POST/303 Pin/Unpin and Back to the conversation.
+The page checks message visibility.
 
 ## Planned directions (from the maintainer, #9)
 

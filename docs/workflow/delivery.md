@@ -4,7 +4,7 @@ Read when: briefing/waking implementers or publishing PR bodies.
 
 ## Standard implementer brief
 
-Every implementer run (after `ready`) receives:
+Each implementer run (after `ready`):
 
 > You are `<Codex|Argon|Claude>`, implementing issue `#<N>` in `tkakkie/ribbitto` on
 > branch `<ai>/<topic>` from `origin/main` (`ready`, risk: `<normal|high>`).
@@ -20,15 +20,14 @@ Every implementer run (after `ready`) receives:
 >    measurements: docs/workflow/investigations.md#investigations-and-the-performance-target.
 > 2. Implement here, <~400 non-generated lines.
 >    Stop/report to the orchestrator for maintainer decisions, new languages/tools, reclassification
->    (docs/workflow/README.md#roles-and-running-the-ais) or H1–H6 first holding.
->    For behaviour-preserving script-to-module PRs, before opening the PR run
->    an output comparison: baseline-SHA old script vs new module, same inputs
+>    (docs/workflow/README.md#roles-and-running-the-ais) or H1–H6 (docs/workflow/delivery.md#model-and-effort) first holding.
+>    Before opening behaviour-preserving script-to-module PRs, compare outputs: baseline-SHA old script vs new module, same inputs
 >    (clock, storage failures, malformed values); `node --test` in `web/test`
 >    (DOM-free), `TestBrowser` (browser). PR body: baseline SHA, commands/results
 >    or what restructuring compared without an old/new pair; no permanent file
 >    ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
 > 3. Run local checks (docs/workflow/delivery.md#local-checks-by-change-type),
->    plus `make deps` for import changes. Fix failures without deleting, skipping or weakening tests.
+>    plus `make deps` for import changes. Fix failures; never delete, skip or weaken tests.
 > 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your branch;
 >    scan the body (docs/workflow/delivery.md#pr-body-credential-scan); open a DRAFT PR using
 >    `.github/pull_request_template.md`, with `Closes #<N>`.

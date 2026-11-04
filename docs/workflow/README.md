@@ -48,10 +48,10 @@ Claude, Codex and Argon follow `AGENTS.md` for coding, this file for workflow
 
 ## What GitHub enforces and what is only a rule
 
-`main` requires a PR and passing GitHub Actions `ci`, no bypass. Every token
-acts as the maintainer, so approvals cannot enforce decision 11. A PR's own
-`.github/workflows/` decides what passes; review reads every change. Check
-source does not constrain tests. Credentials/settings: [tokens](ai-credentials.md#tokens).
+`main`: PR, passing GitHub Actions `ci`, no bypass. Tokens act as maintainer;
+approvals cannot enforce decision 11. GitHub Actions as check source limits who
+posts it, not what a changed workflow tests; review every change.
+Credentials/settings: [tokens](ai-credentials.md#tokens).
 
 ## Enabling an AI's rights
 
@@ -75,7 +75,9 @@ Otherwise use first match for the whole *Done when* change:
 | 4 | Anything else: TypeScript/JavaScript logic (including behaviour-preserving conversions), tests alone, build tooling, CI | Codex |
 
 Generated companions (`*_templ.go`, sqlc output, built CSS/JavaScript) and
-tests follow accompanying source; tests alone use rule 4. First match for any file wins. Claude implements only rule 3.
+tests follow source; tests alone: rule 4; Claude: rule 3 only.
+First match wins: Go anywhere (including `tools/`) is rule 1; rule 4 tooling
+is non-Go (`Makefile`, scripts, configuration).
 Examples: `.templ` + CSS + generated Go + browser check → 2; add hand-written
 Go → 1; docs + `Makefile` → 4; TypeScript conversion alone → 4.
 Remaining quota never selects an AI.
@@ -99,10 +101,10 @@ Headless runs: **close stdin, set a time limit**
 run as one blocking background command so its end wakes the orchestrator
 ([delivery](delivery.md#waking-the-orchestrator)).
 
-- **Codex**, from the worktree:
+- **Codex**, from the worktree (`high` for H1–H6):
 
   ```sh
-  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
+  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec -m gpt-6.1-sol -c 'model_reasoning_effort="medium"' --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
   ```
 
 - **Argon** (Antigravity), from the worktree:
@@ -123,9 +125,8 @@ run as one blocking background command so its end wakes the orchestrator
   completed with an approving verdict that covers the issue text or the
   head to be delivered; every finding gets a disposition. If findings still
   block after two rounds, ask the maintainer.
-- A failed, timed-out or empty run never counts. Record the failure and exact
-  commits/findings; [quota substitution](delivery.md#quota-substitution)
-  applies to quota errors; retry every other failure once, then ask the maintainer.
+- Failed/timed-out/empty runs never count; log failure, exact commits/findings.
+  [Quota errors: substitute, no same-AI retry; other failures: retry once, then ask the maintainer](delivery.md#quota-substitution).
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. A typo or a rewording that changes
   no meaning is not ([what counts](review-followups.md#follow-up-pushes)).

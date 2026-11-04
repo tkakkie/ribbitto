@@ -18,15 +18,14 @@ Every implementer run (after `ready`) receives:
 >    failures/DBs: docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases;
 >    PR scan: docs/workflow/delivery.md#pr-body-credential-scan;
 >    measurements: docs/workflow/investigations.md#investigations-and-the-performance-target.
-> 2. Implement in this worktree under ~400 lines excluding generated files.
->    Stop and report for maintainer decisions, new languages/tools or
->    reclassification (docs/workflow/README.md#roles-and-running-the-ais).
->    For a behaviour-preserving script-to-module PR, compare baseline-SHA
->    old script and new module outputs on identical inputs (clock, storage failures,
->    malformed values included): `node --test` in `web/test` for DOM-free logic,
->    `TestBrowser` cases for browser behaviour. PR body records
->    baseline SHA, commands/result, or what restructuring compared without an
->    old/new pair; no permanent evidence file
+> 2. Implement here, <~400 non-generated lines.
+>    Stop/report to the orchestrator for maintainer decisions, new languages/tools or reclassification
+>    (docs/workflow/README.md#roles-and-running-the-ais).
+>    For behaviour-preserving script-to-module PRs, before opening the PR run
+>    an output comparison: baseline-SHA old script vs new module, same inputs
+>    (clock, storage failures, malformed values); `node --test` in `web/test`
+>    (DOM-free), `TestBrowser` (browser). PR body: baseline SHA, commands/results
+>    or what restructuring compared without an old/new pair; no permanent file
 >    ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
 > 3. Run local checks (docs/workflow/delivery.md#local-checks-by-change-type),
 >    plus `make deps` for import changes. Fix failures without deleting, skipping or weakening tests.
@@ -78,11 +77,11 @@ Codex: `gpt-6.1-sol`, `medium`; `high` if *Done when* or *Notes* cites:
 | H5 | A behaviour-preserving conversion has no old/new comparison test in *Done when* |
 | H6 | Changes to concurrent paths sharing one state (ordering, locking, atomicity); cache contents, keys or invalidation; whether a background job runs, retries, runs once or stops cleanly |
 
-With a comparison test, conversions are `medium` unless H1–H4/H6 holds;
-[comparison stays mandatory](#standard-implementer-brief) (#2052).
-Reading/moving/testing unchanged behaviour is not H6; the
-[third-AI requirement](README.md#lifecycle) stays. Switch to `high` when
-H1–H6 first holds. Line/file count and issue length alone never qualify. Codex reviews/checks: `gpt-6-astra`; no implementation rule for it.
+Comparison-tested conversions: `medium` unless H1–H4/H6; [comparison required](#standard-implementer-brief) (#2052).
+Reading/moving/testing unchanged behaviour: not H6; [third-AI rules](README.md#lifecycle) stay.
+Headless effort is fixed at launch: H1–H6 first holds → stop/restart at `high`
+for next run. Size alone never qualifies.
+Codex reviews/checks: `gpt-6-astra`; no implementation rule.
 
 Argon: only `gemini-4-argon-high`. Claude: Sonnet for orchestration, issues,
 docs, ordinary reviews; Opus only for high-risk review round 1 or when named
@@ -90,31 +89,30 @@ by the maintainer.
 
 ## Quota substitution
 
-Quota error (`RESOURCE_EXHAUSTED`, etc.): record, never retry that AI.
-Other failures: record, retry once, then ask the maintainer.
+Quota error: AI's own quota/rate-limit message, e.g. `RESOURCE_EXHAUSTED`.
+Log failures: quota → substitute, no same-AI retry this run;
+others → retry once, then ask the maintainer.
 
-- **Implementation:** replacing a named AI needs the maintainer. Otherwise:
+- **Implementation:** named AI → ask the maintainer; otherwise:
   Codex/Argon → the other, then Claude (docs-only); Claude → Codex, then Argon.
-  None available → ask the maintainer.
-  **Exception:** Codex exhausted on rule-1 work with H1–H4/H6 needs maintainer
-  confirmation before Argon takes over. All others, including Argon-to-Codex, are automatic.
-- Continue the branch; record why on issue/PR. Partial work, pushed or not,
-  counts as authorship for independence.
+  None → ask the maintainer.
+  **Exception:** Codex exhausted + rule 1 + H1–H4/H6 → maintainer confirmation
+  before Argon; all others (Argon-to-Codex included) are automatic.
+- Keep branch; explain on issue/PR. Partial work, pushed or not, is authorship
+  for independence.
 - **Review:** reselect under [independence](reviewing.md#review-independence-and-rounds):
-  AIs with quota that neither wrote nor changed the work; third AI also excludes
-  the first reviewer. None → ask the maintainer.
-  Required reviews, round caps and maintainer gates stay unchanged.
+  With quota, neither wrote nor changed it; third AI also excludes first reviewer.
+  None → ask the maintainer. Reviews, round caps and maintainer gates stay.
 
 ## Waking the orchestrator
 
-One blocking background command (no `nohup`/trailing `&`) wakes the
-orchestrator on completion/timeout (#1457). Read results; continue to
-`ai-reviewed` until a rule in this file, [lifecycle](README.md#lifecycle),
-[reviewing](reviewing.md), [operations](review-operations.md) or
-[follow-ups](review-followups.md) says to ask the maintainer.
-Report maintainer decisions immediately; on failure/timeout inspect branch
-and worktree, then [substitute or retry once](#quota-substitution), else report.
-CI/Copilot waits: 60 minutes max; report and stop.
+One blocking background command (no `nohup`/trailing `&`) wakes the orchestrator
+at end/timeout (#1457). Read results; continue to `ai-reviewed` unless this file,
+[lifecycle](README.md#lifecycle), [reviewing](reviewing.md),
+[operations](review-operations.md) or [follow-ups](review-followups.md) requires the maintainer.
+Report maintainer decisions now. On failure/timeout inspect branch/worktree:
+[quota errors → substitute, no same-AI retry; others → retry once, then ask the maintainer](#quota-substitution).
+CI/Copilot waits: ≤60 minutes; report to the orchestrator and stop.
 
 ## PR body credential scan
 

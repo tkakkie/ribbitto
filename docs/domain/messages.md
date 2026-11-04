@@ -36,7 +36,7 @@ changing its `id` or `event_seq`.
 
 A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
-([`replies.md`](replies.md), *planned*).
+(decision 22; replies are *planned*, not built).
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).

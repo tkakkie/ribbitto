@@ -34,8 +34,6 @@ Read the file for the area you change:
 | [`csp.md`](csp.md) | the Content Security Policy and script delivery |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
-| [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
-| [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
 | [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the shared write, changed and publication, read admission and the HTTP caller |

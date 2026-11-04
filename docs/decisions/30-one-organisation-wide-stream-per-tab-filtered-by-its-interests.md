@@ -39,7 +39,7 @@ presence rendering/delivery implemented (#768); sidebar recounts are delivered i
   pages that held none (older history, the members panel) now hold one,
   which the process cap (5,000) counts.
 - **Growth.** The interests are the keys of #232's
-  [channel interest index](../architecture/shared-reader-growth.md#a-channel-interest-index).
+  channel interest index (`docs/architecture/shared-reader-growth.md`, “A channel interest index”, at `caea532b5eb08661f4e730905c9c49e05aea856c`).
   M4 still wakes every connection of the organisation and filters after
   waking, as M3 does; the index, which wakes only the connections a change
   touches, is built when a measurement calls for it.

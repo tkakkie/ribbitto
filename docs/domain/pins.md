@@ -82,7 +82,7 @@ unpin on every topic move (loses useful references); transfer a pin on a
 channel move (changes the destination's curated list and may exceed its
 limit); unpin on edit (requires curation again). Retaining deleted text or
 a frozen excerpt would require a separate retention design. A reply's deleted-parent placeholder belongs to the reply
-chain, not to pins ([replies](replies.md)).
+chain, not to pins (#2148; replies are not built).
 
 Pin writes serialize with message moves/deletion, so a stale source-channel
 request cannot recreate a pin after the message leaves. Future deletion

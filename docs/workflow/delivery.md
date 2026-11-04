@@ -112,7 +112,7 @@ at end/timeout (#1457). Read results; continue to `ai-reviewed` unless this file
 [operations](review-operations.md) or [follow-ups](review-followups.md) requires the maintainer.
 Report maintainer decisions now. On failure/timeout inspect branch/worktree:
 [quota errors → substitute, no same-AI retry; others → retry once, then ask the maintainer](#quota-substitution).
-CI/Copilot waits: ≤60 minutes; report to the orchestrator and stop.
+CI/Copilot waits: ≤60 minutes; report to the maintainer and stop.
 
 ## PR body credential scan
 

@@ -433,7 +433,7 @@ templ historyLink(url string, older bool) {
 		if older {
 			hx-get={ url }
 			hx-target={ "#" + MessageItemsID }
-			hx-swap="afterbegin"
+			hx-swap="afterbegin ignoreTitle:true"
 			hx-select={ "#" + MessageItemsID + " > li" }
 			hx-select-oob={ "#" + LoadOlderID }
 		}

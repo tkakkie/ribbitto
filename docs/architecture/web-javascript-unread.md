@@ -24,14 +24,12 @@ extension retry remains its only retry.
   validate out-of-band badges before acknowledging application.
   DOM-free pure transitions in `web/src/unread-counts.ts` specify count updates,
   frame validation, eligibility, bounded retention, stream-order snapshots and
-  loss-aware recovery with jittered backoff; their positive and negative cases
-  live in [`unread-counts.test.ts`](../../web/test/unread-counts.test.ts).
+  loss-aware recovery with jittered backoff.
   A 429 retries with recovery open: [`429 request failure retries at backoff without completing recovery`](../../web/test/unread-counts.test.ts).
   Losses reserve another request: rows `new loss` / `repeated losses` of [`recovery needs both response and covering snapshot with no new losses`](../../web/test/unread-counts.test.ts).
   Retention is not loss: [`retention preserves eligibility without loss and ignores covered or duplicate frames`](../../web/test/unread-counts.test.ts).
   `message` frames never increment. Missing rows wait for the next resync;
-  malformed badges enter recovery. The adapter changes only server-rendered
-  badge text and visibility; htmx owns resync requests. Duplicate triggers merge
+  malformed badges enter recovery. The adapter updates badges and the tab title/favicon; htmx owns resync requests. Duplicate triggers merge
   into one pending request and one timer. Visibility return and persisted
   `pageshow` request resync after uniform 0–2 s jitter. Cleanup of the stream
   container, including persisted `pagehide`, clears and forgets the timer,

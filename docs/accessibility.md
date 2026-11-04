@@ -14,7 +14,9 @@ fail until covered by a rendered case.
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
   or the channel and organisation (`general · Acme · ribbitto`); the channel
   list page names the list and the organisation (`lilypads · Acme · ribbitto`). The app
-  name alone fails the check.
+  name alone fails the check. With scripts, pages with sidebar counts prefix the
+  title with the channel unread total (capped at `99+`) and badge the favicon;
+  at zero they restore the plain title and icon.
 - **Structure means something.** ✓ Every page has `lang` and exactly one
   `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists
   (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for
@@ -43,8 +45,7 @@ fail until covered by a rendered case.
 - **Assets exist.** ✓ Every `/static/` script, stylesheet, icon link, image
   and SVG `<use>` URL resolves to an embedded file, ignoring queries and
   fragments. SVG fragments
-  must name a symbol in that sprite. `TestTemplateIcons` also checks every
-  literal `Icon` call in templates, including ones outside the page fixtures.
+  must name a symbol in that sprite.
 
 **Checking a UI change in a browser**, before the pull request says what
 was checked: use only the keyboard (Tab order, Enter, Space, Escape closes
@@ -53,8 +54,7 @@ DevTools, *Rendering → Emulate vision deficiencies*) to see that no informatio
 is lost. Automated markup checks verify reference targets, not their meaning or behaviour.
 
 The `<ol>` isolates authors, timestamps and plain-text bodies
-(`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
-state when populated. Its labelled, keyboard-focusable pane scrolls independently;
+(`dir="auto"`, preserved line breaks). Its labelled, keyboard-focusable pane scrolls independently;
 without JavaScript, the latest page wraps the pane's children in one child of a
 `column-reverse` flex container so it opens at the newest entry with DOM,
 reading and Tab order and focus unchanged.
@@ -84,7 +84,7 @@ popovers. `web/src/popover-focus.ts` closes them on Tab/Shift-Tab exit,
 keeping focus on the reached control (#1092). Escape closes and focuses
 the trigger; outside clicks close and keep clicked focus. Inside clicks
 keep them open except Quote. Without JavaScript, message controls link to the actions page;
-Tab may move behind other open popovers. `testPopoverFocusBrowser` checks desktop and phone.
+Tab may move behind other open popovers.
 
 Opening the account menu, by keyboard or pointer, moves focus to its first
 line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's

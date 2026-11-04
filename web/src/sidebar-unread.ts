@@ -1,3 +1,4 @@
+import "./tab-unread.ts";
 import {
   getSidebarResync, getSidebarChannels, getChannelLink, getTopicLink, getTopicHeadingCount, getStreamSink,
   getOrganizationStream, organizationStreamSelector, OrganizationStreamID, StreamSinkID, SidebarChannelsID,

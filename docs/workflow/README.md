@@ -75,16 +75,14 @@ Otherwise use first match for the whole *Done when* change:
 | 4 | Anything else: TypeScript/JavaScript logic (including behaviour-preserving conversions), tests alone, build tooling, CI | Codex |
 
 Generated companions (`*_templ.go`, sqlc output, built CSS/JavaScript) and
-tests take the class of accompanying source, not their own; tests alone use
-rule 4. First match for any file wins. Claude implements only rule 3.
+tests follow accompanying source; tests alone use rule 4. First match for any file wins. Claude implements only rule 3.
 Examples: `.templ` + CSS + generated Go + browser check → 2; add hand-written
 Go → 1; docs + `Makefile` → 4; TypeScript conversion alone → 4.
 Remaining quota never selects an AI.
 
-**Reclassification:** stop/report before an edit changes the first matching
-rule (Go added to Argon work, JavaScript logic to template/CSS, `Makefile` to
-docs). The orchestrator reclassifies the whole change; a different AI takes
-the branch under [substitution](delivery.md#quota-substitution), with why on
+**Reclassification:** stop/report before changing the first matching rule
+(Go added to Argon work, JavaScript logic to template/CSS, `Makefile` to docs).
+The orchestrator reclassifies the whole diff; a different AI takes the branch under [substitution](delivery.md#quota-substitution), with why on
 the issue/PR. Partial work counts as authorship; generated companions and
 accompanying tests never trigger this. Exceeding approved *Done when* or
 *Risk* needs the maintainer's decision.
@@ -97,7 +95,9 @@ Claude writes issues/briefs, orchestrates and explains PRs in Japanese chat.
 [Models/effort](delivery.md#model-and-effort).
 
 Headless runs: **close stdin, set a time limit**
-(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`).
+(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). Start each implementer
+run as one blocking background command so its end wakes the orchestrator
+([delivery](delivery.md#waking-the-orchestrator)).
 
 - **Codex**, from the worktree:
 

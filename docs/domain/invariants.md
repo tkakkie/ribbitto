@@ -59,7 +59,7 @@ Keep the numbers stable: other documents cite them.
     organisation and channel with lower `event_seq`.** A composite foreign
     key enforces scope; immutable references prevent cycles. Chain reads
     require channel authorization and leave read state unchanged
-    ([`replies.md`](replies.md)).
+    (decision 22; #2148).
 
 11. **Channel creation never raises an organisation above its configured cap**
     (`RIBBITTO_MAX_CHANNELS`, default 500), counting the default channel.

@@ -42,6 +42,15 @@ func (m browserMessageMenu) show(p *rod.Page) {
 	m.eval(p, `({menu, button, form}) => { if (!menu.matches(':popover-open') || !menu.contains(form)) button.click(); }`)
 }
 
+// Prepare Quote without scrolling an offscreen message into view: growth tests
+// must keep their reader anchor while the composer chip changes.
+func (m browserMessageMenu) submitQuote(p *rod.Page, quoted bool) {
+	m.eval(p, `({button, menu, quote}, quoted) => {
+		if (quoted) { button.click(); menu.hidePopover(); }
+		document.getElementById('quote-form').requestSubmit(quoted ? quote : document.querySelector('#composer-quote button'));
+	}`, quoted)
+}
+
 // Resolve controls on every evaluation: pin responses replace the form.
 func (m browserMessageMenu) script(js string) string {
 	return `(...args) => { const controls = {}; for (const [name, selector] of Object.entries(args.shift())) controls[name] = document.querySelector(selector); return (` + js + `)(controls, ...args); }`

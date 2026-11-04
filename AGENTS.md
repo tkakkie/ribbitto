@@ -31,9 +31,9 @@ One set of rules binds every AI; see [Where things are explained](#where-things-
   `make check`). Follow [the web toolchain](docs/architecture/web-toolchain.md#versions-and-installation--1410-1415).
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any edge change.
-- `make check` also checks documents: links and `#anchors`, repository
-  paths in code spans, documentation image sizes, destinations and alt text,
-  and each document's size limit.
+- `make check` also checks document links and `#anchors`, paths in code
+  spans, image sizes, destinations and alt text, document size limits
+  and `docs/...` paths in source comments.
 
 ## Layout and dependency direction
 

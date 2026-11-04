@@ -20,6 +20,8 @@ func repo(t *testing.T, files map[string]string) string {
 			t.Fatal(err)
 		}
 	}
+	policyGit(t, root, "init", "-q")
+	policyGit(t, root, "add", ".")
 	return root
 }
 

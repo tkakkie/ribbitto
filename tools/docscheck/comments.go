@@ -2,54 +2,57 @@ package main
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
 
 func walkSourceComments(root string, visit func(string, line)) error {
-	generated := regexp.MustCompile(`(?m)^// Code generated .* DO NOT EDIT\.$`)
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			// These tools contain intentionally unresolved fixture/example paths.
-			switch rel {
-			case "tools/docscheck", "tools/languagecheck", "tools/sourcecheck", "web/static/dist", "web/static/css", "docs/schema":
-				return filepath.SkipDir
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	// Only tracked files reach CI; local build leftovers must not change results.
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = root
+	cmd.Env = append(gitEnvironment(), "GIT_CEILING_DIRECTORIES="+filepath.Dir(root))
+	files, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("listing source files: %w", err)
+	}
+	generated := regexp.MustCompile(`^(?s)(?:\s|//[^\n]*\n|/\*.*?\*/)*?// Code generated [^\n]* DO NOT EDIT\.\r?(?:\n|$)`)
+files:
+	for _, rel := range strings.Split(strings.TrimSuffix(string(files), "\x00"), "\x00") {
+		// These tools contain intentionally unresolved fixture/example paths.
+		for _, dir := range []string{"tools/docscheck", "tools/languagecheck", "tools/sourcecheck", "bin", "node_modules", ".claude", "web/static/vendor", "web/static/dist", "web/static/css"} {
+			if strings.HasPrefix(rel, dir+"/") {
+				continue files
 			}
-			switch d.Name() {
-			case ".git", ".claude", "bin", "node_modules", "vendor":
-				return filepath.SkipDir
-			}
-			return nil
 		}
 		lineMarker, blockStart, blockEnd := commentMarkers(rel)
-		if !d.Type().IsRegular() || lineMarker == "" && blockStart == "" {
-			return nil
+		if lineMarker == "" && blockStart == "" {
+			continue
+		}
+		path := filepath.Join(root, rel)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("reading source comments: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			continue
 		}
 		source, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("reading source comments: %w", err)
 		}
-		if generated.Match(source) {
-			return nil
+		if lineMarker == "//" && generated.Match(source) {
+			continue
 		}
 		for _, l := range sourceComments(string(source), lineMarker, blockStart, blockEnd) {
 			visit(rel, l)
 		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("reading source comments: %w", err)
 	}
 	return nil
 }
@@ -105,28 +108,39 @@ func sourceComments(source, lineMarker, blockStart, blockEnd string) []line {
 			case blockStart != "" && strings.HasPrefix(text[i:], blockStart):
 				i += len(blockStart)
 				block = true
-			case text[i] == '"' || text[i] == '\'' || text[i] == '`':
+			case text[i] == '"' || text[i] == '\'' || text[i] == '`' && lineMarker == "//":
 				quote = text[i]
 				i++
 			default:
 				i++
 			}
 		}
+		if quote != '`' {
+			quote = 0
+		}
 	}
 	return out
 }
 
-var commentPath = regexp.MustCompile("(?:^|[\\s`(\"'=:])(docs/[A-Za-z0-9_./-]+)")
+var commentPath = regexp.MustCompile("(?:^|[\\s`(\"'=:<\\[{*])(docs/[A-Za-z0-9_./-]+)(#[^\\s`\"')\\]}>*\\\\]+)?")
+var commentAbbreviation = regexp.MustCompile(`(?:^|/)(?:[A-Za-z]\.){2,}$`)
 
 // Markdown references use bareReferences and the shared heading resolver.
 // The remaining paths use the same repositoryPathExists check as code spans.
 func commentPaths(text string) []string {
 	var paths []string
-	for _, m := range commentPath.FindAllStringSubmatch(text, -1) {
-		path := strings.TrimRight(m[1], ".")
-		if !strings.HasSuffix(path, ".md") {
-			paths = append(paths, strings.TrimSuffix(path, "/"))
+	for _, m := range commentPath.FindAllStringSubmatchIndex(text, -1) {
+		written, rest := text[m[2]:m[3]], text[m[1]:]
+		if m[2] > 0 && text[m[2]-1] == '*' && strings.HasPrefix(rest, "*") &&
+			(len(rest) == 1 || strings.ContainsAny(rest[1:2], " \t)]}>") || len(rest) == 2 && strings.ContainsAny(rest[1:], ".,;:!?")) {
+			rest = rest[1:]
 		}
+		// Patterns, placeholders, ellipses and abbreviations are prose, not paths.
+		if strings.Contains(written, "...") || strings.HasPrefix(rest, "…") ||
+			rest != "" && strings.ContainsAny(rest[:1], "*?[<{%") || commentAbbreviation.MatchString(written) {
+			continue
+		}
+		paths = append(paths, strings.TrimSuffix(strings.TrimRight(text[m[2]:m[1]], ".,;:!?"), "/"))
 	}
 	return paths
 }

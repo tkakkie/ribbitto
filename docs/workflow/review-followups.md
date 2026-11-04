@@ -56,8 +56,8 @@ post-cap delta or accepted-difference re-confirmation must be checked):
    at the final SHA, using `.github/prompts/copilot-check.md` via the
    [README recipe](README.md#roles-and-running-the-ais) with
    [review context](review-operations.md#running-a-review). Header: `Copilot`
-   only when a Copilot finding is covered, else `Adversarial`. Retry a
-   non-counting run once per the README; record who ran it:
+   only for Copilot findings, else `Adversarial`. Use
+   [failure rules](delivery.md#quota-substitution); record the AI:
 
    ```
    **<Copilot|Adversarial> follow-up check — <Claude|Codex|Argon>** (at <SHA>)

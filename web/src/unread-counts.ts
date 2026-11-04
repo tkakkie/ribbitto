@@ -15,7 +15,7 @@ export function sequence(value: string | undefined): bigint {
   if (!/^\d+$/.test(value as string)) throw new Error("invalid snapshot sequence");
   return BigInt(value!);
 }
-export function unreadSequence(value: unknown): bigint {
+function unreadSequence(value: unknown): bigint {
   const event = value as UnreadFrame | null;
   if (!event || !Number.isSafeInteger(event.seq) || event.seq < 0) throw new Error("invalid unread sequence");
   return BigInt(event.seq);
@@ -27,9 +27,9 @@ export function routing(event: UnreadFrame): boolean {
   if (!uuid(event.topic) || (event.author !== undefined && !uuid(event.author))) throw new Error("invalid routing");
   return true;
 }
-export function ignored(state: UnreadState, seq: bigint): boolean { return seq <= state.snapshot || state.events.has(seq); }
+function ignored(state: UnreadState, seq: bigint): boolean { return seq <= state.snapshot || state.events.has(seq); }
 /** Overflow is reported before the triggering event is retained. */
-export function overflow(state: UnreadState): { state: UnreadState; through: bigint } | null {
+function overflow(state: UnreadState): { state: UnreadState; through: bigint } | null {
   if (state.events.size !== 1000) return null;
   let dropped = 0n;
   for (const seq of state.events.keys()) if (seq > dropped) dropped = seq;
@@ -57,7 +57,7 @@ export function markApplied(state: UnreadState, seq: bigint): UnreadState {
   return { ...state, events: new Map(state.events).set(seq, { ...state.events.get(seq)!, applied: true }) };
 }
 export function resumeWait(random: number): number { return random * 2000; }
-export function validCount(raw: string | undefined): boolean { return /^\d+$/.test(raw as string); }
+function validCount(raw: string | undefined): boolean { return /^\d+$/.test(raw as string); }
 export function incrementCount(raw: string): { count: string; text: string } {
   const count = BigInt(raw) + 1n;
   return { count: String(count), text: count >= 100n ? "99+" : String(count) };

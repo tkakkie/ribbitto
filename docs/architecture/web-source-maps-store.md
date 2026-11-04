@@ -33,10 +33,8 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
   against that manifest, publish, then verify lookup and per-ID fetch-back
   (exact SHA/run/attempt release; identical index and every map's bytes).
-  Check upload receipts and both API views: four reads, 1s apart; a fresh
-  pair permits one re-upload round for missing names absent from both throughout.
-  Extras/duplicates/invalid entries fail. Recheck four times; within 15s.
-  Published releases are complete by construction; only drafts are incomplete.
+  Check receipts, release and assets list: four reads, 1s apart; fresh pair; one
+  re-upload round for unseen names; four reads; 15s. Extras/duplicates/invalids fail.
   Failed/interrupted runs leave drafts or published duplicates, both harmless;
   older duplicates take no slot and stay until their SHA expires.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
@@ -108,7 +106,6 @@ cleanup deletions need one mutual exclusion across the final GET/DELETE and
 different SHAs/runs, checked with the real API and a race test; before every
 distribution, `-verify` (#2131) must pass; distribute its exact verified bundle bytes
 unchanged. Cleanup takes no lock; per-SHA upload concurrency groups provide none.
-This PR adds no deploy step. Tests: `TestProductionRetention`, `TestProductionTransitions`.
 
 ## Exact-build verification — #2049 (Part 1/2)
 

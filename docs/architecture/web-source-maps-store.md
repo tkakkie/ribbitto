@@ -33,6 +33,9 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
   against that manifest, publish, then verify lookup and per-ID fetch-back
   (exact SHA/run/attempt release; identical index and every map's bytes).
+  Require upload receipts and both API asset views: four reads, 1s apart, 15s
+  total. Log set differences; fail on duplicates or persistent absence; never
+  re-upload.
   Published releases are complete by construction; only drafts are incomplete.
   Failed/interrupted runs leave drafts or published duplicates, both harmless;
   older duplicates take no slot and stay until their SHA expires.

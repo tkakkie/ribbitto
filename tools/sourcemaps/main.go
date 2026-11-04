@@ -52,13 +52,16 @@ func validBundleEntry(b bundle) bool {
 }
 
 const (
-	maxResponseBytes = 64 << 20
-	maxReleasePages  = 100
-	maxWorkflowRuns  = 1000
-	prodAPIBase      = "https://api.github.com"
-	prodUploadBase   = "https://uploads.github.com"
-	prodStoreRepo    = "tkakkie/ribbitto-sourcemaps"
-	prodSourceRepo   = "tkakkie/ribbitto"
+	maxResponseBytes  = 64 << 20
+	maxReleasePages   = 100
+	maxWorkflowRuns   = 1000
+	assetReadAttempts = 4
+	assetReadTimeout  = 15 * time.Second
+	assetReadDelay    = time.Second
+	prodAPIBase       = "https://api.github.com"
+	prodUploadBase    = "https://uploads.github.com"
+	prodStoreRepo     = "tkakkie/ribbitto-sourcemaps"
+	prodSourceRepo    = "tkakkie/ribbitto"
 )
 
 type config struct {
@@ -322,6 +325,85 @@ func (c *apiClient) hasActiveRun(ctx context.Context, sha string) (bool, error) 
 	return false, fmt.Errorf("checking concurrency group for %s: exceeded %d pages", sha, maxReleasePages)
 }
 
+func assetSetMismatch(got []ghAsset, want map[string][]byte, uploaded map[string]int64) (string, bool) {
+	seen := make(map[string]bool, len(got))
+	var missing, extra, duplicate, invalid []string
+	for _, a := range got {
+		if seen[a.Name] {
+			duplicate = append(duplicate, safeQuote(a.Name))
+		}
+		seen[a.Name] = true
+		data, ok := want[a.Name]
+		if !ok {
+			extra = append(extra, safeQuote(a.Name))
+		} else if !validAsset(a) || a.Size != int64(len(data)) || a.ID != uploaded[a.Name] {
+			invalid = append(invalid, safeQuote(a.Name))
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			missing = append(missing, safeQuote(name))
+		}
+	}
+	if len(missing)+len(extra)+len(duplicate)+len(invalid) == 0 && len(got) == len(want) {
+		return "", false
+	}
+	for _, names := range [][]string{missing, extra, duplicate, invalid} {
+		slices.Sort(names)
+	}
+	return fmt.Sprintf("manifest asset mismatch: expected=%d actual=%d missing=%v extra=%v duplicate=%v invalid=%v", len(want), len(got), missing, extra, duplicate, invalid), len(duplicate) > 0
+}
+
+func (c *apiClient) readDraftAssets(ctx context.Context, created ghRelease, relName string, want map[string][]byte, uploaded map[string]int64) (ghRelease, error) {
+	ctx, cancel := context.WithTimeout(ctx, assetReadTimeout)
+	defer cancel()
+	path := fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, created.ID)
+	for attempt := 1; attempt <= assetReadAttempts; attempt++ {
+		var rel ghRelease
+		if code, _, err := c.do(ctx, true, "GET", path, "", nil, &rel); err != nil || code != 200 || rel.ID != created.ID || !rel.Draft || rel.Prerelease || rel.Name != relName || rel.TagName != relName {
+			return ghRelease{}, fmt.Errorf("verifying draft release: status %d (request, response or identity invalid)", code)
+		}
+		var listed []ghAsset
+		for page := 1; ; page++ {
+			if page > maxReleasePages {
+				return ghRelease{}, fmt.Errorf("listing draft assets: exceeded %d pages", maxReleasePages)
+			}
+			var batch []ghAsset
+			if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("%s/assets?per_page=100&page=%d", path, page), "", nil, &batch); err != nil || code != 200 {
+				return ghRelease{}, fmt.Errorf("listing draft assets: status %d (request or response invalid)", code)
+			}
+			listed = append(listed, batch...)
+			if len(batch) < 100 {
+				break
+			}
+		}
+		matched := true
+		for _, source := range []struct {
+			name   string
+			assets []ghAsset
+		}{{"release", rel.Assets}, {"assets list", listed}} {
+			if mismatch, duplicate := assetSetMismatch(source.assets, want, uploaded); mismatch != "" {
+				logf(c.cfg.stdout, "draft %d read %d %s: %s", created.ID, attempt, source.name, mismatch)
+				if duplicate || attempt == assetReadAttempts {
+					return ghRelease{}, fmt.Errorf("verifying draft %s: %s: %s", safeQuote(relName), source.name, mismatch)
+				}
+				matched = false
+			}
+		}
+		if matched {
+			rel.Assets = listed
+			return rel, nil
+		}
+		// Absence in a lagging listing cannot prove that another POST is safe.
+		select {
+		case <-ctx.Done():
+			return ghRelease{}, fmt.Errorf("waiting for draft assets: %w", ctx.Err())
+		case <-time.After(assetReadDelay):
+		}
+	}
+	return ghRelease{}, fmt.Errorf("draft asset read limit exceeded")
+}
+
 func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt string) error {
 	relName := fmt.Sprintf("map-%s-%s-%s.%s", cfg.now.UTC().Format("20060102T150405Z"), sha, runID, attempt)
 	if _, ok := parseReleaseName(relName); !ok || cfg.token == "" || cfg.now.IsZero() {
@@ -359,15 +441,20 @@ func runStore(ctx context.Context, cfg config, mapDir, sha, runID, attempt strin
 	if code, _, err := c.do(ctx, true, "POST", fmt.Sprintf("/repos/%s/releases", cfg.storeRepo), "", createBody, &created); err != nil || code != 201 || created.ID <= 0 || !created.Draft || created.Prerelease {
 		return fmt.Errorf("creating draft release: status %d (%v)", code, err)
 	}
+	uploaded := make(map[string]int64, len(assets))
 	for _, name := range slices.Sorted(maps.Keys(assets)) {
 		u := fmt.Sprintf("/repos/%s/releases/%d/assets?name=%s", cfg.storeRepo, created.ID, url.QueryEscape(name))
-		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], nil); err != nil || (code != 201 && code != 200) {
-			return fmt.Errorf("uploading asset %s: status %d (%v)", safeQuote(name), code, err)
+		var a ghAsset
+		if code, _, err := c.do(ctx, true, "POST", u, "", assets[name], &a); err != nil || (code != 201 && code != 200) || !validAsset(a) || a.Name != name || a.Size != int64(len(assets[name])) {
+			// Decoder errors can contain response values; only log trusted metadata.
+			return fmt.Errorf("uploading asset %s: status %d (request or asset response invalid)", safeQuote(name), code)
 		}
+		uploaded[name] = a.ID
+		logf(cfg.stdout, "uploaded asset %s: id=%d size=%d state=%s", safeQuote(name), a.ID, a.Size, safeQuote(a.State))
 	}
 	relPath := fmt.Sprintf("/repos/%s/releases/%d", cfg.storeRepo, created.ID)
-	if code, _, err := c.do(ctx, true, "GET", relPath, "", nil, &draftRel); err != nil || code != 200 || draftRel.ID != created.ID || !draftRel.Draft || draftRel.Prerelease || draftRel.Name != relName || draftRel.TagName != relName {
-		return fmt.Errorf("verifying draft release: status %d (%v)", code, err)
+	if draftRel, err = c.readDraftAssets(ctx, created, relName, assets, uploaded); err != nil {
+		return err
 	}
 	var idxID int64
 	for _, a := range draftRel.Assets {

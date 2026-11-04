@@ -63,8 +63,7 @@ Read the file for the area you change:
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
 [org](../api/org.txt), [conversation](../api/conversation.txt), [presence](../api/presence.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).
 Run `make api` after an API or doc-comment change; `make check` compares them
-without rewriting files. Entries and members are sorted by name, with signatures
-and first doc sentences; unexported declarations and their members are omitted.
+without rewriting files.
 Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 
 ## See also

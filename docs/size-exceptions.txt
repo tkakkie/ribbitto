@@ -2,4 +2,3 @@
 # Until then, an unavoidable entry needs the maintainer's say-so in its issue.
 # Format: <path> #<issue>. Remove the entry when its document is brought under
 # the limit by deleting narration or consolidating, never splitting (decision 46).
-docs/decisions/43-typescript-with-a-go-driven-build.md #2103

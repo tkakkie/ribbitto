@@ -128,7 +128,7 @@ func TestRules(t *testing.T) {
 		{"other/go.mod", "", false}, {"other/go.sum", "", false}, {"other/LICENSE", "", false},
 		{"docs/unknown.txt", "", false}, {"docs/api/nested/a.txt", "", false},
 		{".node-version", "", true}, {"tsconfig.json", "", true},
-		{"web/test/a.test.mjs", "", true}, {"web/test/a.test.ts", "", true},
+		{"web/test/a.test.mjs", "", false}, {"web/test/a.test.ts", "", true},
 		{"web/test/node-test.d.ts", "", true},
 		{"web/test/a.mjs", "", false}, {"web/test/a.test.js", "", false},
 		{"web/test/helper.ts", "", false}, {"web/test/other.d.ts", "", false},

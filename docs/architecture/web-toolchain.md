@@ -21,7 +21,7 @@ package.json/package-lock.json and .node-version, updating decision 42 and
 type of `web/src/*.ts` so `node --test` loads them without typeless-package
 reparsing while root and `web/static/` files keep their existing scope.
 Later PRs add rows to both tables with the first file of a new kind or location:
-direct web/test/*.test.mjs (#1412, until #2098), .test.ts, node-test.d.ts and package.json (#2092); Go builders under tools/ are covered.
+direct web/test/*.test.ts, node-test.d.ts and package.json (#2092); Go builders under tools/ are covered.
 Unlisted files fail; exact-path exceptions use
 [`docs/language-exceptions.txt`](../language-exceptions.txt).
 

@@ -6,6 +6,8 @@
 // runs it with the repository root as its argument. Markdown is parsed with
 // goldmark (GFM); this tools module, not the application's, carries that
 // dependency.
+//
+// Paths under docs/... in source comments must resolve.
 package main
 
 import (
@@ -384,6 +386,22 @@ func checkLinks(root string) ([]string, error) {
 				resolve(path, ref[0], ref[1], l.number)
 			}
 		}
+	}
+	identifier := regexp.MustCompile(`^[\pL_][\pL\p{Nd}_]*$`)
+	err = walkSourceComments(root, func(path string, l line) {
+		for _, target := range commentPaths(l.text) {
+			if refs := bareReferences(target); len(refs) > 0 {
+				ref := refs[0]
+				resolve(path, ref[0], ref[1], l.number)
+				continue
+			}
+			if !repositoryPathExists(repo, target, identifier) {
+				problems = append(problems, fmt.Sprintf("%s:%d: %s does not exist", path, l.number, target))
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.Strings(problems)
 	return compact(problems), nil

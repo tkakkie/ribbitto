@@ -143,9 +143,6 @@ func inspect(files map[string]string) []string {
 			if vendorScripts[name] {
 				continue
 			}
-			if match, _ := path.Match("web/test/*.test.mjs", name); match {
-				continue
-			}
 			match := legacy.FindStringSubmatch(name)
 			if match == nil || !slices.Contains(listed, match[1]) {
 				problems = append(problems, name+": untyped client script")

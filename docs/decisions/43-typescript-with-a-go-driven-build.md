@@ -169,8 +169,6 @@ build, tests and measurement gates without gaining UX permission here. Decision 
 - #1412: unit tests and source-check adaptation; #1413: generated DOM
   contract; #1414: keep new code typed; #1415: document and verify trusted Node
   provisioning for AI sandboxes, handoffs and measurements.
-- #1409: conventions; #1416–#1421: stateful-first conversions;
-  #1426: whole-milestone review, measurements and browser verification.
 
 ## Trade-offs
 

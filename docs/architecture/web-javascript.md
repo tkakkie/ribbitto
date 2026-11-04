@@ -14,8 +14,7 @@ exceptions; none exist.
 (with DOM-free rules in `web/src/unread-counts.ts`) own sidebar badge numbers and bounded recovery state: the snapshot sequence,
 at most 1,000 retained `unread` events with eligibility and application flags,
 a recovering flag, loss generations and the highest possibly lost sequence.
-It owns badge text/visibility and the tab title/favicon projection
-(`web/src/tab-unread.ts`, off-DOM image/canvas); htmx sends resyncs. Markup: [web contracts](web-contracts.md).
+It updates badges and the tab title/favicon; htmx sends resyncs. Markup: [web contracts](web-contracts.md).
 
 - [Unread scripts](web-javascript-unread.md): stream checkpoints, visible reads and sidebar badges.
 - `web/src/message-menu.ts` clones server prototypes, parks pin forms and emits `htmx:load`. Removing the opener closes the menu; focus returns to the labelled message pane when it was on the opener/menu or fell to the body, preserving focus elsewhere.

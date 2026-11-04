@@ -29,8 +29,7 @@ extension retry remains its only retry.
   Losses reserve another request: rows `new loss` / `repeated losses` of [`recovery needs both response and covering snapshot with no new losses`](../../web/test/unread-counts.test.ts).
   Retention is not loss: [`retention preserves eligibility without loss and ignores covered or duplicate frames`](../../web/test/unread-counts.test.ts).
   `message` frames never increment. Missing rows wait for the next resync;
-  malformed badges enter recovery. The adapter owns badge text/visibility and
-  `web/src/tab-unread.ts` projects channel totals into the title/favicon; htmx owns resync requests. Duplicate triggers merge
+  malformed badges enter recovery. The adapter updates badges and the tab title/favicon; htmx owns resync requests. Duplicate triggers merge
   into one pending request and one timer. Visibility return and persisted
   `pageshow` request resync after uniform 0–2 s jitter. Cleanup of the stream
   container, including persisted `pagehide`, clears and forgets the timer,

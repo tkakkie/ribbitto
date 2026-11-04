@@ -1,5 +1,5 @@
-/** Channel counts already include their topic subtotals. */
-export function tabUnread(title: string, counts: { channels: readonly string[]; topics?: readonly string[] }): { title: string; badge: boolean } {
-  const total = counts.channels.reduce((sum, count) => sum + BigInt(count), 0n);
-  return { title: total ? `(${total > 99n ? "99+" : total}) ${title}` : title, badge: total > 0n };
+/** Channel counts already include their topic subtotals. Number is exact up to the cap; larger values only need to exceed it. */
+export function tabUnread(channels: readonly string[]): string {
+  const total = channels.reduce((sum, count) => sum + Number(count), 0);
+  return total ? `(${total > 99 ? "99+" : total}) ` : "";
 }

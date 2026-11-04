@@ -30,6 +30,8 @@ func testTabUnreadBrowser(t *testing.T, browser *rod.Browser) {
 	snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme", Name: "Acme"},
 		Current: view.Channel{ID: channel, Name: "general"}, Channels: []view.Channel{{ID: channel, Name: "general"}},
 		Topics: []view.Topic{{ID: topic, Name: "topic"}}, MemberID: kernel.ID{8}, EventCursor: &cursor, SnapshotSeq: cursor}
+	snapshot.Older = true
+	snapshot.Messages = feedFixture(t, 1).Messages
 	frames := make(chan realtime.Outgoing)
 	replacements := make(chan []byte, 1)
 	connected := make(chan struct{}, 1)
@@ -72,7 +74,13 @@ func testTabUnreadBrowser(t *testing.T, browser *rod.Browser) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
+		current := snapshot
+		if r.URL.Query().Has("before") {
+			current.Older = false
+			current.Before = 1
+			current.Messages = nil
+		}
+		templ.Handler(view.ChannelScreen("/static/css/app.css", current)).ServeHTTP(w, r)
 	})
 	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
 	if err != nil {
@@ -126,6 +134,11 @@ func testTabUnreadBrowser(t *testing.T, browser *rod.Browser) {
   }`).ByPromise()); err != nil {
 			t.Fatalf("%s dot pixels: %v; %s", scheme, err, page.MustEval(`() => JSON.stringify(pixels)`).Str())
 		}
+	}
+	page.MustElement("#load-older a").MustClick()
+	page.MustWait(`() => !document.querySelector('#load-older a')`)
+	if err := page.Timeout(3 * time.Second).Wait(rod.Eval(`title => document.title === '(1) '+title && document.querySelector('link[rel="icon"]').href.startsWith('data:image/png')`, title)); err != nil {
+		t.Fatalf("older history title/icon: %v; title=%q", err, page.MustEval(`() => document.title`).Str())
 	}
 	for i, count := range []int64{100, 0} {
 		replacement := snapshot

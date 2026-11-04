@@ -41,7 +41,7 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
 - **Evidence:** `gh api repos/tkakkie/ribbitto/environments/sourcemaps` and
   `.../deployment-branch-policies` confirm the `main`-only environment.
   AI tokens get 403 on secrets and cannot
-  inspect the store/token scope; setup/scope: #1469 [6403307193][c1], [6403484872][c2].
+  inspect the store/token scope.
   Naming the private repo, token scope, permission and expiry is intentional.
   Never write a value, token id or private URL.
 
@@ -77,5 +77,3 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
 
 [i2049]: https://github.com/tkakkie/ribbitto/issues/2049
 [i2050]: https://github.com/tkakkie/ribbitto/issues/2050
-[c1]: https://github.com/tkakkie/ribbitto/issues/1469#issuecomment-6403307193
-[c2]: https://github.com/tkakkie/ribbitto/issues/1469#issuecomment-6403484872

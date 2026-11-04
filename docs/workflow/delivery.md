@@ -1,94 +1,130 @@
-Read when: implementers need the standard brief or scan a PR body before publishing; orchestrators start or wake an implementer.
+Read when: briefing/waking implementers or publishing PR bodies.
 
 # Delivering a pull request
 
 ## Standard implementer brief
 
-Paste into every implementer run (once `ready`), with the issue number, branch,
-risk and issue text:
+Every implementer run (after `ready`) receives:
 
-> You are `<Codex|Argon>`, implementing issue `#<N>` in `tkakkie/ribbitto` on
+> You are `<Codex|Argon|Claude>`, implementing issue `#<N>` in `tkakkie/ribbitto` on
 > branch `<ai>/<topic>` from `origin/main` (`ready`, risk: `<normal|high>`).
 >
-> Issue `#<N>` — `<title>`:
-> `<issue body, including Done when>`
+> Issue `#<N>` — `<title>`: `<body including Done when>`
 >
-> 1. Read `AGENTS.md` and only the touched area's `docs/` (`AGENTS.md` "Where
->    things are explained"). Use only your own token; never put a credential in
->    a commit, pull request, comment or log; use only a disposable local test
->    database (`RIBBITTO_TEST_DATABASE_URL`), never a shared one. Skip
->    `docs/workflow/` unless an action triggers a section:
->    own token, credentials, `ready`, merge (docs/workflow/README.md#what-no-ai-does),
->    tool failures, disposable test DBs (docs/workflow/ai-credentials.md#tool-failures-and-disposable-databases),
->    PR body credential scan (docs/workflow/delivery.md#pr-body-credential-scan), or
->    measurement caps (docs/workflow/investigations.md#investigations-and-the-performance-target).
-> 2. Implement the issue in this worktree (diff under ~400 lines excluding
->    generated files). Stop and report if a maintainer decision or a new
->    language/tool is needed. For a behaviour-preserving conversion of a script to a module, before opening the PR run a test or script that exercises a copy of the old script (taken from the baseline SHA, since the conversion deletes it) and the new module on the same inputs and compares outputs — clock, storage failures, malformed values included — (`node --test` in `web/test` for DOM-free logic, the existing `TestBrowser` suites (or a new case in them) as the comparison when real browser behaviour is needed); the PR body names the baseline SHA and records the commands and the result (kept as evidence there, not as a permanent file); a restructuring with no old/new pair records what was compared instead ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
-> 3. Run the [local checks by change type](#local-checks-by-change-type)
->    (plus `make deps` if imports change);
->    fix failures without deleting, skipping or weakening a test.
-> 4. Commit (Conventional Commits, `Co-Authored-By:` trailer), push only your
->    branch, run the credential scan (docs/workflow/delivery.md#pr-body-credential-scan)
->    on the PR body file, and open a DRAFT PR (`.github/pull_request_template.md`,
->    `Closes #<N>`).
-> 5. Wait for CI (`gh pr checks`), fix failures (`make prepush` before any
->    follow-up push), and stop once CI is green. Do not set labels, request or
->    run reviews, mark ready, merge, or touch `main`, other branches, settings
->    or tokens.
+> 1. Read `AGENTS.md`, only touched-area docs and action-triggered workflow:
+>    only your own token, no credentials in commits/PRs/comments/logs;
+>    [token/ready/merge](README.md#what-no-ai-does),
+>    [tool failures/disposable local DBs](ai-credentials.md#tool-failures-and-disposable-databases),
+>    [PR scan](#pr-body-credential-scan), [measurements](investigations.md).
+> 2. Implement under ~400 lines excluding generated files. Stop for maintainer
+>    decisions, new languages/tools or [reclassification](README.md#roles-and-running-the-ais).
+>    Before a behaviour-preserving script-to-module PR, compare baseline-SHA
+>    old script and new module on identical inputs (clock, storage failures,
+>    malformed values included): `node --test` in `web/test` for DOM-free logic,
+>    existing/new `TestBrowser` cases for browser behaviour. PR body records
+>    baseline SHA, commands/result, or what restructuring compared without an
+>    old/new pair; no permanent evidence file
+>    ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6559340753)).
+> 3. Run [local checks](#local-checks-by-change-type), plus `make deps` for
+>    import changes. Fix failures without deleting, skipping or weakening tests.
+> 4. Commit (Conventional Commits, `Co-Authored-By:`), push only your branch;
+>    [scan](#pr-body-credential-scan) the body file and open a DRAFT PR using
+>    `.github/pull_request_template.md`, with `Closes #<N>`.
+> 5. Wait for CI (`gh pr checks`); fix failures (`make prepush` before follow-up
+>    pushes), stop at green. Do not set labels, request/run reviews, mark ready,
+>    merge, or touch `main`, other branches, settings or tokens.
 
 ## Local checks by change type
 
-Rows are exclusive. A pull request whose files fall in more than one row,
-or in none, uses the last row. So does any pull request touching
-any `go.mod` or `go.sum`, `tools/webbuild`,
-`tools/sourcemaps` or `tools/webtypes` (they feed bundles or root tests).
-Anything no row names also uses the last row (`go.mod`, `go.sum`, `Makefile`,
-configuration files, the locale TOML
-files, `web/static/vendor/README.md`, generated documents such as `docs/api`,
-`docs/dependencies.md` and `docs/schema`, or anything else).
-Classify the pull request by its whole diff against `main` at every push;
-if the row changes (for example, a docs-only pull request gains code), run
-the new row's "before opening" commands before that push.
+Classify the whole diff against `main` each push; mixed/unlisted changes use
+the last row, as do `go.mod`, `go.sum`, `tools/webbuild`, `tools/sourcemaps`,
+`tools/webtypes`, locales, `Makefile`, configuration,
+`web/static/vendor/README.md` and generated docs (`docs/api`,
+`docs/dependencies.md`, `docs/schema`). A new row needs its opening checks
+before pushing.
 
-| Change | Before opening the pull request | Each later push |
-|---|---|---|
-| Markdown under `docs/` and the root documents, `docs/size-exceptions.txt` (not the files listed above) | `make prepush` and `make check-tools` | `make prepush` |
-| `.github/**` only | `make prepush`, `make check-tools` and `go test -race ./web/static` (it reads the workflows) | `make prepush` |
-| Other `tools/**` only (excluding the paths above) | `make prepush`, `make check-static` and `make check-tools` | `make prepush` |
-| Root-module `*_test.go` files only (fixture packages such as `identitytest`, `orgtest` and `conversationtest`, other helper packages and `testdata/` are not test files and use the last row) | `make prepush`, `make check-static`, `make check-tools` and `make check-test GO_TEST_PACKAGES="<touched packages>"`, with `RIBBITTO_TEST_DATABASE_URL` and `RIBBITTO_REQUIRE_DB=1` set (without them database tests skip silently) | `make prepush` |
-| Anything else, including Go production code, TypeScript, templ, CSS, SQL and generated files | `make check` once (test database set via `RIBBITTO_TEST_DATABASE_URL`, `RIBBITTO_REQUIRE_DB=1`) and `make prepush`; if TypeScript or its toolchain (`web/src`, `web/test`, `tools/webtypes`, `tools/webbuild`, `tsconfig.json`, any `package.json` or `package-lock.json`, `.node-version`) changed, first run `make web-install`, then require Node verification with `RIBBITTO_REQUIRE_NODE=1 make check-web test-web` | `make prepush` |
+Run `make prepush` before **every** push, plus these checks before opening:
 
-Run `make prepush` before every push. CI stays the full gate. In the pull
-request body's **Verified by**, name the row used and the commands actually
-run; do not call a subset a passing `make check`. Any run that printed
-`NOT VERIFIED` or skipped checks (no Node or no test database) must not be
-called a passing `make check`.
+| Change (exclusive rows) | Additional opening checks |
+|---|---|
+| Markdown under `docs/` and root documents; `docs/size-exceptions.txt`, excluding generated docs above | `make check-tools` |
+| `.github/**` only | `make check-tools`; `go test -race ./web/static` (reads workflows) |
+| Other `tools/**` only | `make check-static check-tools` |
+| Root-module `*_test.go` only; fixture/helper packages and `testdata/` use last row | `make check-static check-tools`; `make check-test GO_TEST_PACKAGES="<touched packages>"` with DB required below |
+| Anything else (production Go, TypeScript, templ, CSS, SQL, generated files) | `make check` with DB required below; TypeScript/toolchain changes also require Node below |
+
+DB-required runs set disposable local `RIBBITTO_TEST_DATABASE_URL` and
+`RIBBITTO_REQUIRE_DB=1` (otherwise tests skip silently). For TypeScript or
+its toolchain (`web/src`, `web/test`, `tools/webtypes`, `tools/webbuild`,
+`tsconfig.json`, any `package.json`/`package-lock.json`, `.node-version`),
+first `make web-install`, then `RIBBITTO_REQUIRE_NODE=1 make check-web test-web`.
+
+CI remains the full gate. **Verified by** names the row and actual commands;
+a subset, `NOT VERIFIED` or skipped checks (no Node/DB) is never a passing
+`make check`.
+
+## Model and effort
+
+The orchestrator records model/effort and conditions in the work record
+(issue/PR or brief), never by remaining quota or maintainer judgment.
+Codex: `gpt-6.1-sol`, `medium`; `high` if *Done when* or *Notes* cites:
+
+| ID | Condition |
+|---|---|
+| H1 | Authentication, authorisation, organisation separation or sessions change |
+| H2 | Database integrity, migrations, transactions or locks change |
+| H3 | SSE reconnect, event order, deduplication or delivery changes |
+| H4 | A security, correctness or CI verification condition changes: a gate is added, removed or loosened |
+| H5 | A behaviour-preserving conversion has no old/new comparison test in *Done when* |
+| H6 | Changes to concurrent paths sharing one state (ordering, locking, atomicity); cache contents, keys or invalidation; whether a background job runs, retries, runs once or stops cleanly |
+
+With a comparison test, conversions are `medium` unless H1–H4/H6 holds;
+[comparison stays mandatory](#standard-implementer-brief) (#2052).
+Reading/moving/testing without behaviour changes is not H6; the
+[third-AI requirement](README.md#lifecycle) stays. Switch to `high` when
+H1–H6 first holds during work. Line/file count and issue length never qualify
+alone. Codex reviews/checks use `gpt-6-astra`; no implementation rule for it.
+
+Argon: only `gemini-4-argon-high`. Claude: Sonnet for orchestration, issues,
+docs, ordinary reviews; Opus only for high-risk review round 1 or when named
+by the maintainer.
+
+## Quota substitution
+
+Quota error (e.g. `RESOURCE_EXHAUSTED`): record, never retry that AI.
+Other failures: record, retry once, then ask the maintainer.
+
+- **Implementation:** a named implementer needs the maintainer. Otherwise
+  substitute in order: the other of Codex/Argon, then Claude only for docs-only;
+  from Claude (docs-only), Codex then Argon. None available → ask the maintainer.
+  **Exception:** Codex exhausted on rule-1 work with H1–H4/H6 needs maintainer
+  confirmation before Argon takes over. All other substitutions, including
+  every Argon-to-Codex one, are automatic.
+- Continue the branch; record why on issue/PR. Partial work, including any
+  AI's pushed changes, counts as authorship for independence.
+- **Review:** choose again under [independence](reviewing.md#review-independence-and-rounds)
+  from AIs that neither wrote nor changed the work and have quota. The third
+  AI also excludes the first reviewer. If none remains, ask the maintainer.
+  Required reviews, round caps and maintainer gates stay unchanged.
 
 ## Waking the orchestrator
 
-Start every implementer run as one blocking background command (no `nohup` or
-trailing `&`), so its end or time limit wakes the orchestrator (#1457).
-On wakeup, read the result: with a PR, continue through the parallel reviews,
-fixes and follow-up checks to `ai-reviewed` until a rule in this file,
-[`reviewing.md`](reviewing.md), [review operations](review-operations.md),
-[review follow-ups](review-followups.md) or the [README](README.md) says to ask the
-maintainer. If the implementer stopped for a maintainer decision, report at
-once; if the run failed or timed out, inspect the worktree and branch and
-resume or restart once, else report. CI and Copilot wait loops cap at 60
-minutes; at the cap, report to the maintainer and do not proceed. The
-maintainer decides `ready`, the merge, measurement approval and the cases where
-the rules say to ask.
+One blocking background command (no `nohup`/trailing `&`) wakes the
+orchestrator on completion/timeout (#1457). Read results; continue a PR to
+`ai-reviewed` under [lifecycle](README.md#lifecycle), [reviewing](reviewing.md),
+[operations](review-operations.md) and [follow-ups](review-followups.md).
+Report maintainer decisions immediately; on failure/timeout inspect branch
+and worktree, then [substitute or retry once](#quota-substitution), else report.
+CI/Copilot waits cap at 60 minutes: report and stop.
 
 ## PR body credential scan
 
-- Before publishing a PR body (`gh pr create --body-file body.md`), run this
-  scan; it prints nothing, or each match is reviewed (redact real credentials;
-  harmless placeholders or prose may stay). It joins `\`-continued lines and
-  flags URLs with user info (#358):
+Before publishing a PR body (`gh pr create --body-file body.md`), scan it:
+review every match, redact credentials; harmless prose/placeholders may stay.
+It joins `\`-continued lines and flags URL user info (#358):
 
-  ```sh
-  sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta body.md |
-    grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
-  ```
+```sh
+sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta body.md |
+  grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
+```
 

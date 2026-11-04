@@ -14,7 +14,9 @@ fail until covered by a rendered case.
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
   or the channel and organisation (`general · Acme · ribbitto`); the channel
   list page names the list and the organisation (`lilypads · Acme · ribbitto`). The app
-  name alone fails the check.
+  name alone fails the check. With scripts, pages with sidebar counts prefix the
+  title with the channel unread total (capped at `99+`) and badge the favicon;
+  at zero they restore the plain title and icon.
 - **Structure means something.** ✓ Every page has `lang` and exactly one
   `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists
   (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for

@@ -36,9 +36,6 @@ as soon as it is added. `GET /` redirects a member of the setup
 organisation to its page (`org.Authorizer.HomeSlug`); everyone else sees
 the home page.
 
-Every route under `/organizations/{slug}/` and its result is listed in
-[`routes.md`](routes.md).
-
 `POST …/send-key` uses independent per-member admission, then identity preferences
 to update only `middleware.Account` (invalid value: 400). Its 303 uses parsed
 `return_channel`/`return_topic` UUIDs and `view.ConversationURL`, or the channel

@@ -42,7 +42,7 @@ Apply in order while writing; the first match decides:
 
 - [Vision](vision.md) — aims and acceptance criteria
 - [Architecture](architecture/README.md) — packages, imports and data flow
-- [Domain](domain/README.md) — glossary and index; [entities](domain/entities.md), [invariants](domain/invariants.md), [unread rules](domain/unread.md)
+- [Domain](domain/README.md) — glossary and index; [invariants](domain/invariants.md), [unread rules](domain/unread.md)
 - [UI](ui.md) — design, tokens; [colours and contrast](ui-colours.md), [UI code](ui-code.md), [components](ui-components.md), [markup and accessibility](accessibility.md)
 - [Decisions](../DECISIONS.md) — what was decided and why
 - [Worktree environments](worktree-env.md) — dev databases, port allocation, health checks and cleanup

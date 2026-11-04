@@ -25,7 +25,7 @@ func TestApplicationJavaScript(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, finding := range checkJavaScript(strings.TrimPrefix(strings.TrimPrefix(name, "static/"), "src/"), string(source)) {
-				t.Errorf("%s:%d: %s (see docs/architecture/web-layers-checks.md#javascript-pattern-check)", name, finding.line, finding.rule)
+				t.Errorf("%s:%d: %s (see checkJavaScript in web/static/javascript_test.go)", name, finding.line, finding.rule)
 			}
 		})
 	}
@@ -79,7 +79,10 @@ type javascriptFinding struct {
 }
 
 // checkJavaScript checks recognizable source patterns, not JavaScript semantics.
-// Keep its bounds and examples in sync with the web-layers documentation.
+// It is no parser or security boundary: aliases, computed properties, multiline
+// expressions and interpolations escape it; regex literals and delimiter depth
+// can mislead it about scope. Reviewers must check HTML and indirect global
+// writes, including block-level var and implicit globals, by hand.
 func checkJavaScript(name, source string) []javascriptFinding {
 	var findings []javascriptFinding
 	typed := strings.HasSuffix(name, ".ts")

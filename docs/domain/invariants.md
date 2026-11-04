@@ -1,7 +1,7 @@
 # Invariants
 
 Rules that must always hold, for all code and migrations. Terms are in the
-[glossary](README.md#glossary); tables are in [`entities.md`](entities.md).
+[glossary](README.md#glossary); tables are in the [schema](../schema/README.md).
 
 Keep the numbers stable: other documents cite them.
 

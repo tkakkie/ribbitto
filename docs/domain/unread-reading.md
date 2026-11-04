@@ -6,7 +6,7 @@ The reading scopes, posting and automatic reading rules from [unread rules](unre
 
 Branch-notice reads, visible-page reading POSTs and posting writes are current.
 Only a POST advances read state; a GET never changes it
-([routes](../architecture/routes.md)). Each reading POST carries its
+([request flow](../architecture/request-flow.md)). Each reading POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown while
 visible. The body names one run with `cursor=S&from=F&through=T`, or the whole scope
 with `cursor=S&scope=all` (*Mark all as read*). A run reads only messages

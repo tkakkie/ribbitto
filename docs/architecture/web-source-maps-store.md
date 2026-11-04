@@ -2,40 +2,46 @@
 
 ## Storing job, release naming and retention — #1819
 
-[#1819][i1819]: on `main`, `tools/sourcemaps` (`make sourcemaps-store`):
-`.js.map` (`sourcesContent`, outside `web/static/dist`, no
-`sourceMappingURL`) and `bin/sourcemaps/index.json` (outside `web/static`).
-Tests: `make check-tools`, including leak tests. `.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
+On `main`, `make sourcemaps-store` writes `.js.map` (`sourcesContent`, no
+`sourceMappingURL`) outside `web/static/dist`, and `bin/sourcemaps/index.json`
+outside `web/static` ([#1819][i1819]).
+`.github/workflows/sourcemaps-store.yml`: `sourcemaps` environment,
 `GITHUB_TOKEN` `contents: read`, `SOURCEMAPS_TOKEN` only.
 `.github/workflows/ci.yml`: `cancel-in-progress: true`, no secret.
 
-Use per-commit concurrency (`sourcemaps-<full SHA>`, `cancel-in-progress: false`):
-a shared group cancels all but one running and one pending run, silently dropping
-maps. Different commits may overlap; deletions must be idempotent by exact ID
-(404 or absent-confirmed 422 succeeds), with no assumption of running alone.
+Concurrency: `sourcemaps-<full SHA>`, `cancel-in-progress: false`.
+Commits may overlap; delete idempotently by exact ID
+(404 or absent-confirmed 422 succeeds).
 Build once (`make bundles`); upload those bytes (`make sourcemaps-store`).
 Secret: upload step-level `env` only, never build/install/test.
-Actions are SHA-pinned; command, Go dependencies and Makefile targets/tools need
-workflow review ([third-AI review](../workflow/review-operations.md#third-ai-review)).
+SHA-pin Actions; command, Go dependency and Makefile/tool changes require
+[review](../workflow/review-operations.md#third-ai-review).
 
 - **Naming:** tag/name:
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>`: runner
-  clock read once at job start is the only "now", passed to the command;
-  lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros
-  avoid same-SHA same-second collisions. Age/order: parsed name, never `created_at`: `(start time, run id, attempt)`,
-  numeric run id/attempt. Never reuse, rename, retag or return releases
-  to draft. Target: README-only store `main` (`target_commitish: "main"`);
+  job-start clock, read once and passed as the only "now";
+  lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros.
+  Age/order: parsed `(start time, run id, attempt)` with numeric IDs, never `created_at`.
+  Never reuse, rename, retag or re-draft releases.
+  Target: README-only store `main` (`target_commitish: "main"`);
   create/delete tags with releases.
-  #2049 lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
-  newest complete published release per SHA within run/attempt filters; attempt
-  requires run id; lookup never falls back to another run or attempt.
+  Lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
+  newest complete published release per SHA and run/attempt filters; attempt
+  requires run id; never fall back to another run or attempt.
 - **Lifecycle:** create a draft, upload maps and `index.json`
   (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
-  against that manifest, publish, then verify lookup and per-ID fetch-back
+  the manifest, publish, then verify lookup and per-ID fetch-back
   (exact SHA/run/attempt release; identical index and every map's bytes).
+  Validate receipts; release and paginated asset views must exactly
+  match manifest names, sizes, states, counts and receipt IDs before publication.
+  Read up to four pairs 1s apart, then a fresh pair immediately before one re-upload
+  round, only for names absent from both views throughout. Read up to four more
+  pairs immediately, then 1s apart. Reads have a 15s bound, restarted after re-upload;
+  each re-upload has a separate 30s bound. Extras, duplicates, invalid entries and
+  any error fail the run. This relies on GitHub rejecting same-name assets (422),
+  which fails the run.
   Published releases are complete by construction; only drafts are incomplete.
-  Failed/interrupted runs leave drafts or published duplicates, both harmless;
-  older duplicates take no slot and stay until their SHA expires.
+  Older duplicates take no slot and stay until their SHA expires.
   Never reuse drafts or create prereleases. Idempotently delete abandoned
   strict-`map-` drafts older than 7 days by parsed start time (retried creates
   included), by release ID, unless that SHA's concurrency group holds a run.
@@ -75,8 +81,7 @@ last stops; rollback requires verification and re-marking `active` before startu
 
 Reserve release body for marker: empty/null means ordinary;
 exactly `sourcemaps-production-v1 active`: in production;
-`sourcemaps-production-v1 retired <UTC RFC3339 timestamp>`: retirement
-(e.g. `sourcemaps-production-v1 retired 2026-11-03T12:00:00Z`). Reject extra text,
+`sourcemaps-production-v1 retired <UTC RFC3339 timestamp>`: retirement. Reject extra text,
 whitespace, offsets, fractional seconds, unknown versions, malformed/future
 times. Retire via the same command with `retired` instead of `active`;
 retries retain the marker and first retirement time. Use a trusted writer clock:
@@ -112,8 +117,7 @@ This PR adds no deploy step. Tests: `TestProductionRetention`, `TestProductionTr
 Before distribution/deployment:
 `go -C tools run ./sourcemaps -verify <bundle dir> <SHA> <run id> <attempt>`
 under existing store credential rules, on that run/attempt's complete production
-bundle directory, e.g. `../web/static/dist` (from
-`tools/` with `-C tools`). Only top-level `.js`, regular-file targets (follow symlinks); ignore
+bundle directory. Only top-level `.js`, regular-file targets (follow symlinks); ignore
 `manifest.json`, `X.JS`, nested bundles and
 others. Require a complete published exact SHA/run/attempt release; match bundle
 filenames/SHA-256 bytes to index. Missing releases,
@@ -127,7 +131,6 @@ asset `map`). Retain it outside public assets with distribution record; stop on
 verification failure and distribute exact bytes without rebuilding/changing them.
 Use receipt SHA/bundle hash/run id/attempt in `-lookup`;
 SHA-only lookup is insufficient for distribution.
-Test: `TestExactBuildVerification`.
 
 The production gate stays closed until both #2049 parts merge.
 Verify and mark before distribution/deploy. Required: #1819's first real store AND

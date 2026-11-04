@@ -6,10 +6,10 @@ boundary. Read-state tables, locking, range unions, feed, topic and branch-notic
 reads exist;
 Visible-page reading POSTs, posting writes and snapshot-bound sidebar counts are current
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
-the counting queries are in
+counting queries are in
 [unread counts](../architecture/unread-counts.md), their cost in
-[unread count costs](../architecture/unread-count-costs.md), the writes in
-[unread writes](../architecture/unread-writes.md), the reading scopes and posting in
+[unread count costs](../architecture/unread-count-costs.md), write ownership in
+[unread writes](../architecture/unread-writes.md), reading scopes and posting in
 [unread reading](unread-reading.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next

@@ -47,13 +47,19 @@ type mockStore struct {
 	runCounts                                                                                                        map[string]int
 	runsTotalCount                                                                                                   int
 	failUpload                                                                                                       bool
+	uploadStatus                                                                                                     int
+	uploadState                                                                                                      string
 	failRelDelID, relDel404ID, wrongLookupID, nextID                                                                 int64
 }
 
 func (s *mockStore) server(t *testing.T) *httptest.Server {
+	return httptest.NewServer(s.handler(t))
+}
+
+func (s *mockStore) handler(t *testing.T) http.Handler {
 	t.Helper()
 	s.nextID = max(s.nextID, 100)
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/repos/tkakkie/ribbitto/actions/runs") {
 			if r.Header.Get("Authorization") != "" {
 				t.Errorf("store token leaked to source repo: %s", r.URL.Path)
@@ -137,8 +143,19 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 						last.data = bytes.ReplaceAll(last.data, []byte("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), []byte(strings.Repeat("f", 64)))
 					}
 					s.events = append(s.events, "upload:"+name)
-					w.WriteHeader(201)
-					_ = json.NewEncoder(w).Encode(mockAsset{ID: s.nextID, Name: name, Size: int64(buf.Len())})
+					w.WriteHeader(cmp.Or(s.uploadStatus, 201))
+					_ = json.NewEncoder(w).Encode(mockAsset{ID: s.nextID, Name: name, Size: int64(buf.Len()), State: s.uploadState})
+					return
+				}
+			}
+			http.NotFound(w, r)
+		case r.Method == "GET" && strings.HasPrefix(path, "/releases/") && strings.HasSuffix(path, "/assets"):
+			id, _ := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(path, "/releases/"), "/assets"), 10, 64)
+			for _, rel := range s.releases {
+				if rel.ID == id {
+					page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+					start := min((max(page, 1)-1)*100, len(rel.Assets))
+					_ = json.NewEncoder(w).Encode(rel.Assets[start:min(start+100, len(rel.Assets))])
 					return
 				}
 			}
@@ -277,7 +294,7 @@ func (s *mockStore) server(t *testing.T) *httptest.Server {
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
 }
 
 func testCfg(apiBase, token string, now time.Time, stdout io.Writer) config {

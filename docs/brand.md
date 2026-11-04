@@ -15,7 +15,9 @@ How the rest of the UI looks is in [`ui.md`](ui.md).
 - **Mascot:** a flat frog without outlines in three poses —
   `mascot-hello-v1.svg` (welcome), `mascot-sleeping-v1.svg` (empty states)
   and `mascot-typing-v1.svg` (loading, sending). The files ship, but no page
-  places them yet. Its colours are the
+  places them yet. The README shows `docs/images/mascot-hello.webp`, a
+  200 px raster of the welcome pose, since README images must be PNG or
+  WebP; regenerate it when that pose changes. Its colours are the
   illustration colours listed in [`ui-colours.md`](ui-colours.md#colour-tokens). It is decorative (`alt=""`) and never the only
   carrier of information.
 - A changed brand file gets a new version suffix, since static files are

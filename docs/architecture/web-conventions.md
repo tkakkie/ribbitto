@@ -22,7 +22,8 @@ Conventions for browser modules under
   one concern, and logic that decides something (state transitions, queue
   order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
   module, while DOM code stays thin; see [`web-tests.md`](web-tests.md) for the
-  test layers and harness rules.
+  test layers and harness rules. Client unit tests are direct
+  `web/test/<name>.test.ts` harnesses.
 
 - **State:** a module's own working state is held in typed in-memory objects,
   never in `dataset`, limited to what

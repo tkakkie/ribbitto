@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 )
 
@@ -142,23 +141,20 @@ func run(mode, root string, files ...string) error {
 		cmd = command(root, npmPath, "ci", "--ignore-scripts", "--include=optional", "--include=dev", "--registry=https://registry.npmjs.org/", "--userconfig="+filepath.Join(config, "user"), "--globalconfig="+filepath.Join(config, "global"))
 	} else if mode == "test" {
 		var files []string
-		for _, pattern := range []string{"web/test/*.test.ts", "web/test/*.test.mjs"} {
-			matches, err := filepath.Glob(filepath.Join(root, pattern))
+		matches, err := filepath.Glob(filepath.Join(root, "web/test/*.test.ts"))
+		if err != nil {
+			return fmt.Errorf("listing client unit-test harnesses: %w", err)
+		}
+		for _, name := range matches {
+			info, err := os.Stat(name)
 			if err != nil {
-				return fmt.Errorf("listing client unit-test harnesses: %w", err)
+				return fmt.Errorf("inspecting client unit-test harness: %w", err)
 			}
-			for _, name := range matches {
-				info, err := os.Stat(name)
-				if err != nil {
-					return fmt.Errorf("inspecting client unit-test harness: %w", err)
-				}
-				// Node would recursively discover tests inside a matching directory.
-				if info.Mode().IsRegular() {
-					files = append(files, name)
-				}
+			// Node would recursively discover tests inside a matching directory.
+			if info.Mode().IsRegular() {
+				files = append(files, name)
 			}
 		}
-		slices.Sort(files)
 		if len(files) == 0 {
 			return fmt.Errorf("no client unit-test harnesses found")
 		}

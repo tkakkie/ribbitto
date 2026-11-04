@@ -204,7 +204,7 @@ func TestTrackedTypeScriptPaths(t *testing.T) {
 }
 
 func TestScriptPaths(t *testing.T) {
-	for _, name := range []string{"web/static/new-v1.js", "elsewhere.js", "web/src/one.mjs", "elsewhere.cjs", "elsewhere.jsx", "web/test/nested/one.test.mjs", "web/test/one.mjs", "web/static/nested/example-v1.js", "web/static/example-v2.js", "web/static/vendor/x.js"} {
+	for _, name := range []string{"web/static/new-v1.js", "elsewhere.js", "web/src/one.mjs", "elsewhere.cjs", "elsewhere.jsx", "web/test/one.test.mjs", "web/test/nested/one.test.mjs", "web/test/one.mjs", "web/static/nested/example-v1.js", "web/static/example-v2.js", "web/static/vendor/x.js"} {
 		t.Run(name, func(t *testing.T) {
 			files := fixture()
 			if got := inspect(files); len(got) != 0 {
@@ -226,7 +226,7 @@ func TestScriptPaths(t *testing.T) {
 	files["web/static/vendor/htmx-2.0.7.min.js"] = ""
 	files["web/static/vendor/htmx-ext-sse-2.2.4.min.js"] = ""
 	files["web/static/vendor/idiomorph-ext-0.7.4.min.js"] = ""
-	files["web/test/example.test.mjs"] = ""
+	files["web/test/example.test.ts"] = ""
 	files["web/src/one.ts"] = `const text = "// @ts-nocheck";`
 	files["other.templ"] = `<script-widget></script-widget>`
 	if got := inspect(files); len(got) != 1 || !strings.Contains(got[0], "@ts-nocheck") {

@@ -17,13 +17,10 @@ hashed-manifest check. Syntax fixtures preserve the checks' intent; regex is
 no parser or security boundary. Types do not cure alias, computed-property,
 multiline or interpolation blind spots. Keep review and browser tests.
 
-`make test-web` runs direct `web/test/*.test.ts` harnesses through the existing
+`make test-web` runs only direct `web/test/*.test.ts` harnesses through the existing
 Go wrapper's test mode, also in `make check`
-([decision 45](../decisions/45-type-checked-client-unit-tests.md); the runner
-accepts existing `web/test/*.test.mjs` harnesses and runs both forms from
-#2092). Changing a `.test.mjs` harness converts it to `.test.ts` in the same
-PR. #2098 starts only when `ls web/test/*.test.mjs` is empty, then removes the
-`.mjs` glob. The wrapper checks
+([decision 45](../decisions/45-type-checked-client-unit-tests.md)).
+The wrapper checks
 `.node-version`, scrubs `NODE_OPTIONS`, expands the glob itself (no matches
 fails), needs no `node_modules` and runs `node --test <files>` from the
 repository root, propagating failure. `web/src/package.json` and (from #2092)
@@ -45,10 +42,7 @@ test layers and harness rules.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
 exactly one file per stem. Exempt paths are the three named vendor scripts
-in `web/static/vendor/` (pinned by `vendor_test.go`) and untouched direct
-`web/test/*.test.mjs` harnesses (not type-checked; changing one converts it in
-the same PR). #2098 removes this allowance only after the empty-glob condition
-above is met. On conversion, delete the
+in `web/static/vendor/` (pinned by `vendor_test.go`). On conversion, delete the
 old script and its list line together. The list is now empty and may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge
 base with `origin/main`. A missing base list bootstraps from its tracked

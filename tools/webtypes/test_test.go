@@ -32,7 +32,8 @@ func TestNodeTestCommand(t *testing.T) {
 	}
 	root, _ := fakeNodeRoot(t)
 	a := writeHarness(t, root, "a.test.ts", "")
-	b := writeHarness(t, root, "b.test.mjs", "")
+	b := writeHarness(t, root, "b.test.ts", "")
+	writeHarness(t, root, "ignored.test.mjs", "")
 	writeHarness(t, root, "node-test.d.ts", "")
 	writeHarness(t, root, "ignored.ts", "")
 	writeHarness(t, root, "ignored.mjs", "")
@@ -79,7 +80,7 @@ exit "${TEST_EXIT_CODE:-0}"
 }
 
 func TestNodeTestReadiness(t *testing.T) {
-	for _, state := range []string{"wrong", "absent", "no-harness"} {
+	for _, state := range []string{"wrong", "absent", "no-harness", "mjs-only"} {
 		t.Run(state, func(t *testing.T) {
 			root, _ := fakeNodeRoot(t)
 			marker := filepath.Join(root, "ran")
@@ -92,6 +93,8 @@ func TestNodeTestReadiness(t *testing.T) {
 			case "no-harness":
 				writeHarness(t, root, "directory.test.ts/nested.test.ts", "")
 				writeHarness(t, root, "directory.test.mjs/nested.test.mjs", "")
+			case "mjs-only":
+				writeHarness(t, root, "ignored.test.mjs", "")
 			case "absent":
 				if err := os.Remove(filepath.Join(root, "node")); err != nil {
 					t.Fatal(err)
@@ -100,8 +103,8 @@ func TestNodeTestReadiness(t *testing.T) {
 			for _, required := range []string{"", "1"} {
 				t.Setenv("RIBBITTO_REQUIRE_NODE", required)
 				out, err := runOutput(t, "test", root)
-				want := map[string]string{"wrong": "does not match", "absent": "unavailable", "no-harness": "no client unit-test harnesses found"}[state]
-				if required == "1" || state == "no-harness" {
+				want := map[string]string{"wrong": "does not match", "absent": "unavailable", "no-harness": "no client unit-test harnesses found", "mjs-only": "no client unit-test harnesses found"}[state]
+				if required == "1" || state == "no-harness" || state == "mjs-only" {
 					if err == nil || !strings.Contains(err.Error(), want) {
 						t.Fatalf("expected %s failure, got %v: %s", want, err, out)
 					}

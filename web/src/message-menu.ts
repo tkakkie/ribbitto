@@ -45,6 +45,7 @@ import * as dom from "./contracts.gen.ts";
       form.id = dom.pinFormEntryID(suffix);
       dom.writeAttribute(form, dom.PinControlAttribute, id);
       const pinned = dom.readAttribute(link, dom.PinnedAttribute)!;
+      form.action = dom.readAttribute(link, pinned === "true" ? dom.UnpinURLAttribute : dom.PinURLAttribute)!;
       dom.writeAttribute(form, dom.PinnedAttribute, pinned);
       for (const action of form.querySelectorAll<HTMLButtonElement>(`[${dom.PinActionAttribute}]`)) {
         const state = dom.readAttribute(action, dom.PinActionAttribute)!;
@@ -57,7 +58,6 @@ import * as dom from "./contracts.gen.ts";
     menu.querySelector<HTMLButtonElement>(`[form="${dom.QuoteFormID}"]`)!.value = id;
     form.hidden = false;
     menu.append(form);
-    window.htmx?.process(form);
     window.htmx?.trigger(form, "htmx:load", { elt: form });
   }, true);
   menu.addEventListener("toggle", () => {

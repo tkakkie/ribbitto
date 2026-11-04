@@ -26,6 +26,46 @@ import (
 // forgets it when the menu closes, also when the copy settles after
 // that; when copying fails the link opens instead.
 func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("enhancement", func(t *testing.T) { testMessageActionsEnhancementBrowser(t, browser) })
+	t.Run("interaction", func(t *testing.T) { testMessageActionsInteractionBrowser(t, browser) })
+}
+
+func testMessageActionsEnhancementBrowser(t *testing.T, browser *rod.Browser) {
+	id := kernel.ID{10}
+	conversation := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Current: view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: "general"},
+		Messages: []view.Message{
+			{ID: kernel.ID{9}, Body: "unpinned"},
+			{ID: id, Body: "pinned", Pinned: true},
+		}}
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.Handle("GET /conversation", templ.Handler(view.ChannelScreen("/static/css/app.css", conversation)))
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	for _, tt := range []struct {
+		name, check string
+	}{
+		{"pinned-without-panel", `({menu, pin, unpin}) => !document.getElementById('pins-section') && menu.matches(':popover-open') && !pin.checkVisibility() && unpin.checkVisibility()`},
+		{"fallback-hidden", `({button}) => !button.previousElementSibling.checkVisibility() && button.checkVisibility()`},
+		{"second-click-closes", `({menu, button}) => { button.click(); return !menu.matches(':popover-open'); }`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
+			defer page.MustClose()
+			page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
+			menu := messageMenu(id)
+			menu.open(page)
+			if !menu.eval(page, tt.check).Bool() {
+				t.Fatal("message actions enhancement: " + tt.name)
+			}
+		})
+	}
+}
+
+func testMessageActionsInteractionBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	id := kernel.ID{9}

@@ -22,7 +22,7 @@ const (
 	// #1457: no per-message forms are processed at initial load.
 	feedBudgetHTMXSlope = 0
 	// #1478: bytes allow 5% (rounded up) above the measured fixed part for classes/text/translations.
-	feedBudgetBytesFixed = 24562
+	feedBudgetBytesFixed = 24553
 	// #1500: bytes allow 5% (rounded up) above the measured slope for classes/text/translations.
 	feedBudgetBytesSlope = 3639
 	// #1478: 256-byte middle-sample tolerance covers event_seq digit and cyclic seed-name lengths.
@@ -38,5 +38,5 @@ const (
 	// #1500: real first-render htmx nodes have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetHTMXLatest = 22
 	// #1500: real first-render bytes allow 5% (rounded up) for classes/text/translations; a count change (#1477) is a visible, justified budget change.
-	feedBudgetBytesLatest = 214421
+	feedBudgetBytesLatest = 214412
 )

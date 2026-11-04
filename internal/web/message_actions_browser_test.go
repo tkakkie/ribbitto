@@ -30,6 +30,7 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 	defer cancel()
 	id := kernel.ID{9}
 	conversation := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Topic:    &view.Topic{ID: kernel.ID{2}, Name: "topic"},
 		Current:  view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: "general"},
 		Messages: []view.Message{{ID: id, TopicID: kernel.ID{2}, Handle: "author", Body: "hello", URL: view.MessageURL("acme", id)}}}
 	otherID := kernel.ID{10}
@@ -100,6 +101,32 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("%s: shared menu did not retarget all actions to the second message", what)
 		}
 		other.eval(page, `({menu}) => menu.hidePopover()`)
+		menu.open(page)
+		menu.eval(page, `({menu}) => menu.hidePopover()`)
+		for _, removal := range []string{"swap", "move"} {
+			t.Run(fmt.Sprintf("cleanup/%d/%s", size[0], removal), func(t *testing.T) {
+				page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
+				menu.open(page)
+				menu.control(page, "pin").MustFocus()
+				if !menu.eval(page, `async ({menu, button, form}, removal, markup) => {
+					const item = button.closest('li'), pane = document.getElementById('message-list');
+					const clean = () => !menu.matches(':popover-open') && !form.isConnected && document.activeElement === pane;
+					if (removal === 'swap') htmx.swap(item, '', {swapStyle: 'outerHTML', settleDelay: 0});
+					else htmx.trigger(document.getElementById('message-items'), 'htmx:sseBeforeMessage', {type: 'messages-moved', data: markup, lastEventId: '1'});
+					// Swaps must release focus synchronously, before htmx detaches the opener.
+					const synchronous = removal !== 'swap' || clean();
+					await new Promise(requestAnimationFrame);
+					return synchronous && !item.isConnected && clean();
+				}`, removal, renderIn(t, "en", view.MovedMessageItems(conversation.Messages[:1], kernel.ID{2}, kernel.ID{3}))).Bool() {
+					t.Fatal("removing the opener kept its menu/form or lost message-pane focus")
+				}
+				other.open(page)
+				if !other.eval(page, `({menu, form, copy, quote}, id, url) => menu.matches(':popover-open') && menu.contains(form) && form.dataset.pinControl === id && quote.value === id && copy.getAttribute('href') === url`, realtime.FormatPayloadID(otherID), view.MessageURL("acme", otherID)).Bool() {
+					t.Fatal("menu did not retarget after opener removal")
+				}
+			})
+		}
+		page.MustNavigate(server.URL + "/conversation").MustWaitLoad()
 		menu.open(page)
 		menu.eval(page, `({menu}) => menu.hidePopover()`)
 	}

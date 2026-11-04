@@ -261,9 +261,10 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 		step(fmt.Sprintf("onLoadError ancestor=%t", ancestor), func(p *rod.Page) {
 			messageMenu(a.ID).eval(p, `({form}, ancestor) => {
 			  const ajax = htmx.ajax;
+			  window.pinRelation = null;
 			  htmx.ajax = (method, url, options) => {
 			    htmx.ajax = ajax;
-			    if (options.source.closest('[data-pin-control]') !== form || options.target !== form || options.source.form !== form) throw new Error('pin sender does not belong to its target form');
+			    window.pinRelation = options.source.closest('[data-pin-control]') === form && options.target === form && options.source.form === form;
 			    const source = options.source, elt = ancestor ? document.body : source;
 			    const parent = form.parentElement, next = form.nextSibling;
 			    if (ancestor) form.remove();
@@ -274,6 +275,9 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 			  };
 			  form.requestSubmit();
 			}`, ancestor)
+			if !p.MustEval(`() => window.pinRelation === true`).Bool() {
+				panic("pin sender does not belong to its target form")
+			}
 		})
 		noExtra()
 		step("requestSubmit without submitter retries visible action", func(p *rod.Page) {

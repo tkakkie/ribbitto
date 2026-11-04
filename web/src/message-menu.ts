@@ -64,12 +64,21 @@ import * as dom from "./contracts.gen.ts";
   menu.addEventListener("toggle", () => {
     if (!menu.matches(":popover-open")) park();
   });
+  const dismiss = () => {
+    const active = document.activeElement;
+    const restore = active === opener || menu.contains(active) || (menu.matches(":popover-open") && active === document.body);
+    if (menu.matches(":popover-open")) menu.hidePopover();
+    park();
+    opener = null;
+    // The removed trigger cannot receive native popover focus restoration.
+    if (restore) dom.getMessageList()?.focus({ preventScroll: true });
+  };
+  const list = dom.getMessageList();
+  if (list) new MutationObserver(() => {
+    if (opener && !opener.isConnected) dismiss();
+  }).observe(list, { childList: true, subtree: true });
   document.addEventListener("htmx:beforeCleanupElement", (event) => {
     const root = (event as CustomEvent<{ elt: Element }>).detail.elt;
-    if (opener && root.contains(opener)) {
-      if (menu.matches(":popover-open")) menu.hidePopover();
-      park();
-      opener = null;
-    }
+    if (opener && root.contains(opener)) dismiss();
   });
 })();

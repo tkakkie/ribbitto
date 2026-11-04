@@ -165,7 +165,8 @@ templ messageQuote(quote Quote) {
 	</figure>
 }
 
-// Live items carry only viewer-independent URLs and state; the list owns the menu.
+// Below desk the avatar gutter keeps actions out of the single 44 px header
+// row (#1093); the shared menu opens as a bottom sheet.
 templ messageActions(entry Message) {
 	{{ classes := "size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:-my-2 max-desk:absolute max-desk:left-0 max-desk:top-10 transition-feedback motion-safe:active:scale-96" }}
 	<a id={ fmt.Sprintf(MessageActionsDOMPrefix+"%x", entry.ID) } href={ templ.SafeURL(entry.URL + "/actions") } { MessageActionAttribute }={ idValue(entry.ID) } { MessageURLAttribute }={ entry.URL } { PinURLAttribute }={ entry.PinURL + "/pin" } { UnpinURLAttribute }={ entry.PinURL + "/unpin" } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ BodyMessageDOMID(entry.ID) } class={ "flex", classes }>
@@ -177,7 +178,7 @@ templ messageActions(entry Message) {
 // MessageActions renders one menu and a clonable pin form for the message list.
 templ MessageActions(entry Message) {
 	<template id={ MessageActionsTriggerID }>
-		<button type="button" popovertarget={ MessageActionsID } aria-label={ i18n.T(ctx, "message.actions") } class="">
+		<button type="button" popovertarget={ MessageActionsID } aria-label={ i18n.T(ctx, "message.actions") }>
 			<span aria-hidden="true" class="text-heading">⋯</span>
 		</button>
 	</template>

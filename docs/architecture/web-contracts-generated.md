@@ -29,10 +29,6 @@ Composer attributes in the generated set:
 
 Stream `read-applied` and query envelopes stay plain, non-bubbling events.
 
-The `message-history`, `branch-selection` and `sidebar-scroll` entries keep
-scroll/focus restoration and selection constraints in thin DOM adapters; the
-existing browser scenarios cover them.
-
 Add a documented constant with a `//dom:id`
 or `//dom:suffix` directive and its DOM element type, `//dom:field` and its
 form control type, `//dom:attribute`, or

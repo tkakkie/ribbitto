@@ -4,20 +4,23 @@
 
 ## Source maps — #1411
 
-Development (`webbuild -dev` / `-watch`, #1821): retain recent generations.
-`RIBBITTO_DEV_ASSETS=bin/dev-dist`: `Cache-Control: no-store`.
+Development (`webbuild -dev` / `-watch`, #1821): `bin/dev-dist`: bundles,
+external `<name>-<hash>.js.map` (`sourcesContent`,
+`//# sourceMappingURL=<name>-<hash>.js.map`) and `manifest.json` `"map"` fields;
+keep recent generations. Dev handler (`RIBBITTO_DEV_ASSETS=bin/dev-dist`):
+registered bundles/maps served from disk, `Cache-Control: no-store`.
 
 Production (`make bundles`): no maps, `sourceMappingURL` comments or `"map"` fields
-in `web/static/dist`. Keep dev output outside the embedded tree; its
+in `web/static/dist`. Keep dev output outside embedded tree; its
 handler never serves `.map`. Production maps (#1819, #1469,
-[decision 43](../decisions/43-typescript-with-a-go-driven-build.md)) use a private
+[decision 43](../decisions/43-typescript-with-a-go-driven-build.md)): private
 index beside maps outside `web/static`, never in `manifest.json`, matching
 bundles by build SHA, run id and content hash.
 
 Keep production maps out of images, embedded files and public static routes
 (no inline maps/public `sourceMappingURL`).
-Verify CSP/delivery in [target browsers](browser-targets.md) with version-specific
-evidence under its rules: classic-bundle browser check; verify module/shared/lazy/preload
+Verify CSP/delivery in [target browsers](browser-targets.md): version-specific
+evidence per its rules; classic-bundle browser check; verify module/shared/lazy/preload
 before adoption, preserving nonce-only CSP.
 
 ## Private production store — #1469, #1819
@@ -46,17 +49,15 @@ Actions artifacts do not fit public-repo CI because they cannot be private.
 
 ### Constraints
 
-- **Gate before the first production release ([#2049][i2049]):** at AI merge pace,
-  the newest 10 protect almost nothing; only the 90 days do. Require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
-  of exact SHA/run id/attempt/bundle hashes for every distributed/deployed build;
-  [production markers, retention and retirement margin](web-source-maps-store.md#production-markers--2049-part-22)
-  are tested in #1819's `tools/sourcemaps` storing command. Until both #2049 parts merge: no container
+- **Gate ([#2049][i2049]):** closed until both parts merge: no container
   images, Dockerfiles, release workflows, tagged/distributed binaries (including
-  `go install`), manual deployment or other build distribution outside CI.
-  No real production distribution/deployment until #2145 holds.
-  Required: #1819's first real store AND fetch record (main run 41571339027 recorded).
-  Real deletion pending on #1819 (first run: zero releases/tags deleted) does not block
-  the first production release; its preparation states deletion recorded or still pending.
+  `go install`), manual deploy or any distribution outside CI.
+  Newest 10 protect almost nothing at AI merge pace; only the 90 days do.
+  Require [verification](web-source-maps-store.md#exact-build-verification--2049-part-12)
+  and #1819's first real store AND fetch record.
+  No real production distribution/deployment until #2145 holds;
+  [markers/retention/retirement margin](web-source-maps-store.md#production-markers--2049-part-22)
+  are tested in #1819's `tools/sourcemaps` storing command.
 - **Token rotation ([#2050][i2050]):** maintainer rotates `SOURCEMAPS_TOKEN`,
   expiring about `2027-01-23`. Best-effort reminders: desktop `2027-01-09`,
   `2027-01-20` (if Claude is open or next launches); assigned

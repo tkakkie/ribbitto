@@ -18,19 +18,19 @@ Secret: upload step-level `env` only, never build/install/test.
 Actions are SHA-pinned; command, Go dependencies and Makefile targets/tools need
 workflow review ([third-AI review](../workflow/review-operations.md#third-ai-review)).
 
-- **Naming:** tag and name are
+- **Naming:** tag/name:
   `map-<UTC start as YYYYMMDDTHHMMSSZ>-<full SHA>-<run id>.<attempt>`: runner
   clock read once at job start is the only "now", passed to the command;
   lower-case 40-hex SHA; decimal GitHub run id/attempt without leading zeros
-  avoid same-SHA same-second collisions. Age/order
-  use the parsed name, never `created_at`: `(start time, run id, attempt)`,
-  with numeric run id/attempt. Never reuse, rename, retag or return releases
-  to draft. They target README-only store `main` (`target_commitish: "main"`);
+  avoid same-SHA same-second collisions. Age/order: parsed name, never `created_at`: `(start time, run id, attempt)`,
+  numeric run id/attempt. Never reuse, rename, retag or return releases
+  to draft. Target: README-only store `main` (`target_commitish: "main"`);
   create/delete tags with releases.
   #2049 lookup (`go -C tools run ./sourcemaps -lookup <SHA> [<sha256> [<run id> [<attempt>]]]`):
   newest complete published release per SHA within run/attempt filters; attempt
   requires run id; lookup never falls back to another run or attempt.
-- **Lifecycle:** create a draft, upload maps and `index.json`, verify
+- **Lifecycle:** create a draft, upload maps and `index.json`
+  (`{"commit","run_id","entries":{"<name>":{"file","sha256","map"}}}`), verify
   against that manifest, publish, then verify lookup and per-ID fetch-back
   (exact SHA/run/attempt release; identical index and every map's bytes).
   Published releases are complete by construction; only drafts are incomplete.
@@ -43,8 +43,7 @@ workflow review ([third-AI review](../workflow/review-operations.md#third-ai-rev
 - **Population:** eligible releases are canonical published non-prereleases,
   parsed time at most "now" plus one day. Younger/non-strict drafts (outside
   7-day cleanup), prereleases, unparsable/out-of-range names and name/tag mismatches
-  are neither counted nor deleted;
-  warn in the job summary. Count each SHA's newest complete published release
+  are neither counted nor deleted; warn in job summary. Count each SHA's newest complete published release
   toward the newest 10 and 90-day floor (**distinct SHAs**, not releases).
   A rerun of an old SHA takes a newest-10 slot by start time,
   potentially pushing a deployed SHA past 90 days;
@@ -114,18 +113,20 @@ Before distribution/deployment:
 `go -C tools run ./sourcemaps -verify <bundle dir> <SHA> <run id> <attempt>`
 under existing store credential rules, on that run/attempt's complete production
 bundle directory, e.g. `../web/static/dist` (from
-`tools/` with `-C tools`). Only top-level `.js` names with regular-file
-targets (follow symlinks); ignore `manifest.json`, `X.JS`, nested bundles and
+`tools/` with `-C tools`). Only top-level `.js`, regular-file targets (follow symlinks); ignore
+`manifest.json`, `X.JS`, nested bundles and
 others. Require a complete published exact SHA/run/attempt release; match bundle
-filenames/SHA-256 bytes to its index. Missing releases,
+filenames/SHA-256 bytes to index. Missing releases,
 mismatched bytes/names, missing/extra bundles, non-regular targets, empty indexes
 or read failures exit nonzero. Each indexed map needs a non-empty uploaded asset.
 Read-only: no map downloads/content checks or substitute uploads.
 
-Retain JSON receipt outside public assets with distribution record; stop on
+Success stdout JSON: `commit`, `run_id`, `attempt`, full store release name `release`,
+`entries` (per bundle: `file`, `sha256`, indexed map
+asset `map`). Retain it outside public assets with distribution record; stop on
 verification failure and distribute exact bytes without rebuilding/changing them.
-Use receipt SHA, bundle hash,
-run id/attempt in `-lookup`; SHA-only lookup is insufficient for distribution.
+Use receipt SHA/bundle hash/run id/attempt in `-lookup`;
+SHA-only lookup is insufficient for distribution.
 Test: `TestExactBuildVerification`.
 
 The production gate stays closed until both #2049 parts merge.

@@ -118,7 +118,7 @@ later renames show the current name. A same-key retry verifies the normalized
 typed input's stored byte length and SHA-256 digest, without resolving today's
 owner again. Different typed input, including another handle or casing, channel
 or quote returns 409. Recovery removes only a prefix verified by that proof;
-without it the draft stays ([posting](../architecture/posting.md)).
+without it the draft stays.
 
 ## Handles
 

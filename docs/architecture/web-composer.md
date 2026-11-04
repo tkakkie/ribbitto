@@ -29,7 +29,7 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   script removes that prefix by the same rules (*the earlier message was
   sent*), or says the 409's error if the start changed. Otherwise
   text/error stay, including legacy rows without proof.
-- **Pending own posts:** see [web-composer-pending.md](web-composer-pending.md).
+- **Pending own posts:** see [decision 37 (a)](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#a-pending-own-post-1156-1174).
 - **Idempotency key** (#1155): hidden `idempotency_key`, fresh on load, success/409; kept on 422. Scoped to authorised membership; never in streams. Pending sends replace it with
   `crypto.randomUUID()` (secure contexts only; otherwise ordinary sending).
 - **Stream reset:** the [reload guard](web-javascript.md#javascript) receives the queue's

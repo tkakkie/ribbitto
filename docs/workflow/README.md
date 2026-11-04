@@ -1,11 +1,9 @@
 # AI development workflow
 
-Read when: orchestrating an issue or pull request, or when an action triggers [What no AI does](#what-no-ai-does) (own token, credentials, `ready`, merge rule).
+Read when: orchestrating or triggering [What no AI does](#what-no-ai-does).
 
-**One set of rules applies to every AI — Claude, Codex and Argon.** Safety
-comes from GitHub (`main` ruleset, CI) and review, not per-AI sandboxes.
-`AGENTS.md` covers coding; this file governs the workflow and wins over older
-workflow text.
+Claude, Codex and Argon follow `AGENTS.md` for coding, this file for workflow
+(overriding older text).
 
 ## Principles
 
@@ -25,11 +23,9 @@ workflow text.
 
 - Work in its own worktree, on a branch `claude/<topic>`, `codex/<topic>`
   or `argon/<topic>` started from `origin/main`.
-- Read and edit any file; run any command (`make check`, Docker, a browser); use the
-  network and subagents.
-- Run code another AI wrote.
-- Commit, push its own branch, open and update draft pull requests, and
-  comment on issues and pull requests with `gh` and its own token.
+- Read/edit files, run commands or another AI's code; use network/subagents.
+- Commit, push its branch, open/update draft PRs and comment with `gh` and
+  its own token.
 
 ## What no AI does
 
@@ -52,60 +48,63 @@ workflow text.
 
 ## What GitHub enforces and what is only a rule
 
-**Enforced by the `main` ruleset** (pull request and `ci` required, no
-bypass list):
-
-- Nothing reaches `main` except through a pull request.
-- A pull request cannot merge until `ci` passes.
-
-**Kept by the AIs as rules (not enforced by GitHub):**
-
-- **Merges.** Any token that pushes and opens a pull request can merge it once
-  `ci` passes; required approvals cannot help because every token acts as the
-  maintainer's account. Decision 11 is kept by rule.
-- **What `ci` checks.** A pull request can change `.github/workflows/`, and
-  its own copy decides what passes (a known risk; review reads every such
-  change). Limiting the required check to GitHub Actions narrows who can post
-  it, not what a changed workflow tests.
-- **Credentials and settings.** See [tokens](ai-credentials.md#tokens).
+`main`: PR, passing GitHub Actions `ci`, no bypass. Tokens act as maintainer;
+approvals cannot enforce decision 11. GitHub Actions as check source limits who
+posts it, not what a changed workflow tests; review every change.
+Credentials/settings: [tokens](ai-credentials.md#tokens).
 
 ## Enabling an AI's rights
 
-Done for all three AIs on 2026-10-31 (#2002). For a new AI or token, follow
-[the steps](ai-credentials.md#enabling-an-ais-rights) in order, record them
-and show step 4 before ordinary work.
+New AI/token: [steps](ai-credentials.md#enabling-an-ais-rights) in order;
+record them and show step 4 before ordinary work.
 
 ## Tokens
 
-Tokens and the tested `run-as.sh` recipe moved to [AI credentials and launchers](ai-credentials.md#tokens).
+[Credentials/launchers](ai-credentials.md#tokens).
 
 ## Roles and running the AIs
 
-**Choosing the implementer**, in this order:
+**Choosing the implementer:** the maintainer's choice named at `ready` wins.
+Otherwise use first match for the whole *Done when* change:
 
-1. The maintainer's choice, named when adding `ready`.
-2. Codex, for the core areas: authentication, authorisation, organisation
-   scoping, sessions, real-time delivery, concurrency, caches, ordered
-   transactions, migrations and queries.
-3. Argon, for everything else, `high` risk included. `high` is a risk class,
-   not an assignment: its review conditions hold whoever implements.
+| Rule | Condition | AI |
+|---|---|---|
+| 1 | Any Go, SQL, migration, security, data-integrity or delivery-guarantee file, or authentication, authorisation, organisation scoping, sessions, real-time delivery, concurrency, caches, ordered transactions or queries | Codex |
+| 2 | Every non-generated, non-test file is `.templ`, CSS or locale, and *Done when* is checked by browser interaction (display, events, focus) | Argon |
+| 3 | Every file is documentation | Claude |
+| 4 | Anything else: TypeScript/JavaScript logic (including behaviour-preserving conversions), tests alone, build tooling, CI | Codex |
 
-If the maintainer did not name one, the orchestrator may change the
-implementer for a concrete reason (such as stalled work) and state why on the
-issue; changing a named one requires the maintainer. Fixes go to the original
-implementer; Auto-fix runs only on one's own pull requests. Claude writes
-issues and briefs, starts the others and explains pull requests to the
-maintainer in Japanese in the chat.
+Generated companions (`*_templ.go`, sqlc output, built CSS/JavaScript) and
+tests follow source; tests alone: rule 4; Claude: rule 3 only.
+First match wins: Go anywhere (including `tools/`) is rule 1; rule 4 tooling
+is non-Go (`Makefile`, scripts, configuration).
+Examples: `.templ` + CSS + generated Go + browser check → 2; add hand-written
+Go → 1; docs + `Makefile` → 4; TypeScript conversion alone → 4.
+Remaining quota never selects an AI.
 
-Headless runs wait for input forever: **close stdin and set a time limit**
-(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). Start each implementer
-run as one blocking background command so its end wakes the orchestrator
+**Reclassification:** stop/report before a change makes another rule match first
+(Go added to Argon work, JavaScript logic to template/CSS, `Makefile` to docs).
+The orchestrator reclassifies the whole change, reported change included; a different AI takes the branch under [substitution](delivery.md#quota-substitution), with why on
+the issue/PR. Partial work counts as authorship; generated companions and
+accompanying tests never trigger this. Exceeding approved *Done when* or
+*Risk* needs the maintainer's decision.
+
+Reassignment needs a concrete reason on the issue; a named implementer needs
+the maintainer. Fixes return to the implementer, subject to substitution;
+Auto-fix is only for one's own PRs. Parallel reviews of one head feed one
+fix run; no `[nit]` unless the maintainer asks ([only blocking holds](reviewing.md#pull-request-cross-review)).
+Claude writes issues/briefs, orchestrates and explains PRs in Japanese chat.
+[Models/effort](delivery.md#model-and-effort).
+
+Headless: **close stdin; set a timeout**
+(`limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }`). One blocking background command per implementer wakes the orchestrator
 ([delivery](delivery.md#waking-the-orchestrator)).
 
-- **Codex**, from the worktree:
+- **Codex** (worktree):
+  Implement: `gpt-6.1-sol`/`medium` (`high` for H1–H6); reviews/checks: `gpt-6-astra`/`high`.
 
   ```sh
-  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
+  limit 3600 ~/.ribbitto-ai/run-as.sh codex codex exec -m <model> -c 'model_reasoning_effort="<effort>"' --sandbox danger-full-access -o result.md "$(cat prompt.md)" < /dev/null
   ```
 
 - **Argon** (Antigravity), from the worktree:
@@ -115,13 +114,10 @@ run as one blocking background command so its end wakes the orchestrator
   limit 3600 ~/.ribbitto-ai/run-as.sh antigravity env HOME="$HOME/dev/ribbitto/agy-home" PATH=/usr/local/argon-agy:$PATH GIT_AUTHOR_NAME="$n" GIT_AUTHOR_EMAIL="$e" GIT_COMMITTER_NAME="$n" GIT_COMMITTER_EMAIL="$e" /usr/local/argon-agy/agy -p "$(cat prompt.md)" --model gemini-4-argon-high --print-timeout 3000s --output-format text < /dev/null
   ```
 
-  The root-owned pinned `agy` and its own signed-in home, whose
-  `settings.json` allows `command(*)` and `write_file(*)` and trusts only
-  `~/dev/ribbitto/wt`. `--mode auto` is not available for the account.
-  Setup: [credentials](ai-credentials.md).
-- **Reviews** use the same commands: a pull request cross-review follows
-  [reviewing](reviewing.md#pull-request-cross-review) (only the issue review has a prompt file); others
-  use `.github/prompts/` with [review context](ai-credentials.md#review-context).
+  Pin/home/permissions: [credentials](ai-credentials.md#argon-antigravity).
+- **Reviews/checks:** recipes/values above;
+  PR [cross-review](reviewing.md#pull-request-cross-review),
+  other [context](ai-credentials.md#review-context).
 
 ## Reviews (issues and pull requests)
 
@@ -129,9 +125,8 @@ run as one blocking background command so its end wakes the orchestrator
   completed with an approving verdict that covers the issue text or the
   head to be delivered; every finding gets a disposition. If findings still
   block after two rounds, ask the maintainer.
-- A failed, timed-out or empty run never counts. Record the failure; retry
-  a timeout, outage, exhausted quota or empty run once, then ask the
-  maintainer. Keep the report tied to its exact commits and findings.
+- Failed/timed-out/empty runs never count; log failure, exact commits/findings.
+  [Quota errors: substitute, no same-AI retry; other failures: retry once, then ask the maintainer](delivery.md#quota-substitution).
 - A substantive change after a review, including a fix for a finding, is
   checked by an AI that did not write it. A typo or a rewording that changes
   no meaning is not ([what counts](review-followups.md#follow-up-pushes)).
@@ -171,10 +166,8 @@ Pull request:
 
 ## Investigations
 
-Measurements need the maintainer's preapproval and keep the caps in
-[investigations](investigations.md): record SHAs, conditions, commands
-and results; alternate base and head under matched conditions in one session;
-check the result against *Done when*.
+Measurements require maintainer preapproval, [caps/evidence](investigations.md)
+and comparison against *Done when*.
 
 ## Keeping state
 
@@ -192,8 +185,4 @@ check the result against *Done when*.
 
 ## Supporting files
 
-[Reviewing](reviewing.md), [delivery](delivery.md),
-[review operations](review-operations.md), [review follow-ups](review-followups.md),
-[investigations](investigations.md) and [credentials](ai-credentials.md)
-supply checklists. Optional: run [`audit.md`](../../.github/prompts/audit.md) to hunt contradictions; check each finding first. No verification harness or sandbox
-is built or extended (#2002).
+No verification harness or sandbox is built/extended (#2002).

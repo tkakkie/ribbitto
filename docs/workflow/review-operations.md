@@ -84,9 +84,9 @@ Findings are advisory, except blocking [conversion parity](reviewing.md#pull-req
   [Pull request cross-review](reviewing.md#pull-request-cross-review); the
   two-run cap prevents endless review-and-fix loops and is not a precondition
   for an exception, so no completed second run is needed) and any
-  applied fix or required verification must be completed. A failed, timed-out or
-  empty run never counts: record it on the PR, retry once, then ask the
-  maintainer. Follow-up checks ([`review-followups.md`](review-followups.md))
+  applied fix or required verification must be completed. Failed/empty runs,
+  timeouts never count: log on PR; [failures](delivery.md#quota-substitution) apply.
+  Follow-up checks ([`review-followups.md`](review-followups.md))
   are not runs. The cross-review limit (two rounds, then closure verification or
   the maintainer) is unchanged.
 - **Second run (after a later push before the cap):** after a later push (fix,

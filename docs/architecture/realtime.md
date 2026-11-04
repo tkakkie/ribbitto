@@ -1,7 +1,5 @@
 # Real time
 
-How a message is posted, with the organisation's sequence taken first: [posting](posting.md).
-
 ## Durable event log
 
 `event_log` is keyed by `(organization_id, seq)`, with `kind`, nullable
@@ -81,8 +79,8 @@ without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
 `migrate up`. Retention raises the boundary in the same transaction as deletion,
-locking one organisation with `FOR NO KEY UPDATE` before its events as
-[posting](posting.md) does. This serialises batches with `event_seq` writers
+locking one organisation with `FOR NO KEY UPDATE` before its events.
+This serialises batches with `event_seq` writers
 while allowing foreign-key inserts into child tables. The lock and the
 boundary (`greatest`, so it never goes down) come through the injected
 `realtime.RetentionBoundary`. The cleaner lists organisations with expired rows

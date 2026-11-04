@@ -54,7 +54,7 @@ The reading scopes and posting are in [unread reading](unread-reading.md).
 
 ## Counts
 
-[Decision 34](../decisions/34-live-unread-counts.md):
+Per [decision 34](../decisions/34-live-unread-counts.md),
 live counts are eventually exact: exact at page load and every successful
 resync, approximate in between, and always exact again after the next successful
 resync. Small `unread` frames and browser increments replace all-connection

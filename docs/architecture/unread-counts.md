@@ -1,9 +1,8 @@
 # Unread counts
 
-The [domain rules](../domain/unread.md) and
-[decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
-define read state; [unread count costs](unread-count-costs.md) covers its
-cost limits and benchmark, and [unread writes](unread-writes.md) covers writes.
+[Read state](../domain/unread.md) follows
+[decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md);
+see [costs and benchmarks](unread-count-costs.md) and [writes](unread-writes.md).
 
 ## Storage
 
@@ -18,15 +17,16 @@ Ranges are disjoint and never touch. The first starts at 0; its `hi` is
 the **prefix end** `P`: every message below `P` is read. Without rows, the
 read state is `[0, joined_event_seq + 1)`; the first write establishes that
 prefix before its own ranges. A topic without a floor starts scanning at
-`P`, with no moved branch: its effective floor is `P − 1`.
+`P` (effective floor `P − 1`); the moved branch remains, excluding
+prefix-read messages.
 
 ## Counting contract
 
 `unread` never reads `message`, and `conversation` never reads `unread`'s
-tables. The [cross-feature access](cross-feature-access.md) rules describe
-the snapshot-bound APIs and composition: `compose.PageCountsIn` binds unread
-counts to conversation's page or independent sidebar snapshot, using org's
-persisted member join sequence.
+tables. `compose.PageCountsIn` binds counts to the page or sidebar snapshot
+with org's persisted join sequence ([cross-feature access](cross-feature-access.md)).
+Production's `cmd/ribbitto` sidebar source binds resolved membership, channel
+and selected topic; an open panel keeps the conversation's selection (#874).
 
 Counts take two statements per list (channels or topics), four per page
 load, whatever the number of channels or topics; never one per item.
@@ -42,8 +42,8 @@ All four share the page or sidebar's read-only repeatable-read snapshot.
   separately without extending the list: at most 51 distinct topic IDs.
   Fresh snapshots replace both count maps, including zero counts, so
   displaced non-selected topics disappear and badges can clear.
-- Pages compute first unread for the feed and, when selected, the topic;
-  first-unread lookups are uncapped. Production counts-only sidebar recounts
+- Feed first unread uses the capped channel result; the selected topic's
+  first-unread lookup is uncapped. Counts-only sidebar recounts
   skip first unread regardless of selection, keeping the same count branches,
   caps and four statements. `TestSidebarSkipsFirstUnread` checks SQL output,
   skipped moved-candidate materialisation and count parity with a page.

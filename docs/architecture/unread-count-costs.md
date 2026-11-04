@@ -1,7 +1,7 @@
 # Unread count costs
 
-Cost qualifications for the [counting contract](unread-counts.md), under
-[decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md).
+Costs of the [counting contract](unread-counts.md)
+([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 
 ## Cost of the reads
 
@@ -29,7 +29,7 @@ throughput or end-to-end latency guarantee. Snapshot statement budgets and
 conditional `SET LOCAL` are described in
 [server-side timeouts](../recount-capacity.md#server-side-timeouts).
 Total page/recount query counts belong to `TestPageCountsSnapshot` and
-`TestSidebarSnapshot`, rather than a separate historical budget here.
+`TestSidebarSnapshot`.
 
 ## Expected load
 
@@ -50,22 +50,23 @@ ranges. A feed read merges them back into one, at `O(R)`.
 
 ### Running the benchmark
 
-Use disposable loopback PostgreSQL ([database tests](../database-tests.md));
-run outside CI:
+Export `RIBBITTO_TEST_DATABASE_URL` for disposable loopback PostgreSQL
+([database tests](../database-tests.md)); run outside CI:
 
 ```sh
 RIBBITTO_UNREAD_BENCH=1 go test -count=1 -run '^TestUnreadBench$' -v -timeout 30m ./internal/conversation/conversationpg
 ```
 
-[`TestUnreadBench`](../../internal/conversation/conversationpg/unread_bench_test.go)
-documents the `RIBBITTO_UNREAD_BENCH_*` options, defaults, minimums and timing
+[`TestUnreadBench`](../../internal/conversation/conversationpg/unread_bench_test.go):
+`RIBBITTO_UNREAD_BENCH_*` options, defaults, minimums and timing
 conditions. First-unread plans and dense-move trade-offs can be reproduced
 with the command in
 [`TestFirstUnreadBench`](../../cmd/ribbitto/first_unread_bench_test.go).
 Recount plans use `RIBBITTO_RECOUNT_MEASURE=1` with
 [`TestSidebarSkipsFirstUnread`](../../cmd/ribbitto/recount_first_unread_test.go).
-Deleted warm EXPLAIN figures and dense-move timings are available in this
-page at pre-deletion SHA `aaad4bf7aea15b7d678681186329e129de54dc34`.
+History: [frozen recount record](../measurements/sidebar-counts-history.md).
+Deleted EXPLAIN figures and dense-move timings: this page at
+`aaad4bf7aea15b7d678681186329e129de54dc34`.
 
 ## Results
 

@@ -3,7 +3,7 @@
 Read when: orchestrating or triggering [What no AI does](#what-no-ai-does).
 
 Claude, Codex and Argon follow `AGENTS.md` for coding, this file for workflow
-(overriding older text). Safety comes from GitHub and review.
+(overriding older text).
 
 ## Principles
 
@@ -82,9 +82,9 @@ Examples: `.templ` + CSS + generated Go + browser check → 2; add hand-written
 Go → 1; docs + `Makefile` → 4; TypeScript conversion alone → 4.
 Remaining quota never selects an AI.
 
-**Reclassification:** stop/report before changing the first matching rule
+**Reclassification:** stop/report before a change makes another rule match first
 (Go added to Argon work, JavaScript logic to template/CSS, `Makefile` to docs).
-The orchestrator reclassifies the whole diff; a different AI takes the branch under [substitution](delivery.md#quota-substitution), with why on
+The orchestrator reclassifies the whole change, reported change included; a different AI takes the branch under [substitution](delivery.md#quota-substitution), with why on
 the issue/PR. Partial work counts as authorship; generated companions and
 accompanying tests never trigger this. Exceeding approved *Done when* or
 *Risk* needs the maintainer's decision.

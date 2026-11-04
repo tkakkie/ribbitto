@@ -38,10 +38,10 @@ and so is HTML or CSS that fails one of the four points.
 - **Popover API menus (`popover`, `popovertarget`):** `#account-menu` and
   `#channel-create` (when `popover` is true, i.e. `Error == ""` and
   `CreateImageError == ""`; in place on error) in
-  `internal/web/view/shell.templ`, and `messageActions` in
+  `internal/web/view/shell.templ`, and `MessageActions` in
   `internal/web/view/message.templ` (`anchor-below-end` in `web/styles/app.css`).
-  The browser opens, dismisses on `Escape` or outside tap, and returns focus
-  without JavaScript.
+  The browser opens, dismisses and restores focus. Message controls need
+  JavaScript for the shared popover; otherwise they link to the actions page.
 - **`:has()` in `internal/web/view/branch.templ`:** when `BranchError == ""`
   (otherwise it stays in the column to show its error), `#branch-form` uses
   `peer-not-has-checked/list:hidden` and `peer-has-checked/list:absolute` (or

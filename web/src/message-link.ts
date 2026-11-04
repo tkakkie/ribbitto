@@ -1,3 +1,4 @@
+import "./message-menu.ts";
 import {
   CopiedAttribute,
   CopiedLabelAttribute,

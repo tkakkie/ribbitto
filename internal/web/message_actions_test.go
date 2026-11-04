@@ -49,7 +49,7 @@ func TestMessageSubmitMarkup(t *testing.T) {
 	for _, pinned := range []bool{false, true} {
 		for _, lang := range []string{"en", "ja"} {
 			entry := view.Message{ID: kernel.ID{8}, Pinned: pinned, Body: "original"}
-			doc, err := html.Parse(strings.NewReader(renderIn(t, lang, view.MessageItem(entry))))
+			doc, err := html.Parse(strings.NewReader(renderIn(t, lang, view.MessageItem(entry)) + renderIn(t, lang, view.MessageActions(entry))))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -121,7 +121,7 @@ func TestMessageActionsSharedRender(t *testing.T) {
 		}
 		id := fmt.Sprintf("message-actions-%x", entry.ID)
 		fromPage, fromStream := actionsMarkup(t, page.String(), id), actionsMarkup(t, string(live.Data), id)
-		link := `href="` + view.MessageURL("acme", entry.ID) + `"`
+		link := `href="` + view.MessageURL("acme", entry.ID) + `/actions"`
 		if fromPage == "" || fromPage != fromStream || !strings.Contains(fromPage, link) || strings.Contains(fromPage, "//") {
 			t.Fatalf("%s: page menu %q, stream menu %q; want equal with %s", lang, fromPage, fromStream, link)
 		}

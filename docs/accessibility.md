@@ -50,8 +50,7 @@ fail until covered by a rendered case.
 was checked: use only the keyboard (Tab order, Enter, Space, Escape closes
 what opened); check visible focus and a colour-vision simulation (Chrome
 DevTools, *Rendering → Emulate vision deficiencies*) to see that no information
-is lost. Automated checks verify reference targets exist, not that they describe
-the right field, and run neither JavaScript nor `hx-*`.
+is lost. Automated markup checks verify reference targets, not their meaning or behaviour.
 
 The `<ol>` isolates authors, timestamps and plain-text bodies
 (`dir="auto"`, preserved line breaks). `hidden peer-empty:flex` hides its empty
@@ -80,12 +79,12 @@ The [message actions page](ui.md#markup-and-accessibility) uses native links,
 forms and Tab/Shift-Tab order, with no popover or script needed.
 
 The account menu (`#account-menu`), create popover (`#channel-create`) and
-message actions menus (`message-actions-<hex>`, #1159) are non-modal native
+the shared message actions menu (`#message-actions`, #1457) are non-modal native
 popovers. `web/src/popover-focus.ts` closes them on Tab/Shift-Tab exit,
 keeping focus on the reached control (#1092). Escape closes and focuses
 the trigger; outside clicks close and keep clicked focus. Inside clicks
-keep them open except Quote. Without JavaScript, Tab may move behind an
-open popover. `testPopoverFocusBrowser` checks desktop and phone.
+keep them open except Quote. Without JavaScript, message controls link to the actions page;
+Tab may move behind other open popovers. `testPopoverFocusBrowser` checks desktop and phone.
 
 Opening the account menu, by keyboard or pointer, moves focus to its first
 line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's

@@ -65,9 +65,13 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 			permalink := view.MessageURL("acme", message.ID)
 			actions := server.URL + permalink + "/actions"
 			open := func() {
-				if err := navigateLoaded(page, actions); err != nil {
+				if err := navigateLoaded(page, server.URL+permalink); err != nil {
 					t.Fatal(err)
 				}
+				// Rod's Focus waits for animation frames, unavailable with scripts disabled.
+				page.MustEval(`s => document.querySelector(s).focus()`, fmt.Sprintf("a#message-actions-%x", message.ID))
+				page.Keyboard.MustType(input.Enter)
+				page.MustWait(`url => location.href === url`, actions)
 				if got := page.MustElement("main h1").MustText(); got != "Ribbit actions" {
 					t.Fatal(got)
 				}

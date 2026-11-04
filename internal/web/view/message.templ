@@ -165,27 +165,32 @@ templ messageQuote(quote Quote) {
 	</figure>
 }
 
-// messageActions is every message's one actions menu (#1159).
-// Its markup depends only on the message and the language, because live
-// renders are shared between members (stream_renderer.go): the link is
-// root-relative, and web/src/message-link.ts copies the browser-resolved href.
-// From desk the button's negative margin keeps the header's height. Below
-// desk the header has no room for it (#1093 keeps it one 44 px row), so it
-// sits in the avatar's gutter, under the avatar, without growing the item;
-// the menu is a bottom sheet like the account menu.
+// Below desk the avatar gutter keeps actions out of the single 44 px header
+// row (#1093); the shared menu opens as a bottom sheet.
 templ messageActions(entry Message) {
-	{{ id := fmt.Sprintf("message-actions-%x", entry.ID) }}
-	<button type="button" popovertarget={ id } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ BodyMessageDOMID(entry.ID) } class="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:-my-2 max-desk:absolute max-desk:left-0 max-desk:top-10 transition-feedback motion-safe:active:scale-96">
-		// A text glyph: the icon sprite has no "more" symbol.
+	{{ classes := "size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:-my-2 max-desk:absolute max-desk:left-0 max-desk:top-10 transition-feedback motion-safe:active:scale-96" }}
+	<a id={ fmt.Sprintf(MessageActionsDOMPrefix+"%x", entry.ID) } href={ templ.SafeURL(entry.URL + "/actions") } { MessageActionAttribute }={ idValue(entry.ID) } { MessageURLAttribute }={ entry.URL } { PinURLAttribute }={ entry.PinURL + "/pin" } { UnpinURLAttribute }={ entry.PinURL + "/unpin" } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ BodyMessageDOMID(entry.ID) } class={ "flex", classes }>
 		<span aria-hidden="true" class="text-heading">⋯</span>
-	</button>
-	<div id={ id } popover class="m-0 w-56 desk:inset-auto desk:anchor-below-end rounded-xl border border-border bg-surface p-2 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:top-auto max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
+	</a>
+	<div hidden></div>
+}
+
+// MessageActions renders one menu and a clonable pin form for the message list.
+templ MessageActions(entry Message) {
+	<template id={ MessageActionsTriggerID }>
+		<button type="button" popovertarget={ MessageActionsID } aria-label={ i18n.T(ctx, "message.actions") }>
+			<span aria-hidden="true" class="text-heading">⋯</span>
+		</button>
+	</template>
+	<div id={ MessageActionsID } popover class="m-0 w-56 desk:inset-auto desk:anchor-below-end rounded-xl border border-border bg-surface p-2 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:top-auto max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
 		<a href={ templ.SafeURL(entry.URL) } { CopyLinkAttribute } class="group flex min-h-11 items-center rounded-md px-3 hover:bg-hover">
 			<span class="group-data-copied:hidden">{ i18n.T(ctx, "message.copy_link") }</span>
 			<span { CopiedLabelAttribute } class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
 		<button form={ QuoteFormID } name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
-		@PinControl(entry, "")
+		<template id={ MessageActionsTemplateID }>
+			@PinControl(entry, "")
+		</template>
 	</div>
 }
 
@@ -198,15 +203,15 @@ templ PinControl(entry Message, errorKey string) {
 			action = entry.PinURL + "/unpin"
 		}
 	}}
-	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } { PinControlAttribute }={ idValue(entry.ID) } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) }>
+	<form id={ fmt.Sprintf(PinFormDOMPrefix+"%x", entry.ID) } method="post" action={ templ.SafeURL(action) } { PinControlAttribute }={ idValue(entry.ID) } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) }>
 		for _, pinned := range []bool{false, true} {
 			{{
-				action, label := entry.PinURL+"/pin", "message.pin"
+				action, label, prefix := entry.PinURL+"/pin", "message.pin", PinFalseDOMPrefix
 				if pinned {
-					action, label = entry.PinURL+"/unpin", "message.unpin"
+					action, label, prefix = entry.PinURL+"/unpin", "message.unpin", PinTrueDOMPrefix
 				}
 			}}
-			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } formaction={ templ.SafeURL(action) } { PinActionAttribute }={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
+			<button id={ fmt.Sprintf(prefix+"%x", entry.ID) } formaction={ templ.SafeURL(action) } { PinActionAttribute }={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
 		}
 		if errorKey != "" {
 			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>

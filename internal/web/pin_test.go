@@ -123,7 +123,7 @@ func TestPinControlMarkup(t *testing.T) {
 	for _, lang := range []string{"en", "ja"} {
 		for _, pinned := range []bool{false, true} {
 			entry := conversation.Entry{Message: conversation.Message{ID: kernel.ID{8}, ChannelID: kernel.ID{1}, Pinned: pinned}, Handle: "alice"}
-			got := renderIn(t, lang, view.MessageItem(viewMessage("acme", entry)))
+			got := renderIn(t, lang, view.PinControl(viewMessage("acme", entry), ""))
 			action, label := "/pin", map[string]string{"en": "Pin", "ja": "ピン留め"}[lang]
 			if pinned {
 				action, label = "/unpin", map[string]string{"en": "Unpin", "ja": "ピン留めを外す"}[lang]

@@ -8,12 +8,8 @@ M11 ([#2089](https://github.com/tkakkie/ribbitto/issues/2089); motivated by the
 `409d680` survey recorded on
 [#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6594314637)).
 
-**When this page applies:** from the merge of #2092, every new or changed
-client unit test is a type-checked `web/test/<name>.test.ts` file.
-Changing an existing `.test.mjs` harness converts it to `.test.ts` in the same
-PR. Untouched `web/test/*.test.mjs` files await their owning conversion issues;
-#2098 starts only when `ls web/test/*.test.mjs` is empty, then removes the
-allowance. Test count and line total are not targets.
+**When this page applies:** every client unit test is a type-checked
+`web/test/<name>.test.ts` file. Test count and line total are not targets.
 
 ## Layers and what each owns
 

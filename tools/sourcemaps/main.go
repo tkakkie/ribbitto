@@ -100,9 +100,11 @@ type ghRelease struct {
 	ID         int64     `json:"id"`
 	TagName    string    `json:"tag_name"`
 	Name       string    `json:"name"`
+	Body       string    `json:"body"`
 	Draft      bool      `json:"draft"`
 	Prerelease bool      `json:"prerelease"`
 	Assets     []ghAsset `json:"assets"`
+	bodyAbsent bool
 }
 
 type releaseName struct {
@@ -201,10 +203,24 @@ func (c *apiClient) do(ctx context.Context, storeAuth bool, method, path, accept
 func (c *apiClient) listReleases(ctx context.Context) ([]ghRelease, error) {
 	var all []ghRelease
 	for page := 1; page <= maxReleasePages; page++ {
-		var batch []ghRelease
+		var batch []struct {
+			ghRelease
+			// Only a missing key needs a fallback read; null is an empty body.
+			Body json.RawMessage `json:"body"`
+		}
 		if code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases?per_page=100&page=%d", c.cfg.storeRepo, page), "", nil, &batch); err != nil || code != 200 {
 			return nil, fmt.Errorf("listing releases: status %d (%v)", code, err)
-		} else if all = append(all, batch...); len(batch) < 100 {
+		}
+		for _, r := range batch {
+			r.ghRelease.bodyAbsent = r.Body == nil
+			if r.Body != nil {
+				if err := json.Unmarshal(r.Body, &r.ghRelease.Body); err != nil {
+					return nil, fmt.Errorf("decoding listed release body: %w", err)
+				}
+			}
+			all = append(all, r.ghRelease)
+		}
+		if len(batch) < 100 {
 			return all, nil
 		}
 	}
@@ -222,6 +238,9 @@ func (c *apiClient) deleteReleaseByID(ctx context.Context, r ghRelease) error {
 		return err
 	} else if code != 200 || got.ID != r.ID || got.Name != r.Name || got.TagName != r.TagName || got.Draft != r.Draft || got.Prerelease {
 		return fmt.Errorf("release lookup mismatch for id %d (status %d)", r.ID, code)
+	}
+	if keep, err := keepProduction(got.Body, c.cfg.now); err != nil || keep || got.Body != r.Body {
+		return fmt.Errorf("production marker protected or changed for release %d tag %s (%v)", r.ID, safeQuote(r.TagName), err)
 	}
 	if code, _, err := c.do(ctx, true, "DELETE", u, "", nil, nil); err != nil || (code != 204 && code != 404) {
 		return fmt.Errorf("deleting release %d: status %d (%v)", r.ID, code, err)
@@ -416,6 +435,21 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 	if err != nil {
 		return err
 	}
+	// Validate every marker before even draft or orphan cleanup can delete anything.
+	for i, r := range rels {
+		if r.bodyAbsent {
+			var fresh ghRelease
+			code, _, err := c.do(ctx, true, "GET", fmt.Sprintf("/repos/%s/releases/%d", c.cfg.storeRepo, r.ID), "", nil, &fresh)
+			if err != nil || code != 200 || fresh.ID != r.ID || fresh.Name != r.Name || fresh.TagName != r.TagName || fresh.Draft != r.Draft || fresh.Prerelease != r.Prerelease {
+				return fmt.Errorf("reading production marker: release %d tag %s lookup mismatch or unreadable (status %d, %v)", r.ID, safeQuote(r.TagName), code, err)
+			}
+			r.Body = fresh.Body
+		}
+		if _, err := keepProduction(r.Body, c.cfg.now); err != nil {
+			return fmt.Errorf("release %d tag %s: %w", r.ID, safeQuote(r.TagName), err)
+		}
+		rels[i].Body = r.Body
+	}
 	now, sum, deletedIDs, bySHA := c.cfg.now, c.cfg.summary, make(map[int64]bool), make(map[string][]parsedRel)
 	var delDrafts []ghRelease
 	for _, r := range rels {
@@ -447,6 +481,9 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 		}
 	}
 	for _, r := range delDrafts {
+		if keep, _ := keepProduction(r.Body, now); keep {
+			continue
+		}
 		if err := c.deleteReleaseByID(ctx, r); err != nil {
 			return err
 		}
@@ -466,6 +503,9 @@ func runRetention(ctx context.Context, c *apiClient, currentSHA string) error {
 		if s := shas[idx]; now.Sub(bySHA[s][0].parsed.Start) > 90*24*time.Hour {
 			for i := len(bySHA[s]) - 1; i >= 0; i-- {
 				item := bySHA[s][i]
+				if keep, _ := keepProduction(item.rel.Body, now); keep {
+					continue
+				}
 				if err := c.deleteReleaseByID(ctx, item.rel); err != nil {
 					return err
 				}
@@ -643,6 +683,7 @@ func runVerify(ctx context.Context, cfg config, dir, sha, runID, attempt string)
 func main() {
 	lookup := flag.Bool("lookup", false, "find and fetch a production source map by commit SHA, bundle SHA-256 and optional run id and attempt")
 	verify := flag.Bool("verify", false, "check bundle names and hashes against an exact stored index with uploaded map assets (maps are not downloaded); emit a JSON receipt")
+	production := flag.Bool("production", false, "set a store release's production marker: <release name> <active|retired>")
 	flag.Parse()
 	args := flag.Args()
 	var summary io.Writer = os.Stderr
@@ -653,24 +694,27 @@ func main() {
 	cfg := prodConfig(os.Getenv("SOURCEMAPS_TOKEN"), os.Stdout, summary)
 	var err error
 	switch {
-	case *verify && !*lookup && len(args) == 4:
+	case *production && !*verify && !*lookup && len(args) == 2:
+		cfg.now = time.Now().UTC()
+		err = runProduction(context.Background(), cfg, args[0], args[1])
+	case *verify && !*lookup && !*production && len(args) == 4:
 		cfg.now = time.Now().UTC()
 		err = runVerify(context.Background(), cfg, args[0], args[1], args[2], args[3])
-	case *lookup && !*verify && len(args) >= 1 && len(args) <= 4:
+	case *lookup && !*verify && !*production && len(args) >= 1 && len(args) <= 4:
 		cfg.now = time.Now().UTC()
 		a := append(args, "", "", "")
 		rel, name, data, lerr := runLookup(context.Background(), cfg, a[0], a[1], a[2], a[3])
 		if err = lerr; err == nil {
 			logf(os.Stdout, "%s %s (%d bytes)\n", safeQuote(rel), safeQuote(name), len(data))
 		}
-	case !*lookup && !*verify && len(args) == 5:
+	case !*lookup && !*verify && !*production && len(args) == 5:
 		if cfg.now, err = time.Parse("20060102T150405Z", args[1]); err != nil || cfg.now.UTC().Format("20060102T150405Z") != args[1] {
 			err = fmt.Errorf("invalid UTC start timestamp %s", safeQuote(args[1]))
 		} else {
 			err = runStore(context.Background(), cfg, args[0], args[2], args[3], args[4])
 		}
 	default:
-		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id> [<attempt>]]] | sourcemaps -verify <bundle dir> <commit SHA> <run id> <attempt>")
+		err = fmt.Errorf("usage: sourcemaps <map dir> <YYYYMMDDTHHMMSSZ> <commit SHA> <run id> <attempt> | sourcemaps -lookup <commit SHA> [<bundle sha256> [<run id> [<attempt>]]] | sourcemaps -verify <bundle dir> <commit SHA> <run id> <attempt> | sourcemaps -production <release name> <active|retired>")
 	}
 	if err != nil {
 		logf(os.Stderr, "%v\n", err)

@@ -18,9 +18,8 @@ per-topic gap probes.
 
 On normal pages, only the selected topic gets the uncapped first-unread
 lookup. Enumerating unread moved candidates sacrifices early exit for dense
-moves. There is **no physical `O(M)` guarantee** for `M` moved candidates:
-PostgreSQL can still scan all topic history. Above-floor filtering also
-remains unbounded; #747 re-checks page load.
+moves. For `M` unread moved candidates, there is **no physical `O(M)` guarantee**:
+PostgreSQL can still scan all topic history. #747 re-checks page load.
 
 Counts-only sidebar recounts skip first-unread work, including moved-candidate
 materialisation, without reducing the four count statements.
@@ -49,6 +48,9 @@ first 101 ranges; topic counting and a topic-view write handle all `R`
 ranges. A feed read merges them back into one, at `O(R)`.
 
 ### Running the benchmark
+
+Benchmark labels: step 1 loads channel ranges; step 2 counts channel messages;
+step 3 loads and decodes topic read state; step 4 counts topic messages.
 
 Export `RIBBITTO_TEST_DATABASE_URL` for disposable loopback PostgreSQL
 ([database tests](../database-tests.md)); run outside CI:

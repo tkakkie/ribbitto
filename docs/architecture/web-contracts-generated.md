@@ -27,16 +27,7 @@ Composer attributes in the generated set:
 | `data-pending-body`, `data-pending-form`, `data-pending-actions`, `data-pending-edit`, `data-pending-edit-help`, `data-pending-remove`, `data-pending-sending` | pending template/clone | latest feeds/topics | form and state/control hooks; form `data-state` tracks queued/sending/failed/confirmed; `data-unconfirmed` on the form remembers uncertainty, `data-posted-message` on the item confirms its ID |
 | `data-draft-channel`, `data-draft-topic` | `#message-composer` | latest htmx feeds/topics only; the latter only on topics; neither on `?before=`/`?around=` | canonical channel/topic UUIDs for the draft key's place; stay outside `#message-composer-state` and survive 200/422 swaps ([drafts](web-composer.md#drafts)) |
 
-The registered `web/src/message-stream.ts` adapter delegates decisions to the
-DOM-free `web/src/stream-cursor.ts`. Its `web/test/stream-cursor.test.ts` case tables
-cover BigInt cursor ordering, visibility, move admission/insertion, the
-ten-announcement cap and reset holds/jitter. Lifecycle tables cover persisted and
-non-persisted pagehide/pageshow, CONNECTING/open/CLOSED sources, existing parking,
-cleanup completion, and restoration that requests one error and forgets only after
-successful dispatch. State and actions contain no DOM objects.
-The adapter has typed `sse-connect` read/write accessors and uses event constants
-with native constructors to retain the plain, non-bubbling `read-applied` and
-non-bubbling query envelopes.
+Stream `read-applied` and query envelopes stay plain, non-bubbling events.
 
 The `message-history`, `branch-selection` and `sidebar-scroll` entries keep
 scroll/focus restoration and selection constraints in thin DOM adapters; the

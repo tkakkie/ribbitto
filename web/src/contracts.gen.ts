@@ -324,6 +324,42 @@ export function listenReadVisibleEvent(target: EventTarget, listener: (detail: R
   return () => target.removeEventListener(ReadVisibleEvent, handle);
 }
 
+export const MessageActionsID = "message-actions";
+export const messageActionsSelector = (): string => "#" + MessageActionsID;
+export const getMessageActions = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(messageActionsSelector());
+
+export const MessageActionsTemplateID = "message-actions-template";
+export const messageActionsTemplateSelector = (): string => "#" + MessageActionsTemplateID;
+export const getMessageActionsTemplate = (root: ParentNode = document): HTMLTemplateElement | null => root.querySelector<HTMLTemplateElement>(messageActionsTemplateSelector());
+
+export const MessageActionsTriggerID = "message-actions-trigger";
+export const messageActionsTriggerSelector = (): string => "#" + MessageActionsTriggerID;
+export const getMessageActionsTrigger = (root: ParentNode = document): HTMLTemplateElement | null => root.querySelector<HTMLTemplateElement>(messageActionsTriggerSelector());
+
+export const MessageActionsDOMPrefix = "message-actions-";
+export const messageActionsEntryID = (suffix: string): string => MessageActionsDOMPrefix + suffix;
+export const messageActionsEntrySelector = (suffix: string): string => "#" + messageActionsEntryID(suffix);
+export const getMessageActionsEntry = (suffix: string, root: ParentNode = document): HTMLAnchorElement | null => root.querySelector<HTMLAnchorElement>(messageActionsEntrySelector(suffix));
+
+export const MessageActionAttribute = "data-message-action";
+export const MessageURLAttribute = "data-message-url";
+export const PinURLAttribute = "data-pin-url";
+export const UnpinURLAttribute = "data-unpin-url";
+export const PinFormDOMPrefix = "pin-form-message-";
+export const pinFormEntryID = (suffix: string): string => PinFormDOMPrefix + suffix;
+export const pinFormEntrySelector = (suffix: string): string => "#" + pinFormEntryID(suffix);
+export const getPinFormEntry = (suffix: string, root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(pinFormEntrySelector(suffix));
+
+export const PinFalseDOMPrefix = "pin-false-message-";
+export const pinFalseEntryID = (suffix: string): string => PinFalseDOMPrefix + suffix;
+export const pinFalseEntrySelector = (suffix: string): string => "#" + pinFalseEntryID(suffix);
+export const getPinFalseEntry = (suffix: string, root: ParentNode = document): HTMLButtonElement | null => root.querySelector<HTMLButtonElement>(pinFalseEntrySelector(suffix));
+
+export const PinTrueDOMPrefix = "pin-true-message-";
+export const pinTrueEntryID = (suffix: string): string => PinTrueDOMPrefix + suffix;
+export const pinTrueEntrySelector = (suffix: string): string => "#" + pinTrueEntryID(suffix);
+export const getPinTrueEntry = (suffix: string, root: ParentNode = document): HTMLButtonElement | null => root.querySelector<HTMLButtonElement>(pinTrueEntrySelector(suffix));
+
 export const PinsSectionID = "pins-section";
 export const pinsSectionSelector = (): string => "#" + PinsSectionID;
 export const getPinsSection = (root: ParentNode = document): HTMLElement | null => root.querySelector<HTMLElement>(pinsSectionSelector());
@@ -406,6 +442,6 @@ export const getBranchForm = (root: ParentNode = document): HTMLFormElement | nu
 export const SourceAttribute = "data-source";
 export const AriaCurrentAttribute = "aria-current";
 
-export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute | typeof QueryAttribute | typeof CountAttribute | typeof HandleAttribute | typeof QuoteHandleAttribute | typeof QuoteSelectionAttribute | typeof OldestSeqAttribute | typeof ToTopicAttribute | typeof EventSeqAttribute | typeof AnnouncementAttribute | typeof SourceAttribute | typeof AriaCurrentAttribute;
+export type ContractAttribute = typeof MemberAttribute | typeof SessionAttribute | typeof SessionExpiresAttribute | typeof RenderedAtAttribute | typeof SidebarTopicAttribute | typeof SnapshotSeqAttribute | typeof UnreadCountAttribute | typeof PostedMessageAttribute | typeof PostedTopicAttribute | typeof PostedSeqAttribute | typeof SendKeyAttribute | typeof SentBodyAttribute | typeof InvalidAttribute | typeof UnconfirmedKeyAttribute | typeof PendingBodyAttribute | typeof PendingFormAttribute | typeof PendingActionsAttribute | typeof PendingEditAttribute | typeof PendingEditHelpAttribute | typeof PendingRemoveAttribute | typeof PendingSendingAttribute | typeof StateAttribute | typeof DraftKeyAttribute | typeof UnconfirmedAttribute | typeof NotSentAttribute | typeof StillUnconfirmedAttribute | typeof RecoveredAttribute | typeof RepeatAttribute | typeof BusyAttribute | typeof CapacityAttribute | typeof DraftsHorizonAttribute | typeof DraftChannelAttribute | typeof DraftTopicAttribute | typeof DraftMarkerAttribute | typeof EventCursorAttribute | typeof AppliedCursorAttribute | typeof TopicAttribute | typeof FromTopicAttribute | typeof ArrivePillAttribute | typeof ArrivePanelAttribute | typeof AriaModalAttribute | typeof MessageActionAttribute | typeof MessageURLAttribute | typeof PinURLAttribute | typeof UnpinURLAttribute | typeof PinsSeqAttribute | typeof PinnedIDsAttribute | typeof PinControlAttribute | typeof PinActionAttribute | typeof PinnedAttribute | typeof CopyLinkAttribute | typeof CopiedAttribute | typeof CopiedLabelAttribute | typeof MemberIDAttribute | typeof OwnMentionAttribute | typeof QueryAttribute | typeof CountAttribute | typeof HandleAttribute | typeof QuoteHandleAttribute | typeof QuoteSelectionAttribute | typeof OldestSeqAttribute | typeof ToTopicAttribute | typeof EventSeqAttribute | typeof AnnouncementAttribute | typeof SourceAttribute | typeof AriaCurrentAttribute;
 export const readAttribute = (element: Element, name: ContractAttribute): string | null => element.getAttribute(name);
 export const writeAttribute = (element: Element, name: ContractAttribute, value: string): void => element.setAttribute(name, value);

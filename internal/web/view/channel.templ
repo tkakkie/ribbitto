@@ -290,6 +290,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</div>
 					</div>
+					if len(page.Messages) > 0 {
+						@MessageActions(page.Messages[0])
+					} else {
+						@MessageActions(Message{})
+					}
 					<div id={ MessageStatusID } role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)
 					// While a message is checked the move form covers this area, which

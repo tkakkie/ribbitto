@@ -263,6 +263,7 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 			  const ajax = htmx.ajax;
 			  htmx.ajax = (method, url, options) => {
 			    htmx.ajax = ajax;
+			    if (options.source.closest('[data-pin-control]') !== form || options.target !== form || options.source.form !== form) throw new Error('pin sender does not belong to its target form');
 			    const source = options.source, elt = ancestor ? document.body : source;
 			    const parent = form.parentElement, next = form.nextSibling;
 			    if (ancestor) form.remove();
@@ -301,6 +302,15 @@ func testPinSubmitBrowser(t *testing.T, browser *rod.Browser, width int) {
 		}
 	})
 	noExtra()
+	activate(b, true, input.Enter)
+	qb = next(b, true)
+	b.Pinned = false
+	qb.reply <- browserReply{200, []byte(renderIn(t, "en", view.PinControl(b, "")))}
+	wait("ok")
+	step("second message's own control receives focus", func(p *rod.Page) {
+		messageMenu(b.ID).waitPinFocus(p, false)
+		messageMenu(a.ID).open(p)
+	})
 	step("native fallback without htmx", func(p *rod.Page) {
 		p.MustEval(`() => { window.htmx = undefined; }`)
 		messageMenu(a.ID).control(p, "unpin").MustClick()
@@ -329,6 +339,7 @@ func testPinFrameBrowser(t *testing.T, browser *rod.Browser) {
 	snapshot.Messages[0] = entry
 	pinned := snapshot
 	pinned.SnapshotSeq, pinned.Pins = 43, []view.Pin{{MessageID: entry.ID, Excerpt: "pinned"}}
+	pinned.Pins = append(pinned.Pins, view.Pin{MessageID: snapshot.Messages[1].ID, Excerpt: "also pinned"})
 	frame := renderIn(t, "en", view.PinsSection(pinned))
 	release := make(chan struct{})
 	mux := http.NewServeMux()
@@ -371,6 +382,12 @@ func testPinFrameBrowser(t *testing.T, browser *rod.Browser) {
 	page.MustWait(`() => window.pinFrameSwapped === true`)
 	if !messageMenu(entry.ID).eval(page, `({form, pin, unpin}) => window.pinRequests === 0 && document.getElementById('pins-section').dataset.pinsSeq === '43' && form.dataset.pinned === 'true' && unpin.innerText.trim() === 'Unpin' && unpin.getClientRects().length > 0 && pin.hidden`).Bool() {
 		t.Fatal("pins frame did not switch the loaded control to Unpin without an htmx request")
+	}
+	other := messageMenu(snapshot.Messages[1].ID)
+	messageMenu(entry.ID).eval(page, `({menu}) => menu.hidePopover()`)
+	other.open(page)
+	if !other.eval(page, `({form, unpin}) => form.dataset.pinned === 'true' && !unpin.hidden && unpin.checkVisibility() && window.pinRequests === 0`).Bool() {
+		t.Fatal("a menu first opened after the pins frame did not use the current snapshot")
 	}
 }
 

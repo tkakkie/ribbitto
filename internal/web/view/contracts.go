@@ -340,6 +340,39 @@ type ReadVisibleDetail struct{}
 
 // Pins hooks cover the overview section and message pin controls.
 const (
+	// MessageActionsID identifies the list's shared actions popover.
+	//dom:id HTMLDivElement
+	MessageActionsID = "message-actions"
+	// MessageActionsTemplateID holds the shared pin form prototype.
+	//dom:id HTMLTemplateElement
+	MessageActionsTemplateID = "message-actions-template"
+	// MessageActionsTriggerID holds the enhanced control's native button.
+	//dom:id HTMLTemplateElement
+	MessageActionsTriggerID = "message-actions-trigger"
+	// MessageActionsDOMPrefix identifies each message's fallback link.
+	//dom:suffix HTMLAnchorElement
+	MessageActionsDOMPrefix = "message-actions-"
+	// MessageActionAttribute carries the message identity on its fallback link.
+	//dom:attribute
+	MessageActionAttribute = "data-message-action"
+	// MessageURLAttribute carries the message's server-provided permalink.
+	//dom:attribute
+	MessageURLAttribute = "data-message-url"
+	// PinURLAttribute carries the server-provided pin endpoint.
+	//dom:attribute
+	PinURLAttribute = "data-pin-url"
+	// UnpinURLAttribute carries the server-provided unpin endpoint.
+	//dom:attribute
+	UnpinURLAttribute = "data-unpin-url"
+	// PinFormDOMPrefix keeps response targets unique to each message.
+	//dom:suffix HTMLFormElement
+	PinFormDOMPrefix = "pin-form-message-"
+	// PinFalseDOMPrefix identifies a message's explicit Pin action.
+	//dom:suffix HTMLButtonElement
+	PinFalseDOMPrefix = "pin-false-message-"
+	// PinTrueDOMPrefix identifies a message's explicit Unpin action.
+	//dom:suffix HTMLButtonElement
+	PinTrueDOMPrefix = "pin-true-message-"
 	// PinsSectionID identifies the overview's pins section.
 	//dom:id HTMLElement
 	PinsSectionID = "pins-section"

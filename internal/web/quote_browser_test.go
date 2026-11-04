@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -137,8 +138,14 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 		if hold {
 			quoteHolds <- release
 		}
-		messageMenu(message.ID).open(page)
-		messageMenu(message.ID).control(page, "quote").MustClick()
+		if scripts {
+			messageMenu(message.ID).open(page)
+			messageMenu(message.ID).control(page, "quote").MustClick()
+		} else {
+			page.MustElement(fmt.Sprintf("a#message-actions-%x", message.ID)).MustClick()
+			page.MustWait(`() => location.pathname.endsWith('/actions')`)
+			page.MustElement("main [name=quote]").MustClick()
+		}
 		if hold {
 			page.MustWait(`() => document.getElementById('quote-form').classList.contains('htmx-request')`)
 			page.MustElement("#message-body").MustFocus()
@@ -251,12 +258,25 @@ func testPartialQuoteBrowser(t *testing.T, page *rod.Page, url string, original 
 		p.MustElement("#body-" + view.MessageDOMID(original.ID)).MustWaitVisible()
 	})
 	step(t, "keyboard menu: Enter opens the original's actions", func(p *rod.Page) {
-		tabTo(p, messageMenu(original.ID).selector("button"))
+		control := messageMenu(original.ID).selector("button")
+		if !scripts {
+			control = fmt.Sprintf("a#message-actions-%x", original.ID)
+		}
+		tabTo(p, control)
 		p.Keyboard.MustType(input.Enter)
-		p.MustElement(messageMenu(original.ID).selector("menu")).MustWaitVisible()
+		if scripts {
+			p.MustElement(messageMenu(original.ID).selector("menu")).MustWaitVisible()
+		} else {
+			p.MustWait(`() => location.pathname.endsWith('/actions')`)
+			p.MustElement("main h1").MustWaitVisible()
+		}
 	})
 	step(t, "keyboard Quote: whole chip appears with no part textarea", func(p *rod.Page) {
-		tabTo(p, messageMenu(original.ID).selector("quote"))
+		control := messageMenu(original.ID).selector("quote")
+		if !scripts {
+			control = "main [name=quote]"
+		}
+		tabTo(p, control)
 		p.Keyboard.MustType(input.Enter)
 		p.MustWait(`() => document.querySelector('#composer-quote [name=part]') && !document.getElementById('quote-text')`)
 	})

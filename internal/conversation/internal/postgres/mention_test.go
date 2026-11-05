@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -35,6 +36,11 @@ func TestMentionMigrationAndConstraints(t *testing.T) {
 	requireNoError(t, pool.QueryRow(t.Context(), `SELECT count(*) FROM pg_constraint WHERE conrelid = 'message'::regclass AND contype = 'u'`).Scan(&messageKeys))
 	if columns != 0 || messageKeys != 2 {
 		t.Fatalf("channel columns=%d, message unique constraints=%d; want 0, 2", columns, messageKeys)
+	}
+	var indexDefinition string
+	requireNoError(t, pool.QueryRow(t.Context(), `SELECT pg_get_indexdef('message_mention_member_event_seq_idx'::regclass)`).Scan(&indexDefinition))
+	if !strings.HasSuffix(indexDefinition, "(organization_id, member_id, event_seq DESC)") {
+		t.Fatalf("unexpected mention index definition: %s", indexDefinition)
 	}
 	for _, tt := range []struct {
 		name, table, deletion string
@@ -89,7 +95,12 @@ func TestMentionMigrationAndConstraints(t *testing.T) {
 	conversationtest.AssertMentions(t, pool, f.acme, messageID, 1, nil)
 	_, err = pool.Exec(t.Context(), "DELETE FROM member WHERE organization_id = $1 AND id = $2", f.acme, mentioned)
 	requireNoError(t, err)
-	migrations.Down(t.Context())
+	migrations.DownTo(t.Context(), 20)
+	var mentionsDropped bool
+	requireNoError(t, pool.QueryRow(t.Context(), "SELECT to_regclass('message_mention') IS NULL").Scan(&mentionsDropped))
+	if !mentionsDropped {
+		t.Fatal("migration down left message_mention table")
+	}
 	var remaining int
 	requireNoError(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM message WHERE organization_id = $1 AND id = $2", f.globex, foreignMessage).Scan(&remaining))
 	if remaining != 1 {

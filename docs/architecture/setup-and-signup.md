@@ -18,12 +18,9 @@ repeating setup is 404.
 
 `org.Setup` (built by `orgpg.NewSetup`) checks the configured token, then
 whether setup is open, and validates all fields before using the shared
-`identity.Hasher`. As sign-up does, the root owns that transaction through
-`TxRunner`, appending `member.joined` after the membership, with identity's
-account, the event and the default channel ([`channels.md`](../domain/channels.md))
-injected through `AccountCreatorIn`, `EventAppenderIn` and
-`DefaultChannelCreatorIn` (`conversationpg.DefaultChannelCreatorIn`, adapted by
-`compose.DefaultChannelCreator` in commands and database tests). After a slug,
+`identity.Hasher`. As sign-up does, the root owns that transaction, appending
+`member.joined` after the membership and creating the default channel
+([`channels.md`](../domain/channels.md)). After a slug,
 email, handle or setup-row conflict it re-checks on the pool whether setup is
 open, since a concurrent winner may have collided first: closed means
 `ErrSetupCompleted`. While setup is open, a taken or invalid email or slug
@@ -48,8 +45,7 @@ to `/` with 303. Setup and sign-in share the process's single password hasher.
 
 ## Sign-up
 
-`org.SignUp` (`NewSignUp`, built by `orgpg.NewSignUp`) shares
-`ValidationErrors` and one private account-field validator with `org.Setup`:
+`org.SignUp` and `org.Setup` share account-field validation:
 display name, handle, email and password keep their rules and keys; setup also
 validates organisation name and slug. Both flows share the store mapping for
 invalid email and handle. Each flow checks its gate, then every
@@ -59,9 +55,6 @@ the process hasher. Through the injected `TxRunner`, the root owns one
 transaction: read the setup organisation, take its sequence first, create
 identity's account through `AccountCreatorIn`, insert org's member, then
 append `member.joined` through `EventAppenderIn`. Org declares both factories.
-Commands and database tests use `compose.AccountCreator` and
-`compose.MemberEvents` from `internal/compose`, binding the providers to the
-same transaction.
 The member gets the validated handle and sequence. Database email and handle
 rejections become typed conflicts or field errors without inspecting pgconn.
 Duplicate email or a handle already used in the organisation rolls back

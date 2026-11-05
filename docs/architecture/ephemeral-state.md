@@ -54,8 +54,7 @@ The durable watermark worker cannot repair a missing member invalidation.
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 pages hold one organisation stream with [interests](stream-scope.md#stream-scope).
-Delivery, sink, presence and typing state, signals and delivery are current
-(#784–#790, #813, #833), including the page's typing status region. Only visible transitions raise generations.
+Only visible transitions raise generations.
 
 - **Owners.** Presence counts accepted streams through web's lifecycle seam,
   independent of interests, and marks members offline 30 s after the last

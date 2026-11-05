@@ -8,11 +8,10 @@ password and display-name rules ([validation](../domain/validation.md)).
 the composer: `enter` (the default, so accounts that existed before migration
 00017 keep sending on Enter) or `modifier_enter` (Ctrl+Enter, ⌘+Enter on a
 Mac). It is the person's, so it applies in every organisation and on every
-device. `GetSessionByTokenHash` selects it with the account, so
-`identity.Account.SendKey` reaches each request through the session
-middleware with no extra query. `identity.Preferences.SetSendKey` checks the
-value with `ParseSendKey` and updates only the account whose ID its caller
-passes, which must be the signed-in account's own; an unknown ID is
+device. Session resolution includes it without an extra query.
+`identity.Preferences.SetSendKey` checks the value with `ParseSendKey` and
+updates only the account whose ID its caller passes, which must be the
+signed-in account's own; an unknown ID is
 `identity.ErrNoAccount`.
 In default `enter` mode, Enter, Ctrl/⌘+Enter and Alt+Enter send; Shift+Enter adds a newline.
 In `modifier_enter` mode, only Ctrl/⌘+Enter send; Enter, Shift+Enter and Alt+Enter add a newline.
@@ -21,10 +20,9 @@ Composition never sends in either mode. Without scripts, Enter adds a newline.
 **Account creation in a caller's transaction.** `org.AccountCreator` and its
 `AccountCreatorIn` factory accept validated, normalised values and a password
 hash. `identitypg.AccountCreatorIn` binds identity's store to the supplied
-`platform.Tx`; it never opens, commits or rolls back. Composition roots adapt
-it to org's factory with a named function. The store maps `account_email_key` to
-`identity.ErrEmailTaken` and every `account_email_*` CHECK to
-`identity.ErrInvalidEmail`; other errors remain wrapped PostgreSQL errors.
+`platform.Tx`; it never opens, commits or rolls back. The store maps
+`account_email_key` to `identity.ErrEmailTaken` and every `account_email_*`
+CHECK to `identity.ErrInvalidEmail`; other errors remain wrapped PostgreSQL errors.
 These distinct errors preserve sign-up's field mappings and let setup
 re-check completion after rollback for either. `org.SignUp` uses the creator
 and maps identity's errors to `org.ErrEmailTaken` and an `email` field error;
@@ -121,8 +119,7 @@ account exists. A busy hasher answers 503. `POST /signout` deletes
 the session row, clears the cookie and redirects to `/signin` with
 `Clear-Site-Data: "storage"`, which drops stored drafts (never `"cookies"`,
 which covers the whole registrable domain); a failed sign-out answers 500
-without it. There is no GET sign-out. `cmd/ribbitto` creates the process's
-one `identity.Hasher` here and shares it with every authentication use case.
+without it. There is no GET sign-out.
 
 **Drafts horizon.** `SignIn.SessionHorizon` returns a `uuidv7()` from
 PostgreSQL, the clock of session ids, so a later session's id has a

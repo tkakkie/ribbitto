@@ -21,9 +21,7 @@ See [Content Security Policy and script delivery](csp.md#content-security-policy
 
 ## Languages
 
-`internal/web/i18n` embeds the English and Japanese TOML
-catalogues (go-i18n). `cmd/ribbitto` creates one catalogue service for the
-process; middleware on HTML routes puts a localizer in the request context.
+`internal/web/i18n` embeds the English and Japanese TOML catalogues (go-i18n).
 A valid `lang` cookie wins over `Accept-Language`; the matcher's index picks
 a supported catalogue, defaulting to English, and HTML responses add
 `Accept-Language` and `Cookie` to `Vary`. Templates get text only through

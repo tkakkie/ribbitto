@@ -74,6 +74,10 @@ func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID
 		}
 		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
 		page.Topic = loaded.topic
+		page.Conclusion, err = s.conclusion(ctx, snapshot, m, loaded.topic)
+		if err != nil {
+			return err
+		}
 		page.Page, err = read(s.history(snapshot, reads))
 		if err != nil {
 			return err
@@ -127,4 +131,15 @@ func (s *Reader) Many(ctx context.Context, m org.Membership, channelID kernel.ID
 		return nil, fmt.Errorf("reading messages snapshot: %w", err)
 	}
 	return entries, nil
+}
+
+func (s *Reader) conclusion(ctx context.Context, snapshot platform.Snapshot, m org.Membership, topic *Topic) (*Entry, error) {
+	if topic == nil || topic.ConclusionMessageID == (kernel.ID{}) {
+		return nil, nil
+	}
+	entries, err := s.history(snapshot, s.reads(snapshot)).Many(ctx, m, topic.ChannelID, []kernel.ID{topic.ConclusionMessageID})
+	if err != nil {
+		return nil, fmt.Errorf("reading conclusion: %w", err)
+	}
+	return &entries[0], nil
 }

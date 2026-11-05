@@ -708,7 +708,7 @@ func TestPagesMarkup(t *testing.T) {
 		return s
 	}, method: "POST", path: view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + "/pin", cookie: true, status: http.StatusConflict, alerts: 1})
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"POST /organizations/{slug}/send-key", "POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "POST /signout/others", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
+	noPage := []string{"POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/resolve", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/reopen", "POST /organizations/{slug}/send-key", "POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "POST /signout/others", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {
@@ -1045,6 +1045,7 @@ func TestComponentsMarkup(t *testing.T) {
 		{"ComposerQuote", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "author", Body: "<script>bad()</script>"}}, false)},
 		{"ComposerQuote part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new("<script>part</script>")}, false)},
 		{"ComposerQuote invalid part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new(""), QuoteInvalid: true}, false)},
+		{"TopicResolution", view.TopicResolution(view.ChannelPage{Topic: &view.Topic{ID: kernel.ID{2}}, Conclusion: &view.Message{Body: "<script>bad()</script>", URL: "/original"}})},
 		{"ChannelEntry", view.ChannelEntry("acme", view.Channel{ID: kernel.ID{1}, Name: "general"}, false, 0)},
 		{"TopicEntry", view.TopicEntry("acme", kernel.ID{1}, view.Topic{ID: kernel.ID{2}, Name: "topic"}, false, 0)},
 		{"SignOutButton", view.SignOutButton()},

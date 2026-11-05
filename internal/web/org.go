@@ -27,7 +27,7 @@ type orgRoute struct {
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
 func orgRoutes(pages *pageRenderer, services Services) []orgRoute {
-	handlers := channelPages{typing: services.Typing, limiter: services.MemberLimits.Signal(), readLimit: services.MemberLimits.Read(), createLimit: services.MemberLimits.Create(), imageLimit: services.MemberLimits.Image(), branchLimit: services.MemberLimits.Branch(), postLimit: services.MemberLimits.Post(), pinLimit: services.MemberLimits.Pin(), reading: services.Reading, pages: pages, channels: services.Channels, topics: services.Topics, messages: services.Messages, posting: services.Posting, branching: services.Branching, pinning: services.Pinning, stream: services.Stream}
+	handlers := channelPages{typing: services.Typing, limiter: services.MemberLimits.Signal(), readLimit: services.MemberLimits.Read(), createLimit: services.MemberLimits.Create(), imageLimit: services.MemberLimits.Image(), branchLimit: services.MemberLimits.Branch(), postLimit: services.MemberLimits.Post(), pinLimit: services.MemberLimits.Pin(), reading: services.Reading, pages: pages, channels: services.Channels, topics: services.Topics, messages: services.Messages, posting: services.Posting, branching: services.Branching, pinning: services.Pinning, resolution: services.Resolution, stream: services.Stream}
 	if services.Stream != nil {
 		handlers.renders = newRenderCache(services.Stream.Lifetime)
 	}
@@ -49,6 +49,8 @@ func orgRoutes(pages *pageRenderer, services Services) []orgRoute {
 		{http.MethodPost, "/channels/{channelID}/topics/{topicID}", handlers.show},
 		{http.MethodPost, "/channels/{channelID}", handlers.show},
 		{http.MethodPost, "/channels/{channelID}/branch", handlers.branch},
+		{http.MethodPost, "/channels/{channelID}/topics/{topicID}/resolve", handlers.resolve},
+		{http.MethodPost, "/channels/{channelID}/topics/{topicID}/reopen", handlers.reopen},
 		{http.MethodPost, "/channels/{channelID}/quote", handlers.quote},
 		{http.MethodPost, "/channels/{channelID}/messages/{messageID}/pin", handlers.pin},
 		{http.MethodPost, "/channels/{channelID}/messages/{messageID}/unpin", handlers.unpin},

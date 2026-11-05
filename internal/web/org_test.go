@@ -256,7 +256,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 204 || w.Body.Len() != 0 {
 					t.Fatalf("typing: %d", w.Code)
 				}
-			case "POST /sidebar/resync", "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
+			case "POST /channels/{channelID}/topics/{topicID}/resolve", "POST /channels/{channelID}/topics/{topicID}/reopen", "POST /sidebar/resync", "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
 				if w.Code != http.StatusNotFound {
 					t.Fatalf("reading disabled: %d", w.Code)
 				}

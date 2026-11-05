@@ -44,6 +44,7 @@ type ChannelMember struct // ChannelMember holds a channel member's names for di
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
 type ChannelPage struct // ChannelPage is a channel, its sidebar and history read in one snapshot.
   field Channels []Channel
+  field Conclusion *Entry // Conclusion is the selected topic's current message in this snapshot.
   field Current Channel
   field EventCursor *int64 // EventCursor is the snapshot's organisation sequence, including on older pages.
   field Page Page

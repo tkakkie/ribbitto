@@ -28,9 +28,10 @@ type Channel struct {
 
 // Topic holds the topic fields a channel page displays.
 type Topic struct {
-	ID        kernel.ID
-	Name      string
-	IsDefault bool
+	ID                  kernel.ID
+	Name                string
+	IsDefault           bool
+	ConclusionMessageID kernel.ID
 }
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
@@ -43,6 +44,7 @@ type ChannelPage struct {
 	Organization               Organization
 	DisplayName, Handle, Role  string
 	Topic                      *Topic
+	Conclusion                 *Message
 	Topics                     []Topic
 	Current                    Channel
 	Channels                   []Channel
@@ -240,6 +242,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							<p>{ i18n.T(ctx, "reading.unread_above") }</p>
 							<a href={ templ.SafeURL(fmt.Sprintf("%s?around=%d&unread=%d#%s", conversationURL(page), page.FirstUnread, page.FirstUnread, UnreadDividerID)) } class="inline-flex min-h-11 min-w-11 items-center text-brand underline short:py-0.5 short:desk:min-h-6">{ i18n.T(ctx, "reading.unread_jump") }</a>
 						</div>
+					}
+					if page.Topic != nil {
+						@TopicResolution(page)
 					}
 					<p id={ StreamStoppedID } role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
 						{ i18n.T(ctx, "stream.stopped") }
@@ -754,6 +759,9 @@ templ TopicHeadingCount(page ChannelPage, oob bool) {
 			hx-swap-oob="true"
 		}
 	>
+		if page.Topic != nil {
+			@resolvedMark(*page.Topic)
+		}
 		if !selectedTopicListed(page) {
 			@unreadBadge(page.TopicCounts[page.Topic.ID])
 		}
@@ -825,6 +833,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			}
 			@Icon("branch-regular", 16)
 			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
+			@resolvedMark(topic)
 			@unreadBadge(count)
 			@draftMarker()
 		</a>

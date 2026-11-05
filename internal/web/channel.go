@@ -62,6 +62,7 @@ type channelPages struct {
 	reading          Reading
 	branching        Branching
 	pinning          Pinning
+	resolution       Resolution
 	topics           TopicLookup
 	topicID          *kernel.ID // Set only on the request-local copy in show.
 	panel            string     // Set only on the request-local copy by a panel route.
@@ -360,6 +361,11 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: snapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
+		if history.Conclusion != nil {
+			entry := viewMessage(m.Organization.Slug, *history.Conclusion)
+			entry.Body = history.Conclusion.Text(view.UnknownMember(r.Context()))
+			page.Conclusion = &entry
+		}
 		page.Older = history.Older
 		page.CarriedUnread = firstUnread != nil
 		page.FirstUnread = history.FeedFirstUnread
@@ -600,7 +606,7 @@ func viewChannels(channels []conversation.Channel) []view.Channel {
 }
 
 func viewTopic(t conversation.Topic) view.Topic {
-	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault}
+	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault, ConclusionMessageID: t.ConclusionMessageID}
 }
 
 func viewTopicPtr(t *conversation.Topic) *view.Topic {
@@ -623,8 +629,13 @@ func viewTopics(topics []conversation.Topic) []view.Topic {
 // the page and the stream alike; slug is the organisation's, for the label's
 // link to the topic view.
 func viewMessage(slug string, entry conversation.Entry) view.Message {
+	resolveURL := ""
+	if !entry.DefaultTopic {
+		resolveURL = view.ConversationURL(slug, entry.ChannelID, &entry.TopicID) + "/resolve"
+	}
 	return view.Message{
-		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
+		ResolveURL: resolveURL,
+		ID:         entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),

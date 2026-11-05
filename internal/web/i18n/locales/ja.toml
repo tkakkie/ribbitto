@@ -480,3 +480,21 @@ other = "Ctrl+Enter（Macでは⌘+Enter）で送信、Enterで改行。**太字
 
 ["message.quote_selection"]
 other = "選択部分を引用"
+
+["resolution.resolved"]
+other = "解決済み"
+
+["resolution.conclusion"]
+other = "結論"
+
+["resolution.resolve"]
+other = "解決する"
+
+["resolution.reopen"]
+other = "再開する"
+
+["resolution.error.default"]
+other = "既定の会話は解決済みにできません。"
+
+["resolution.error.moved"]
+other = "選んだものは移動しました。別のものを選んでください。"

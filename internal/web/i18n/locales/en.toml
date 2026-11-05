@@ -480,3 +480,21 @@ other = "Ctrl+Enter (⌘+Enter on Mac) sends; Enter adds a line break. **bold**,
 
 ["message.quote_selection"]
 other = "Quote selection"
+
+["resolution.resolved"]
+other = "Resolved"
+
+["resolution.conclusion"]
+other = "Conclusion"
+
+["resolution.resolve"]
+other = "Resolve"
+
+["resolution.reopen"]
+other = "Reopen"
+
+["resolution.error.default"]
+other = "The default conversation cannot be resolved."
+
+["resolution.error.moved"]
+other = "This choice has moved. Choose another one."

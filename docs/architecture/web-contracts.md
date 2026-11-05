@@ -1,7 +1,5 @@
 # Web contracts: DOM ids and data attributes
 
-DOM ids and script-read data attributes shared by templ, htmx and scripts.
-
 - **DOM ids are a contract.** Templates define ids used by `hx-target`,
   `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
@@ -9,7 +7,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   `message-pending`, `message-pending-template`, `message-pending-body`, `message-pending-edit-help` (template; clones append their send UUID), `message-empty`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `mention-picker`, `mention-search`, `mention-status`, `mention-listbox` and `mention-option-<hex>` for mention candidates,
-  `message-actions`, `message-actions-template`, `message-actions-trigger`,
+  `message-actions`, `message-actions-template`, `message-actions-trigger`, `resolution-form`, `resolution-summary`,
   `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
@@ -18,10 +16,9 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
 - Message links carry `data-message-action` (UUID), `data-message-url`,
-  `data-pin-url`, `data-unpin-url` and `data-pinned`. Opening the shared menu
-  copies their server-provided URLs and identity; pin form IDs stay per message.
-  Forms are cloned on first open; inactive forms stay in hidden message
-  containers so delayed responses retain their own targets and SSE state.
+  `data-pin-url`, `data-unpin-url`, `data-resolve-url` (empty for the default) and `data-pinned`. The menu copies URLs and identity;
+  pin form IDs stay per message. First-open clones stay in hidden containers
+  so delayed responses retain targets and SSE state.
 - Menu Quote keeps `form="quote-form"`, `name="quote"` and the message ID.
 - **Script-read data attributes are a contract too** (#351). The same renaming
   rule covers `data-event-cursor`, `data-posted-message`, `data-invalid`, `data-announcement` and:

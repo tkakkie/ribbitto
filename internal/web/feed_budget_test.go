@@ -23,7 +23,8 @@ func TestFeedMarkupBudget(t *testing.T) {
 	// 51024b25: 357322 bytes / 2018 elements / 163 hx. The tighter whole-page
 	// cap replaces the suggested 1.5x historical per-message starting budget.
 	t.Logf("whole page: %d bytes, %d elements, %d hx elements", len(markup), elements, hx)
-	if hx > 10 || len(markup) > 206459 || elements > 1294 {
-		t.Fatalf("whole-page budget exceeded: bytes=%d/206459 elements=%d/1294 hx=%d/10", len(markup), elements, hx)
+	// https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6671415422 approves the additional menu element.
+	if hx > 10 || len(markup) > 206459 || elements > 1295 {
+		t.Fatalf("whole-page budget exceeded: bytes=%d/206459 elements=%d/1295 hx=%d/10", len(markup), elements, hx)
 	}
 }

@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"slices"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -67,7 +68,20 @@ func (s *Brancher) run(ctx context.Context, m org.Membership, channelID kernel.I
 		if err := s.reads(tx).Merge(ctx, organizationID, channelID, memberID, m.Member.JoinedEventSeq, previous+1, noticeSeq+1); err != nil {
 			return err
 		}
-		return events.Append(ctx, organizationID, noticeSeq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID, memberID))
+		if err := events.Append(ctx, organizationID, noticeSeq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID, memberID)); err != nil {
+			return err
+		}
+		if source.ConclusionMessageID != (kernel.ID{}) && slices.Contains(b.Messages, source.ConclusionMessageID) {
+			if err := writer.SetTopicConclusion(ctx, organizationID, channelID, source.ID, kernel.ID{}); err != nil {
+				return err
+			}
+			noticeSeq, err = sequences.NextEventSeq(ctx, organizationID)
+			if err != nil {
+				return err
+			}
+			return events.Append(ctx, organizationID, noticeSeq, KindResolutionChanged, nil, EncodeResolutionChanged(channelID, source.ID))
+		}
+		return nil
 	})
 	return destination, noticeSeq, err
 }

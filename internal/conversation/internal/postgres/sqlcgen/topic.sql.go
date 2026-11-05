@@ -200,3 +200,28 @@ func (q *Queries) MoveMessages(ctx context.Context, arg MoveMessagesParams) (int
 	}
 	return result.RowsAffected(), nil
 }
+
+const setTopicConclusion = `-- name: SetTopicConclusion :execrows
+UPDATE topic SET conclusion_message_id = $4
+WHERE organization_id = $1 AND channel_id = $2 AND id = $3
+`
+
+type SetTopicConclusionParams struct {
+	OrganizationID      pgtype.UUID
+	ChannelID           pgtype.UUID
+	ID                  pgtype.UUID
+	ConclusionMessageID pgtype.UUID
+}
+
+func (q *Queries) SetTopicConclusion(ctx context.Context, arg SetTopicConclusionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTopicConclusion,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.ID,
+		arg.ConclusionMessageID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

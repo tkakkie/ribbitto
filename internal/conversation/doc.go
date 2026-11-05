@@ -3,8 +3,8 @@
 // IDs are kernel.ID.
 //
 // Module: conversation (feature map in docs/architecture/features.md), which
-// owns the channel, topic, message and message_mention tables and publishes message.posted
-// plus messages.moved and pins.changed.
+// owns the channel, topic, message and message_mention tables and publishes
+// message.posted plus messages.moved, pins.changed and topic.resolution_changed.
 // Topic.conclusion_message_id is the sole resolution state, nullable and
 // constrained to a message of the same channel; default topics stay unresolved.
 // Message pin metadata is paired and organisation-scoped; transaction-bound

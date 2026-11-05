@@ -88,6 +88,8 @@ type Writer interface {
 	// MoveMessages moves the given messages still in the source topic of
 	// the channel to the destination, recording the move sequence, and returns how many moved.
 	MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID, movedEventSeq int64) (int64, error)
+	// SetTopicConclusion sets a checked conclusion; zero reopens the topic.
+	SetTopicConclusion(ctx context.Context, organizationID, channelID, topicID, messageID kernel.ID) error
 }
 
 // WriterIn binds conversation's writes to the caller's transaction.

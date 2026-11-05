@@ -64,11 +64,13 @@ type Channels struct // Channels runs the channel use cases for a member resolve
 func DecodeMoved(data []byte) (Moved, error) // DecodeMoved reads stored data.
 func DecodePinsChanged(data []byte) (channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, err error) // DecodePinsChanged validates both required IDs, even though only the channel routes.
 func DecodePosted(data []byte) (Posted, error) // DecodePosted reads stored data.
+func DecodeResolutionChanged(data []byte) (channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, err error) // DecodeResolutionChanged validates the channel and topic routing IDs.
 const DefaultChannelName untyped string = "general" // DefaultChannelName is the initial name of an organisation's default channel.
 const DefaultMaxChannels int32 = 500 // DefaultMaxChannels includes the default channel in the organisation cap.
 func EncodeMoved(m Moved) []byte // EncodeMoved returns the stored data of m: canonical UUID text under channel_id, from_topic_id and to_topic_id, and a message_ids array.
 func EncodePinsChanged(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePinsChanged stores only routing IDs, never pin state or message content.
 func EncodePosted(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, authorID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePosted returns the stored data of KindPosted for a post in topicID: canonical UUID text under channel_id, message_id, topic_id and author_id.
+func EncodeResolutionChanged(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodeResolutionChanged retains routing IDs only, never conclusion state.
 type Entry struct // Entry is a stored message with its current author names and topic label.
   field Blocks []BodyBlock // Blocks is a chat_v1 body, parsed; it is nil for plain_text.
   field DefaultTopic bool
@@ -83,6 +85,8 @@ var ErrBranchConflict error // ErrBranchConflict means a selected message is no 
 var ErrChannelLimit error // ErrChannelLimit means the organisation cannot create another channel.
 var ErrChannelNameTaken error // ErrChannelNameTaken means the organisation already has a channel with that name.
 var ErrChannelNotFound error // ErrChannelNotFound means the channel does not exist in the caller's organisation, including when it exists in another one.
+var ErrConclusionConflict error // ErrConclusionConflict means the chosen message left the topic (HTTP 409).
+var ErrDefaultTopicResolution error // ErrDefaultTopicResolution refuses a conclusion on the default topic (HTTP 422).
 var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody or, as ErrUnknownReference, references a member posting cannot find.
 var ErrInvalidBranch error // ErrInvalidBranch means the request itself is unusable: no messages, too many, a repeated one, no destination or two, or the source as destination.
 var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outside the bundled set.
@@ -125,6 +129,7 @@ const InlineText InlineKind = 0 // The chat_v1 inline nodes (decision 39).
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
 const KindPinsChanged github.com/tkakkie/ribbitto/internal/realtime.EventKind = "pins.changed" // KindPinsChanged invalidates current channel pins, without retaining content.
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
+const KindResolutionChanged github.com/tkakkie/ribbitto/internal/realtime.EventKind = "topic.resolution_changed" // KindResolutionChanged invalidates a topic's current resolution and sidebar order.
 type Location struct // Location is where a message is now.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field EventSeq int64
@@ -167,6 +172,7 @@ func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn,
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, countRunner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
+func NewResolution(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Resolution // NewResolution builds resolution over transaction-bound factories; notifier may be nil.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
 type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; callers raise only after commit.
@@ -257,9 +263,13 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
 type Reference struct // Reference is a referenced member's current names.
   field DisplayName string
   field Handle string
+type Resolution struct // Resolution commits a topic's conclusion with its durable invalidation.
+  func (*Resolution).Reopen(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Reopen clears a topic's conclusion; an open topic is unchanged.
+  func (*Resolution).Resolve(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Resolve sets or replaces a named topic's conclusion with a current message.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePinsChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePinsChanged routes channel-wide invalidations across every topic.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
+func RouteResolutionChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteResolutionChanged routes invalidations channel-wide, including other topics.
 type Send struct // Send is one composer submission.
   field Body string
   field Cursor *int64 // Cursor is validated but not used for reading; kept for old pages until S5.
@@ -322,4 +332,5 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.
   func (Writer).MoveMessages(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, fromTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, toTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageIDs []github.com/tkakkie/ribbitto/internal/kernel.ID, movedEventSeq int64) (int64, error) // MoveMessages moves the given messages still in the source topic of the channel to the destination, recording the move sequence, and returns how many moved.
   func (Writer).QuotedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Message, error) // QuotedMessage returns the channel's message with the ID, or ErrQuoteNotFound when it is missing or in another organisation or channel.
+  func (Writer).SetTopicConclusion(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // SetTopicConclusion sets a checked conclusion; zero reopens the topic.
 type WriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) Writer // WriterIn binds conversation's writes to the caller's transaction.

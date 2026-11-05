@@ -64,8 +64,7 @@ Keep the numbers stable: other documents cite them.
     Concurrent creations serialize before counting; lowering the cap leaves
     existing channels intact and blocks further creation.
 
-Every migration that adds an
-organisation-owned table must include `organization_id` and
-composite foreign keys (1–3), and every use case must be covered by tests
-for 4–5 as it is written. Row-level security in PostgreSQL is planned as a
-second line of defence after the MVP.
+Every migration that adds an organisation-owned table must include
+`organization_id` and composite foreign keys (1–3), and every use case must be
+covered by tests for 4–5 as it is written. Row-level security in PostgreSQL is
+planned as a second line of defence after the MVP.

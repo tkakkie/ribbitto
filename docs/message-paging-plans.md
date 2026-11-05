@@ -1,9 +1,9 @@
 # Message paging plans
 
-Measured 2026-10-18 for #1300 at `406e1121b6cabb64c171c6cd83444c8d66a8deb8`:
-do [ListMessagesBefore and ListMessagesAfter](../db/queries/conversation/message.sql)
-keep useful index conditions under generic plans? **Recommendation: no change
-needed for the measured workload.** Keep the queries and pool configuration.
+The 2026-10-18 measurement for #1300 at `406e1121b6cabb64c171c6cd83444c8d66a8deb8`
+tested whether [ListMessagesBefore and ListMessagesAfter](../db/queries/conversation/message.sql)
+keep useful index conditions under generic plans. **The measured workload needs
+no change.** Keep the queries and pool configuration.
 
 ## Conditions and scope
 

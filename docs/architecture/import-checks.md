@@ -143,7 +143,7 @@ proves it rejects unused, unclosed pgx rows; disabling the linter fails that
 assertion.
 
 Nilerr runs without exclusions: do not return nil after a non-nil error
-check unless the block handles the error, or return the error after a nil
+check unless the block handles the error, and do not return the error after a nil
 check. `make lint-fixtures` guards the non-nil-error check.
 
 `make check-static` runs [`tools/formatcheck`](../../tools/formatcheck/main.go),

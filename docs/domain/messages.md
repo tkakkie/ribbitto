@@ -60,12 +60,15 @@ with the message and its insert's returned `event_seq`. Message identity and
 in their issue. Message deletion cascades to mentions; mentions restrict member
 deletion. Historical coverage awaits #2199's backfill.
 
-Moves retain mentions, resolving channel/topic through the message. Only
-`chat_v1` references count; code, escapes, quotes and `plain_text` add none.
-The body limit bounds one insert to 102 rows. A member deleted after validation
-gets 422; other database failures stay internal. Both roll back the whole post.
-Mention pages return 50 newest non-self messages from readable channels;
-an exclusive `event_seq` cursor and one filtered lookahead row bound each page.
+Rows store organisation, message, member and sequence; channel/topic resolve
+through the message, so moves retain mentions. Only `chat_v1` references count;
+code, escapes, quote snapshots and `plain_text` add none. The body limit bounds
+one bulk insert to 102 rows. A member deleted after validation gets 422; other
+database failures stay internal. Both roll back message, mentions, event,
+read state and reserved sequence.
+
+Mention pages: 50 newest non-self messages in readable channels, with an
+exclusive `event_seq` cursor and one filtered lookahead row.
 
 ## Accepted bodies
 

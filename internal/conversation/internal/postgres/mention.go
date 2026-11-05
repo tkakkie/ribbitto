@@ -47,7 +47,10 @@ func (s ReadStore) ReadableChannelIDs(ctx context.Context, m org.Membership) ([]
 
 // ListMentions reads one bounded source for the member, with no directory reads.
 func (s ReadStore) ListMentions(ctx context.Context, organizationID, memberID kernel.ID, channelIDs []kernel.ID, before *int64) ([]conversation.Message, error) {
-	params := sqlcgen.ListMentionsParams{OrganizationID: uuid(organizationID), MemberID: uuid(memberID), ChannelIds: uuids(channelIDs)}
+	params := sqlcgen.ListMentionsParams{
+		OrganizationID: uuid(organizationID), MemberID: uuid(memberID), ChannelIds: uuids(channelIDs),
+		RowLimit: conversation.PageSize + 1,
+	}
 	if before != nil {
 		params.BeforeEventSeq = pgtype.Int8{Int64: *before, Valid: true}
 	}

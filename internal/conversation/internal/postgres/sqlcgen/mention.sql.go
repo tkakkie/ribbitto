@@ -47,7 +47,7 @@ WHERE r.organization_id = $1
   AND c.id = ANY($4::uuid[])
   AND NOT (m.member_id = $2)
 ORDER BY r.event_seq DESC
-LIMIT 51
+LIMIT $5
 `
 
 type ListMentionsParams struct {
@@ -55,6 +55,7 @@ type ListMentionsParams struct {
 	MemberID       pgtype.UUID
 	BeforeEventSeq pgtype.Int8
 	ChannelIds     []pgtype.UUID
+	RowLimit       int32
 }
 
 func (q *Queries) ListMentions(ctx context.Context, arg ListMentionsParams) ([]Message, error) {
@@ -63,6 +64,7 @@ func (q *Queries) ListMentions(ctx context.Context, arg ListMentionsParams) ([]M
 		arg.MemberID,
 		arg.BeforeEventSeq,
 		arg.ChannelIds,
+		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err

@@ -16,4 +16,4 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND c.id = ANY(sqlc.arg(channel_ids)::uuid[])
   AND NOT (m.member_id = sqlc.arg(member_id))
 ORDER BY r.event_seq DESC
-LIMIT 51;
+LIMIT sqlc.arg(row_limit);

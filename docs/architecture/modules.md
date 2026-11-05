@@ -45,7 +45,7 @@ A cross-module flow's root use case owns its transaction through an injected run
 | `identity`: accounts, passwords, sessions, sign-in | `account`, `session` |
 | `realtime`: event log, retention, hub, stream loop, envelope | `event_log` |
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` |
-| `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` |
+| `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message`, `message_mention` |
 | `presence`: per-process online state, grace expiry and ordered changes/reset; web rendering/delivery current (#768) | no tables |
 | `typing`: per-process distinct-member channel/topic summaries and generation publication ([contract](typing.md)); channel-stream lifetime, owner expiry, signal ingress and delivery are current | no tables |
 | `unread`: feed and topic writes, transaction-bound lock, join prefix, read-range unions and topic floors | `channel_read`, `read_range`, `topic_read_floor` |

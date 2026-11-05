@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/compose"
@@ -34,6 +38,53 @@ func mentionFixture(t *testing.T, pool *pgxpool.Pool) conversationtest.Organizat
 
 func mentionPosting(pool *pgxpool.Pool) *conversation.Posting {
 	return conversationpg.NewPagePosting(pool, compose.PostingSequence, compose.PostingEvents, compose.PostReads, compose.LookupMembers, nil)
+}
+
+func TestMentionSequencesAcrossSendsAndMove(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := mentionFixture(t, pool)
+	m := membership(f.OrganizationID, f.MemberID)
+	service := mentionPosting(pool)
+	key := conversation.NewIdempotencyKey()
+	body := mentionToken(f.MemberID)
+	first, err := service.Send(t.Context(), m, f.Channel.ID, conversation.Send{Body: body, Key: &key})
+	requireNoError(t, err)
+	conversationtest.AssertMentions(t, pool, f.OrganizationID, first.Message.ID, first.Message.EventSeq, []kernel.ID{f.MemberID})
+	repeated, err := service.Post(t.Context(), m, f.Channel.ID, body+" **"+body+"**")
+	requireNoError(t, err)
+	conversationtest.AssertMentions(t, pool, f.OrganizationID, repeated.ID, repeated.EventSeq, []kernel.ID{f.MemberID})
+	converted, err := service.Post(t.Context(), m, f.Channel.ID, "@owner")
+	requireNoError(t, err)
+	conversationtest.AssertMentions(t, pool, f.OrganizationID, converted.ID, converted.EventSeq, []kernel.ID{f.MemberID})
+	quoted, err := service.Send(t.Context(), m, f.Channel.ID, conversation.Send{Body: "quote only", Quote: &first.Message.ID})
+	requireNoError(t, err)
+	conversationtest.AssertMentions(t, pool, f.OrganizationID, quoted.Message.ID, quoted.Message.EventSeq, nil)
+	before := mentionState(t, pool, f.OrganizationID)
+	for _, tt := range []struct {
+		body string
+		err  error
+	}{{body, nil}, {body + " changed", conversation.ErrPostKeyReused}} {
+		again, err := service.Send(t.Context(), m, f.Channel.ID, conversation.Send{Body: tt.body, Key: &key})
+		if !errors.Is(err, tt.err) || !again.Repeat || again.Message.ID != first.Message.ID {
+			t.Fatalf("resend=%+v, %v; want %v", again, err, tt.err)
+		}
+		if after := mentionState(t, pool, f.OrganizationID); after != before {
+			t.Fatalf("resend changed state: %+v -> %+v", before, after)
+		}
+		conversationtest.AssertMentions(t, pool, f.OrganizationID, first.Message.ID, first.Message.EventSeq, []kernel.ID{f.MemberID})
+	}
+	moved, err := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil).Branch(t.Context(), m, f.Channel.ID,
+		conversation.Branch{Messages: []kernel.ID{first.Message.ID}, From: f.Channel.DefaultTopicID, NewName: "moved"}, func(conversation.Topic) string { return "moved" })
+	requireNoError(t, err)
+	conversationtest.AssertMentions(t, pool, f.OrganizationID, first.Message.ID, first.Message.EventSeq, []kernel.ID{f.MemberID})
+	var topic kernel.ID
+	requireNoError(t, pool.QueryRow(t.Context(), `SELECT m.topic_id FROM message_mention r JOIN message m
+		ON m.organization_id = r.organization_id AND m.id = r.message_id
+		WHERE r.organization_id = $1 AND r.message_id = $2`, f.OrganizationID, first.Message.ID).Scan(&topic))
+	if topic != moved.ID {
+		t.Fatalf("mention resolves to topic %v, want %v", topic, moved.ID)
+	}
 }
 
 type mentionPostState struct {
@@ -123,18 +174,96 @@ func TestMentionFailuresRollback(t *testing.T) {
 			if next.EventSeq != before.seq+1 {
 				t.Fatalf("rollback left a sequence gap: %d after %d", next.EventSeq, before.seq)
 			}
-			assertMentionMembers(t, pool, f.OrganizationID, next.ID, []kernel.ID{f.MemberID})
+			conversationtest.AssertMentions(t, pool, f.OrganizationID, next.ID, next.EventSeq, []kernel.ID{f.MemberID})
 			assertEventLog(t, pool, f.OrganizationID, 1, next.EventSeq)
 		})
 	}
 }
 
-func assertMentionMembers(t *testing.T, pool *pgxpool.Pool, organizationID, messageID kernel.ID, members []kernel.ID) {
-	t.Helper()
-	var total, matched int
-	requireNoError(t, pool.QueryRow(t.Context(), `SELECT count(*), count(*) FILTER (WHERE member_id = ANY($3::uuid[]))
-		FROM message_mention WHERE organization_id = $1 AND message_id = $2`, organizationID, messageID, members).Scan(&total, &matched))
-	if total != len(members) || matched != len(members) {
-		t.Fatalf("mentions=%d matched=%d, want %d", total, matched, len(members))
+func TestMentionValidationAndLiteralBodies(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := mentionFixture(t, pool)
+	foreign := conversationtest.OrganizationWithOwner(t, pool, "foreign", conversation.DefaultChannelName)
+	service, m := mentionPosting(pool), membership(f.OrganizationID, f.MemberID)
+	before := mentionState(t, pool, f.OrganizationID)
+	for _, id := range []kernel.ID{{0xee}, foreign.MemberID} {
+		_, err := service.Post(t.Context(), m, f.Channel.ID, mentionToken(id))
+		if !errors.Is(err, conversation.ErrInvalidBody) || !errors.Is(err, conversation.ErrUnknownReference) {
+			t.Fatalf("unknown/foreign mention: %v", err)
+		}
+		if after := mentionState(t, pool, f.OrganizationID); after != before {
+			t.Fatalf("invalid mention wrote state: %+v -> %+v", before, after)
+		}
+	}
+	for _, body := range []string{"`" + mentionToken(f.MemberID) + "`", "```\n" + mentionToken(f.MemberID) + "\n```", "\\" + mentionToken(f.MemberID)} {
+		posted, err := service.Post(t.Context(), m, f.Channel.ID, body)
+		requireNoError(t, err)
+		conversationtest.AssertMentions(t, pool, f.OrganizationID, posted.ID, posted.EventSeq, nil)
+	}
+}
+
+type mentionTrace struct {
+	*platform.QueryCounter
+	inserts atomic.Int64
+}
+
+func (trace *mentionTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.HasPrefix(data.SQL, "-- name: InsertMessageMentions :exec") {
+		trace.inserts.Add(1)
+	}
+	return trace.QueryCounter.TraceQueryStart(ctx, conn, data)
+}
+
+func TestMaximumMentionPostStatementCount(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := mentionFixture(t, pool)
+	var ids []kernel.ID
+	var references strings.Builder
+	for i := range 102 {
+		id := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, fmt.Sprintf("m%d@example.org", i), "Member"), org.RoleMember, fmt.Sprintf("m%d", i), 1)
+		ids = append(ids, id)
+		references.WriteString(mentionToken(id))
+	}
+	// Start every comparison with an existing read range; its first creation
+	// uses a savepoint and would otherwise obscure the mention-only cost.
+	_, err := mentionPosting(pool).Post(t.Context(), membership(f.OrganizationID, f.MemberID), f.Channel.ID, "seed read state")
+	requireNoError(t, err)
+	trace := &mentionTrace{QueryCounter: platform.NewQueryCounter()}
+	config := pool.Config()
+	config.ConnConfig.Tracer = trace
+	traced, err := pgxpool.NewWithConfig(t.Context(), config)
+	requireNoError(t, err)
+	t.Cleanup(traced.Close)
+	var baseline platform.QueryCounts
+	for _, n := range []int{0, 1, 102} {
+		body := ""
+		if n > 0 {
+			body = references.String()[:39*n]
+		}
+		body += strings.Repeat("界", conversation.MaxMessageBodyLength-utf8.RuneCountInString(body))
+		if utf8.RuneCountInString(body) != 4000 {
+			t.Fatal("maximum body is not 4000 code points")
+		}
+		before, inserts := trace.Counts(), trace.inserts.Load()
+		posted, err := mentionPosting(traced).Post(t.Context(), membership(f.OrganizationID, f.MemberID), f.Channel.ID, body)
+		requireNoError(t, err)
+		after := trace.Counts()
+		delta := platform.QueryCounts{Queries: after.Queries - before.Queries, Begins: after.Begins - before.Begins, Commits: after.Commits - before.Commits, Rollbacks: after.Rollbacks - before.Rollbacks}
+		wantInserts := int64(0)
+		if n == 0 {
+			baseline = delta
+		} else {
+			wantInserts = 1
+			if delta.Queries != baseline.Queries+2 || delta.Begins != baseline.Begins+1 || delta.Commits != baseline.Commits+1 || delta.Rollbacks != baseline.Rollbacks {
+				t.Fatalf("%d mentions: statements=%+v, no-mention=%+v; want one lookup and one bulk insert", n, delta, baseline)
+			}
+		}
+		if got := trace.inserts.Load() - inserts; got != wantInserts {
+			t.Fatalf("%d mentions: bulk inserts=%d, want %d", n, got, wantInserts)
+		}
+		t.Logf("4000 code points, %d distinct mentions: queries=%d begin=%d commit=%d rollback=%d mention inserts=%d", n, delta.Queries, delta.Begins, delta.Commits, delta.Rollbacks, wantInserts)
+		conversationtest.AssertMentions(t, pool, f.OrganizationID, posted.ID, posted.EventSeq, ids[:n])
 	}
 }

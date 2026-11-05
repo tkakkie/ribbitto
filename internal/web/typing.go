@@ -18,7 +18,7 @@ func (p channelPages) signal(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	if !p.limiter.Allow(m.Organization.ID, m.Member.ID) {
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.limiter, p.pages)
 		return
 	}
 	channel, channelOK := channelID(r)

@@ -15,7 +15,7 @@ type MemberSearch interface {
 	Search(context.Context, org.Membership, string) ([]org.MemberCandidate, error)
 }
 
-func mentionCandidates(search MemberSearch, limit *middleware.MemberRateLimiter) func(http.ResponseWriter, *http.Request, org.Membership) {
+func mentionCandidates(search MemberSearch, limit *middleware.MemberRateLimiter, pages *pageRenderer) func(http.ResponseWriter, *http.Request, org.Membership) {
 	return func(w http.ResponseWriter, r *http.Request, m org.Membership) {
 		w.Header().Set("Cache-Control", "no-store")
 		if search == nil {
@@ -24,8 +24,7 @@ func mentionCandidates(search MemberSearch, limit *middleware.MemberRateLimiter)
 		}
 		release, admitted := limit.Admit(m.Organization.ID, m.Member.ID)
 		if !admitted {
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
+			rejectMemberLimit(w, r, limit, pages)
 			return
 		}
 		defer release()

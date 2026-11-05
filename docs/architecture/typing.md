@@ -56,6 +56,8 @@ expiry; a request already being handled that long fails the shorter deadline
 
 `POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing` uses
 `Signal`, never `Start`, after [member admission](rate-limits.md#member-admission-for-typing).
+Typing uses htmx/fetch: admission refusal is empty 429 with `Retry-After`;
+browser forms would get the page per the [response rule](rate-limits.md#member-rejection-responses).
 Non-membership or bad scope returns 404; form parsing requires exactly one
 nonempty `composer` generation (400, or 413 over the body limit). Accepted and
 refused generations (invalid, closed or overdue) return empty 204 with no swap.

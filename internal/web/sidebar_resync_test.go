@@ -99,7 +99,7 @@ func TestSidebarResyncAdmission(t *testing.T) {
 		watches[i] = changes.Watch(m.Organization.ID, m.Member.ID)
 		defer watches[i].Release()
 	}
-	handle := resyncSidebar(changes, limits)
+	handle := resyncSidebar(changes, limits, nil)
 	request := func(t *testing.T, index, status int) {
 		t.Helper()
 		before := make([]uint64, len(watches))

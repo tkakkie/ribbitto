@@ -28,7 +28,7 @@ func moduleManifest() []module {
 		{root: "internal/org", store: "internal/org/internal/postgres", wiring: "internal/org/orgpg",
 			fixture: "internal/org/orgtest", mayImport: []string{"identity", "realtime"}, ownsTables: []string{"organization", "member", "setup"}},
 		{root: "internal/conversation", store: "internal/conversation/internal/postgres", wiring: "internal/conversation/conversationpg",
-			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message"}},
+			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message", "message_mention"}},
 		{root: "internal/presence", mayImport: []string{"realtime"}, ownsTables: []string{}},
 		{root: "internal/typing", mayImport: []string{"realtime"}, ownsTables: []string{}},
 		{root: "internal/unread", store: "internal/unread/internal/postgres", wiring: "internal/unread/unreadpg", mayImport: []string{"conversation"}, ownsTables: []string{"channel_read", "read_range", "topic_read_floor"}},

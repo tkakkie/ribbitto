@@ -80,7 +80,7 @@ func TestPostingReferences(t *testing.T) {
 		wantErr    error
 	}{
 		{name: "no reference", body: "**hi**"},
-		{name: "members, one batch", body: ref(member) + " and _" + ref(other) + "_ " + ref(member), lookups: [][]kernel.ID{{member, other, member}}},
+		{name: "members, one batch", body: ref(member) + " and _" + ref(other) + "_ " + ref(member), lookups: [][]kernel.ID{{member, other}}},
 		{name: "unknown member", body: ref(member) + " " + ref(unknown), lookups: [][]kernel.ID{{member, unknown}}, wantErr: conversation.ErrUnknownReference},
 		{name: "another organisation's member", body: ref(foreign), lookups: [][]kernel.ID{{foreign}}, wantErr: conversation.ErrUnknownReference},
 		{name: "malformed tokens stay text", body: "<@nope> " + strings.ToUpper(ref(unknown)) + " `" + ref(unknown) + "`"},

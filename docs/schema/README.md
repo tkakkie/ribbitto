@@ -17,6 +17,7 @@
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
 | [public.read_range](public.read_range.md) | 5 |  | BASE TABLE |
 | [public.topic_read_floor](public.topic_read_floor.md) | 5 |  | BASE TABLE |
+| [public.message_mention](public.message_mention.md) | 4 |  | BASE TABLE |
 
 ## Stored procedures and functions
 
@@ -52,6 +53,8 @@ erDiagram
 "public.read_range" }o--|| "public.channel_read" : "FOREIGN KEY (organization_id, channel_id, member_id) REFERENCES channel_read(organization_id, channel_id, member_id) ON DELETE CASCADE"
 "public.topic_read_floor" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.topic_read_floor" }o--|| "public.channel_read" : "FOREIGN KEY (organization_id, channel_id, member_id) REFERENCES channel_read(organization_id, channel_id, member_id) ON DELETE CASCADE"
+"public.message_mention" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message_mention" }o--|| "public.message" : "FOREIGN KEY (organization_id, message_id) REFERENCES message(organization_id, id) ON DELETE CASCADE"
 
 "public.goose_db_version" {
   integer id
@@ -160,6 +163,12 @@ erDiagram
   uuid member_id FK
   uuid channel_id FK
   bigint floor_seq
+}
+"public.message_mention" {
+  uuid organization_id FK
+  uuid message_id FK
+  uuid member_id FK
+  bigint event_seq
 }
 ```
 

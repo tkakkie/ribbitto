@@ -39,6 +39,10 @@ type keyedStore struct {
 	lookups   []keyScope
 }
 
+func (*keyedStore) InsertMentions(context.Context, kernel.ID, kernel.ID, int64, []kernel.ID) error {
+	return nil
+}
+
 func (s *keyedStore) InTx(_ context.Context, fn func(platform.Tx) error) error {
 	s.tx = keyedState{seq: maps.Clone(s.state.seq), keyed: maps.Clone(s.state.keyed), unkeyed: s.state.unkeyed, events: s.state.events, inserted: s.state.inserted}
 	if err := fn(platform.Tx{}); err != nil {

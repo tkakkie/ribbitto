@@ -1,7 +1,16 @@
 # Unread rules
 
-[Decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md); [counts](../architecture/unread-counts.md), [costs](../architecture/unread-count-costs.md),
-[write ownership](../architecture/unread-writes.md) and [reading scopes](unread-reading.md).
+The inputs are in place since M3: the join transaction, `joined_event_seq`,
+the pairing of each message with its `message.posted` event, and the log
+boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
+reads exist;
+Visible-page reading POSTs, posting writes and snapshot-bound sidebar counts are current
+([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
+the counting contract is in
+[unread counts](../architecture/unread-counts.md), their cost in
+[unread count costs](../architecture/unread-count-costs.md), write ownership in
+[unread writes](../architecture/unread-writes.md), reading scopes and posting in
+[unread reading](unread-reading.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and
@@ -13,6 +22,9 @@
   retention: it relies on `message.event_seq`, never on `event_log`.
 
 ## Read state
+
+Storage, range unions, message-derived feed bounds, topic-floor writes and
+branch-notice reads are current.
 
 - **Read ranges.** A member's read state in a channel is a set of
   `event_seq` ranges (`read_range` rows, `lo ≤ event_seq < hi`). A message
@@ -80,7 +92,8 @@ When rendered, F has a divider. When 0 < F < the oldest rendered sequence,
 “Unread above” links to `?around=F&unread=F#unread-divider` in the same scope,
 without count, extra query or read. Empty pages and the destination omit it; missing F
 yields nearby history without divider or self-link. The notice survives prepends/reads;
-navigation rechecks it. Automatic reading POSTs stay unchanged.
+navigation rechecks it. Automatic reading POSTs stay unchanged. Screen readers
+untested (#1486).
 
 ## Topics
 

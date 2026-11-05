@@ -28,7 +28,8 @@ code points after newline normalisation/trim, or no `crypto.randomUUID()`.
   That prefix is removed under the ordinary-send rules: *the earlier message
   was sent*. If the start changed, show the 409 error. Otherwise text/error
   stay, including legacy rows without proof.
-- **Stream reset:** pending or unconfirmed sends hold the
+- **Stream reset:** pending/unconfirmed sends, an in-flight composer request or
+  a failure alert (Not sent/Could not confirm/Still unconfirmed) hold the
   [reload guard](web-javascript.md#javascript). Dispatched requests time out at
   30 s; queues/retries/failed text can extend the hold. Edit's restored text is
   a draft, which does not hold reload.
@@ -58,7 +59,7 @@ Only `web/src/message-drafts.ts` may use `localStorage` (checked), for latest
 feed/topic composers, never history. [Decision 37 (d)][draft-policy] is canonical
 for the member/session/channel/place key and JSON value, restore ownership and
 expiry checks, 4,000-code-point/50-entry/7-day bounds, plaintext privacy cost,
-cleanup horizons and the guaranteed cleanup events and their limits.
+cleanup horizons, guaranteed cleanup events and qualifications throughout (d).
 An earlier session's text must never appear under a later session or another
 member. Send keys restore only for the current member/session/place and
 unchanged valid text; edits or emptying renew them.
@@ -84,23 +85,22 @@ entries may omit it.
   effort without reading or writing foreign keys. Overlapping writes can keep
   older text; eviction can remove a concurrent update. Neither race is repaired;
   textarea text stays unchanged and only subsequent input saves again.
-  Validation and saving cases: `web/test/drafts.test.ts` and
-  `web/test/drafts-saving.test.ts` (including timestamp ordering and trimming).
+  Tests: `web/test/drafts.test.ts` and
+  `web/test/drafts-saving.test.ts` (ordering and trimming).
 - **Stopping is not removal:** a `ribbitto.signed-out.v1` notice calls `stop()`:
   it stops writes, cancels saves and hides markers, deleting nothing. The
   notice is best effort; stale writes stay bound to the ended session, are
   never restored and are removed by later cleanup.
 - **Removal:** `sweepKeys` runs on sign-in with a signed-out horizon and on the
   next organisation page load, never on BFCache restore. It removes malformed
-  keys, invalid own entries, own-session keys under another member, and foreign
+  `ribbitto.draft.v1:` keys, invalid own entries, own-session keys under another member, and foreign
   sessions strictly older in milliseconds than the horizon; same-millisecond
   and later foreign sessions remain unread. Successful sign-out also sends
   `Clear-Site-Data: "storage"` where supported; failure does neither redirect
   nor clear storage. Either expiry clock stops writes until reload and removes
   that session's keys without reading values. Page text and sending stay usable;
-  storage errors can leave copies for later cleanup. [Decision 37 (d)][draft-policy]
-  states the guaranteed events separately from notice/browser/storage/clock
-  limits, including no open page and same-millisecond sessions.
+  storage errors can leave copies for later cleanup. See [decision 37 (d)][draft-policy]
+  for guarantees and qualifications.
 
 [d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md
 [draft-policy]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#d-drafts-on-this-device-1178-1181-1162-1177

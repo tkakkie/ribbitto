@@ -75,8 +75,8 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
-“Unread above” follows header controls: visible focus, 44 px phone target, no live announcements.
-Chromium scrolls to divider; body keeps focus, Tab reaches F's first link. Screen readers unverified (#1486).
+“Unread above”: after header controls; visible focus, 44 px phone target; silent.
+Screen readers untested (#1486).
 
 The [message actions page](ui.md#markup-and-accessibility) uses native links,
 forms and Tab/Shift-Tab order, with no popover or script needed.

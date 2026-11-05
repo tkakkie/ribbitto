@@ -116,7 +116,9 @@ channel, a new one or an existing one. In **one transaction**:
    just the notice through an injected writer in this same transaction;
 5. the move and the notice are recorded as new durable events
    ([decision 5](../decisions/05-one-event-sequence-per-organisation.md)), so live clients see them in
-   order and a reconnecting client replays them.
+   order and a reconnecting client replays them. If the move takes the
+   topic's conclusion, the same transaction also clears it and appends a third
+   event, `topic.resolution_changed` ([Resolution](#resolution)); otherwise none.
 
 If any selected message is no longer in the topic the request expected —
 someone else branched it first — the whole operation fails with **409**
@@ -133,7 +135,8 @@ topic view shows them in their original order among its own messages.
   (`conversation.MaxBranchMessages`). A new destination's name follows channel
   names; the source cannot be the destination.
 - **Events:** the move takes the next sequence, then the notice the one
-  after. The move is `messages.moved`, carrying
+  after. A resolution event, only when the conclusion moved, takes the one
+  after the notice. The move is `messages.moved`, carrying
   `{"channel_id","from_topic_id","to_topic_id","message_ids":[…]}` (IDs only).
   The notice is an ordinary message by the member who branched, in their
   language, logged as `message.posted`. New posting events, notices included,
@@ -159,6 +162,15 @@ topic view shows them in their original order among its own messages.
   (303 plain, `HX-Redirect` enhanced). Live replacements clear the replaced
   checkbox's selection and refresh single-source constraints, including on
   duplicate replay; other items keep their selections.
+
+## Resolution
+
+Resolve chooses or replaces a current message; reopen clears it. Both use pin
+permissions and lock the organisation before reading. Default topics refuse
+resolve (422); stale choices give 409. No-ops write nothing and take no sequence.
+Branching that moves the conclusion also clears it (step 5 of
+[Branching](#branching)). The event's channel and topic IDs route
+channel-wide; replay needs no historical state.
 
 ## Unread
 

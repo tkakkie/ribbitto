@@ -15,8 +15,9 @@ import (
 // reader.
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{
-		conversation.KindPosted:        conversation.RoutePosted,
-		conversation.KindMessagesMoved: conversation.RouteMoved,
+		conversation.KindPosted:            conversation.RoutePosted,
+		conversation.KindMessagesMoved:     conversation.RouteMoved,
+		conversation.KindResolutionChanged: conversation.RouteResolutionChanged,
 	}
 }
 
@@ -31,6 +32,11 @@ func NewChannels(pool *pgxpool.Pool, maxChannels int32) *conversation.Channels {
 // NewTopics builds the topic lookups on conversation's pool-bound store.
 func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
 	return conversation.NewTopics(postgres.NewTopicStore(pool))
+}
+
+// NewResolution binds conclusion changes and invalidations to one transaction.
+func NewResolution(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Resolution {
+	return conversation.NewResolution(newTxRunner(pool), writerIn, sequences, events, notifier)
 }
 
 // NewPosting builds posting with org's sequence and realtime's appender

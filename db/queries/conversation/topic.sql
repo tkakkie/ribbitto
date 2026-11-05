@@ -27,3 +27,7 @@ LIMIT $3;
 -- name: LookupTopics :many
 SELECT * FROM topic
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(topic_ids)::uuid[]);
+
+-- name: SetTopicConclusion :execrows
+UPDATE topic SET conclusion_message_id = sqlc.narg(conclusion_message_id)
+WHERE organization_id = $1 AND channel_id = $2 AND id = $3;

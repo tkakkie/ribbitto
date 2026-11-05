@@ -187,6 +187,12 @@ func TestPinsTriggerAndMessageFilter(t *testing.T) {
 
 type filterWitness struct{ messageRenderer }
 
+func TestResolutionInvalidationMessageFilter(t *testing.T) {
+	if (messageRenderer{}).Accept(realtime.Event{Kind: conversation.KindResolutionChanged}) {
+		t.Fatal("resolution invalidation reached message rendering")
+	}
+}
+
 func (r filterWitness) RenderUnread(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	if e.Kind == conversation.KindPinsChanged {
 		return realtime.Outgoing{}, fmt.Errorf("pin reached unread renderer")

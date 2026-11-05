@@ -16,6 +16,7 @@ import (
 )
 
 type postingFake struct {
+	conversation.Writer
 	t                 *testing.T
 	calls             []string
 	fail              string

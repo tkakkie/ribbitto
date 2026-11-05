@@ -121,10 +121,12 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads
   `RIBBITTO_MAX_STREAMS`: unset keeps that default; an explicit value must
   be a positive integer. Empty, zero, negative, unparsable and overflowing
-  values fail at start. The default leaves headroom below the passing/failing
-  steps in [#216's 2026-10-07 run](../measurements/load-results.md#active-steps-10-postss),
-  not a capacity guarantee. Smaller machines may set it lower; it can be re-evaluated
-  if the measured ceiling rises. The hub checks both caps under its
+  values fail at start. The maintainer kept 5,000 after #671 passed 10,000 on
+  10 CPUs / 7.7 GiB: no safe limit for small self-hosted machines is known.
+  This conservative resource limit is not a performance ceiling or safety
+  guarantee. [#216's 2026-10-07 result](../measurements/load-results.md#active-steps-10-postss)
+  is history. #1701 or other results need a separate decision to change it.
+  The hub checks both caps under its
   registration lock, refusing an excess stream with 429 before registration
   or any SSE header, without taking an account slot. Only unregistering
   frees a slot; cancellation alone still counts.

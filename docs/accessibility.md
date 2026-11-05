@@ -1,8 +1,7 @@
 # Markup and accessibility
 
-Target: WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`) renders
-every HTML route/state in both languages, enforcing ✓ rules; new routes
-fail until covered by a rendered case.
+WCAG 2.2 AA. `TestPagesMarkup` enforces ✓ for all routes/states, both
+languages; new routes fail without rendered cases.
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` (#1500) and a name (its text, or `aria-label` when it has none); a link is
@@ -75,9 +74,8 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
-“Unread above”: native link named by visible text, no count; after header
-in reading/Tab order; no live region or own announcement. Chromium jump: body
-focus; next Tab reaches the first unread’s first link.
+“Unread above”: native link, visible-text name, after header in reading/Tab order;
+no live region/announcement. Chromium jump: body focus; Tab to first unread’s first link.
 
 The [message actions page](ui.md#markup-and-accessibility) uses native links,
 forms and Tab/Shift-Tab order, with no popover or script needed.

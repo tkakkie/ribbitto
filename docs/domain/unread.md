@@ -85,15 +85,13 @@ history ([unread count costs](../architecture/unread-count-costs.md)).
 
 ## The unread divider
 
-First unread F comes from the scope snapshot before reading POSTs (zero: none);
-*Load older* and reads preserve F.
-URLs without F use snapshots; shared live renders omit F.
-When rendered, F has a divider. When 0 < F < the oldest rendered sequence,
-“Unread above” links to `?around=F&unread=F#unread-divider` in the same scope,
-without count, extra query or read. Empty pages and the destination omit it; missing F
-yields nearby history without divider or self-link. The notice survives prepends/reads;
-navigation rechecks it. Automatic reading POSTs stay unchanged. Screen readers
-untested (#1486).
+Snapshot first unread F (0: none) precedes reading POSTs; reads and *Load older*
+keep F. URLs without F resnapshot; live renders omit F. Rendered F has a divider.
+At 0 < F < oldest rendered sequence, “Unread above” links within scope to
+`?around=F&unread=F#unread-divider`, with no count, query or read.
+Empty pages and jump destinations omit it; missing F yields nearby history
+without divider. It stays for the visit through prepends/reads; navigation
+rechecks it. Automatic reads are unchanged. Screen readers untested (#1486).
 
 ## Topics
 

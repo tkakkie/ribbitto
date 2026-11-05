@@ -40,10 +40,11 @@ type Message struct {
 }
 
 type Topic struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	ChannelID      pgtype.UUID
-	Name           pgtype.Text
-	IsDefault      bool
-	CreatedAt      pgtype.Timestamptz
+	ID                  pgtype.UUID
+	OrganizationID      pgtype.UUID
+	ChannelID           pgtype.UUID
+	Name                pgtype.Text
+	IsDefault           bool
+	CreatedAt           pgtype.Timestamptz
+	ConclusionMessageID pgtype.UUID
 }

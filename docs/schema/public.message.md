@@ -4,9 +4,9 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.message_mention](public.message_mention.md) |  |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) [public.message_mention](public.message_mention.md) | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
-| channel_id | uuid |  | false |  | [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.message_mention](public.message_mention.md) |  |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.message_mention](public.message_mention.md) | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
+| channel_id | uuid |  | false | [public.topic](public.topic.md) | [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
 | member_id | uuid |  | false |  | [public.member](public.member.md) |  |
 | body | text |  | false |  |  |  |
 | event_seq | bigint |  | false |  |  |  |
@@ -69,6 +69,7 @@
 | message_idempotency_key_idx | CREATE UNIQUE INDEX message_idempotency_key_idx ON public.message USING btree (organization_id, member_id, idempotency_key) WHERE (idempotency_key IS NOT NULL) |
 | message_organization_id_id_key | CREATE UNIQUE INDEX message_organization_id_id_key ON public.message USING btree (organization_id, id) |
 | message_quoted_message_idx | CREATE INDEX message_quoted_message_idx ON public.message USING btree (organization_id, quoted_message_id) WHERE (quoted_message_id IS NOT NULL) |
+| message_org_channel_id_key | CREATE UNIQUE INDEX message_org_channel_id_key ON public.message USING btree (organization_id, channel_id, id) |
 
 ## Relations
 
@@ -76,6 +77,7 @@
 erDiagram
 
 "public.message" }o--|| "public.message" : "FOREIGN KEY (organization_id, quoted_message_id) REFERENCES message(organization_id, id) ON DELETE SET NULL (quoted_message_id)"
+"public.topic" }o--|| "public.message" : "FOREIGN KEY (organization_id, channel_id, conclusion_message_id) REFERENCES message(organization_id, channel_id, id)"
 "public.message_mention" }o--|| "public.message" : "FOREIGN KEY (organization_id, message_id) REFERENCES message(organization_id, id) ON DELETE CASCADE"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
@@ -102,6 +104,15 @@ erDiagram
   text quote_text
   bytea typed_body_proof
 }
+"public.topic" {
+  uuid id
+  uuid organization_id FK
+  uuid channel_id FK
+  text name
+  boolean is_default
+  timestamp_with_time_zone created_at
+  uuid conclusion_message_id FK
+}
 "public.message_mention" {
   uuid organization_id FK
   uuid message_id FK
@@ -126,14 +137,6 @@ erDiagram
   uuid default_topic_id FK
   boolean default_topic_is_default FK
   text image
-}
-"public.topic" {
-  uuid id
-  uuid organization_id FK
-  uuid channel_id FK
-  text name
-  boolean is_default
-  timestamp_with_time_zone created_at
 }
 ```
 

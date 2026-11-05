@@ -5,11 +5,12 @@
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | id | uuid | uuidv7() | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) |  |  |
-| organization_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) |  |
-| channel_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) |  |
+| organization_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) [public.message](public.message.md) |  |
+| channel_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) [public.message](public.message.md) |  |
 | name | text |  | true |  |  |  |
 | is_default | boolean | false | false | [public.channel](public.channel.md) |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| conclusion_message_id | uuid |  | true |  | [public.message](public.message.md) |  |
 
 ## Constraints
 
@@ -18,6 +19,7 @@
 | topic_channel_id_not_null | n | NOT NULL channel_id |
 | topic_created_at_not_null | n | NOT NULL created_at |
 | topic_default_unnamed_check | CHECK | CHECK ((is_default = (name IS NULL))) |
+| topic_default_unresolved_check | CHECK | CHECK (((NOT is_default) OR (conclusion_message_id IS NULL))) |
 | topic_id_not_null | n | NOT NULL id |
 | topic_is_default_not_null | n | NOT NULL is_default |
 | topic_name_check | CHECK | CHECK ((((length(name) >= 1) AND (length(name) <= 80)) AND (name = NORMALIZE(name, NFC)))) |
@@ -26,6 +28,7 @@
 | topic_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | topic_channel_id_key | UNIQUE | UNIQUE (organization_id, channel_id, id) |
 | topic_channel_id_default_key | UNIQUE | UNIQUE (organization_id, channel_id, id, is_default) |
+| topic_conclusion_message_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id, conclusion_message_id) REFERENCES message(organization_id, channel_id, id) |
 
 ## Indexes
 
@@ -46,6 +49,7 @@ erDiagram
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.topic_read_floor" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.topic" }o--|| "public.message" : "FOREIGN KEY (organization_id, channel_id, conclusion_message_id) REFERENCES message(organization_id, channel_id, id)"
 
 "public.topic" {
   uuid id
@@ -54,6 +58,7 @@ erDiagram
   text name
   boolean is_default
   timestamp_with_time_zone created_at
+  uuid conclusion_message_id FK
 }
 "public.channel" {
   uuid id FK

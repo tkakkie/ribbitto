@@ -113,6 +113,8 @@ store NULL. Down drops it.
 
 [Migration 00020: channel names](channel-name-upgrade.md).
 
+[Migration 00022: topic conclusion](domain/topics.md#tables).
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

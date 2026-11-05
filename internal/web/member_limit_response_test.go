@@ -32,6 +32,16 @@ func TestMemberLimitFormResponse(t *testing.T) {
 		{"wildcard", "navigate", "*/*", "application/x-www-form-urlencoded", "", "POST", false},
 		{"HTML excluded", "navigate", "text/html;q=0,*/*", "application/x-www-form-urlencoded", "", "POST", false},
 		{"invalid quality", "navigate", "text/html;q=NaN", "application/x-www-form-urlencoded", "", "POST", false},
+		{"exponent quality", "navigate", "text/html;q=1e-1", "application/x-www-form-urlencoded", "", "POST", false},
+		{"leading zero quality", "navigate", "text/html;q=01", "application/x-www-form-urlencoded", "", "POST", false},
+		{"excess precision quality", "navigate", "text/html;q=0.1234", "application/x-www-form-urlencoded", "", "POST", false},
+		{"signed quality", "navigate", "text/html;q=+0.5", "application/x-www-form-urlencoded", "", "POST", false},
+		{"invalid other quality", "navigate", "text/html,application/xml;q=1e-1", "application/x-www-form-urlencoded", "", "POST", false},
+		{"zero decimal quality", "navigate", "text/html;q=0.", "application/x-www-form-urlencoded", "", "POST", false},
+		{"one quality", "navigate", "text/html;q=1", "application/x-www-form-urlencoded", "", "POST", true},
+		{"one decimal quality", "navigate", "text/html;q=1.", "application/x-www-form-urlencoded", "", "POST", true},
+		{"one precision quality", "navigate", "text/html;q=1.000", "application/x-www-form-urlencoded", "", "POST", true},
+		{"fraction quality", "navigate", "text/html;q=0.123", "application/x-www-form-urlencoded", "", "POST", true},
 		{"invalid accept", "navigate", "text/html,invalid", "application/x-www-form-urlencoded", "", "POST", false},
 		{"JSON", "navigate", "text/html", "application/json", "", "POST", false},
 		{"GET", "navigate", "text/html", "application/x-www-form-urlencoded", "", "GET", false},
@@ -76,5 +86,14 @@ func TestMemberLimitFormResponse(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMemberLimitFractionalInterval(t *testing.T) {
+	limit := middleware.NewMemberRateLimiterWithBudget(time.Now, 0.9999999995, 1, 0)
+	w := httptest.NewRecorder()
+	rejectMemberLimit(w, httptest.NewRequest(http.MethodPost, "/", nil), limit, nil)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "2" {
+		t.Fatalf("status=%d retry=%q, want 429 and 2", w.Code, w.Header().Get("Retry-After"))
 	}
 }

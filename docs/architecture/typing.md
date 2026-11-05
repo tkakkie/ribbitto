@@ -100,8 +100,9 @@ precedes session lookup. After membership, the shared limiter precedes scope par
 and exported membership-scoped channel/topic lookups (bad scope/denial: 404; errors:
 500). Then form parsing requires one nonempty opaque `composer` generation (400
 otherwise). Only URL organisation and resolved member/account identity reach state.
-Empty 429 means limited; empty 204 means no swap, including invalid, closed or
-overdue generations. Refusals change no activity, deadline or generation.
+429 follows the [response rule](rate-limits.md); empty 204 means no swap,
+including invalid, closed or overdue generations. Refusals change no activity,
+deadline or generation.
 
 Feed/topic posts, plain or enhanced, pass optional `composer` to `Posted` only on
 success or a repeat, using the returned message's organisation, channel and

@@ -41,6 +41,9 @@ func ordinaryFormSubmission(r *http.Request) bool {
 		}
 		quality := 1.0
 		if q, ok := params["q"]; ok {
+			if !validAcceptQuality(q) {
+				return false
+			}
 			quality, err = strconv.ParseFloat(q, 64)
 			if err != nil || math.IsNaN(quality) || quality < 0 || quality > 1 {
 				return false
@@ -54,4 +57,23 @@ func ordinaryFormSubmission(r *http.Request) bool {
 		}
 	}
 	return html
+}
+
+func validAcceptQuality(q string) bool {
+	// RFC 9110 qvalues allow at most three decimal digits, and only zeros after 1.
+	if len(q) == 0 || (q[0] != '0' && q[0] != '1') {
+		return false
+	}
+	if len(q) == 1 {
+		return true
+	}
+	if len(q) > 5 || q[1] != '.' {
+		return false
+	}
+	for _, digit := range q[2:] {
+		if digit < '0' || digit > '9' || (q[0] == '1' && digit != '0') {
+			return false
+		}
+	}
+	return true
 }

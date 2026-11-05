@@ -34,6 +34,15 @@ func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
 	return conversation.NewTopics(postgres.NewTopicStore(pool))
 }
 
+// NewMentions binds the public-channel port and mention source to one snapshot.
+func NewMentions(pool *pgxpool.Pool) *conversation.Mentions {
+	return conversation.NewMentions(newSnapshotRunner(pool), func(s platform.Snapshot) conversation.MentionReader {
+		return postgres.ReadStoreIn(s)
+	}, func(s platform.Snapshot) conversation.ReadableChannels {
+		return postgres.ReadStoreIn(s)
+	})
+}
+
 // NewResolution binds conclusion changes and invalidations to one transaction.
 func NewResolution(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Resolution {
 	return conversation.NewResolution(newTxRunner(pool), writerIn, sequences, events, notifier)

@@ -42,6 +42,12 @@ func rememberSwapState(page *rod.Page) {
  }`)
 }
 
+func waitSwapSettled(page *rod.Page) {
+	// Include settle listeners and their queued frame reactions in the invariant.
+	page.MustWait(`() => !document.querySelector(".htmx-settling, .htmx-request, .htmx-swapping")`)
+	page.MustEval(`() => new Promise(resolve => requestAnimationFrame(resolve))`)
+}
+
 func assertSwapState(t *testing.T, page *rod.Page) {
 	t.Helper()
 	if !page.MustEval(`() => {
@@ -111,10 +117,18 @@ func testSwapZonesBrowser(t *testing.T, browser *rod.Browser) {
 			case "older":
 				page.MustEval(`() => document.querySelector('#load-older a').click()`)
 			}
-			page.MustWait(`id => {const n=document.getElementById(id);return n && (n!==oldZone || n.innerHTML!==oldContent)}`, tc.target)
+			switch tc.name {
+			case "pins-ajax":
+				page.MustWait(`id => document.getElementById(id)!==oldZone`, tc.target)
+			case "older":
+				page.MustWait(`() => !!document.querySelector('#message-items > #message-14000000000000000000000000000000')`)
+			default:
+				page.MustWait(`id => {const n=document.getElementById(id);return n && (n!==oldZone || n.innerHTML!==oldContent)}`, tc.target)
+			}
 			if tc.name == "composer" {
 				page.MustWait(`() => oldOOB.every(n=>document.getElementById(n.id)!==n)`)
 			}
+			waitSwapSettled(page)
 			assertSwapState(t, page)
 		})
 	}
@@ -156,6 +170,8 @@ func testSwapPendingNotSentBrowser(t *testing.T, browser *rod.Browser) {
 
 func testSwapIMEBrowser(t *testing.T, browser *rod.Browser) {
 	page, events, posts := swapZonePage(t, browser, "overview")
+	// Without randomUUID, send stays in place, as with quotes, >4000 characters,
+	// older/around pages without #message-pending, or plain-HTTP origins.
 	page.MustEval(`() => {crypto.randomUUID=undefined;const b=document.getElementById('message-body');b.value='sent';b.focus();b.setSelectionRange(4,4);b.form.requestSubmit();window.stateBefore=document.getElementById('message-composer-state')}`)
 	request := receivePending(t, page, posts)
 	if err := (proto.InputImeSetComposition{Text: "に", SelectionStart: 1, SelectionEnd: 1}).Call(page); err != nil {

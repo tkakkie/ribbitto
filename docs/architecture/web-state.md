@@ -1,6 +1,6 @@
 # Web state and swap zones
 
-State lifetime and swap ownership contract.
+Owner names (Progress, conversation applier, unread owner, pins owner) are #2060 targets, not current code.
 
 ## State classes
 
@@ -41,4 +41,3 @@ Rules:
 3. No swap resets U or O state, except one that carries that operation's own
    outcome.
 4. A new zone adds a row.
-

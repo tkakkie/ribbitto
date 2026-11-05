@@ -9,15 +9,12 @@
   in `web/src/<concern>.ts` (`web/src/*.ts`), one file per concern, using
   erasable TypeScript only (no enums, runtime namespaces or parameter
   properties) and relative imports naming `.ts`
-  (`allowImportingTsExtensions`, #1410). Authors never write the served
-  content-hashed name. Authored JavaScript directly in `web/static/` is rejected.
+  (`allowImportingTsExtensions`, #1410). Never author served content-hashed names. Authored JavaScript directly in `web/static/` is rejected.
 
-- **Logic and DOM:** each module owns
-  one concern, and logic that decides something (state transitions, queue
-  order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
-  module, while DOM code stays thin; see [`web-tests.md`](web-tests.md) for the
-  test layers and harness rules. Client unit tests are direct
-  `web/test/<name>.test.ts` harnesses.
+- **Logic and DOM:** modules own one concern. Decisions (state transitions,
+  queue order, retry classification) live in DOM-free `web/src/<concern>.ts`;
+  DOM code stays thin. Test layers and `web/test/<name>.test.ts` harness rules:
+  [`web-tests.md`](web-tests.md).
 
 - **State:** a module's own working state is held in typed in-memory objects,
   never in `dataset`, limited to what
@@ -33,12 +30,10 @@
 - **Script declarations:** templates use only logical names from the Go
   registry, never script files or hashed bundles.
 
-- **When a shared helper is extracted:** a shared helper is extracted only once
-  duplication appears, as
+- **Shared helpers:** extract only when duplication appears, as
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
-  states. A helper with a second user in another module moves to its own
-  `web/src/<helper>.ts` module, imported by relative `.ts` path, and is tested
-  as [`web-tests.md`](web-tests.md) sets out.
+  states. With a second module user, move it to `web/src/<helper>.ts`;
+  import by relative `.ts` path and test per [`web-tests.md`](web-tests.md).
 
 - **DOM contract:** Go owns DOM ids, dynamic suffixes, data attributes,
   event names and payload types; `go generate` writes their constants, types
@@ -54,6 +49,8 @@
 
 ## Composer projections
 
+`web/src/composer-queue.ts` owns pending state, uncertainty, original text, confirmed ID
+and immutable `draftKey` (`requestKey` may rotate after a 409).
 Never read pending state, identity or original text back from DOM projections.
 
 `data-state`, `data-unconfirmed` and item `data-posted-message` are output only;

@@ -88,9 +88,9 @@ Docker on the same machine; pool 10 connections; batch 100; 10 posts/s for
 setup measured that day, not today's performance or an absolute capacity;
 the coarse step ladder only brackets the limit between a pass and a failure.
 
-**Measurement SHA (uncached runs A/B):**
-`3c981fe185bcb435bd6050abe13e6fd6af60f581`, identified by #228's author
-comment that the tables came from `3c981fe`, before the later timeout bug.
+**First measurement (no shared reads, 1 to 1,000 streams):**
+`3c981fe185bcb435bd6050abe13e6fd6af60f581`; #228's author identifies this
+measurement SHA, before the timeout bug.
 **Pre-deletion SHA (both tables):**
 `5fd630c8abcc7bf114674883ed1d02c1e70484fb`; retrieve the tables and past
 commands with `git show 5fd630c8abcc7bf114674883ed1d02c1e70484fb:docs/architecture/stream-cost.md`.
@@ -107,10 +107,10 @@ queries per delivery; caught-up streams read one new event per post.
 
 Same hardware, versions, pool, batch, rate and duration; `_CACHE=1` shares
 **event reads and message renders**, not #670's later authorization cache.
-**Measurement SHA (final shared-read comparison):**
-`b33c82efbb298d60318fbf1237299e3e8f831b1d`, identified by #233's author
-comment recording the rerun after the joiner-freshness fix. Both measurement
-SHAs are PR-branch commits, not the later squash commits.
+**Shared-read re-run SHA:** `b33c82efbb298d60318fbf1237299e3e8f831b1d`
+(#233's author comment: after the joiner-freshness fix). Both SHAs are
+PR-branch commits. The no-shared-reads comparison's commit is unidentified
+beyond #233's branch on 2026-10-01.
 
 Without shared reads the comparison again measured **300 pass / 500 fail**
 (p95 83 ms / 2.55 s). With them, **2,000 passed / 3,000 failed**, both with

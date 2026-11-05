@@ -11,19 +11,16 @@ Other browser actions use POST. One process serves every stream; multiple
 processes are future work (hub, stream caps and watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
-A shared reader per organisation is designed but not built (#2149).
-The generic [channel-state refresh seam](pins.md#ordering-authorization-and-cost)
-is implemented (#891), with consumer-defined frames and no SSE IDs; its web
-pins adapter (#892) and production wiring/browser interests (#1205) are active.
+[Channel-state refreshes](pins.md#ordering-authorization-and-cost) use
+consumer-defined frames without SSE IDs.
 
 ### Retention
 
-`realtime.Retention` expires replay history once at start and then hourly.
+Retention expires replay history once at start and then hourly.
 The worker starts asynchronously before serving, so its first run can overlap
-requests. `realtime`'s store runs it (`realtimepg.NewCleaner`); org's lock and boundary
-come through the injected `realtime.RetentionBoundary` (`orgpg.RetentionBoundaryIn`,
-org's store). It takes the same organisation lock as posting; separate transactions
-of at most 1,000 expired rows and a one-minute run timeout limit contention.
+requests. Each run has a one-minute timeout; the
+[event-log contract](realtime.md#durable-event-log) bounds deletion batches and
+defines the boundary, lock order and cursor validity.
 Failed runs retry on the next tick, keeping committed progress. Shutdown cancels
 and waits for the worker, including a blocked first run, before closing the pool.
 The retention period defaults to seven days; see [database configuration](../database.md).
@@ -36,7 +33,9 @@ The retention period defaults to seven days; see [database configuration](../dat
 - Every event is authorized for the connection's member **after it is
   rendered and immediately before sending**, including events already
   queued: access may have been lost in between, including while rendering (#262).
-  `org.Authorizer.MayReceive` first reads a fresh
+  An access removal committed before an event's check starts prevents delivery;
+  one committed after the check starts may still let that event through.
+  Authorization first reads a fresh
   access epoch, sharing reads only with overlapping checks and retaining no
   epoch values. A bounded allow cache keyed by (account, slug) may supply the
   membership only when its epoch is at least that fresh epoch; otherwise an
@@ -62,12 +61,8 @@ The retention period defaults to seven days; see [database configuration](../dat
   Other sessions of the account stay connected for single-session sign-out.
   [Signing out of other sessions](identity.md) ends those streams instead;
   a mutation error cancels the whole account so reconnects re-check sessions.
-  The handler's private
-  `openStream` helper owns registration, the re-check and the expiry deadline.
-  It frees failed registrations; on success, the handler defers one cleanup
-  function that cancels the expiry context, unregisters the stream and
-  releases presence/typing counts. `StreamOpened` counts each accepted
-  stream once, whatever its interests.
+  Failed registrations free their slots; each accepted stream counts once,
+  whatever its interests, and cleanup releases its slot and presence/typing counts.
   Typing uses separate channel counts: the last matching close clears activity
   immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online
   until 30 s after the last close; a reconnect cancels expiry.

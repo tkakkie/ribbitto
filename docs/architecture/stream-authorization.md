@@ -1,7 +1,8 @@
 # Stream authorization cost
 
 Keeping #262's guarantee without a membership query per connection/event.
-`N` below is the number of interested streams; the earlier query costs and ceilings are in
+`N` below is the number of interested streams; earlier query costs and
+ceilings are in
 [stream cost](stream-cost.md) and [load results](../measurements/load-results.md).
 
 ## #262's guarantee
@@ -36,7 +37,8 @@ hold:
   in an earlier transaction, a reload in between caches the old membership
   under the new epoch;
 - the membership and the epoch it is valid for are read in **one statement**,
-  for the same reason.
+  so both come from one snapshot: a reload between separate reads could
+  cache an old membership under a newer epoch or the reverse.
 
 The variants differ in how a check learns the current epoch.
 
@@ -56,7 +58,8 @@ path must get the triggers it needs in the migration that adds it.
 Private channels and member removal remain [planned](../roadmap.md#after-the-mvp);
 their access writers must obey these rules too. **The triggers are a required
 part of (a2)** and cannot be replaced by epoch updates in application code:
-direct SQL, another process or an older binary bypasses those updates.
+any writer not running the application's bump code (direct SQL, an older
+binary) bypasses those updates.
 
 A check takes the epoch from a read whose snapshot began after the check
 started, and **an epoch value is never retained**: a stored or TTL-cached
@@ -77,7 +80,7 @@ staggered checks (lagging streams, render latency) each read: between one and
   there is no signal to lose.
 - **Failure modes:** a read error stops the stream and is never a deny. A new
   access table without a trigger leaves caches stale; a check enumerating access
-  tables and their triggers is planned but unbuilt. Staggered checks fall
+  tables and their triggers is not built. Staggered checks fall
   back towards `N` epoch reads per post: the pre-#670 count, with a primary-key
   read instead of the join.
 
@@ -126,5 +129,6 @@ authorization logic ([package boundary](packages.md)). Joins do not bump the
 epoch because only allows are cached; denies are never cached. A rolled-back
 access change must leave the committed epoch unchanged.
 
-The revisit condition was exercised and (a2) kept on 2026-10-09; see the
+The revisit condition was judged met at 0.72 `N` on #671; the maintainer
+kept (a2) on 2026-10-09. See the
 [measurements and reasons](../measurements/stream-authorization-results.md).

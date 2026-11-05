@@ -1,15 +1,10 @@
 # Client test layers and rules
 
-Client-side test layers, what not to test, and the rules for writing,
-converting, splitting, deleting and reviewing client tests under
-[decision 43](../decisions/43-typescript-with-a-go-driven-build.md),
-[decision 45](../decisions/45-type-checked-client-unit-tests.md) and milestone
-M11 ([#2089](https://github.com/tkakkie/ribbitto/issues/2089); motivated by the
-`409d680` survey recorded on
-[#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6594314637)).
-
-**When this page applies:** every client unit test is a type-checked
-`web/test/<name>.test.ts` file. Test count and line total are not targets.
+Rules under [decision 43](../decisions/43-typescript-with-a-go-driven-build.md),
+[decision 45](../decisions/45-type-checked-client-unit-tests.md) and
+[M11 #2089](https://github.com/tkakkie/ribbitto/issues/2089), motivated by the
+`409d680` survey on [#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-6594314637).
+Type-checked unit tests: `web/test/<name>.test.ts`; counts are not targets.
 
 ## Layers and what each owns
 
@@ -139,13 +134,21 @@ Do not write a client unit test for:
 
 Alongside [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review):
 
-- **`[blocking]`:** a missing required test for new or changed behaviour;
-  global patching (`globalThis`, `window`, `document`, `Date`, `Math`, `crypto`)
-  or DOM fakes in `web/test/`; removing or merging a test guarding normal-use
-  or documented behaviour without naming what still covers it; or a missing
-  deliberate-defect proof in *Verified by* when a pull request adds or changes
-  a client unit test.
-- **`[blocking]`:** a removed test whose stated category (implementation detail,
-  conversion-parity quirk or duplicate) is false, or whose assertions guarded
-  normal-use or documented behaviour with no named remaining coverage.
-- **`[nit]`:** redundant table rows within an already-covered equivalence class.
+- **`[blocking]`:** missing required behaviour coverage or deliberate-defect
+  proof; patched globals or DOM fakes in `web/test/` (see [Rules](#rules)).
+- **`[blocking]`:** a false removal classification, or removal/merging of
+  normal-use or documented coverage without naming its remaining test
+  (see [Deleting or merging tests](#deleting-or-merging-tests)).
+- **`[nit]`:** redundant table rows within an equivalence class.
+
+## Stream failures
+
+`TestBrowser` characterizations (expectations change only with approved A-F):
+
+- `characterization/failed-message-native-reconnect`: skips the failed frame;
+  later application advances past it.
+- `source/characterization-history-reapply`: drops the failed retained move.
+
+See [#2060 Remaining risk](https://github.com/tkakkie/ribbitto/issues/2060#remaining-risk).
+Regression cases: `duplicate-reconnect`, `per-entry/ephemeral`, `progress`,
+`source/stale` and `destination/stale`.

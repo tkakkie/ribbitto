@@ -10,7 +10,8 @@ resolved channel, independent of interests and selected topic. Signals without
 one create no state; streams without a channel take no typing count. Last close
 immediately clears that member's topics in the channel, even against a racing
 signal; other channels, organisations and presence's independent counts/grace
-are unaffected. Open only after registration and the session re-check succeed.
+are unaffected. Web calls `Streaming.StreamOpened` with the resolved channel
+only after registration and the session re-check succeed.
 
 Starts refresh the five-second expiry without changing captured identity,
 order or generations; stops are scoped and idempotent. A member in two topics
@@ -56,10 +57,10 @@ expiry; a request already being handled that long fails the shorter deadline
 `POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing` uses
 `Signal`, never `Start`, after [member admission](rate-limits.md#member-admission-for-typing).
 Non-membership or bad scope returns 404; form parsing requires exactly one
-nonempty `composer` generation (400 otherwise). Accepted and refused generations
-(invalid, closed or overdue) return empty 204 with no swap. Only URL organisation
-and resolved member/account identity reach state. Refusals change no activity,
-deadline or generation (`TestTypingRefusals`).
+nonempty `composer` generation (400, or 413 over the body limit). Accepted and
+refused generations (invalid, closed or overdue) return empty 204 with no swap.
+Only URL organisation and resolved member/account identity reach state. Refusals
+change no activity, deadline or generation (`TestTypingRefusals`).
 
 Plain and enhanced posts call `Posted` only on success or a repeat, with the
 returned message's organisation/channel/author and the requested posting topic.

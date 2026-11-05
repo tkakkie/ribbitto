@@ -11,7 +11,7 @@ Pin state and event commit together; raise the hub only after commit. The event
 invalidates the channel's pins, not an old pin to reconstruct. The hub carries
 a committed level, never content, per [decision 23](../decisions/23-the-event-log-is-the-source-of-truth-the-hub-carries-a-level.md).
 
-Use one channel-scoped `pins` interest on the existing organisation stream
+Use one channel-scoped `pins` interest (`want=pins`) on the existing organisation stream
 ([decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)).
 The hosting feed/topic requests it while the pins section is present. A later
 panel obtains a fresh snapshot and reopens that stream, never a second one.
@@ -43,8 +43,9 @@ The channel-state source owns triggers, bounded whole-state reads, frame names
 and shared renders. The single writer refreshes at most once between durable
 batches, coalescing at `ChannelStateInterval` (one second). Bursts never postpone
 the fixed deadline; pending work survives quiet periods and backlogs, and changes
-committed during refresh remain pending for later batches. Add no goroutine,
-per-connection event queue or hub generation (`TestChannelStateBacklogAndTriggerDuringRefresh`).
+committed during refresh remain pending for later batches
+(`TestChannelStateBacklogAndTriggerDuringRefresh`). Add no goroutine,
+per-connection event queue or hub generation.
 
 Filter organisation, channel and interest before rendering. After rendering,
 check channel authorization and bound membership immediately before every send.
@@ -76,7 +77,7 @@ POST/303 fallback, including when htmx is missing.
 
 Pin buttons omit `type` (native submit) and `hx-*`, as do Quote and Quote selection;
 these four are the only exception to the [button type rule](../accessibility.md).
-Popover triggers keep `type="button"`; [pin forms have no `hx-*`](web-htmx.md).
+Popover triggers keep `type="button"`. No per-message pin element carries `hx-*`.
 Enhanced submission uses the submitter's server-rendered `formaction` (the visible
 button when absent), with independent per-form in-flight drops. A present overview
 requests the current section with the response. A 409 swaps the unchanged control

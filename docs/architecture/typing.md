@@ -16,6 +16,8 @@ Starts refresh the five-second expiry without changing captured identity,
 order or generations; stops are scoped and idempotent. A member in two topics
 counts once in each and once in the feed. Adding/removing a topic while that
 member remains in the feed does not reorder it or change its place generation.
+Each distinct-member transition advances its place generation; one start/stop
+advances the organisation generation once even when both topic and feed change.
 Reads copy captured identity, exclude the viewer even outside the four cached
 candidates, and return at most three others, newest first, plus the remaining
 count. They do no expiry, directory query or unrelated-state traversal
@@ -27,7 +29,8 @@ Notifiers must not call back into state.
 Each composer has its own signed generation bound to server-resolved scope.
 The token is ordering evidence, not authorization: callers still authorize
 scope and identity. The random signing key stays in memory, never configured,
-logged or persisted; restart refuses old generations.
+logged or persisted; restart refuses old generations because typing state is
+lost then anyway.
 
 `Posted` closes the submitted generation and stops the member's requested
 posting place atomically with respect to signals. A repeat uses its requested
@@ -50,16 +53,20 @@ expiry; a request already being handled that long fails the shorter deadline
 
 ## HTTP ingress and posting
 
-Signals use the topic-scoped POST and admission order in
-[rate limits](rate-limits.md#member-admission-for-typing); only URL organisation
-and resolved member/account identity reach state. Refusals change no activity, deadline or
-generation (`TestTypingRefusals`).
+`POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing` uses
+`Signal`, never `Start`, after [member admission](rate-limits.md#member-admission-for-typing).
+Non-membership or bad scope returns 404; form parsing requires exactly one
+nonempty `composer` generation (400 otherwise). Accepted and refused generations
+(invalid, closed or overdue) return empty 204 with no swap. Only URL organisation
+and resolved member/account identity reach state. Refusals change no activity,
+deadline or generation (`TestTypingRefusals`).
 
 Plain and enhanced posts call `Posted` only on success or a repeat, with the
 returned message's organisation/channel/author and the requested posting topic.
 Failure preserves activity and ordering: 422/409 renders keep the submitted
-composer generation exactly, including empty/invalid values or absence. Success
-issues a fresh generation. Feed composers use the snapshot's default topic;
+composer generation exactly, including empty/invalid values or absence, so the
+successful retry closes signals sent before the failure. Success issues a fresh
+generation. Feed composers use the snapshot's default topic;
 topic composers use its resolved selected topic, without extra issuance queries.
 Hidden composer/signal controls and the two-second unqueued throttle follow the
 [CSP contract](csp.md#content-security-policy). Posting works without JavaScript;

@@ -194,8 +194,7 @@ func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	if !p.createLimit.Allow(m.Organization.ID, m.Member.ID) {
-		w.Header().Set("Retry-After", "60")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.createLimit, p.pages)
 		return
 	}
 	if !parseForm(w, r) {
@@ -380,8 +379,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
 	release, admitted := p.postLimit.Admit(m.Organization.ID, m.Member.ID)
 	if !admitted {
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.postLimit, p.pages)
 		return
 	}
 	defer release()

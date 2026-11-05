@@ -40,8 +40,7 @@ func (p channelPages) changePin(w http.ResponseWriter, r *http.Request, m org.Me
 		return
 	}
 	if !p.pinLimit.Allow(m.Organization.ID, m.Member.ID) {
-		w.Header().Set("Retry-After", "2")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.pinLimit, p.pages)
 		return
 	}
 	change := p.pinning.Unpin

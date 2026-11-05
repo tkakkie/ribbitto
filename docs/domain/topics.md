@@ -153,9 +153,8 @@ Settled in #305:
   values with explicit `from` still work. The event reader decodes the move's
   routing and message IDs and validates its payload. The feed delivers moves
   through the render cache shared with topic pages.
-  An independent [member budget](../architecture/rate-limits.md#member-admission-for-branching)
-  admits requests before parsing; refusal is empty 429 with `Retry-After: 6`,
-  with no move, event or redirect.
+  Admission precedes parsing; refusal makes no move, event or redirect
+  ([member budget and 429 response](../architecture/rate-limits.md#member-admission-for-branching)).
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
   destination list uses the existing bounded topic list. Plain 409/422 errors render

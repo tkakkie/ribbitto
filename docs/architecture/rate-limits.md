@@ -2,8 +2,7 @@
 
 ## Authentication network limits
 
-In `internal/web/middleware/ratelimit.go`, `POST /signin`,
-`/signup` and `/setup` are limited with token buckets, per client and, for
+`POST /signin`, `/signup` and `/setup` use token buckets, per client and, for
 IPv6 clients, also per /48:
 
 - sign-in: a burst of 5, then one every 12 s per client; a /48 gets a burst
@@ -41,26 +40,20 @@ The /48 budget bounds how many client buckets one /48 keeps unevictable.
 Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
-memory, per process. These authentication network limits are unchanged by
-member budgets ([posts/pins/images](member-admission.md)); an identity-side layer
-is tracked in #99.
+memory, per process. Member budgets ([posts/pins/images](member-admission.md)) are independent.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
 proxy, the address it forwards (below).
 
 ## Member admission for typing
 
-`internal/web/middleware/member_ratelimit.go` supplies `MemberRateLimiter`
-for typing signals: burst 4, then one token per second. Its only key is the
-trusted organisation/member ID pair supplied by the authenticated web
-adapter, never client-submitted identity. One shared instance gives that
-member one budget across channels, topics, sessions and client addresses;
-different members and organisations have separate budgets. It performs no
-authorization, feature-state access or database work. The topic-scoped
-[typing POST](typing.md#http-ingress-and-posting) checks CSRF and resolves session
-and organisation membership first, then admits against this budget before
-channel/topic lookups or form parsing. A refusal is empty 429 and changes no
-typing state, deadline or generation; an admitted signal is empty 204.
+Typing allows burst 4, then one token per second per trusted organisation/member
+pair, shared across channels, topics, sessions and addresses. Other members
+and organisations have separate budgets. The [typing POST](typing.md#http-ingress-and-posting)
+checks CSRF, session and membership before admission, then channel/topic lookups
+and parsing. Refusal is 429 with `Retry-After` and no typing-state, deadline or
+generation change; success is empty 204. Only the authenticated adapter supplies
+IDs; the limiter does no authorization, feature reads or database work.
 
 The table holds at most 10,000 buckets. When a new key needs room, only
 fully replenished buckets can be evicted: replacing one with a fresh bucket
@@ -69,20 +62,17 @@ keys. Refused requests create no buckets, take no tokens and do not extend
 retention. Admission and eviction are serialized, including concurrent
 requests for the same member.
 
-`Services.MemberLimits` groups all ten in-memory member budgets, including
-send-key preferences. `web.NewMemberLimits` constructs distinct limiters behind
-private fields and accessors; the zero group fails startup. `orgRoutes` takes `Services`
-and wires these budgets to their handlers. Share one group per process. Restart
-resets budgets; server processes have independent budgets. There are no
-configuration settings or distributed limits.
+Share each member budget per process. Restart resets budgets; processes are
+independent. There are no configuration settings or distributed limits.
 
 ## Member admission for reads
 
-Read POSTs use a separate `MemberRateLimiter`: initial, unmeasured 4 requests/s,
+Read POSTs use a separate `MemberRateLimiter`: unmeasured 4 requests/s,
 burst 16 and four concurrent requests per trusted organisation/member pair.
-Typing keeps its existing independent budget. Admission follows session and
+Typing has an independent budget. Admission follows session and
 membership resolution (non-members still get 404), before channel/topic lookups,
-form parsing and the read transaction. Refusal is immediate 429 with
+form parsing and the read transaction. Its body follows the
+[response rule](#member-rejection-responses). Refusal is immediate 429 with
 `Retry-After: 1`; a defer releases each admitted slot on success, error, panic
 or cancellation. The 10,000-bucket bound and full-refill eviction rule also
 apply here, but a bucket with an active slot is never evicted. Refusals take
@@ -94,12 +84,12 @@ there is no success guarantee under sustained overload.
 
 ## Member admission for channel creation
 
-Channel creation allows burst 10, then
-one token per minute per trusted organisation/member pair. Session and
+Creation allows burst 10, then one token/min per organisation/member. Session and
 membership resolution precede admission, which precedes form parsing and
-all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
-nothing. Failed admitted attempts also consume a token. The same bucket
-bound and eviction rules apply. The persistent count cap is described in
+all channel work. Refusal is 429 with `Retry-After: 60` and creates
+nothing; its body follows the [response rule](#member-rejection-responses).
+Admitted failures spend tokens; shared bucket bounds and eviction rules apply.
+The persistent count cap is described in
 [channels](../domain/channels.md#creation-limits).
 
 ## Member admission for sidebar resyncs
@@ -113,9 +103,10 @@ The budget leaves steady retry headroom and a burst of two requests per tab
 for visibility return, persisted `pageshow` and early recovery retries.
 
 CSRF, session and membership checks precede admission; non-members still
-get 404. Admission precedes `RequestResync`. Refusal is empty 429 with
-`Retry-After: 1` and never advances the member's watch generation or wakes
-streams. Success is empty 204 and publishes only to that member's streams.
+get 404. Admission precedes `RequestResync`. Refusal is 429 with
+`Retry-After: 1`, follows the [response rule](#member-rejection-responses),
+and never advances the member's watch generation or wakes streams. Success is
+empty 204 and publishes only to that member's streams.
 The same bucket bound and eviction rules apply. A 429 follows the script's
 failed-request path: recovery stays
 open and retries with backoff. Only a successful request with an applied,
@@ -128,9 +119,10 @@ Branch POSTs allow burst 20, then one token every 6 s per trusted
 organisation/member: enough to tidy a channel, while moves recount each
 viewer's sidebar at most ~10 times/min. CSRF, session and
 membership precede admission; parsing and branch work follow it. Failed
-attempts spend tokens. Refusal is empty 429 with `Retry-After: 6`, without
-redirect, move or event, for plain and htmx forms. Channels, topics, sessions
-and addresses share it. Other members and organisations have independent
+attempts spend tokens. Refusal is 429 with `Retry-After: 6`, without
+redirect, move or event; its body follows the [response rule](#member-rejection-responses).
+Channels, topics, sessions and addresses share it. Other members and
+organisations have independent
 budgets. The same 10,000-bucket bound, full-refill eviction
 and per-process reset rules apply.
 
@@ -142,6 +134,18 @@ and addresses. Session and membership precede admission; search follows.
 Refusal is empty 429 with `Retry-After: 1`; the picker ignores it. Admitted
 slots release on every exit. The 10,000-bucket, full-refill eviction and
 active-slot rules above apply. Responses use `Cache-Control: no-store`.
+
+## Member rejection responses
+
+Member refusals render the localized page only for POSTs with
+`Sec-Fetch-Mode: navigate`, no `HX-Request` header, a form content type
+(`application/x-www-form-urlencoded` or `multipart/form-data`), and explicit
+nonzero `text/html` acceptance. This identifies browser form navigation;
+htmx, fetch/API, malformed and unclear requests keep an empty 429.
+
+`Retry-After` hints at the configured single-token refill interval, rounded up
+to whole seconds; admission is not guaranteed. Concurrent slots, competing
+requests or a full bucket table can still refuse a retry. SSE limits are separate.
 
 ## Reverse proxies
 

@@ -13,8 +13,9 @@ Posting, pin-change and channel image budgets are independent within `Services.M
 Session and URL membership resolution precede admission; non-members still
 get 404 without organisation data, even when budgets are exhausted. Admission
 precedes channel lookup, form parsing, other feature reads and transactions.
-A refusal is empty 429 with `Retry-After`, with no redirect, write or event,
-for plain and htmx forms. Every admitted attempt spends a token, including
+Refusal is 429 with no redirect, write or event; its body and `Retry-After`
+follow the [member response rule](rate-limits.md#member-rejection-responses).
+Every admitted attempt spends a token, including
 validation failures and committed-post replays. Posting immediately defers
 slot release, covering success, validation, lookup failures, errors and panics.
 

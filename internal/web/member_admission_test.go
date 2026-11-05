@@ -23,8 +23,9 @@ import (
 )
 
 func TestPostPinAdmissionPostgreSQL(t *testing.T) {
-	for _, hx := range []bool{false, true} {
-		t.Run(fmt.Sprint(hx), func(t *testing.T) {
+	for _, mode := range []string{"browser", "htmx", "fetch", "unspecified"} {
+		hx := mode == "htmx"
+		t.Run(mode, func(t *testing.T) {
 			pool := pgtest.New(t)
 			f := conversationtest.OrganizationWithOwner(t, pool, "acme", "secret channel")
 			outsider := conversationtest.OrganizationWithOwner(t, pool, "other", "other")
@@ -53,6 +54,13 @@ func TestPostPinAdmissionPostgreSQL(t *testing.T) {
 				t.Helper()
 				r := httptest.NewRequest("POST", path, strings.NewReader(body))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				if mode == "browser" || mode == "fetch" {
+					r.Header.Set("Accept", "text/html")
+					r.Header.Set("Sec-Fetch-Mode", "cors")
+					if mode == "browser" {
+						r.Header.Set("Sec-Fetch-Mode", "navigate")
+					}
+				}
 				if hx {
 					r.Header.Set("HX-Request", "true")
 				}
@@ -62,7 +70,7 @@ func TestPostPinAdmissionPostgreSQL(t *testing.T) {
 				if w.Code != want {
 					t.Fatalf("%s: status %d want %d: %s", path, w.Code, want, w.Body.String())
 				}
-				if want == 429 && (w.Body.Len() != 0 || w.Header().Get("Retry-After") != retry || w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "") {
+				if want == 429 && ((mode != "browser" && w.Body.Len() != 0) || (mode == "browser" && !strings.Contains(w.Body.String(), "Too many attempts")) || w.Header().Get("Retry-After") != retry || w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "") {
 					t.Fatalf("refusal: %v %q", w.Header(), w.Body.String())
 				}
 				if want == 404 && w.Body.String() != "404 page not found\n" {

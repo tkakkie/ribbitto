@@ -44,7 +44,7 @@ import (
 //	RIBBITTO_STREAM_COST_STEPS     streams per step, default 1,10,100,1000,5000
 //	RIBBITTO_STREAM_COST_RATE      posts per second, default 10
 //	RIBBITTO_STREAM_COST_DURATION  posting time per step, default 10s
-//	RIBBITTO_STREAM_COST_POOL      pool size, default pgxpool's max(4, CPUs)
+//	RIBBITTO_STREAM_COST_POOL      pool size, default pgtest.MaxConns (16)
 //	RIBBITTO_STREAM_COST_CACHE     1: share event reads and message reads
 //	                               through the caches of #227
 //	RIBBITTO_STREAM_COST_MEMBERS   distinct: one member per stream, instead

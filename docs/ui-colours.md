@@ -61,21 +61,21 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 
 | Scheme | Pair (foreground on background) | Used for | Needed | Ratio |
 |---|---|---|---|---|
-| Light | `fg` on `bg` / `base` / `hover` | body text | 4.5:1 | 17.23 / 15.44 / 14.45 |
+| Light | `fg` on `bg` / `base` / `hover` / `selected` | body/notice text | 4.5:1 | 17.23 / 15.44 / 14.45 / 14.44 |
 | Light | `muted` on `bg` / `base` / `hover` | secondary text | 4.5:1 | 6.78 / 6.08 / 5.69 |
 | Light | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
 | Light | `on-brand` on `brand-hover` | hovered button label | 4.5:1 | 7.52 |
 | Light | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
 | Light | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
 | Light | `brand` on `bg` / `base` | link text; focus ring; own-mention outline | 4.5:1 | 5.47 / 4.90 |
-| Light | `brand` on `selected` | current-row indicator; own-mention outline | 3:1 | 4.58 |
+| Light | `brand` on `selected` | current-row indicator; own-mention outline; notice link | 4.5:1 | 4.58 |
 | Light | `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
 | Light | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
 | Light | `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
 | Light | `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
 | Light | `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
 | Light | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
-| Dark | `fg` on `bg` / `base` / `hover` | body text | 4.5:1 | 13.63 / 15.36 / 11.31 |
+| Dark | `fg` on `bg` / `base` / `hover` / `selected` | body/notice text | 4.5:1 | 13.63 / 15.36 / 11.31 / 9.84 |
 | Dark | `fg` on `surface` | card and popover text | 4.5:1 | 12.37 |
 | Dark | `fg` on `input` | typed text | 4.5:1 | 12.37 |
 | Dark | `muted` on `bg` / `base` / `hover` | secondary text | 4.5:1 | 6.59 / 7.43 / 5.47 |
@@ -89,7 +89,7 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Dark | `brand` on `bg` / `base` / `hover` | link text; focus ring; own-mention outline | 4.5:1 | 8.07 / 9.10 / 6.70 |
 | Dark | `brand` on `surface` | links; focus outline | 4.5:1 | 7.33 |
 | Dark | `brand` on `input` | focus outline and focused control border | 3:1 | 7.33 |
-| Dark | `brand` on `selected` | current-row indicator; own-mention outline | 3:1 | 5.82 |
+| Dark | `brand` on `selected` | current-row indicator; own-mention outline; notice link | 4.5:1 | 5.82 |
 | Dark | `success` on `bg` / `base` | online dot | 3:1 | 7.44 / 8.39 |
 | Dark | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 8.75 / 9.86 |
 | Dark | `danger` on `bg` / `base` | error text | 4.5:1 | 7.19 / 8.11 |

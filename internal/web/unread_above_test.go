@@ -54,7 +54,8 @@ func TestUnreadAbove(t *testing.T) {
 				{name: "before", query: "?before=90&unread=30", call: "before=90", shown: true},
 				{name: "before newer", query: "?before=90&unread=60", call: "before=90"},
 				{name: "around other", query: "?around=50&unread=30", call: "around=50", shown: true},
-				{name: "moved out", query: "?around=30&unread=30", call: "around=30"},
+				{name: "ordinary moved out", query: "?around=30", call: "around=30", first: 30, shown: true},
+				{name: "moved out", query: "?around=30&unread=30", call: "around=30", first: 30},
 				{name: "fabricated", query: "?around=29&unread=29", call: "around=29"},
 				{name: "list", first: 30, list: true},
 			} {

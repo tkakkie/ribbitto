@@ -93,6 +93,8 @@ type ChannelPage struct {
 	Around int64
 	// FirstUnread stays the same for the whole visit; zero means nothing was unread.
 	FirstUnread int64
+	// CarriedUnread distinguishes a jump destination from an ordinary history URL.
+	CarriedUnread bool
 	// EventCursor starts replay after every page's snapshot, including history.
 	EventCursor *int64
 	// Session is the signing-in session's id, never its token, with its
@@ -233,7 +235,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
-					if page.FirstUnread > 0 && len(page.Messages) > 0 && page.FirstUnread < page.Messages[0].EventSeq && page.Around != page.FirstUnread {
+					if page.FirstUnread > 0 && len(page.Messages) > 0 && page.FirstUnread < page.Messages[0].EventSeq && (!page.CarriedUnread || page.Around != page.FirstUnread) {
 						<div class="flex shrink-0 flex-wrap items-center justify-between gap-x-4 bg-selected px-6 text-body max-desk:px-4 short:gap-x-2 short:px-2">
 							<p>{ i18n.T(ctx, "reading.unread_above") }</p>
 							<a href={ templ.SafeURL(fmt.Sprintf("%s?around=%d&unread=%d#%s", conversationURL(page), page.FirstUnread, page.FirstUnread, UnreadDividerID)) } class="inline-flex min-h-11 min-w-11 items-center text-brand underline short:py-0.5 short:desk:min-h-6">{ i18n.T(ctx, "reading.unread_jump") }</a>

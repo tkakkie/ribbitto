@@ -1,7 +1,6 @@
 # Unread rules
 
-See [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md).
-See [counts](../architecture/unread-counts.md), [costs](../architecture/unread-count-costs.md),
+[Decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md); [counts](../architecture/unread-counts.md), [costs](../architecture/unread-count-costs.md),
 [write ownership](../architecture/unread-writes.md) and [reading scopes](unread-reading.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next
@@ -74,20 +73,14 @@ history ([unread count costs](../architecture/unread-count-costs.md)).
 
 ## The unread divider
 
-The snapshot computes first unread for the feed's channel or selected topic
-before the page's reading POST. Its carried sequence F stays for the visit,
-through *Load older* and reads; zero means none. Fresh
-visits and direct history URLs without a carried F use their snapshot.
-Shared live renders carry no divider.
-
-When F is rendered, the divider sits above its message. When 0 < F < the
-oldest rendered sequence, “Unread above” links to the scoped
-`?around=F&unread=F#unread-divider` page, with no count, extra query or read.
-Empty pages and the jump's destination show no notice. If F no longer exists
-in scope, the destination shows ordinary nearby history without a divider
-or self-link. The notice stays through prepends and reads in the document;
-full-page navigation re-evaluates its condition. Latest automatic
-reading POSTs are unchanged.
+First unread F comes from the scope snapshot before reading POSTs (zero: none);
+*Load older* and reads preserve F.
+URLs without F use snapshots; shared live renders omit F.
+When rendered, F has a divider. When 0 < F < the oldest rendered sequence,
+“Unread above” links to `?around=F&unread=F#unread-divider` in the same scope,
+without count, extra query or read. Empty pages and the destination omit it; missing F
+yields nearby history without divider or self-link. The notice survives prepends/reads;
+navigation rechecks it. Automatic reading POSTs stay unchanged.
 
 ## Topics
 

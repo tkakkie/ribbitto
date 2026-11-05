@@ -1,6 +1,8 @@
 # Markup and accessibility
 
-Target: WCAG 2.2 AA; ✓: checks (`internal/web/markup_test.go`).
+Target: WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`) renders
+every HTML route/state in both languages, enforcing ✓ rules; new routes
+fail until covered by a rendered case.
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` (#1500) and a name (its text, or `aria-label` when it has none); a link is
@@ -73,12 +75,8 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
-“Unread above” precedes the list; its native “Jump to first unread” link
-follows header controls in Tab order, with visible focus and a 44 px phone
-target. No live region, autofocus or focus move means no live announcement
-on load or prepends. Chromium scrolls to the divider, leaves focus on the
-body, then Tabs to the first unread message's first link.
-Real screen readers: unverified (#1486 manual checklist).
+“Unread above” follows header controls: visible focus, 44 px phone target, no live announcements.
+Chromium scrolls to divider; body keeps focus, Tab reaches F's first link. Screen readers unverified (#1486).
 
 The [message actions page](ui.md#markup-and-accessibility) uses native links,
 forms and Tab/Shift-Tab order, with no popover or script needed.

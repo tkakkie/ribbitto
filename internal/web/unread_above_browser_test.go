@@ -149,6 +149,9 @@ func testUnreadAboveBrowser(t *testing.T, browser *rod.Browser) {
 							t.Fatal("destination notice or reading form")
 						}
 						active := page.MustEval(`() => document.activeElement.tagName + '#' + document.activeElement.id`).Str()
+						if active != "BODY#" {
+							t.Fatalf("fragment focus=%s, want BODY#", active)
+						}
 						page.Keyboard.MustType(input.Tab)
 						next := page.MustEval(`() => { const a=document.activeElement; return a.closest('#message-items > li')?.dataset.eventSeq + ':' + a.tagName; }`).Str()
 						t.Logf("fragment focus=%s; next Tab=%s", active, next)

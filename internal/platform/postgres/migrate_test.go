@@ -51,6 +51,7 @@ func TestMigrations(t *testing.T) {
 		mentions bool
 	}{
 		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, true},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, true},
 		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, false},
 		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, false},
 		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, false, false},

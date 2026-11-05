@@ -239,7 +239,7 @@ type ReadStore interface [embeds PinReader] // ReadStore is conversation's reads
   func (ReadStore).ListChannels(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]Channel, error) // ListChannels returns the organisation's channels by name, then ID.
   func (ReadStore).ListMessagesAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int32) ([]Message, error) // ListMessagesAfter returns at most limit messages of the channel newer than event_seq after, oldest first, only of topicID when it is set.
   func (ReadStore).ListMessagesBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64, limit int32) ([]Message, error) // ListMessagesBefore returns at most limit messages of the channel older than event_seq before (the latest when before is nil), newest first, only of topicID when it is set.
-  func (ReadStore).ListTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, limit int) ([]Topic, error) // ListTopics returns at most limit topics of the channel: the default first, then by name ignoring case, then by ID.
+  func (ReadStore).ListTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, limit int) ([]Topic, error) // ListTopics returns at most limit topics of the channel: the default first, then open before resolved, then by name ignoring case, then by ID.
   func (ReadStore).LocateMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID, limit int32) (Location, int, error) // LocateMessage returns where the organisation's message is now and how many newer messages its topic holds, counted up to limit, or ErrMessageNotFound.
   func (ReadStore).LookupTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]Topic, error) // LookupTopics resolves the requested topics of the channel in one batch, so a page costs one topic query rather than one per message.
 type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadStore // ReadStoreIn binds conversation's reads to the caller's snapshot.
@@ -293,6 +293,7 @@ type TextSegment struct // TextSegment is one piece of a chat_v1 body's text ext
   field Text string
 type Topic struct // Topic is a named conversation inside a channel, identified by ID.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field ConclusionMessageID github.com/tkakkie/ribbitto/internal/kernel.ID // ConclusionMessageID is zero for an open topic; otherwise it identifies its conclusion.
   field CreatedAt time.Time
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
   field IsDefault bool

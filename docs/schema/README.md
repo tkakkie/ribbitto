@@ -13,7 +13,7 @@
 | [public.channel](public.channel.md) | 8 |  | BASE TABLE |
 | [public.message](public.message.md) | 17 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
-| [public.topic](public.topic.md) | 6 |  | BASE TABLE |
+| [public.topic](public.topic.md) | 7 |  | BASE TABLE |
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
 | [public.read_range](public.read_range.md) | 5 |  | BASE TABLE |
 | [public.topic_read_floor](public.topic_read_floor.md) | 5 |  | BASE TABLE |
@@ -48,6 +48,7 @@ erDiagram
 "public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.topic" }o--|| "public.message" : "FOREIGN KEY (organization_id, channel_id, conclusion_message_id) REFERENCES message(organization_id, channel_id, id)"
 "public.channel_read" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.channel_read" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.read_range" }o--|| "public.channel_read" : "FOREIGN KEY (organization_id, channel_id, member_id) REFERENCES channel_read(organization_id, channel_id, member_id) ON DELETE CASCADE"
@@ -144,6 +145,7 @@ erDiagram
   text name
   boolean is_default
   timestamp_with_time_zone created_at
+  uuid conclusion_message_id FK
 }
 "public.channel_read" {
   uuid organization_id FK

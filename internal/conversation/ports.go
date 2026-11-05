@@ -161,8 +161,8 @@ type ReadStore interface {
 	GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (Topic, error)
 	PinReader
 	// ListTopics returns at most limit topics of the channel: the default
-	// first, then by name ignoring case, then by ID. A limit outside
-	// 1…math.MaxInt32 is an error.
+	// first, then open before resolved, then by name ignoring case, then by
+	// ID. A limit outside 1…math.MaxInt32 is an error.
 	ListTopics(ctx context.Context, organizationID, channelID kernel.ID, limit int) ([]Topic, error)
 }
 

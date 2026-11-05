@@ -44,7 +44,8 @@ func (s ReadStore) ListChannels(ctx context.Context, organizationID kernel.ID) (
 }
 
 // ListTopics returns at most limit topics of the channel, the default first,
-// then by name (case-insensitive), with ID as a tie-breaker.
+// then open before resolved, then by name (case-insensitive), with ID as a
+// tie-breaker.
 func (s ReadStore) ListTopics(ctx context.Context, organizationID, channelID kernel.ID, limit int) ([]conversation.Topic, error) {
 	// The query takes an int32; a larger limit would wrap.
 	if limit < 1 || limit > math.MaxInt32 {

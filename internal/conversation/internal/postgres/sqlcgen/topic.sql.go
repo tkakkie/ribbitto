@@ -13,7 +13,7 @@ import (
 
 const createTopic = `-- name: CreateTopic :one
 INSERT INTO topic (organization_id, channel_id, name, is_default)
-VALUES ($1, $2, $3, false) RETURNING id, organization_id, channel_id, name, is_default, created_at
+VALUES ($1, $2, $3, false) RETURNING id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id
 `
 
 type CreateTopicParams struct {
@@ -32,12 +32,13 @@ func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.ConclusionMessageID,
 	)
 	return i, err
 }
 
 const getDefaultTopic = `-- name: GetDefaultTopic :one
-SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_default
+SELECT id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_default
 `
 
 type GetDefaultTopicParams struct {
@@ -55,12 +56,13 @@ func (q *Queries) GetDefaultTopic(ctx context.Context, arg GetDefaultTopicParams
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.ConclusionMessageID,
 	)
 	return i, err
 }
 
 const getTopic = `-- name: GetTopic :one
-SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic WHERE organization_id = $1 AND channel_id = $2 AND id = $3
+SELECT id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id FROM topic WHERE organization_id = $1 AND channel_id = $2 AND id = $3
 `
 
 type GetTopicParams struct {
@@ -80,14 +82,15 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.ConclusionMessageID,
 	)
 	return i, err
 }
 
 const listTopics = `-- name: ListTopics :many
-SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
+SELECT id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id FROM topic
 WHERE organization_id = $1 AND channel_id = $2
-ORDER BY is_default DESC, lower(name), id
+ORDER BY is_default DESC, (conclusion_message_id IS NOT NULL), lower(name), id
 LIMIT $3
 `
 
@@ -97,6 +100,7 @@ type ListTopicsParams struct {
 	Limit          int32
 }
 
+// The default topic first, then open before resolved, then by name and ID.
 func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error) {
 	rows, err := q.db.Query(ctx, listTopics, arg.OrganizationID, arg.ChannelID, arg.Limit)
 	if err != nil {
@@ -113,6 +117,7 @@ func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic
 			&i.Name,
 			&i.IsDefault,
 			&i.CreatedAt,
+			&i.ConclusionMessageID,
 		); err != nil {
 			return nil, err
 		}
@@ -125,7 +130,7 @@ func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic
 }
 
 const lookupTopics = `-- name: LookupTopics :many
-SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
+SELECT id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id FROM topic
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
 `
 
@@ -151,6 +156,7 @@ func (q *Queries) LookupTopics(ctx context.Context, arg LookupTopicsParams) ([]T
 			&i.Name,
 			&i.IsDefault,
 			&i.CreatedAt,
+			&i.ConclusionMessageID,
 		); err != nil {
 			return nil, err
 		}

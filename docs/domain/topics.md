@@ -50,6 +50,12 @@ Topics group messages inside a channel; branching moves messages between them
 - **Migration:** every existing channel gets a default topic, and every
   existing message moves into its channel's default topic, in the same
   migration that makes `topic_id` and `default_topic_id` not null.
+- **Resolution state:** nullable `topic.conclusion_message_id` (migration 00022),
+  no resolver or time. A composite foreign key confines it to a message of the
+  same channel (deleting it is refused for now), a CHECK excludes the default
+  topic; same-topic is transactional (#2183). The migration builds
+  `message_org_channel_id_key` without `CONCURRENTLY`, so message writes wait
+  briefly; Down keeps it, as another foreign key may use it.
 
 ## Views
 
@@ -87,7 +93,7 @@ Topics group messages inside a channel; branching moves messages between them
   Replays and duplicates use stable IDs; replay matches a reload within this
   loaded range, including labels and checkbox sources.
 - The channel sidebar links to at most 50 topics: default first, then
-  case-insensitive name order with ID as a tie-breaker.
+  open before resolved, in case-insensitive name order with ID as a tie-breaker.
 - A topic in a URL is scoped by the organisation and channel in the same
   URL; a topic of another channel is 404, like a non-member.
 

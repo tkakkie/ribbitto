@@ -52,6 +52,7 @@ erDiagram
   text name
   boolean is_default
   timestamp_with_time_zone created_at
+  uuid conclusion_message_id FK
 }
 "public.channel_read" {
   uuid organization_id FK

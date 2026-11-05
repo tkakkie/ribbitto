@@ -2,6 +2,7 @@ package conversationpg_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -109,7 +110,9 @@ func TestResolutionConcurrency(t *testing.T) {
 				select {
 				case err := <-results[1]:
 					t.Fatalf("second operation did not wait for the organisation: %v", err)
-				default:
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				case <-time.After(5 * time.Millisecond):
 				}
 			}
 			check(kernel.ID{}, source, nil)
@@ -180,7 +183,7 @@ func assertResolutionCommit(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 		JOIN message m ON m.organization_id = o.id AND m.channel_id = t.channel_id
 		WHERE o.id = $1 AND t.channel_id = $2 AND t.id = $3 AND m.id = $4`, organization, channel, topic, message).Scan(&conclusion, &location, &seq, &valid))
 	if !valid || conclusion != wantConclusion || location != wantLocation || seq != before+int64(len(kinds)) {
-		t.Fatalf("committed state: valid=%v conclusion=%v location=%v seq=%d; want conclusion=%v location=%v seq=%d", valid, conclusion, location, seq, wantConclusion, wantLocation, before+int64(len(kinds)))
+		t.Fatalf("committed state: valid=%v conclusion=%s location=%s seq=%d; want conclusion=%s location=%s seq=%d", valid, realtime.FormatPayloadID(conclusion), realtime.FormatPayloadID(location), seq, realtime.FormatPayloadID(wantConclusion), realtime.FormatPayloadID(wantLocation), before+int64(len(kinds)))
 	}
 	events, err := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t)).EventsAfter(ctx, organization, before, 20)
 	requireNoError(t, err)
@@ -192,9 +195,18 @@ func assertResolutionCommit(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 			t.Fatalf("event %d = %s at %d, want %s at %d", i, event.Kind, event.Seq, kinds[i], before+int64(i)+1)
 		}
 		if event.Kind == conversation.KindResolutionChanged {
+			var data []byte
+			var public bool
+			requireNoError(t, pool.QueryRow(ctx, `SELECT data, audience_member_id IS NULL FROM event_log
+				WHERE organization_id = $1 AND seq = $2`, organization, event.Seq).Scan(&data, &public))
+			var payload map[string]string
+			requireNoError(t, json.Unmarshal(data, &payload))
+			if len(payload) != 2 || payload["channel_id"] != realtime.FormatPayloadID(channel) || payload["topic_id"] != realtime.FormatPayloadID(topic) || !public {
+				t.Fatalf("stored resolution payload = %s, audience NULL = %v; want exactly channel_id=%s and topic_id=%s, audience NULL", data, public, realtime.FormatPayloadID(channel), realtime.FormatPayloadID(topic))
+			}
 			gotChannel, gotTopic, err := conversation.DecodeResolutionChanged(event.Payload)
 			if err != nil || gotChannel != channel || gotTopic != topic || event.ChannelID != channel || event.Topics != nil || event.AudienceMemberID != nil {
-				t.Fatalf("resolution event routing = %+v, %v", event, err)
+				t.Fatalf("resolution event routing: channel=%s topic=%s routed channel=%s topics nil=%v audience nil=%v, error=%v", realtime.FormatPayloadID(gotChannel), realtime.FormatPayloadID(gotTopic), realtime.FormatPayloadID(event.ChannelID), event.Topics == nil, event.AudienceMemberID == nil, err)
 			}
 		}
 	}

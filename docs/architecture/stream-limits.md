@@ -8,9 +8,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   to prevent bfcache. On persisted `pagehide`, the stream script releases
   the connection through htmx's SSE cleanup; persisted `pageshow` resumes
   through the extension's CLOSED-source retry, with the current `after`.
-  One stream per tab remains the rule (decision 30). The HTTP/1.1 browser
-  test removes no-store only in its response wrapper, proves real bfcache
-  restores at 4x CPU throttle, and checks release against a negative control.
+  One stream per tab remains the rule (decision 30).
 
 - Each cache (events, renders) runs at most 16 loaders at once, second
   loads included; a slot is held until its loader returns, even after a
@@ -24,14 +22,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   their private second load from finishing.
   Joiners wait directly for their result, with one wake: a kept value or
   error from the first load, otherwise the private second load's result.
-  Event-cache callers skip locked leave accounting once both results are
-  published: the load has left the lookup map and its deferred cancellation
-  ends the context. Until then, leaving still updates counts under the lock
-  so the last waiter or last second-read joiner cancels pending work.
-  Lookup, LRU, TTL and loading are unchanged; render caches keep their
-  existing cleanup. Full batches alone are retained, short-batch joiners
-  still get their private fresh second read, keys include the hub level,
-  and every full batch still gets a zero-limit bounds read.
+  Full batches alone are retained; short-batch joiners get their private
+  fresh second read, started after they joined, never an older snapshot.
+  Keys include the hub level, and every full batch gets a zero-limit bounds read.
 
 - Per organisation the hub publishes the durable level and a generation
   for each ephemeral kind (presence, typing). Each level and its broadcast
@@ -42,10 +35,8 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   select therefore wakes it, and no level regresses. The stream selects on
   the durable channel, only its declared kinds' generation channels, its
   heartbeat deadline and context together. The writer reads owners
-  after each batch, with at most one frame and check per kind; production
-  presence and typing owners and page regions are implemented; the hidden sink
-  receives sidebar/presence payloads. Register and
-  RaiseIfActive still use the registry mutex for caps and active checks.
+  after each batch, with at most one frame and check per kind. Register and
+  RaiseIfActive use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries
@@ -61,10 +52,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   both values: sharing a key makes a smaller capacity a valid choice (#692).
   Live keys fit in the derived capacity, but connecting and disconnecting
   members can still cause eviction and misses.
-  [#671 measured](../measurements/stream-authorization-results.md#benchmark-2026-10-09)
-  churn past 10,000 distinct entries: hit rate fell to 0.905 at 11,000 and
-  0.647 at 15,000. Each miss loaded a membership, and the pool limited delivery
-  again (15,000 failed with p95 13.9 s).
+  [#671's results](../measurements/stream-authorization-results.md#benchmark-2026-10-09)
+  show why churn past capacity costs misses and a membership load for each,
+  making the pool limit delivery again in that run.
   The epoch reader uses its own 16-loader
   limit, with a 5 s timeout and no retained values. `org.Authorizer.Stats`
   reports checks, membership-cache hits and actual epoch reads (including
@@ -74,11 +64,8 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   fresh epoch proves that snapshot even if it was evicted. Hits take two
   authorizer lock acquisitions, refreshing LRU in token cleanup only for
   the same resident entry. Misses can use a newer resident allow or query
-  independently. Latest tokens still prevent older loads replacing newer
-  results, including a missing-organisation deny. Deterministic #703 tests
-  gate eviction to prove no reload or resurrection, check LRU at capacity,
-  and count context Done evaluations to prove joiners wait once while
-  still getting the fresh second read.
+  independently. Latest tokens prevent older loads replacing newer
+  results, including a missing-organisation deny.
 
 - Sidebar recounts use `realtime.SidebarInterval`: one second after each
   completed recount attempt (a deny ends the stream, #852). This fixed minimum coalesces
@@ -114,7 +101,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   deadline before waiting (#158) — under HTTP/2 an expired deadline resets
   the stream even while idle. If it cannot flush, the stream ends. The
   server's read timeout does not cut it: net/http clears the read deadline
-  once the request is read. `TestStreamEndpoints` idles past all of them.
+  once the request is read.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
   flushing works; compression is not applied to the SSE endpoints.
 - An idle stream writes an SSE comment (`: heartbeat`) once
@@ -126,8 +113,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   checkpoints also restart the write deadline. It sends while waiting on the
   hub (`Stream.Heartbeat`); a failed write ends
   the stream without moving the cursor. Presence waits 30 s
-  after the last stream closes before marking a member offline (#766;
-  delivery/display current in #768), so a reload does
+  after the last stream closes before marking a member offline (#766), so a reload does
   not flicker. Typing has separate accepted-channel counts: its five-second
   owner expiry and immediate last-channel-close cleanup have no grace
   ([typing](typing.md)), independent of interests and selected topic.
@@ -135,9 +121,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads
   `RIBBITTO_MAX_STREAMS`: unset keeps that default; an explicit value must
   be a positive integer. Empty, zero, negative, unparsable and overflowing
-  values fail at start. The default leaves headroom below #216's active
-  ceiling: 7,000 passed and 10,000 failed at 10 posts/s (maintainer,
-  2026-10-07). Smaller machines may set it lower; it can be re-evaluated
+  values fail at start. The default leaves headroom below the passing/failing
+  steps in [#216's 2026-10-07 run](../measurements/load-results.md#active-steps-10-postss),
+  not a capacity guarantee. Smaller machines may set it lower; it can be re-evaluated
   if the measured ceiling rises. The hub checks both caps under its
   registration lock, refusing an excess stream with 429 before registration
   or any SSE header, without taking an account slot. Only unregistering
@@ -153,4 +139,3 @@ Exit/failure: `Hub.CancelAll` (503/`ErrShutdown`) → lifetime cancel → HTTP
 shutdown → workers → pool. After HTTP's 10 s grace, `Close` force-closes
 connections. Maintenance workers and server goroutines are joined; handlers
 need not have returned, so may still use the pool when it closes last.
-Browsers reconnect/replay; Caddy uses HTTP/2; HTTP/1.1: six connections/origin.

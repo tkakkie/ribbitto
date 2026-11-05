@@ -22,9 +22,7 @@ Keep the numbers stable: other documents cite them.
    re-implement it. The entry point is
    `internal/org`: `Authorizer.Member` turns the signed-in account and
    the slug from the URL into a membership, with one not-found error for an
-   unknown slug, a non-member and a signed-out caller. `orgpg.NewAuthorizer`
-   builds it with org's store, which reads memberships and resolves the home
-   organisation through the setup row.
+   unknown slug, a non-member and a signed-out caller.
 6. **`organization.event_seq` only increases, without gaps.** It is taken
    first in the writing transaction, and the same value is stored in both
    `event_log.seq` and the entity's own `event_seq` (for messages) or
@@ -66,11 +64,7 @@ Keep the numbers stable: other documents cite them.
     Concurrent creations serialize before counting; lowering the cap leaves
     existing channels intact and blocks further creation.
 
-These are **requirements for all code and migrations**, not a description
-of what is implemented today: `organization`, `account`, `session`,
-`member`, `setup`, `channel`, `message`, `event_log`, `topic`, `channel_read`,
-`read_range` and `topic_read_floor` have tables; setup authorization is
-implemented, and organisation routes go through `internal/org`. Every migration that adds an
+Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests
 for 4–5 as it is written. Row-level security in PostgreSQL is planned as a

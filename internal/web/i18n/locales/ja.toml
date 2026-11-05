@@ -355,6 +355,12 @@ other = "オンライン"
 ["people.offline"]
 other = "オフライン"
 
+["reading.unread_above"]
+other = "上に未読があります"
+
+["reading.unread_jump"]
+other = "最初の未読へ移動"
+
 ["reading.mark"]
 other = "すべて既読にする"
 

@@ -355,6 +355,12 @@ other = "Online"
 ["people.offline"]
 other = "Offline"
 
+["reading.unread_above"]
+other = "Unread above"
+
+["reading.unread_jump"]
+other = "Jump to first unread"
+
 ["reading.mark"]
 other = "Mark all as read"
 

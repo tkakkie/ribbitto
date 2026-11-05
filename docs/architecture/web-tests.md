@@ -143,12 +143,12 @@ Alongside [`reviewing.md`](../workflow/reviewing.md#pull-request-cross-review):
 
 ## Stream failures
 
-`TestBrowser` characterizations (expectations change only with approved A-F):
+Characterizations change only with approved A-F:
 
 - `characterization/failed-message-native-reconnect`: skips the failed frame;
   later application advances past it.
 - `source/characterization-history-reapply`: drops the failed retained move.
 
-See [#2060 Remaining risk](https://github.com/tkakkie/ribbitto/issues/2060#remaining-risk).
+See [#2060 Remaining risk](https://github.com/tkakkie/ribbitto/issues/2060#track-a-start-completion-and-remaining-risk).
 Regression cases: `duplicate-reconnect`, `per-entry/ephemeral`, `progress`,
 `source/stale` and `destination/stale`.

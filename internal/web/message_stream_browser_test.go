@@ -703,6 +703,37 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	if !page.MustEval(`()=>{const s=document.getElementById('organization-stream');return s.dataset.appliedCursor==='51' && s.dataset.eventCursor==='51'}`).Bool() {
 		t.Fatal("checkpoint changed applied or shown cursor")
 	}
+	// Id-less frames inherit transport progress ahead of the applied cursor.
+	for _, name := range []string{"unread", "pins", "sidebar", "typing"} {
+		page.MustEval(`name => {
+			delete document.body.dataset.extraFrame;
+			window.testSource.addEventListener(name, e => {
+				document.body.dataset.extraFrame = e.type;
+				document.body.dataset.extraLastId = e.lastEventId;
+			}, {once: true});
+		}`, name)
+		payload := []byte(`{"channel":"01000000-0000-0000-0000-000000000000","topic":"02000000-0000-0000-0000-000000000000","seq":51}`)
+		switch name {
+		case "pins":
+			payload = streamTestMarkup(t, view.PinsSection(snapshot))
+		case "sidebar":
+			payload = streamTestMarkup(t, view.SidebarLists(snapshot))
+		case "typing":
+			payload = streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: []typing.Typist{{DisplayName: "Alice", Handle: "alice"}}}))
+		}
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: payload})
+		page.MustWait(`name => document.body.dataset.extraFrame === name`, name)
+		if got := page.MustEval(`() => document.body.dataset.extraLastId`).Str(); got != "55" {
+			t.Fatalf("%s inherited lastEventId = %q, want 55", name, got)
+		}
+		if !page.MustEval(`() => {
+			const s = document.getElementById('organization-stream');
+			return s.dataset.appliedCursor === '51' && s.dataset.eventCursor === '51' &&
+				new URL(s.getAttribute('sse-connect'), location.href).searchParams.get('after') === '55';
+		}`).Bool() {
+			t.Fatalf("id-less %s changed durable cursors after checkpoint", name)
+		}
+	}
 }
 
 // launchScenarioBrowser starts one browser of TestBrowser's pool.

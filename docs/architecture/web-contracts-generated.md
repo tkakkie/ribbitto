@@ -44,11 +44,8 @@ Use the constant in templ, then run `go generate ./internal/web/view`
 
 The committed `web/src/contracts.gen.ts` supplies names, selectors, dynamic id
 helpers and typed element, field, attribute and event accessors; `make check-tools`
-rejects drift. Element helpers drop trailing `ID`; `DOMPrefix` becomes `Entry`,
-or a leading `Link` moves to the end (`ChannelLink`). Accessors use `getName`,
-selectors `nameSelector`, and dynamic ids `nameID`.
-Modules still validate attribute values and external event payloads at runtime.
-The human-readable DOM contract (ids and data attributes) is described in [`web-contracts.md`](web-contracts.md); this page covers the generated one.
+rejects drift. Modules still validate attribute values and external event
+payloads at runtime.
 
 The composer payloads are `message-sending` (`key`, `body`, `inPlace`),
 `message-sent` (`key`, `message`), `message-pending-action` (`key`, nullable
@@ -60,13 +57,8 @@ See the definitions in `internal/web/view/contracts.go` and script-order/reset
 cases in `internal/web/stream_reset_browser_test.go`.
 Other fields are strings except boolean `inPlace` and nullable `restoredKey`
 and sending/sent `key`. Without an idempotency key on plain/history pages,
-`message-sent` carries null (`FormData.get`); `web/src/composer.ts` normalizes
-in-place `message-sending` from undefined (`elements.idempotency_key?.value`)
-to null, as the contract specifies, because consumers treat
-both alike: `web/src/drafts.ts` returns on a falsy key, the composer does not
-listen to `message-sending`, and `internal/web/drafts_save_test.go` compares only
-string keys. `message-sent` must keep null: the composer compares against a null initial
-restoration key (undefined differs), and drafts also uses strict key comparison.
+sending/sent `key` is null. `message-sent` must keep null: composer restoration
+and drafts use strict key comparison.
 `message-sending` is both an id (composer markup) and an event name by design;
 the literal check accepts contract constants in either role.
 Generated `CustomEvent` dispatches use `bubbles: true`, like legacy scripts, for document

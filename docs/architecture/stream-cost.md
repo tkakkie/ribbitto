@@ -1,10 +1,8 @@
 # Stream cost
 
-What one post costs the delivery loop as open streams grow, measured by
-`TestStreamCost` in `internal/realtime/cost_test.go` (#215). The benchmark
-measures the current delivery path without HTTP or HTML rendering. The frozen
-2026-10-01 results below precede #670's authorization cache and shared epoch
-reads; #671 measured those with the same benchmark
+`TestStreamCost` in `internal/realtime/cost_test.go` (#215) measures delivery
+cost as streams grow, without HTTP or HTML rendering. The frozen results
+precede #670's authorization cache and shared epoch reads; #671 measured those
 ([results](../measurements/stream-authorization-results.md)).
 
 ## Running it
@@ -25,6 +23,7 @@ migrates and drops only that database; it touches no other database.
 Tunables are defined in the `TestStreamCost` comment in
 `internal/realtime/cost_test.go`. One correction to that comment: unset
 `RIBBITTO_STREAM_COST_POOL` inherits `pgtest.MaxConns` (16), not pgx's default.
+Set `RIBBITTO_STREAM_COST_POOL=10` to compare like for like with the recorded runs.
 A run stops at its first failing step; if all pass, it establishes only a lower bound.
 For sidebar measurements, set duration and rate explicitly.
 
@@ -36,9 +35,10 @@ member's streams share one cached allow.
 
 ## What is measured
 
-`N` streams in one organisation receive posts through the real delivery path,
-with an in-memory sender; the renderer reads messages with their authors but
-renders no HTML. Without sidebar placement, all follow one channel.
+`N` streams in one organisation use an in-memory sender and read messages with
+authors, without HTML. All follow one channel unless sidebar placement applies.
+Unset `RIBBITTO_STREAM_COST_MEMBERS` shares one member across all streams;
+`distinct` gives one member per stream.
 
 - **Posting** is an open loop at a fixed rate regardless of latency, with at
   most one second's worth in flight. Missed or incomplete posts fail the step
@@ -50,9 +50,9 @@ renders no HTML. Without sidebar placement, all follow one channel.
 - **Pool wait** is both the mean per acquisition that found the pool empty
   (`EmptyAcquireWaitTime / EmptyAcquireCount`) and that total spread over
   deliveries. It explains latency, fails no step and is not a ceiling by itself.
-- **Delivery latency** is `Post` returning after commit to the in-memory send,
-  including any stagger wait, reported as p50/p95/p99. Delivery before `Post`
-  returns is a negative sample; this is not a commit timestamp.
+- **Delivery latency** runs from `Post` returning after commit to the in-memory
+  send, including stagger wait, as p50/p95/p99. It starts at return, not at
+  the earlier commit; delivery before `Post` returns counts as a negative sample.
 - **Authorization** reports epoch reads per post and per post per stream,
   checks per post, cached-allow hit rate and `MayReceive` p50/p95/p99 without
   stagger wait. Epoch reads are a subset of queries. The authorization cache
@@ -82,15 +82,16 @@ the stopped server-recount comparisons.
 
 ## Results, 2026-10-01
 
-Apple M-series laptop, darwin/arm64, 10 CPUs, Go 1.27.1; PostgreSQL 18 in
-Docker on the same machine; pool 10 connections; batch 100; 10 posts/s for
-10 s. Every step completed all 100 scheduled posts. These are what this
-setup measured that day, not today's performance or an absolute capacity;
-the coarse step ladder only brackets the limit between a pass and a failure.
+Apple M-series, darwin/arm64, 10 CPUs, Go 1.27.1; PostgreSQL 18 in local
+Docker; pool 10; batch 100; 10 posts/s for 10 s. All 100 posts/step completed.
+These past figures bracket this setup's limit between pass and failure,
+not today's performance or absolute capacity. Commit dates here are JST.
+Fetch both measurement commits: `git fetch origin pull/228/head pull/233/head`.
 
 **First measurement (no shared reads, 1 to 1,000 streams):**
-`3c981fe185bcb435bd6050abe13e6fd6af60f581`; #228's author identifies this
-measurement SHA, before the timeout bug.
+`3c981fe185bcb435bd6050abe13e6fd6af60f581`; #228's author identifies this SHA,
+before cancellation incorrectly marked successful steps timed out. It predates
+the step deadline and zero-post guard added in `4393a08`.
 **Pre-deletion SHA (both tables):**
 `5fd630c8abcc7bf114674883ed1d02c1e70484fb`; retrieve the tables and past
 commands with `git show 5fd630c8abcc7bf114674883ed1d02c1e70484fb:docs/architecture/stream-cost.md`.
@@ -116,7 +117,6 @@ Without shared reads the comparison again measured **300 pass / 500 fail**
 (p95 83 ms / 2.55 s). With them, **2,000 passed / 3,000 failed**, both with
 one member (p95 89 ms / 2.93 s) and distinct members (90 ms / 2.44 s).
 The ladder stopped at 3,000; 5,000 was not run. Every step completed 100 posts.
-These pairs bracket this setup's measured limit that day, not a capacity promise.
 
 A post cost about `N + 10` queries: one membership check per stream, three
 posting queries, one shared message read with two author lookups, and about
@@ -128,9 +128,8 @@ this setup's pool beyond the 2,000-stream passing step.
 
 ## What it points to
 
-Under this load the pool saturated while the loop's goroutines mostly waited
-between posts: the evidence points at per-connection database work, but does
-not prove Go adds nothing at higher counts. #670's authorization cache follows
+Pool saturation and goroutines waiting between posts point at per-connection
+database work, without ruling out Go at higher counts. #670's authorization cache follows
 its own [freshness protocol](stream-authorization.md#decision): cached allows
 remove the per-stream query; a cache miss still loads one membership per stream.
 Its later costs and limits are in [authorization results](../measurements/stream-authorization-results.md);

@@ -21,8 +21,7 @@ The benchmark creates its own database from `template0` (`pgtest.NewEmpty`),
 migrates and drops only that database; it touches no other database.
 
 Tunables are defined in the `TestStreamCost` comment in
-`internal/realtime/cost_test.go`. One correction to that comment: unset
-`RIBBITTO_STREAM_COST_POOL` inherits `pgtest.MaxConns` (16), not pgx's default.
+`internal/realtime/cost_test.go`.
 Set `RIBBITTO_STREAM_COST_POOL=10` to compare like for like with the recorded runs.
 A run stops at its first failing step; if all pass, it establishes only a lower bound.
 For sidebar measurements, set duration and rate explicitly.

@@ -361,6 +361,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
 		page.Older = history.Older
+		page.CarriedUnread = firstUnread != nil
 		page.FirstUnread = history.FeedFirstUnread
 		if history.Topic != nil {
 			page.FirstUnread = history.TopicFirstUnread

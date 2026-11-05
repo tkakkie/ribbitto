@@ -27,8 +27,8 @@ func TestResolvePlace(t *testing.T) {
 		{"wrapped missing topic", nil, fmt.Errorf("lookup: %w", conversation.ErrTopicNotFound), streamTopic, 404, 1},
 		{"channel failure", offline, nil, streamTopic, 500, 0},
 		{"topic failure", nil, offline, streamTopic, 500, 1},
-		{"unexpected channel error", org.ErrNotFound, nil, streamTopic, 500, 0},
-		{"unexpected topic error", nil, org.ErrNotFound, streamTopic, 500, 1},
+		{"missing channel membership", org.ErrNotFound, nil, streamTopic, 404, 0},
+		{"missing topic membership", nil, org.ErrNotFound, streamTopic, 404, 1},
 		{"malformed topic", nil, nil, "bad", 404, 0},
 		{"channel error before malformed topic", offline, nil, "bad", 500, 0},
 	} {

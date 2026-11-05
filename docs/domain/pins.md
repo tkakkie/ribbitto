@@ -1,14 +1,9 @@
 # Pinned messages
 
-Pins keep important messages within reach in a channel's overview panel
-(#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
-these rules on 2026-10-12 (#880). Metadata storage and bounded snapshot
-reads (#887), pin/unpin use cases (#888), realtime's generic channel-state
-refresh seam (#891), the overview's pins section (#889) and Pin and Unpin in
-each message's actions menu (#890) are implemented. Live pins (#1205) refresh
-the overview and loaded controls across members and tabs while it is open.
-The jump from a pin uses the message's URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md),
-implemented by #1170), which comes first.
+Pins keep important messages within reach in a channel's overview panel.
+Live pins refresh the overview and loaded controls across members and tabs
+while it is open. The jump from a pin uses the message's URL
+([decision 36](../decisions/36-one-message-has-a-stable-url.md)).
 
 ## Permissions and limits
 

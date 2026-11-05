@@ -1,9 +1,5 @@
 # Channels
 
-What a channel is, how it is identified and the rules about the default
-channel. Read this before changing channel creation, setup, or anything that
-finds, renames, archives or deletes channels.
-
 Validation of the name is in [`validation.md`](validation.md#validation).
 
 ## Identity and names
@@ -45,8 +41,7 @@ The overview POST returns to the same feed or topic with its query parameters.
 ## Channel members
 
 The conversation header opens the members panel beside the conversation
-(#874); the overview panel links to it too. Public channels include every organisation member; one
-channel-members use case keeps that rule ready to narrow for private channels.
+(#874); the overview panel links to it too. Public channels include every organisation member.
 Only organisation members can open it; everyone else gets 404. The list shows
 [display names and handles](names.md), 100 per page in member-ID order with
 plain next-page links. It has no live list updates; presence is separate (#287).
@@ -61,10 +56,7 @@ it at exactly one:
 - **at most one:** the partial unique index
   `UNIQUE (organization_id) WHERE is_default`;
 - **at least one:** first-run setup creates the organisation and its
-  default channel in one transaction (a failure rolls both back), and
-  migration `00006` gave every organisation that existed before it a
-  default — turning an existing non-default `general` into the default
-  rather than inserting a second one;
+  default channel in one transaction (a failure rolls both back);
 - **nothing removes it:** no operation deletes a channel or clears
   `is_default`, and a channel a member creates is never the default.
 

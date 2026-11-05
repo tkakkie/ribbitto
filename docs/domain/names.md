@@ -1,9 +1,5 @@
 # Names
 
-How ribbitto names members: display names, handles and member ids. Read
-this before showing a member's name, adding mentions, or changing the rules
-for either name.
-
 The general validation rules (UTF-8, controls, NFC, printable characters) are in
 [`validation.md`](validation.md#validation).
 
@@ -69,11 +65,6 @@ Only resolved references carry `data-member-id` in HTML. The browser matches
 it to the viewer's member ID and outlines their own mentions (#1313),
 including live posts, replay, older messages and moves; the server render is
 shared by all readers.
-The channel page resolves member IDs (authors and references) to handles and
-account IDs through org, then looks up display names through identity, in
-two batches. The members
-page takes account IDs and handles from org's paged directory, then resolves
-display names through identity in one batch.
 
 ## Member search
 

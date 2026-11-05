@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 
@@ -55,7 +54,7 @@ func (p channelPages) readQuote(w http.ResponseWriter, r *http.Request, m org.Me
 		return false
 	}
 	entries, err := p.messages.Many(r.Context(), m, channel, []kernel.ID{id})
-	if errors.Is(err, conversation.ErrMessageNotFound) || errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
+	if isNotFound(err) {
 		http.NotFound(w, r)
 		return false
 	}

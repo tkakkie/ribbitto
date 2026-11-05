@@ -1,11 +1,9 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -21,7 +19,7 @@ func (p channelPages) message(w http.ResponseWriter, r *http.Request, m org.Memb
 		return
 	}
 	at, err := p.messages.Locate(r.Context(), m, id)
-	if errors.Is(err, conversation.ErrMessageNotFound) {
+	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
 	}

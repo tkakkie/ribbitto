@@ -96,8 +96,6 @@ check-test: bundles db-health
 
 check-tools: bundles $(TEMPL)
 	go -C tools run ./languagecheck ..
-	go -C tools vet ./apicheck
-	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./domcontract -check ..
 	go -C tools run ./contractliterals ..

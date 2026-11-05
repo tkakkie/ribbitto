@@ -101,6 +101,9 @@ func TestTypingRefusals(t *testing.T) {
 				if w.Code != status || !reflect.DeepEqual(before, state.Read(kernel.ID{}, place, kernel.ID{9})) {
 					t.Fatalf("refusal %d changed state", w.Code)
 				}
+				if status == 429 && (w.Header().Get("Retry-After") != "1" || w.Body.Len() != 0) {
+					t.Fatalf("rate-limit response: %v %q", w.Header(), w.Body.String())
+				}
 				if status == 404 && w.Body.String() != "404 page not found\n" {
 					t.Fatal("scope disclosed")
 				}

@@ -36,8 +36,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	if !p.branchLimit.Allow(m.Organization.ID, m.Member.ID) {
-		w.Header().Set("Retry-After", "6")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.branchLimit, p.pages)
 		return
 	}
 	if !parseForm(w, r) {
@@ -99,7 +98,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 		p.branchError(w, r, m, id, 422, "topic.branch_name_taken")
 	case errors.Is(err, conversation.ErrInvalidBranch):
 		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
-	case errors.Is(err, conversation.ErrTopicNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
+	case isNotFound(err):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "branching messages", err)
@@ -117,7 +116,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, key string) {
 	// Scope error responses too; invalid input must not reveal another channel.
 	if _, err := p.channels.Get(r.Context(), m, id); err != nil {
-		if errors.Is(err, conversation.ErrChannelNotFound) {
+		if isNotFound(err) {
 			http.NotFound(w, r)
 		} else {
 			serverError(w, r, "finding channel", err)

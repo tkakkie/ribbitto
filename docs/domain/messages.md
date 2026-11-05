@@ -23,7 +23,7 @@ Stored messages are never reinterpreted; rendered HTML is only a disposable cach
 Messages stored before `chat_v1` remain `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
 bold, italic, `http`/`https` autolinks and member references `<@uuid>`).
-New posts use `chat_v1` (#1203). Every reference is checked through org's
+New posts use `chat_v1`. Every reference is checked through org's
 directory in the URL's organisation: one to an unknown or another
 organisation's member rejects the post with 422 and one message for both,
 keeping the draft; a malformed token is text. Branching's notice is
@@ -36,7 +36,8 @@ changing its `id` or `event_seq`.
 
 A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
-(decision 22; replies are *planned*, not built).
+([decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md);
+replies are *planned*, not built).
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
@@ -44,13 +45,14 @@ Selections extract text (`@handle`, newline per block); cut/unresolved
 mentions or unknown markup hide the button.
 Quotes store the original ID, author member ID and text snapshot.
 In the post transaction, absent `quote_text` copies the whole extraction;
-a present field, even empty, is a part. `ValidateQuotePart` normalises with
-the body rules and requires a substring of `Entry.Text`; invalid parts get 422.
+a present field, even empty, is a part. A quoted part is normalised with the
+body rules and must be a substring of the original's extracted text; invalid
+parts get 422.
 The snapshot belongs to the quoting message and survives edits, moves and
 deletion of the original; deletion nulls only its ID. A quote is not a reply.
 
 Channel pins reference the current message; permissions, limits and lifecycle:
-[`pins.md`](pins.md) (implemented in #887–#890 and #1205).
+[`pins.md`](pins.md).
 
 ## Accepted bodies
 
@@ -75,10 +77,6 @@ for example — and Unicode discourages them in new text. The isolates LRI,
 RLI, FSI and PDI (U+2066–U+2069) and the marks LRM, RLM and ALM (U+200E,
 U+200F, U+061C) are **allowed on purpose**: they are the recommended way to
 mix directions in plain text with Arabic or Hebrew.
-
-The database checks length, no CR, rejected controls/separators/bidi characters
-(listed individually, not as a range), and no leading/trailing ASCII white space.
-PostgreSQL `text` rejects NUL; Unicode-aware trim stays in conversation.
 
 ## Showing bodies
 
@@ -108,12 +106,12 @@ HTML built from strings, no raw HTML or images. Links allow only `http` and
 `https`, checked again when rendering, with `rel="noopener noreferrer"`, and are never fetched; a pasted
 message URL is an ordinary link. A member reference shows the current
 `Display name @handle` (`view.MemberName`), or a localised placeholder when
-the organisation's directory, read in the authors' batches, does not return
-it. The markup is the same for every reader of one language. Its extraction
+the organisation's directory does not return it. The markup is the same for
+every reader of one language. Its extraction
 (`conversation.ExtractChatV1`) is text and member-reference segments:
 delimiters, escapes, fences and language tags dropped, code kept exactly,
 an autolink as its URL, one line break per block boundary. A reference
-resolves at use, in the reader's organisation-scoped directory batch, to
+resolves at use, in the reader's organisation-scoped directory, to
 `@handle` or to the caller's localised placeholder (`view.UnknownMember`),
 never its UUID; a UUID typed as text or in code stays. So the announcement,
 kept in the shared stream render cache, is the same for every reader of one

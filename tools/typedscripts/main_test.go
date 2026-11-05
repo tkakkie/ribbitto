@@ -225,7 +225,6 @@ func TestScriptPaths(t *testing.T) {
 	files[listFile] = "# all converted\n"
 	files["web/static/vendor/htmx-2.0.7.min.js"] = ""
 	files["web/static/vendor/htmx-ext-sse-2.2.4.min.js"] = ""
-	files["web/static/vendor/idiomorph-ext-0.7.4.min.js"] = ""
 	files["web/test/example.test.ts"] = ""
 	files["web/src/one.ts"] = `const text = "// @ts-nocheck";`
 	files["other.templ"] = `<script-widget></script-widget>`

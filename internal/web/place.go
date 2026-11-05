@@ -25,7 +25,7 @@ func (p channelPages) resolvePlace(w http.ResponseWriter, r *http.Request, m org
 		_, err = p.topics.Get(r.Context(), m, channel, selected)
 	}
 	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound):
+	case isNotFound(err):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "resolving conversation scope", err)
@@ -33,4 +33,12 @@ func (p channelPages) resolvePlace(w http.ResponseWriter, r *http.Request, m org
 		return topic, true
 	}
 	return nil, false
+}
+
+// isNotFound gives missing and inaccessible conversation resources the same response.
+func isNotFound(err error) bool {
+	return errors.Is(err, conversation.ErrChannelNotFound) ||
+		errors.Is(err, conversation.ErrTopicNotFound) ||
+		errors.Is(err, conversation.ErrMessageNotFound) ||
+		errors.Is(err, org.ErrNotFound)
 }

@@ -112,7 +112,7 @@ func TestSendKeyAuthorization(t *testing.T) {
 		services := postgresServices(t, pool, sessions, "", false)
 		now := time.Now()
 		services.MemberLimits = memberLimitOverride(services.MemberLimits, func(l *MemberLimits) {
-			l.sendKey = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 1, 1, 0)
+			l.sendKey = middleware.NewMemberRateLimiterWithBudget(func() time.Time { return now }, 0.4, 1, 0)
 		})
 		h, err := NewHandler("", cat, services)
 		if err != nil {
@@ -126,6 +126,9 @@ func TestSendKeyAuthorization(t *testing.T) {
 			}
 			if w.Code != want {
 				t.Fatalf("request %d: status %d, want %d", i, w.Code, want)
+			}
+			if i == 1 && w.Header().Get("Retry-After") != "3" {
+				t.Fatalf("limited request: Retry-After %q, want 3", w.Header().Get("Retry-After"))
 			}
 		}
 		var got string

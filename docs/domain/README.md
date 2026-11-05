@@ -13,7 +13,7 @@ words (ribbit, pond, marsh, …) appear only in UI message files.
 | [`invariants.md`](invariants.md) | rules every piece of code and every migration must keep |
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
-| [`unread.md`](unread.md) | unread rules: read ranges, counts and the divider (storage, counts in the page snapshot and the sidebar, live counts on posts and moves, and the divider current, #291; recounts after a read advance wired in production (#711), M4) |
+| [`unread.md`](unread.md) | unread rules: read ranges, counts and the divider |
 | [`unread-reading.md`](unread-reading.md) | reading scopes, visible-page reading POSTs, posting, Mark all as read and the modal-panel pause |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |

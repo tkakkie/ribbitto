@@ -114,7 +114,7 @@ func run(ctx context.Context, root string, syncIssue bool, cfg config, out io.Wr
 		counts[max(0, slices.Index([]string{"up-to-date", "outdated", "check-failed"}, r[4]))]++
 		fmt.Fprintf(&b, "| %s | %s | `%s` | `%s` | `%s` |\n", r[0], r[1], r[2], r[3], r[4])
 	}
-	fmt.Fprintf(&b, "\nSummary: %d up-to-date, %d outdated, %d check-failed.\n\nUnchecked manual-only pins: `web/static/vendor/` (`htmx`, `htmx-ext-sse`, `idiomorph`, `@fluentui/svg-icons`); see [`docs/dependency-updates.md`](docs/dependency-updates.md).\n", counts[0], counts[1], counts[2])
+	fmt.Fprintf(&b, "\nSummary: %d up-to-date, %d outdated, %d check-failed.\n\nUnchecked manual-only pins: `web/static/vendor/` (`htmx`, `htmx-ext-sse`, `@fluentui/svg-icons`); see [`docs/dependency-updates.md`](docs/dependency-updates.md).\n", counts[0], counts[1], counts[2])
 	report := b.String()
 	_, _ = io.WriteString(out, report)
 	if syncIssue {

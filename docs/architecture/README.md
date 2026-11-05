@@ -27,7 +27,7 @@ Read the file for the area you change:
 | [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress, delivery and the page's status region |
 | [SSE](streaming.md), [scope](stream-scope.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
-| [`pins.md`](pins.md) | pin ownership and durable writes (#888); channel-state writer and shared pins source implemented (#891–#892), live delivery active (#1205) |
+| [`pins.md`](pins.md) | pin ownership, durable writes and live delivery |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
 | [`rendering.md`](rendering.md) | templates, assets, languages |
 | [`csp.md`](csp.md) | the Content Security Policy and script delivery |
@@ -58,9 +58,7 @@ Read the file for the area you change:
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
 [org](../api/org.txt), [conversation](../api/conversation.txt), [presence](../api/presence.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).
 Run `make api` after an API or doc-comment change; `make check` compares them
-without rewriting files. Entries and members are sorted by name, with signatures
-and first doc sentences; unexported declarations and their members are omitted.
-Loading uses `go/packages` for Linux/amd64 with cgo disabled.
+without rewriting files.
 
 ## See also
 

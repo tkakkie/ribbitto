@@ -183,7 +183,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 					t.Fatal("unauthorized request changed the pin")
 				}
 				body := w.Body.String()
-				if w.Code != http.StatusNotFound || strings.Contains(body, "Acme") || strings.Contains(body, "Globex") {
+				if w.Code != http.StatusNotFound || body != "404 page not found\n" ||
+					w.Header().Get("Location") != "" || w.Header().Get("HX-Redirect") != "" {
 					t.Fatalf("status %d, body %q", w.Code, body)
 				}
 			})

@@ -11,8 +11,14 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web"
 )
 
+// sidebarReader limits the production reader to Sidebar because it is built
+// without member or account lookups needed by its other methods.
+type sidebarReader interface {
+	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
+}
+
 type liveSidebar struct {
-	reader     *conversation.Reader
+	reader     sidebarReader
 	membership org.Membership
 	channel    kernel.ID
 	topic      *kernel.ID
@@ -21,7 +27,7 @@ type liveSidebar struct {
 
 var _ realtime.SidebarWatcher = liveSidebar{}
 
-func sidebarSource(reader *conversation.Reader, changes *unread.Changes) func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource {
+func sidebarSource(reader sidebarReader, changes *unread.Changes) func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource {
 	return func(m org.Membership, channel kernel.ID, topic *kernel.ID) realtime.SidebarSource {
 		return liveSidebar{reader, m, channel, topic, changes}
 	}

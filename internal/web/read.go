@@ -26,8 +26,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	}
 	release, admitted := p.readLimit.Admit(m.Organization.ID, m.Member.ID)
 	if !admitted {
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.readLimit, p.pages)
 		return
 	}
 	defer release()
@@ -62,7 +61,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	switch {
 	case errors.Is(err, unread.ErrInvalidCursor):
 		http.Error(w, "Bad Request", http.StatusBadRequest)
-	case errors.Is(err, org.ErrNotFound):
+	case isNotFound(err):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "advancing read state", err)

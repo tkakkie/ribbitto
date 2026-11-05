@@ -1,17 +1,9 @@
 # Topics
 
-How messages inside a channel are grouped into topics, what the default
-topic is, and how messages move between topics. Read this before
-designing or changing topics, the channel page, branching, or anything
-that counts messages per topic. It was settled in
-[decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md) (#274).
+Topics group messages inside a channel; branching moves messages between them
+([decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)).
 
-The *Model* and *Tables* below exist (#301, #307):
-every channel has its default topic and every message a topic, and posting
-goes to the default topic, and a topic view posts into its topic. Feed
-labels, topic views with live updates (#304), posting into a topic, a
-bounded topic list, the branching endpoint (#305) and its selection UI
-(#308) and live feed and topic move delivery (#306) exist. `db/migrations/` is the schema source of truth.
+`db/migrations/` is the schema source of truth.
 
 ## Model
 
@@ -62,8 +54,8 @@ bounded topic list, the branching endpoint (#305) and its selection UI
 ## Views
 
 - **Feed** — the channel page: every topic's messages interleaved by
-  `event_seq`, each labelled with its topic. It is what the channel page
-  shows today. Labels are escaped and isolated with `<bdi>` and link to the
+  `event_seq`, each labelled with its topic. Labels are escaped and isolated
+  with `<bdi>` and link to the
   topic view; the default label comes from both language catalogues. Topic names
   are resolved through `conversation.ReadStore` in one batch per page, in the same
   snapshot as the messages and authors. Live labels come from the shared
@@ -128,8 +120,6 @@ Because moved messages keep their `event_seq`, the feed shows them where
 they were, now labelled with the destination topic; the destination's
 topic view shows them in their original order among its own messages.
 
-Settled in #305:
-
 - **Who may branch:** any member, including other members' messages. In
   the MVP every member reads and writes every public channel; roles and
   private channels may narrow this later.
@@ -153,9 +143,8 @@ Settled in #305:
   values with explicit `from` still work. The event reader decodes the move's
   routing and message IDs and validates its payload. The feed delivers moves
   through the render cache shared with topic pages.
-  An independent [member budget](../architecture/rate-limits.md#member-admission-for-branching)
-  admits requests before parsing; refusal is empty 429 with `Retry-After: 6`,
-  with no move, event or redirect.
+  Admission precedes parsing; refusal makes no move, event or redirect
+  ([member budget and 429 response](../architecture/rate-limits.md#member-admission-for-branching)).
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
   destination list uses the existing bounded topic list. Plain 409/422 errors render

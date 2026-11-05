@@ -43,15 +43,14 @@ type SidebarResync interface {
 	RequestResync(organizationID, memberID kernel.ID)
 }
 
-func resyncSidebar(resync SidebarResync, limiter *middleware.MemberRateLimiter) func(http.ResponseWriter, *http.Request, org.Membership) {
+func resyncSidebar(resync SidebarResync, limiter *middleware.MemberRateLimiter, pages *pageRenderer) func(http.ResponseWriter, *http.Request, org.Membership) {
 	return func(w http.ResponseWriter, r *http.Request, m org.Membership) {
 		if resync == nil {
 			http.NotFound(w, r)
 			return
 		}
 		if !limiter.Allow(m.Organization.ID, m.Member.ID) {
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
+			rejectMemberLimit(w, r, limiter, pages)
 			return
 		}
 		resync.RequestResync(m.Organization.ID, m.Member.ID)

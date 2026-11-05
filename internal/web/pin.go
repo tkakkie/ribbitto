@@ -50,7 +50,7 @@ func (p channelPages) changePin(w http.ResponseWriter, r *http.Request, m org.Me
 	err := change(r.Context(), m, channel, message)
 	status, errorKey := http.StatusOK, ""
 	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrMessageNotFound), errors.Is(err, org.ErrNotFound):
+	case isNotFound(err):
 		http.NotFound(w, r)
 		return
 	case errors.Is(err, conversation.ErrPinLimit):
@@ -65,6 +65,10 @@ func (p channelPages) changePin(w http.ResponseWriter, r *http.Request, m org.Me
 		page := view.ChannelPage{Organization: view.Organization{Slug: m.Organization.Slug}}
 		if showPins {
 			state, err := p.messages.ReadPins(r.Context(), m, channel)
+			if isNotFound(err) {
+				http.NotFound(w, r)
+				return
+			}
 			if err != nil {
 				serverError(w, r, "reading pin response", err)
 				return

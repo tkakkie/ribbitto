@@ -47,13 +47,12 @@ proxy, the address it forwards (below).
 
 ## Member admission for typing
 
-Typing allows burst 4, then one token per second per trusted organisation/member
-pair, shared across channels, topics, sessions and addresses. Other members
-and organisations have separate budgets. The [typing POST](typing.md#http-ingress-and-posting)
-checks CSRF, session and membership before admission, then channel/topic lookups
-and parsing. Refusal is 429 with `Retry-After` and no typing-state, deadline or
-generation change; success is empty 204. Only the authenticated adapter supplies
-IDs; the limiter does no authorization, feature reads or database work.
+Typing allows burst 4, then one token/s per trusted organisation/member pair,
+across channels, topics, sessions and addresses. The [typing POST](typing.md#http-ingress-and-posting)
+checks CSRF, session and membership before admission, then scope lookups and
+parsing. Refusal is 429 with `Retry-After`, changing no typing state, deadline or
+generation; success is empty 204. Only the authenticated adapter supplies IDs;
+the limiter does no authorization, feature reads or database work.
 
 The table holds at most 10,000 buckets. When a new key needs room, only
 fully replenished buckets can be evicted: replacing one with a fresh bucket
@@ -62,8 +61,8 @@ keys. Refused requests create no buckets, take no tokens and do not extend
 retention. Admission and eviction are serialized, including concurrent
 requests for the same member.
 
-Share each member budget per process. Restart resets budgets; processes are
-independent. There are no configuration settings or distributed limits.
+Budgets are per-process, reset on restart, and have no configuration or
+distributed limits.
 
 ## Member admission for reads
 
@@ -85,8 +84,8 @@ there is no success guarantee under sustained overload.
 ## Member admission for channel creation
 
 Creation allows burst 10, then one token/min per organisation/member. Session and
-membership resolution precede admission, which precedes form parsing and
-all channel work. Refusal is 429 with `Retry-After: 60` and creates
+membership precede admission, then parsing and channel work.
+Refusal is 429 with `Retry-After: 60` and creates
 nothing; its body follows the [response rule](#member-rejection-responses).
 Admitted failures spend tokens; shared bucket bounds and eviction rules apply.
 The persistent count cap is described in
@@ -140,12 +139,10 @@ active-slot rules above apply. Responses use `Cache-Control: no-store`.
 Member refusals render the localized page only for POSTs with
 `Sec-Fetch-Mode: navigate`, no `HX-Request` header, a form content type
 (`application/x-www-form-urlencoded` or `multipart/form-data`), and explicit
-nonzero `text/html` acceptance. This identifies browser form navigation;
-htmx, fetch/API, malformed and unclear requests keep an empty 429.
+nonzero `text/html` acceptance. Other requests keep an empty 429.
 
-`Retry-After` hints at the configured single-token refill interval, rounded up
-to whole seconds; admission is not guaranteed. Concurrent slots, competing
-requests or a full bucket table can still refuse a retry. SSE limits are separate.
+`Retry-After` is the token refill interval rounded up to seconds. Slots,
+competition or a full table can still refuse retries. SSE limits are separate.
 
 ## Reverse proxies
 

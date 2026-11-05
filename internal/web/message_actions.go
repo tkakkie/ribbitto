@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/a-h/templ"
@@ -25,7 +24,7 @@ func (p channelPages) messageActions(w http.ResponseWriter, r *http.Request, m o
 		entries, err = p.messages.Many(r.Context(), m, at.ChannelID, []kernel.ID{id})
 	}
 	switch {
-	case errors.Is(err, conversation.ErrMessageNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
+	case isNotFound(err):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "reading message actions", err)

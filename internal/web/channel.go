@@ -265,7 +265,7 @@ func (p channelPages) list(w http.ResponseWriter, r *http.Request, m org.Members
 // counted, neither skipping nor repeating a change.
 func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
 	list, err := p.messages.Sidebar(r.Context(), m, id, nil)
-	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
+	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
 	}
@@ -312,7 +312,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	default:
 		history, err = p.messages.Page(r.Context(), m, id, p.topicID, nil)
 	}
-	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, conversation.ErrTopicNotFound) {
+	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
 	}
@@ -322,7 +322,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	if page.Panel == view.PanelMembers {
 		page.Members, err = p.memberListing(r.Context(), m, id)
-		if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
+		if isNotFound(err) {
 			http.NotFound(w, r)
 			return
 		}
@@ -384,7 +384,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	}
 	defer release()
 	c, err := p.channels.Get(r.Context(), m, id)
-	if errors.Is(err, conversation.ErrChannelNotFound) {
+	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
 	}
@@ -480,8 +480,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
 		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, PostedTopicID: posted.TopicID, PostedEventSeq: posted.EventSeq, SentBody: recovered(enhanced, c.ID, body, quote != nil, posted), IdempotencyKey: freshKey()})
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound),
-		errors.Is(err, conversation.ErrQuoteNotFound):
+	case isNotFound(err), errors.Is(err, conversation.ErrQuoteNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member. A quoted
 		// message outside this channel gets the same answer, with none of its text.

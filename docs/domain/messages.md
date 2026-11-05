@@ -54,6 +54,12 @@ deletion of the original; deletion nulls only its ID. A quote is not a reply.
 Channel pins reference the current message; permissions, limits and lifecycle:
 [`pins.md`](pins.md).
 
+`message_mention` belongs to conversation. Distinct validated references commit
+with the message and its insert's returned `event_seq`. Message identity and
+`event_seq` are immutable; future rewrites must keep mentions in step and say so
+in their issue. Message deletion cascades to mentions; mentions restrict member
+deletion. Historical coverage awaits #2199's backfill.
+
 ## Accepted bodies
 
 `conversation.ValidateMessageBody`, in this order:

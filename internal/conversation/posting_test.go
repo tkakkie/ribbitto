@@ -82,6 +82,13 @@ func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID
 	}
 	return conversation.Message{ID: kernel.ID{5}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, EventSeq: seq}, f.step("insert")
 }
+func (f *postingFake) InsertMentions(_ context.Context, organizationID, messageID kernel.ID, seq int64, ids []kernel.ID) error {
+	f.scope(organizationID, kernel.ID{3})
+	if messageID != (kernel.ID{5}) || seq != 7 || len(ids) == 0 {
+		f.t.Fatal("wrong mention arguments")
+	}
+	return f.step("mentions")
+}
 func (f *postingFake) KeyedMessage(_ context.Context, organizationID, memberID kernel.ID, _ conversation.IdempotencyKey) (conversation.Message, error) {
 	f.scope(organizationID, f.stored.ChannelID)
 	if f.stored.ID == (kernel.ID{}) || memberID != f.stored.MemberID {

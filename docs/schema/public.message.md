@@ -4,8 +4,8 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) |  |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.message_mention](public.message_mention.md) |  |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.message_mention](public.message_mention.md) | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
 | channel_id | uuid |  | false |  | [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
 | member_id | uuid |  | false |  | [public.member](public.member.md) |  |
 | body | text |  | false |  |  |  |
@@ -76,6 +76,7 @@
 erDiagram
 
 "public.message" }o--|| "public.message" : "FOREIGN KEY (organization_id, quoted_message_id) REFERENCES message(organization_id, id) ON DELETE SET NULL (quoted_message_id)"
+"public.message_mention" }o--|| "public.message" : "FOREIGN KEY (organization_id, message_id) REFERENCES message(organization_id, id) ON DELETE CASCADE"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
@@ -100,6 +101,12 @@ erDiagram
   uuid quoted_member_id FK
   text quote_text
   bytea typed_body_proof
+}
+"public.message_mention" {
+  uuid organization_id FK
+  uuid message_id FK
+  uuid member_id FK
+  bigint event_seq
 }
 "public.member" {
   uuid id

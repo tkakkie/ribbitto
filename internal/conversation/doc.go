@@ -3,7 +3,7 @@
 // IDs are kernel.ID.
 //
 // Module: conversation (feature map in docs/architecture/features.md), which
-// owns the channel, topic and message tables and publishes message.posted
+// owns the channel, topic, message and message_mention tables and publishes message.posted
 // plus messages.moved and pins.changed.
 // Message pin metadata is paired and organisation-scoped; transaction-bound
 // pin writes and bounded snapshot reads retain no historical body; the
@@ -23,7 +23,9 @@
 // Member lookups return org's directory entries, not copies. Posting stores
 // chat_v1 after converting typed handles and checking member references
 // through org's directory, in separate listing and reference-check
-// snapshots before its transaction; branching's notice is escaped chat_v1. A message's
+// snapshots before its transaction. Validated distinct mentions commit with
+// the message and its returned, immutable event_seq; message deletion cascades
+// to mentions, and mentions restrict member deletion. Branching's notice is escaped chat_v1. A message's
 // format column is never updated; history and pins reads parse chat_v1 bodies
 // and resolve their member references in the authors' organisation-scoped
 // batches, and Entry.Text is a message's plain text in either format. A quote

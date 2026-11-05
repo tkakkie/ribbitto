@@ -1,16 +1,8 @@
 # Unread rules
 
-The inputs are in place since M3: the join transaction, `joined_event_seq`,
-the pairing of each message with its `message.posted` event, and the log
-boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
-reads exist;
-Visible-page reading POSTs, posting writes and snapshot-bound sidebar counts are current
-([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
-the counting contract is in
-[unread counts](../architecture/unread-counts.md), their cost in
-[unread count costs](../architecture/unread-count-costs.md), write ownership in
-[unread writes](../architecture/unread-writes.md), reading scopes and posting in
-[unread reading](unread-reading.md).
+See [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md).
+See [counts](../architecture/unread-counts.md), [costs](../architecture/unread-count-costs.md),
+[write ownership](../architecture/unread-writes.md) and [reading scopes](unread-reading.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and
@@ -22,9 +14,6 @@ the counting contract is in
   retention: it relies on `message.event_seq`, never on `event_log`.
 
 ## Read state
-
-Storage, range unions, message-derived feed bounds, topic-floor writes and
-branch-notice reads are current.
 
 - **Read ranges.** A member's read state in a channel is a set of
   `event_seq` ranges (`read_range` rows, `lo ≤ event_seq < hi`). A message
@@ -85,15 +74,20 @@ history ([unread count costs](../architecture/unread-count-costs.md)).
 
 ## The unread divider
 
-The page computes, in its snapshot and before its own POST, the first
-unread message of its scope (the channel for the feed, the topic for a topic
-view) and carries its sequence. The divider sits above that message when it
-is on the loaded page, and *Load older* passes the sequence along, so the
-divider stays where it was for the whole visit while the visit's POSTs
-advance the read state. The next page load computes it afresh. A direct
-older-history URL without a carried sequence also uses its snapshot. Zero
-is carried explicitly when nothing was unread. Live items never carry it:
-their renders are shared between members.
+The snapshot computes first unread for the feed's channel or selected topic
+before the page's reading POST. Its carried sequence F stays for the visit,
+through *Load older* and reads; zero means none. Fresh
+visits and direct history URLs without a carried F use their snapshot.
+Shared live renders carry no divider.
+
+When F is rendered, the divider sits above its message. When 0 < F < the
+oldest rendered sequence, “Unread above” links to the scoped
+`?around=F&unread=F#unread-divider` page, with no count, extra query or read.
+Empty pages and the jump's destination show no notice. If F no longer exists
+in scope, the destination shows ordinary nearby history without a divider
+or self-link. The notice stays through prepends and reads in the document;
+full-page navigation re-evaluates its condition. Latest automatic
+reading POSTs are unchanged.
 
 ## Topics
 

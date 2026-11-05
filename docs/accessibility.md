@@ -1,8 +1,6 @@
 # Markup and accessibility
 
-Target: WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`) renders
-every HTML route/state in both languages, enforcing ✓ rules; new routes
-fail until covered by a rendered case.
+Target: WCAG 2.2 AA; ✓: checks (`internal/web/markup_test.go`).
 
 - **Things that act are buttons or links.** ✓ A `<button>` always has a
   `type` (#1500) and a name (its text, or `aria-label` when it has none); a link is
@@ -75,6 +73,13 @@ A polite `role="status"` shows "Sending…" over the help, which turns invisible
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
+“Unread above” precedes the list; its native “Jump to first unread” link
+follows header controls in Tab order, with visible focus and a 44 px phone
+target. No live region, autofocus or focus move means no live announcement
+on load or prepends. Chromium scrolls to the divider, leaves focus on the
+body, then Tabs to the first unread message's first link.
+Real screen readers: unverified (#1486 manual checklist).
+
 The [message actions page](ui.md#markup-and-accessibility) uses native links,
 forms and Tab/Shift-Tab order, with no popover or script needed.
 
@@ -91,8 +96,7 @@ line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's
 own popover focusing, so also without JavaScript), because below `desk` the
 sheet covers the bottom navigation's button that opened it (#1102). Text
 rather than sign-out, so a repeated Enter or Space acts on nothing and the
-menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
-Enter and with Space at desktop and phone width.
+menu stays open; Tab then reaches sign-out. The create popover keeps focus on its button.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, focused on opening
 (`autofocus` with `tabindex="-1"`). Its header control has `aria-current="true"`.
@@ -113,5 +117,4 @@ crossing 852 px either way keeps the modal. The dimmed `#panel-backdrop` covers 
 as a pointer-only close link (`tabindex="-1"`, `aria-hidden="true"`); the close
 link and Escape serve keyboard and assistive technology. All three return
 focus to the opener. Without JavaScript the panel is a page with working
-close link and member paging. `testPanelSheetBrowser` checks the accessibility
-tree at both widths, sheet height, scrolling and reading pause.
+close link and member paging.

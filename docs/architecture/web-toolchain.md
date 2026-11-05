@@ -5,21 +5,17 @@ decision 45 sets `.test.ts` harnesses. Mechanics marked **confirmed**: [record][
 
 ## Language approval — #1410–#1413
 
-[Decision 42](../decisions/42-repository-languages-and-formats.md) is merged.
-Decision 43 accepts approval through #1356 as decision 42 anticipates: the
+Under [decision 42](../decisions/42-repository-languages-and-formats.md), the
 maintainer's [approval record](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
-covers TypeScript, Node only for type checking/tests/dependency management, and the
-Go-driven esbuild build, not blanket authorization.
+covers TypeScript, Node only for type checking/tests/dependency management, and
+the Go-driven esbuild build.
 
-#1410 approved web/src/*.ts (including declarations), root tsconfig.json,
-package.json/package-lock.json and .node-version, updating decision 42 and
-[`tools/languagecheck`](../../tools/languagecheck/rules.go); #1854 adds
-`web/src/package.json` (`{"type": "module"}`). The nested file scopes the module
-type of `web/src/*.ts` so `node --test` loads them without typeless-package
-reparsing while root and `web/static/` files keep their existing scope.
-Later PRs add rows to both tables with the first file of a new kind or location:
-direct web/test/*.test.ts, node-test.d.ts and package.json (#2092); Go builders under tools/ are covered.
-Unlisted files fail; exact-path exceptions use
+Approved locations: web/src/*.ts (including declarations), root tsconfig.json,
+package.json/package-lock.json and .node-version; `web/src/package.json`
+(`{"type": "module"}`); direct web/test/*.test.ts, node-test.d.ts and package.json.
+Go builders under tools/ are covered. Add rows to decision 42 and
+[`tools/languagecheck`](../../tools/languagecheck/rules.go) with the first file
+of a new kind or location. Unlisted files fail; exact-path exceptions use
 [`docs/language-exceptions.txt`](../language-exceptions.txt).
 
 Review checks Makefile/workflow node/npm commands against that limited approval
@@ -42,15 +38,12 @@ under `web/static`. Logical entries record bundle filenames and SHA-256 content 
 commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
 locally to a UTC timestamp. Production output has no maps or source-map links.
 
-`static.NewScripts` in `web/static/scripts.go` owns the single `names` list of
-page entries and validates the manifest and bundle hashes at startup.
-`tools/webbuild` reads this list from the repository root (#2022); non-entry
-`web/src/` modules are never bundled standalone. templ uses context; direct
-renders use the embedded registry without mutable globals.
-`web/legacy-scripts.txt` is empty. Type checking covers authored TypeScript,
-excluding SHA-256-pinned `web/static/vendor` and generated `web/static/dist`
-scripts. Missing/unknown entries or bundles fail
-startup; undeclared renders fail.
+`web/static/scripts.go` owns the shared page-entry list; non-entry `web/src/`
+modules are never bundled standalone. Validate the manifest and bundle hashes
+at startup; missing/unknown entries or bundles and undeclared renders fail.
+Use no mutable globals. Type checking covers authored TypeScript, excluding
+SHA-256-pinned `web/static/vendor` and generated `web/static/dist` scripts.
+`web/legacy-scripts.txt` is empty.
 Classic bundle: deferred, with nonce; arrival stays synchronous.
 Converted bundles are strict-mode scripts (assignments to non-writable properties throw, which sloppy legacy scripts silently ignored).
 Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
@@ -173,9 +166,5 @@ ownership, persistence and decisions 34/37/41's permissions. On conversion,
 typed modules replace authoritative `dataset` working state. Preserve check
 intent and browser tests. Authored code is typed;
 `web/static/embed.go` embeds only vendor and generated scripts.
-
-Routine Node use starts at #1415's merge, after #1410; the one-time #1410
-exception ended with its last PR.
-The wrapper's `node --version` probe in `make check` is not routine Node use.
 
 [cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

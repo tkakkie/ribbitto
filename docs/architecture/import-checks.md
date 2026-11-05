@@ -1,7 +1,6 @@
 # Import checks
 
-How `make check` enforces the import rules of [packages and allowed imports](packages.md). The [architecture index](README.md) lists
-the other files.
+`make check` enforces [packages and allowed imports](packages.md); see the [architecture index](README.md).
 
 A package's sub-packages may import each other, apart from the store,
 wiring and fixture rules below. The [module manifest](../../module_imports_test.go)
@@ -143,19 +142,15 @@ Close once rows are used, including an early return from a scan loop. Keep
 proves it rejects unused, unclosed pgx rows; disabling the linter fails that
 assertion.
 
-Nilerr runs with no exclusions and rejects returning a nil error after
-checking that an error is non-nil, unless the block uses the error (for
-example, `log.Print(err); return nil` counts as handling it). It also reports
-the opposite case, `if err == nil { return err }`. `make lint-fixtures`
-asserts the non-nil-error finding in a tagged Go fixture, so disabling
-nilerr fails the check.
+Nilerr runs without exclusions: do not return nil after a non-nil error
+check unless the block handles the error, or return the error after a nil
+check. `make lint-fixtures` guards the non-nil-error check.
 
 `make check-static` runs [`tools/formatcheck`](../../tools/formatcheck/main.go),
 which requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
-The command first checks Go formatting with PATH's `gofmt -l`, then compares
-each template with the pinned `./bin/templ`'s formatter stdout (parse errors
-fail too). Neither check rewrites files. Both skip root `bin/` and `node_modules/` but include
-`_test.go` and `testdata/` files; the exemptions above apply only to `doc.go`.
+Formatting checks use PATH's `gofmt` and pinned `./bin/templ`, without rewriting;
+parse errors fail. They skip root `bin/` and `node_modules/`, include `_test.go`
+and `testdata/`; the exemptions above apply only to `doc.go`.

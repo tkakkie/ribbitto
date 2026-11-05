@@ -33,10 +33,10 @@ func orgRoutes(pages *pageRenderer, services Services) []orgRoute {
 	}
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
-		{http.MethodPost, "/send-key", sendKey(services.Preferences, services.MemberLimits.SendKey())},
+		{http.MethodPost, "/send-key", sendKey(services.Preferences, services.MemberLimits.SendKey(), pages)},
 		{http.MethodGet, "/events", handlers.events},
-		{http.MethodGet, "/mention-candidates", mentionCandidates(services.MemberSearch, services.MemberLimits.Mention())},
-		{http.MethodPost, "/sidebar/resync", resyncSidebar(services.SidebarResync, services.MemberLimits.Resync())},
+		{http.MethodGet, "/mention-candidates", mentionCandidates(services.MemberSearch, services.MemberLimits.Mention(), pages)},
+		{http.MethodPost, "/sidebar/resync", resyncSidebar(services.SidebarResync, services.MemberLimits.Resync(), pages)},
 		{http.MethodPost, "/channels/{channelID}/topics/{topicID}/typing", handlers.signal},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},
 		{http.MethodGet, "/channels/{channelID}/members", handlers.members},

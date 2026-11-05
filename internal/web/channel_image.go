@@ -31,8 +31,7 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	// Admission precedes the channel lookup and the write: SetImage writes
 	// no event, so without it one member could rewrite images without limit.
 	if !p.imageLimit.Allow(m.Organization.ID, m.Member.ID) {
-		w.Header().Set("Retry-After", "6")
-		w.WriteHeader(http.StatusTooManyRequests)
+		rejectMemberLimit(w, r, p.imageLimit, p.pages)
 		return
 	}
 	if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {

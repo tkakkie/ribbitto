@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -101,6 +102,13 @@ func NewMentionRateLimiter(now func() time.Time) *MemberRateLimiter {
 func NewMemberRateLimiterWithBudget(now func() time.Time, requestsPerSecond float64, burst, concurrent int) *MemberRateLimiter {
 	return &MemberRateLimiter{now: now, rate: rate.Limit(requestsPerSecond), burst: burst, concurrent: concurrent,
 		buckets: make(map[memberLimitKey]*memberBucket)}
+}
+
+// RefillInterval returns the configured time to replenish one token, rounded up
+// to a nanosecond so callers rounding to seconds never understate the interval.
+// It is a retry hint, not a prediction of concurrent slot availability.
+func (l *MemberRateLimiter) RefillInterval() time.Duration {
+	return time.Duration(math.Ceil(float64(time.Second) / float64(l.rate)))
 }
 
 // Admit takes a token and a concurrency slot without waiting. On success the

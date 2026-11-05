@@ -11,7 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-func sendKey(preferences *identity.Preferences, limit *middleware.MemberRateLimiter) func(http.ResponseWriter, *http.Request, org.Membership) {
+func sendKey(preferences *identity.Preferences, limit *middleware.MemberRateLimiter, pages *pageRenderer) func(http.ResponseWriter, *http.Request, org.Membership) {
 	return func(w http.ResponseWriter, r *http.Request, m org.Membership) {
 		account, signedIn := middleware.Account(r.Context())
 		if !signedIn {
@@ -19,8 +19,7 @@ func sendKey(preferences *identity.Preferences, limit *middleware.MemberRateLimi
 			return
 		}
 		if !limit.Allow(m.Organization.ID, m.Member.ID) {
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
+			rejectMemberLimit(w, r, limit, pages)
 			return
 		}
 		if !parseForm(w, r) {

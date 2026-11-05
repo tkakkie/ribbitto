@@ -104,10 +104,8 @@ func TestUnreadAbove(t *testing.T) {
 						t.Fatalf("notice present=%t, want %t", notice != nil, tt.shown)
 					}
 					if notice == nil {
-						if tt.name == "moved out" || tt.name == "fabricated" {
-							if strings.Contains(w.Body.String(), `id="unread-divider"`) {
-								t.Fatal("absent target has divider")
-							}
+						if (tt.name == "moved out" || tt.name == "fabricated") && strings.Contains(w.Body.String(), `id="unread-divider"`) {
+							t.Fatal("absent target has divider")
 						}
 						return
 					}

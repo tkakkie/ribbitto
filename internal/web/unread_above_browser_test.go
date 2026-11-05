@@ -61,7 +61,7 @@ func testUnreadAboveBrowser(t *testing.T, browser *rod.Browser) {
 					if topic {
 						path = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{5})
 					}
-					page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+					page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
 					defer page.MustClose()
 					if err := (proto.EmulationSetEmulatedVisionDeficiency{Type: proto.EmulationSetEmulatedVisionDeficiencyTypeDeuteranopia}).Call(page); err != nil {
 						t.Fatal(err)
@@ -90,7 +90,9 @@ func testUnreadAboveBrowser(t *testing.T, browser *rod.Browser) {
 					for _, size := range [][2]int{{1280, 800}, {390, 844}, {1280, 400}, {1280, 200}} {
 						visit.read.Store(false)
 						page.MustSetViewport(size[0], size[1], 1, false)
-						page.MustNavigate(server.URL + path).MustWaitLoad()
+						if err := navigateLoaded(page, server.URL+path); err != nil {
+							t.Fatal(err)
+						}
 						for _, zoom := range []int{100, 200} {
 							page.MustEval(`z => document.documentElement.style.fontSize = z + '%'`, zoom)
 							if !page.MustEval(`() => {
@@ -105,7 +107,9 @@ func testUnreadAboveBrowser(t *testing.T, browser *rod.Browser) {
 					for _, size := range [][2]int{{1280, 800}, {390, 844}, {1280, 200}} {
 						page.MustSetViewport(size[0], size[1], 1, false)
 						visit.read.Store(false)
-						page.MustNavigate(server.URL + path).MustWaitLoad()
+						if err := navigateLoaded(page, server.URL+path); err != nil {
+							t.Fatal(err)
+						}
 						if scripts {
 							page.MustWait(`() => document.documentElement.dataset.readComplete === 'true'`)
 							page.MustElement("#load-older a").MustClick()
@@ -125,8 +129,9 @@ func testUnreadAboveBrowser(t *testing.T, browser *rod.Browser) {
 						}
 						page.KeyActions().Press(input.ShiftLeft).Type(input.Tab).Release(input.ShiftLeft).MustDo()
 						before := reads.Load()
+						loaded := page.WaitNavigation(proto.PageLifecycleEventNameLoad)
 						page.Keyboard.MustType(input.Enter)
-						page.MustWaitLoad()
+						loaded()
 						page.MustWait(`() => location.hash === '#unread-divider'`)
 						if scripts {
 							page.MustEval(`() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)

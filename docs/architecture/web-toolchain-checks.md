@@ -41,7 +41,7 @@ test layers and harness rules.
 `tools/typedscripts` runs in `make check-tools`, scanning only `git ls-files`.
 Tracked `.js`, `.mjs`, `.cjs` and `.jsx` files must be direct versioned
 `web/static/<stem>-vN.js` scripts listed once in `web/legacy-scripts.txt`, with
-exactly one file per stem. Exempt paths are the three named vendor scripts
+exactly one file per stem. Exempt paths are the two named vendor scripts
 in `web/static/vendor/` (pinned by `vendor_test.go`). On conversion, delete the
 old script and its list line together. The list is now empty and may
 only shrink against `HEAD^1` when `GITHUB_ACTIONS` is set, otherwise the merge

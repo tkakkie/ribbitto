@@ -1,7 +1,7 @@
 # Stream authorization cost
 
-Keeping #262's guarantee without a query per connection/event. `N` below is
-the number of interested streams; the earlier query costs and ceilings are in
+Keeping #262's guarantee without a membership query per connection/event.
+`N` below is the number of interested streams; the earlier query costs and ceilings are in
 [stream cost](stream-cost.md) and [load results](../measurements/load-results.md).
 
 ## #262's guarantee
@@ -18,13 +18,17 @@ another member's audience deny skips the event and advances. A failed check
 ends the stream with the cursor before the event and is never a deny (see
 `Run` in `internal/realtime/stream.go`).
 
+Before #670, each interested stream ran a membership query per event with a
+`READ COMMITTED` snapshot taken after rendering; the options compare against
+that baseline, while the code now uses (a2).
+
 ## Options
 
 ### (a) Membership kept until the organisation's access changes
 
 Each (account, organisation) membership is cached with an organisation-wide
 **access epoch**; a check allows from memory while the epoch is unchanged and
-runs today's query when it changed. Whatever carries the signal, two rules
+runs the pre-#670 query when it changed. Whatever carries the signal, two rules
 hold:
 
 - every access-changing write bumps the epoch **in its own transaction**.
@@ -67,13 +71,14 @@ staggered checks (lagging streams, render latency) each read: between one and
 - **Ordering:** a revocation committed before the check starts is in the
   read's snapshot; older memberships cannot allow, so a query denies. The
   installation-wide sequence preserves this across recreation. A commit
-  after the read's snapshot can still let the event through: today's window,
+  after the read's snapshot can still let the event through: the pre-#670 window,
   widened by the read's return.
 - **Multi-process:** unchanged; every process reads the durable epoch, so
   there is no signal to lose.
 - **Failure modes:** a read error stops the stream and is never a deny. A new
-  access table without a trigger leaves caches stale. Staggered checks fall
-  back towards `N` epoch reads per post: today's count, with a primary-key
+  access table without a trigger leaves caches stale; a check enumerating access
+  tables and their triggers is planned but unbuilt. Staggered checks fall
+  back towards `N` epoch reads per post: the pre-#670 count, with a primary-key
   read instead of the join.
 
 Not an option: taking the epoch from `EventsAfter`'s snapshot would cost
@@ -92,7 +97,7 @@ batches ([stream cost](stream-cost.md)). Several processes change nothing.
 
 Streams of one account share the membership query under the same fresh-read
 rule (joining a query already in flight would reopen #262's race). It keeps
-the guarantee by today's argument and works per process, but costs a query
+the guarantee by the pre-#670 argument and works per process, but costs a query
 per account with an interested stream: at least `N / 16` (the per-account
 cap), and close to `N` in real use, where a member has one or two tabs.
 
@@ -109,7 +114,7 @@ cap), and close to `N` in real use, where a member has one or two tabs.
 
 **(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622).
 It is the only option that keeps #262's guarantee by the same ordering
-argument as today (the deciding read starts
+argument as before #670 (the deciding read starts
 after the render) and can stop the per-post cost following `N`. It also
 covers direct SQL, today's only revocation path, and needs nothing new for
 several processes. Its gain depends on checks overlapping: if measurements with

@@ -1,30 +1,18 @@
 # Rendering and assets
 
-templ components live in `internal/web/view`. Assets embedded from
-`web/static` are cached as immutable; the stylesheet URL carries the CSS's SHA-256.
-In development (`make dev`, `RIBBITTO_DEV_ASSETS=bin/dev-dist`), disk assets
-from `web/static` and `bin/dev-dist`, a per-request CSS hash and per-request
-manifest reloads make rebuilt CSS, script bundles and `.js.map` source maps
-appear without restarting.
+Embedded assets use immutable caching and a SHA-256 stylesheet URL.
+Development (`make dev`, `RIBBITTO_DEV_ASSETS=bin/dev-dist`) serves rebuilt CSS,
+bundles and `.js.map` source maps without restarting.
 
-Fluent icons use an embedded, versioned SVG sprite in `web/static/vendor`
-through `Icon` ([UI convention](../ui-code.md#icons)). Its same-origin `<use>`
-references need no Content Security Policy change.
-
-Channel illustrations ship from the embedded `channel-images-v1` directory
-with versioned URLs. Handlers resolve stored keys or choose a stable
-ID-based fallback for NULL or unknown keys, then pass the URL to the shared
-view component. It reserves 24 px in sidebar rows and 32 px in the header,
-uses empty alt text and asynchronous decoding, and lazy-loads sidebar images.
-
-See [Content Security Policy and script delivery](csp.md#content-security-policy).
+Fluent icons follow the [UI convention](../ui-code.md#icons) and
+[Content Security Policy](csp.md#content-security-policy).
+Channel illustrations use versioned URLs, a stable ID-based fallback for NULL
+or unknown keys, empty alt text and reserved space (24 px in sidebar rows,
+32 px in the header), asynchronous decoding and lazy sidebar loading.
 
 ## Languages
 
-`internal/web/i18n` embeds the English and Japanese TOML catalogues (go-i18n).
-A valid `lang` cookie wins over `Accept-Language`; the matcher's index picks
-a supported catalogue, defaulting to English, and HTML responses add
-`Accept-Language` and `Cookie` to `Vary`. Templates get text only through
-`i18n.T(ctx, "message.id")` and the page language through `i18n.Language`.
-A missing message falls back to English, then to the ID, and is logged once
-per language and ID.
+A valid `lang` cookie wins over `Accept-Language`, defaulting to English.
+HTML responses vary on `Accept-Language` and `Cookie`. Templates use
+`i18n.T(ctx, "message.id")` and `i18n.Language`. Missing messages fall back to
+English, then the ID, and are logged once per language and ID.

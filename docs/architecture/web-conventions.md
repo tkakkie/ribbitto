@@ -11,12 +11,9 @@ Conventions for browser modules under
   in `web/src/<concern>.ts` (`web/src/*.ts`), one file per concern, using
   erasable TypeScript only (no enums, runtime namespaces or parameter
   properties) and relative imports naming `.ts`
-  (`allowImportingTsExtensions`, #1410). After #1411, the Go builder (esbuild's
-  Go API) compiles page entries into uncommitted
-  `web/static/dist/[name]-[hash].js` bundles selected through the manifest and
-  Go registry; authors never write the served content-hashed name. The
-  legacy `<concern>-v<N>` pattern remains covered by syntax fixtures; authored
-  JavaScript directly in `web/static/` is rejected.
+  (`allowImportingTsExtensions`, #1410). Authors never write the served
+  content-hashed name. The legacy `<concern>-v<N>` pattern remains covered by
+  syntax fixtures; authored JavaScript directly in `web/static/` is rejected.
 
 - **One concern per module; pure logic apart from DOM code:** each module owns
   one concern, and logic that decides something (state transitions, queue
@@ -42,10 +39,7 @@ Conventions for browser modules under
 
 - **How a page declares its scripts:** a page declares its scripts in one Go
   registry (#1411), and `templ` templates reference only logical script names
-  from that registry; a template never names a script file or hashed bundle. The
-  registry resolves logical entries through the manifest to embedded
-  `web/static/dist/[name]-[hash].js` bundles (or serves rebuilt disk bundles
-  with `no-store` in development).
+  from that registry; a template never names a script file or hashed bundle.
 
 - **When a shared helper is extracted:** a shared helper is extracted only once
   duplication appears, as
@@ -78,22 +72,12 @@ Conventions for browser modules under
 [`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) owns state,
 uncertainty, original text, confirmed ID and immutable `draftKey`; `requestKey`
 may rotate after a 409. Its [tests](../../web/test/composer-queue.test.ts)
-specify transitions and ordering. The entry keeps item/form references in maps,
-clones the server template and writes DOM projections from these typed objects.
-It never reads pending state, identity or original text back from those outputs.
-
-The entry's synchronous subscription renders each changed projection, then calls:
-
-```ts
-const notifyPending = () => dom.dispatchMessagePendingChangedEvent(document, {
-  holdsReload: holdsReload(queue.items),
-});
-dom.listenMessagePendingQueryEvent(document, notifyPending);
-notifyPending();
-```
+specify transitions and ordering. The entry never reads pending state, identity
+or original text back from DOM projections.
 
 `data-state`, `data-unconfirmed` and item `data-posted-message` are output only;
-`draftKey` stays in memory. Every queue notification publishes the predicate,
+`draftKey` stays in memory. Every queue notification synchronously renders
+each changed projection, then publishes the predicate,
 including a change with no DOM write and removal of the last item. The stream
 subscribes before requesting the current predicate, covering either script order.
 Its request-class and alert clauses stay with the guard.

@@ -1,10 +1,7 @@
 # Web toolchain
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules;
-decision 45 sets `.test.ts` harnesses. The maintainer confirmed mechanics
-marked **confirmed** on 2026-10-21
-([record][cf]). #1410–#1415 build the foundation; #1416–#1421 convert scripts;
-#1409 writes module conventions.
+decision 45 sets `.test.ts` harnesses. Mechanics marked **confirmed**: [record][cf].
 
 ## Language approval — #1410–#1413
 
@@ -34,9 +31,8 @@ need no table entries.
 **Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
-dynamic imports. The maintainer raised ES2017 to ES2018 on 2026-11-03 (#2119):
-supported browsers run ES2018; lowering object spread/rest adds needless
-per-bundle helpers ([browser target rule 4](browser-targets.md#design-rules)).
+dynamic imports. ES2018 avoids needless object spread/rest helpers in supported
+browsers ([browser target rule 4](browser-targets.md#design-rules)).
 This syntax floor adds no Web API polyfills and does not complete browser
 verification; #1820 checks the served bundle.
 

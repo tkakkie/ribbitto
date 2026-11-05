@@ -38,5 +38,5 @@ func (s *TopicStore) GetTopic(ctx context.Context, organizationID, channelID, id
 }
 
 func topicFromRow(row sqlcgen.Topic) conversation.Topic {
-	return conversation.Topic{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, Name: row.Name.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
+	return conversation.Topic{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, Name: row.Name.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time, ConclusionMessageID: row.ConclusionMessageID.Bytes}
 }

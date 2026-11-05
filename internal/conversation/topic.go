@@ -14,6 +14,8 @@ type Topic struct {
 	Name                          string
 	IsDefault                     bool
 	CreatedAt                     time.Time
+	// ConclusionMessageID is zero for an open topic; otherwise it identifies its conclusion.
+	ConclusionMessageID kernel.ID
 }
 
 // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode

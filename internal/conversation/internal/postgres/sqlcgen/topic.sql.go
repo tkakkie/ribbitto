@@ -90,7 +90,7 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 const listTopics = `-- name: ListTopics :many
 SELECT id, organization_id, channel_id, name, is_default, created_at, conclusion_message_id FROM topic
 WHERE organization_id = $1 AND channel_id = $2
-ORDER BY is_default DESC, lower(name), id
+ORDER BY is_default DESC, (conclusion_message_id IS NOT NULL), lower(name), id
 LIMIT $3
 `
 
@@ -100,6 +100,7 @@ type ListTopicsParams struct {
 	Limit          int32
 }
 
+// The default topic first, then open before resolved, then by name and ID.
 func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error) {
 	rows, err := q.db.Query(ctx, listTopics, arg.OrganizationID, arg.ChannelID, arg.Limit)
 	if err != nil {

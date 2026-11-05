@@ -18,9 +18,10 @@ WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(chan
   AND topic_id = sqlc.arg(from_topic_id) AND id = ANY(sqlc.arg(message_ids)::uuid[]);
 
 -- name: ListTopics :many
+-- The default topic first, then open before resolved, then by name and ID.
 SELECT * FROM topic
 WHERE organization_id = $1 AND channel_id = $2
-ORDER BY is_default DESC, lower(name), id
+ORDER BY is_default DESC, (conclusion_message_id IS NOT NULL), lower(name), id
 LIMIT $3;
 
 -- name: LookupTopics :many

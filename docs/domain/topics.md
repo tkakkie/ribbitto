@@ -93,7 +93,7 @@ Topics group messages inside a channel; branching moves messages between them
   Replays and duplicates use stable IDs; replay matches a reload within this
   loaded range, including labels and checkbox sources.
 - The channel sidebar links to at most 50 topics: default first, then
-  case-insensitive name order with ID as a tie-breaker.
+  open before resolved, in case-insensitive name order with ID as a tie-breaker.
 - A topic in a URL is scoped by the organisation and channel in the same
   URL; a topic of another channel is 404, like a non-member.
 

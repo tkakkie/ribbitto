@@ -1,49 +1,22 @@
 # Stream authorization cost
 
-Keeping #262's guarantee without a query per connection/event (#622).
-**Maintainer, 2026-10-08: (a2), triggers mandatory** ([Decision](#decision)).
-Implemented by #669/#670 and [measured by #671](../measurements/stream-authorization-results.md):
-fresh shared epochs and bounded cached allows; misses reload independently.
-Cancellation fails closed. The comparison preserves pre-#670 reasoning.
+Keeping #262's guarantee without a query per connection/event. `N` below is
+the number of interested streams; the earlier query costs and ceilings are in
+[stream cost](stream-cost.md) and [load results](../measurements/load-results.md).
 
-## Before #670
-
-- **The check:** `Stream.deliver` (`internal/realtime/stream.go`) filters,
-  renders, calls `Authorizer.MayReceive`, then sends.
-  `org.Authorizer.MayReceive` (`internal/org/authorizer.go`) runs
-  `GetMembershipBySlug` (`db/queries/org/member.sql`) every time, then checks
-  the organisation and the audience in memory. A failed query stops the
-  stream; it is never a deny.
-- **The cost:** a post wakes every stream of its organisation; each
-  caught-up stream that follows the post's channel (and topic) checks it
-  once, while the others skip it before rendering
-  (`internal/realtime/subscription.go`). So a post costs one query per
-  interested stream, `N` below, plus shared work. In the benchmark and in
-  #216 every stream followed one channel, so `N` was every open stream.
-  With #227's caches the benchmark measured `N + 10` queries per post and passed 2,000 streams ([stream cost](stream-cost.md)).
-  End to end at 10 posts/s with pgx's default pool of 10, 7,000 streams pass
-  (7,015 queries per post) and 10,000 fail (p95 2.8 s over HTTP/1.1, 4.3 s
-  through Caddy over HTTP/2); a 40-connection pool fails at 15,000
-  ([load results](../measurements/load-results.md)).
-- **What revokes access:** nothing in the application yet. No code removes a
-  member, changes a role, or renames or deletes an organisation, and every
-  channel is public. Only direct SQL removes a membership, as #262's
-  reproduction did. Private channels and member removal
-  ([roadmap](../roadmap.md#after-the-mvp)) will add the real writers.
-  Sign-out is separate: `Hub.CancelSession` ends the session's streams, with
-  no query per event.
-
-### #262's guarantee, testable
+## #262's guarantee
 
 For an event E and a connection of account A: if a transaction that removes
 A's access to E commits **before the check for E starts** — before E was
-read, while it waited in a batch, or while its render waited on the
-database — E is not sent and the cursor moves past it. A commit after the
-check can still let that one event through (accepted on #262). Before #670, this
-held because the check is a `READ COMMITTED` query whose snapshot is taken
-after the render returns. `TestStreamRechecksAccessBeforeEachSend` and
-`TestStreamDeniesAccessLostWhileRendering`
-(`internal/realtime/stream_test.go`) pin it.
+read, while it waited in a batch, or while its render waited — E is not sent.
+A removal committed **after the check has started** may let that one event
+through (accepted on #262).
+
+Denied-event behaviour is separate (#852): a deny of the stream's own member
+ends the stream with `ErrMembershipRevoked`, without advancing the cursor;
+another member's audience deny skips the event and advances. A failed check
+ends the stream with the cursor before the event and is never a deny (see
+`Run` in `internal/realtime/stream.go`).
 
 ## Options
 
@@ -53,6 +26,7 @@ Each (account, organisation) membership is cached with an organisation-wide
 **access epoch**; a check allows from memory while the epoch is unchanged and
 runs today's query when it changed. Whatever carries the signal, two rules
 hold:
+
 - every access-changing write bumps the epoch **in its own transaction**.
   Bumped after the commit, a check in between allows a revoked member; bumped
   in an earlier transaction, a reload in between caches the old membership
@@ -72,24 +46,24 @@ commit and a dropped listener loses signals; polling bounds staleness to its
 period. Both weaken "committed before the check" to "a while before".
 
 **(a2) Durable epoch, read fresh and shared.** `organization.access_epoch`
-is bumped by triggers on the tables that decide access (`member` deletes,
-updates of role, organisation or account, and `TRUNCATE`; `organization` slug
-updates; later the private-channel tables), so direct SQL and other binaries
-bump it too. **The triggers are part of (a2):** bumps only in application
-code are a weaker variant whose guarantee, like (a1)'s, covers only writes
-through current code, though across processes.
+must be bumped by database triggers on every access-changing write, in the
+same transaction as the change. Every new access-controlling table or write
+path must get the triggers it needs in the migration that adds it.
+Private channels and member removal remain [planned](../roadmap.md#after-the-mvp);
+their access writers must obey these rules too. **The triggers are a required
+part of (a2)** and cannot be replaced by epoch updates in application code:
+direct SQL, another process or an older binary bypasses those updates.
 
 A check takes the epoch from a read whose snapshot began after the check
 started, and **an epoch value is never retained**: a stored or TTL-cached
 epoch is stale. `realtime.Cache` gives this rule only with a `keep` that
-rejects every value (`internal/realtime/cache.go`): callers that join a load
-share a private second load started after it, and a caller arriving during
-that one starts another. If shutdown ends that read, the cache returns the
-parent's cause; `org` also rejects results after parent cancellation.
-Sharing comes only from overlap. A
-post's checks mostly overlap, since every interested stream wakes at once, but
+rejects every value (`internal/realtime/cache.go`). Cancellation must fail
+closed, and cancelled membership results must never be cached.
+Sharing comes only from overlap. A post's checks mostly overlap, since every
+interested stream wakes at once, but
 staggered checks (lagging streams, render latency) each read: between one and
 `N` reads per post, roughly the checks' arrival span over a read's duration.
+
 - **Ordering:** a revocation committed before the check starts is in the
   read's snapshot; older memberships cannot allow, so a query denies. The
   installation-wide sequence preserves this across recreation. A commit
@@ -97,10 +71,10 @@ staggered checks (lagging streams, render latency) each read: between one and
   widened by the read's return.
 - **Multi-process:** unchanged; every process reads the durable epoch, so
   there is no signal to lose.
-- **Failure modes:** a read error stops the stream, as today. A new access
-  table without a trigger leaves caches stale; a test listing the access
-  tables can catch it. Staggered checks fall back towards `N` epoch reads
-  per post: today's count, with a primary-key read instead of the join.
+- **Failure modes:** a read error stops the stream and is never a deny. A new
+  access table without a trigger leaves caches stale. Staggered checks fall
+  back towards `N` epoch reads per post: today's count, with a primary-key
+  read instead of the join.
 
 Not an option: taking the epoch from `EventsAfter`'s snapshot would cost
 nothing, but that snapshot precedes the render, which is #262's bug.
@@ -133,55 +107,19 @@ cap), and close to `N` in real use, where a member has one or two tabs.
 
 ## Decision
 
-**(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622),
-implemented by #669 and #670. It is the only option that keeps #262's
-guarantee by the same ordering argument as today (the deciding read starts
+**(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622).
+It is the only option that keeps #262's guarantee by the same ordering
+argument as today (the deciding read starts
 after the render) and can stop the per-post cost following `N`. It also
 covers direct SQL, today's only revocation path, and needs nothing new for
 several processes. Its gain depends on checks overlapping: if measurements with
 staggered checks show reads near `N`, (a2) only swaps the membership join
 for a primary-key read, and the choice should be revisited.
 
-- **Where it lives:** `org.Authorizer` keeps [cached allows](stream-limits.md)
-  and shared reads behind `MayReceive`; `realtime`'s loop and its `Authorizer` interface do
-  not change and `org` remains the only authorization logic.
-- **Settled by the implementation issues:** joins do not bump (#669; only
-  allows are cached); a deny skipped and advanced (#670) until #852 made a
-  deny of the stream's own member end the stream.
-- Recorded here and in streaming.md; decision 23 covers the event log and
-  hub. #669, #670 and #671 are high risk; #669 and #670 need the third-AI review.
+Authorization decisions belong to `org`; `realtime` must not grow its own
+authorization logic ([package boundary](packages.md)). Joins do not bump the
+epoch because only allows are cached; denies are never cached. A rolled-back
+access change must leave the committed epoch unchanged.
 
-### Tests that prove (a2)
-
-- **Unchanged:** tests above, #207's register-then-recheck and session
-  cancellation. Audience denies advance; bound revocation and check errors do not.
-- **`org`, no database:** an unchanged epoch runs no membership query
-  (counted, even after snapshot eviction); a changed one queries and denies;
-  a failed epoch read is an error, never a deny; organisation and audience
-  checks still hold.
-- **Shared read:** a check that arrives while a read is in flight gets the
-  next read, forced with a gated store; two checks in sequence run two reads
-  (nothing is retained).
-- **PostgreSQL:** each trigger bumps the epoch in the writer's transaction,
-  and a rolled-back write bumps nothing. A revocation committed while a
-  membership load is in flight still denies the next event. Gated streams
-  also cover warmed SQL removal, rename and same-ID/slug recreation.
-  `TestStreamEndpoints` checks removal over SSE: the removed member misses the
-  next event while the owner receives it.
-- **Shutdown:** a gated successful epoch read with a waiting joiner fails
-  closed after cancellation; cancelled membership results are never cached.
-
-## Expected effect
-
-About 15 shared queries per post end to end, plus the epoch reads: a few
-per organisation **when the checks overlap**, up to `N` when they are
-staggered. Misses reload independently; denies are never cached.
-
-**Measured** (#671, [results](../measurements/stream-authorization-results.md)):
-- **Stream cost:** in the unstaggered ladders, queries per post
-  stay at 16 to 46, not `N + 10`, up to 10,000; the highest passing step rose from 2,000 to 30,000
-  (one member) and 11,000 (distinct members, past the cache's capacity).
-- **Staggered checks** read 0.72 `N` per post at 1,000 streams with a 100 ms
-  window and 0.056 `N` at 10,000: revisited, and (a2) kept (#671).
-- **#216's active steps:** 10,000 passes with the default pool; at the next
-  limit the pool was not the cause; over HTTP/2 CPU was under pressure.
+The revisit condition was exercised and (a2) kept on 2026-10-09; see the
+[measurements and reasons](../measurements/stream-authorization-results.md).

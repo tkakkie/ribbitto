@@ -121,7 +121,8 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if body, err = ValidateMessageBody(body); err != nil {
 		return Sent{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 	}
-	if err := p.checkReferences(ctx, m.Organization.ID, body); err != nil {
+	memberIDs, err := p.checkReferences(ctx, m.Organization.ID, body)
+	if err != nil {
 		return Sent{}, err
 	}
 	var quoted map[kernel.ID]Reference
@@ -177,6 +178,11 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 		if err != nil {
 			return err
 		}
+		if len(memberIDs) > 0 {
+			if err := writer.InsertMentions(ctx, organizationID, posted.ID, posted.EventSeq, memberIDs); err != nil {
+				return err
+			}
+		}
 		if p.reads != nil {
 			previous, err := writer.LastMessageBefore(ctx, organizationID, channelID, seq)
 			if err != nil {
@@ -204,16 +210,15 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 
 // checkReferences looks every member reference in body up in one batch in
 // the organisation's directory, before and outside the posting transaction,
-// so the organisation lock is never held for it. A member who leaves between
-// the check and the insert is shown as the placeholder, like any member who
-// leaves later (decision 39).
-func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID, body string) error {
-	ids := appendReferences(nil, ParseChatV1(body))
+// so the organisation lock is never held for it. The returned IDs are reused
+// for persistence; the member foreign key closes the check-to-insert race.
+func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID, body string) ([]kernel.ID, error) {
+	ids := ExtractMentions(FormatChatV1, body)
 	if len(ids) == 0 {
-		return nil
+		return nil, nil
 	}
 	if p.members == nil {
-		return errors.New("posting has no member directory to check references")
+		return nil, errors.New("posting has no member directory to check references")
 	}
 	var found map[kernel.ID]org.DirectoryEntry
 	err := p.snapshots.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
@@ -222,14 +227,14 @@ func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID,
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("checking member references: %w", err)
+		return nil, fmt.Errorf("checking member references: %w", err)
 	}
 	for _, id := range ids {
 		if _, ok := found[id]; !ok {
-			return fmt.Errorf("%w: %w", ErrInvalidBody, ErrUnknownReference)
+			return nil, fmt.Errorf("%w: %w", ErrInvalidBody, ErrUnknownReference)
 		}
 	}
-	return nil
+	return ids, nil
 }
 
 // repeat answers a send whose key the author already stored. The topic is

@@ -69,6 +69,10 @@ type Writer interface {
 	// is stored with it; an original deleted since QuotedMessage is
 	// ErrQuoteNotFound.
 	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error)
+	// InsertMentions writes the validated distinct members with the inserted
+	// message's returned sequence. A member deleted after validation is
+	// ErrInvalidBody with ErrUnknownReference; other failures stay internal.
+	InsertMentions(ctx context.Context, organizationID, messageID kernel.ID, eventSeq int64, memberIDs []kernel.ID) error
 	// QuotedMessage returns the channel's message with the ID, or
 	// ErrQuoteNotFound when it is missing or in another organisation or channel.
 	QuotedMessage(ctx context.Context, organizationID, channelID, id kernel.ID) (Message, error)

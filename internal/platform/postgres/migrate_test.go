@@ -48,29 +48,31 @@ func TestMigrations(t *testing.T) {
 		sendKey  bool
 		quote    bool
 		proof    bool
+		mentions bool
 	}{
-		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, true, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, true, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, true, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, true, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, true, false, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, true, false, false, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", true, false, false, false, false, false, false, false, false, false, false, false, false},
-		{"down", true, "applied", false, false, false, false, false, false, false, false, false, false, false, false, false},
-		{"down", false, "pending", false, false, false, false, false, false, false, false, false, false, false, false, false},
-		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true},
+		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, true},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, true, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, true, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, true, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, true, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, true, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, true, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, true, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, true, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, true, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, true, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", true, false, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", true, "applied", false, false, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"down", false, "pending", false, false, false, false, false, false, false, false, false, false, false, false, false, false},
+		{"up", true, "applied", true, true, true, true, true, true, true, true, true, true, true, true, true, true},
 	} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
@@ -89,6 +91,9 @@ func TestMigrations(t *testing.T) {
 		}
 		if err := db.QueryRowContext(ctx, "SELECT to_regclass('public.setup') IS NOT NULL").Scan(&present); err != nil || present != step.setup {
 			t.Fatalf("after %s: setup present = %t, want %t: %v", step.command, present, step.setup, err)
+		}
+		if err := db.QueryRowContext(ctx, "SELECT to_regclass('public.message_mention') IS NOT NULL").Scan(&present); err != nil || present != step.mentions {
+			t.Fatalf("after %s: message_mention present = %t, want %t: %v", step.command, present, step.mentions, err)
 		}
 		if err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'member' AND column_name = 'handle')").Scan(&present); err != nil || present != step.handle {
 			t.Fatalf("after %s: member.handle present = %t, want %t: %v", step.command, present, step.handle, err)

@@ -32,7 +32,7 @@ load tests are done (#216, #219; [results](measurements/load-results.md)).
 | **M9 Front end** (#1404) | A front end that stays safe to change as it grows, and conversations that open at a bounded cost | The five outcomes in [M9](roadmap-m9.md) |
 | **M10 Front-end architecture** (#2060) | Front-end complexity that stays bounded as reactions, editing, uploads and search arrive | The five outcomes in [M10](roadmap-m10.md) |
 | **M11 Client tests** (#2089) | Client-side tests that check the behaviour that matters in the layer that owns it ([`web-tests.md`](architecture/web-tests.md)), with type-checked `web/test/*.test.ts` harnesses ([decision 45](decisions/45-type-checked-client-unit-tests.md)) and cleaned-up existing harnesses; its foundation (#2090, #2092, #2091) lands before the remaining M9 conversions while M9 and M10 continue alongside it | The four outcomes and completion criteria in [#2089](https://github.com/tkakkie/ribbitto/issues/2089) |
-| **M12 Nothing gets buried** (#2181) | What needs a person reaches them in one place, and what is settled stays out of their way | A "for me" view of mentions and replies (#433), a list of topics with unread messages across channels that opens at the first unread message, and resolving a topic with a conclusion; none needs a setting. Reactions follow in M13. Plan and order in #2181 |
+| **M12 Nothing gets buried** | What needs a person reaches them | Defined in #2181 |
 
 The repository is public, but a release — a
 container image and a Compose file with PostgreSQL and Caddy

@@ -272,7 +272,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (ChannelPage, error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
   func (*Reader).Pins(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]Pin, error) // Pins reads the bounded current pins without exposing their display sequence.
   func (*Reader).ReadPins(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (state PinsSnapshot, err error) // ReadPins reads only the channel's bounded pins, current topics and names in one read-only snapshot.
-  func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
+  func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its event sequence and selected conclusion.
 type Reference struct // Reference is a referenced member's current names.
   field DisplayName string
   field Handle string
@@ -303,6 +303,7 @@ type SidebarCounter interface // SidebarCounter is the counts-only extension use
 type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and explicit counts, including zero.
   field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Channels []Channel
+  field Conclusion *Entry
   field Current Channel
   field SnapshotSeq int64
   field Topic *Topic

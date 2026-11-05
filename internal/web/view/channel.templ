@@ -244,7 +244,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						</div>
 					}
 					if page.Topic != nil {
-						@TopicResolution(page)
+						@TopicResolution(page, false)
 					}
 					<p id={ StreamStoppedID } role="status" hidden class="shrink-0 px-6 py-2 text-body text-muted">
 						{ i18n.T(ctx, "stream.stopped") }
@@ -274,6 +274,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 								id={ MessageItemsID }
 								if page.Topic != nil {
 									{ TopicAttribute }={ idValue(page.Topic.ID) }
+									if !page.Topic.IsDefault {
+										{ ResolveURLAttribute }={ conversationURL(page) + "/resolve" }
+									} else {
+										{ ResolveURLAttribute }=""
+									}
 								}
 								if page.EventCursor != nil && latest(page) {
 									sse-swap="message,messages-moved"
@@ -304,9 +309,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						</div>
 					</div>
 					if len(page.Messages) > 0 {
-						@MessageActions(page.Messages[0])
+						@MessageActions(page.Messages[0], page.Topic != nil)
 					} else {
-						@MessageActions(Message{})
+						@MessageActions(Message{}, page.Topic != nil)
 					}
 					<div id={ MessageStatusID } role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)
@@ -698,6 +703,7 @@ templ SidebarLists(page ChannelPage) {
 	@ChannelList(page, true)
 	if page.Topic != nil {
 		@TopicHeadingCount(page, true)
+		@TopicResolution(page, true)
 	}
 }
 

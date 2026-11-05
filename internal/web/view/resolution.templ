@@ -9,16 +9,18 @@ templ resolvedMark(topic Topic) {
 	}
 }
 
-// TopicResolution links the current conclusion to its stable message URL.
-templ TopicResolution(page ChannelPage) {
+// TopicResolution stays present when open so live refresh can replace it.
+templ TopicResolution(page ChannelPage, oob bool) {
 	<div
 		id={ ResolutionSummaryID }
 		class="flex shrink-0 flex-wrap items-center justify-between gap-x-2 px-6 text-body max-desk:px-4"
+		if oob {
+			hx-swap-oob="true"
+		}
 	>
 		if page.Conclusion != nil {
-			<form id={ ResolutionFormID } method="post" action={ templ.SafeURL(conversationURL(page) + "/reopen") } hidden></form>
 			<a href={ templ.SafeURL(page.Conclusion.URL) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "resolution.conclusion") }</a>
-			<button type="submit" form={ ResolutionFormID } class="min-h-11 rounded-md px-3 text-brand hover:bg-hover">{ i18n.T(ctx, "resolution.reopen") }</button>
+			<button type="submit" form={ ResolutionFormID } formaction={ templ.SafeURL(conversationURL(page) + "/reopen") } class="min-h-11 rounded-md px-3 text-brand hover:bg-hover">{ i18n.T(ctx, "resolution.reopen") }</button>
 			<p dir="auto" role="region" tabindex="0" aria-label={ i18n.T(ctx, "resolution.summary") } class="basis-full max-h-16 overflow-y-auto whitespace-pre-wrap wrap-anywhere">{ page.Conclusion.Body }</p>
 		}
 	</div>

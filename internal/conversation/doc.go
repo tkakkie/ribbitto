@@ -23,7 +23,7 @@
 // author lookups and injected unread counts share a snapshot so a page cannot mix states; the bounded channel-members page reads its
 // channel check, listing and display names in one snapshot. Independent sidebar
 // snapshots, which also serve the channel list page, read fresh bounded lists,
-// counts and their event sequence without history or directories.
+// counts, the selected conclusion and their event sequence.
 // Member lookups return org's directory entries, not copies. Posting stores
 // chat_v1 after converting typed handles and checking member references
 // through org's directory, in separate listing and reference-check

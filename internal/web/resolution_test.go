@@ -119,7 +119,7 @@ func TestResolutionAdmission(t *testing.T) {
 
 func TestResolutionSummaryKeyboardRegion(t *testing.T) {
 	for _, lang := range []string{"en", "ja"} {
-		markup := renderIn(t, lang, view.TopicResolution(view.ChannelPage{Conclusion: &view.Message{Body: strings.Repeat("long conclusion\n", 40)}}))
+		markup := renderIn(t, lang, view.TopicResolution(view.ChannelPage{Conclusion: &view.Message{Body: strings.Repeat("long conclusion\n", 40)}}, false))
 		label := "Conclusion text"
 		if lang == "ja" {
 			label = "結論の本文"
@@ -127,5 +127,36 @@ func TestResolutionSummaryKeyboardRegion(t *testing.T) {
 		if !strings.Contains(markup, `role="region" tabindex="0" aria-label="`+label+`"`) || !strings.Contains(markup, "max-h-16 overflow-y-auto") {
 			t.Fatal("summary has no labelled keyboard region")
 		}
+	}
+}
+
+func TestResolutionMenuScope(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		topic      *view.Topic
+		resolveURL string
+	}{
+		{"channel", nil, ""},
+		{"default topic", &view.Topic{ID: kernel.ID{2}, IsDefault: true}, ""},
+		{"named topic", &view.Topic{ID: kernel.ID{2}}, "/organizations/acme/channels/01000000-0000-0000-0000-000000000000/topics/02000000-0000-0000-0000-000000000000/resolve"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			page := feedFixture(t, 1)
+			page.Topic = tt.topic
+			page.Messages[0].DefaultTopic = false
+			page.Messages[0].TopicURL = "/named-topic"
+			markup := renderIn(t, "en", view.ChannelScreen("", page))
+			if strings.Contains(markup, `id="resolution-form"`) != (tt.topic != nil) || strings.Contains(markup, `data-resolve-url`) != (tt.topic != nil) {
+				t.Fatal("Resolve form or URL escaped the topic page")
+			}
+			if tt.topic != nil && !strings.Contains(markup, `data-resolve-url="`+tt.resolveURL+`"`) {
+				t.Fatal("topic list lost its Resolve endpoint")
+			}
+			for _, item := range []string{renderIn(t, "en", view.MessageItem(page.Messages[0])), renderIn(t, "en", view.LiveMessageItem(page.Messages[0]))} {
+				if strings.Contains(item, "data-resolve-url") || !strings.Contains(item, `href="/named-topic"`) {
+					t.Fatal("message lost its topic link or retained a per-message Resolve URL")
+				}
+			}
+		})
 	}
 }

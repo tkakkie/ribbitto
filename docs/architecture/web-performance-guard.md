@@ -29,25 +29,20 @@ assertions. CI never judges time.
 The source is `internal/web/feed_guard_budgets_test.go`; each constant cites
 an issue and explains its reason. Initial values cite #1478; #1500 ratchets
 message actions, including #1461's pin attribute removal; #1489 adds the
-no-JavaScript list wrapper. Current measured values and caps are:
+no-JavaScript list wrapper. Cells are measured/cap; pairs are channel; resolved topic.
 
-| Metric | Fixed measured / cap | Per message measured / cap | First render measured / cap (50 messages) |
-|---|---:|---:|---:|
-| Elements | 182 / 182 | 29 / 29 | 1693 / 1693 |
-| Forms | 11 / 11 | 1 / 1 | 61 / 61 |
-| Explicit type=submit | 7 / 7 | 0 / 0 | 7 / 7 |
-| hx-* carriers | 10 / 10 | 0 / 0 | 11 / 11 |
-| htmx-selected nodes | 21 / 21 | 1 / 1 | 72 / 72 |
-| HTML bytes | 20988.333 / 21769 | 4745.873 / 4916 | 265856 / 275517 |
+| Metric | Channel fixed | Topic fixed | Per message | First render |
+|---|---:|---:|---:|---:|
+| Elements | 193 / 193 | 212 / 212 | 22 / 22 | 1354 / 1354; 1373 / 1373 |
+| Forms | 12 / 12 | 13 / 13 | 0 / 0 | 12 / 12; 13 / 13 |
+| Explicit type=submit | 7 / 7 | 9 / 9 | 0 / 0 | 7 / 7; 9 / 9 |
+| hx-* carriers | 10 / 10 | 10 / 10 | 0 / 0 | 11 / 11 |
+| htmx-selected nodes | 21 / 21 | 24 / 24 | 0 / 0 | 22 / 22; 25 / 25 |
+| HTML bytes | 23303.333 / 24469 | 25990.333 / 25991 | 3464.873 / 3639; 3466.873 / 3467 | 204094 / 214299; 206969 / 214299 |
 
-The structure fixture at 50/100/200 messages measures bytes
-258282/495543/970163. Its 50-message htmx mirror is 71 nodes; the
-handler first render is 72. Attribute-less buttons do not match htmx
-2.0.7's `[type='submit']` selector; the per-message pin form still does.
-The older whole-page test remains: 1632 elements, 10 hx carriers and
-267568 bytes (258282 measured; cap 5% above #1500's 254826, rounded up), one byte stricter than the
-standing guard's rounded fixed + 50 × slope byte caps. It checks the
-whole total; this guard also checks growth, linearity and handler output.
+Topic counts include conclusion and menu controls ([approval](https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298)).
+Whole-page measured/cap (channel; topic): elements 1293/1294; 1312/1312,
+hx carriers 10/10, bytes 196547/206459; 199334/206459. Both fixtures run all guards.
 
 Counts have zero headroom: elements bound DOM growth, forms/submits and
 htmx-selected nodes bound initialization work, and hx carriers independently

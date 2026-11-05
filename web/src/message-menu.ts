@@ -56,6 +56,13 @@ import * as dom from "./contracts.gen.ts";
     }
     menu.querySelector<HTMLAnchorElement>(`[${dom.CopyLinkAttribute}]`)!.href = dom.readAttribute(link, dom.MessageURLAttribute)!;
     menu.querySelector<HTMLButtonElement>(`[form="${dom.QuoteFormID}"]`)!.value = id;
+    const resolve = dom.getResolutionForm(menu);
+    if (resolve) {
+      const resolveURL = dom.readAttribute(dom.getMessageItems()!, dom.ResolveURLAttribute);
+      resolve.action = resolveURL || "";
+      resolve.hidden = !resolveURL;
+      resolve.querySelector<HTMLButtonElement>("button")!.value = id;
+    }
     form.hidden = false;
     menu.append(form);
     window.htmx?.trigger(form, "htmx:load", { elt: form });

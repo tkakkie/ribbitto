@@ -91,11 +91,9 @@ func vendorRules() []rule {
 		{"web/static/vendor/fluent-icons-1.1.344.svg", "vendor SVG"},
 		{"web/static/vendor/htmx-2.0.7.min.js", "vendor JavaScript"},
 		{"web/static/vendor/htmx-ext-sse-2.2.4.min.js", "vendor JavaScript"},
-		{"web/static/vendor/idiomorph-ext-0.7.4.min.js", "vendor JavaScript"},
 		{"web/static/vendor/fluent-icons-LICENSE", "vendor licence"},
 		{"web/static/vendor/htmx-ext-sse-LICENSE", "vendor licence"},
 		{"web/static/vendor/htmx.org-LICENSE", "vendor licence"},
-		{"web/static/vendor/idiomorph-LICENSE", "vendor licence"},
 	}
 }
 

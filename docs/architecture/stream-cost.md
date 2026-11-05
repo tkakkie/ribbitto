@@ -1,177 +1,136 @@
 # Stream cost
 
-What one post costs the delivery loop as open streams grow, measured by
-`TestStreamCost` in `internal/realtime/cost_test.go` (#215). It measures the
-current delivery path. The results below precede #670's cached allows and
-fresh shared epoch reads; #671 measured those with the same benchmark
+`TestStreamCost` in `internal/realtime/cost_test.go` (#215) measures delivery
+cost as streams grow, without HTTP or HTML rendering. The frozen results
+precede #670's authorization cache and shared epoch reads; #671 measured those
 ([results](../measurements/stream-authorization-results.md)).
 
 ## Running it
 
-It runs only when asked and never in CI. Export `RIBBITTO_TEST_DATABASE_URL`
-first, as for `make check` ([database tests](../database-tests.md)): the admin URL of a
-disposable PostgreSQL on loopback, kept out of the command line. The two runs
-below then used:
+Run only when asked, never in CI. Export `RIBBITTO_TEST_DATABASE_URL` first
+([database tests](../database-tests.md)): the admin URL of a disposable
+PostgreSQL on loopback, kept out of the command line.
 
 ```sh
-# Run A: the default steps
-RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 \
-  go test -count=1 -run 'TestStreamCost$' -v -timeout 30m ./internal/realtime/
-# Run B: between run A's last pass and first failure
-RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=200,300,500 \
-  go test -count=1 -run 'TestStreamCost$' -v -timeout 30m ./internal/realtime/
+RIBBITTO_STREAM_COST=1 go test -count=1 -run '^TestStreamCost$' -v -timeout 30m ./internal/realtime/
 ```
 
-`RIBBITTO_STREAM_COST_STEPS` (streams per step, default `1,10,100,1000,5000`;
-a run stops at its first failing step), `_RATE` (posts per second, default
-10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
-default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
-(one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members; set duration/rate explicitly). Its measured
-results and commands are in [client counts results](../measurements/stream-client-counts-results.md).
-`_OTHER=0..100` places that percentage on another channel in sidebar mode.
-`_RECOUNTS=<n>` overrides the shared recount limit (default `max(1, pool/2)`).
-`_SMOKE=1` checks function without reporting timings.
-With a
-window, stream `i` of `N` waits `i × window / N` after its shared render
-returns and before its `MayReceive`, in a per-stream renderer wrapper: in the
-shared render loader it would delay one render, not the checks. It needs
-`_MEMBERS=distinct` (one member's streams share one cached allow) and refuses
-to start without it. The server must be loopback, checked before
-connecting, fallback hosts included. The benchmark works in a database it
-creates from `template0` (`pgtest.NewEmpty`), migrates itself and drops
-afterwards; it touches no other database. Loopback alone does not prove a
-server is disposable: it can be a tunnel.
+The server must be loopback, checked before connecting, fallback hosts included.
+Loopback alone does not prove a server is disposable: it can be a tunnel.
+The benchmark creates its own database from `template0` (`pgtest.NewEmpty`),
+migrates and drops only that database; it touches no other database.
+
+Tunables are defined in the `TestStreamCost` comment in
+`internal/realtime/cost_test.go`. One correction to that comment: unset
+`RIBBITTO_STREAM_COST_POOL` inherits `pgtest.MaxConns` (16), not pgx's default.
+Set `RIBBITTO_STREAM_COST_POOL=10` to compare like for like with the recorded runs.
+A run stops at its first failing step; if all pass, it establishes only a lower bound.
+For sidebar measurements, set duration and rate explicitly.
+
+With `_STAGGER`, stream `i` of `N` waits `i × window / N` after its shared
+render returns and before `MayReceive`. The wait must stay in a per-stream
+renderer wrapper: in the shared loader it would delay one render, not the checks.
+It needs `_MEMBERS=distinct` and refuses to start without it, because one
+member's streams share one cached allow.
 
 ## What is measured
 
-Per step: `N` streams of one member (or distinct members) in one organisation, all following one
-channel, run the real loop (#209), event reader (#208), `org.Authorizer.MayReceive` and
-one-message read (#206); the renderer reads the message but renders no HTML.
-Posts go through `conversation.Posting` with the hub as notifier.
+`N` streams in one organisation use an in-memory sender and read messages with
+authors, without HTML. All follow one channel unless sidebar placement applies.
+Unset `RIBBITTO_STREAM_COST_MEMBERS` shares one member across all streams;
+`distinct` gives one member per stream.
 
-- **Posting** is an open loop: posts are scheduled at the fixed rate
-  whatever their latency, with at most one second's worth in flight. A post
-  that would exceed that is missed, and a step with a missed or incomplete
-  post fails as underloaded rather than quietly offering less load.
-- **Queries** are statements attempted, counted by `postgres.QueryCounter`
-  over the posting window and the drain, fixtures excluded; they include
-  both posting and delivery. Transaction statements (BEGIN, COMMIT,
-  ROLLBACK) are counted apart from them. Empty reads (event reads that
-  returned nothing) are a subset of the queries. Each is reported per
-  completed post and per delivery.
-- **Pool wait** is reported two ways: per acquisition that found the pool
-  empty (`EmptyAcquireWaitTime / EmptyAcquireCount`) and spread over the
-  deliveries (what the pool adds to a delivery on average). It explains
-  latency but fails no step (#227): with the caches, waits become rare and
-  their per-acquisition mean can exceed half of a 5 ms p95, and without them
-  the pool dominates a 30 ms p95 at 100 streams — neither is a ceiling.
-- **Delivery latency** runs from `Post` returning after commit to the in-memory send
-  (a delivery before `Post` returns counts as a negative sample), reported as
-  p50, p95 and p99; it includes any stagger wait. It is not a commit
-  timestamp.
-- **Authorization**, in a second table after the step table: epoch reads
-  per post and per post per stream (the trend as `N` grows), a subset of the
-  queries, counted by the `GetAccessEpoch` query name in the benchmark's
-  tracer; checks per post and the cached-allow hit rate from
-  `org.Authorizer.Stats` (the cache lives for the whole run, so later steps
-  start warm); the check's own time (p50, p95, p99) in `MayReceive`, without
-  the stagger wait; and the stagger delays as min/max/step.
-- A step fails when it is underloaded or incomplete, when p95 exceeds 1 s,
-  or when a delivery is still missing when the step's deadline (posting
-  time plus 30 s) passes. A failing step logs what came first, as offsets
-  from the first post: the first empty pool acquire (sampled every 50 ms)
-  with the empty and cancelled acquire counts, the first delivery over 1 s,
-  and the failed stream loops with the first error. CPU and memory, of this
-  process or PostgreSQL, are not visible to it; watch them outside.
+- **Posting** is an open loop at a fixed rate regardless of latency, with at
+  most one second's worth in flight. Missed or incomplete posts fail the step
+  as underloaded, rather than silently reducing the offered load.
+- **Queries** count attempted statements from posting and delivery over the
+  posting window and drain, excluding fixtures. Transaction statements
+  (BEGIN, COMMIT, ROLLBACK) are counted apart; empty event reads are a subset
+  of queries. Counts are reported per completed post and per delivery.
+- **Pool wait** is both the mean per acquisition that found the pool empty
+  (`EmptyAcquireWaitTime / EmptyAcquireCount`) and that total spread over
+  deliveries. It explains latency, fails no step and is not a ceiling by itself.
+- **Delivery latency** runs from `Post` returning after commit to the in-memory
+  send, including stagger wait, as p50/p95/p99. It starts at return, not at
+  the earlier commit; delivery before `Post` returns counts as a negative sample.
+- **Authorization** reports epoch reads per post and per post per stream,
+  checks per post, cached-allow hit rate and `MayReceive` p50/p95/p99 without
+  stagger wait. Epoch reads are a subset of queries. The authorization cache
+  lives for the run, so later steps start warm.
+- A step fails for underloaded or incomplete posting, p95 over 1 s, or a
+  delivery still missing at the deadline (posting time plus 30 s). CPU and
+  memory of this process and PostgreSQL are invisible here; watch them outside.
 
 ## Sidebar mode (#812)
 
-`Reader.Sidebar` uses `compose.PageCountsIn`, wrapped only to add a
-same-snapshot cursor witness to production counts.
-Each connection binds its own membership and read ranges. Before each step,
-prior posts are marked read; alternating members retain one unread seed.
-The initial snapshot must match that member's two count totals before counters
-start. Initial recounts, seeds and read writes are excluded.
+Initial snapshots must match each member's two count totals before counters
+start; initial recounts, unread seeds and read writes are excluded.
+Drain requires each member's delivery of every posted sequence and an exact
+capped-count snapshot computed after resync publication, with the final
+same-snapshot committed sequence. Timing alone cannot prove freshness;
+the freshness witness is test-only and supports runs beyond 99 posts.
+SQL totals include posting and final resync; elapsed time includes drain.
+Message and unread delivery use the post-return clock above; final resync
+runs from publication until every stream is exact, including outstanding delivery.
+The delivery denominator includes both frame kinds. Pool wait totals sum
+acquisition waits, not wall time.
 
-Messages are collected separately. Drain requires each member's delivery of
-every posted sequence and an exact capped-count snapshot computed after resync
-publication, with the final same-snapshot committed sequence. The test-only
-freshness witness supports runs beyond 99 posts; timing alone cannot prove freshness. Snapshot bytes replace HTML; sidebar
-output bypasses the shared message render cache. The four count statements are
-classified by sqlc names, separately from list queries and transaction statements.
-Reports include absolute SQL totals, recounts, elapsed posting plus drain time,
-recounts/connection/second, count statements/recount and /post, pool wait totals
-and acquisitions, and message and unread p50/p95/p99.
-[Client counts results](../measurements/stream-client-counts-results.md) describes placement and
-final resync accounting; [sidebar counts history](../measurements/sidebar-counts-history.md)
-summarises the stopped server-recount comparisons.
+[Client counts results](../measurements/stream-client-counts-results.md) holds
+placement rules, commands and measured results;
+[sidebar counts history](../measurements/sidebar-counts-history.md) summarises
+the stopped server-recount comparisons.
 
 ## Results, 2026-10-01
 
-Apple M-series, darwin/arm64, 10 CPUs, Go 1.27.1; PostgreSQL 18 in Docker on
-the same machine; pool 10 connections; batch 100; 10 posts/s for 10 s. Every
-step completed all 100 scheduled posts.
+Apple M-series, darwin/arm64, 10 CPUs, Go 1.27.1; PostgreSQL 18 in local
+Docker; pool 10; batch 100; 10 posts/s for 10 s. All 100 posts/step completed.
+These past figures bracket this setup's limit between pass and failure,
+not today's performance or absolute capacity. Commit dates here are JST.
+Fetch both measurement commits: `git fetch origin pull/228/head pull/233/head`.
 
-| Run | Streams | Queries/post | Transaction statements/post | Queries/delivery | Mean empty-acquire wait | p50 | p95 | Result |
-|---|---|---|---|---|---|---|---|---|
-| A | 1 | 8.0 | 4.0 | 8.00 | 0 | 3.5 ms | 4.3 ms | pass |
-| A | 10 | 53 | 22 | 5.30 | 0 | 5.7 ms | 7.4 ms | pass |
-| A | 100 | 503 | 202 | 5.03 | 6.6 ms | 22 ms | 32 ms | pass |
-| B | 200 | 1,003 | 402 | 5.01 | 11.9 ms | 38 ms | 56 ms | pass |
-| B | 300 | 1,503 | 602 | 5.01 | 17.7 ms | 56 ms | 82 ms | pass |
-| B | 500 | 2,089 | 1,002 | 4.18 | 55 ms | 1.35 s | 2.34 s | fail: p95 over 1 s |
-| A | 1,000 | 4,068 | 2,002 | 4.07 | 115 ms | 7.2 s | 13.4 s | fail: p95 over 1 s |
+**First measurement (no shared reads, 1 to 1,000 streams):**
+`3c981fe185bcb435bd6050abe13e6fd6af60f581`; #228's author identifies this SHA,
+before cancellation incorrectly marked successful steps timed out. It predates
+the step deadline and zero-post guard added in `4393a08`.
+**Pre-deletion SHA (both tables):**
+`5fd630c8abcc7bf114674883ed1d02c1e70484fb`; retrieve the tables and past
+commands with `git show 5fd630c8abcc7bf114674883ed1d02c1e70484fb:docs/architecture/stream-cost.md`.
 
-No event read came back empty. **Highest passing step: 300 streams; first
-failing: 500.** Each delivery costs about five queries — one event read, one
-membership check, and the message with its two author lookups — and two
-transaction statements (the one-message read's BEGIN and COMMIT), plus the
-post's own three queries. At 10 posts/s, 300 streams need about 15,000
-queries/s and pass; 500 need 25,000 and the pool saturates. Below five
-queries per delivery, reads batch several events when a stream lags.
+Without shared event reads and message renders, **300 streams passed / 500
+failed** (p95 82 ms / 2.34 s). Each delivery cost about five queries: event
+read, membership check, message and its two author lookups; plus two
+transaction statements, and three queries per post. At 10 posts/s, the
+300-stream step needed about 15,000 queries/s; at 500 the pool saturated.
+No event read returned empty. Lagging streams batched events, lowering
+queries per delivery; caught-up streams read one new event per post.
 
 ## With shared reads (#227), 2026-10-01
 
-Same machine and settings, run with and without `_CACHE=1` (steps
-`100,200,300,500` without it; `100,300,500,1000,2000,3000,5000` with it, once
-with one member and once with `_MEMBERS=distinct`):
+Same hardware, versions, pool, batch, rate and duration; `_CACHE=1` shares
+**event reads and message renders**, not #670's later authorization cache.
+**Shared-read re-run SHA:** `b33c82efbb298d60318fbf1237299e3e8f831b1d`
+(#233's author comment: after the joiner-freshness fix). Both SHAs are
+PR-branch commits. The no-shared-reads comparison's commit is unidentified
+beyond #233's branch on 2026-10-01.
 
-| Case | Streams | Queries/post | Queries/delivery | Pool wait/delivery | p50 | p95 | Result |
-|---|---|---|---|---|---|---|---|
-| no cache | 300 | 1,503 | 5.01 | 53 ms | 56 ms | 83 ms | pass |
-| no cache | 500 | 2,087 | 4.17 | 123 ms | 1.29 s | 2.55 s | fail: p95 over 1 s |
-| cache, one member | 1,000 | 1,010 | 1.01 | 21 ms | 39 ms | 48 ms | pass |
-| cache, one member | 2,000 | 2,010 | 1.01 | 40 ms | 81 ms | 89 ms | pass |
-| cache, one member | 3,000 | 3,007 | 1.00 | 73 ms | 1.56 s | 2.93 s | fail: p95 over 1 s |
-| cache, distinct members | 1,000 | 1,010 | 1.01 | 22 ms | 40 ms | 52 ms | pass |
-| cache, distinct members | 2,000 | 2,010 | 1.01 | 41 ms | 81 ms | 90 ms | pass |
-| cache, distinct members | 3,000 | 3,007 | 1.00 | 69 ms | 1.40 s | 2.44 s | fail: p95 over 1 s |
+Without shared reads the comparison again measured **300 pass / 500 fail**
+(p95 83 ms / 2.55 s). With them, **2,000 passed / 3,000 failed**, both with
+one member (p95 89 ms / 2.93 s) and distinct members (90 ms / 2.44 s).
+The ladder stopped at 3,000; 5,000 was not run. Every step completed 100 posts.
 
-Every step completed its 100 posts. With the caches a post costs about
-`N + 10` queries — one membership check per stream, plus the post's three,
-one shared message read with its two author lookups, and about four event
-reads — and **the highest passing step rises from 300
-to 2,000 streams**. Distinct members change nothing, so the sharing is per
-organisation, not per member. The cache stores only full event batches: a
-short batch, such as the one holding a new post, is never stored, and the
-streams that joined a read in flight get a second read started after it
-finished, so none gets an unkept snapshot older than its own call; shutdown
-returns the parent's cancellation cause if it prevents that second read.
-A stream that reads later repeats it.
-In this run the remaining per-stream query was the membership check; beyond about
-2,000 streams on this machine it saturates the pool.
+A post cost about `N + 10` queries: one membership check per stream, three
+posting queries, one shared message read with two author lookups, and about
+four event reads. Distinct members changed nothing, indicating sharing per
+organisation. Only full event batches are retained
+([consistency rules](stream-limits.md)); short batches can require repeated reads.
+The remaining per-stream query was the membership check, which saturated
+this setup's pool beyond the 2,000-stream passing step.
 
 ## What it points to
 
-Under this load the pool saturates while the loop's goroutines mostly wait
-between posts: the evidence points at per-connection database work, though
-it does not prove Go adds nothing at higher counts. #227 shares each event read
-(plus one private read for a short batch's joiners) and message read per
-organisation and renders once per language; what
-remained per connection was the membership check. #670 implements its
-[freshness protocol](stream-authorization.md#decision). With it (#671's
-[results](../measurements/stream-authorization-results.md)), queries per post stay near 16
-to 46 up to 10,000 streams in the unstaggered ladders. The next limits are the authorization cache's
-capacity and, with one member, something the benchmark cannot see (not the
-pool). Cached allows remove the per-stream query; a cache miss still loads
-one membership per stream (#232).
+Pool saturation and goroutines waiting between posts point at per-connection
+database work, without ruling out Go at higher counts. #670's authorization cache follows
+its own [freshness protocol](stream-authorization.md#decision): cached allows
+remove the per-stream query; a cache miss still loads one membership per stream.
+Its later costs and limits are in [authorization results](../measurements/stream-authorization-results.md);
+end-to-end conditions and figures are in [load results](../measurements/load-results.md).

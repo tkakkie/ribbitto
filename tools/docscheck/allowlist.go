@@ -63,6 +63,7 @@ func documentAllowlist() map[string]string {
 		"docs/architecture/web-performance-guard.md":           "existing at the baseline commit",
 		"docs/architecture/web-source-maps-store.md":           "existing at the baseline commit",
 		"docs/architecture/web-source-maps.md":                 "existing at the baseline commit",
+		"docs/architecture/web-state.md":                       "#2062: state lifetime and swap ownership contract from #2060",
 		"docs/architecture/web-tests.md":                       "existing at the baseline commit",
 		"docs/architecture/web-toolchain-checks.md":            "existing at the baseline commit",
 		"docs/architecture/web-toolchain.md":                   "existing at the baseline commit",

@@ -80,6 +80,7 @@ type Entry struct // Entry is a stored message with its current author names and
   field Message Message
   field QuoteAuthor Reference // QuoteAuthor is the quoted member's current names when Quote is set.
   field References map[github.com/tkakkie/ribbitto/internal/kernel.ID]Reference // References holds the members Blocks names that the organisation's directory resolved.
+  field ReplyPreview *ReplyPreview // ReplyPreview is current text and author data, or an unavailable state.
   func (Entry).Text(placeholder string) string // Text returns the message as plain text, one extraction per format (decision 38): a plain_text body unchanged, and a chat_v1 body's extraction with each reference resolved through References to its "@handle", or to placeholder when the organisation's directory did not return the member.
   field TopicName string
 var ErrBranchConflict error // ErrBranchConflict means a selected message is no longer in the topic the request expected (someone else branched it first): nothing changed.
@@ -167,6 +168,7 @@ type Message struct // Message is a post identified by ID, its body read under F
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Pinned bool // Pinned is the message's current pin state, the same for every member.
   field Quote *Quote // Quote is the earlier message this one quotes, or nil.
+  field Reply *Reply // Reply identifies the answered message; only posting can set it.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
   func (Message).TypedBodyPrefix(typed string) string // TypedBodyPrefix returns only a prefix verified against the original typed input.
   field TypedBodyProof TypedBodyProof // TypedBodyProof verifies the whole normalized typed body on keyed retries.
@@ -276,6 +278,13 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
 type Reference struct // Reference is a referenced member's current names.
   field DisplayName string
   field Handle string
+type Reply struct // Reply is an immutable link to an older message in the same channel.
+  field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field MessageID github.com/tkakkie/ribbitto/internal/kernel.ID
+type ReplyPreview struct // ReplyPreview exposes only current author names and text; unavailable targets leave Available false so web can supply a neutral localized placeholder.
+  field Author Reference
+  field Available bool
+  func (ReplyPreview).Text(placeholder string) string // Text returns up to 200 code points of current text, with placeholder for unresolved member references, using the same excerpt rules as pins.
 type Resolution struct // Resolution commits a topic's conclusion with its durable invalidation.
   func (*Resolution).Reopen(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Reopen clears a topic's conclusion; an open topic is unchanged.
   func (*Resolution).Resolve(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Resolve sets or replaces a named topic's conclusion with a current message.
@@ -289,6 +298,7 @@ type Send struct // Send is one composer submission.
   field Key *IdempotencyKey // Key makes a repeated send return the first message; nil posts without it.
   field Quote *github.com/tkakkie/ribbitto/internal/kernel.ID // Quote is a message of the channel to quote (decision 38), or nil.
   field QuoteText *string // QuoteText selects a part; nil copies the whole extracted body.
+  field ReplyTo *github.com/tkakkie/ribbitto/internal/kernel.ID // ReplyTo is the answered message of this channel; its author is read in the transaction.
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID
   field UnknownMember string // UnknownMember stands in the quote's text for a member the quoted chat_v1 message references and the directory did not return.
 type Sent struct // Sent is what a send produced.
@@ -339,7 +349,7 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).GetDefaultTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetDefaultTopic returns the channel's default topic; none, as for another organisation's channel, is ErrTopicNotFound.
   func (Writer).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetTopic returns a topic of the channel, or ErrTopicNotFound.
   func (Writer).InsertMentions(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64, memberIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) error // InsertMentions writes the validated distinct members with the inserted message's returned sequence.
-  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
+  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote, reply *Reply) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
   func (Writer).InsertNotice(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64) (Message, error) // InsertNotice inserts branching's notice like InsertMessage but maps no error, so a failure there stays a server error (R2 on #502).
   func (Writer).KeyedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, key IdempotencyKey) (Message, error) // KeyedMessage returns the author's message stored with the key in the organisation, or ErrMessageNotFound.
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.

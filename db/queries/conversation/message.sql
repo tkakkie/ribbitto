@@ -1,8 +1,9 @@
 -- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, format, event_seq, idempotency_key,
-                     quoted_message_id, quoted_member_id, quote_text, typed_body_proof)
+                     quoted_message_id, quoted_member_id, quote_text, typed_body_proof, reply_to_message_id, reply_to_member_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg(idempotency_key),
-        sqlc.narg(quoted_message_id), sqlc.narg(quoted_member_id), sqlc.narg(quote_text), sqlc.narg(typed_body_proof)) RETURNING *;
+        sqlc.narg(quoted_message_id), sqlc.narg(quoted_member_id), sqlc.narg(quote_text), sqlc.narg(typed_body_proof),
+        sqlc.narg(reply_to_message_id), sqlc.narg(reply_to_member_id)) RETURNING *;
 
 -- name: GetKeyedMessage :one
 SELECT * FROM message

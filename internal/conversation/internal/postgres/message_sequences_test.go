@@ -38,7 +38,7 @@ func TestFirstMessageAfterScope(t *testing.T) {
 		{other.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, other.MemberID, 4},
 		{f.OrganizationID, sibling.ID, f.Channel.DefaultTopicID, f.MemberID, 5},
 	} {
-		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq, nil, conversation.TypedBodyProof{}, nil)
+		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq, nil, conversation.TypedBodyProof{}, nil, nil)
 		requireNoError(t, err)
 	}
 	traced, trace := hasMessagesPool(t, pool)

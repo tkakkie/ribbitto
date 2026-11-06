@@ -37,7 +37,7 @@ words (ribbit, pond, marsh, …) appear only in UI message files.
 | **Mark all as read** | Explicitly reads the whole feed or topic through the page cursor, including older history. |
 | **read state** | A member's read ranges in a channel: which of its messages they have read ([`unread.md`](unread.md)). |
 | **message** | A post in a channel, written by a member. |
-| **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
+| **reply** | A message linked to an earlier message it answers in the same channel. |
 | **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |
 | **quote** | A message's copy of an earlier message's text in the same channel, with its author and, while the original exists, a link to it; the copy belongs to the quoting message ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)). |
 | **pin** | A channel's reference to an important message, shown in its overview panel. |

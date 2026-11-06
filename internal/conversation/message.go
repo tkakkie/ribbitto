@@ -51,6 +51,13 @@ type Message struct {
 	Pinned bool
 	// Quote is the earlier message this one quotes, or nil.
 	Quote *Quote
+	// Reply identifies the answered message; only posting can set it.
+	Reply *Reply
+}
+
+// Reply is an immutable link to an older message in the same channel.
+type Reply struct {
+	MessageID, MemberID kernel.ID
 }
 
 // Quote is a message's copy of an earlier message's text in the same

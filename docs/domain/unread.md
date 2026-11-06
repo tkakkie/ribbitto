@@ -111,9 +111,9 @@ Any unread design must pass both tests:
 
 ## Replies
 
-Replies are not implemented (decision 22); once built, opening or paging a
-reply chain must send no POST and leave read state unchanged. A chain
-omits other messages in the channel,
+In-stream replies are stored and previewed; the reply-chain view is not built
+yet (decision 22). Opening or paging a chain must send no POST and leave
+read state unchanged. A chain omits other messages in the channel,
 so treating it as a read would mark unseen messages read. Replies are
 ordinary messages under the same unread rules, with no separate unread
 count.

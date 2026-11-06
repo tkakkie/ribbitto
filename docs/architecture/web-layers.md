@@ -1,7 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
-Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
-Target browsers, compatibility rules and verification status: [`browser-targets.md`](browser-targets.md).
+[Decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md).
+[Browser targets](browser-targets.md).
 
 ## Progressive enhancement
 
@@ -22,17 +22,13 @@ provide full parity.
 Handlers in `internal/web` validate requests, call use cases, convert results
 to view models, and choose status, component and full page or fragment. They never
 build HTML strings (`AGENTS.md`); `/healthz` and `/readyz` return plain text.
-`Services.Posting` uses web's `Poster` (`Send`), like `Branching`; unit tests fake
-these seams, not conversation's storage ports.
+Unit tests fake web seams, never conversation's storage ports.
 
 ## templ
 
 Components render view models in `internal/web/view`. Handlers convert
-module results; components never receive them. View models own their
-`Organization` (`Slug`, `Name`), `Channel` (`ID`, `DefaultTopicID`, `Name`,
-`ImageURL`, `Image`, `Created`) and `Topic` (`ID`, `Name`, `IsDefault`).
-Views import neither `org` nor `conversation`. From `kernel` they hold only
-`kernel.ID`, which carries no behaviour a template could misuse. Components do no I/O and
+module results; components never receive them. Views import neither `org` nor
+`conversation`; from `kernel`, only `ID`. Components do no I/O and
 make no authorisation decisions; display logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 

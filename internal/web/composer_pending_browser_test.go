@@ -31,6 +31,11 @@ type pendingRequest struct {
 // Real markup, htmx and stream script; only transport delivery is gated.
 func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool, delayed ...string) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
 	t.Helper()
+	return pendingBrowserFixture(t, browser, topic, nil, delayed...)
+}
+
+func pendingBrowserFixture(t *testing.T, browser *rod.Browser, topic bool, setup func(*view.ChannelPage, *http.ServeMux), delayed ...string) (*rod.Page, chan realtime.Outgoing, chan pendingRequest, *atomic.Int32) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 	snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, MemberID: kernel.ID{3}, Handle: "alice", DisplayName: "Alice", Role: "member", EventCursor: new(int64(42)), Composer: new("generation"), IdempotencyKey: new("00000000-0000-4000-8000-000000000001"), Reading: true}
@@ -40,6 +45,9 @@ func pendingBrowser(t *testing.T, browser *rod.Browser, topic bool, delayed ...s
 	events, posts := make(chan realtime.Outgoing, 8), make(chan pendingRequest, 8)
 	var reads atomic.Int32
 	mux := http.NewServeMux()
+	if setup != nil {
+		setup(&snapshot, mux)
+	}
 	mux.Handle("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Suppress one initial script; the order tests load it explicitly later.
 		if len(delayed) > 0 && strings.Contains(r.URL.Path, delayed[0]) && r.URL.Query().Get("late") != "1" {

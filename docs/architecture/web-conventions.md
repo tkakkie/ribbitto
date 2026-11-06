@@ -1,26 +1,20 @@
 # Web front-end conventions (planned)
 
-Conventions for browser modules under
-[decision 43](../decisions/43-typescript-with-a-go-driven-build.md) and the
-[web toolchain](web-toolchain.md). All authored client code is now in `web/src/*.ts`;
-`web/legacy-scripts.txt` is empty.
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md);
+[web toolchain](web-toolchain.md).
 
 ## Rules
 
-- **Where modules live and how they are named:** new and converted modules live
+- **Modules:** new and converted modules live
   in `web/src/<concern>.ts` (`web/src/*.ts`), one file per concern, using
   erasable TypeScript only (no enums, runtime namespaces or parameter
   properties) and relative imports naming `.ts`
-  (`allowImportingTsExtensions`, #1410). Authors never write the served
-  content-hashed name. The legacy `<concern>-v<N>` pattern remains covered by
-  syntax fixtures; authored JavaScript directly in `web/static/` is rejected.
+  (`allowImportingTsExtensions`, #1410). Never author served content-hashed names. Authored JavaScript directly in `web/static/` is rejected.
 
-- **One concern per module; pure logic apart from DOM code:** each module owns
-  one concern, and logic that decides something (state transitions, queue
-  order or retry classification) lives in a DOM-free `web/src/<concern>.ts`
-  module, while DOM code stays thin; see [`web-tests.md`](web-tests.md) for the
-  test layers and harness rules. Client unit tests are direct
-  `web/test/<name>.test.ts` harnesses.
+- **Logic and DOM:** modules own one concern. Decisions (state transitions,
+  queue order, retry classification) live in DOM-free `web/src/<concern>.ts`;
+  DOM code stays thin. Test layers and `web/test/<name>.test.ts` harness rules:
+  [`web-tests.md`](web-tests.md).
 
 - **State:** a module's own working state is held in typed in-memory objects,
   never in `dataset`, limited to what
@@ -28,56 +22,38 @@ Conventions for browser modules under
   [decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
   and [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)
   already allow; any other/new client-side state is for #1361 to decide, not for
-  this document. The attributes that [`web-contracts.md`](web-contracts.md)
-  documents (for example `data-event-cursor`, `data-applied-cursor`,
-  `data-unread-count`, `data-state`) stay in the DOM as the contract between
-  server HTML, CSS, scripts and tests; scripts read and write them only through
+  this document. The attributes in [`web-contracts.md`](web-contracts.md)
+  remain the contract between server HTML, CSS, scripts and tests; scripts read and write them only through
   the typed DOM-contract accessors (#1413), and a value that only the script
-  needs is never put in the DOM. Derived attributes such as `data-state` are
-  rendered from the typed state (#1416, #1417), and the composer queue notifies
-  the stream reload guard when its state changes.
+  needs is never put in the DOM. Render derived attributes from typed state; notify the reload guard on queue changes.
 
-- **How a page declares its scripts:** a page declares its scripts in one Go
-  registry (#1411), and `templ` templates reference only logical script names
-  from that registry; a template never names a script file or hashed bundle.
+- **Script declarations:** templates use only logical names from the Go
+  registry, never script files or hashed bundles.
 
-- **When a shared helper is extracted:** a shared helper is extracted only once
-  duplication appears, as
+- **Shared helpers:** extract only when duplication appears, as
   [decision 40 §2](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md#2-the-m7-composer)
-  states. A helper with a second user in another module moves to its own
-  `web/src/<helper>.ts` module, imported by relative `.ts` path, and is tested
-  as [`web-tests.md`](web-tests.md) sets out.
+  states. With a second module user, move it to `web/src/<helper>.ts`;
+  import by relative `.ts` path and test per [`web-tests.md`](web-tests.md).
 
-- **How DOM ids and data attributes come from the DOM contract:** Go definitions
-  used by `templ` own DOM ids (including dynamic id suffixes), data attributes,
-  custom event names and payload fields/types; a Go generator under `tools/`,
-  reached by `go generate`, writes the committed generated file
-  `web/src/contracts.gen.ts` that the [toolchain page](web-toolchain.md)
-  names, with constants, types and typed accessors (sidebar #1413 and composer
-  #1823, including typed payloads, nullable keys and htmx triggers).
-  `web/src/composer.ts` is the typed composer entry and uses these accessors. A
-  module never contains a literal contract id, attribute name, `dataset` key,
+- **DOM contract:** Go owns DOM ids, dynamic suffixes, data attributes,
+  event names and payload types; `go generate` writes their constants, types
+  and accessors to `web/src/contracts.gen.ts`.
+  A module never contains a literal contract id, attribute name, `dataset` key,
   selector or custom event string outside that adapter; runtime validation and
   type narrowing stay in the modules because static types cannot validate server
   attributes or htmx event detail. `tools/contractliterals` in `make check-tools`
   rejects literal bypasses in authored TypeScript and view templates; only the
-  generated file is exempt. It matches whole names/tokens and the current
-  dynamic id families' 32-hex suffixes, not arbitrary substrings. This text
-  check is not a security boundary; computed/indirect bypasses (concatenation,
-  aliasing, runtime names) remain for review. Removing or weakening it needs its
-  own review (#1414).
+  generated file is exempt. Computed/indirect bypasses remain for review; this
+  check is not a security boundary. Removing or weakening it needs its own
+  review (#1414).
 
-## Composer queue example
+## Composer projections
 
-[`web/src/composer-queue.ts`](../../web/src/composer-queue.ts) owns state,
-uncertainty, original text, confirmed ID and immutable `draftKey`; `requestKey`
-may rotate after a 409. Its [tests](../../web/test/composer-queue.test.ts)
-specify transitions and ordering. The entry never reads pending state, identity
-or original text back from DOM projections.
+`web/src/composer-queue.ts` owns pending state, uncertainty, original text, confirmed ID
+and immutable `draftKey` (`requestKey` may rotate after a 409).
+Never read pending state, identity or original text back from DOM projections.
 
 `data-state`, `data-unconfirmed` and item `data-posted-message` are output only;
-`draftKey` stays in memory. Every queue notification synchronously renders
-each changed projection, then publishes the predicate,
-including a change with no DOM write and removal of the last item. The stream
-subscribes before requesting the current predicate, covering either script order.
-Its request-class and alert clauses stay with the guard.
+`draftKey` stays in memory. Queue notifications publish the reload predicate
+even without a DOM write or after the last removal. The stream must
+subscribe before querying it; the guard owns request-class and alert clauses.

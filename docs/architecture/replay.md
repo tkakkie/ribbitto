@@ -37,7 +37,8 @@ sequenceDiagram
   the hub's latest sequence for this organisation is greater than both my cursor
   and the last observed durable level", and that condition and wake channel
   are read from one immutable atomic snapshot
-  *before* blocking. The hub's
+  *before* blocking, so a raise before select still wakes that channel's waiter.
+  The hub's
   value is level-triggered: if event 101 is committed after the connection
   read `seq > 100` and found nothing, but before it starts waiting, the hub
   already holds 101, so the wait returns at once and the next read delivers
@@ -50,7 +51,8 @@ sequenceDiagram
   Watch-only, ephemeral-only and recount-deadline wakes perform no event-log
   read without a newer durable level. Coverage uses the level known before
   reading, so a raise during the read still prompts another read.
-- **The hub** (`realtime.Hub`, #157) only raises its durable level.
+- **The hub** (`realtime.Hub`, #157): `Hub.Raise` only raises the durable
+  level, carrying no event data; lower or equal raises are ignored.
   Registration atomically enforces the process and account caps; only
   unregistering frees a slot. Account or session cancellation ends the
   connection; `context.Cause` tells why.
@@ -97,8 +99,10 @@ sequenceDiagram
   presence (#768) and typing (#788, #790) are current-state delivery.
 - **Missed raises** (#237). Writers without a notifier (`cmd/seed`, sign-up's
   `member.joined`) and other processes can commit without raising the hub.
-  The watermark periodically checks the committed sequences of active
-  organisations and raises only those still active. It only wakes streams;
+  Without the watermark, caught-up streams would wait for another post.
+  It periodically checks committed sequences of active organisations (those
+  with at least one registered connection) and raises only those still active.
+  It only wakes streams;
   they read from their cursor, so `event_log` stays the only truth, and such
   an event arrives after the next successful check. Failed checks are logged
   and retried; without connections it reads nothing.

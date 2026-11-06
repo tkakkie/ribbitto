@@ -53,11 +53,11 @@ Keep the numbers stable: other documents cite them.
    foreign keys keep both in the same organisation and channel; branching
    moves messages, never copies them, and keeps their `id` and `event_seq`
    ([`topics.md`](topics.md)).
-10. **Replies reference existing messages in the same
-    organisation and channel with lower `event_seq`.** A composite foreign
-    key enforces scope; insert-only application writes, a self-reply CHECK
-    and a database update guard prevent cycles. Preview reads leave read
-    state unchanged ([messages](messages.md); decision 22).
+10. **Replies reference existing messages in the same organisation and
+    channel, never themselves, and the link never changes.** The database
+    guarantees only these; posting adds an older target and the target's
+    author, so direct multi-row SQL can insert a cycle
+    ([messages](messages.md); decision 22).
 
 11. **Channel creation never raises an organisation above its configured cap**
     (`RIBBITTO_MAX_CHANNELS`, default 500), counting the default channel.

@@ -34,15 +34,14 @@ Every channel message is in exactly one topic of its channel
 ([`topics.md`](topics.md)). Branching moves it to another topic without
 changing its `id` or `event_seq`.
 
-A reply stays in the stream with an immutable link to an older message of
+A reply stays in the stream with an immutable link to a message of
 its channel ([decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)).
-Posting reads the answered author and defaults to the answered topic; an
-explicit same-channel topic may override it. Quote and reply targets are
+The database guarantees existence, scope, no self-reply and immutability;
+posting guarantees an older target and the answered author, and defaults to
+the answered topic (an explicit same-channel topic may override it). Quote and reply targets are
 independent, including on keyed retries. Previews show current text only,
 up to 200 code points, or a neutral unavailable state. Replies add only
 their message's unread count; preview reads leave read state unchanged.
-The composer, rendered preview, chain panel and replies supply remain
-separate work.
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).

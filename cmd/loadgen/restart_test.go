@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"regexp"
 	"strings"
@@ -62,7 +63,13 @@ func TestRestartHelper(t *testing.T) {
 	}
 	var pages atomic.Int64
 	var events [2]atomic.Int64
-	err = http.ListenAndServe(os.Getenv("RIBBITTO_ADDR"), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	file := os.NewFile(3, "listener")
+	listener, err := net.FileListener(file)
+	_ = file.Close()
+	if err != nil || listener.Addr().String() != os.Getenv("RIBBITTO_ADDR") {
+		os.Exit(5)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mode == "never" {
 			w.WriteHeader(503)
 			return
@@ -146,7 +153,8 @@ func TestRestartHelper(t *testing.T) {
 			_ = http.NewResponseController(w).Flush()
 		}
 		<-r.Context().Done()
-	}))
+	})}
+	err = server.Serve(listener)
 	if err != nil {
 		os.Exit(5)
 	}
@@ -184,18 +192,41 @@ func TestRestart(t *testing.T) {
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			failRestartIf(t, err != nil, err)
 			address, state := listener.Addr().String(), t.TempDir()+"/state"
-			_ = listener.Close()
+			t.Cleanup(func() { _ = listener.Close() })
+			// Keep a parent copy across both launches: neither child binds a released port.
+			listenerFile, err := listener.(*net.TCPListener).File()
+			failRestartIf(t, err != nil, err)
+			t.Cleanup(func() { _ = listenerFile.Close() })
+			var commands []*exec.Cmd
+			launch := func(ctx context.Context, path string, args []string, address, channel string, probe func(context.Context, *http.Client, string) (string, error), deadline, exitDeadline time.Duration) (*childServer, error) {
+				cmd := exec.Command(path, args...)
+				commands = append(commands, cmd)
+				cmd.ExtraFiles = []*os.File{listenerFile}
+				// The parent's listener queues connections even after an early child exit.
+				// Bound early-exit probes so readiness can observe the reaper's result.
+				// Successful probes keep their deadline: page reads advance helper state.
+				read := func(ctx context.Context, client *http.Client, endpoint string) (string, error) {
+					if tc.mode == "fail" || tc.mode == "relaunch-fail" {
+						ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+						defer cancel()
+						return probe(ctx, client, endpoint)
+					}
+					return probe(ctx, client, endpoint)
+				}
+				return startChild(ctx, cmd, address, channel, read, deadline, exitDeadline)
+			}
 			t.Setenv("LOADGEN_HELPER", tc.mode)
 			t.Setenv("LOADGEN_STATE", state)
 			t.Setenv("RIBBITTO_ADDR", "192.0.2.1:1") // Must be overridden in the child.
 			t.Setenv("GORACE", "atexit_sleep_ms=0")
 			path, childArg := os.Args[0], "-test.run=^TestRestartHelper$"
 			childArgs := []string{childArg, "-test.timeout=5s"}
-			assertClosed := func() {
+			assertReaped := func() {
 				t.Helper()
-				listener, err := net.Listen("tcp", address)
-				failRestartIf(t, err != nil, "child not cleaned up", err)
-				_ = listener.Close()
+				// Rebinding after closing the reservation would create another port race.
+				for _, cmd := range commands {
+					failRestartIf(t, cmd.Process != nil && cmd.ProcessState == nil, "child not reaped")
+				}
 			}
 			var probes atomic.Int64
 			probe := func(ctx context.Context, client *http.Client, endpoint string) (string, error) {
@@ -214,8 +245,7 @@ func TestRestart(t *testing.T) {
 				path = t.TempDir() + "/missing"
 			}
 			if tc.mode == "occupied" {
-				listener, err := net.Listen("tcp", address)
-				failRestartIf(t, err != nil, err)
+				launch = launchChild
 				server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					_, _ = fmt.Fprint(w, `<div data-event-cursor="7"></div>`)
 				})}
@@ -223,9 +253,9 @@ func TestRestart(t *testing.T) {
 				defer func() { _ = server.Close() }()
 			}
 			if tc.kind != "run" {
-				child, err := launchChild(t.Context(), path, childArgs, address, "/channel", probe, 300*time.Millisecond, 150*time.Millisecond)
+				child, err := launch(t.Context(), path, childArgs, address, "/channel", probe, 300*time.Millisecond, 150*time.Millisecond)
 				if child != nil {
-					defer func() { child.stop(time.Second); assertClosed() }()
+					defer func() { child.stop(time.Second); assertReaped() }()
 				}
 				if tc.failure != "" {
 					failRestartIf(t, err == nil || !strings.Contains(err.Error(), tc.failure), fmt.Sprintf("accepted failed/occupied child: %v", err))
@@ -234,14 +264,14 @@ func TestRestart(t *testing.T) {
 						_, err = os.Stat(state)
 						failRestartIf(t, !os.IsNotExist(err), "launched on an occupied address", err)
 					} else {
-						assertClosed()
+						assertReaped()
 					}
 					return
 				}
 				failRestartIf(t, err != nil, err)
 				if tc.kind == "handover" {
 					assertHandover(t, child, address, func() (*childServer, error) {
-						return launchChild(t.Context(), path, childArgs, address, "/channel", probe, time.Second, time.Second)
+						return launch(t.Context(), path, childArgs, address, "/channel", probe, time.Second, time.Second)
 					})
 					return
 				}
@@ -288,14 +318,14 @@ func TestRestart(t *testing.T) {
 				args = append(args, "-rate=20")
 			}
 			var out bytes.Buffer
-			err = run(args, &out)
+			err = runWithLauncher(args, &out, launch)
 			if tc.failure != "" {
 				failRestartIf(t, err == nil || !strings.Contains(err.Error(), "restart: child "+tc.failure), err)
-				assertClosed()
+				assertReaped()
 				return
 			}
 			failRestartIf(t, err != nil, err)
-			assertClosed()
+			assertReaped()
 			var got result
 			err = json.Unmarshal(out.Bytes(), &got)
 			failRestartIf(t, err != nil, err)

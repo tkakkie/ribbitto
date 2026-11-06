@@ -64,6 +64,18 @@ func TestMessageReplyMigration(t *testing.T) {
 			t.Fatalf("mutable %s: %v", column, err)
 		}
 	}
+	for _, assignment := range []string{
+		"reply_to_message_id = NULL",
+		"reply_to_member_id = NULL",
+		"reply_to_message_id = NULL, reply_to_member_id = NULL",
+	} {
+		t.Run(assignment, func(t *testing.T) {
+			_, err := pool.Exec(ctx, "UPDATE message SET "+assignment+" WHERE organization_id=$1 AND id=$2", f.OrganizationID, reply)
+			if !isConstraint(err, "23514", "") {
+				t.Fatalf("erasing reply link: %v", err)
+			}
+		})
+	}
 	_, err = pool.Exec(ctx, "UPDATE message SET reply_to_message_id=$3, reply_to_member_id=$4 WHERE organization_id=$1 AND id=$2", f.OrganizationID, original, reply, f.MemberID)
 	if !isConstraint(err, "23514", "") {
 		t.Fatalf("adding a link later could create a cycle: %v", err)

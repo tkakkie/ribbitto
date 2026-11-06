@@ -88,6 +88,10 @@ func TestReplyPostingAndMoves(t *testing.T) {
 			t.Fatalf("out-of-scope reply wrote state: %v", err)
 		}
 	}
+	_, err = p.Send(t.Context(), m, f.Channel.ID, conversation.Send{Body: "refused", ReplyTo: &original.ID, Topic: &channel.DefaultTopicID})
+	if !errors.Is(err, conversation.ErrTopicNotFound) || mentionState(t, pool, f.OrganizationID) != before {
+		t.Fatalf("foreign-channel reply topic wrote state: %v", err)
+	}
 	brancher := conversationpg.NewBrancher(pool, compose.PostingSequence, compose.PostingEvents, compose.BranchReads, nil)
 	for i, message := range []conversation.Message{original, first.Message} {
 		_, err := brancher.Branch(t.Context(), m, f.Channel.ID, conversation.Branch{Messages: []kernel.ID{message.ID}, From: topic.ID, NewName: []string{"original moved", "reply moved"}[i]}, func(conversation.Topic) string { return "moved" })
@@ -124,60 +128,75 @@ func TestReplyPreviewStatementCount(t *testing.T) {
 	f := mentionFixture(t, pool)
 	m := membership(f.OrganizationID, f.MemberID)
 	p := mentionPosting(pool)
-	original, err := p.Post(t.Context(), m, f.Channel.ID, "**hello** "+mentionToken(f.MemberID)+" "+strings.Repeat("界", 210))
-	requireNoError(t, err)
-	counter := platform.NewQueryCounter()
-	config := pool.Config()
-	config.ConnConfig.Tracer = counter
-	traced, err := pgxpool.NewWithConfig(t.Context(), config)
-	requireNoError(t, err)
-	t.Cleanup(traced.Close)
-	reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)
-	var baseline int64
-	var reply conversation.Message
-	posted := 0
-	for _, count := range []int{1, 50} {
-		for ; posted < count; posted++ {
-			sent, err := p.Send(t.Context(), m, f.Channel.ID, conversation.Send{Body: "answer", ReplyTo: &original.ID})
+	for _, channel := range []conversationtest.ChannelFixture{f.Channel, conversationtest.Channel(t, pool, f.OrganizationID, "other", false)} {
+		t.Run(channel.Name, func(t *testing.T) {
+			topic := conversationtest.Topic(t, pool, f.OrganizationID, channel.ID, "answers")
+			originals := make([]conversation.Message, 50)
+			for i := range originals {
+				topicID := []kernel.ID{channel.DefaultTopicID, topic.ID}[i%2]
+				original, err := p.PostToTopic(t.Context(), m, channel.ID, &topicID, "**hello** "+mentionToken(f.MemberID)+" "+strings.Repeat("界", 210))
+				requireNoError(t, err)
+				originals[i] = original
+			}
+			counter := platform.NewQueryCounter()
+			config := pool.Config()
+			config.ConnConfig.Tracer = counter
+			traced, err := pgxpool.NewWithConfig(t.Context(), config)
 			requireNoError(t, err)
-			reply = sent.Message
-		}
-		before := counter.Counts()
-		page, err := reader.Page(t.Context(), m, f.Channel.ID, nil, nil)
-		requireNoError(t, err)
-		delta := counter.Counts().Queries - before.Queries
-		if baseline == 0 {
-			baseline = delta
-		}
-		if delta != baseline {
-			t.Fatalf("%d replies: %d queries, want %d", count, delta, baseline)
-		}
-		for _, entry := range page.Entries {
-			if entry.Reply == nil {
-				continue
+			t.Cleanup(traced.Close)
+			reader := conversationpg.NewReader(traced, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)
+			var baseline int64
+			var reply conversation.Message
+			posted := 0
+			for _, count := range []int{1, 50} {
+				for ; posted < count; posted++ {
+					sent, err := p.Send(t.Context(), m, channel.ID, conversation.Send{Body: "answer", ReplyTo: &originals[posted].ID})
+					requireNoError(t, err)
+					reply = sent.Message
+				}
+				before := counter.Counts()
+				page, err := reader.Page(t.Context(), m, channel.ID, nil, nil)
+				requireNoError(t, err)
+				delta := counter.Counts().Queries - before.Queries
+				if baseline == 0 {
+					baseline = delta
+				}
+				if delta != baseline {
+					t.Fatalf("%d replies: %d queries, want %d", count, delta, baseline)
+				}
+				seen := make(map[kernel.ID]bool)
+				for _, entry := range page.Entries {
+					if entry.Reply == nil {
+						continue
+					}
+					seen[entry.Reply.MessageID] = true
+					preview := entry.ReplyPreview
+					text := preview.Text("@gone")
+					if !preview.Available || preview.Author.Handle != "owner" || len([]rune(text)) != 200 || !strings.HasPrefix(text, "hello @owner ") || strings.Contains(text, "**") {
+						t.Fatalf("preview is not current, resolved, bounded text: %+v %q", preview, text)
+					}
+				}
+				if len(seen) != count {
+					t.Fatalf("%d replies: %d distinct targets, want %d", count, len(seen), count)
+				}
+				t.Logf("%d replies: %d page queries", count, delta)
 			}
-			preview := entry.ReplyPreview
-			text := preview.Text("@gone")
-			if !preview.Available || preview.Author.Handle != "owner" || len([]rune(text)) != 200 || !strings.HasPrefix(text, "hello @owner ") || strings.Contains(text, "**") {
-				t.Fatalf("preview is not current, resolved, bounded text: %+v %q", preview, text)
+			_, err = pool.Exec(t.Context(), "UPDATE message SET body='current plain text', format='plain_text' WHERE organization_id=$1 AND id=$2", f.OrganizationID, originals[49].ID)
+			requireNoError(t, err)
+			entry, err := reader.One(t.Context(), m, channel.ID, reply.EventSeq)
+			requireNoError(t, err)
+			if entry.ReplyPreview.Text("@gone") != "current plain text" {
+				t.Fatal("preview retained a snapshot of the old body")
 			}
-		}
-		t.Logf("%d replies: %d page queries", count, delta)
-	}
-	_, err = pool.Exec(t.Context(), "UPDATE message SET body='current plain text', format='plain_text' WHERE organization_id=$1 AND id=$2", f.OrganizationID, original.ID)
-	requireNoError(t, err)
-	entry, err := reader.One(t.Context(), m, f.Channel.ID, reply.EventSeq)
-	requireNoError(t, err)
-	if entry.ReplyPreview.Text("@gone") != "current plain text" {
-		t.Fatal("preview retained a snapshot of the old body")
-	}
-	runner := conversationpg.NewSnapshotRunnerForTest(pool)
-	unavailable := conversation.NewReader(runner, runner, func(s platform.Snapshot) conversation.ReadStore {
-		return unavailableReplyTargets{postgres.ReadStoreIn(s)}
-	}, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)
-	entry, err = unavailable.One(t.Context(), m, f.Channel.ID, reply.EventSeq)
-	requireNoError(t, err)
-	if entry.ReplyPreview == nil || entry.ReplyPreview.Available || entry.ReplyPreview.Text("@gone") != "" {
-		t.Fatal("missing reply target did not return a neutral state")
+			runner := conversationpg.NewSnapshotRunnerForTest(pool)
+			unavailable := conversation.NewReader(runner, runner, func(s platform.Snapshot) conversation.ReadStore {
+				return unavailableReplyTargets{postgres.ReadStoreIn(s)}
+			}, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)
+			entry, err = unavailable.One(t.Context(), m, channel.ID, reply.EventSeq)
+			requireNoError(t, err)
+			if entry.ReplyPreview == nil || entry.ReplyPreview.Available || entry.ReplyPreview.Text("@gone") != "" {
+				t.Fatal("missing reply target did not return a neutral state")
+			}
+		})
 	}
 }

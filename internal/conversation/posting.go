@@ -159,6 +159,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 		}
 		var reply *Reply
 		if s.ReplyTo != nil {
+			// The organisation lock serialises this lookup and insert against branching.
 			original, err := writer.QuotedMessage(ctx, organizationID, channelID, *s.ReplyTo)
 			if errors.Is(err, ErrQuoteNotFound) {
 				return ErrMessageNotFound

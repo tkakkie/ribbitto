@@ -36,18 +36,13 @@ changing its `id` or `event_seq`.
 
 A reply stays in the stream with an immutable link to an older message of
 its channel ([decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)).
-Posting reads the answered author in its transaction and defaults to its topic;
-an explicit topic may override it. Quote and reply targets are independent,
-on keyed retries. Paired reply columns reuse the shared message key,
-restrict deletion and reject self-replies; insert-only writes and a database
-update guard prevent cycles without blocking branching or pins. The foreign
-key enforces scope, not permission: channels are public today; future private
-channels must guarantee posting-time access and concurrent permission changes.
-History supplies text-only previews (200 code points) with batched
-authors and targets, and an unavailable state for a neutral placeholder.
-Replies add only their message's unread count; preview reads leave read state
-unchanged. The composer, rendered preview, chain panel and replies supply
-remain separate work.
+Posting reads the answered author and defaults to the answered topic; an
+explicit same-channel topic may override it. Quote and reply targets are
+independent, including on keyed retries. Previews show current text only,
+up to 200 code points, or a neutral unavailable state. Replies add only
+their message's unread count; preview reads leave read state unchanged.
+The composer, rendered preview, chain panel and replies supply remain
+separate work.
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
@@ -147,12 +142,12 @@ See [Posting from the channel page](message-posting.md#posting-from-the-channel-
 
 ## Older pages
 
-History pages hold 50 messages, oldest first. Older pages use an exclusive
-`event_seq` bound and one lookahead row, without OFFSET or a count query.
-`ListMessagesBefore` and `ListMessagesAfter` always scope by organisation,
-channel and optional topic; a cursor from elsewhere grants no access.
-An `?around=` page takes up to 25 messages from its position on and fills
-with older messages. "Load older" prepends with htmx and keeps the reader's
-place; without JavaScript it links to the older page and back to the newest.
-The control disappears at the oldest message. Without JavaScript, pages open
-at their top unless a message fragment selects a target.
+Older pages show 50 messages, oldest first, with an exclusive `event_seq`
+bound (`?before=`) and a lookahead row, no `OFFSET` or count query. Reads
+stay within the URL's organisation, channel and optional topic; a cursor
+from elsewhere never exposes its messages. An `?around=` page takes up to
+25 messages from its position on and fills with older ones. "Load older"
+prepends and keeps the reader's place; without JavaScript it links to the
+older page and back to newest. It disappears at the oldest message.
+Without JavaScript, pages open at the top unless a message fragment selects
+a target.

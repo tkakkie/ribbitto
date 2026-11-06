@@ -221,9 +221,13 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 		if msg.Reply != nil {
 			original, available := originals[msg.Reply.MessageID]
 			author := members[original.MemberID]
+			var references map[kernel.ID]Reference
+			if original.Format == FormatChatV1 {
+				references = resolveReferences(ParseChatV1(original.Body), members, names)
+			}
 			entry.ReplyPreview = &ReplyPreview{Available: available,
 				Author: Reference{DisplayName: names[author.AccountID], Handle: author.Handle},
-				entry:  Entry{Message: original, References: resolveReferences(ParseChatV1(original.Body), members, names)}}
+				entry:  Entry{Message: original, References: references}}
 		}
 		if msg.Quote != nil {
 			quoted, ok := members[msg.Quote.MemberID]

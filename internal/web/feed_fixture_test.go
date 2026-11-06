@@ -28,6 +28,21 @@ func feedFixture(t *testing.T, n int) view.ChannelPage {
 	return page
 }
 
+func resolvedTopicFixture(t *testing.T, n int) view.ChannelPage {
+	t.Helper()
+	page := feedFixture(t, n)
+	// An unlisted selected topic isolates resolution's fixed cost from sidebar size.
+	page.Topic = &view.Topic{ID: kernel.ID{3}, Name: "Planning", ConclusionMessageID: page.Messages[0].ID}
+	for i := range page.Messages {
+		entry := &page.Messages[i]
+		entry.TopicID, entry.TopicName, entry.DefaultTopic = page.Topic.ID, page.Topic.Name, false
+		entry.TopicURL = view.ConversationURL(page.Organization.Slug, page.Current.ID, &page.Topic.ID)
+	}
+	conclusion := page.Messages[0]
+	page.Conclusion = &conclusion
+	return page
+}
+
 func countElements(doc *html.Node, pred func(*html.Node) bool) int {
 	n := 0
 	for node := range doc.Descendants() {

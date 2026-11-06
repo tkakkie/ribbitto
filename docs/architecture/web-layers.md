@@ -5,12 +5,11 @@
 
 ## Progressive enhancement
 
-Core functionality works without JavaScript; progressive enhancement need not
-provide full parity.
+Core works without JavaScript; enhancements need not provide full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
-  branching, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
+  branching, resolving and reopening a topic, pinning and unpinning a message, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling (while CSS starts a latest conversation page at its newest entry without JavaScript),
   keyboard shortcuts (chosen send key), local-time display, own-mention outlines,
@@ -26,10 +25,10 @@ Unit tests fake web seams, never conversation's storage ports.
 
 ## templ
 
-Components render view models in `internal/web/view`. Handlers convert
-module results; components never receive them. Views import neither `org` nor
-`conversation`; from `kernel`, only `ID`. Components do no I/O and
-make no authorisation decisions; display logic (building URLs,
+Handlers convert module results to `internal/web/view` models for components.
+View `Topic` fields: `ID`, `Name`, `IsDefault`, `ConclusionMessageID`.
+Views import neither `org` nor `conversation`; from `kernel`, only `ID`.
+Components do no I/O or authorisation; display logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 
 ## htmx

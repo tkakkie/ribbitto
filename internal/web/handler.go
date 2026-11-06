@@ -42,8 +42,9 @@ type Services struct {
 	Topics        TopicLookup
 	Messages      MessageReader
 	Posting       Poster
-	Branching     Branching // nil: branching answers 404
-	Pinning       Pinning   // nil: pin and unpin answer 404
+	Branching     Branching  // nil: branching answers 404
+	Pinning       Pinning    // nil: pin and unpin answer 404
+	Resolution    Resolution // nil: resolution routes answer 404
 	Channels      Channels
 	Limits        *middleware.AuthLimits // nil: no authentication rate limits (tests)
 	SidebarResync SidebarResync          // nil: resync POSTs answer 404

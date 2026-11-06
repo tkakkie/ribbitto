@@ -58,10 +58,12 @@ type channelPages struct {
 	branchLimit      *middleware.MemberRateLimiter
 	postLimit        *middleware.MemberRateLimiter
 	pinLimit         *middleware.MemberRateLimiter
+	resolutionLimit  *middleware.MemberRateLimiter
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
 	pinning          Pinning
+	resolution       Resolution
 	topics           TopicLookup
 	topicID          *kernel.ID // Set only on the request-local copy in show.
 	panel            string     // Set only on the request-local copy by a panel route.
@@ -360,6 +362,11 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: snapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
+		if history.Conclusion != nil {
+			entry := viewMessage(m.Organization.Slug, *history.Conclusion)
+			entry.Body = history.Conclusion.Text(view.UnknownMember(r.Context()))
+			page.Conclusion = &entry
+		}
 		page.Older = history.Older
 		page.CarriedUnread = firstUnread != nil
 		page.FirstUnread = history.FeedFirstUnread
@@ -600,7 +607,7 @@ func viewChannels(channels []conversation.Channel) []view.Channel {
 }
 
 func viewTopic(t conversation.Topic) view.Topic {
-	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault}
+	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault, ConclusionMessageID: t.ConclusionMessageID}
 }
 
 func viewTopicPtr(t *conversation.Topic) *view.Topic {

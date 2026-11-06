@@ -1,0 +1,36 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/kernel"
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+templ resolvedMark(topic Topic) {
+	if topic.ConclusionMessageID != (kernel.ID{}) {
+		<span class="shrink-0 text-caption font-normal text-muted">{ i18n.T(ctx, "resolution.resolved") }</span>
+	}
+}
+
+// TopicResolution links the current conclusion to its stable message URL.
+templ TopicResolution(page ChannelPage) {
+	<div
+		id={ ResolutionSummaryID }
+		class="flex shrink-0 flex-wrap items-center justify-between gap-x-2 px-6 text-body max-desk:px-4"
+	>
+		if page.Conclusion != nil {
+			<form id={ ResolutionFormID } method="post" action={ templ.SafeURL(conversationURL(page) + "/reopen") } hidden></form>
+			<a href={ templ.SafeURL(page.Conclusion.URL) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "resolution.conclusion") }</a>
+			<button type="submit" form={ ResolutionFormID } class="min-h-11 rounded-md px-3 text-brand hover:bg-hover">{ i18n.T(ctx, "resolution.reopen") }</button>
+			<p dir="auto" role="region" tabindex="0" aria-label={ i18n.T(ctx, "resolution.summary") } class="basis-full max-h-16 overflow-y-auto whitespace-pre-wrap wrap-anywhere">{ page.Conclusion.Body }</p>
+		}
+	</div>
+}
+
+// ResolutionRefusal keeps a refused native post navigable.
+templ ResolutionRefusal(stylesheetURL, backURL, errorKey string) {
+	@layout(stylesheetURL, i18n.T(ctx, "resolution.error.title")) {
+		@welcomeLayout() {
+			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "resolution.error.title") }</h1>
+			<p role="alert" class="text-body text-muted">{ i18n.T(ctx, errorKey) }</p>
+			@textLink(backURL, "resolution.back", "")
+		}
+	}
+}

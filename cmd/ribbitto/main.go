@@ -358,6 +358,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Reading:       unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), readPublisher),
 		Branching:     branching,
 		Pinning:       conversationpg.NewPinning(pool, compose.PostingSequence, compose.PostingEvents, postingNotifier),
+		Resolution:    conversationpg.NewResolution(pool, compose.PostingSequence, compose.PostingEvents, postingNotifier),
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now, slog.Default()),
 		Stream:        stream,

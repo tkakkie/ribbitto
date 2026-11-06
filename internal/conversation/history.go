@@ -70,6 +70,8 @@ type ChannelPage struct {
 	Channels []Channel
 	// Pins are the channel's pins, newest first; only Overview reads them.
 	Pins []Pin
+	// Conclusion is the selected topic's current message in this snapshot.
+	Conclusion *Entry
 	// EventCursor is the snapshot's organisation sequence, including on older pages.
 	EventCursor *int64
 }

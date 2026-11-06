@@ -31,6 +31,9 @@ func (p channelPages) messageActions(w http.ResponseWriter, r *http.Request, m o
 	default:
 		entry := viewMessage(m.Organization.Slug, entries[0])
 		conversationURL := view.ConversationURL(m.Organization.Slug, entries[0].ChannelID, &entries[0].TopicID)
+		if !entry.DefaultTopic {
+			entry.ResolveURL = conversationURL + "/resolve"
+		}
 		p.pages.render(w, r, http.StatusOK, func(url string) templ.Component {
 			return view.MessageActionsPage(url, entry, conversationURL)
 		})

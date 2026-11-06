@@ -147,6 +147,14 @@ const MemberPageSize untyped int = 100 // MemberPageSize bounds the members show
 type MembersPage struct // MembersPage is one bounded page of a channel's members, read in one snapshot, and the member ID the next page starts after (nil on the last page).
   field Members []ChannelMember
   field Next *github.com/tkakkie/ribbitto/internal/kernel.ID
+type MentionPage struct // MentionPage contains up to 50 messages and the exclusive event_seq cursor for the next page, or nil when no older matching message exists.
+  field Messages []Message
+  field Next *int64
+type MentionReader interface // MentionReader reads at most 51 mentions, newest first, applying both the readable-channel set and author exclusion before the limit in one statement.
+  func (MentionReader).ListMentions(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *int64) ([]Message, error)
+type MentionReaderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) MentionReader // MentionReaderIn binds the mention source to a caller's snapshot.
+type Mentions struct // Mentions reads one member's mentions across readable channels.
+  func (*Mentions).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, before *int64) (page MentionPage, err error) // Page reads the resolved member's mentions, excluding their own messages.
 type Message struct // Message is a post identified by ID, its body read under Format.
   field Body string
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -168,6 +176,7 @@ type Moved struct // Moved is the payload of KindMessagesMoved.
   field ToTopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher // NewBrancher builds branching over transaction-bound factories.
 func NewIdempotencyKey() IdempotencyKey // NewIdempotencyKey returns a random version-4 UUID.
+func NewMentions(runner SnapshotRunner, reads MentionReaderIn, channels ReadableChannelsIn) *Mentions // NewMentions shares a snapshot between the read-access port and page source.
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, quotes ReadStoreIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction, and member references and quoted messages read through members and quotes in a snapshot of their own.
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
@@ -249,6 +258,9 @@ type ReadStore interface [embeds PinReader] // ReadStore is conversation's reads
   func (ReadStore).LocateMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID, limit int32) (Location, int, error) // LocateMessage returns where the organisation's message is now and how many newer messages its topic holds, counted up to limit, or ErrMessageNotFound.
   func (ReadStore).LookupTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]Topic, error) // LookupTopics resolves the requested topics of the channel in one batch, so a page costs one topic query rather than one per message.
 type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadStore // ReadStoreIn binds conversation's reads to the caller's snapshot.
+type ReadableChannels interface // ReadableChannels supplies the channels a resolved member may read.
+  func (ReadableChannels).ReadableChannelIDs(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership) ([]github.com/tkakkie/ribbitto/internal/kernel.ID, error)
+type ReadableChannelsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadableChannels // ReadableChannelsIn binds the shared read-access port to a caller's snapshot.
 type Reader struct // Reader owns page, sidebar, single-message and batch snapshots across conversation, org, identity and unread through factories bound to the same read-only snapshot.
   func (*Reader).Around(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, around int64) (ChannelPage, error) // Around reads the older page holding event_seq around, with context on both sides, in the same snapshot as Page.
   func (*Reader).Locate(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID) (at Location, err error) // Locate finds where a message of the member's organisation is now, for its URL (decision 36).

@@ -67,6 +67,9 @@ one bulk insert to 102 rows. A member deleted after validation gets 422; other
 database failures stay internal. Both roll back message, mentions, event,
 read state and reserved sequence.
 
+Mention pages: 50 newest non-self messages in readable channels, with an
+exclusive `event_seq` cursor and one filtered lookahead row.
+
 ## Accepted bodies
 
 `conversation.ValidateMessageBody`, in this order:

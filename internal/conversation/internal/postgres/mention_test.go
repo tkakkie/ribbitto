@@ -17,6 +17,35 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
+func TestListMentionsReadsOneLookahead(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := newFixtures(t, pool)
+	mentioned := orgtest.Member(t, pool, f.acme, identitytest.Account(t, pool, "mentioned@example.org", "Mentioned"), org.RoleMember, "mentioned", 1)
+	inserted, err := pool.Exec(t.Context(), `WITH messages AS (
+		INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
+		SELECT $1, $2, $3, $4, 'mention', seq FROM generate_series(1, 101) AS seq
+		RETURNING organization_id, id, event_seq
+	)
+	INSERT INTO message_mention (organization_id, message_id, member_id, event_seq)
+	SELECT organization_id, id, $5, event_seq FROM messages`, f.acme, f.general, f.generalTopic, f.alice, mentioned)
+	requireNoError(t, err)
+	if inserted.RowsAffected() != 101 {
+		t.Fatalf("inserted %d mentions, want 101", inserted.RowsAffected())
+	}
+	err = platform.InSnapshot(t.Context(), pool, func(snapshot platform.Snapshot) error {
+		messages, err := postgres.ReadStoreIn(snapshot).ListMentions(t.Context(), f.acme, mentioned, []kernel.ID{f.general}, nil)
+		if err != nil {
+			return err
+		}
+		if len(messages) != conversation.PageSize+1 {
+			t.Fatalf("raw store read %d rows, want PageSize+1 (%d)", len(messages), conversation.PageSize+1)
+		}
+		return nil
+	})
+	requireNoError(t, err)
+}
+
 func TestMentionMigrationAndConstraints(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.NewEmpty(t)

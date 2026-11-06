@@ -9,7 +9,7 @@ import (
 // MemberLimits keeps each request kind's budget independent. Its zero value
 // is invalid; construct it once and share it across the process's handlers.
 type MemberLimits struct {
-	sendKey, mention, signal, read, create, image, resync, branch, post, pin *middleware.MemberRateLimiter
+	sendKey, mention, signal, read, create, image, resync, branch, post, pin, resolution *middleware.MemberRateLimiter
 }
 
 // MemberLimitsOption adjusts construction without accepting shared limiters.
@@ -25,13 +25,14 @@ func WithReadAdmission(now func() time.Time, concurrent int) MemberLimitsOption 
 	}}
 }
 
-// NewMemberLimits creates all ten production budgets; now is time.Now outside tests.
+// NewMemberLimits creates independent production budgets; now is time.Now outside tests.
 func NewMemberLimits(now func() time.Time, options ...MemberLimitsOption) MemberLimits {
 	l := MemberLimits{
 		sendKey: middleware.NewMemberRateLimiter(now), mention: middleware.NewMentionRateLimiter(now),
 		signal: middleware.NewMemberRateLimiter(now), read: middleware.NewReadRateLimiter(now),
 		create: middleware.NewChannelCreationRateLimiter(now), image: middleware.NewChannelImageRateLimiter(now), resync: middleware.NewSidebarResyncRateLimiter(now),
 		branch: middleware.NewBranchRateLimiter(now), post: middleware.NewPostRateLimiter(now), pin: middleware.NewPinRateLimiter(now),
+		resolution: middleware.NewPinRateLimiter(now),
 	}
 	for _, option := range options {
 		if option.apply != nil {
@@ -70,3 +71,6 @@ func (l MemberLimits) Post() *middleware.MemberRateLimiter { return l.post }
 
 // Pin returns the pin-change budget.
 func (l MemberLimits) Pin() *middleware.MemberRateLimiter { return l.pin }
+
+// Resolution returns the resolve/reopen budget.
+func (l MemberLimits) Resolution() *middleware.MemberRateLimiter { return l.resolution }

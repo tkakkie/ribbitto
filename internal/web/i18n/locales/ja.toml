@@ -498,3 +498,12 @@ other = "既定の会話は解決済みにできません。"
 
 ["resolution.error.moved"]
 other = "選んだものは移動しました。別のものを選んでください。"
+
+["resolution.error.title"]
+other = "結論を変更できません"
+
+["resolution.back"]
+other = "会話に戻る"
+
+["resolution.summary"]
+other = "結論の本文"

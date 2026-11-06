@@ -58,6 +58,7 @@ type channelPages struct {
 	branchLimit      *middleware.MemberRateLimiter
 	postLimit        *middleware.MemberRateLimiter
 	pinLimit         *middleware.MemberRateLimiter
+	resolutionLimit  *middleware.MemberRateLimiter
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching

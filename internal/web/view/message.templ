@@ -170,7 +170,7 @@ templ messageQuote(quote Quote) {
 // row (#1093); the shared menu opens as a bottom sheet.
 templ messageActions(entry Message) {
 	{{ classes := "size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:-my-2 max-desk:absolute max-desk:left-0 max-desk:top-10 transition-feedback motion-safe:active:scale-96" }}
-	<a id={ fmt.Sprintf(MessageActionsDOMPrefix+"%x", entry.ID) } href={ templ.SafeURL(entry.URL + "/actions") } { ResolveURLAttribute }={ entry.ResolveURL } { MessageActionAttribute }={ idValue(entry.ID) } { MessageURLAttribute }={ entry.URL } { PinURLAttribute }={ entry.PinURL + "/pin" } { UnpinURLAttribute }={ entry.PinURL + "/unpin" } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ BodyMessageDOMID(entry.ID) } class={ "flex", classes }>
+	<a id={ fmt.Sprintf(MessageActionsDOMPrefix+"%x", entry.ID) } href={ templ.SafeURL(entry.URL + "/actions") } { MessageActionAttribute }={ idValue(entry.ID) } { MessageURLAttribute }={ entry.URL } { PinURLAttribute }={ entry.PinURL + "/pin" } { UnpinURLAttribute }={ entry.PinURL + "/unpin" } { PinnedAttribute }={ fmt.Sprint(entry.Pinned) } aria-label={ i18n.T(ctx, "message.actions") } aria-describedby={ BodyMessageDOMID(entry.ID) } class={ "flex", classes }>
 		<span aria-hidden="true" class="text-heading">⋯</span>
 	</a>
 	<div hidden></div>
@@ -189,9 +189,6 @@ templ MessageActions(entry Message) {
 			<span { CopiedLabelAttribute } class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
 		<button form={ QuoteFormID } name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
-		<form id={ ResolutionFormID } method="post" hidden>
-			<button type="submit" name="message" class="min-h-11 w-full rounded-md px-3 text-left hover:bg-hover">{ i18n.T(ctx, "resolution.resolve") }</button>
-		</form>
 		<template id={ MessageActionsTemplateID }>
 			@PinControl(entry, "")
 		</template>

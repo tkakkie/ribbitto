@@ -25,6 +25,16 @@ func feedFixture(t *testing.T, n int) view.ChannelPage {
 		entry.PinURL = view.PinURL(page.Organization.Slug, page.Current.ID, entry.ID)
 		page.Messages[i] = entry
 	}
+	// An unlisted selected topic isolates resolution's fixed cost from sidebar size.
+	page.Topic = &view.Topic{ID: kernel.ID{3}, Name: "Planning", ConclusionMessageID: page.Messages[0].ID}
+	for i := range page.Messages {
+		entry := &page.Messages[i]
+		entry.TopicID, entry.TopicName, entry.DefaultTopic = page.Topic.ID, page.Topic.Name, false
+		entry.TopicURL = view.ConversationURL(page.Organization.Slug, page.Current.ID, &page.Topic.ID)
+		entry.ResolveURL = entry.TopicURL + "/resolve"
+	}
+	conclusion := page.Messages[0]
+	page.Conclusion = &conclusion
 	return page
 }
 

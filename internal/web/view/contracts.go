@@ -5,12 +5,12 @@ package view
 // The dom directives describe script hooks without importing the application
 // into tools. Element types describe server markup; modules validate data values.
 const (
-	// ResolutionFormID identifies the shared resolve form.
+	// ResolutionSummaryID identifies the current conclusion.
+	//dom:id HTMLDivElement
+	ResolutionSummaryID = "resolution-summary"
+	// ResolutionFormID identifies the native resolution form.
 	//dom:id HTMLFormElement
 	ResolutionFormID = "resolution-form"
-	// ResolveURLAttribute carries the resolve endpoint, empty for the default topic.
-	//dom:attribute
-	ResolveURLAttribute = "data-resolve-url"
 	// OrganizationStreamID identifies the shared stream container.
 	//dom:id HTMLDivElement
 	OrganizationStreamID = "organization-stream"

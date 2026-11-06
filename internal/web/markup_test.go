@@ -708,7 +708,19 @@ func TestPagesMarkup(t *testing.T) {
 		return s
 	}, method: "POST", path: view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + "/pin", cookie: true, status: http.StatusConflict, alerts: 1})
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/resolve", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/reopen", "POST /organizations/{slug}/send-key", "POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "POST /signout/others", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
+	for _, action := range []string{"resolve", "reopen"} {
+		for _, refusal := range []struct {
+			err    error
+			status int
+		}{{conversation.ErrConclusionConflict, 409}, {conversation.ErrDefaultTopicResolution, 422}} {
+			cases = append(cases, markupCase{name: fmt.Sprintf("%s refusal %d", action, refusal.status), route: "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/" + action, services: func() Services {
+				s := signedIn(oneOrganisation{})()
+				s.Resolution = fakeResolution{refusal.err}
+				return s
+			}, method: "POST", path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}) + "/" + action, cookie: true, form: url.Values{"message": {"08000000-0000-0000-0000-000000000000"}}, status: refusal.status, alerts: 1})
+		}
+	}
+	noPage := []string{"POST /organizations/{slug}/send-key", "POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "POST /signout/others", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

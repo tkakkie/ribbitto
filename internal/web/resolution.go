@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -33,8 +33,8 @@ func (p channelPages) changeResolution(w http.ResponseWriter, r *http.Request, m
 		http.NotFound(w, r)
 		return
 	}
-	if !p.pinLimit.Allow(m.Organization.ID, m.Member.ID) {
-		rejectMemberLimit(w, r, p.pinLimit, p.pages)
+	if !p.resolutionLimit.Allow(m.Organization.ID, m.Member.ID) {
+		rejectMemberLimit(w, r, p.resolutionLimit, p.pages)
 		return
 	}
 	var err error
@@ -55,12 +55,18 @@ func (p channelPages) changeResolution(w http.ResponseWriter, r *http.Request, m
 	case isNotFound(err):
 		http.NotFound(w, r)
 	case errors.Is(err, conversation.ErrDefaultTopicResolution):
-		http.Error(w, i18n.T(r.Context(), "resolution.error.default"), http.StatusUnprocessableEntity)
+		p.resolutionRefusal(w, r, m, channel, topic, http.StatusUnprocessableEntity, "resolution.error.default")
 	case errors.Is(err, conversation.ErrConclusionConflict):
-		http.Error(w, i18n.T(r.Context(), "resolution.error.moved"), http.StatusConflict)
+		p.resolutionRefusal(w, r, m, channel, topic, http.StatusConflict, "resolution.error.moved")
 	case err != nil:
 		serverError(w, r, "changing resolution", err)
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, channel, &topic), http.StatusSeeOther)
 	}
+}
+
+func (p channelPages) resolutionRefusal(w http.ResponseWriter, r *http.Request, m org.Membership, channel, topic kernel.ID, status int, key string) {
+	p.pages.render(w, r, status, func(url string) templ.Component {
+		return view.ResolutionRefusal(url, view.ConversationURL(m.Organization.Slug, channel, &topic), key)
+	})
 }

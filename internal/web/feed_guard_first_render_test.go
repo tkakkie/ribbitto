@@ -24,7 +24,13 @@ func (f feedLatestReader) Page(ctx context.Context, m org.Membership, id kernel.
 		f.entries = f.entries[len(f.entries)-conversation.PageSize:]
 		f.older = true
 	}
-	return f.fakeMessages.Page(ctx, m, id, topic, before)
+	page, err := f.fakeMessages.Page(ctx, m, id, topic, before)
+	if err != nil {
+		return page, err
+	}
+	page.Topic.ConclusionMessageID = page.Entries[0].ID
+	page.Conclusion = &page.Entries[0]
+	return page, nil
 }
 
 func feedFirstRender(t *testing.T) feedMeasurement {
@@ -35,7 +41,7 @@ func feedFirstRender(t *testing.T) feedMeasurement {
 		reader.entries = append(reader.entries, conversation.Entry{Message: conversation.Message{
 			ID: msg.ID, MemberID: msg.MemberID, ChannelID: fixture.Current.ID, TopicID: msg.TopicID,
 			EventSeq: msg.EventSeq, Body: msg.Body, CreatedAt: msg.CreatedAt,
-		}, DisplayName: msg.DisplayName, Handle: msg.Handle, DefaultTopic: true})
+		}, DisplayName: msg.DisplayName, Handle: msg.Handle, TopicName: msg.TopicName})
 	}
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
@@ -45,7 +51,7 @@ func feedFirstRender(t *testing.T) feedMeasurement {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("GET", view.ChannelURL("acme", kernel.ID{1}), nil)
+	req := httptest.NewRequest("GET", view.ConversationURL("acme", fixture.Current.ID, &fixture.Topic.ID), nil)
 	req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

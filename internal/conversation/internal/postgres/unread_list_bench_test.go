@@ -27,30 +27,116 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-// TestUnreadListBench is Stage 1 of #2191. Running it needs the maintainer's
-// separate approval of the exact SHA and start. With a disposable numeric
-// loopback postgres/admin URL from docs/database-tests.md already exported:
+// TestUnreadListBench is Stage 1 of #2191. It needs separate maintainer
+// approval of the exact SHA and start. Never use a shared server. After that
+// approval, the operator runs this entire recipe from this worktree (retain
+// verbose output outside the container). The outer clock covers container
+// preparation, build, Stage 0, initialization, measurement and removal:
 //
-//	RIBBITTO_REQUIRE_DB=1 RIBBITTO_UNREAD_LIST_DISPOSABLE=1 RIBBITTO_UNREAD_LIST_BENCH=1 go test -count=1 -run '^TestUnreadListBench$' -v -timeout 125m ./internal/conversation/internal/postgres
+//	perl -MPOSIX -e '
+//	  $p=fork; defined $p or die $!;
+//	  if (!$p) { POSIX::setsid()>0 or die $!; exec @ARGV; die $!; }
+//	  $SIG{ALRM}=sub { kill "KILL", -$p; die "INCONCLUSIVE: outer two-hour cap; remove recorded container ID\n"; };
+//	  alarm 7200; waitpid($p,0);
+//	  exit(($? & 127) ? 128+($? & 127) : $? >> 8);
+//	' sh -eu -c '
+//	  cid=$(docker run -d --read-only --log-driver=none \
+//	    --tmpfs /var/lib/postgresql:rw,size=3000000000 \
+//	    --tmpfs /var/run/postgresql:rw,size=16m --tmpfs /tmp:rw,size=16m \
+//	    -e PGDATA=/var/lib/postgresql/18/docker -e POSTGRES_HOST_AUTH_METHOD=trust \
+//	    -p 127.0.0.1:55439:5432 postgres:18 \
+//	    -c max_connections=20 -c max_wal_size=256MB -c min_wal_size=64MB \
+//	    -c wal_keep_size=0 -c temp_file_limit=64MB -c logging_collector=off)
+//	  printf "disposable container ID=%s\n" "$cid"
+//	  trap "docker rm -f \"$cid\" >/dev/null" EXIT
+//	  until docker exec "$cid" pg_isready -h 127.0.0.1 -U postgres -d postgres >/dev/null; do sleep 1; done
+//	  export RIBBITTO_TEST_DATABASE_URL="host=127.0.0.1 port=55439 user=postgres dbname=postgres sslmode=disable"
+//	  RIBBITTO_REQUIRE_DB=1 RIBBITTO_UNREAD_LIST_DISPOSABLE=1 RIBBITTO_UNREAD_LIST_BENCH=1 \
+//	    go test -count=1 -run "^TestUnreadListBench$" -v -timeout 120m ./internal/conversation/internal/postgres
+//	'
 //
-// Both opt-ins and the exact selector are required; CI and ordinary make check
-// silently skip even if the benchmark variable was inherited. pgtest clones and
-// drops the database; the operator still owns the disposable server/container.
-// Keep verbose output: raw samples and separate plans survive an inconclusive
-// stop. No parameters reduce the scenarios, warm-ups, repetitions or caps.
+// In another terminal, set cid to the printed ID and monitor the whole data
+// volume, including WAL, temp files, every database and filesystem overhead:
+//
+//	while docker inspect "$cid" >/dev/null 2>&1; do docker exec "$cid" sh -c 'du -sk /var/lib/postgresql; df -k /var/lib/postgresql'; sleep 5; done
+//
+// The tmpfs is a hard 3,000,000,000-byte data limit. WAL settings are soft
+// checkpoint/retention targets and temp_file_limit is per backend; neither
+// replaces that volume limit. No external tablespaces or WAL mounts. At ENOSPC
+// PostgreSQL can fail statements or stop; the result is INCONCLUSIVE. The
+// harness retains raw samples and cluster usage/high-water logs, stops at
+// 2,744,000,000 bytes and checks all databases + pg_ls_waldir + pg_ls_tmpdir
+// for every tablespace + other PGDATA files (global, transaction status, etc.).
+// An unreadable component, including missing admin privileges, stops the run;
+// there is no partial-accounting fallback. A five-second admin observer also
+// checks during preparation, Stage 0 and long statements; timed A/B uses one
+// physical connection, serially. The hard volume covers polling gaps.
+//
+// The test's clock starts before opt-in checks: work ends at 115 minutes,
+// reserving five minutes for pool closure and pgtest's bounded database drops
+// inside the two-hour job. Stage 0 shares that context; pgtest initialization
+// is independently bounded to 45 seconds and fixture statements to 30 seconds.
+// The outer alarm can fire sooner because it also counts container/build time.
+// go test -timeout panics and bypasses t.Cleanup; the outer alarm kills only
+// its own process group and can bypass the shell trap too. On either hard stop,
+// retain output, inspect the recorded container ID, then docker rm -f "$cid"
+// to remove the entire dedicated server, clones, template, WAL and tmpfs.
+// Never remove an unverified ID. A cap stop is INCONCLUSIVE even without samples.
+//
+// Both opt-ins and the exact selector are required; ordinary test commands
+// skip before any SQL even if the benchmark variable was inherited. No
+// parameters reduce the scenarios, warm-ups, repetitions or approved budgets.
 func TestUnreadListBench(t *testing.T) {
-	if os.Getenv("RIBBITTO_UNREAD_LIST_BENCH") != "1" || os.Getenv("CI") != "" || flag.Lookup("test.run").Value.String() != "^TestUnreadListBench$" {
+	started := time.Now()
+	const cap = 2 * time.Hour
+	const cleanupReserve = 5 * time.Minute
+	job, finish := context.WithDeadline(t.Context(), started.Add(cap))
+	ctx, cancel := context.WithDeadline(job, started.Add(cap-cleanupReserve))
+	t.Cleanup(finish)
+	t.Cleanup(cancel)
+	if os.Getenv("RIBBITTO_UNREAD_LIST_BENCH") != "1" {
+		t.Skip("set RIBBITTO_UNREAD_LIST_BENCH=1 outside CI with the exact selector and disposable opt-in")
+	}
+	if os.Getenv("CI") != "" || flag.Lookup("test.run").Value.String() != "^TestUnreadListBench$" {
 		t.SkipNow()
 	}
 	unreadListBenchLoopback(t)
-	// Stage 0 must finish successfully before any stress data or timing.
-	if !t.Run("correctness", TestUnreadListCorrectness) || !t.Run("page-statements", TestUnreadListPageStatements) {
-		t.Fatal("Stage 0 failed; no timing taken")
+	observer, err := pgxpool.New(ctx, pgtest.AdminURL(t))
+	if err != nil {
+		t.Fatal("INCONCLUSIVE: invalid disposable admin configuration (details suppressed)")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Hour)
-	defer cancel()
-	started := time.Now()
+	t.Cleanup(observer.Close)
+	g := unreadListBenchGuard{t: t, ctx: ctx, observe: observer, cancel: cancel}
+	t.Cleanup(func() {
+		t.Logf("whole job including preparation/Stage 0/cleanup elapsed=%s; cluster high-water=%d bytes; partial output retained if inconclusive", time.Since(started), g.highWater)
+	})
+	g.check()
+	monitor, stop := context.WithCancel(job)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-monitor.Done():
+				return
+			case <-ticker.C:
+				if g.usage(monitor) != nil {
+					return
+				}
+			}
+		}
+	}()
+	defer func() { stop(); <-done }()
+	// Stage 0 must finish successfully before any stress data or timing.
+	if !t.Run("correctness", func(t *testing.T) { unreadListCorrectness(ctx, t) }) ||
+		!t.Run("page-statements", func(t *testing.T) { unreadListPageStatements(ctx, t) }) {
+		t.Fatal("INCONCLUSIVE: Stage 0 failed; no timing taken")
+	}
+	g.check()
 	base := pgtest.New(t)
+	g.check()
 	trace := &unreadListBenchTrace{unreadListTrace: &unreadListTrace{QueryCounter: platform.NewQueryCounter()}}
 	wire := &unreadListBenchWire{}
 	trace.wire = wire
@@ -61,7 +147,7 @@ func TestUnreadListBench(t *testing.T) {
 	config.MaxConnLifetime, config.MaxConnIdleTime = 0, 0
 	config.ConnConfig.Tracer = trace
 	config.ConnConfig.RuntimeParams["statement_timeout"] = "30000ms"
-	config.ConnConfig.RuntimeParams["temp_file_limit"] = "65536" // kB; outside pg_database_size.
+	config.ConnConfig.RuntimeParams["temp_file_limit"] = "65536" // kB, per backend; also bounded by the volume.
 	config.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, addr)
 		if err != nil {
@@ -82,10 +168,7 @@ func TestUnreadListBench(t *testing.T) {
 	requireNoError(t, err)
 	t.Cleanup(pool.Close)
 	base.Close()
-	g := unreadListBenchGuard{t: t, ctx: ctx, pool: pool, started: started}
-	defer func() {
-		t.Logf("session elapsed=%s; database high-water=%d bytes; partial output retained if inconclusive", time.Since(started), g.highWater)
-	}()
+	g.pool = pool
 	g.check()
 	var version string
 	requireNoError(t, pool.QueryRow(ctx, "SELECT version()").Scan(&version))
@@ -108,6 +191,8 @@ func TestUnreadListBench(t *testing.T) {
 	// Validate every scenario before even the first warm-up takes an interval.
 	for _, scenario := range scenarios {
 		g.check()
+		g.require(unreadListVerifyData(ctx, pool, scenario.f, unreadListBenchExpected(scenario.name)))
+		t.Logf("independent data sanity passed: scenario=%s expected=%+v", scenario.name, unreadListBenchExpected(scenario.name))
 		expected := 51 // Includes the lookahead row beyond the 50 displayed rows.
 		switch scenario.name {
 		case "normal":
@@ -135,7 +220,7 @@ func TestUnreadListBench(t *testing.T) {
 				g.check()
 			}
 		}
-		t.Logf("prepared plan counts after timed samples form=%s (before diagnostics):", form)
+		t.Logf("cumulative prepared plan counts after timed samples form=%s (before this form's diagnostics; V1 includes earlier V0 diagnostics):", form)
 		g.lines(`SELECT name||' generic_plans='||generic_plans||' custom_plans='||custom_plans||' statement='||split_part(statement,chr(10),1) FROM pg_prepared_statements ORDER BY name`)
 		for i, scenario := range scenarios {
 			unreadListBenchReport(t, scenario.name, form, results[i])

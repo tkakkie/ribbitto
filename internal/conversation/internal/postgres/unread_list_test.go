@@ -33,15 +33,18 @@ type unreadListFixture struct {
 	labels   map[string]kernel.ID
 }
 
-func unreadListExec(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
+func unreadListExec(ctx context.Context, t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
 	t.Helper()
-	_, err := pool.Exec(t.Context(), sql, args...)
+	_, err := pool.Exec(ctx, sql, args...)
 	requireNoError(t, err)
 }
 
-func unreadListSmall(t *testing.T) unreadListFixture {
+func unreadListSmall(ctx context.Context, t *testing.T) unreadListFixture {
 	t.Helper()
-	pool := pgtest.New(t)
+	requireNoError(t, ctx.Err())
+	pool := pgtest.New(t) // pgtest bounds initialization independently to 45 seconds.
+	requireNoError(t, ctx.Err())
+	pool, _ = unreadListTracedPool(ctx, t, pool)
 	f := conversationtest.OrganizationWithOwner(t, pool, "unread-list", "general")
 	member := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
 	writer := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "writer@example.org", "Writer"), org.RoleMember, "writer", 1)
@@ -58,16 +61,16 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 			author = f.MemberID
 		}
 		var result kernel.ID
-		requireNoError(t, pool.QueryRow(t.Context(), `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq,moved_event_seq) VALUES ($1,$2,$3,$4,'fixture',$5,$6) RETURNING id`, f.OrganizationID, channel, id, author, seq, moved).Scan(&result))
+		requireNoError(t, pool.QueryRow(ctx, `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq,moved_event_seq) VALUES ($1,$2,$3,$4,'fixture',$5,$6) RETURNING id`, f.OrganizationID, channel, id, author, seq, moved).Scan(&result))
 		return result
 	}
 	read := func(channel kernel.ID, lo, hi int64) {
-		unreadListExec(t, pool, `INSERT INTO channel_read VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, f.OrganizationID, channel, f.MemberID)
-		unreadListExec(t, pool, `INSERT INTO read_range VALUES ($1,$2,$3,$4,$5)`, f.OrganizationID, channel, f.MemberID, lo, hi)
+		unreadListExec(ctx, t, pool, `INSERT INTO channel_read VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, f.OrganizationID, channel, f.MemberID)
+		unreadListExec(ctx, t, pool, `INSERT INTO read_range VALUES ($1,$2,$3,$4,$5)`, f.OrganizationID, channel, f.MemberID, lo, hi)
 	}
 	floor := func(channel, id kernel.ID, value int64) {
-		unreadListExec(t, pool, `INSERT INTO channel_read VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, f.OrganizationID, channel, f.MemberID)
-		unreadListExec(t, pool, `INSERT INTO topic_read_floor (organization_id,channel_id,member_id,topic_id,floor_seq) VALUES ($1,$2,$3,$4,$5)`, f.OrganizationID, channel, f.MemberID, id, value)
+		unreadListExec(ctx, t, pool, `INSERT INTO channel_read VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, f.OrganizationID, channel, f.MemberID)
+		unreadListExec(ctx, t, pool, `INSERT INTO topic_read_floor (organization_id,channel_id,member_id,topic_id,floor_seq) VALUES ($1,$2,$3,$4,$5)`, f.OrganizationID, channel, f.MemberID, id, value)
 	}
 	for i := int64(10); i < 115; i++ {
 		message(f.Channel.ID, f.Channel.DefaultTopicID, i, nil, false)
@@ -84,7 +87,7 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 	}
 	resolved := topic(f.Channel.ID, "zz-resolved-beyond-50")
 	conclusion := message(f.Channel.ID, resolved, 1100, nil, false)
-	unreadListExec(t, pool, `UPDATE topic SET conclusion_message_id=$2 WHERE id=$1`, resolved, conclusion)
+	unreadListExec(ctx, t, pool, `UPDATE topic SET conclusion_message_id=$2 WHERE id=$1`, resolved, conclusion)
 	// The newest read message, rather than the newest unread, controls rank.
 	message(f.Channel.ID, labels["topic-00"], 1150, nil, true)
 	read(f.Channel.ID, 1150, 1151)
@@ -114,7 +117,7 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 	source := topic(moves.ID, "moved-out")
 	destination := topic(moves.ID, "moved-first")
 	movedID := message(moves.ID, source, 1200, nil, false)
-	unreadListExec(t, pool, `UPDATE message SET topic_id=$2,moved_event_seq=3000 WHERE id=$1`, movedID, destination)
+	unreadListExec(ctx, t, pool, `UPDATE message SET topic_id=$2,moved_event_seq=3000 WHERE id=$1`, movedID, destination)
 	message(moves.ID, destination, 1202, int64(3001), false)
 	read(moves.ID, 1202, 1203)
 	message(moves.ID, destination, 1204, int64(1900), false) // a hole below an explicit floor
@@ -153,7 +156,7 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 	excluded := conversationtest.Channel(t, pool, f.OrganizationID, "withheld", false)
 	message(excluded.ID, excluded.DefaultTopicID, 8000, nil, false)
 	foreign := conversationtest.OrganizationWithOwner(t, pool, "foreign-list", "foreign")
-	unreadListExec(t, pool, `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'foreign',9000)`, foreign.OrganizationID, foreign.Channel.ID, foreign.Channel.DefaultTopicID, foreign.MemberID)
+	unreadListExec(ctx, t, pool, `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'foreign',9000)`, foreign.OrganizationID, foreign.Channel.ID, foreign.Channel.DefaultTopicID, foreign.MemberID)
 	return unreadListFixture{pool, member, channels, labels}
 }
 
@@ -164,10 +167,14 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 //
 //	go test -count=1 -run '^TestUnreadList' -v ./internal/conversation/internal/postgres
 func TestUnreadListCorrectness(t *testing.T) {
-	f := unreadListSmall(t)
-	pool, trace := unreadListTracedPool(t, f.pool)
-	requireNoError(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-		want := unreadListOracle(t, s, f)
+	unreadListCorrectness(t.Context(), t)
+}
+
+func unreadListCorrectness(ctx context.Context, t *testing.T) {
+	f := unreadListSmall(ctx, t)
+	pool, trace := unreadListTracedPool(ctx, t, f.pool)
+	requireNoError(t, platform.InSnapshot(ctx, pool, func(s platform.Snapshot) error {
+		want := unreadListOracle(ctx, t, s, f)
 		if len(want) <= 50 {
 			t.Fatal("fixture must exercise multiple pages")
 		}
@@ -177,19 +184,19 @@ func TestUnreadListCorrectness(t *testing.T) {
 			}
 		}
 		for _, form := range []string{"V0", "V1"} {
-			got := unreadListAll(t, s, f, form, "", trace)
+			got := unreadListAll(ctx, t, s, f, form, "", trace)
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("%s differs from oracle: got=%+v want=%+v", form, got, want)
 			}
 			// Real counts-only sidebar path, including a topic beyond its 50.
-			topics, err := postgres.ReadStoreIn(s).ListTopics(t.Context(), f.member.Organization.ID, f.channels[0], 50)
+			topics, err := postgres.ReadStoreIn(s).ListTopics(ctx, f.member.Organization.ID, f.channels[0], 50)
 			requireNoError(t, err)
 			ids := make([]kernel.ID, len(topics))
 			for i, topic := range topics {
 				ids[i] = topic.ID
 			}
 			selected := f.labels["zz-resolved-beyond-50"]
-			counts, err := compose.PageCountsIn(s).(conversation.SidebarCounter).ReadCounts(t.Context(), f.member, f.channels[0], f.channels, ids, &selected)
+			counts, err := compose.PageCountsIn(s).(conversation.SidebarCounter).ReadCounts(ctx, f.member, f.channels[0], f.channels, ids, &selected)
 			requireNoError(t, err)
 			if len(topics) != 50 || slices.Contains(ids, selected) {
 				t.Fatal("resolved fixture must sort beyond sidebar")
@@ -205,7 +212,7 @@ func TestUnreadListCorrectness(t *testing.T) {
 		}
 		for _, mutation := range []string{"drop-moved-branch", "drop-positive-ranges", "ignore-explicit-floor", "capped-first-unread", "sidebar-50", "channel-first-100", "ignore-join-prefix", "inclusive-keyset", "exclusive-prefix", "inclusive-floor", "inclusive-move-floor", "cap-101"} {
 			for _, form := range []string{"V0", "V1"} {
-				got := unreadListAll(t, s, f, form, mutation, trace)
+				got := unreadListAll(ctx, t, s, f, form, mutation, trace)
 				if reflect.DeepEqual(got, want) {
 					t.Fatalf("%s survived mutation %s", form, mutation)
 				}
@@ -228,21 +235,21 @@ func TestUnreadListCorrectness(t *testing.T) {
 	}))
 }
 
-func unreadListOracle(t *testing.T, s platform.Snapshot, f unreadListFixture) []unreadListRow {
+func unreadListOracle(ctx context.Context, t *testing.T, s platform.Snapshot, f unreadListFixture) []unreadListRow {
 	t.Helper()
 	var want []unreadListRow
 	for _, channel := range f.channels {
-		topics, err := postgres.ReadStoreIn(s).ListTopics(t.Context(), f.member.Organization.ID, channel, 1000)
+		topics, err := postgres.ReadStoreIn(s).ListTopics(ctx, f.member.Organization.ID, channel, 1000)
 		requireNoError(t, err)
 		for _, topic := range topics {
 			scope := unread.Scope{OrganizationID: f.member.Organization.ID, ChannelID: channel, MemberID: f.member.Member.ID}
-			counts, first, err := compose.NewTopicCounts().ReadWithFirstUnread(t.Context(), s, scope, f.member.Member.JoinedEventSeq, []kernel.ID{topic.ID}, &topic.ID, true)
+			counts, first, err := compose.NewTopicCounts().ReadWithFirstUnread(ctx, s, scope, f.member.Member.JoinedEventSeq, []kernel.ID{topic.ID}, &topic.ID, true)
 			requireNoError(t, err)
 			if counts[topic.ID] == 0 {
 				continue
 			}
 			row := unreadListRow{Channel: channel, Topic: topic.ID, Name: topic.Name, Default: topic.IsDefault, Resolved: topic.ConclusionMessageID != (kernel.ID{}), Count: counts[topic.ID], First: first}
-			requireNoError(t, pgxbridge.Snapshot(s).QueryRow(t.Context(), `SELECT max(event_seq),(SELECT id FROM message WHERE organization_id=$1 AND event_seq=$3) FROM message WHERE organization_id=$1 AND topic_id=$2`, f.member.Organization.ID, topic.ID, first).Scan(&row.Last, &row.FirstID))
+			requireNoError(t, pgxbridge.Snapshot(s).QueryRow(ctx, `SELECT max(event_seq),(SELECT id FROM message WHERE organization_id=$1 AND event_seq=$3) FROM message WHERE organization_id=$1 AND topic_id=$2`, f.member.Organization.ID, topic.ID, first).Scan(&row.Last, &row.FirstID))
 			want = append(want, row)
 		}
 	}
@@ -259,13 +266,14 @@ func unreadListOracle(t *testing.T, s platform.Snapshot, f unreadListFixture) []
 }
 
 func TestUnreadListSanity(t *testing.T) {
-	f := unreadListSmall(t)
-	pool, _ := unreadListTracedPool(t, f.pool)
-	requireNoError(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
-		if err := unreadListSanity(t.Context(), s, f, 51); err != nil {
+	ctx := t.Context()
+	f := unreadListSmall(ctx, t)
+	pool, _ := unreadListTracedPool(ctx, t, f.pool)
+	requireNoError(t, platform.InSnapshot(ctx, pool, func(s platform.Snapshot) error {
+		if err := unreadListSanity(ctx, s, f, 51); err != nil {
 			return err
 		}
-		if err := unreadListSanity(t.Context(), s, f, 50); err == nil {
+		if err := unreadListSanity(ctx, s, f, 50); err == nil {
 			t.Fatal("incorrect scenario row count accepted")
 		}
 		return nil
@@ -298,14 +306,14 @@ func TestUnreadListSanityRows(t *testing.T) {
 	}
 }
 
-func unreadListAll(t *testing.T, s platform.Snapshot, f unreadListFixture, form, mutation string, trace *unreadListTrace) []unreadListRow {
+func unreadListAll(ctx context.Context, t *testing.T, s platform.Snapshot, f unreadListFixture, form, mutation string, trace *unreadListTrace) []unreadListRow {
 	t.Helper()
 	var got []unreadListRow
 	var after *unreadListPosition
 	// Bounded even for a broken keyset; duplicates must be observable, never hang.
 	for range 10 {
 		before := trace.Counts().Queries
-		rows, err := unreadListPage(t.Context(), s, f.member, append(slices.Clone(f.channels), f.channels[0]), after, form, mutation)
+		rows, err := unreadListPage(ctx, s, f.member, append(slices.Clone(f.channels), f.channels[0]), after, form, mutation)
 		requireNoError(t, err)
 		added := int64(1)
 		if form == "V1" {
@@ -341,7 +349,7 @@ func (p *unreadListTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, d
 	return ctx
 }
 
-func unreadListTracedPool(t *testing.T, pool *pgxpool.Pool) (*pgxpool.Pool, *unreadListTrace) {
+func unreadListTracedPool(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (*pgxpool.Pool, *unreadListTrace) {
 	t.Helper()
 	trace := &unreadListTrace{QueryCounter: platform.NewQueryCounter()}
 	config := pool.Config()
@@ -353,7 +361,7 @@ func unreadListTracedPool(t *testing.T, pool *pgxpool.Pool) (*pgxpool.Pool, *unr
 		conn.TypeMap().RegisterType(&pgtype.Type{Name: "_int8multirange", OID: pgtype.Int8multirangeArrayOID, Codec: &pgtype.ArrayCodec{ElementType: element}})
 		return nil
 	}
-	traced, err := pgxpool.NewWithConfig(t.Context(), config)
+	traced, err := pgxpool.NewWithConfig(ctx, config)
 	requireNoError(t, err)
 	t.Cleanup(traced.Close)
 	return traced, trace
@@ -374,15 +382,19 @@ func (c unreadListPageCounter) ReadCounts(ctx context.Context, m org.Membership,
 }
 
 func TestUnreadListPageStatements(t *testing.T) {
-	f := unreadListSmall(t)
+	unreadListPageStatements(t.Context(), t)
+}
+
+func unreadListPageStatements(ctx context.Context, t *testing.T) {
+	f := unreadListSmall(ctx, t)
 	resolved := f.labels["zz-resolved-beyond-50"]
 	for _, form := range []string{"V0", "V1"} {
 		for _, selected := range []*kernel.ID{nil, &resolved} {
-			pool, trace := unreadListTracedPool(t, f.pool)
+			pool, trace := unreadListTracedPool(ctx, t, f.pool)
 			factory := func(s platform.Snapshot) conversation.PageCounter {
 				return unreadListPageCounter{compose.PageCountsIn(s), s, form}
 			}
-			_, err := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, factory).Sidebar(t.Context(), f.member, f.channels[0], selected)
+			_, err := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, factory).Sidebar(ctx, f.member, f.channels[0], selected)
 			requireNoError(t, err)
 			added := int64(1)
 			if form == "V1" {

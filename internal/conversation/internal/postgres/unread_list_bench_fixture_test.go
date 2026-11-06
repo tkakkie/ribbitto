@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,14 +19,24 @@ type unreadListBenchGuard struct {
 	t         *testing.T
 	ctx       context.Context
 	pool      *pgxpool.Pool
-	started   time.Time
 	highWater int64
+	mu        sync.Mutex
+	stop      error
+	observe   *pgxpool.Pool
+	cancel    context.CancelFunc
+	lastLog   time.Time
 }
 
 func (g *unreadListBenchGuard) require(err error) {
 	g.t.Helper()
-	if g.ctx.Err() != nil || time.Since(g.started) >= 2*time.Hour {
-		g.t.Fatal("INCONCLUSIVE: stopped at two-hour disposable database session cap; partial results above")
+	g.mu.Lock()
+	stop := g.stop
+	g.mu.Unlock()
+	if stop != nil {
+		g.t.Fatalf("INCONCLUSIVE: %v; partial results above", stop)
+	}
+	if g.ctx.Err() != nil {
+		g.t.Fatal("INCONCLUSIVE: work deadline reached; five-minute cleanup reserve within two-hour whole-job cap; partial results above")
 	}
 	if err != nil {
 		g.t.Fatalf("INCONCLUSIVE: benchmark stopped: %v", err)
@@ -35,15 +46,53 @@ func (g *unreadListBenchGuard) require(err error) {
 func (g *unreadListBenchGuard) check() {
 	g.t.Helper()
 	g.require(nil)
-	var size int64
-	g.require(g.pool.QueryRow(g.ctx, "SELECT pg_database_size(current_database())").Scan(&size))
-	g.highWater = max(g.highWater, size)
-	// Stop conservatively with 64 MB reserved for the next bounded insert or
-	// temporary query file. No setup statement inserts more than 1,000 rows.
-	// pg_database_size covers this clone's tables/indexes, not cluster WAL.
-	if size >= 3_000_000_000-64_000_000 {
-		g.t.Fatalf("INCONCLUSIVE: stopped before 3 GB database cap: bytes=%d (64 MB reserve); partial results above", size)
+	g.require(g.usage(g.ctx))
+}
+
+// usage also runs on the admin observer during Stage 0 and long statements.
+// Missing privileges or an unreadable directory fail closed, including WAL and
+// every tablespace's live temp files. temp_bytes is cumulative, not disk usage.
+func (g *unreadListBenchGuard) usage(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var databases, wal, temp, other int64
+	err := g.observe.QueryRow(ctx, `WITH RECURSIVE dirs(path) AS (
+ SELECT ''::text
+ UNION ALL
+ SELECT dirs.path||entry||'/' FROM dirs,
+ LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END) entry,
+ LATERAL pg_stat_file(dirs.path||entry) info
+ WHERE info.isdir AND NOT (dirs.path='' AND entry IN ('base','pg_wal','pg_tblspc'))
+)
+SELECT (SELECT coalesce(sum(pg_database_size(oid)),0)::bigint FROM pg_database),
+ (SELECT coalesce(sum(size),0)::bigint FROM pg_ls_waldir()),
+ (SELECT coalesce(sum(tmp.size),0)::bigint FROM pg_tablespace ts,
+  LATERAL pg_ls_tmpdir(ts.oid) tmp WHERE ts.spcname<>'pg_global'),
+ (SELECT coalesce(sum(info.size),0)::bigint FROM dirs,
+  LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END) entry,
+  LATERAL pg_stat_file(dirs.path||entry) info WHERE NOT info.isdir)`).
+		Scan(&databases, &wal, &temp, &other)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err != nil {
+		g.stop = fmt.Errorf("cluster usage unreadable (all DBs/WAL/temp/other required): %w", err)
+	} else {
+		size := databases + wal + temp + other
+		g.highWater = max(g.highWater, size)
+		if time.Since(g.lastLog) >= 5*time.Second {
+			g.t.Logf("cluster bytes: databases=%d WAL=%d live-temp=%d other=%d total=%d high-water=%d", databases, wal, temp, other, size, g.highWater)
+			g.lastLog = time.Now()
+		}
+		// The volume is the hard cap; polling cannot bound WAL growth between
+		// checks. Reserve 256 MB for the next batch, temp files and cleanup.
+		if size >= 3_000_000_000-256_000_000 {
+			g.stop = fmt.Errorf("cluster reached 3 GB stop threshold with 256 MB reserve: bytes=%d", size)
+		}
 	}
+	if g.stop != nil {
+		g.cancel()
+	}
+	return g.stop
 }
 
 func (g *unreadListBenchGuard) exec(sql string, args ...any) {

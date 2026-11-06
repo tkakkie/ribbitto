@@ -79,18 +79,29 @@ func TestResolutionLiveBrowser(t *testing.T) {
 	acceptanceOK(t, (proto.EmulationSetScriptExecutionDisabled{Value: false}).Call(actor))
 	channelPath := strings.Split(f.path, "/topics/")[0]
 	post(t, f.owner, channelPath, "default reply")
-	for _, path := range []string{f.path, channelPath} {
+	actor.MustNavigate(f.reader.server.URL + channelPath).MustWaitLoad()
+	defaultPath := actor.MustEval(`() => document.querySelector('#sidebar-topics > li:first-child a').getAttribute('href')`).Str()
+	for _, path := range []string{f.path, channelPath, defaultPath} {
 		actor.MustEvalOnNewDocument(`window.menuErrors = []; addEventListener('error', e => window.menuErrors.push(e.message));`)
 		actor.MustNavigate(f.reader.server.URL + path).MustWaitLoad()
-		actor.MustElement(`a[data-message-action="` + message + `"] + button`).MustClick()
-		if path == f.path {
+		selector := `a[data-message-action="` + message + `"] + button`
+		if path == defaultPath {
+			selector = `#message-items > li:last-child a[data-message-action] + button`
+		}
+		actor.MustElement(selector).MustClick()
+		switch path {
+		case f.path:
 			if !actor.MustEval(`(path, message) => {
    const form = document.querySelector('#resolution-form');
    return form.checkVisibility() && form.getAttribute('action') === path + '/resolve' && form.querySelector('button').value === message;
   }`, f.path, message).Bool() {
 				t.Fatal("topic message menu lost Resolve action or identity")
 			}
-		} else {
+		case defaultPath:
+			if !actor.MustEval(`() => !document.querySelector('#resolution-form').checkVisibility() && window.menuErrors.length === 0`).Bool() {
+				t.Fatal("default-topic menu offers Resolve or throws")
+			}
+		default:
 			if !actor.MustEval(`() => !document.querySelector('#resolution-form, #message-items [data-resolve-url]') && window.menuErrors.length === 0`).Bool() {
 				t.Fatal("channel feed retained Resolve markup or threw opening its menu")
 			}
@@ -110,6 +121,55 @@ func TestResolutionLiveBrowser(t *testing.T) {
 	actor.MustElement(`#message-items > li:last-child button[popovertarget="message-actions"]`).MustClick()
 	actor.MustElement(`#resolution-form button`).MustClick()
 	page.MustWait(`() => document.querySelector('#resolution-summary p')?.textContent === 'later reply'`)
+}
+
+func TestResolutionFocusBrowser(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	browser := launchBrowser(t, ctx, "resolution focus")
+	f := newSidebarBranchFixture(t)
+	body := strings.TrimSpace(strings.Repeat("long conclusion\n", 100))
+	post(t, f.reader, f.path, body)
+	page, closePage := boundedPage(t, browser, ctx, "resolution focus")
+	defer closePage()
+	u, err := url.Parse(f.reader.server.URL)
+	acceptanceOK(t, err)
+	for _, cookie := range f.reader.client.Jar.Cookies(u) {
+		page.MustSetCookies(&proto.NetworkCookieParam{Name: cookie.Name, Value: cookie.Value, URL: f.reader.server.URL, Path: "/", Secure: true})
+	}
+	page.MustEvalOnNewDocument(`Object.defineProperty(document, 'visibilityState', {get: () => 'hidden'});
+		window.sidebars = 0;
+		document.addEventListener('htmx:sseOpen', () => window.connected = true);
+		document.addEventListener('htmx:sseMessage', e => { if (e.detail.type === 'sidebar') window.sidebars++; });`)
+	page.MustNavigate(f.reader.server.URL + f.path).MustWaitLoad()
+	page.MustWait(`() => window.connected === true && window.sidebars > 0`)
+	message := page.MustEval(`() => document.querySelector('#message-items > li:last-child a[data-message-action]').getAttribute('data-message-action')`).Str()
+	response, _, err := f.owner.send(f.owner.request(t, "POST", f.path+"/resolve", url.Values{"message": {message}}))
+	acceptanceOK(t, err)
+	if response.StatusCode != 303 || response.Header.Get("Location") != f.path {
+		t.Fatal("conclusion choice did not redirect to its topic")
+	}
+	page.MustWait(`body => document.querySelector('#resolution-summary p')?.textContent === body`, body)
+	for _, selector := range []string{"button", "p"} {
+		before := page.MustEval(`selector => {
+			const summary = document.querySelector('#resolution-summary');
+			window.previousRegion = summary.querySelector('p');
+			summary.querySelector(selector).focus({preventScroll: true});
+			window.previousRegion.scrollTop = 30;
+			if (window.previousRegion.scrollTop !== 30) throw new Error('conclusion must overflow');
+			return window.sidebars;
+		}`, selector).Int()
+		// Own posts force a sidebar snapshot even while the tab is hidden.
+		post(t, f.reader, f.path, "own post with focus on "+selector)
+		page.MustWait(`before => window.sidebars > before`, before)
+		if !page.MustEval(`selector => {
+			const summary = document.querySelector('#resolution-summary');
+			return document.activeElement === summary.querySelector(selector) &&
+				summary.querySelector('p') !== window.previousRegion && summary.querySelector('p').scrollTop === 30;
+		}`, selector).Bool() {
+			t.Fatalf("sidebar refresh lost %s focus or conclusion scroll", selector)
+		}
+	}
 }
 
 func TestResolutionSelectedTopicReachability(t *testing.T) {

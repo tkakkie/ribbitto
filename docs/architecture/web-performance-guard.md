@@ -3,11 +3,9 @@
 The guard in `internal/web` checks markup growth without a database or timing
 assertions. CI never judges time.
 
-- The structure test renders a fixed English fixture at 50, 100 and 200
-  messages. The 50/200 endpoints separate the fixed part (intercept) from the
-  per-message part (slope); 100 checks linearity. Integer counts must lie
-  exactly on the line. Bytes allow a 256-byte middle-sample residual because
-  event sequence digits and cyclic seed-author name lengths vary.
+- A fixed English fixture at 50/100/200 messages separates fixed cost from
+  per-message slope; 100 checks linearity. Counts must lie exactly on the line.
+  Bytes allow a 256-byte residual for sequence digits and cyclic author names.
 - The real first-render test requests the channel through the handler with a
   session and a fake history reader holding 120 messages. It serves the newest
   `conversation.PageSize` entries oldest-first, with older history available,
@@ -19,17 +17,14 @@ assertions. CI never judges time.
   body `htmx:load`. It compares that count with the Go mirror of the exact
   served markup. A gated stream frame then proves that including later work
   gives a larger count. Wait deadlines bound tests; no duration is judged.
-- The source check parses Go declarations and requires an issue reference in
-  every budget constant/variable's comment. Its own missing-reference fixture
-  proves rejection. A DOM-only regression test adds a submit button to every
-  message and proves violations for elements, explicit submits and htmx nodes.
+- Budget comments require issue references, tested with a missing-reference
+  fixture. Adding a submit button per message must violate element, submit
+  and htmx-node budgets.
 
 ## Budgets and ratchet
 
-The source is `internal/web/feed_guard_budgets_test.go`; each constant cites
-an issue and explains its reason. Initial values cite #1478; #1500 ratchets
-message actions, including #1461's pin attribute removal; #1489 adds the
-no-JavaScript list wrapper. Cells are measured/cap; pairs are channel; resolved topic.
+Constants in `internal/web/feed_guard_budgets_test.go` cite their approval issues.
+Cells are measured/cap; pairs are channel; resolved topic.
 
 | Metric | Channel fixed | Topic fixed | Per message | First render |
 |---|---:|---:|---:|---:|
@@ -69,6 +64,9 @@ comment points to that issue. The source check fails without an issue
 reference; CI rejects a raised count budget unless the measured value rises
 in step. Review verifies the reason and approval. A feature needing more
 per-message markup states its count in its issue first.
+
+Attribute-less buttons miss htmx 2.0.7's `[type='submit']` selector;
+per-message pin forms still match its form selector.
 
 ## Mirror maintenance
 

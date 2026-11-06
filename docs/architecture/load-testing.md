@@ -18,7 +18,7 @@ what a run measures. Each has a disposition, agreed by the maintainer on
 | | What | Disposition |
 |---|---|---|
 | A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `internal/web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Measured; no byte budget for now** (maintainer, 2026-10-07, after #216). The cache keeps `renderCapacity` (4096) and its one-minute TTL. A full cache of worst-case renders is a theoretical case of about 167 MB of payload plus overhead. #216's worst-case step passed (1,000 streams, 10 posts/s, 300 renders of about 40.8 KB), and nothing measured shows the entry bound to be insufficient, so byte-based eviction would be speculative complexity. Revisit if the render cache proves to be a real memory limit: on small self-hosted machines, with more render variants, at higher event rates, or in profiling. |
-| A5 | #216 (2026-10-07): per-account cap 16, no process cap; that setup passed 7,000 and failed 10,000 active streams at 10 posts/s. | After #671 re-evaluation: 5,000 kept as a conservative resource limit, not a performance ceiling; small-machine safety unknown. Override: `RIBBITTO_MAX_STREAMS`; no guarantee. |
+| A5 | #216 (2026-10-07; no process cap, per-account 16): 7,000 streams passed, 10,000 failed at 10 posts/s. | **Done (#623):** default 5,000 when `RIBBITTO_MAX_STREAMS` is unset (maintainer, 2026-10-07, after #216); kept 2026-11-06 after #671's rerun. [Resource limit; reason, override and no guarantee](stream-limits.md). |
 | A7 | Detached cache loads (`realtime.Cache`) are neither bounded nor cancelled when every waiter leaves, and can delay exit after shutdown. | **Done first:** #297 (#316) bounds and cancels them before either run, so neither measures a pile-up of abandoned loads and #219's SIGTERM-to-exit time measures the fixed behaviour. |
 
 The event cache (`realtime.NewCachedEvents`, 1024 entries, one minute) is
@@ -49,8 +49,8 @@ numbers are named when #216 tunes them (#261 B13).
 - **A5:** attempted versus established streams (the load client and
   `streams.open`) and the server's open file descriptors, read from the
   operating system on the disposable Linux machine (`/proc/<pid>/fd`), at
-  the highest passing step. The first failing step's limit (file
-  descriptors, memory, or the database pool) describes that setup's limit.
+  the highest passing step. The first failure identifies what limited the
+  run (file descriptors, memory, or the database pool).
 - **A7:** with #297 merged, `runtime.goroutines` after a step's streams
   close (abandoned loads would remain as goroutines) and, in #219, the time
   from SIGTERM to exit.
@@ -79,13 +79,11 @@ From the run in [load results](../measurements/load-results.md); every step's fi
   - **Highest passing idle step:** 60,000 streams over HTTP/1.1, the fixtures'
     size. The server held 60,019 file descriptors and a peak RSS of 3,349 MiB.
     Over the HTTP/1.1 idle steps, peak RSS per stream was 45.7–61.0 KiB.
-  - **What fails first:**
+  - **First limits in #216's setup (before #670):**
     - with 10 posts/s, the database pool, between 7,000 and 10,000 streams;
     - idle through Caddy, the proxy's memory, between 40,000 and 50,000
       streams.
-  - After #671 re-evaluation: conservative 5,000 resource limit, not a
-    performance ceiling; small-machine safety unknown. Override:
-    `RIBBITTO_MAX_STREAMS`; no guarantee ([reason](stream-limits.md)).
+  - [Default and operator rules](stream-limits.md).
 - **A7 (detached loads):** within each series, on one server process, each
   step's first snapshot showed 11–15 goroutines after the previous step's
   thousands of streams had closed, which remained near the baseline of 11. The run saw no pile-up of abandoned loads; these counts alone

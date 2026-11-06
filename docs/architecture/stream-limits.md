@@ -118,15 +118,17 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   owner expiry and immediate last-channel-close cleanup have no grace
   ([typing](typing.md)), independent of interests and selected topic.
 - The hub caps streams across all accounts and organisations in the process
-  at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads
+  at `DefaultMaxStreams` (5,000; maintainer, 2026-10-07 after #216; #623).
+  `cmd/ribbitto` reads
   `RIBBITTO_MAX_STREAMS`: unset keeps that default; an explicit value must
   be a positive integer. Empty, zero, negative, unparsable and overflowing
-  values fail at start. The maintainer kept 5,000 after #671 passed 10,000 on
-  10 CPUs / 7.7 GiB: no safe limit for small self-hosted machines is known.
+  values fail at start. On 2026-11-06 (#2225), the maintainer kept 5,000
+  after #671 passed 10,000 streams on 10 CPUs / 7.7 GiB: no safe limit for
+  small self-hosted machines is known.
   This conservative resource limit is not a performance ceiling or safety
   guarantee. [#216's 2026-10-07 result](../measurements/load-results.md#active-steps-10-postss)
-  is history. #1701 or other results need a separate decision to change it.
-  The hub checks both caps under its
+  is historical. Smaller machines may set it lower. #1701 or other results need
+  a separate decision to change it. The hub checks both caps under its
   registration lock, refusing an excess stream with 429 before registration
   or any SSE header, without taking an account slot. Only unregistering
   frees a slot; cancellation alone still counts.

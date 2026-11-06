@@ -18,7 +18,7 @@ import (
 // page selection. Counts are member-dependent: this path never uses the
 // shared message cache.
 func RenderSidebar(ctx context.Context, m org.Membership, snapshot conversation.SidebarSnapshot) (realtime.Outgoing, error) {
-	page := sidebarView(view.ChannelPage{}, m, snapshot)
+	page := sidebarView(ctx, view.ChannelPage{}, m, snapshot)
 	var html bytes.Buffer
 	if err := view.SidebarLists(page).Render(ctx, &html); err != nil {
 		return realtime.Outgoing{}, fmt.Errorf("rendering sidebar: %w", err)
@@ -28,13 +28,19 @@ func RenderSidebar(ctx context.Context, m org.Membership, snapshot conversation.
 
 // sidebarView keeps the page's form, paging and members state while sharing the
 // sidebar conversion between reloads and member-dependent live recounts.
-func sidebarView(page view.ChannelPage, m org.Membership, snapshot conversation.SidebarSnapshot) view.ChannelPage {
+func sidebarView(ctx context.Context, page view.ChannelPage, m org.Membership, snapshot conversation.SidebarSnapshot) view.ChannelPage {
 	page.Organization = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}
 	page.Current, page.Channels = viewChannel(snapshot.Current), viewChannels(snapshot.Channels)
 	page.Topic, page.Topics = viewTopicPtr(snapshot.Topic), viewTopics(snapshot.Topics)
 	page.ChannelCounts, page.TopicCounts = snapshot.ChannelCounts, snapshot.TopicCounts
 	page.SnapshotSeq = snapshot.SnapshotSeq
 	page.MemberID = m.Member.ID
+	page.Conclusion = nil
+	if snapshot.Conclusion != nil {
+		entry := viewMessage(m.Organization.Slug, *snapshot.Conclusion)
+		entry.Body = snapshot.Conclusion.Text(view.UnknownMember(ctx))
+		page.Conclusion = &entry
+	}
 	return page
 }
 

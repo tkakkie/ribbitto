@@ -330,7 +330,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
 			RecountLimit: config.recountLimit,
 			Pins:         web.NewPinsSource(ctx, conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, nil)),
-			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, compose.PageCountsIn), changes),
+			Sidebar:      sidebarSource(conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn), changes),
 			Presence:     state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }

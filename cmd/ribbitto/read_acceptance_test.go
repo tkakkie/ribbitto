@@ -185,7 +185,7 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 		Reading:  unreadpg.NewReading(pool, compose.NewFeedWriter(), compose.NewTopicWriter(), p),
 		Stream: &web.Streaming{Lifetime: t.Context(), Hub: hub, Sessions: sessions, Authorizer: auth,
 			Events:  realtimepg.NewReader(pool, orgpg.BoundsIn, kinds),
-			Sidebar: sidebarSource(conversationpg.NewReader(pool, nil, nil, compose.EventCursor, compose.PageCountsIn), &p.changes)},
+			Sidebar: sidebarSource(conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, compose.PageCountsIn), &p.changes)},
 	})
 	acceptanceOK(t, err)
 	server := httptest.NewTLSServer(handler)

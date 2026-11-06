@@ -69,7 +69,7 @@ func assertSidebarMatchesPage(t *testing.T, page *html.Node, frame realtime.Outg
 		t.Fatal("sidebar frame lacks the topic list inside the channel list")
 	}
 	for n := range page.Descendants() {
-		if attr(n, "id") == "topic-heading-count" {
+		if attr(n, "id") == "topic-heading-count" || attr(n, "id") == "resolution-summary" {
 			expected++
 		}
 	}

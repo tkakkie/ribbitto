@@ -11,8 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web"
 )
 
-// sidebarReader limits the production reader to Sidebar because it is built
-// without member or account lookups needed by its other methods.
+// sidebarReader limits the live source to its snapshot API.
 type sidebarReader interface {
 	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 }
@@ -42,7 +41,7 @@ func (s liveSidebar) Trigger(event realtime.Event) bool {
 	case conversation.KindPosted:
 		posted, err := conversation.DecodePosted(event.Payload)
 		return err == nil && posted.AuthorID != nil && *posted.AuthorID == s.membership.Member.ID
-	case conversation.KindMessagesMoved:
+	case conversation.KindMessagesMoved, conversation.KindResolutionChanged:
 		return event.ChannelID == s.channel
 	default:
 		return false

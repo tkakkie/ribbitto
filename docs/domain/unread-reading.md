@@ -4,7 +4,6 @@ The reading scopes, posting and automatic reading rules from [unread rules](unre
 
 ## Advancing it
 
-Branch-notice reads, visible-page reading POSTs and posting writes are current.
 Only a POST advances read state; a GET never changes it
 ([request flow](../architecture/request-flow.md)). Each reading POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown while
@@ -64,17 +63,6 @@ the overview offers it, submitting the same form. One click reads up to the
 newest shown sequence, and a refused (429) click retries with that cursor
 while the panel stays modal; it reads nothing that arrived after the click.
 
-Cursor-only POSTs keep today's whole-scope meaning through `Reading.Feed` or
-`Topic`, with no counter or log line here. Today's script still sends them;
-run sending and the injected counter/reporter belong to S3a. S5 refuses them
-no earlier than 7 and no later than 30 days after S3a deploys. That clock is
-not proof old tabs are gone: ordinary tabs can reconnect across deploys,
-and the old script does not reload after a non-429 failure. S3a/S5 must decide
-recovery and a reporter with start and daily-zero lines (amendment E).
-
-Before S3a merges, S1c-3 can be reverted alone, in reverse dependency order;
-new buttons against the old server have their `scope` ignored and still read
-the whole scope. After S3a merges, S1c is permanent until S5: an older handler
-would turn every run into a whole-scope read, irreversibly growing read state.
-Revert S3a first; never revert or downgrade S1c alone. The fail-closed `bound`
-key is a decision for S3a, requiring no change here.
+Until S5, a cursor-only reading POST (no run and no `scope`) reads the whole
+scope; the transition's later stages are tracked in
+[#1486](https://github.com/tkakkie/ribbitto/issues/1486).

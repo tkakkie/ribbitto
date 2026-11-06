@@ -22,7 +22,7 @@ type Connection struct // Connection names who holds a stream: the organisation 
   field Session github.com/tkakkie/ribbitto/internal/kernel.ID
 const DefaultBatchSize untyped int = 100 // DefaultBatchSize bounds how many events one read returns.
 const DefaultCacheLoads untyped int = 16 // DefaultCacheLoads bounds concurrent loaders in each production cache.
-const DefaultMaxStreams untyped int = 5000 // DefaultMaxStreams caps open streams per process, leaving headroom below the measured active-stream ceiling (docs/architecture/load-testing.md).
+const DefaultMaxStreams untyped int = 5000 // DefaultMaxStreams is the maintainer's conservative process resource limit, not measured capacity (docs/architecture/stream-limits.md).
 const DefaultRetention time.Duration = 604800000000000 // DefaultRetention keeps seven days of replay history.
 type EphemeralFrame struct // EphemeralFrame is one bounded current-state read, including its delivery scope.
   field Channel github.com/tkakkie/ribbitto/internal/kernel.ID

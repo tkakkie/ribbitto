@@ -147,7 +147,7 @@ get 429 before streaming; the per-account cap remains 16. When
 `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset, the authorization cache
 holds `max(10,000, this limit)` allows; an explicit capacity below this limit
 is kept and logs a warning at start. See
-[stream resource limits](architecture/stream-limits.md) for the rule and the sizing evidence.
+[stream resource limits](architecture/stream-limits.md) for the rule and default rationale.
 
 [Database tests](database-tests.md) covers integration tests, `pgtest` and module fixtures.
 

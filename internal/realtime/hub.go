@@ -74,8 +74,8 @@ type registration struct {
 	cancel           context.CancelCauseFunc
 }
 
-// DefaultMaxStreams caps open streams per process, leaving headroom below
-// the measured active-stream ceiling (docs/architecture/load-testing.md).
+// DefaultMaxStreams is the maintainer's conservative process resource limit,
+// not measured capacity (docs/architecture/stream-limits.md).
 const DefaultMaxStreams = 5000
 
 // NewHub returns an empty hub with DefaultMaxStreams as its process cap.

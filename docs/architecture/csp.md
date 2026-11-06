@@ -4,12 +4,9 @@ Content Security Policy and script delivery for [rendering and assets](rendering
 
 ## Content Security Policy
 
-HTML routes are registered on the `routes` mux
-in `internal/web.NewHandler`, behind `middleware.SecurityHeaders`. Each
-response gets a fresh 32-byte `crypto/rand` nonce, base64-encoded and passed
-to templ through `templ.WithNonce`; every script in the shared layout uses
-`templ.GetNonce(ctx)`. The policy is defined in one place in
-`internal/web/middleware/security.go`:
+Each HTML response requires a fresh base64-encoded 32-byte `crypto/rand`
+nonce on every shared-layout script. `internal/web/middleware/security.go`
+defines the policy:
 
 ```text
 default-src 'self'; script-src 'nonce-<nonce>'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
@@ -46,24 +43,16 @@ matching entry wins: composer errors replace `#message-composer-state`, branch
 errors replace `#branch-feedback`. New htmx requests inherit both rules
 ([`web-htmx.md`](web-htmx.md)). Other status codes retain their defaults.
 
-Message timestamps use `web/src/message-time.ts`, selected by the logical
-`message-time` registry entry from the embedded manifest and delivered under
-`/static/dist/` with a content-hashed name, loaded with the response nonce
-on every channel page, empty or not, because htmx does not run scripts in
-swapped fragments. The server renders `<time datetime>` in UTC, truncating
-only the attribute to millisecond precision; stored timestamps and the
-visible UTC fallback text are unchanged. The script localises the initial
-page once, then only the element reported by each `htmx:load` and its
-descendants. It reuses one `Intl.DateTimeFormat` for the page language and
-tracks localised elements in a `WeakSet` so overlapping load events do not
-rewrite them. Invalid dates retain their fallback, as do all timestamps
-when JavaScript is disabled. From `desk` the element reserves a width that
-fits both texts, so the rewrite moves nothing beside it (#1094,
-[`ui-components.md`](../ui-components.md#shared-components)). Below `desk`
-the stylesheet's `server-time-stack` lays out the header column's
-`data-server-time` copy of the UTC text in the time's grid cell, hidden and
-with empty alternative text, so the cell never shrinks when the local text
-replaces it (#2044); the script itself is unchanged.
+Load the content-hashed `web/src/message-time.ts` bundle under `/static/dist/`
+with the response nonce on every channel page, empty or not: htmx does not run
+scripts in swapped fragments. Render `<time datetime>` in UTC, truncating only
+the attribute to milliseconds, preserving stored timestamps and visible UTC
+fallback text. Localise the initial page and new `htmx:load` subtrees once,
+in the page language; invalid dates and disabled JavaScript retain the fallback.
+Reserve space for UTC and local text at all widths so localisation neither
+moves adjacent content from `desk` nor shrinks the cell below it; any hidden
+sizing copy has empty alternative text
+([`ui-components.md`](../ui-components.md#shared-components)).
 Hashed bundles are immutable; the fixed-name manifest is not public.
 Unconverted application scripts retain versioned URLs.
 

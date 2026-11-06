@@ -42,13 +42,11 @@ and so is HTML or CSS that fails one of the four points.
   `internal/web/view/message.templ` (`anchor-below-end` in `web/styles/app.css`).
   The browser opens, dismisses and restores focus. Message controls need
   JavaScript for the shared popover; otherwise they link to the actions page.
-- **`:has()` in `internal/web/view/branch.templ`:** when `BranchError == ""`
-  (otherwise it stays in the column to show its error), `#branch-form` uses
-  `peer-not-has-checked/list:hidden` and `peer-has-checked/list:absolute` (or
-  `short:peer-has-checked/list:static`) against `#message-list` (`peer/list` in
-  `internal/web/view/channel.templ`). It appears from the first paint only while
-  a message is checked; `display: none` keeps its controls out of the tab order
-  and accessibility tree, and covering the composer avoids resizing the list.
+- **`:has()` in `internal/web/view/branch.templ`:** without errors, show the
+  branch form from first paint only while a message is checked; keep hidden
+  controls out of the tab order and accessibility tree. Errors stay in the
+  column. Covering the composer avoids resizing the list; short screens keep
+  the form in flow.
 - **`field-sizing-content` for composer growth:** `#message-body` in
   `internal/web/view/channel.templ` pairs `field-sizing-content` with
   `max-h-composer` in `web/styles/app.css` ([`ui-composer.md`](../ui-composer.md)).
@@ -64,20 +62,14 @@ and so is HTML or CSS that fails one of the four points.
   back link in `internal/web/view/channel.templ` targets `#channel-<id>`
   (`ChannelDOMID`) on the channel list page, scrolling that row into view without
   JavaScript ([`ui-code.md`](../ui-code.md#sidebar-order-and-position)).
-- **Reversed flex container for the no-JavaScript latest page (#1489):** on
-  the latest page only, under `@custom-variant noscript (@media (scripting: none))`
-  in `web/styles/app.css`, `#message-list` in `internal/web/view/channel.templ`
-  uses `noscript:flex noscript:flex-col-reverse` around one wrapper child
-  (`contents noscript:block noscript:grow noscript:shrink-0`). A single child
-  keeps DOM, reading and Tab order unchanged while the reversed scroller's
-  origin is the newest entry from the first paint, and the wrapper's fill
-  classes keep short and empty pages top-aligned or centred. Under *Criterion*
-  point 2, this is verified in the Chromium of local runs and CI
-  (`TestBrowser/message-list/no-javascript`), and **expected, unverified** in
-  Firefox (113+, reversed scroll origin since 81) and Safari / iOS Safari
-  (17.0+); where unsupported, the pane opens at its top as before. With
-  JavaScript (`scripting: enabled`) the variant does not match and the wrapper
-  is `display: contents`.
+- **Reversed flex container for the no-JavaScript latest page:** only with
+  `scripting: none`, a single wrapper child keeps DOM, reading and Tab order
+  unchanged while the scroller starts at the newest entry from first paint;
+  short and empty pages remain top-aligned or centred. Under *Criterion* point 2,
+  `TestBrowser/message-list/no-javascript` verifies Chromium locally and in CI;
+  Firefox (113+, reversed scroll origin since 81) and Safari / iOS Safari (17.0+)
+  are **expected, unverified**. Unsupported browsers open the pane at its top.
+  With JavaScript the wrapper is `display: contents`.
 
 ## Scripts that stay
 
@@ -99,14 +91,11 @@ and so is HTML or CSS that fails one of the four points.
   topic's `<option>` in `#branch-to`, and `#branch-name` when an existing topic
   is selected, including on `htmx:load` (points 1 and 3: CSS cannot set
   `disabled`).
-- **`web/src/arrival.ts` (navigation type):** reads
-  `navigation.activation` before first paint to set `data-arrive-pill` and
-  `data-arrive-panel` on `document.documentElement` only on a same-origin `push`
-  navigation that changed the place or opened a panel (point 1: CSS cannot read
-  `navigation.activation`), clearing each mark on `animationend` or
-  `animationcancel`, `data-arrive-pill` on `#sidebar-channels`
-  `htmx:oobBeforeSwap`, and any mark whose animation is not running on
-  `DOMContentLoaded`.
+- **`web/src/arrival.ts` (navigation type):** CSS cannot read
+  `navigation.activation` (point 1). Before first paint, mark only same-origin
+  `push` navigation that changed the place or opened a panel;
+  marks must not survive ended, cancelled or inactive animations; clear the pill
+  mark on sidebar swaps.
 - **Composer `visualViewport` handling in `web/src/composer.ts`:**
   iOS Safari's keyboard shrinks and pans the visual viewport without changing
   `dvh` (point 2). The script writes `--composer-viewport-h` and

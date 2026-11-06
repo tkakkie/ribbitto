@@ -36,7 +36,7 @@ Cells are measured/cap; pairs are channel; resolved topic.
 | HTML bytes | 23303.333 / 24469 | 25990.333 / 25991 | 3464.873 / 3639; 3466.873 / 3467 | 204094 / 214299; 206969 / 214299 |
 
 Topic counts include conclusion and menu controls ([approval](https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298)).
-Whole-page measured/cap (channel; topic): elements 1293/1294; 1312/1312,
+Whole-page measured/cap (channel; topic, unlisted selection): elements 1293/1294; 1312/1312,
 hx carriers 10/10, bytes 196547/206459; 199334/206459. Both fixtures run all guards.
 
 Counts have zero headroom: elements bound DOM growth, forms/submits and

@@ -40,7 +40,8 @@ const (
 	// #1500: real first-render bytes allow 5% (rounded up) for classes/text/translations; a count change (#1477) is a visible, justified budget change.
 	feedBudgetBytesLatest = 214299
 
-	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
+	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture;
+	// its selected topic is not in the sidebar list (a listed one adds about 8 elements, not budgeted).
 	feedBudgetResolvedElementsFixed = 212
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedFormsFixed = 13

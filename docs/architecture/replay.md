@@ -98,7 +98,8 @@ sequenceDiagram
   Ephemeral owner frames follow each batch without moving the cursor;
   presence (#768) and typing (#788, #790) are current-state delivery.
 - **Missed raises** (#237). Writers without a notifier (`cmd/seed`, sign-up's
-  `member.joined`) and other processes can commit without raising the hub.
+  `member.joined`) and, later, other processes (a future multi-process
+  deployment) can commit without raising the hub.
   Without the watermark, caught-up streams would wait for another post.
   It periodically checks committed sequences of active organisations (those
   with at least one registered connection) and raises only those still active.

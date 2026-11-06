@@ -206,7 +206,7 @@ func TestRestart(t *testing.T) {
 				// Bound early-exit probes so readiness can observe the reaper's result.
 				// Successful probes keep their deadline: page reads advance helper state.
 				read := func(ctx context.Context, client *http.Client, endpoint string) (string, error) {
-					if tc.mode == "fail" || tc.mode == "relaunch-fail" {
+					if tc.mode == "fail" || (tc.mode == "relaunch-fail" && len(commands) > 1) {
 						ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 						defer cancel()
 						return probe(ctx, client, endpoint)

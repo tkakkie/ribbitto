@@ -287,7 +287,7 @@ func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.M
 // the sidebar, the account menu and the channel image choices.
 func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapshot conversation.SidebarSnapshot) view.ChannelPage {
 	account, _ := middleware.Account(r.Context())
-	page = sidebarView(page, m, snapshot)
+	page = sidebarView(r.Context(), page, m, snapshot)
 	page.SendKey = string(account.SendKey)
 	page.ImageKeys = conversation.ChannelImageKeys()
 	page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
@@ -359,14 +359,9 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page = screenView(r, page, m, conversation.SidebarSnapshot{
-			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: snapshotSeq,
+			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, Conclusion: history.Conclusion, SnapshotSeq: snapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
-		if history.Conclusion != nil {
-			entry := viewMessage(m.Organization.Slug, *history.Conclusion)
-			entry.Body = history.Conclusion.Text(view.UnknownMember(r.Context()))
-			page.Conclusion = &entry
-		}
 		page.Older = history.Older
 		page.CarriedUnread = firstUnread != nil
 		page.FirstUnread = history.FeedFirstUnread

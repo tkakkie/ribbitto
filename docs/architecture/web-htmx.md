@@ -74,9 +74,9 @@ htmx does only requests/swaps; the server and templ own HTML.
   visible, or when a hidden application is shown again.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
   `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
-  entries absent from the page. Sidebar recounts use the page's list components,
-  replacing the whole channel list, whose current channel nests its topics; an
-  unlisted selection stays at its heading, outside the 50 topic links. Counts bypass the message cache.
+  entries absent from the page. Sidebar recounts replace the channel list and its nested topics;
+  unlisted selections keep a heading outside the 50 links. Counts bypass the message cache.
+  Resolution changes refresh current marks and the selected conclusion.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

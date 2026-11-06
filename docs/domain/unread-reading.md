@@ -63,6 +63,6 @@ the overview offers it, submitting the same form. One click reads up to the
 newest shown sequence, and a refused (429) click retries with that cursor
 while the panel stays modal; it reads nothing that arrived after the click.
 
-Until S5, a cursor-only reading POST (no run and no `scope`) reads the whole
-scope; the transition's later stages are tracked in
+Until stage S5 of #1486 refuses them, a cursor-only reading POST (no run and
+no `scope`) reads the whole scope; the transition's later stages are tracked in
 [#1486](https://github.com/tkakkie/ribbitto/issues/1486).

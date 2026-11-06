@@ -551,6 +551,10 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body, p
 }
 
 func run(args []string, out io.Writer) (runErr error) {
+	return runWithLauncher(args, out, launchChild)
+}
+
+func runWithLauncher(args []string, out io.Writer, launchServer childLauncher) (runErr error) {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
 	compare := flags.String("compare", "", "compare receipt run file with positional expected file")
 	server := flags.String("server", "", "child executable (environment passed through)")
@@ -716,7 +720,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	}()
 	launch := func() error {
 		var launchErr error
-		child, launchErr = launchChild(streamCtx, *server, serverArgs, *address, strings.TrimPrefix(endpoint, t.origin.Scheme+"://"+t.origin.Host), readCursor, *startDeadline, *exitDeadline)
+		child, launchErr = launchServer(streamCtx, *server, serverArgs, *address, strings.TrimPrefix(endpoint, t.origin.Scheme+"://"+t.origin.Host), readCursor, *startDeadline, *exitDeadline)
 		if launchErr != nil {
 			return launchErr
 		}

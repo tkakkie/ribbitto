@@ -145,6 +145,8 @@ type childServer struct {
 	cursor  uint64
 }
 
+type childLauncher func(context.Context, string, []string, string, string, func(context.Context, *http.Client, string) (string, error), time.Duration, time.Duration) (*childServer, error)
+
 func launchChild(ctx context.Context, path string, args []string, address, channel string, probe func(context.Context, *http.Client, string) (string, error), deadline, exitDeadline time.Duration) (*childServer, error) {
 	host, port, err := net.SplitHostPort(address)
 	n, portErr := strconv.Atoi(port)
@@ -161,7 +163,11 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 		return nil, fmt.Errorf("child address already occupied: %w", err)
 	}
 	_ = listener.Close()
-	child := &childServer{cmd: exec.Command(path, args...), done: make(chan struct{})}
+	return startChild(ctx, exec.Command(path, args...), address, channel, probe, deadline, exitDeadline)
+}
+
+func startChild(ctx context.Context, cmd *exec.Cmd, address, channel string, probe func(context.Context, *http.Client, string) (string, error), deadline, exitDeadline time.Duration) (*childServer, error) {
+	child := &childServer{cmd: cmd, done: make(chan struct{})}
 	child.cmd.Stderr = os.Stderr
 	child.cmd.Env = append(os.Environ(), "RIBBITTO_ADDR="+address)
 	if err := child.cmd.Start(); err != nil {

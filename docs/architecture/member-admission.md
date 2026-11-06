@@ -1,8 +1,8 @@
-# Posting, pin-change and image-change admission
+# Member write admission
 
-Posts, pins, resolution and image changes use independent `Services.MemberLimits` budgets
-([wiring](rate-limits.md#member-admission-for-typing)). These are
-**unmeasured, provisional** per-process budgets:
+Posts, pins, resolution and images have independent `Services.MemberLimits` budgets
+([wiring](rate-limits.md#member-admission-for-typing)):
+**unmeasured, provisional**, per-process:
 
 | Requests | Burst | Refill | Concurrent | Retry-After |
 |---|---|---|---|---|
@@ -13,15 +13,15 @@ Posts, pins, resolution and image changes use independent `Services.MemberLimits
 
 Session and URL membership resolution precede admission; non-members still
 get 404 without organisation data, even when budgets are exhausted. Admission
-precedes channel lookup, form parsing, other feature reads and transactions.
+precedes channel lookup, query/form parsing, feature reads and transactions.
 Refusal is 429 with no redirect, write or event; its body and `Retry-After`
 follow the [member response rule](rate-limits.md#member-rejection-responses).
-Every admitted attempt spends a token, including
+Admitted attempts spend tokens, including rejected images,
 validation failures and committed-post replays. Posting immediately defers
 slot release, covering success, validation, lookup failures, errors and panics.
 
 Image changes (`POST …/overview` from a channel or a topic) write no event,
-so without a budget one member could rewrite channel rows without limit.
+so admission bounds row rewrites by one member.
 
 The trusted organisation/member pair shares its budget across channels,
 topics, sessions and addresses. Other members and organisations are independent.

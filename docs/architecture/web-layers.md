@@ -5,8 +5,7 @@
 
 ## Progressive enhancement
 
-Core functionality works without JavaScript; progressive enhancement need not
-provide full parity.
+Core works without JavaScript; enhancements need not provide full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
@@ -26,10 +25,10 @@ Unit tests fake web seams, never conversation's storage ports.
 
 ## templ
 
-Components render view models in `internal/web/view`. Handlers convert
-module results; components never receive them. Views import neither `org` nor
-`conversation`; from `kernel`, only `ID`. Components do no I/O and
-make no authorisation decisions; display logic (building URLs,
+Handlers convert module results to `internal/web/view` models for components.
+View `Topic` fields: `ID`, `Name`, `IsDefault`, `ConclusionMessageID`.
+Views import neither `org` nor `conversation`; from `kernel`, only `ID`.
+Components do no I/O or authorisation; display logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 
 ## htmx

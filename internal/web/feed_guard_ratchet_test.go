@@ -24,30 +24,34 @@ func checkFeedValue(metric, part string, actual, budget float64, bytes bool) []s
 }
 
 func TestFeedGuardBudgetMutations(t *testing.T) {
-	samples := feedSamples(t, false)
-	latest := feedFirstRender(t).values
-	violations := append(checkFeedStructure(samples, feedLimits()), checkFeedFirstRender(latest, feedLimits())...)
-	if len(violations) != 0 {
-		t.Fatalf("unmodified limits: %v", violations)
-	}
-	for i, limit := range feedLimits()[:5] {
-		for _, part := range []string{"fixed", "per message", "first render"} {
-			t.Run(limit.metric+"/"+part, func(t *testing.T) {
-				limits := feedLimits()
-				switch part {
-				case "fixed":
-					limits[i].fixed++
-				case "per message":
-					limits[i].slope++
-				case "first render":
-					limits[i].latest++
+	for _, page := range feedGuardPages() {
+		t.Run(page.name, func(t *testing.T) {
+			samples := feedSamples(t, page, false)
+			latest := feedFirstRender(t, page).values
+			violations := append(checkFeedStructure(samples, page.limits), checkFeedFirstRender(latest, page.limits)...)
+			if len(violations) != 0 {
+				t.Fatalf("unmodified limits: %v", violations)
+			}
+			for i, limit := range page.limits[:5] {
+				for _, part := range []string{"fixed", "per message", "first render"} {
+					t.Run(limit.metric+"/"+part, func(t *testing.T) {
+						limits := append([]feedLimit(nil), page.limits...)
+						switch part {
+						case "fixed":
+							limits[i].fixed++
+						case "per message":
+							limits[i].slope++
+						case "first render":
+							limits[i].latest++
+						}
+						got := append(checkFeedStructure(samples, limits), checkFeedFirstRender(latest, limits)...)
+						if len(got) != 1 || !strings.Contains(got[0], limit.metric+" "+part+":") || !strings.Contains(got[0], "exceeds allowed") {
+							t.Errorf("raised limit: %v, want only %s %s headroom violation", got, limit.metric, part)
+						}
+					})
 				}
-				got := append(checkFeedStructure(samples, limits), checkFeedFirstRender(latest, limits)...)
-				if len(got) != 1 || !strings.Contains(got[0], limit.metric+" "+part+":") || !strings.Contains(got[0], "exceeds allowed") {
-					t.Errorf("raised limit: %v, want only %s %s headroom violation", got, limit.metric, part)
-				}
-			})
-		}
+			}
+		})
 	}
 }
 

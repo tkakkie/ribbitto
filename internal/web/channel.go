@@ -630,13 +630,8 @@ func viewTopics(topics []conversation.Topic) []view.Topic {
 // the page and the stream alike; slug is the organisation's, for the label's
 // link to the topic view.
 func viewMessage(slug string, entry conversation.Entry) view.Message {
-	resolveURL := ""
-	if !entry.DefaultTopic {
-		resolveURL = view.ConversationURL(slug, entry.ChannelID, &entry.TopicID) + "/resolve"
-	}
 	return view.Message{
-		ResolveURL: resolveURL,
-		ID:         entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
+		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),

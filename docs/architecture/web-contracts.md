@@ -16,9 +16,9 @@
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
 - Message links carry `data-message-action` (UUID), `data-message-url`,
-  `data-pin-url`, `data-unpin-url` and `data-pinned`. The menu copies URLs and identity;
-  pin form IDs stay per message. First-open clones stay in hidden containers
-  so delayed responses retain targets and SSE state.
+  `data-pin-url`, `data-unpin-url` and `data-pinned`. The menu copies server-provided URLs and identity;
+  pin form IDs stay per message. Forms clone on first open; inactive forms stay
+  in hidden message containers so delayed responses retain their targets and SSE state.
 - Menu Quote keeps `form="quote-form"`, `name="quote"` and the message ID.
 - **Script-read data attributes are a contract too** (#351). The same renaming
   rule covers `data-event-cursor`, `data-posted-message`, `data-invalid`, `data-announcement` and:

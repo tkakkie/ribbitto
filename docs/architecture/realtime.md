@@ -42,7 +42,8 @@ payload without a message read.
 Setup and sign-up append `member.joined` immediately after the member,
 with its `joined_event_seq`, in the same transaction owned by the root use case.
 Setup and sign-up do not raise the hub;
-the watermark covers it. Kinds are an open list; a duplicate registration
+the watermark covers it. Each publisher registers a `Router` for its kinds;
+wiring combines the registrations. Kinds are an open list; a duplicate registration
 fails start-up with the kind named, rather than replacing its router.
 `EventsAfter` returns
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
@@ -56,10 +57,11 @@ without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
 `migrate up`. Retention raises the boundary in the same transaction as deletion,
-locking one organisation with `FOR NO KEY UPDATE` before its events.
+locking only one organisation per transaction with `FOR NO KEY UPDATE` before its events.
 This serialises batches with `event_seq` writers
 while allowing foreign-key inserts into child tables. The boundary must never
-regress. Retention commits batches of at most 1,000 expired
+regress. Retention lists organisations with expired rows in ID order without write locks,
+then commits batches of at most 1,000 expired
 rows in sequence order until no eligible prefix rows remain for each organisation.
 Eligible rows are the expired prefix:
 those below the organisation's lowest-sequence row that has not expired, or

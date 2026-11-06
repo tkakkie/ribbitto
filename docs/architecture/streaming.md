@@ -21,7 +21,7 @@ The worker starts asynchronously before serving, so its first run can overlap
 requests. Each run has a one-minute timeout; the
 [event-log contract](realtime.md#durable-event-log) bounds deletion batches and
 defines the boundary, lock order and cursor validity.
-Failed runs retry on the next tick, keeping committed progress. Shutdown cancels
+Errors or timeouts keep committed batches; the next tick retries. Shutdown cancels
 and waits for the worker, including a blocked first run, before closing the pool.
 The retention period defaults to seven days; see [database configuration](../database.md).
 
@@ -61,7 +61,7 @@ The retention period defaults to seven days; see [database configuration](../dat
   Other sessions of the account stay connected for single-session sign-out.
   [Signing out of other sessions](identity.md) ends those streams instead;
   a mutation error cancels the whole account so reconnects re-check sessions.
-  Failed registrations free their slots; each accepted stream counts once,
+  Failed registrations free their slots; presence/typing count each accepted stream once,
   whatever its interests, and cleanup releases its slot and presence/typing counts.
   Typing uses separate channel counts: the last matching close clears activity
   immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online

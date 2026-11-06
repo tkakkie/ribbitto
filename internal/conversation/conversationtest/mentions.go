@@ -8,7 +8,7 @@ import (
 )
 
 // AssertMentions verifies the exact members and copied sequence against the
-// persisted message, for both posting and historical backfill tests.
+// persisted message.
 func AssertMentions(t *testing.T, pool *pgxpool.Pool, organizationID, messageID kernel.ID, eventSeq int64, members []kernel.ID) {
 	t.Helper()
 	rows, err := pool.Query(t.Context(), `SELECT r.member_id, r.event_seq, m.event_seq

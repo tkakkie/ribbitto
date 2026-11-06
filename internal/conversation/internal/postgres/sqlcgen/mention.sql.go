@@ -33,3 +33,71 @@ func (q *Queries) InsertMessageMentions(ctx context.Context, arg InsertMessageMe
 	)
 	return err
 }
+
+const listMentions = `-- name: ListMentions :many
+SELECT m.id, m.organization_id, m.channel_id, m.member_id, m.body, m.event_seq, m.created_at, m.topic_id, m.moved_event_seq, m.pinned_by_member_id, m.pinned_at, m.idempotency_key, m.format, m.quoted_message_id, m.quoted_member_id, m.quote_text, m.typed_body_proof
+FROM message_mention r
+JOIN message m ON m.organization_id = r.organization_id AND m.id = r.message_id
+JOIN channel c ON c.organization_id = m.organization_id AND c.id = m.channel_id
+WHERE r.organization_id = $1
+  AND m.organization_id = $1
+  AND c.organization_id = $1
+  AND r.member_id = $2
+  AND ($3::bigint IS NULL OR r.event_seq < $3)
+  AND c.id = ANY($4::uuid[])
+  AND NOT (m.member_id = $2)
+ORDER BY r.event_seq DESC
+LIMIT $5
+`
+
+type ListMentionsParams struct {
+	OrganizationID pgtype.UUID
+	MemberID       pgtype.UUID
+	BeforeEventSeq pgtype.Int8
+	ChannelIds     []pgtype.UUID
+	RowLimit       int32
+}
+
+func (q *Queries) ListMentions(ctx context.Context, arg ListMentionsParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMentions,
+		arg.OrganizationID,
+		arg.MemberID,
+		arg.BeforeEventSeq,
+		arg.ChannelIds,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.MemberID,
+			&i.Body,
+			&i.EventSeq,
+			&i.CreatedAt,
+			&i.TopicID,
+			&i.MovedEventSeq,
+			&i.PinnedByMemberID,
+			&i.PinnedAt,
+			&i.IdempotencyKey,
+			&i.Format,
+			&i.QuotedMessageID,
+			&i.QuotedMemberID,
+			&i.QuoteText,
+			&i.TypedBodyProof,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

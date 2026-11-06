@@ -10,6 +10,8 @@
 // Message pin metadata is paired and organisation-scoped; transaction-bound
 // pin writes and bounded snapshot reads retain no historical body; the
 // overview page and pins-only refresh read current excerpts in their snapshots.
+// Mention pages read 50 newest non-self mentions across ReadableChannels,
+// with an event_seq cursor and a filtered lookahead row in one statement.
 // Channel.image holds a nullable illustration key; web resolves missing or
 // unknown keys to a stable image from the channel ID without a backfill.
 // Members choose validated bundled keys or restore NULL; image writes emit no event.

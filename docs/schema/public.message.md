@@ -6,7 +6,7 @@
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.message_mention](public.message_mention.md) |  |  |
 | organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.message_mention](public.message_mention.md) | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
-| channel_id | uuid |  | false | [public.topic](public.topic.md) | [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
+| channel_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.channel](public.channel.md) [public.topic](public.topic.md) [public.message](public.message.md) |  |
 | member_id | uuid |  | false |  | [public.member](public.member.md) |  |
 | body | text |  | false |  |  |  |
 | event_seq | bigint |  | false |  |  |  |
@@ -21,6 +21,8 @@
 | quoted_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
 | quote_text | text |  | true |  |  |  |
 | typed_body_proof | bytea |  | true |  |  |  |
+| reply_to_message_id | uuid |  | true |  | [public.message](public.message.md) |  |
+| reply_to_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
 
 ## Constraints
 
@@ -44,17 +46,21 @@
 | message_quote_text_characters_check | CHECK | CHECK ((quote_text !~ '[---  ‪‫‬‭‮]'::text)) |
 | message_quote_text_length_check | CHECK | CHECK (((length(quote_text) >= 1) AND (length(quote_text) <= 4000))) |
 | message_quote_text_trim_check | CHECK | CHECK ((quote_text = btrim(quote_text, '	<br /><br /> '::text))) |
+| message_reply_pair_check | CHECK | CHECK (((reply_to_message_id IS NULL) = (reply_to_member_id IS NULL))) |
+| message_reply_self_check | CHECK | CHECK ((reply_to_message_id <> id)) |
 | message_topic_id_not_null | n | NOT NULL topic_id |
 | message_typed_body_proof_check | CHECK | CHECK (((typed_body_proof IS NULL) OR (octet_length(typed_body_proof) = 36))) |
 | message_organization_id_member_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_pinner_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_quoted_member_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
+| message_reply_member_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, reply_to_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_organization_id_channel_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT |
 | message_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | message_organization_id_event_seq_key | UNIQUE | UNIQUE (organization_id, event_seq) |
 | message_topic_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT |
 | message_organization_id_id_key | UNIQUE | UNIQUE (organization_id, id) |
 | message_quoted_message_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, quoted_message_id) REFERENCES message(organization_id, id) ON DELETE SET NULL (quoted_message_id) |
+| message_reply_message_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id, reply_to_message_id) REFERENCES message(organization_id, channel_id, id) ON DELETE RESTRICT |
 
 ## Indexes
 
@@ -71,17 +77,25 @@
 | message_quoted_message_idx | CREATE INDEX message_quoted_message_idx ON public.message USING btree (organization_id, quoted_message_id) WHERE (quoted_message_id IS NOT NULL) |
 | message_org_channel_id_key | CREATE UNIQUE INDEX message_org_channel_id_key ON public.message USING btree (organization_id, channel_id, id) |
 
+## Triggers
+
+| Name | Definition |
+| ---- | ---------- |
+| message_reply_guard | CREATE TRIGGER message_reply_guard BEFORE UPDATE OF reply_to_message_id, reply_to_member_id ON public.message FOR EACH ROW WHEN (((new.reply_to_message_id IS DISTINCT FROM old.reply_to_message_id) OR (new.reply_to_member_id IS DISTINCT FROM old.reply_to_member_id))) EXECUTE FUNCTION message_reply_guard() |
+
 ## Relations
 
 ```mermaid
 erDiagram
 
 "public.message" }o--|| "public.message" : "FOREIGN KEY (organization_id, quoted_message_id) REFERENCES message(organization_id, id) ON DELETE SET NULL (quoted_message_id)"
+"public.message" }o--|| "public.message" : "FOREIGN KEY (organization_id, channel_id, reply_to_message_id) REFERENCES message(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.message" : "FOREIGN KEY (organization_id, channel_id, conclusion_message_id) REFERENCES message(organization_id, channel_id, id)"
 "public.message_mention" }o--|| "public.message" : "FOREIGN KEY (organization_id, message_id) REFERENCES message(organization_id, id) ON DELETE CASCADE"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, reply_to_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 
@@ -103,6 +117,8 @@ erDiagram
   uuid quoted_member_id FK
   text quote_text
   bytea typed_body_proof
+  uuid reply_to_message_id FK
+  uuid reply_to_member_id FK
 }
 "public.topic" {
   uuid id

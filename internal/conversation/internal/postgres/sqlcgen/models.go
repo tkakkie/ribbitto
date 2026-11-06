@@ -37,6 +37,8 @@ type Message struct {
 	QuotedMemberID   pgtype.UUID
 	QuoteText        pgtype.Text
 	TypedBodyProof   []byte
+	ReplyToMessageID pgtype.UUID
+	ReplyToMemberID  pgtype.UUID
 }
 
 type Topic struct {

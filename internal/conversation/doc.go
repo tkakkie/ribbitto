@@ -7,6 +7,8 @@
 // message.posted plus messages.moved, pins.changed and topic.resolution_changed.
 // Topic.conclusion_message_id is the sole resolution state, nullable and
 // constrained to a message of the same channel; default topics stay unresolved.
+// Reply links are insert-only and guarded against updates in PostgreSQL;
+// their current text previews join history's batched author lookups.
 // Message pin metadata is paired and organisation-scoped; transaction-bound
 // pin writes and bounded snapshot reads retain no historical body; the
 // overview page and pins-only refresh read current excerpts in their snapshots.

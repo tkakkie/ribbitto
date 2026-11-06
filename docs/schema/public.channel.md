@@ -89,6 +89,8 @@ erDiagram
   uuid quoted_member_id FK
   text quote_text
   bytea typed_body_proof
+  uuid reply_to_message_id FK
+  uuid reply_to_member_id FK
 }
 "public.channel_read" {
   uuid organization_id FK

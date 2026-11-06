@@ -63,8 +63,10 @@ var ErrInvalidPostCursor = errors.New("invalid posting cursor")
 
 // Send is one composer submission.
 type Send struct {
-	Topic *kernel.ID // A topic of the channel; nil is its default topic.
-	Body  string
+	// ReplyTo is the answered message of this channel; its author is read in the transaction.
+	ReplyTo *kernel.ID
+	Topic   *kernel.ID // Nil uses the answered topic, or the channel default without a reply.
+	Body    string
 	// Cursor is validated but not used for reading; kept for old pages until S5.
 	Cursor *int64
 	// Key makes a repeated send return the first message; nil posts without it.
@@ -155,6 +157,21 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 		if err != nil {
 			return err
 		}
+		var reply *Reply
+		if s.ReplyTo != nil {
+			original, err := writer.QuotedMessage(ctx, organizationID, channelID, *s.ReplyTo)
+			if errors.Is(err, ErrQuoteNotFound) {
+				return ErrMessageNotFound
+			}
+			if err != nil {
+				return err
+			}
+			reply = &Reply{MessageID: original.ID, MemberID: original.MemberID}
+			topic, err = writer.GetTopic(ctx, organizationID, channelID, original.TopicID)
+			if err != nil {
+				return err
+			}
+		}
 		if topicID != nil {
 			topic, err = writer.GetTopic(ctx, organizationID, channelID, *topicID)
 			if err != nil {
@@ -174,7 +191,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 				return err
 			}
 		}
-		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key, proof, quote)
+		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key, proof, quote, reply)
 		if err != nil {
 			return err
 		}
@@ -258,6 +275,19 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 			if lookupErr != nil {
 				return lookupErr
 			}
+			if s.ReplyTo != nil {
+				target, lookupErr := p.writer(tx).QuotedMessage(ctx, m.Organization.ID, channelID, *s.ReplyTo)
+				if errors.Is(lookupErr, ErrQuoteNotFound) {
+					return ErrMessageNotFound
+				}
+				if lookupErr != nil {
+					return lookupErr
+				}
+				topic, lookupErr = p.writer(tx).GetTopic(ctx, m.Organization.ID, channelID, target.TopicID)
+				if lookupErr != nil {
+					return lookupErr
+				}
+			}
 			if s.Topic != nil {
 				topic, lookupErr = p.writer(tx).GetTopic(ctx, m.Organization.ID, channelID, *s.Topic)
 				if lookupErr != nil {
@@ -287,7 +317,7 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		}
 	}
 	sent := Sent{Message: stored, Topic: requested, Repeat: true}
-	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, s.Quote) {
+	if !stored.sameTypedBody(body) || stored.ChannelID != channelID || !sameQuote(stored.Quote, s.Quote) || !sameReply(stored.Reply, s.ReplyTo) {
 		return sent, ErrPostKeyReused
 	}
 	// A whole and a part equal to the whole are the same snapshot.
@@ -295,6 +325,13 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil
+}
+
+func sameReply(stored *Reply, requested *kernel.ID) bool {
+	if stored == nil || requested == nil {
+		return stored == nil && requested == nil
+	}
+	return stored.MessageID == *requested
 }
 
 // sameQuote reports whether a stored message quotes the requested original.

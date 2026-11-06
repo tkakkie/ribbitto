@@ -58,7 +58,7 @@ Channel pins reference the current message; permissions, limits and lifecycle:
 with the message and its insert's returned `event_seq`. Message identity and
 `event_seq` are immutable; future rewrites must keep mentions in step and say so
 in their issue. Message deletion cascades to mentions; mentions restrict member
-deletion. Historical coverage awaits #2199's backfill.
+deletion. No backfill is planned.
 
 Rows store organisation, message, member and sequence; channel/topic resolve
 through the message, so moves retain mentions. Only `chat_v1` references count;

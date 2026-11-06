@@ -153,6 +153,9 @@ func messagesFromRows(rows []sqlcgen.Message) []conversation.Message {
 
 func messageFromRow(row sqlcgen.Message) conversation.Message {
 	message := conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, Format: conversation.Format(row.Format), EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time, Pinned: row.PinnedAt.Valid}
+	if row.ReplyToMessageID.Valid {
+		message.Reply = &conversation.Reply{MessageID: row.ReplyToMessageID.Bytes, MemberID: row.ReplyToMemberID.Bytes}
+	}
 	if len(row.TypedBodyProof) == len(message.TypedBodyProof) {
 		copy(message.TypedBodyProof[:], row.TypedBodyProof)
 	}

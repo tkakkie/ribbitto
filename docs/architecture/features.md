@@ -32,8 +32,8 @@ How features reach each other's data (stores, posting's transaction, history
 and the page snapshot) is in
 [cross-feature access](cross-feature-access.md).
 
-Conversation owns `message_mention`; [messages](../domain/messages.md) states
-its atomic writes, immutable sequence and deletion invariants.
+Conversation owns mentions and immutable reply links;
+[message invariants](../domain/messages.md) cover posting, previews and lifecycle.
 
 Org's test-only lookup by slug lives in its store's tests; its test-only
 `GetMemberByOrganizationAndAccount` query lives in `db/queries/org/`.

@@ -103,8 +103,23 @@ func TestUnreadListBench(t *testing.T) {
 		g.exec("ANALYZE " + table)
 	}
 	t.Log("ANALYZE complete; settings and indexes (outside intervals):")
-	g.lines(`SELECT name||'='||setting||coalesce(unit,'') FROM pg_settings WHERE name IN ('shared_buffers','work_mem','effective_cache_size','jit','max_parallel_workers_per_gather','random_page_cost','statement_timeout','temp_file_limit') ORDER BY name`)
+	g.lines(`SELECT name||'='||setting||coalesce(unit,'') FROM pg_settings WHERE name IN ('shared_buffers','work_mem','effective_cache_size','jit','max_parallel_workers_per_gather','random_page_cost','statement_timeout','temp_file_limit','plan_cache_mode') ORDER BY name`)
 	g.lines(`SELECT indexdef FROM pg_indexes WHERE tablename IN ('message','read_range','topic_read_floor') ORDER BY indexname`)
+	// Validate every scenario before even the first warm-up takes an interval.
+	for _, scenario := range scenarios {
+		g.check()
+		expected := 51 // Includes the lookahead row beyond the 50 displayed rows.
+		switch scenario.name {
+		case "normal":
+			expected = 50
+		case "caught-up":
+			expected = 0
+		}
+		g.require(platform.InSnapshotWithStatementTimeout(ctx, pool, time.Minute, func(s platform.Snapshot) error {
+			return unreadListSanity(ctx, s, scenario.f, expected)
+		}))
+		g.check()
+	}
 	for _, form := range []string{"V0", "V1"} {
 		results := make([][]unreadListBenchSample, len(scenarios))
 		// Cycling pairs normal with stressed data, without confounding order
@@ -120,12 +135,36 @@ func TestUnreadListBench(t *testing.T) {
 				g.check()
 			}
 		}
+		t.Logf("prepared plan counts after timed samples form=%s (before diagnostics):", form)
+		g.lines(`SELECT name||' generic_plans='||generic_plans||' custom_plans='||custom_plans||' statement='||split_part(statement,chr(10),1) FROM pg_prepared_statements ORDER BY name`)
 		for i, scenario := range scenarios {
 			unreadListBenchReport(t, scenario.name, form, results[i])
 			g.diagnostics(scenario, form)
 			g.pageTrace(scenario, form)
 		}
 	}
+}
+
+func unreadListSanity(ctx context.Context, s platform.Snapshot, f unreadListFixture, expected int) error {
+	v0, err := unreadListPage(ctx, s, f.member, f.channels, nil, "V0", "")
+	if err != nil {
+		return fmt.Errorf("checking V0 before timing: %w", err)
+	}
+	v1, err := unreadListPage(ctx, s, f.member, f.channels, nil, "V1", "")
+	if err != nil {
+		return fmt.Errorf("checking V1 before timing: %w", err)
+	}
+	return unreadListSanityRows(v0, v1, expected)
+}
+
+func unreadListSanityRows(v0, v1 []unreadListRow, expected int) error {
+	if len(v0) != expected || len(v1) != expected {
+		return fmt.Errorf("before timing: V0 rows=%d V1 rows=%d, want %d", len(v0), len(v1), expected)
+	}
+	if !slices.Equal(v0, v1) {
+		return fmt.Errorf("before timing: V0 and V1 differ")
+	}
+	return nil
 }
 
 func unreadListBenchLoopback(t *testing.T) {

@@ -92,6 +92,25 @@ func unreadListSmall(t *testing.T) unreadListFixture {
 	moves := conversationtest.Channel(t, pool, f.OrganizationID, "moves", false)
 	channels = append(channels, moves.ID)
 	read(moves.ID, 0, 2)
+	message(moves.ID, topic(moves.ID, "at-prefix"), 2, nil, false)
+	boundary := topic(moves.ID, "at-floor")
+	floor(moves.ID, boundary, 3500)
+	message(moves.ID, boundary, 3490, int64(3500), false)
+	message(moves.ID, boundary, 3500, nil, false)
+	message(moves.ID, boundary, 3501, nil, false)
+	// Each branch stays below 100; only their combined cap distinguishes 101.
+	for _, count := range []int64{100, 101} {
+		id := topic(moves.ID, fmt.Sprintf("combined-cap-%d", count))
+		base := int64(10000) + (count-100)*1000
+		floor(moves.ID, id, base+200)
+		for i := int64(1); i <= count; i++ {
+			if i <= 50 {
+				message(moves.ID, id, base+i, base+300+i, false)
+			} else {
+				message(moves.ID, id, base+150+i, nil, false)
+			}
+		}
+	}
 	source := topic(moves.ID, "moved-out")
 	destination := topic(moves.ID, "moved-first")
 	movedID := message(moves.ID, source, 1200, nil, false)
@@ -184,7 +203,7 @@ func TestUnreadListCorrectness(t *testing.T) {
 				}
 			}
 		}
-		for _, mutation := range []string{"drop-moved-branch", "drop-positive-ranges", "ignore-explicit-floor", "capped-first-unread", "sidebar-50", "channel-first-100", "ignore-join-prefix", "inclusive-keyset"} {
+		for _, mutation := range []string{"drop-moved-branch", "drop-positive-ranges", "ignore-explicit-floor", "capped-first-unread", "sidebar-50", "channel-first-100", "ignore-join-prefix", "inclusive-keyset", "exclusive-prefix", "inclusive-floor", "inclusive-move-floor", "cap-101"} {
 			for _, form := range []string{"V0", "V1"} {
 				got := unreadListAll(t, s, f, form, mutation, trace)
 				if reflect.DeepEqual(got, want) {
@@ -237,6 +256,46 @@ func unreadListOracle(t *testing.T, s platform.Snapshot, f unreadListFixture) []
 		return -strings.Compare(fmt.Sprintf("%x", a.Topic), fmt.Sprintf("%x", b.Topic))
 	})
 	return want
+}
+
+func TestUnreadListSanity(t *testing.T) {
+	f := unreadListSmall(t)
+	pool, _ := unreadListTracedPool(t, f.pool)
+	requireNoError(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
+		if err := unreadListSanity(t.Context(), s, f, 51); err != nil {
+			return err
+		}
+		if err := unreadListSanity(t.Context(), s, f, 50); err == nil {
+			t.Fatal("incorrect scenario row count accepted")
+		}
+		return nil
+	}))
+}
+
+func TestUnreadListSanityRows(t *testing.T) {
+	rows := []unreadListRow{{Name: "first", Count: 1, First: 10}, {Name: "second", Count: 2, First: 20}}
+	changed := slices.Clone(rows)
+	changed[0].Count++
+	for _, tt := range []struct {
+		name     string
+		v0, v1   []unreadListRow
+		expected int
+		wantErr  bool
+	}{
+		{"equal", rows, slices.Clone(rows), 2, false},
+		{"caught-up", nil, []unreadListRow{}, 0, false},
+		{"both-empty-unexpectedly", nil, nil, 2, true},
+		{"V0-count", rows[:1], rows, 2, true},
+		{"V1-count", rows, rows[:1], 2, true},
+		{"different-values", rows, changed, 2, true},
+		{"different-order", rows, []unreadListRow{rows[1], rows[0]}, 2, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := unreadListSanityRows(tt.v0, tt.v1, tt.expected); (err != nil) != tt.wantErr {
+				t.Fatalf("sanity error=%v, wantErr=%t", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func unreadListAll(t *testing.T, s platform.Snapshot, f unreadListFixture, form, mutation string, trace *unreadListTrace) []unreadListRow {

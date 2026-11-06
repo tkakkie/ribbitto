@@ -62,13 +62,25 @@ func unreadListSQL(form, mutation string) string {
 		channels = strings.Replace(channels, "$3::bigint+1", "0::bigint", 1)
 	}
 	scope := `m.organization_id=$1 AND m.channel_id=c.channel_id AND m.topic_id=c.topic_id AND m.event_seq>=c.p AND ` + notRead
+	if mutation == "exclusive-prefix" {
+		scope = strings.Replace(scope, "m.event_seq>=c.p", "m.event_seq>c.p", 1)
+	}
 	above := `SELECT m.event_seq FROM message m WHERE ` + scope + ` AND m.event_seq>c.floor ORDER BY m.event_seq`
 	movedWhere := scope + ` AND c.explicit_floor IS NOT NULL AND m.event_seq<=c.floor AND m.moved_event_seq>c.floor`
+	if mutation == "inclusive-floor" {
+		above = strings.Replace(above, "m.event_seq>c.floor", "m.event_seq>=c.floor", 1)
+	}
+	if mutation == "inclusive-move-floor" {
+		movedWhere = strings.Replace(movedWhere, "m.moved_event_seq>c.floor", "m.moved_event_seq>=c.floor", 1)
+	}
 	if mutation == "drop-moved-branch" {
 		movedWhere += " AND false"
 	}
 	moved := `SELECT m.event_seq FROM message m WHERE ` + movedWhere
 	capped := `SELECT event_seq FROM ((` + above + ` LIMIT 100) UNION ALL (` + moved + ` ORDER BY m.moved_event_seq LIMIT 100)) branches ORDER BY event_seq LIMIT 100`
+	if mutation == "cap-101" {
+		capped = strings.Replace(capped, "branches ORDER BY event_seq LIMIT 100", "branches ORDER BY event_seq LIMIT 101", 1)
+	}
 	firstMoved := moved
 	if mutation == "capped-first-unread" {
 		firstMoved += " ORDER BY m.moved_event_seq LIMIT 100"

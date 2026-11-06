@@ -49,6 +49,27 @@ func feedLimits() []feedLimit {
 	}
 }
 
+type feedGuardPage struct {
+	name          string
+	fixture       func(*testing.T, int) view.ChannelPage
+	limits        []feedLimit
+	wholeElements int
+}
+
+func feedGuardPages() []feedGuardPage {
+	resolved := feedLimits()
+	resolved[0] = feedLimit{"elements", feedBudgetResolvedElementsFixed, feedBudgetElementsSlope, feedBudgetResolvedElementsLatest}
+	resolved[1] = feedLimit{"forms", feedBudgetResolvedFormsFixed, feedBudgetFormsSlope, feedBudgetResolvedFormsLatest}
+	resolved[2] = feedLimit{"[type=submit]", feedBudgetResolvedSubmitFixed, feedBudgetSubmitSlope, feedBudgetResolvedSubmitLatest}
+	resolved[4] = feedLimit{"htmx-selected", feedBudgetResolvedHTMXFixed, feedBudgetHTMXSlope, feedBudgetResolvedHTMXLatest}
+	resolved[5] = feedLimit{"HTML bytes", feedBudgetResolvedBytesFixed, feedBudgetResolvedBytesSlope, feedBudgetBytesLatest}
+	return []feedGuardPage{
+		{"channel", feedFixture, feedLimits(), 1294},
+		// https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6672846682 approves the resolved-topic whole-page cap.
+		{"resolved topic", resolvedTopicFixture, resolved, 1311},
+	}
+}
+
 // The endpoints define the line; the middle sample independently detects
 // nonlinear growth. Counts are exact; byte residuals allow digit/name variation.
 func checkFeedStructure(samples [3][6]int, limits []feedLimit) []string {
@@ -77,11 +98,11 @@ func checkFeedStructure(samples [3][6]int, limits []feedLimit) []string {
 	return violations
 }
 
-func feedSamples(t *testing.T, addButton bool) [3][6]int {
+func feedSamples(t *testing.T, page feedGuardPage, addButton bool) [3][6]int {
 	t.Helper()
 	var samples [3][6]int
 	for i, size := range []int{50, 100, 200} {
-		measured := measureFeed(t, renderIn(t, "en", view.ChannelScreen("/static/css/app.css", feedFixture(t, size))))
+		measured := measureFeed(t, renderIn(t, "en", view.ChannelScreen("/static/css/app.css", page.fixture(t, size))))
 		if addButton {
 			for node := range measured.doc.Descendants() {
 				if feedMessageItem(node) {
@@ -95,7 +116,7 @@ func feedSamples(t *testing.T, addButton bool) [3][6]int {
 			measured = measureFeed(t, markup.String())
 		}
 		samples[i] = measured.values
-		for metric, limit := range feedLimits() {
+		for metric, limit := range page.limits {
 			t.Logf("messages=%d %s=%d", size, limit.metric, measured.values[metric])
 		}
 	}
@@ -107,23 +128,31 @@ func feedMessageItem(n *html.Node) bool {
 }
 
 func TestFeedGuardStructure(t *testing.T) {
-	samples := feedSamples(t, false)
-	for i, limit := range feedLimits() {
-		slope := float64(samples[2][i]-samples[0][i]) / 150
-		t.Logf("%s: fixed=%.3f per message=%.3f", limit.metric, float64(samples[0][i])-50*slope, slope)
-	}
-	for _, violation := range checkFeedStructure(samples, feedLimits()) {
-		t.Error(violation)
+	for _, page := range feedGuardPages() {
+		t.Run(page.name, func(t *testing.T) {
+			samples := feedSamples(t, page, false)
+			for i, limit := range page.limits {
+				slope := float64(samples[2][i]-samples[0][i]) / 150
+				t.Logf("%s: fixed=%.3f per message=%.3f", limit.metric, float64(samples[0][i])-50*slope, slope)
+			}
+			for _, violation := range checkFeedStructure(samples, page.limits) {
+				t.Error(violation)
+			}
+		})
 	}
 }
 
 func TestFeedGuardCatchesButtonPerMessage(t *testing.T) {
-	violations := strings.Join(checkFeedStructure(feedSamples(t, true), feedLimits()), "\n")
-	t.Log(violations)
-	for _, metric := range []string{"elements per message", "[type=submit] per message", "htmx-selected per message"} {
-		if !strings.Contains(violations, metric) {
-			t.Errorf("missing %s violation: %s", metric, violations)
-		}
+	for _, page := range feedGuardPages() {
+		t.Run(page.name, func(t *testing.T) {
+			violations := strings.Join(checkFeedStructure(feedSamples(t, page, true), page.limits), "\n")
+			t.Log(violations)
+			for _, metric := range []string{"elements per message", "[type=submit] per message", "htmx-selected per message"} {
+				if !strings.Contains(violations, metric) {
+					t.Errorf("missing %s violation: %s", metric, violations)
+				}
+			}
+		})
 	}
 }
 

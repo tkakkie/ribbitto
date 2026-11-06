@@ -30,7 +30,8 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 			pool := pgtest.New(t)
 			f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-			message, err := fixturePoster(pool).Post(ctx, m, f.Channel.ID, "actions page original")
+			topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "actions")
+			message, err := fixturePoster(pool).PostToTopic(ctx, m, f.Channel.ID, &topic.ID, "actions page original")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +93,7 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 				}
 			}
 			activate := func(selector string) {
-				for range 5 {
+				for range 6 {
 					if page.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
 						page.Keyboard.MustType(input.Enter)
 						return
@@ -102,14 +103,14 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatalf("Tab did not reach %s", selector)
 			}
 			open()
-			// Native Tab order: copyable link, Quote, pin action, back link.
-			for _, selector := range []string{"main a", "[name=quote]", "form[method=post] button", "main > div > a:last-child"} {
+			// Native Tab order includes Resolve on a named topic.
+			for _, selector := range []string{"main a", "[name=quote]", "form[method=post] button", "button[name=message]", "main > div > a:last-child"} {
 				page.Keyboard.MustType(input.Tab)
 				if !page.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
 					t.Fatalf("Tab missed %s", selector)
 				}
 			}
-			page.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+			page.KeyActions().Press(input.ShiftLeft).Type(input.Tab, input.Tab).MustDo()
 			if !page.MustEval(`() => document.activeElement.matches('form[method=post] button')`).Bool() {
 				t.Fatal("Shift-Tab missed Pin")
 			}

@@ -15,12 +15,18 @@ import (
 )
 
 func testFeedGuardHTMXLoad(t *testing.T, browser *rod.Browser) {
+	for _, page := range feedGuardPages() {
+		t.Run(page.name, func(t *testing.T) { testFeedGuardPageHTMXLoad(t, browser, page) })
+	}
+}
+
+func testFeedGuardPageHTMXLoad(t *testing.T, browser *rod.Browser, page feedGuardPage) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	fixture := feedFixture(t, 50)
+	fixture := page.fixture(t, 50)
 	markup := renderIn(t, "en", view.ChannelScreen("/static/css/app.css", fixture))
 	want := measureFeed(t, markup).values[4]
-	next := feedFixture(t, 51).Messages[50]
+	next := page.fixture(t, 51).Messages[50]
 	frame := realtime.Outgoing{ID: 51, Name: "message", Data: []byte(renderIn(t, "en", view.LiveMessageItem(next)))}
 	gate := make(chan struct{})
 	mux := http.NewServeMux()

@@ -24,18 +24,26 @@ func (f feedLatestReader) Page(ctx context.Context, m org.Membership, id kernel.
 		f.entries = f.entries[len(f.entries)-conversation.PageSize:]
 		f.older = true
 	}
-	return f.fakeMessages.Page(ctx, m, id, topic, before)
+	page, err := f.fakeMessages.Page(ctx, m, id, topic, before)
+	if err != nil {
+		return page, err
+	}
+	if page.Topic != nil {
+		page.Topic.ConclusionMessageID = page.Entries[0].ID
+		page.Conclusion = &page.Entries[0]
+	}
+	return page, nil
 }
 
-func feedFirstRender(t *testing.T) feedMeasurement {
+func feedFirstRender(t *testing.T, page feedGuardPage) feedMeasurement {
 	t.Helper()
-	fixture := feedFixture(t, 120)
+	fixture := page.fixture(t, 120)
 	reader := feedLatestReader{}
 	for _, msg := range fixture.Messages {
 		reader.entries = append(reader.entries, conversation.Entry{Message: conversation.Message{
 			ID: msg.ID, MemberID: msg.MemberID, ChannelID: fixture.Current.ID, TopicID: msg.TopicID,
 			EventSeq: msg.EventSeq, Body: msg.Body, CreatedAt: msg.CreatedAt,
-		}, DisplayName: msg.DisplayName, Handle: msg.Handle, DefaultTopic: true})
+		}, DisplayName: msg.DisplayName, Handle: msg.Handle, TopicName: msg.TopicName, DefaultTopic: fixture.Topic == nil})
 	}
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
@@ -45,7 +53,11 @@ func feedFirstRender(t *testing.T) feedMeasurement {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("GET", view.ChannelURL("acme", kernel.ID{1}), nil)
+	var topicID *kernel.ID
+	if fixture.Topic != nil {
+		topicID = &fixture.Topic.ID
+	}
+	req := httptest.NewRequest("GET", view.ConversationURL("acme", fixture.Current.ID, topicID), nil)
 	req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -64,14 +76,18 @@ func checkFeedFirstRender(values [6]int, limits []feedLimit) []string {
 }
 
 func TestFeedGuardFirstRender(t *testing.T) {
-	measured := feedFirstRender(t)
-	if got := countElements(measured.doc, feedMessageItem); got != conversation.PageSize {
-		t.Errorf("first render messages: actual %d, want PageSize %d", got, conversation.PageSize)
-	}
-	for i, limit := range feedLimits() {
-		t.Logf("first render %s: %d (budget %d)", limit.metric, measured.values[i], limit.latest)
-	}
-	for _, violation := range checkFeedFirstRender(measured.values, feedLimits()) {
-		t.Error(violation)
+	for _, page := range feedGuardPages() {
+		t.Run(page.name, func(t *testing.T) {
+			measured := feedFirstRender(t, page)
+			if got := countElements(measured.doc, feedMessageItem); got != conversation.PageSize {
+				t.Errorf("first render messages: actual %d, want PageSize %d", got, conversation.PageSize)
+			}
+			for i, limit := range page.limits {
+				t.Logf("first render %s: %d (budget %d)", limit.metric, measured.values[i], limit.latest)
+			}
+			for _, violation := range checkFeedFirstRender(measured.values, page.limits) {
+				t.Error(violation)
+			}
+		})
 	}
 }

@@ -29,6 +29,11 @@ templ MessageActionsPage(stylesheetURL string, entry Message, conversationURL st
 				<form method="post" action={ templ.SafeURL(action) }>
 					<button type="submit" class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, label) }</button>
 				</form>
+				if entry.ResolveURL != "" {
+					<form method="post" action={ templ.SafeURL(entry.ResolveURL) }>
+						<button type="submit" name="message" value={ idValue(entry.ID) } class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, "resolution.resolve") }</button>
+					</form>
+				}
 				@textLink(entry.URL, "message.actions_back", "")
 			</div>
 		</main>

@@ -37,6 +37,7 @@ type snapshotFake struct {
 	// Sentinel lists, empty unless a test needs to see them reach its page.
 	channels []conversation.Channel
 	topics   []conversation.Topic
+	selected *conversation.Topic
 	pins     []conversation.PinnedMessage
 }
 
@@ -64,6 +65,9 @@ func (f *snapshotFake) ListChannels(_ context.Context, organizationID kernel.ID)
 	return f.channels, f.step("channels")
 }
 func (f *snapshotFake) GetTopic(_ context.Context, _, _, id kernel.ID) (conversation.Topic, error) {
+	if f.selected != nil {
+		return *f.selected, f.step("selected")
+	}
 	return conversation.Topic{ID: id}, f.step("selected")
 }
 func (f *snapshotFake) ListTopics(_ context.Context, _, _ kernel.ID, limit int) ([]conversation.Topic, error) {

@@ -88,10 +88,10 @@ import (
 // parameters reduce the scenarios, warm-ups, repetitions or approved budgets.
 func TestUnreadListBench(t *testing.T) {
 	started := time.Now()
-	const cap = 2 * time.Hour
+	const jobCap = 2 * time.Hour
 	const cleanupReserve = 5 * time.Minute
-	job, finish := context.WithDeadline(t.Context(), started.Add(cap))
-	ctx, cancel := context.WithDeadline(job, started.Add(cap-cleanupReserve))
+	job, finish := context.WithDeadline(t.Context(), started.Add(jobCap))
+	ctx, cancel := context.WithDeadline(job, started.Add(jobCap-cleanupReserve))
 	t.Cleanup(finish)
 	t.Cleanup(cancel)
 	if os.Getenv("RIBBITTO_UNREAD_LIST_BENCH") != "1" {

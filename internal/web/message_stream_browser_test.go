@@ -135,6 +135,8 @@ func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) 
 	run("tab-unread", testTabUnreadBrowser)
 	run("read-control", testReadControlBrowser)
 	run("progress", testStreamProgressBrowser)
+	run("characterization/failed-message-native-reconnect", testCharacterizationFailedMessageReconnect)
+	run("duplicate-reconnect", testDuplicateReconnectBrowser)
 	run("pins", testPinsBrowser)
 	run("per-entry/ephemeral", testEphemeralSinkBrowser)
 	run("side-panel", testSidePanelBrowser)
@@ -187,7 +189,7 @@ func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) 
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {
-			modes = append(modes, "divider-first", "divider-other")
+			modes = append(modes, "divider-first", "divider-other", "characterization-history-reapply")
 		}
 		for _, mode := range modes {
 			run(side+"/"+mode, func(t *testing.T, browser *rod.Browser) {
@@ -319,6 +321,20 @@ func registerBrowserScenarios(run func(string, func(*testing.T, *rod.Browser))) 
 				request := begin(initial[0])
 				if mode != "before" {
 					move(source, destination, afterMove)
+				}
+				if mode == "characterization-history-reapply" {
+					// Characterization: only approved A-F may change this outcome.
+					// A malformed history control makes the retained move throw.
+					page.MustEval(`()=>{window.reapplyErrors=0;window.addEventListener('error',()=>window.reapplyErrors++);document.addEventListener('htmx:afterSwap',e=>{if(e.detail.target?.id==='message-items')window.historyXHR=e.detail.xhr})}`)
+					broken := bytes.Replace(history(stale, true), []byte(`data-oldest-seq="20"`), []byte(`data-oldest-seq="invalid"`), 1)
+					request.reply <- browserReply{status: http.StatusOK, body: broken}
+					page.MustWait(`()=>window.reapplyErrors===1 && !!window.historyXHR`)
+					assertBrowserItems(t, page, []int{20, 30, 35, 61})
+					// Repeating the same completion after repairing the boundary
+					// cannot repair the stale item: the move record was dropped.
+					page.MustEval(`()=>{document.getElementById('load-older').dataset.oldestSeq='20';const items=document.getElementById('message-items');items.dispatchEvent(new CustomEvent('htmx:afterSwap',{bubbles:true,detail:{xhr:window.historyXHR,target:items}}))}`)
+					assertBrowserItems(t, page, []int{20, 30, 35, 61})
+					return
 				}
 				response, expectedOlder := fresh, fresh
 				if mode == "stale" {
@@ -625,6 +641,7 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 				document.getElementById(old.id).textContent === name)`, name)
 		if !page.MustEval(`() => document.body.dataset.lastId === '51' &&
 			document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			document.getElementById('organization-stream').dataset.appliedCursor === '51' &&
 			new URL(document.getElementById('organization-stream').getAttribute('sse-connect'), location.href).searchParams.get('after') === '51' &&
 			!document.getElementById('stream-test-absent') && !document.getElementById('stream-sink').hasChildNodes() &&
 			window.testEntries.every(old => document.querySelectorAll('#' + old.id).length === 1)`).Bool() {
@@ -647,6 +664,7 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 		send(&frame)
 		page.MustWait(`id => document.activeElement.id === id && document.activeElement !== window.focusedLink`, focused)
 		if !page.MustEval(`() => document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			document.getElementById('organization-stream').dataset.appliedCursor === '51' &&
 			!document.getElementById('stream-sink').hasChildNodes() && document.querySelectorAll('#sidebar-topics > li').length === 1`).Bool() {
 			t.Fatal("real sidebar payload changed the cursor, sink or fresh list")
 		}
@@ -658,10 +676,23 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 			(document.getElementById('typing-status').textContent === '') === empty`, len(people) == 0)
 		if !page.MustEval(`() => document.body.dataset.lastId === '51' &&
 			document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			document.getElementById('organization-stream').dataset.appliedCursor === '51' &&
 			new URL(document.getElementById('organization-stream').getAttribute('sse-connect'), location.href).searchParams.get('after') === '51'`).Bool() {
 			t.Fatal("typing changed native or page durable cursor")
 		}
 		assertBrowserItems(t, page, []int{51})
+	}
+	for _, name := range []string{"unread", "pins"} {
+		page.MustEval(`name=>{window.testSource.addEventListener(name,e=>{document.body.dataset.extraFrame=e.type;document.body.dataset.extraLastId=e.lastEventId},{once:true})}`, name)
+		payload := []byte(`{"channel":"01000000-0000-0000-0000-000000000000","topic":"02000000-0000-0000-0000-000000000000","seq":51}`)
+		if name == "pins" {
+			payload = streamTestMarkup(t, view.PinsSection(snapshot))
+		}
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: payload})
+		page.MustWait(`name=>document.body.dataset.extraFrame===name`, name)
+		if !page.MustEval(`()=>{const s=document.getElementById('organization-stream');return document.body.dataset.extraLastId==='51' && s.dataset.appliedCursor==='51' && s.dataset.eventCursor==='51' && new URL(s.getAttribute('sse-connect'),location.href).searchParams.get('after')==='51'}`).Bool() {
+			t.Fatal("id-less frame changed durable cursors")
+		}
 	}
 	// Native retry retains the original URL and sends its durable Last-Event-ID.
 	send(nil)
@@ -670,6 +701,43 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	// The extension recreates a CLOSED source from the page's updated URL.
 	page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
 	assertRequest("51", "")
+	// Checkpoints after a durable application move only transport progress.
+	send(&realtime.Outgoing{ID: 55, Name: "checkpoint"})
+	page.MustWait(`()=>new URL(document.getElementById('organization-stream').getAttribute('sse-connect'),location.href).searchParams.get('after')==='55'`)
+	if !page.MustEval(`()=>{const s=document.getElementById('organization-stream');return s.dataset.appliedCursor==='51' && s.dataset.eventCursor==='51'}`).Bool() {
+		t.Fatal("checkpoint changed applied or shown cursor")
+	}
+	// Id-less frames inherit transport progress ahead of the applied cursor.
+	for _, name := range []string{"unread", "pins", "sidebar", "typing"} {
+		page.MustEval(`name => {
+			delete document.body.dataset.extraFrame;
+			window.testSource.addEventListener(name, e => {
+				document.body.dataset.extraFrame = e.type;
+				document.body.dataset.extraLastId = e.lastEventId;
+			}, {once: true});
+		}`, name)
+		payload := []byte(`{"channel":"01000000-0000-0000-0000-000000000000","topic":"02000000-0000-0000-0000-000000000000","seq":51}`)
+		switch name {
+		case "pins":
+			payload = streamTestMarkup(t, view.PinsSection(snapshot))
+		case "sidebar":
+			payload = streamTestMarkup(t, view.SidebarLists(snapshot))
+		case "typing":
+			payload = streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: []typing.Typist{{DisplayName: "Alice", Handle: "alice"}}}))
+		}
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: payload})
+		page.MustWait(`name => document.body.dataset.extraFrame === name`, name)
+		if got := page.MustEval(`() => document.body.dataset.extraLastId`).Str(); got != "55" {
+			t.Fatalf("%s inherited lastEventId = %q, want 55", name, got)
+		}
+		if !page.MustEval(`() => {
+			const s = document.getElementById('organization-stream');
+			return s.dataset.appliedCursor === '51' && s.dataset.eventCursor === '51' &&
+				new URL(s.getAttribute('sse-connect'), location.href).searchParams.get('after') === '55';
+		}`).Bool() {
+			t.Fatalf("id-less %s changed durable cursors after checkpoint", name)
+		}
+	}
 }
 
 // launchScenarioBrowser starts one browser of TestBrowser's pool.

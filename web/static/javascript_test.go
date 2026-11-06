@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -70,6 +72,71 @@ func TestApplicationSources(t *testing.T) {
 			t.Fatalf("expected authored JavaScript rejection for %s, got %v", name, err)
 		}
 		delete(files, name)
+	}
+}
+
+// Probe the actual language checker, including hypothetical nested sources:
+// checking only today's tracked files would miss a future rule widening.
+func TestApplicationSourcesLanguagecheckConsistency(t *testing.T) {
+	checker := filepath.Join(t.TempDir(), "languagecheck")
+	build := exec.Command("go", "build", "-o", checker, "./languagecheck")
+	build.Dir = "../../tools"
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build languagecheck: %v: %s", err, out)
+	}
+	candidates := []string{"logic.ts", "globals.d.ts", "nested/logic.ts", "nested/deeper/logic.ts"}
+	if err := fs.WalkDir(os.DirFS("../src"), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() && strings.HasSuffix(name, ".ts") {
+			candidates = append(candidates, name)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range candidates {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, path := range []string{"docs/language-exceptions.txt", "web/src/logic.ts", "web/src/" + name} {
+				full := filepath.Join(root, filepath.FromSlash(path))
+				if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, args := range [][]string{{"init", "--quiet"}, {"add", "."}} {
+				cmd := exec.Command("git", args...)
+				cmd.Dir = root
+				// Hook/index environment must not redirect the fixture to the worktree.
+				for _, entry := range os.Environ() {
+					if !strings.HasPrefix(entry, "GIT_") {
+						cmd.Env = append(cmd.Env, entry)
+					}
+				}
+				cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("git fixture: %v: %s", err, out)
+				}
+			}
+			out, err := exec.Command(checker, root).CombinedOutput()
+			if err != nil {
+				if !strings.Contains(string(out), `"web/src/`+name+`": path and kind are not in the language table`) {
+					t.Fatalf("unexpected languagecheck failure: %v: %s", err, out)
+				}
+				return
+			}
+			names, err := applicationSources(os.DirFS(filepath.Join(root, "web")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(names, "src/"+name) {
+				t.Fatalf("languagecheck admits web/src/%s but applicationSources skips it", name)
+			}
+		})
 	}
 }
 

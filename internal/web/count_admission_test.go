@@ -115,12 +115,66 @@ func TestCountAdmissionRoutes(t *testing.T) {
 					if w.Code != want {
 						t.Fatalf("status %d want %d: %s", w.Code, want, w.Body.String())
 					}
-					if tc.counts && exhausted != "none" && (w.Header().Get("Retry-After") == "" || w.Body.Len() != 0) {
+					if tc.counts && exhausted != "none" && (w.Header().Get("Retry-After") != "1" || w.Body.Len() != 0) {
 						t.Fatal("rejection headers/body")
 					}
 				}
 			})
 		}
+	}
+}
+
+type countWriteGate struct {
+	http.ResponseWriter
+	block func()
+}
+
+func (w countWriteGate) Write(b []byte) (int, error) {
+	w.block()
+	return w.ResponseWriter.Write(b)
+}
+
+func TestCountAdmissionReleasesBeforeWrite(t *testing.T) {
+	for _, list := range []bool{false, true} {
+		t.Run(map[bool]string{false: "render", true: "renderList"}[list], func(t *testing.T) {
+			// Pool of two connections: one shared slot and one slot per member.
+			p := channelPages{messages: populatedMessages(), countLimit: middleware.NewCountRateLimiter(time.Now), stream: &Streaming{RecountLimit: realtime.NewRecountLimit(1)}, pages: &pageRenderer{stylesheetURL: func() (string, error) { return "", nil }}}
+			started, unblock := make(chan struct{}), make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				m := org.Membership{Member: org.Member{ID: kernel.ID{2}}}
+				if r.URL.Path == "/blocked" {
+					m.Member.ID = kernel.ID{1}
+					w = countWriteGate{w, func() { close(started); <-unblock }}
+				}
+				if list {
+					p.renderList(w, r, m, kernel.ID{1}, 200, view.ChannelPage{})
+				} else {
+					p.render(w, r, m, kernel.ID{1}, 200, view.ChannelPage{}, nil)
+				}
+			}))
+			defer server.Close()
+			defer close(unblock)
+			client := server.Client()
+			client.Timeout = 5 * time.Second
+			go func() {
+				if response, err := client.Get(server.URL + "/blocked"); err == nil {
+					_ = response.Body.Close()
+				}
+			}()
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("response write never started")
+			}
+			response, err := client.Get(server.URL + "/other")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("second member during blocked write: status %d", response.StatusCode)
+			}
+		})
 	}
 }
 

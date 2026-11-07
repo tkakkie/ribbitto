@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -271,8 +272,10 @@ func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.M
 	if !ok {
 		return
 	}
+	release = sync.OnceFunc(release)
 	defer release()
 	list, err := p.messages.Sidebar(r.Context(), m, id, nil)
+	release()
 	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
@@ -307,6 +310,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	if !ok {
 		return
 	}
+	release = sync.OnceFunc(release)
 	defer release()
 	var history conversation.ChannelPage
 	var err error
@@ -325,6 +329,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	default:
 		history, err = p.messages.Page(r.Context(), m, id, p.topicID, nil)
 	}
+	release()
 	if isNotFound(err) {
 		http.NotFound(w, r)
 		return

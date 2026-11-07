@@ -7,7 +7,7 @@ require (
 	github.com/a-h/templ v0.3.1100
 	github.com/go-rod/rod v0.116.2
 	github.com/jackc/pgx/v5 v5.12.0
-	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/ysmood/gson v0.7.3

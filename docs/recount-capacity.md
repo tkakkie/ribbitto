@@ -4,8 +4,8 @@
 
 For a VPS with about 2 vCPUs and 4 GB RAM running both ribbitto and PostgreSQL,
 start with `pool_max_conns=8` in `RIBBITTO_DATABASE_URL`. This is an initial
-setting, not a measured capacity guarantee: it allows four simultaneous recounts
-and leaves four connections for posting, page reads and background work.
+setting, not a measured capacity guarantee: it allows four simultaneous count snapshots
+and leaves four connections for posting, reads without counts and background work.
 Without an override, pgx uses `max(4, NumCPU)`: on two CPUs that means four
 connections and two recounts. The application does not change pgx's pool size.
 
@@ -84,21 +84,22 @@ other operations retain the configured session defaults.
 
 ## Current computation sizing (#1046)
 
-One process-wide `RecountLimit` covers connect, read, resync and move recounts,
-separately from stream registrations. It is sized as `max(1, floor(C/2))`, where
-C is the effective pgx pool maximum (including the database URL's
-`pool_max_conns` and pgx defaults). This reserves `ceil(C/2)` connections for
-normal work when C >= 2. A one-connection pool permits one recount and cannot
-reserve a separate normal connection; deployments needing headroom must provide
-at least two connections. No separate configuration is required. Startup logs
-the effective pool maximum, computation limit and stream registration limit.
+One process-wide `RecountLimit` covers page counts and SSE connect/read/resync/
+move recounts: `max(1, floor(C/2))` slots for pgx pool maximum C
+(URL/defaults). `ceil(C/2)` connections remain for work without counts if C >= 2;
+C=1 has no headroom. Stream registrations are separate.
 
-Slot acquisition waits at most 25 ms. Expiry defers the computation: dirty state
-and watch coverage remain pending, and a new attempt follows after 250–1,000 ms
-of jitter. Slots are released only when the actual computation returns.
-Established streams do not return 503 on deferral.
+SSE waits 25 ms, then retains dirty/watch state and retries after 250–1,000 ms
+jitter, without 503. Connect delays 0–3 s hold no slot; durable/owner frames and
+authorization continue. Slots release only when computation returns.
 
-Connect sets a recount deadline randomly within 0–3 s. Durable frames, owner
-frames and authorization continue during that delay; no computation slot is
-occupied until the deadline. This bounds sidebar computation only: ordinary
-page loads retain their exact SQL and gain no admission limit.
+Before snapshots, pages take one concurrent slot per organisation/member,
+then a shared slot with a 25 ms wait. Over-cap returns 429
+immediately; shared exhaustion returns 503. One slot (pool of two) means other
+members get 503 while held: expected. Without a hub, only the member cap applies.
+Coverage: GET/HEAD channel/topic, older/around, members/overview/list pages;
+POST creation errors, non-htmx post/branch errors and invalid images on both
+overview routes. Paths without counts (successes, redirects, htmx composer/branch
+fragments) take no slot. Both set `Retry-After: 1` (seconds, a hint):
+localized navigation pages, empty HEAD, status only otherwise; POST follows the
+[form rule](architecture/rate-limits.md#member-rejection-responses).

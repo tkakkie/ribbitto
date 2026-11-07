@@ -507,3 +507,9 @@ other = "会話に戻る"
 
 ["resolution.summary"]
 other = "結論の本文"
+
+["capacity.title"]
+other = "サーバーが混み合っています"
+
+["capacity.message"]
+other = "しばらく待ってから、もう一度お試しください。"

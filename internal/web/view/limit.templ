@@ -23,3 +23,13 @@ templ TooManyRequests(stylesheetURL string) {
 		}
 	}
 }
+
+// ServiceUnavailable asks a navigation to retry when shared counts are busy.
+templ ServiceUnavailable(stylesheetURL string) {
+	@layout(stylesheetURL, i18n.T(ctx, "capacity.title")) {
+		@welcomeLayout() {
+			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "capacity.title") }</h1>
+			<p class="text-body text-muted">{ i18n.T(ctx, "capacity.message") }</p>
+		}
+	}
+}

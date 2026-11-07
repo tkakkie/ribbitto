@@ -88,7 +88,8 @@ type Outgoing struct // Outgoing is one event ready to send.
   field Name string
   field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the message's topic as the shared render read it.
 func ParsePayloadID(value string) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // ParsePayloadID parses a payload ID in the canonical 8-4-4-4-12 layout.
-type RecountLimit struct // RecountLimit bounds computations across all sidebar triggers.
+type RecountLimit struct // RecountLimit bounds page counts and computations across all sidebar triggers.
+  func (*RecountLimit).Acquire(ctx context.Context) (release func(), err error) // Acquire waits at most 25 ms for shared count capacity.
 type Renderer interface // Renderer turns an event the subscription wants into what the stream sends; the stream does the subscription's filtering, so a render depends only on the event.
   func (Renderer).Render(ctx context.Context, event Event) (Outgoing, error)
 type Retention struct // Retention expires replay history at start and on each tick; messages and unread state remain.

@@ -23,17 +23,13 @@ never from the request. An
 account that is not a member of that organisation gets 404, not 403, so the
 existence of an organisation or channel is not revealed.
 
-**Organisation routes.** Every page under `/organizations/{slug}/` is listed in
-`orgRoutes` (`internal/web/org.go`) and registered by `registerOrgRoutes`,
-which calls `org.Authorizer.Member` with the signed-in account and the
-slug before the page's handler runs and passes it the resolved membership;
-handlers never read `{slug}` themselves. A signed-out request, an unknown
+**Organisation routes.** Authorize every route under `/organizations/{slug}/`
+before its handler runs; handlers receive resolved membership and never read
+`{slug}` themselves. A signed-out request, an unknown
 slug, a non-member and a member of another organisation all get the same
 404 — a signed-out request is not redirected to sign-in, because a redirect
-would reveal which slugs exist. The same list drives
-`TestOrgRoutesAgainstPostgreSQL`, so a new route is covered by the 404 tests
-as soon as it is added. `GET /` redirects a member of the setup
-organisation to its page (`org.Authorizer.HomeSlug`); everyone else sees
+would reveal which slugs exist. `GET /` redirects a member of the setup
+organisation to its page; everyone else sees
 the home page.
 
 `POST …/send-key` uses independent per-member admission, then identity preferences
@@ -41,8 +37,8 @@ to update only `middleware.Account` (invalid value: 400). Its 303 uses parsed
 `return_channel`/`return_topic` UUIDs and `view.ConversationURL`, or the channel
 list, dropping history, panels and scroll position. The choice follows the account.
 
-Quote selection writes nothing: `POST …/channels/{channel-id}/quote` resolves
-its channel, reads one ID through `conversation.Reader.Many`, and returns only
+Quote selection writes nothing: `POST …/channels/{channel-id}/quote` uses
+an organisation- and channel-scoped read and returns only
 `#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
 uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
 messages get the posting route's plain 404, without their text, before comparing
@@ -51,10 +47,7 @@ chip with the original's extracted text; GET ignores `quote_text` entirely.
 Supplying both `quote` and `part` on GET or chip POST gets 400 before any
 message read. Posting POST ignores `part`, including on re-render, so it
 cannot override `quote`. Presence of body `quote_text` selects a part on chip
-POST and posting POST; absent means whole. The selection button supplies extracted
-`quote_text` only in the chip POST body; its disabled-by-default hidden input
-is cleared after capture. Menu Quote omits it. The returned editable chip
-then supplies the part in the composer's posting POST. Empty or not-found parts get 422,
+POST and posting POST; absent means whole. Empty or not-found parts get 422,
 preserving submitted text and the idempotency key, with an error on the part
 rather than a valid body. Posting validates again inside its transaction
 after the scoped read and stores the normalised part. Both retry paths check
@@ -62,7 +55,8 @@ scope, then part validity, then the stored snapshot: 404/422 precede 409.
 
 ## Server timeouts
 
-In `newServer` (`cmd/ribbitto`):
+HTTP limits:
+
 - 10 s to read the request line and headers.
 - 30 s to read a whole request, headers and body. Bodies are capped at 64 KiB.
 - 60 s for a keep-alive connection to wait for its next request.
@@ -70,7 +64,7 @@ In `newServer` (`cmd/ribbitto`):
 
 Without these limits, a client could hold a connection for as long as it liked: idle between requests, with a body started and never finished, or by never reading the response. That includes an unread body that `net/http` discards after a 404 or 429.
 
-**The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: M3's SSE sets a finite deadline before each write (see [`stream-limits.md`](stream-limits.md)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
+**The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: SSE sets a finite deadline before each write (see [`stream-limits.md`](stream-limits.md)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
 
 ribbitto keeps these limits itself and does not rely on a reverse proxy for them ([decision 15](../decisions/15-every-ordinary-response-has-a-bounded-write-ribbitto-does-not-rely-on-a-proxy-for-it.md)). A proxy in front (Caddy by default, or nginx, Traefik and others) adds defense in depth: TLS, keeping the backend unreachable from outside, and connection and slow-client limits.
 
@@ -89,8 +83,7 @@ Outermost first:
 2. `middleware.RequestLog`: assigns a server-generated ID in context and logs
    once when the handler returns (streams log when they end). The only request
    fields are `request_id`, method, registered route pattern, status and duration.
-   `middleware.LogRoute` captures patterns at inner registration, including
-   routes without sessions; the outer `/` catch-all is never used as a label.
+   Include routes without sessions; never label the outer `/` catch-all.
    Unknown paths/methods, mux redirects and pre-routing rejections use
    `unmatched`, never a raw path. Bodies, headers, queries and client addresses
    are excluded. `Unwrap` preserves ResponseController stream operations.
@@ -104,9 +97,8 @@ Outermost first:
 4. On everything except `/static/`, `/healthz` and `/readyz`: security headers
    ([`csp.md`](csp.md#content-security-policy)), then i18n.
    `/static/` sets its own `nosniff` and restrictive CSP.
-5. On each **registered** HTML route (the `sessionMux` in `NewHandler`
-   wraps routes one by one; `/setup` and `/signup` are registered without
-   it, so their availability is decided first): `middleware.Session`. An unknown path or
+5. On each **registered** HTML route: `middleware.Session`, except that
+   `/setup` and `/signup` decide availability before session lookup. An unknown path or
    method gets its plain 404 or 405 without a session lookup, so it costs
    no query and stays 404 while the database is down. The middleware
    resolves the cookie and puts the account and the session in the context

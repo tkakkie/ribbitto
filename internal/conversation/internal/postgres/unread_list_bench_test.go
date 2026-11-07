@@ -513,7 +513,7 @@ func (g *unreadListBenchGuard) pageTrace(scenario unreadListBenchScenario, form 
 		factory := func(s platform.Snapshot) conversation.PageCounter {
 			return unreadListPageCounter{compose.PageCountsIn(s), s, form}
 		}
-		_, err := conversationpg.NewReader(g.pool, nil, nil, compose.EventCursor, factory).Sidebar(g.ctx, scenario.f.member, scenario.f.channels[0], selected)
+		_, err := conversationpg.NewReader(g.pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, factory).Sidebar(g.ctx, scenario.f.member, scenario.f.channels[0], selected)
 		g.require(err)
 		g.t.Logf("page trace scenario=%s form=%s selected=%t whole-page=%d (includes SET LOCAL; excludes BEGIN/COMMIT) names=%v", scenario.name, form, selected != nil, trace.Counts().Queries-before, trace.names)
 	}

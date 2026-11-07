@@ -394,7 +394,7 @@ func unreadListPageStatements(ctx context.Context, t *testing.T) {
 			factory := func(s platform.Snapshot) conversation.PageCounter {
 				return unreadListPageCounter{compose.PageCountsIn(s), s, form}
 			}
-			_, err := conversationpg.NewReader(pool, nil, nil, compose.EventCursor, factory).Sidebar(ctx, f.member, f.channels[0], selected)
+			_, err := conversationpg.NewReader(pool, compose.LookupMembers, compose.LookupAccounts, compose.EventCursor, factory).Sidebar(ctx, f.member, f.channels[0], selected)
 			requireNoError(t, err)
 			added := int64(1)
 			if form == "V1" {
@@ -402,7 +402,7 @@ func unreadListPageStatements(ctx context.Context, t *testing.T) {
 			}
 			want := int64(9) + added
 			if selected != nil {
-				want++
+				want += 5 // Selected topic lookup plus four conclusion/history statements.
 			}
 			q := trace.Counts()
 			if q.Queries != want || q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 {
@@ -410,7 +410,7 @@ func unreadListPageStatements(ctx context.Context, t *testing.T) {
 			}
 			expected := []string{"begin", "SET", "GetChannel", "ListChannels", "ListTopics", "GetEventSeq", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread", "UnreadTopicPage" + form, "commit"}
 			if selected != nil {
-				expected = append(expected, "GetTopic")
+				expected = append(expected, "GetTopic", "GetMessages", "LookupMembers", "LookupDisplayNames", "LookupTopics")
 			}
 			if form == "V1" {
 				expected = append(expected, "OrgReadState")

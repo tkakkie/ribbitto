@@ -9,6 +9,7 @@ type measurementSkip struct{ pkg, test, message string }
 const measurementSkipAllowlist = `github.com/tkakkie/ribbitto/cmd/ribbitto	TestFirstUnreadBench	set RIBBITTO_FIRST_UNREAD_BENCH=1 outside CI
 github.com/tkakkie/ribbitto/cmd/ribbitto	TestReadAdvanceCost	set RIBBITTO_READ_COST=1
 github.com/tkakkie/ribbitto/internal/conversation/conversationpg	TestUnreadBench	set RIBBITTO_UNREAD_BENCH=1 outside CI
+github.com/tkakkie/ribbitto/internal/conversation/internal/postgres	TestUnreadListBench	set RIBBITTO_UNREAD_LIST_BENCH=1 outside CI with the exact selector and disposable opt-in
 github.com/tkakkie/ribbitto/internal/realtime	TestStreamCost	set RIBBITTO_STREAM_COST=1 to measure the stream's cost
 github.com/tkakkie/ribbitto/internal/unread/internal/postgres	TestReadMergeCost	set RIBBITTO_READ_COST=1`
 

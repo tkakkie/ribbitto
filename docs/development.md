@@ -130,7 +130,7 @@ docs or `make vuln`, which CI runs separately.
 
 `tools/measurementskip` scans repository test files for literal measurement
 gates in `Skip`, `Skipf` and `SkipNow` calls. It rejects new gated skips and
-stale entries in its five-entry allowlist; fixture tests preserve the scan's
+stale entries in its six-entry allowlist; fixture tests preserve the scan's
 handling of concatenation, closures and excluded database/browser variables.
 Dynamic messages and indirect helper calls still need review. `make check`
 runs both the scan and its uncached tool tests.

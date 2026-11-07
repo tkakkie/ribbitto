@@ -43,6 +43,15 @@ func NewMentions(pool *pgxpool.Pool) *conversation.Mentions {
 	})
 }
 
+// NewReplies binds the public-channel port and reply source to one snapshot.
+func NewReplies(pool *pgxpool.Pool) *conversation.Replies {
+	return conversation.NewReplies(newSnapshotRunner(pool), func(s platform.Snapshot) conversation.ReplyReader {
+		return postgres.ReadStoreIn(s)
+	}, func(s platform.Snapshot) conversation.ReadableChannels {
+		return postgres.ReadStoreIn(s)
+	})
+}
+
 // NewResolution binds conclusion changes and invalidations to one transaction.
 func NewResolution(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Resolution {
 	return conversation.NewResolution(newTxRunner(pool), writerIn, sequences, events, notifier)

@@ -57,12 +57,15 @@ func (g *unreadListBenchGuard) usage(ctx context.Context) error {
 	defer cancel()
 	var databases, wal, temp, other int64
 	var complete bool
-	err := g.observe.QueryRow(ctx, `WITH RECURSIVE dirs(path) AS (
+	var err error
+	// A fresh statement can stop seeing a database dropped during accounting.
+	for attempt := 0; attempt < 2; attempt++ {
+		err = g.observe.QueryRow(ctx, `WITH RECURSIVE dirs(path) AS (
  SELECT ''::text
  UNION ALL
  SELECT dirs.path||entry||'/' FROM dirs,
- LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END) entry,
- LATERAL pg_stat_file(dirs.path||entry) info
+ LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END,true,false) entry,
+ LATERAL pg_stat_file(dirs.path||entry,true) info
  WHERE info.isdir AND NOT (dirs.path='' AND entry IN ('base','pg_wal','pg_tblspc'))
 ), databases AS MATERIALIZED (
  SELECT pg_database_size(oid) AS bytes FROM pg_database
@@ -72,10 +75,14 @@ SELECT (SELECT coalesce(sum(bytes),0)::bigint FROM databases),
  (SELECT coalesce(sum(tmp.size),0)::bigint FROM pg_tablespace ts,
   LATERAL pg_ls_tmpdir(ts.oid) tmp WHERE ts.spcname<>'pg_global'),
  (SELECT coalesce(sum(info.size),0)::bigint FROM dirs,
-  LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END) entry,
-  LATERAL pg_stat_file(dirs.path||entry) info WHERE NOT info.isdir),
+  LATERAL pg_ls_dir(CASE WHEN dirs.path='' THEN '.' ELSE dirs.path END,true,false) entry,
+  LATERAL pg_stat_file(dirs.path||entry,true) info WHERE NOT info.isdir),
  (SELECT coalesce(bool_and(bytes IS NOT NULL),false) FROM databases)`).
-		Scan(&databases, &wal, &temp, &other, &complete)
+			Scan(&databases, &wal, &temp, &other, &complete)
+		if err != nil || complete {
+			break
+		}
+	}
 	if err == nil && !complete {
 		err = fmt.Errorf("a database size was unavailable; refusing partial accounting")
 	}

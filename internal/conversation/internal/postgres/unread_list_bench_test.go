@@ -191,7 +191,9 @@ func TestUnreadListBench(t *testing.T) {
 	// Validate every scenario before even the first warm-up takes an interval.
 	for _, scenario := range scenarios {
 		g.check()
-		g.require(unreadListVerifyData(ctx, pool, scenario.f, unreadListBenchExpected(scenario.name)))
+		g.require(platform.InSnapshotWithStatementTimeout(ctx, pool, 10*time.Minute, func(s platform.Snapshot) error {
+			return unreadListVerifyData(ctx, pgxbridge.Snapshot(s), scenario.f, unreadListBenchExpected(scenario.name))
+		}))
 		t.Logf("independent data sanity passed: scenario=%s expected=%+v", scenario.name, unreadListBenchExpected(scenario.name))
 		expected := 51 // Includes the lookahead row beyond the 50 displayed rows.
 		switch scenario.name {

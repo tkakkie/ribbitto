@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -42,7 +43,8 @@ func unreadListBenchExpected(name string) unreadListDataShape {
 }
 
 // This gate deliberately shares no candidate SQL, read-state loader or oracle.
-// Count actual messages with a plain anti-join, without any display/count cap.
+// The latest range suffices because the gate also rejects overlaps/adjacency.
+// Count actual messages with an anti-join, without any display/count cap.
 func unreadListVerifyData(ctx context.Context, db interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, f unreadListFixture, want unreadListDataShape) error {
@@ -54,10 +56,12 @@ func unreadListVerifyData(ctx context.Context, db interface {
  SELECT m.*, m.event_seq >= greatest($3::bigint+1,coalesce((SELECT hi FROM read_range
    WHERE organization_id=$1 AND channel_id=m.channel_id AND member_id=$2 AND lo=0),0))
   AND (m.event_seq>coalesce(f.floor_seq,0) OR m.moved_event_seq>coalesce(f.floor_seq,0))
-  AND NOT EXISTS (SELECT 1 FROM read_range r WHERE r.organization_id=$1
-   AND r.channel_id=m.channel_id AND r.member_id=$2 AND r.lo<=m.event_seq AND m.event_seq<r.hi) AS unread
+  AND NOT coalesce(m.event_seq<latest.hi,false) AS unread
  FROM message m LEFT JOIN topic_read_floor f ON f.organization_id=m.organization_id
   AND f.channel_id=m.channel_id AND f.topic_id=m.topic_id AND f.member_id=$2
+ LEFT JOIN LATERAL (SELECT hi FROM read_range r WHERE r.organization_id=$1
+  AND r.channel_id=m.channel_id AND r.member_id=$2 AND r.lo<=m.event_seq
+  ORDER BY r.lo DESC LIMIT 1) latest ON true
  WHERE m.organization_id=$1
 ), ranges AS (
  SELECT *,max(hi) OVER (PARTITION BY channel_id ORDER BY lo
@@ -161,7 +165,9 @@ func TestUnreadListDataSanity(t *testing.T) {
 				fixture.member.Member.JoinedEventSeq = 6
 			}
 			err = unreadListVerifyData(t.Context(), tx, fixture, expected)
-			if (err != nil) != (tt.name != "intact") {
+			if tt.name == "intact" {
+				requireNoError(t, err)
+			} else if err == nil || !strings.HasPrefix(err.Error(), "independent data sanity channel") {
 				t.Fatalf("data sanity error=%v mutation=%s", err, tt.name)
 			}
 		})

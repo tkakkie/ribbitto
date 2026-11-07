@@ -83,7 +83,7 @@ Outermost first:
 2. `middleware.RequestLog`: assigns a server-generated ID in context and logs
    once when the handler returns (streams log when they end). The only request
    fields are `request_id`, method, registered route pattern, status and duration.
-   Include routes without sessions; never label the outer `/` catch-all.
+   Routes without sessions also use their registered pattern; the outer `/` catch-all is never used as a label.
    Unknown paths/methods, mux redirects and pre-routing rejections use
    `unmatched`, never a raw path. Bodies, headers, queries and client addresses
    are excluded. `Unwrap` preserves ResponseController stream operations.

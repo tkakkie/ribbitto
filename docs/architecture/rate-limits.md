@@ -136,13 +136,13 @@ active-slot rules above apply. Responses use `Cache-Control: no-store`.
 
 ## Member rejection responses
 
-Member refusals render the localized page only for POSTs with
+Member refusals render the localized page for GET/HEAD navigations and POSTs with
 `Sec-Fetch-Mode: navigate`, no `HX-Request` header, a form content type
-(`application/x-www-form-urlencoded` or `multipart/form-data`), and explicit
+(for POST: `application/x-www-form-urlencoded` or `multipart/form-data`), and explicit
 nonzero `text/html` acceptance. Other requests keep an empty 429.
 
-`Retry-After` is the token refill interval rounded up to seconds. Slots,
-competition or a full table can still refuse retries. SSE limits are separate.
+`Retry-After` rounds the refill interval up to seconds; retries can still fail.
+SSE registration limits are separate.
 
 ## Reverse proxies
 

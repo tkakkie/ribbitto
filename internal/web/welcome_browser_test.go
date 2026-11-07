@@ -43,6 +43,7 @@ func testWelcomeBrowser(t *testing.T, browser *rod.Browser) {
 		{"home", view.Hello(css, view.Viewer{SignUpOpen: true}), 0, 0},
 		{"home-signed-in", view.Hello(css, view.Viewer{SignedIn: true, DisplayName: "Alice"}), 0, 0},
 		{"limit", view.TooManyRequests(css), 0, 0},
+		{"capacity", view.ServiceUnavailable(css), 0, 0},
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))

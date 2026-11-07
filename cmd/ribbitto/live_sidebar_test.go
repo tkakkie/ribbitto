@@ -259,6 +259,8 @@ func TestLiveSidebarTrigger(t *testing.T) {
 		{"malformed", realtime.Event{Kind: conversation.KindPosted, Payload: []byte(`{`)}, false},
 		{"current move", realtime.Event{Kind: conversation.KindMessagesMoved, ChannelID: channel}, true},
 		{"other move", realtime.Event{Kind: conversation.KindMessagesMoved, ChannelID: other}, false},
+		{"current resolution", realtime.Event{Kind: conversation.KindResolutionChanged, ChannelID: channel}, true},
+		{"other resolution", realtime.Event{Kind: conversation.KindResolutionChanged, ChannelID: other}, false},
 		{"join", realtime.Event{Kind: "member.joined"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

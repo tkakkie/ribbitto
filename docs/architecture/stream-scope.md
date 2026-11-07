@@ -13,7 +13,8 @@ delivers presence and typing as current state ([ephemeral state](ephemeral-state
 delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch or generation wake and before waiting, at most
 one frame per kind. Presence checks the organisation, typing
-the frame's channel, immediately before sending. Bound-member denies and errors stop the stream. Web's presence (#768) and viewer-filtered typing (#788) adapters are wired in production. Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
+the frame's channel, immediately before sending. Bound-member denies and errors stop the stream. Sidebar count composition is in
+[unread counts](unread-counts.md).
 
 The endpoint takes:
 
@@ -38,27 +39,17 @@ The endpoint takes:
 Every page, including `?before=`, carries a snapshot cursor on
 `#organization-stream` and holds a slot under both caps. `message`,
 `messages-moved` and transport-only `checkpoint` frames advance native resume.
-A checkpoint covers completed unread-only or skipped progress at most once per
-heartbeat interval since the last checkpoint or ID-bearing write, replacing a
-heartbeat comment when due. With heartbeats disabled, pending progress is
-checkpointed before waiting. A fresh organisation/bound-member authorization
-immediately precedes send.
-Failures are never covered. The browser also updates `sse-connect` for source
-recreation; checkpoints never change applied/shown, read or composer cursors.
-Disconnects before receipt may replay about one heartbeat interval of events.
+Checkpoint timing, authorization, failure exclusion and duplicate replay follow
+[replay](replay.md#ordering-and-replay). The browser also updates `sse-connect`
+for source recreation; checkpoints never change applied/shown, read or composer cursors.
 
 Ephemeral delivery filters organisation, interest and typing channel/topic
 before authorization, preserving the durable cursor and heartbeat deadlines.
-Typing receives server-resolved member identity and after=-1 on connect,
-restoring current content, even empty, in `#typing-status`. Later reads acknowledge the organisation level
-without repeating unchanged places ([owner contract](typing.md#production-delivery)).
-Presence receives the page
-token: one coalesced entry per member, in last-change order, at most 100.
-Offline entries stay five minutes; discarding one advances a monotonic boundary.
-The state, boundary and generation come from one locked read. Another process's
-token, a start below the boundary or over 100 changes require `reset` on connect
-or later; equality at the boundary is served. The presence adapter sends
-that reset without `id:`, ending the stream so the page reloads.
+Typing's server-resolved identity, connect restoration (including empty content)
+and generation acknowledgement follow its [owner contract](typing.md#production-delivery).
+Presence's page token, coalesced changes, retention, boundary and reset rules
+follow [ephemeral state](ephemeral-state.md#ephemeral-state). A presence reset
+ends the stream.
 Sidebars recount on connect, own posts, current-channel moves, resync and the member's read advances,
 regardless of message interests. With a hub, Reading and watches share
 one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
@@ -95,7 +86,7 @@ resync. Reads and own
 posts recount only that member's tabs; moves or branches dirty only streams
 showing that channel.
 
-**Recovery and current server bound (PR 4):** reconnect, `reset`,
+**Recovery and current server bound:** reconnect, `reset`,
 visibility return, back-forward-cache `pageshow` and failures trigger resync.
 Malformed frames, failed DOM application or resync requests, or losses beyond
 the 1,000-event retention bound stop increments and enter recovery. Coalesce
@@ -104,7 +95,7 @@ only after a snapshot arrives with no event lost between the request it answers
 and its arrival, then reapply eligible retained events above it. Retained events
 are not losses; otherwise show the snapshot numbers, resync again and stay
 recovering. No event-history
-replay or unbounded retention is added. PR 4 now spreads connect recounts by 0–3 s,
+replay or unbounded retention is added. Connect recounts spread by 0–3 s,
 visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s once
 no send, queue or failed text holds the [reload guard](web-javascript.md#javascript). One bound on
 concurrent recount computations covers connect, read, resync and moves,
@@ -121,10 +112,10 @@ Swap targets:
 | `message`, `messages-moved` | the sequence | `#message-items` |
 | `checkpoint` | completed cursor | stream script updates only `sse-connect` |
 | `unread` | none | the sidebar script increments shown server-rendered badges |
-| `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
-| `presence` | none | each member's indicator, out of band by its DOM id (#768) |
+| `sidebar` | none | whole sidebar lists and selected heading count, out of band |
+| `presence` | none | each member's indicator, out of band by its DOM id |
 | `pins` | none | whole `#pins-section`, including empty lists |
-| `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
+| `typing` | none | `#typing-status` content replacement on latest feeds/topics |
 | `reset` | the cursor for durable reset; none for owner reset | the stream script reloads once no text is at stake |
 
 `#organization-stream`, holding `sse-connect`, wraps the sidebar, conversation and any side panel, because the htmx
@@ -136,9 +127,7 @@ Typing replaces content outside the composer. Per-entry events go to the hidden
 extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
-`TestBrowser` proves replacement and missing-target behavior with
-test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
-reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening, switching or closing a
+Opening, switching or closing a
 panel is a navigation. Its bounded, paged list has no live list updates. One
 presence snapshot supplies every indicator and the page token; changes replace
 only loaded indicators, with visible localized labels and the success dot.

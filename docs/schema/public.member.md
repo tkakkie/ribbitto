@@ -58,6 +58,7 @@ erDiagram
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, reply_to_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.channel_read" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message_mention" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
@@ -91,6 +92,8 @@ erDiagram
   uuid quoted_member_id FK
   text quote_text
   bytea typed_body_proof
+  uuid reply_to_message_id FK
+  uuid reply_to_member_id FK
 }
 "public.event_log" {
   uuid organization_id FK

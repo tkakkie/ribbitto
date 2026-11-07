@@ -177,7 +177,7 @@ templ messageActions(entry Message) {
 }
 
 // MessageActions renders one menu and a clonable pin form for the message list.
-templ MessageActions(entry Message) {
+templ MessageActions(entry Message, topicPage bool) {
 	<template id={ MessageActionsTriggerID }>
 		<button type="button" popovertarget={ MessageActionsID } aria-label={ i18n.T(ctx, "message.actions") }>
 			<span aria-hidden="true" class="text-heading">⋯</span>
@@ -192,6 +192,11 @@ templ MessageActions(entry Message) {
 		<template id={ MessageActionsTemplateID }>
 			@PinControl(entry, "")
 		</template>
+		if topicPage {
+			<form id={ ResolutionFormID } method="post" hidden>
+				<button type="submit" name="message" class="min-h-11 w-full rounded-md px-3 text-left hover:bg-hover">{ i18n.T(ctx, "resolution.resolve") }</button>
+			</form>
+		}
 	</div>
 }
 

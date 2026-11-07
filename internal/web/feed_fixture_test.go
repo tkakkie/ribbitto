@@ -31,7 +31,7 @@ func feedFixture(t *testing.T, n int) view.ChannelPage {
 func resolvedTopicFixture(t *testing.T, n int) view.ChannelPage {
 	t.Helper()
 	page := feedFixture(t, n)
-	// An unlisted selected topic isolates resolution's fixed cost from sidebar size.
+	// An unlisted selected topic isolates resolution's fixed cost from sidebar size; the approved caps measure this shape, not a listed selected topic.
 	page.Topic = &view.Topic{ID: kernel.ID{3}, Name: "Planning", ConclusionMessageID: page.Messages[0].ID}
 	for i := range page.Messages {
 		entry := &page.Messages[i]

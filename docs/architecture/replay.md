@@ -37,14 +37,12 @@ sequenceDiagram
   the hub's latest sequence for this organisation is greater than both my cursor
   and the last observed durable level", and that condition and wake channel
   are read from one immutable atomic snapshot
-  *before* blocking. A raise publishes a higher snapshot and closes the
-  old snapshot's channel; a waiter holding that channel wakes even if the
-  raise lands before its select. The hub's
+  *before* blocking, so a raise before select still wakes that channel's waiter.
+  The hub's
   value is level-triggered: if event 101 is committed after the connection
   read `seq > 100` and found nothing, but before it starts waiting, the hub
   already holds 101, so the wait returns at once and the next read delivers
-  it. Wakeups are broadcast (a condition variable, or a channel that is
-  closed and replaced on every raise), never a buffered per-connection
+  it. Wakeups are broadcast, never a buffered per-connection
   signal that could be dropped. The cursor advances to the last sequence
   *read*, including events this connection may not see, so a filtered event
   cannot keep the loop spinning.
@@ -53,15 +51,11 @@ sequenceDiagram
   Watch-only, ephemeral-only and recount-deadline wakes perform no event-log
   read without a newer durable level. Coverage uses the level known before
   reading, so a raise during the read still prompts another read.
-- **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
-  only raises the value, and `Wait(ctx, org, after)` returns the value
-  once it is above `after`, or `context.Cause(ctx)`. It is also the connection
-  registry: `Register(parent, connection, limit)` refuses atomically once
-  the process reaches its configured cap or the account holds `limit`
-  connections. Otherwise it returns a context
-  derived from the request's context, which `CancelAccount` or
-  `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
-  `context.Cause` tells why a connection ended.
+- **The hub** (`realtime.Hub`, #157): `Hub.Raise` only raises the durable
+  level, carrying no event data; lower or equal raises are ignored.
+  Registration atomically enforces the process and account caps; only
+  unregistering frees a slot. Account or session cancellation ends the
+  connection; `context.Cause` tells why.
 - **The loop** is `realtime.Stream.Run` (#209). `Subscription` owns the
   interest checks on the envelope alone, with no kind names: other
   channels, unrouted kinds (no channel) and events whose routing topics do
@@ -77,7 +71,7 @@ sequenceDiagram
   never move it or its `before=` link. Only
   Load older replaces it, so older moved items cannot duplicate or skip history.
   Moves are silent; the notice arrives separately as `message.posted`.
-  Posts and notices now carry the session-resolved `author_id`. Sidebar interests
+  Posts and notices carry the session-resolved `author_id`. Sidebar interests
   receive a shared `unread` frame when message filtering excludes a post: channel,
   posting-time topic, sequence and author, with no `id:`. Legacy posts without
   author or topic send none. Audience and final bound-member checks still apply.
@@ -102,18 +96,17 @@ sequenceDiagram
   nothing more. It drains every batch before waiting on the durable level,
   declared ephemeral generations, heartbeat and context together (#735).
   Ephemeral owner frames follow each batch without moving the cursor;
-  production presence is current (#768); typing delivery (#788) and its page region (#790) are current.
-- **Missed raises** (#237). Posting raises the hub right after its commit,
-  but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
-  or, later, another process commits without one, and a stream that has
-  caught up would wait until the next post. `realtime.Watermark` reads, every
-  `WatermarkInterval` (5 s) and in one query, the committed `event_seq` of
-  the organisations with registered connections (`Hub.ActiveOrganizations`)
-  and raises the hub for those still active (`RaiseIfActive`, under the
-  registry lock). It only wakes streams; they read from their cursor, so
-  `event_log` stays the only truth, and such an event arrives after the next
-  successful check. Each check's query has a 2 s timeout; a failed check is
-  logged and retried on the next tick; without connections it reads nothing.
+  presence (#768) and typing (#788, #790) are current-state delivery.
+- **Missed raises** (#237). Writers without a notifier (`cmd/seed`, sign-up's
+  `member.joined`) and, later, other processes (a future multi-process
+  deployment) can commit without raising the hub.
+  Without the watermark, caught-up streams would wait for another post.
+  It periodically checks committed sequences of active organisations (those
+  with at least one registered connection) and raises only those still active.
+  It only wakes streams;
+  they read from their cursor, so `event_log` stays the only truth, and such
+  an event arrives after the next successful check. Failed checks are logged
+  and retried; without connections it reads nothing.
 - Its cost per post grows with the number of open streams; measured in
   [`stream-cost.md`](stream-cost.md).
 - Replay and live delivery go through the same per-connection loop, so they

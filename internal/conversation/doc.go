@@ -7,6 +7,8 @@
 // message.posted plus messages.moved, pins.changed and topic.resolution_changed.
 // Topic.conclusion_message_id is the sole resolution state, nullable and
 // constrained to a message of the same channel; default topics stay unresolved.
+// Reply links are insert-only and guarded against updates in PostgreSQL;
+// their current text previews join history's batched author lookups.
 // Message pin metadata is paired and organisation-scoped; transaction-bound
 // pin writes and bounded snapshot reads retain no historical body; the
 // overview page and pins-only refresh read current excerpts in their snapshots.
@@ -23,7 +25,7 @@
 // author lookups and injected unread counts share a snapshot so a page cannot mix states; the bounded channel-members page reads its
 // channel check, listing and display names in one snapshot. Independent sidebar
 // snapshots, which also serve the channel list page, read fresh bounded lists,
-// counts and their event sequence without history or directories.
+// counts, the selected conclusion and their event sequence.
 // Member lookups return org's directory entries, not copies. Posting stores
 // chat_v1 after converting typed handles and checking member references
 // through org's directory, in separate listing and reference-check

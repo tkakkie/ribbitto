@@ -31,6 +31,10 @@ and selected topic; an open panel keeps the conversation's selection (#874).
 Counts take two statements per list (channels or topics), four per page
 load, whatever the number of channels or topics; never one per item.
 All four share the page or sidebar's read-only repeatable-read snapshot.
+A sidebar snapshot takes eight statements for a feed, nine for an open selected
+topic, and thirteen for a resolved selection: the latter adds message, member,
+display-name and topic-label lookups. These exclude transaction control and
+production's optional local timeout statement.
 `TestPageCountsSnapshot` checks the four statements and snapshot consistency.
 
 - Channel and topic counts each cap at 100 messages. Channel totals cover

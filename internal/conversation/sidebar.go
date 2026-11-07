@@ -17,12 +17,13 @@ type SidebarSnapshot struct {
 	Channels                   []Channel
 	Topics                     []Topic
 	Topic                      *Topic
+	Conclusion                 *Entry
 	ChannelCounts, TopicCounts map[kernel.ID]int64
 }
 
 // Sidebar reads lists and counts in an independent read-only repeatable-read
-// snapshot, including its organisation event sequence, without history or
-// directories. Membership is resolved by org; the channel and optional topic are checked in the snapshot.
+// snapshot, including its event sequence and selected conclusion. Membership
+// is resolved by org; the channel and optional topic are checked in the snapshot.
 func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID) (sidebar SidebarSnapshot, err error) {
 	err = s.countRunner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		loaded, err := loadSidebarContext(ctx, s.reads(snapshot), m.Organization.ID, channelID, topicID)
@@ -31,6 +32,10 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 		}
 		sidebar.Current, sidebar.Channels = loaded.current, loaded.channels
 		sidebar.Topic, sidebar.Topics = loaded.topic, loaded.topics
+		sidebar.Conclusion, err = s.conclusion(ctx, snapshot, m, loaded.topic)
+		if err != nil {
+			return err
+		}
 		sidebar.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
 		if err != nil {
 			return fmt.Errorf("reading sidebar sequence: %w", err)

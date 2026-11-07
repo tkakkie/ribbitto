@@ -1,7 +1,7 @@
 import "./tab-unread.ts";
 import {
   getSidebarResync, getSidebarChannels, getChannelLink, getTopicLink, getTopicHeadingCount, getStreamSink,
-  getOrganizationStream, organizationStreamSelector, OrganizationStreamID, StreamSinkID, SidebarChannelsID,
+  getOrganizationStream, getResolutionSummary, organizationStreamSelector, OrganizationStreamID, StreamSinkID, SidebarChannelsID,
   SidebarResyncEvent, MemberAttribute, SidebarTopicAttribute, SnapshotSeqAttribute, UnreadCountAttribute,
   readAttribute, writeAttribute, type ContractAttribute,
 } from "./contracts.gen.ts";
@@ -103,8 +103,16 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
         const seq = sequence(incoming ? attr(incoming, SnapshotSeqAttribute) : undefined);
         state = observe(state, seq);
         const previous = getSidebarChannels(connection);
+        // These controls have no ids; preserve their position across the OOB replacement.
+        const summary = getResolutionSummary(connection);
+        const focused = summary ? Array.from(summary.children).indexOf(document.activeElement!) : -1;
+        const region = summary?.querySelector("p");
+        const scrollTop = region?.scrollTop ?? 0, scrollLeft = region?.scrollLeft ?? 0;
         htmx.swap(getStreamSink(connection)!, event.detail.data, { swapStyle: "none", settleDelay: 0 }, {
           afterSettleCallback: () => {
+            const summary = getResolutionSummary(connection);
+            (summary?.children.item(focused) as HTMLElement | null)?.focus({ preventScroll: true });
+            summary?.querySelector("p")?.scrollTo(scrollLeft, scrollTop);
             try {
               const current = getSidebarChannels(connection);
               if (current === previous || sequence(current ? attr(current, SnapshotSeqAttribute) : undefined) !== seq) throw new Error("snapshot not applied");

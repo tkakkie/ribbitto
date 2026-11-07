@@ -22,6 +22,8 @@ type Entry struct {
 	References map[kernel.ID]Reference
 	// QuoteAuthor is the quoted member's current names when Quote is set.
 	QuoteAuthor Reference
+	// ReplyPreview is current text and author data, or an unavailable state.
+	ReplyPreview *ReplyPreview
 }
 
 // Reference is a referenced member's current names.
@@ -161,7 +163,17 @@ func (s historyReader) Many(ctx context.Context, m org.Membership, channelID ker
 // looked up only in m's organisation, which omits foreign and missing
 // members, so a stored reference cannot show another organisation's member.
 func (s historyReader) entries(ctx context.Context, m org.Membership, channelID kernel.ID, messages []Message) ([]Entry, error) {
+	originals, err := s.replyTargets(ctx, m.Organization.ID, channelID, messages)
+	if err != nil {
+		return nil, err
+	}
 	ids := make([]kernel.ID, 0, len(messages))
+	for _, original := range originals {
+		ids = append(ids, original.MemberID)
+		if original.Format == FormatChatV1 {
+			ids = appendReferences(ids, ParseChatV1(original.Body))
+		}
+	}
 	bodies := make([][]BodyBlock, len(messages))
 	for i, msg := range messages {
 		ids = append(ids, msg.MemberID)
@@ -206,6 +218,17 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
 		}
 		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
+		if msg.Reply != nil {
+			original, available := originals[msg.Reply.MessageID]
+			author := members[original.MemberID]
+			var references map[kernel.ID]Reference
+			if original.Format == FormatChatV1 {
+				references = resolveReferences(ParseChatV1(original.Body), members, names)
+			}
+			entry.ReplyPreview = &ReplyPreview{Available: available,
+				Author: Reference{DisplayName: names[author.AccountID], Handle: author.Handle},
+				entry:  Entry{Message: original, References: references}}
+		}
 		if msg.Quote != nil {
 			quoted, ok := members[msg.Quote.MemberID]
 			if !ok {

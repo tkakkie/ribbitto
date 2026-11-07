@@ -67,8 +67,9 @@ type Writer interface {
 	// ErrPostKeyTaken; the transaction is then rolled back. Proof is stored
 	// atomically with a key; its zero value means unverifiable. A non-nil quote
 	// is stored with it; an original deleted since QuotedMessage is
-	// ErrQuoteNotFound.
-	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote) (Message, error)
+	// ErrQuoteNotFound. Reply's target and author come from the same transaction;
+	// neither reply column has an application update path.
+	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *IdempotencyKey, proof TypedBodyProof, quote *Quote, reply *Reply) (Message, error)
 	// InsertMentions writes the validated distinct members with the inserted
 	// message's returned sequence. A member deleted after validation is
 	// ErrInvalidBody with ErrUnknownReference; other failures stay internal.

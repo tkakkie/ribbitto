@@ -8,9 +8,12 @@ const (
 	// ResolutionSummaryID identifies the current conclusion.
 	//dom:id HTMLDivElement
 	ResolutionSummaryID = "resolution-summary"
-	// ResolutionFormID identifies the native resolution form.
+	// ResolutionFormID identifies the shared resolve form.
 	//dom:id HTMLFormElement
 	ResolutionFormID = "resolution-form"
+	// ResolveURLAttribute carries the resolve endpoint, empty for the default topic.
+	//dom:attribute
+	ResolveURLAttribute = "data-resolve-url"
 	// OrganizationStreamID identifies the shared stream container.
 	//dom:id HTMLDivElement
 	OrganizationStreamID = "organization-stream"

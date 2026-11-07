@@ -49,7 +49,7 @@ func TestMessageSubmitMarkup(t *testing.T) {
 	for _, pinned := range []bool{false, true} {
 		for _, lang := range []string{"en", "ja"} {
 			entry := view.Message{ID: kernel.ID{8}, Pinned: pinned, Body: "original"}
-			doc, err := html.Parse(strings.NewReader(renderIn(t, lang, view.MessageItem(entry)) + renderIn(t, lang, view.MessageActions(entry))))
+			doc, err := html.Parse(strings.NewReader(renderIn(t, lang, view.MessageItem(entry)) + renderIn(t, lang, view.MessageActions(entry, false))))
 			if err != nil {
 				t.Fatal(err)
 			}

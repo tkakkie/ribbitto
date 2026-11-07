@@ -1057,7 +1057,7 @@ func TestComponentsMarkup(t *testing.T) {
 		{"ComposerQuote", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "author", Body: "<script>bad()</script>"}}, false)},
 		{"ComposerQuote part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new("<script>part</script>")}, false)},
 		{"ComposerQuote invalid part", view.ComposerQuote(view.ChannelPage{Quote: &view.Message{Handle: "author"}, QuoteText: new(""), QuoteInvalid: true}, false)},
-		{"TopicResolution", view.TopicResolution(view.ChannelPage{Topic: &view.Topic{ID: kernel.ID{2}}, Conclusion: &view.Message{Body: "<script>bad()</script>", URL: "/original"}})},
+		{"TopicResolution", view.TopicResolution(view.ChannelPage{Topic: &view.Topic{ID: kernel.ID{2}}, Conclusion: &view.Message{Body: "<script>bad()</script>", URL: "/original"}}, false)},
 		{"ChannelEntry", view.ChannelEntry("acme", view.Channel{ID: kernel.ID{1}, Name: "general"}, false, 0)},
 		{"TopicEntry", view.TopicEntry("acme", kernel.ID{1}, view.Topic{ID: kernel.ID{2}, Name: "topic"}, false, 0)},
 		{"SignOutButton", view.SignOutButton()},

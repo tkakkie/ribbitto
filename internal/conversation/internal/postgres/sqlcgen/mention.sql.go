@@ -35,7 +35,7 @@ func (q *Queries) InsertMessageMentions(ctx context.Context, arg InsertMessageMe
 }
 
 const listMentions = `-- name: ListMentions :many
-SELECT m.id, m.organization_id, m.channel_id, m.member_id, m.body, m.event_seq, m.created_at, m.topic_id, m.moved_event_seq, m.pinned_by_member_id, m.pinned_at, m.idempotency_key, m.format, m.quoted_message_id, m.quoted_member_id, m.quote_text, m.typed_body_proof
+SELECT m.id, m.organization_id, m.channel_id, m.member_id, m.body, m.event_seq, m.created_at, m.topic_id, m.moved_event_seq, m.pinned_by_member_id, m.pinned_at, m.idempotency_key, m.format, m.quoted_message_id, m.quoted_member_id, m.quote_text, m.typed_body_proof, m.reply_to_message_id, m.reply_to_member_id
 FROM message_mention r
 JOIN message m ON m.organization_id = r.organization_id AND m.id = r.message_id
 JOIN channel c ON c.organization_id = m.organization_id AND c.id = m.channel_id
@@ -91,6 +91,8 @@ func (q *Queries) ListMentions(ctx context.Context, arg ListMentionsParams) ([]M
 			&i.QuotedMemberID,
 			&i.QuoteText,
 			&i.TypedBodyProof,
+			&i.ReplyToMessageID,
+			&i.ReplyToMemberID,
 		); err != nil {
 			return nil, err
 		}

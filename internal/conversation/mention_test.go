@@ -41,8 +41,8 @@ type returnedMentionWriter struct {
 	ids []kernel.ID
 }
 
-func (w *returnedMentionWriter) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote) (conversation.Message, error) {
-	posted, err := w.postingFake.InsertMessage(ctx, organizationID, channelID, topicID, memberID, body, seq, key, proof, quote)
+func (w *returnedMentionWriter) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, proof conversation.TypedBodyProof, quote *conversation.Quote, reply *conversation.Reply) (conversation.Message, error) {
+	posted, err := w.postingFake.InsertMessage(ctx, organizationID, channelID, topicID, memberID, body, seq, key, proof, quote, reply)
 	// Make the returned values distinguishable from the request and reserved
 	// sequence, so reparsing or using the input sequence fails the assertion.
 	posted.ID, posted.EventSeq, posted.Body = kernel.ID{0x55}, 99, "different returned body"

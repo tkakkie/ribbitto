@@ -82,7 +82,6 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
   document.dispatchEvent(new CustomEvent<dom.MessagePendingQueryDetail>(dom.MessagePendingQueryEvent, { detail: {} }));
   let stopped = false;
   const reset = (event: Event) => {
-    progress.report({ type: "terminal" });
     (event.target as StreamSource).close();
     if (stopped) return;
     stopped = true;

@@ -5,7 +5,6 @@ Conversation applier, unread owner and pins owner are #2060 targets.
 ## Progress
 
 `web/src/stream-progress.ts` is DOM-free; both modes take the same inputs.
-The stream reports in compatible mode.
 `web/src/stream-progress-adapter.ts` alone writes `data-applied-cursor`,
 `data-event-cursor` and `sse-connect`'s `after`. Decoding, verification and
 strict recovery remain [M10](../roadmap-m10.md) work.
@@ -19,21 +18,21 @@ groups, never compared with conversation cursors.
 
 | Value | Meaning | Starts at | Advances on |
 |---|---|---|---|
-| `P0` | The page snapshot's rendered `event_seq` | Snapshot | Never changes |
-| `Ap` | The highest durable id applied in the DOM, including a contract no-op | `P0` | Applied or contract no-op outcomes; stops after a failure in strict mode |
+| `P0` | Snapshot's rendered `event_seq` | Snapshot | Never changes |
+| `Ap` | Highest durable id applied in the DOM, including a contract no-op | `P0` | Applied or contract no-op outcomes; stops after a failure in strict mode |
 | `Sh` | The cursor the visible conversation shows | `P0` | Follows `Ap` while visible; catches up to `Ap` on hidden-to-visible, including after a terminal reset; stays put while hidden |
-| `G` | The safe resume cursor used for `after` | `P0` | Applied, contract no-op or checkpoint outcomes; stops after a failure in strict mode |
+| `G` | Safe resume cursor for `after` | `P0` | Applied, contract no-op or checkpoint outcomes; stops after a failure in strict mode |
 | `F` | First failure, `{ reason, id }`; `id` is a decimal string when known, otherwise `null` | `null` | First failed decode, application or history re-application; later failures never replace it |
-| `Uc` | The `after` in the URL the source was created with | `P0` for the first source | Set on creation; recreate or bfcache uses `G`; the model rejects an `after` above `G` |
+| `Uc` | Source URL's creation-time `after` | `P0` for the first source | Set on creation; recreate/bfcache uses `G`; strict rejects `after > G`; compatible parses at first comparison, not open |
 | `Rc` | The id of the last id-bearing durable frame dispatched on that connection | Unset (`null`) | Dispatch of a durable frame with a decimal raw id; reset to `null` on source creation |
 
 - `P0 ≤ Sh ≤ Ap ≤ G`; no page cursor decreases.
-- `Uc ≤ G` at all times, because `G` is monotonic.
+- Strict mode keeps `Uc ≤ G`, since `G` is monotonic.
 - Decimal strings preserve exact ids above 2^53; comparisons use `BigInt`.
 - `Rc` has no general order relation to page cursors. In failure-free runs,
   `Rc ≤ G` holds after synchronous outcomes until a terminal `reset`.
   A durable reset can carry a newer cursor after the server reads skipped
-  events before a gap: it freezes `G` and can leave `Rc > G` without failure.
+  events before a gap: strict mode freezes `G` and can leave `Rc > G` without failure.
   The adapter closes the source on reset.
 - `F` keeps the first reason and a decimal id or `null`. A malformed failure
   id becomes `null`; it does not prevent strict mode from freezing progress.
@@ -45,7 +44,7 @@ reconnect never skips an unapplied durable frame.
 
 | Path | Resume point | Why S holds |
 |---|---|---|
-| New source: first connection, extension recreate or bfcache | The source's creation-time `Uc` | Creation requires `Uc ≤ G` |
+| New source: first connection, extension recreate or bfcache | The source's creation-time `Uc` | Strict requires `Uc ≤ G`; compatible skips this check |
 | Native reconnect before any id-bearing durable dispatch | `Uc`, since `Rc` is unset | `Uc ≤ G` remains true as `G` advances |
 | Native reconnect after an id-bearing durable dispatch | `Rc` | Requires `Rc ≤ G`: each dispatch must reach a non-failed outcome synchronously before a reconnect task runs |
 
@@ -70,15 +69,14 @@ for continuity.** Filtering and authorization can leave gaps.
 | Failed decode | Missing item, or a missing, non-decimal, negative or non-increasing id on `message`, `messages-moved` or `checkpoint` | Record first `F`: `decode-missing-item`, `decode-missing-id`, `decode-invalid-id` or `decode-non-monotonic`; this outcome advances no cursor | Record `F` and stop `Ap` and `G`, even with `id: null` |
 | Failed history re-application | Exception or verification mismatch when a move crossing Load older is re-applied after the response | Record first `F`: `history-reapply`; receipt already advanced `Ap` and `G`, with no rollback | Same monotonic cursors, then stop; replay cannot repair it, so recovery uses the reload guard |
 | Checkpoint (transport progress) | `checkpoint` c covers eligible events through c | Advance only `G` to the highest id, even after failure; never `Ap` or `Sh` | Same, only while `F` is unset |
-| Terminal | `reset` with or without id, including an equal or lower id | Handle before id-order checks; freeze page progress, close the source and run the reload guard | Same |
+| Terminal | `reset` with or without id, including an equal or lower id | Close the source and run the reload guard; later outcomes still settle | Before id-order checks, freeze page progress, close and run the reload guard |
 | Not observed | Sequence gaps from filtering or authorization | No outcome or cursor effect; server contract and checkpoints cover them | Same |
 
-Terminal freezes outcome-driven cursor changes; visibility can still promote
-`Sh` to `Ap`. Dispatch and connection observations remain separate from outcomes.
-The pure model records terminal state; source closure and the reload guard
-are adapter responsibilities.
-
-Post-application verification:
+Strict terminal freezes outcomes; visibility can still promote `Sh` to `Ap`.
+Adapters close and guard reload; dispatch/connections are observations.
+For main parity, compatible bypasses `advanceProgress` for terminal,
+connection-created and the URL cursor. BigInt/cursor-syntax parsing waits for
+the first legacy comparison; A4c restores strict checks.
 
 | Frame | Expected before applying | Checked after applying |
 |---|---|---|
@@ -95,17 +93,16 @@ dispatch ids leave `Rc` alone; frames without `id:` never move page cursors.
 
 ### Compatible and strict modes
 
-The root sets one mode flag. Strict recovery is the direction described in
-M10; the page selects compatible mode.
+Root selects compatible mode.
 
 | | Compatible | Strict |
 |---|---|---|
 | `Ap` and `G` after a failure | Advance past it to the highest applied/no-op id; checkpoints advance `G` | Stop |
 | Cursor attributes | Today's values | The stopped values |
-| `F` visible to tests | Recorded, visible to tests | Recorded |
+| `F` visible to tests | Recorded | Recorded |
 | Decode or apply failure | No recovery action, as today | `close()` within the same dispatch, preventing native reconnect, then the reset path's reload guard |
 | History re-application failure | No recovery action; the record is dropped and the DOM stays inconsistent | `close()`, then the reload guard; a fresh snapshot repairs it |
-| Condition S | Holds while no failure occurs | Always holds with the adapter actions above |
+| Condition S | Requires valid initial cursors and no failure | Always holds with the adapter actions above |
 
 ## State classes
 
@@ -138,8 +135,6 @@ The server never replaces `#message-body`, `#message-pending`,
 | `#composer-quote` | `#quote-form`; composer POST OOB | composer controller | composer growth |
 | `#mention-listbox` | `#mention-search` | mention picker | — |
 | `#branch-feedback` | branch POST | none | — |
-
-Rules:
 
 1. Only the primary owner rebuilds a zone's projection.
 2. Secondary reactions refresh only their own display.

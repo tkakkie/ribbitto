@@ -223,7 +223,7 @@ func checkJavaScript(name, source string) []javascriptFinding {
 // Like the other checks, this covers recognizable writes; aliases remain a review concern.
 func cursorWrites(raw, masked string) []int {
 	var positions []int
-	contracts := regexp.MustCompile(`\b(?:writeAttribute|removeAttribute)\s*\([^;)]*?\b(?:AppliedCursorAttribute|EventCursorAttribute)\b`)
+	contracts := regexp.MustCompile(`\b(?:writeAttribute|removeAttribute)\s*\([^;]{0,200}?\b(?:AppliedCursorAttribute|EventCursorAttribute)\b`)
 	for _, loc := range contracts.FindAllStringIndex(masked, -1) {
 		positions = append(positions, loc[0])
 	}
@@ -234,7 +234,7 @@ func cursorWrites(raw, masked string) []int {
 	pattern := regexp.MustCompile(`\b(?:setAttribute|removeAttribute)\s*\(\s*` + quote +
 		`(?:data-applied-cursor|data-event-cursor|sse-connect)` + quote +
 		`|\bsearchParams\s*\.\s*(?:set|append|delete)\s*\(\s*` + quote + `after` + quote +
-		`|` + property + `\s*` + assignment + `|\bdelete\s+\w+\s*\.\s*` + property)
+		`|` + property + `\s*` + assignment + `|\bdelete\s+[\w$.]+\s*\.\s*` + property)
 	for _, loc := range pattern.FindAllStringIndex(raw, -1) {
 		// Masking preserves offsets, so quoted examples and comments are not writes.
 		if masked[loc[0]] == raw[loc[0]] {
@@ -246,6 +246,14 @@ func cursorWrites(raw, masked string) []int {
 
 func TestCursorWriter(t *testing.T) {
 	for _, source := range []string{
+		`dom.writeAttribute(dom.getOrganizationStream()!, dom.AppliedCursorAttribute, id);`,
+		`dom.writeAttribute(connection(), dom.EventCursorAttribute, id);`,
+		`dom.writeAttribute(connection(), dom.AppliedCursorAttribute, id);`,
+		`dom.removeAttribute(document.querySelector('x'), dom.AppliedCursorAttribute);`,
+		"dom.writeAttribute(\n dom.getOrganizationStream()!,\n dom.AppliedCursorAttribute,\n id);",
+		"dom.writeAttribute(\n connection(),\n dom.EventCursorAttribute,\n id);",
+		"dom.writeAttribute(\n connection(),\n dom.AppliedCursorAttribute,\n id);",
+		`delete this.el.dataset.appliedCursor;`,
 		"dom.writeAttribute(\n el,\n dom.AppliedCursorAttribute, id);",
 		"el.setAttribute(\n \"sse-connect\", u);",
 		"el.dataset.appliedCursor\n = id;",
@@ -286,7 +294,7 @@ func TestCursorWriter(t *testing.T) {
 			}
 		})
 	}
-	if got := checkJavaScript("other.ts", `dom.readAttribute(node, dom.AppliedCursorAttribute); node.getAttribute("sse-connect"); url.searchParams.get("after"); node.dataset["appliedCursor"] === id; node.dataset.eventCursor == id; dom.readAttribute(
+	if got := checkJavaScript("other.ts", `dom.readAttribute(dom.getOrganizationStream()!, dom.AppliedCursorAttribute); dom.readAttribute(connection(), dom.AppliedCursorAttribute); this.el.dataset.appliedCursor; dom.readAttribute(node, dom.AppliedCursorAttribute); node.getAttribute("sse-connect"); url.searchParams.get("after"); node.dataset["appliedCursor"] === id; node.dataset.eventCursor == id; dom.readAttribute(
  node, dom.EventCursorAttribute); node.getAttribute("data-applied-cursor"); url.searchParams.get(
  "after");`); len(got) != 0 {
 		t.Fatalf("cursor readers: %v", got)

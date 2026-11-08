@@ -52,6 +52,26 @@ test('application, no-op, checkpoints and visibility retain exact monotonic curs
   }
 });
 
+for (const mode of modes) {
+  for (const type of ['applied', 'contract-no-op', 'checkpoint', 'terminal'] as const) {
+    test(`${mode}: stale ${type} id above 2^53 cannot lower cursors`, () => {
+      const high = '9007199254740997';
+      const low = '9007199254740996';
+      const before = createProgress(high, mode, true);
+      const after = type === 'terminal'
+        ? run(before, [{ type: 'frame-dispatched', kind: 'reset', lastEventId: low }, { type }])
+        : advanceProgress(before, { type, id: low });
+      assert.deepEqual(cursors(after), cursors(before));
+      if (type === 'terminal') {
+        assert.equal(after.terminal, true);
+        assert.equal(after.Rc, low);
+        assert.deepEqual(cursors(run(after, [{ type: 'applied', id: '9007199254740999' },
+          { type: 'checkpoint', id: '9007199254740999' }])), cursors(before));
+      }
+    });
+  }
+}
+
 test('first failure is exact and permanent; strict stops even with unknown id', () => {
   for (const mode of modes) {
     for (const reason of reasons) {
@@ -72,6 +92,23 @@ test('first failure is exact and permanent; strict stops even with unknown id', 
     }
   }
 });
+
+for (const mode of modes) {
+  test(`${mode}: malformed first failure ids become null and remain first`, () => {
+    for (const id of ['bad', ' ', '', '-1', '1.5', '0x10', '0', large]) {
+      const expected = ['0', large].includes(id) ? id : null;
+      const initial = createProgress('0', mode, true);
+      const failed = advanceProgress(initial, { type: 'failed', reason: 'decode-invalid-id', id });
+      assert.deepEqual(failed.F, { reason: 'decode-invalid-id', id: expected }, JSON.stringify(id));
+      assert.deepEqual(advanceProgress(failed, { type: 'failed', reason: 'apply-exception', id: large }).F, failed.F);
+      const outcomes: ProgressInput[] = [
+        { type: 'applied', id: large }, { type: 'contract-no-op', id: large }, { type: 'checkpoint', id: large },
+      ];
+      const unknown = advanceProgress(initial, { type: 'failed', reason: 'decode-invalid-id', id: null });
+      assert.deepEqual(cursors(run(failed, outcomes)), cursors(run(unknown, outcomes)));
+    }
+  });
+}
 
 test('history re-application failure cannot roll receipt progress back', () => {
   for (const mode of modes) {
@@ -139,13 +176,20 @@ test('seeded histories preserve page, connection and policy invariants in both m
       const resetAt = 60 + Math.floor(random() * 30);
       for (let step = 0; step < 100; step++) {
         const choice = Math.floor(random() * 10);
-        const id = (sequence + (choice % 3 === 0 ? 0n : 1n)).toString();
+        const offset = random() < 0.5 ? -BigInt(Math.floor(random() * 4)) : 1n;
+        const candidate = sequence + offset;
+        const id = (candidate < 0n ? 0n : candidate).toString();
         const batch: ProgressInput[] = [];
         if (step === resetAt) {
           batch.push({ type: 'frame-dispatched', kind: 'reset', lastEventId: id }, { type: 'terminal' });
         } else if (choice === 0) {
-          // Same sequence for both policies: zero is always at or below G.
-          batch.push({ type: 'connection-created', after: '0' });
+          // Both modes receive the same after, bounded by the smaller safe cursor.
+          const floor = BigInt(states[0].P0);
+          const ceiling = states.map(p => BigInt(p.G)).reduce((a, b) => a < b ? a : b);
+          const pick = Math.floor(random() * 3);
+          const after = pick === 0 ? ceiling : pick === 1
+            ? floor + BigInt(Math.floor(random() * Number(ceiling - floor + 1n))) : 0n;
+          batch.push({ type: 'connection-created', after: after.toString() });
         } else if (choice === 1) {
           batch.push({ type: 'visibility-changed', visible: random() > 0.5 });
         } else if (choice === 2) {
@@ -154,7 +198,7 @@ test('seeded histories preserve page, connection and policy invariants in both m
           batch.push({ type: 'frame-dispatched', kind: 'message', lastEventId: '' });
           if (!failureFree) batch.push({ type: 'failed', reason: 'decode-missing-id', id: null });
         } else {
-          sequence = BigInt(id);
+          if (BigInt(id) > sequence) sequence = BigInt(id);
           batch.push({ type: 'frame-dispatched', kind: choice === 4 ? 'checkpoint' : 'messages-moved', lastEventId: id });
           if (!failureFree && choice === 5) {
             batch.push({ type: 'failed', reason: reasons[step % (reasons.length - 1)], id });
@@ -180,6 +224,10 @@ test('seeded histories preserve page, connection and policy invariants in both m
             const values = cursors(p).map(BigInt);
             assert.equal(values.every((v, i) => i === 0 || values[i - 1] <= v), true, context);
             assert.equal(BigInt(p.Uc) <= BigInt(p.G), true, context);
+            if (input.type === 'connection-created') {
+              assert.equal(p.Uc, input.after, context);
+              assert.equal(p.Rc, null, context);
+            }
             assert.equal(p.P0, large, context);
             if (p.visible) assert.equal(p.Sh, p.Ap, context);
             if (input.type === 'checkpoint' || input.type === 'frame-dispatched') {

@@ -63,7 +63,7 @@ export function advanceProgress(state: Progress, input: ProgressInput): Progress
   switch (input.type) {
     case "terminal": return { ...state, terminal: true };
     case "failed":
-      return state.F ? state : { ...state, F: { reason: input.reason, id: input.id } };
+      return state.F ? state : { ...state, F: { reason: input.reason, id: input.id !== null && decimal(input.id) ? input.id : null } };
     case "checkpoint":
       return state.mode === "strict" && state.F ? state : { ...state, G: highest(state.G, input.id) };
     case "applied":

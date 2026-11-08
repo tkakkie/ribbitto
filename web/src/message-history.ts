@@ -2,7 +2,7 @@ import * as dom from "./contracts.gen.ts";
 
 type HistoryEvent = CustomEvent<{ target?: Element }>;
 
-(() => {
+export function startMessageHistory() {
   // Older messages are prepended above the ones being read. Keep the
   // distance from the bottom of the pane so the reader stays in place.
   let fromBottom: number | null = null;
@@ -29,4 +29,4 @@ type HistoryEvent = CustomEvent<{ target?: Element }>;
     const next = document.querySelector<HTMLElement>(`${dom.loadOlderSelector()} a`) || pane();
     next.focus({ preventScroll: true });
   });
-})();
+}

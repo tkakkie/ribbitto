@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -48,10 +51,14 @@ func pendingBrowserFixture(t *testing.T, browser *rod.Browser, topic bool, setup
 	if setup != nil {
 		setup(&snapshot, mux)
 	}
+	var bundle []byte
+	if len(delayed) > 0 {
+		bundle = delayedPageBundle(t, strings.TrimSuffix(delayed[0], "-"))
+	}
 	mux.Handle("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Suppress one initial script; the order tests load it explicitly later.
-		if len(delayed) > 0 && strings.Contains(r.URL.Path, delayed[0]) && r.URL.Query().Get("late") != "1" {
+		if bundle != nil && strings.Contains(r.URL.Path, "/page-channel-") {
 			w.Header().Set("Content-Type", "text/javascript")
+			_, _ = w.Write(bundle)
 			return
 		}
 		http.StripPrefix("/static/", http.FileServerFS(static.FS())).ServeHTTP(w, r)
@@ -105,7 +112,7 @@ func pendingBrowserFixture(t *testing.T, browser *rod.Browser, topic bool, setup
  EventTarget.prototype.addEventListener=function(type,fn,options){
   if(this===window && type==='storage')window.draftStarts++;
   if(this===window.visualViewport && type==='resize')window.starts++;
-  if(this===document && type==='keydown' && /popover-focus-[A-Z0-9]{8}\.js/.test(new Error().stack))window.focusStarts++;
+  if(this===document && type==='keydown' && String(fn).includes('beforetoggle'))window.focusStarts++;
   return listen.call(this,type,fn,options);
  };
  window.answers=0; window.opens=0; window.requests=0; window.ordinaryRequests=0; window.failures=[];
@@ -1542,4 +1549,57 @@ func testPendingBatchedDelivery(t *testing.T, browser *rod.Browser) {
 	if page.MustEval(`()=>JSON.stringify(batchRemoved)`).Str() != `["second","third","first"]` {
 		t.Fatal("batched delivery must remove items in their rendered Retry order")
 	}
+}
+
+// Mutate a page root while keeping the other production module starts intact.
+func delayedPageBundle(t *testing.T, name string) []byte {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.CopyFS(filepath.Join(root, "web/src"), os.DirFS("../../web/src")); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := os.ReadFile("../../web/static/scripts.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "web/static"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), registry, 0644); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "web/src/page-channel.ts")
+	data, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name == "popover-focus" {
+		// Its standalone wrapper also runs when imported by a page bundle.
+		data = append([]byte("import './popover-focus.ts';\n"), data...)
+	} else {
+		start := map[string]string{"composer": "startComposer", "message-stream": "startMessageStream"}[name]
+		if start == "" || strings.Count(string(data), start+"();") != 1 {
+			t.Fatal("missing unique module start")
+		}
+		data = []byte(strings.Replace(string(data), start+"();", "Object.assign(window, {startDelayed: "+start+"});", 1))
+	}
+	if err := os.WriteFile(source, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("go", "-C", "../../tools", "run", "./webbuild", root, "test", "delayed-start").CombinedOutput(); err != nil {
+		t.Fatalf("building delayed start: %v: %s", err, out)
+	}
+	scripts, err := static.NewScripts(os.DirFS(filepath.Join(root, "web/static")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	url, err := scripts.URL("page-channel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(root, "web", strings.TrimPrefix(url, "/")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

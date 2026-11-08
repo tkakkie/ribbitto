@@ -43,7 +43,7 @@ func testMessageTimeSweepBrowser(t *testing.T, browser *rod.Browser) {
 	var hold atomic.Bool
 	requested := make(chan chan struct{})
 	held := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hold.Load() && strings.HasPrefix(r.URL.Path, "dist/message-time-") {
+		if hold.Load() && strings.HasPrefix(r.URL.Path, "dist/page-channel-") {
 			release := make(chan struct{})
 			select {
 			case requested <- release:

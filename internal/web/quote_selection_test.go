@@ -14,7 +14,7 @@ import (
 )
 
 func TestQuoteSelectionMarkup(t *testing.T) {
-	scriptURL, err := static.ScriptURL(t.Context(), "quote-selection")
+	scriptURL, err := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil {
 		t.Fatal(err)
 	}

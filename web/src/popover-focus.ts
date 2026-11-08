@@ -1,4 +1,4 @@
-(() => {
+export function startPopoverFocus() {
   // A popover is not modal, so Tab can move focus out of it while it stays
   // open over the control that now has focus (#1092). A Tab or Shift-Tab
   // that leaves focus outside an open popover closes it. Only the keyboard:
@@ -27,4 +27,6 @@
       }
     });
   });
-})();
+}
+
+startPopoverFocus();

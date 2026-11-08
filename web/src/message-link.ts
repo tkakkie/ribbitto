@@ -1,4 +1,4 @@
-import "./message-menu.ts";
+import { startMessageMenu } from "./message-menu.ts";
 import {
   CopiedAttribute,
   CopiedLabelAttribute,
@@ -12,7 +12,8 @@ import {
   createPendingCopies,
 } from "./copy-link.ts";
 
-(() => {
+export function startMessageLink() {
+  startMessageMenu();
   const linkSelector = `a[${CopyLinkAttribute}]`;
   const copiedLabelSelector = `[${CopiedLabelAttribute}]`;
   const pending = createPendingCopies<HTMLAnchorElement>();
@@ -46,4 +47,4 @@ import {
     },
     true,
   );
-})();
+}

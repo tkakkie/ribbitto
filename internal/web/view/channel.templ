@@ -333,27 +333,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 				}
 			</div>
 		}
-		// Scripts stay outside swap targets; htmx will not run swapped scripts.
-		// read-visibility starts at htmx:load, after every deferred script, so
-		// side-panel already answers its panel-cover request whatever the order.
-		@pageScript("sidebar-scroll")
-		{ "" /* Retain the legacy separator text node between script tags. */ }
-		@pageScript("read-visibility")
-		@pageScript("branch-selection")
-		{ "" /* Retain the legacy separator text node between script tags. */ }
-		@pageScript("message-time")
-		@pageScript("member-mentions")
-		@pageScript("mention-picker")
-		@pageScript("composer")
-		@pageScript("pins-sync")
-		@pageScript("quote-selection")
-		@pageScript("message-link")
-		@pageScript("message-history")
-		{ "" /* Retain the legacy separator text node between script tags. */ }
-		@pageScript("side-panel")
-		@pageScript("sidebar-unread")
-		@pageScript("message-stream")
-		@pageScript("message-drafts")
+		@pageScript("page-channel")
 	}
 }
 
@@ -438,11 +418,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 				<p class="text-muted">{ i18n.T(ctx, "channel.choose") }</p>
 			</div>
 		}
-		@pageScript("sidebar-scroll")
-		{ "" /* Retain the legacy separator text node between script tags. */ }
-		@pageScript("sidebar-unread")
-		@pageScript("message-stream")
-		@pageScript("message-drafts")
+		@pageScript("page-channel-list")
 	}
 }
 

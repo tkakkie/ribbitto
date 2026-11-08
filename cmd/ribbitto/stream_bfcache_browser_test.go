@@ -143,12 +143,12 @@ func testStreamBFCache(t *testing.T, ctx context.Context, browser *rod.Browser, 
 		window.addEventListener('pageshow', e => { window.shown = true; window.restored = e.persisted; });`)
 	if blocked {
 		// In-process mutation: drop only pagehide listeners registered by the
-		// stream script (found by its stack frame), leaving the drafts, composer
+		// stream handler (found by its cleanup event), leaving the drafts, composer
 		// and read-visibility handlers and the asset itself untouched.
 		page.MustEvalOnNewDocument(`(() => {
 			const add = window.addEventListener;
 			window.addEventListener = function (type, ...rest) {
-				if (type === 'pagehide' && /message-stream-[A-Z0-9]{8}\.js/.test(new Error().stack)) return;
+				if (type === 'pagehide' && String(rest[0]).includes("htmx:beforeCleanupElement")) return;
 				return add.call(this, type, ...rest);
 			};
 		})()`)

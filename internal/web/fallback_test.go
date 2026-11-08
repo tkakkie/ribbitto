@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -139,34 +140,30 @@ func assertFullConversationPage(t *testing.T, body string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	composerURL, err := static.ScriptURL(t.Context(), "composer")
+	composerURL, err := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil {
 		t.Fatal(err)
 	}
-	draftsURL, err := static.ScriptURL(t.Context(), "message-drafts")
-	if err != nil {
-		t.Fatal(err)
-	}
-	streamURL, err := static.ScriptURL(t.Context(), "message-stream")
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	composer := false
-	var scripts []string
 	for n := range doc.Descendants() {
 		if n.DataAtom != atom.Script {
 			continue
 		}
 		src := attr(n, "src")
-		scripts = append(scripts, src)
 		if src == composerURL {
 			composer = true
 		} else if strings.HasPrefix(src, "/static/dist/composer-") || strings.HasPrefix(src, "/static/message-composer-") {
 			t.Errorf("unexpected composer script %q", src)
 		}
 	}
-	order := strings.Join(scripts, " ")
-	if strings.Index(order, composerURL) > strings.Index(order, streamURL) || strings.Index(order, streamURL) > strings.Index(order, draftsURL) {
+	root, err := os.ReadFile("../../web/src/page-channel.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := string(root)
+	composerStart, streamStart, draftsStart := strings.Index(order, "startComposer();"), strings.Index(order, "startMessageStream();"), strings.Index(order, "startMessageDrafts();")
+	if composerStart < 0 || streamStart < 0 || draftsStart < 0 || composerStart > streamStart || streamStart > draftsStart {
 		t.Errorf("composer listener registration order: %s", order)
 	}
 	if !composer {

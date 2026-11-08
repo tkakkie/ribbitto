@@ -21,7 +21,7 @@ type HtmxConfigRequestEvent = CustomEvent<{
   parameters: Record<string, string>;
 }>;
 
-(() => {
+export function startQuoteSelection() {
   const bodySelector = `[id^="${BodyMessageDOMPrefix}"]`;
   const quoteHandleSelector = `[${QuoteHandleAttribute}]`;
   const quoteSelectionButtons = `button[${QuoteSelectionAttribute}]`;
@@ -151,4 +151,4 @@ type HtmxConfigRequestEvent = CustomEvent<{
   for (const name of ["htmx:beforeSend", "htmx:afterRequest", "htmx:afterSwap"]) {
     document.addEventListener(name, clear);
   }
-})();
+}

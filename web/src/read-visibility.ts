@@ -14,7 +14,7 @@ type HtmxAfterRequestEvent = CustomEvent<{
   xhr: { status: number; getResponseHeader(name: string): string | null };
 }>;
 
-(() => {
+export function startReadVisibility() {
   const initialized = new WeakSet<HTMLFormElement>();
   let inFlight = false;
   let active: (() => void) | null = null;
@@ -136,4 +136,4 @@ type HtmxAfterRequestEvent = CustomEvent<{
     active = visible;
     visible();
   });
-})();
+}

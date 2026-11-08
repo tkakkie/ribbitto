@@ -44,23 +44,11 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	// This is the single declaration of converted page entries; tools/webbuild
 	// parses it from NewScripts, so keep its name and string slice literal.
 	names := []string{
-		"message-time",
-		"composer",
 		"arrival",
 		"popover-focus",
-		"side-panel",
-		"read-visibility",
-		"sidebar-unread",
-		"pins-sync",
 		"message-drafts",
-		"message-stream",
-		"member-mentions",
-		"message-link",
-		"mention-picker",
-		"quote-selection",
-		"message-history",
-		"branch-selection",
-		"sidebar-scroll",
+		"page-channel",
+		"page-channel-list",
 	}
 	scripts := &Scripts{
 		urls:    make(map[string]string, len(names)),

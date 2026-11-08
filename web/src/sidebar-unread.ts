@@ -1,4 +1,4 @@
-import "./tab-unread.ts";
+import { startTabUnread } from "./tab-unread.ts";
 import {
   getSidebarResync, getSidebarChannels, getChannelLink, getTopicLink, getTopicHeadingCount, getStreamSink,
   getOrganizationStream, getResolutionSummary, organizationStreamSelector, OrganizationStreamID, StreamSinkID, SidebarChannelsID,
@@ -11,7 +11,8 @@ import { unreadState, observe, sequence, receiveFrame, retain, loss,
 type SidebarEvent = CustomEvent<{ data: string; type: string }>;
 const attr = (node: Element, name: ContractAttribute) => readAttribute(node, name) ?? undefined;
 
-(() => {
+export function startSidebarUnread() {
+  startTabUnread();
   const states = new WeakMap<Element, { unread: (message: MessageEvent) => void; sidebar: (event: SidebarEvent) => void; schedule: (wait?: number) => void; cleanup: () => void }>();
   const initialize = (connection: Element) => {
     if (states.has(connection)) return states.get(connection);
@@ -191,4 +192,4 @@ const attr = (node: Element, name: ContractAttribute) => readAttribute(node, nam
     if (document.visibilityState === "visible") resume();
   });
   window.addEventListener("pageshow", (event) => { if (event.persisted) resume(); });
-})();
+}

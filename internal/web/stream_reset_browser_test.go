@@ -21,7 +21,7 @@ func resetClock(page *rod.Page) {
   window.name='1'; window.reloadTimers=new Map(); let id=-1;
   const schedule=window.setTimeout, cancel=window.clearTimeout;
   window.setTimeout=(fn,ms,...args)=>{
-   if(!/message-stream-[A-Z0-9]{8}\.js/.test(new Error().stack)) return schedule(fn,ms,...args);
+   if(!/page-channel-[A-Z0-9]{8}\.js/.test(new Error().stack) || !String(fn).includes("location.reload()")) return schedule(fn,ms,...args);
    if(ms<0 || ms>5000) throw new Error('reset jitter out of range');
    window.reloadTimers.set(id,()=>fn(...args)); return id--;
   };
@@ -61,11 +61,7 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 			resetClock(page)
 			load := func() {
 				t.Helper()
-				page.MustEval(`part => new Promise((resolve,reject)=>{
- const script=document.createElement('script');
- script.src=[...document.scripts].find(s=>s.src.includes(part)).src+'?late=1';
- script.onload=()=>resolve(true);script.onerror=()=>reject(new Error("script load failed"));document.head.append(script);
-})`, delayed)
+				page.MustEval(`() => window.startDelayed()`)
 			}
 			queue := func() {
 				page.MustEval(`() => {
@@ -408,11 +404,7 @@ func testStreamResetInvalidCursorsBrowser(t *testing.T, browser *rod.Browser) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			page, _, _, _ := pendingBrowser(t, browser, false, "message-stream-")
-			page.MustEval(`() => new Promise((resolve,reject) => {
- const script=document.createElement('script');
- script.src=[...document.scripts].find(s=>s.src.includes('message-stream-')).src+'?late=1';
- script.onload=()=>resolve(true);script.onerror=()=>reject(new Error('script load failed'));document.head.append(script);
-})`)
+			page.MustEval(`() => window.startDelayed()`)
 			closed := page.MustEval(`(url, cursor) => {
  const stream=document.getElementById('organization-stream');
  stream.setAttribute('sse-connect',url);stream.dataset.eventCursor=cursor;

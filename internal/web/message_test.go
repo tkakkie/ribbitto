@@ -153,7 +153,7 @@ func TestMessageListHandler(t *testing.T) {
 				t.Fatal("latest message list must receive message events")
 			}
 			// An empty channel still loads them: messages swapped in later need them.
-			for _, name := range []string{"message-time", "pins-sync"} {
+			for _, name := range []string{"page-channel"} {
 				url, err := static.ScriptURL(t.Context(), name)
 				if err != nil {
 					t.Fatal(err)

@@ -22,7 +22,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   notSent: dom.NotSentAttribute, recovered: dom.RecoveredAttribute, repeat: dom.RepeatAttribute,
   capacity: dom.CapacityAttribute, busy: dom.BusyAttribute } as const;
 
-if (typeof window !== "undefined") (() => {
+export function startComposer() {
   // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
   const viewport = window.visualViewport;
   const updateViewport = () => {
@@ -623,4 +623,4 @@ if (typeof window !== "undefined") (() => {
       say("unconfirmed");
     }
   });
-})();
+}

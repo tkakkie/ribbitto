@@ -65,8 +65,8 @@ func feedGuardPages() []feedGuardPage {
 	resolved[5] = feedLimit{"HTML bytes", feedBudgetResolvedBytesFixed, feedBudgetResolvedBytesSlope, feedBudgetBytesLatest}
 	return []feedGuardPage{
 		{"channel", feedFixture, feedLimits(), 1294},
-		// https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic whole-page cap.
-		{"resolved topic", resolvedTopicFixture, resolved, 1312},
+		// #2200 approves one shared Reply control above #2183's resolved-topic whole-page cap.
+		{"resolved topic", resolvedTopicFixture, resolved, 1313},
 	}
 }
 

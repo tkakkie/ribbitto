@@ -14,7 +14,7 @@ templ ComposerQuote(page ChannelPage, oob bool) {
 	>
 		if page.Reply != nil {
 			<div class="flex min-w-0 items-center gap-2 text-caption">
-				<p id="composer-reply-description" role="status" class="min-w-0 flex-1 truncate">{ replyLabel(ctx, replyAuthor(page.Reply.DisplayName, page.Reply.Handle), page.Reply.Body) }</p>
+				<p id={ ComposerReplyDescriptionID } role="status" class="min-w-0 flex-1 truncate">{ replyLabel(ctx, replyAuthor(page.Reply.DisplayName, page.Reply.Handle), page.Reply.Body) }</p>
 				<input type="hidden" name="reply" value={ idValue(page.Reply.ID) }/>
 				<button type="submit" name="clear_reply" value="1" class="min-h-11 min-w-11 px-2 text-muted">{ i18n.T(ctx, "message.reply_cancel") }</button>
 			</div>

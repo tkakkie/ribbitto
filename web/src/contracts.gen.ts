@@ -119,6 +119,10 @@ export const QuoteFormID = "quote-form";
 export const quoteFormSelector = (): string => "#" + QuoteFormID;
 export const getQuoteForm = (root: ParentNode = document): HTMLFormElement | null => root.querySelector<HTMLFormElement>(quoteFormSelector());
 
+export const ComposerReplyDescriptionID = "composer-reply-description";
+export const composerReplyDescriptionSelector = (): string => "#" + ComposerReplyDescriptionID;
+export const getComposerReplyDescription = (root: ParentNode = document): HTMLParagraphElement | null => root.querySelector<HTMLParagraphElement>(composerReplyDescriptionSelector());
+
 export const ComposerQuoteID = "composer-quote";
 export const composerQuoteSelector = (): string => "#" + ComposerQuoteID;
 export const getComposerQuote = (root: ParentNode = document): HTMLDivElement | null => root.querySelector<HTMLDivElement>(composerQuoteSelector());

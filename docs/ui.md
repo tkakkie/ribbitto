@@ -11,7 +11,6 @@ Chosen by the maintainer from mock-ups for M5 (#870), replacing
 "B · Clear water" from #9: white rounded blocks on a lightly tinted base,
 with the calm reading column of a modern AI chat app, the order of a tool
 like Linear, and on desktop the rounded, layered feel of Microsoft's Fluent 2.
-The mock-ups are a direction, not a specification.
 
 - **Blocks on a base.** The page ground is the tinted `base`. The app bar,
   the conversation, and a side panel when one is open, are white rounded
@@ -61,9 +60,8 @@ and the contrast table are in [`ui-colours.md`](ui-colours.md).
 | Own mention | 2 px dashed `brand` outline, no offset; distinct from keyboard focus |
 | Motion | durations 100 · 150 · 200 · 250 ms; easings `standard`, `decelerate` (entering), `accelerate` (leaving), after Fluent 2 |
 
-The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`)
-and how templates and styles are written are in [`ui-code.md`](ui-code.md);
-the shared components are in [`ui-components.md`](ui-components.md).
+Layout and styles: [`ui-code.md`](ui-code.md);
+shared components: [`ui-components.md`](ui-components.md).
 
 **Motion** animates only `transform`, `opacity` and colours, never delays
 readable text, and is off under `prefers-reduced-motion: reduce`; uses:
@@ -122,9 +120,7 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
 
 ## Product labels
 
-The frog labels (`docs/domain/vocabulary.md`) are names. Their meaning
-comes from presentation and placement, never from ordinary words added
-beside them (decisions 20 and 28):
+Product labels follow [`vocabulary.md`](domain/vocabulary.md#product-labels):
 
 - **Placement shows the hierarchy.** The organisation's name sits at the
   top of the sidebar (an organisation image is not built yet); channels
@@ -155,12 +151,15 @@ poses, the channel illustrations and details are in [`brand.md`](brand.md).
 ## Markup and accessibility
 
 [Accessibility](accessibility.md) covers markup checks and browser verification.
-Messages share one native actions popover: Copy link, Quote and Pin/Unpin.
+Messages share one native actions popover: Copy link, Quote, Reply and Pin/Unpin.
 htmx enhances pins with focus restoration; requests keep their message identity.
 Without JavaScript the control links to
 `/organizations/{slug}/messages/{messageID}/actions`: the visible message,
-copyable permalink, Quote, POST/303 Pin/Unpin and Back to the conversation.
+copyable permalink, Quote, Reply, POST/303 Pin/Unpin and Back to the conversation.
 The page checks message visibility.
+Reply shows an announced target beside the composer, with a cancel control;
+cancelling keeps text and any quote. Replies show a one-line preview linking
+to the original, or an unavailable placeholder.
 
 ## Planned directions (from the maintainer, #9)
 

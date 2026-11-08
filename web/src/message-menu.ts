@@ -56,6 +56,10 @@ import * as dom from "./contracts.gen.ts";
     }
     menu.querySelector<HTMLAnchorElement>(`[${dom.CopyLinkAttribute}]`)!.href = dom.readAttribute(link, dom.MessageURLAttribute)!;
     menu.querySelector<HTMLButtonElement>(`[form="${dom.QuoteFormID}"]`)!.value = id;
+    const reply = menu.querySelector<HTMLButtonElement>('button[name="reply"]')!;
+    reply.type = "submit";
+    reply.setAttribute("form", dom.QuoteFormID);
+    reply.value = id;
     const resolve = dom.getResolutionForm(menu);
     if (resolve) {
       const resolveURL = dom.readAttribute(dom.getMessageItems()!, dom.ResolveURLAttribute);

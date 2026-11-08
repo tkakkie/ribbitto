@@ -207,3 +207,50 @@ func replyTargetMarkup(t *testing.T, markup string) string {
 	t.Fatal("missing composer target container")
 	return ""
 }
+
+func TestReplyMenuTargetAgainstPostgreSQL(t *testing.T) {
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
+	original, err := fixturePoster(pool).Post(t.Context(), m, f.Channel.ID, "Original")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
+	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, postgresServices(t, pool, sessions, "", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, _, err := sessions.Create(t.Context(), f.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := realtime.FormatPayloadID(original.ID)
+	for _, tc := range []struct {
+		name, id string
+		status   int
+	}{
+		{"valid", id, 200}, {"malformed", "bad", 400}, {"unknown", realtime.FormatPayloadID(kernel.ID{99}), 404},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := serveForm(handler, "POST", view.ChannelURL("acme", f.Channel.ID)+"/quote", cookie, url.Values{"reply": {tc.id}, "quote": {id}})
+			if w.Code != tc.status {
+				t.Fatalf("status %d, want %d", w.Code, tc.status)
+			}
+			if tc.status == 200 {
+				for _, want := range []string{`name="reply" value="` + id + `"`, `name="quote" value="` + id + `"`, `role="status"`, "Original"} {
+					if !strings.Contains(w.Body.String(), want) {
+						t.Fatalf("target response lacks %s", want)
+					}
+				}
+				if strings.Contains(w.Body.String(), "message-composer-state") {
+					t.Fatal("target selection replaced send state/key")
+				}
+			}
+		})
+	}
+}

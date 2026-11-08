@@ -21,7 +21,7 @@ func (p channelPages) quote(w http.ResponseWriter, r *http.Request, m org.Member
 		return
 	}
 	page := view.ChannelPage{}
-	if p.readQuote(w, r, m, id, r.PostForm, &page) {
+	if p.readQuote(w, r, m, id, r.PostForm, &page) && p.readReply(w, r, m, id, r.PostForm, &page) {
 		status := http.StatusOK
 		if page.QuoteInvalid {
 			status = http.StatusUnprocessableEntity

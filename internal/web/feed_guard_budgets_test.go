@@ -2,7 +2,8 @@ package web
 
 const (
 	// #1457: shared menu/template move actions to the fixed part; exact counts.
-	feedBudgetElementsFixed = 193
+	// #2200: maintainer-approved shared Reply menu control.
+	feedBudgetElementsFixed = 194
 	// #1478: each message's DOM must not grow without justification.
 	feedBudgetElementsSlope = 22
 	// #1478: fixed forms add request-processing work; zero headroom.
@@ -28,7 +29,8 @@ const (
 	// #1478: 256-byte middle-sample tolerance covers event_seq digit and cyclic seed-name lengths.
 	feedBudgetBytesLinearity = 256
 	// #1478, #1489: real first-render elements have zero headroom; a count change (#1477) is a visible, justified budget change.
-	feedBudgetElementsLatest = 1354
+	// #2200: maintainer-approved shared Reply menu control.
+	feedBudgetElementsLatest = 1355
 	// #1478: real first-render forms have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetFormsLatest = 12
 	// #1500: real first-render submits have zero headroom; a count change (#1477) is a visible, justified budget change.
@@ -42,7 +44,8 @@ const (
 
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture;
 	// its selected topic is not in the sidebar list (a listed one adds about 8 elements, not budgeted).
-	feedBudgetResolvedElementsFixed = 212
+	// #2200: maintainer-approved shared Reply menu control.
+	feedBudgetResolvedElementsFixed = 213
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedFormsFixed = 13
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
@@ -50,11 +53,13 @@ const (
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedHTMXFixed = 24
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixed bytes.
-	feedBudgetResolvedBytesFixed = 25991
+	// #2200: maintainer-approved shared Reply menu control.
+	feedBudgetResolvedBytesFixed = 26080
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic byte slope.
 	feedBudgetResolvedBytesSlope = 3467
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
-	feedBudgetResolvedElementsLatest = 1373
+	// #2200: maintainer-approved shared Reply menu control.
+	feedBudgetResolvedElementsLatest = 1374
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedFormsLatest = 13
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.

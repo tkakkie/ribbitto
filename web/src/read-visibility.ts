@@ -3,6 +3,7 @@ import {
   AppliedCursorAttribute, AriaModalAttribute, CursorField, dispatchPanelCoverEvent, getCursorField,
   getOrganizationStream, getReadForm, getSidePanel, listenReadAppliedEvent, readAttribute, ReadFormID, ReadVisibleEvent,
 } from "./contracts.gen.ts";
+import { attachPageLifecycle } from "./lifecycle.ts";
 import { readCursor, readDue, type ReadState, retryDelay, settleRead } from "./read-cursor.ts";
 
 type HtmxLoadEvent = CustomEvent<{ elt: Element }>;
@@ -110,24 +111,28 @@ type HtmxAfterRequestEvent = CustomEvent<{
       navigating = false;
       visible();
     };
+    const lifecycle = attachPageLifecycle(window, {
+      phase: phase => {
+        // Dispose must stop retries before abort: an in-flight afterRequest
+        // still runs on the form and must see navigation already in progress.
+        if (phase === "freeze" || phase === "dispose") navigation();
+      },
+      pageshow: restore,
+    });
+    const { signal } = lifecycle;
     const stopReadApplied = listenReadAppliedEvent(document, visible);
     const removed = new MutationObserver(() => {
-      if (form.isConnected) return;
-      clearRetry();
-      removed.disconnect();
-      document.removeEventListener("visibilitychange", visibility);
-      stopReadApplied();
-      window.removeEventListener("resize", visible);
-      window.removeEventListener("pagehide", navigation);
-      window.removeEventListener("pageshow", restore);
-      if (active === visible) active = null;
+      if (!form.isConnected) lifecycle.dispose();
     });
+    signal.addEventListener("abort", () => {
+      removed.disconnect();
+      stopReadApplied();
+      if (active === visible) active = null;
+    }, { once: true });
     removed.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("visibilitychange", visibility);
+    document.addEventListener("visibilitychange", visibility, { signal });
     // Crossing a breakpoint can uncover the conversation with the panel open.
-    window.addEventListener("resize", visible);
-    window.addEventListener("pagehide", navigation);
-    window.addEventListener("pageshow", restore);
+    window.addEventListener("resize", visible, { signal });
     active = visible;
     visible();
   });

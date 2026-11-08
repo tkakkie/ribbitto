@@ -44,7 +44,7 @@ func TestMemberLimitFormResponse(t *testing.T) {
 		{"fraction quality", "navigate", "text/html;q=0.123", "application/x-www-form-urlencoded", "", "POST", true},
 		{"invalid accept", "navigate", "text/html,invalid", "application/x-www-form-urlencoded", "", "POST", false},
 		{"JSON", "navigate", "text/html", "application/json", "", "POST", false},
-		{"GET", "navigate", "text/html", "application/x-www-form-urlencoded", "", "GET", false},
+		{"GET", "navigate", "text/html", "application/x-www-form-urlencoded", "", "GET", true},
 	} {
 		for _, lang := range []string{"en", "ja"} {
 			t.Run(tt.name+"/"+lang, func(t *testing.T) {

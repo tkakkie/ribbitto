@@ -26,11 +26,11 @@ func rejectMemberLimit(w http.ResponseWriter, r *http.Request, limit *middleware
 func ordinaryFormSubmission(r *http.Request) bool {
 	// Navigation plus explicit HTML and form media types avoids treating fetch
 	// defaults or missing browser metadata as a request for a whole page.
-	if r.Method != http.MethodPost || r.Header.Get("Sec-Fetch-Mode") != "navigate" || len(r.Header.Values("HX-Request")) != 0 {
+	if (r.Method != http.MethodPost && r.Method != http.MethodGet && r.Method != http.MethodHead) || r.Header.Get("Sec-Fetch-Mode") != "navigate" || len(r.Header.Values("HX-Request")) != 0 {
 		return false
 	}
 	kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || (kind != "application/x-www-form-urlencoded" && kind != "multipart/form-data") {
+	if r.Method == http.MethodPost && (err != nil || (kind != "application/x-www-form-urlencoded" && kind != "multipart/form-data")) {
 		return false
 	}
 	html := false

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -51,6 +52,7 @@ type TopicLookup interface {
 }
 
 type channelPages struct {
+	countLimit       *middleware.MemberRateLimiter
 	typing           *typing.State
 	limiter          *middleware.MemberRateLimiter
 	createLimit      *middleware.MemberRateLimiter
@@ -100,7 +102,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		p.topicID = &selected
 	}
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost && p.overviewImageErr == "" {
 		p.post(w, r, m, id)
 		return
 	}
@@ -266,7 +268,14 @@ func (p channelPages) list(w http.ResponseWriter, r *http.Request, m org.Members
 // whole page, and its stream resumes after the sequence of the snapshot that
 // counted, neither skipping nor repeating a change.
 func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
+	release, ok := p.admitCount(w, r, m)
+	if !ok {
+		return
+	}
+	release = sync.OnceFunc(release)
+	defer release()
 	list, err := p.messages.Sidebar(r.Context(), m, id, nil)
+	release()
 	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
@@ -297,6 +306,12 @@ func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapsh
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {
+	release, ok := p.admitCount(w, r, m)
+	if !ok {
+		return
+	}
+	release = sync.OnceFunc(release)
+	defer release()
 	var history conversation.ChannelPage
 	var err error
 	switch {
@@ -314,6 +329,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	default:
 		history, err = p.messages.Page(r.Context(), m, id, p.topicID, nil)
 	}
+	release()
 	if isNotFound(err) {
 		http.NotFound(w, r)
 		return
@@ -642,4 +658,28 @@ func memberDisplayName(name string) string {
 		return ""
 	}
 	return name
+}
+
+func (p channelPages) admitCount(w http.ResponseWriter, r *http.Request, m org.Membership) (func(), bool) {
+	releaseMember, ok := p.countLimit.Admit(m.Organization.ID, m.Member.ID)
+	if !ok {
+		rejectMemberLimit(w, r, p.countLimit, p.pages)
+		return nil, false
+	}
+	var limit *realtime.RecountLimit
+	if p.stream != nil {
+		limit = p.stream.RecountLimit
+	}
+	releaseShared, err := limit.Acquire(r.Context())
+	if err != nil {
+		releaseMember()
+		w.Header().Set("Retry-After", "1")
+		if ordinaryFormSubmission(r) {
+			p.pages.render(w, r, http.StatusServiceUnavailable, view.ServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		return nil, false
+	}
+	return func() { releaseShared(); releaseMember() }, true
 }

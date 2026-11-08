@@ -23,21 +23,14 @@ assertions. CI never judges time.
 
 ## Budgets and ratchet
 
-Constants in `internal/web/feed_guard_budgets_test.go` cite their approval issues.
-Cells are measured/cap; pairs are channel; resolved topic.
-
-| Metric | Channel fixed | Topic fixed | Per message | First render |
-|---|---:|---:|---:|---:|
-| Elements | 193 / 193 | 212 / 212 | 22 / 22 | 1354 / 1354; 1373 / 1373 |
-| Forms | 12 / 12 | 13 / 13 | 0 / 0 | 12 / 12; 13 / 13 |
-| Explicit type=submit | 7 / 7 | 9 / 9 | 0 / 0 | 7 / 7; 9 / 9 |
-| hx-* carriers | 10 / 10 | 10 / 10 | 0 / 0 | 11 / 11 |
-| htmx-selected nodes | 21 / 21 | 24 / 24 | 0 / 0 | 22 / 22; 25 / 25 |
-| HTML bytes | 23303.333 / 24469 | 25990.333 / 25991 | 3464.873 / 3639; 3466.873 / 3467 | 204094 / 214299; 206969 / 214299 |
-
-Topic counts include conclusion and menu controls ([approval](https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298)).
-Whole-page measured/cap (channel; topic, unlisted selection): elements 1293/1294; 1312/1312,
-hx carriers 10/10, bytes 196547/206459; 199334/206459. Both fixtures run all guards.
+The authoritative fixed, per-message and first-render limits are in
+[`feed_guard_budgets_test.go`](../../internal/web/feed_guard_budgets_test.go),
+with approval issues. Whole-page byte and hx-carrier
+caps are in [`feed_budget_test.go`](../../internal/web/feed_budget_test.go);
+per-fixture element caps are in
+[`feed_guard_test.go`](../../internal/web/feed_guard_test.go).
+Channel and resolved-topic fixtures run all guards; the selected topic is unlisted
+([approval](https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298)).
 
 Counts have zero headroom: elements bound DOM growth, forms/submits and
 htmx-selected nodes bound initialization work, and hx carriers independently
@@ -66,7 +59,7 @@ in step. Review verifies the reason and approval. A feature needing more
 per-message markup states its count in its issue first.
 
 Attribute-less buttons miss htmx 2.0.7's `[type='submit']` selector;
-per-message pin forms still match its form selector.
+forms match its form selector.
 
 ## Mirror maintenance
 

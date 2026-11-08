@@ -68,15 +68,31 @@ versus a device) is a different record: WebKit is not iOS Safari.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1`, using Chrome installed on the CI runner image (not pinned); every CI run records the version `TestBrowser` drives, shard, date and runner image in each browser job's step summary (`test (web-1/3)`, `test (web-2/3)`, `test (web-3/3)`) | unverified (no check yet covers the latest two major versions, including the older one; scope, result and evidence must be filled per check, planned in #1426) |
+| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below | PASS for the recorded scope/version; latest two major versions remain unverified |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |
-| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified (manual check on a real iOS device planned in #1426; see the planned levels below) | unverified |
-| Android Chrome | latest two major versions | not verified (check on a real Android device or an emulator planned in #1426; a real device and an emulator are different records, each recorded as what it is) | unverified |
+| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | R4 level 3: real-device checklist in [#2261] (M10) | NOT RUN |
+| Android Chrome | latest two major versions | R4 level 4: device or emulator checklist in [#2261] (M10) | NOT RUN |
 
-[#1426](https://github.com/tkakkie/ribbitto/issues/1426) plans four
-separately recorded verification levels: the existing Chrome go-rod tests,
-a WebKit run recorded as WebKit and never as iOS Safari, a real iOS device
-run, and an Android Chrome run (on a real device or an emulator, each
-recorded as what it is).
+[R4 run record](https://github.com/tkakkie/ribbitto/issues/1426#issuecomment-6706152731)
+(2026-11-07, head `33d709a`):
+
+- **Level 1 — Chrome go-rod:** Chrome 157.0.8103.39, clean head extract,
+  `webbuild` bundles, `RIBBITTO_REQUIRE_BROWSER=1`. `TestBrowser` first ran
+  without a database: 1157 PASS, 0 FAIL, 59 SKIP (PostgreSQL required).
+  The database scenarios reran on disposable PostgreSQL 18: 58 PASS,
+  0 FAIL, 0 SKIP. `cmd/ribbitto` browser tests with
+  `RIBBITTO_REQUIRE_DB=1`: 73 PASS, 0 FAIL, 0 SKIP.
+- **Level 2 — Playwright WebKit:** Playwright 1.64.1 WebKit build,
+  local TLS proxy against the head server: **17/17 PASS**. Scope: CSP,
+  switching/title/focus/status, history/one stream request, overlapping
+  navigation, drafts, own/live posts, offline recovery, tab unread/title/
+  favicon, older messages and JavaScript-off reading/posting/paging/switching.
+  This is **WebKit, not iOS Safari**; no concrete WebKit engine version is
+  recorded, so it does not verify a supported Safari version.
+- **Levels 3–4 — real iOS Safari and Android Chrome:** **NOT RUN**;
+  tracked in [#2261]. Device keyboard, viewport and bfcache behaviour remain
+  unverified. WebKit and desktop Chrome do not substitute for device runs.
+
+[#2261]: https://github.com/tkakkie/ribbitto/issues/2261

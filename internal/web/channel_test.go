@@ -355,8 +355,8 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	starts := regexp.MustCompile(`\bstart[A-Z]\w*\(\);`).FindAllString(string(root), -1)
-	wantStarts := []string{"startSidebarScroll();", "startSidebarUnread();", "startMessageStream();", "startMessageDrafts();"}
+	starts := regexp.MustCompile(`\bstart[A-Z]\w*\([^;\n]*\);`).FindAllString(string(root), -1)
+	wantStarts := []string{"startModule(startSidebarScroll);", "startModule(startSidebarUnread);", "startModule(startMessageStream);", "startModule(startMessageDrafts);"}
 	if !slices.Equal(starts, wantStarts) {
 		t.Errorf("list root starts %v, want %v", starts, wantStarts)
 	}

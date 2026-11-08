@@ -1578,10 +1578,10 @@ func delayedPageBundle(t *testing.T, name string) []byte {
 		data = append([]byte("import './popover-focus.ts';\n"), data...)
 	} else {
 		start := map[string]string{"composer": "startComposer", "message-stream": "startMessageStream"}[name]
-		if start == "" || strings.Count(string(data), start+"();") != 1 {
+		if start == "" || strings.Count(string(data), "startModule("+start+");") != 1 {
 			t.Fatal("missing unique module start")
 		}
-		data = []byte(strings.Replace(string(data), start+"();", "Object.assign(window, {startDelayed: "+start+"});", 1))
+		data = []byte(strings.Replace(string(data), "startModule("+start+");", "Object.assign(window, {startDelayed: "+start+"});", 1))
 	}
 	if err := os.WriteFile(source, data, 0644); err != nil {
 		t.Fatal(err)

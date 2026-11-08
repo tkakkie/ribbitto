@@ -90,6 +90,29 @@ func testSwapZonesBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("composer, drafts or popover focus starts: %s", page.MustEval(`() => JSON.stringify([starts,draftStarts,focusStarts])`).Str())
 		}
 	})
+	t.Run("isolated-start", func(t *testing.T) {
+		page, _, _, _ := pendingBrowserFixture(t, browser, false, func(p *view.ChannelPage, _ *http.ServeMux) {
+			p.Session, _ = pathID("019a1b2c-3d4e-7800-8800-000000000000")
+			p.Rendered, p.SessionExpires = time.Now(), time.Now().Add(time.Hour)
+		})
+		page.MustEvalOnNewDocument(`(() => {
+ sessionStorage.setItem('panel-opener','panel-control-[');
+ window.isolated={unread:0,stream:0,drafts:0,root:0,errors:0};
+ window.addEventListener('error',e=>{isolated.errors++;window.startError=e.error?.name;});
+ const listen=EventTarget.prototype.addEventListener;
+ EventTarget.prototype.addEventListener=function(type,fn,options){
+  if(this===document && type==='htmx:sseBeforeMessage' && String(fn).includes('.sidebar('))isolated.unread++;
+  if(this===document && type==='htmx:sseClose')isolated.stream++;
+  if(this===window && type==='storage')isolated.drafts++;
+  if(this===window && type==='pagehide' && options?.signal)isolated.root++;
+  return listen.call(this,type,fn,options);
+ };
+ })()`)
+		page.MustReload().MustWaitLoad()
+		if got := page.MustEval(`() => JSON.stringify(isolated)`).Str(); got != `{"unread":1,"stream":1,"drafts":1,"root":2,"errors":1}` || page.MustEval(`() => window.startError`).Str() != "SyntaxError" {
+			t.Fatalf("isolated starts (root includes read-visibility lifecycle): %s; want 1,1,1,2,1 and SyntaxError", got)
+		}
+	})
 	t.Run("single-start-rejects-duplicate-focus", func(t *testing.T) {
 		page, _, _, _ := pendingBrowserFixture(t, browser, false, func(p *view.ChannelPage, _ *http.ServeMux) {
 			p.Session, _ = pathID("019a1b2c-3d4e-7800-8800-000000000000")

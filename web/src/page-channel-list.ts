@@ -1,3 +1,4 @@
+import { startModule } from "./start-module.ts";
 import { startSidebarScroll } from "./sidebar-scroll.ts";
 import { startSidebarUnread } from "./sidebar-unread.ts";
 import { startMessageStream } from "./message-stream.ts";
@@ -9,10 +10,10 @@ export function ChannelListScreen() {
   return attachPageLifecycle(window, {
     phase(phase) {
       if (phase !== "start") return;
-      startSidebarScroll();
-      startSidebarUnread();
-      startMessageStream();
-      startMessageDrafts();
+      startModule(startSidebarScroll);
+      startModule(startSidebarUnread);
+      startModule(startMessageStream);
+      startModule(startMessageDrafts);
     },
     pageshow() {},
   });

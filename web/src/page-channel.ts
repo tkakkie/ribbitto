@@ -1,3 +1,4 @@
+import { startModule } from "./start-module.ts";
 import { startSidebarScroll } from "./sidebar-scroll.ts";
 import { startReadVisibility } from "./read-visibility.ts";
 import { startBranchSelection } from "./branch-selection.ts";
@@ -20,21 +21,21 @@ export function ChannelScreen() {
   return attachPageLifecycle(window, {
     phase(phase) {
       if (phase !== "start") return;
-      startSidebarScroll();
-      startReadVisibility();
-      startBranchSelection();
-      startMessageTime();
-      startMemberMentions();
-      startMentionPicker();
-      startComposer();
-      startPinsSync();
-      startQuoteSelection();
-      startMessageLink();
-      startMessageHistory();
-      startSidePanel();
-      startSidebarUnread();
-      startMessageStream();
-      startMessageDrafts();
+      startModule(startSidebarScroll);
+      startModule(startReadVisibility);
+      startModule(startBranchSelection);
+      startModule(startMessageTime);
+      startModule(startMemberMentions);
+      startModule(startMentionPicker);
+      startModule(startComposer);
+      startModule(startPinsSync);
+      startModule(startQuoteSelection);
+      startModule(startMessageLink);
+      startModule(startMessageHistory);
+      startModule(startSidePanel);
+      startModule(startSidebarUnread);
+      startModule(startMessageStream);
+      startModule(startMessageDrafts);
     },
     pageshow() {},
   });

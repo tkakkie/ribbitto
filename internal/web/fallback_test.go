@@ -162,7 +162,7 @@ func assertFullConversationPage(t *testing.T, body string) {
 		t.Fatal(err)
 	}
 	order := string(root)
-	composerStart, streamStart, draftsStart := strings.Index(order, "startComposer();"), strings.Index(order, "startMessageStream();"), strings.Index(order, "startMessageDrafts();")
+	composerStart, streamStart, draftsStart := strings.Index(order, "startModule(startComposer);"), strings.Index(order, "startModule(startMessageStream);"), strings.Index(order, "startModule(startMessageDrafts);")
 	if composerStart < 0 || streamStart < 0 || draftsStart < 0 || composerStart > streamStart || streamStart > draftsStart {
 		t.Errorf("composer listener registration order: %s", order)
 	}

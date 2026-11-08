@@ -127,15 +127,19 @@ func checkOwnedSQL(sql, module, query string, owners map[string]string, allow ma
 func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allow map[exemption]bool, migration *migrationPolicy, bigints map[float64]bool) error {
 	unnests := map[float64]bool{}
 	arrays, columns := map[float64]bool{}, map[float64]bool{}
+	var ordinary map[float64]bool
 	if migration == nil {
 		var err error
 		unnests, err = sqlwalk.UnnestFrom(stmt, bigints)
 		if err != nil {
 			return err
 		}
-		arrays, columns, err = readSetRelations(stmt, unnests)
+		arrays, columns, ordinary, err = readSetRelations(stmt, unnests)
 		if err != nil {
 			return err
+		}
+		if len(arrays) == 0 {
+			ordinary = nil
 		}
 	}
 	access := func(table string, write bool) error {
@@ -228,7 +232,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				case "@>":
 					column := sqlwalk.Node(n["lexpr"], "ColumnRef")
 					location, ok := column["location"].(float64)
-					if tag != "A_Expr" || n["kind"] != "AEXPR_OP" || (!readSetParameter(n["lexpr"]) && !(ok && columns[location])) || !bigintOperand(n["rexpr"], bigints) {
+					if tag != "A_Expr" || n["kind"] != "AEXPR_OP" || (!readSetParameter(n["lexpr"]) && !(ok && columns[location])) || !bigintOperand(n["rexpr"], bigints, ordinary) {
 						return fmt.Errorf("unsupported containment: requires int8multirange sqlc.arg parameter and bigint expression")
 					}
 				default:

@@ -65,8 +65,9 @@ switch to probing gaps before implementation if the cost is unacceptable
 (maintainer's directions, 2026-10-09: read ranges first; fixed statements
 per list).
 
-#1486: run reads cover only displayed messages; *Mark all as read* keeps the
-explicit whole-scope read.
+#1486: a read covered everything up to the cursor, also messages the member
+never saw. A run lets a page read only what it showed, while *Mark all as read*
+keeps the explicit whole-scope read; no new table is needed.
 
 **Considered:**
 - *The loaded window as the bound* (option C): rejected, also as an interim,
@@ -97,6 +98,4 @@ statements' query-gate additions are reviewed separately in #740–#743 and
 #749: UUID-array `unnest` parameters (#740, accepted), single-array `unnest`
 `WITH ORDINALITY` for parallel arrays (#749, accepted), `LATERAL` and derived
 relations (#741, accepted), `UNION ALL` (#742, accepted), and `int8multirange` parameters
-and containment (#743, accepted). #2182 adds `int8multirange[]` only to the
-single-array ordinal form, with containment against its value column; the
-[query gate](../architecture/query-gate.md) states the bounds.
+and containment (#743, accepted).

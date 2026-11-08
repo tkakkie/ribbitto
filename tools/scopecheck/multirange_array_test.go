@@ -11,6 +11,9 @@ func TestReadSetArrayScope(t *testing.T) {
 	query := "SELECT m.id FROM " + joined + " WHERE m.organization_id = sqlc.arg(organization_id) AND NOT (c.read_set @> m.event_seq::bigint)"
 	for _, tc := range []struct{ name, sql, want string }{
 		{"ordinal_join", query, ""},
+		{"aliased_join_clash", "SELECT 1 FROM (message c JOIN message m ON c.read_set @> m.event_seq) j, " + relation, "unsupported shape: join"},
+		{"aliased_join_clash_cast", "SELECT 1 FROM (message c JOIN message m ON c.read_set @> sqlc.arg(seq)::bigint) j, " + relation, "unsupported shape: join"},
+		{"implicit_unnest_clash", "SELECT unnest.unnest @> 1::bigint FROM unnest(sqlc.arg(ids)::uuid[]), " + strings.ReplaceAll(relation, "c(read_set, ord)", "unnest(unnest, ord)"), "unsupported shape: duplicate alias unnest"},
 		{"only_relation", "SELECT c.read_set @> sqlc.arg(seq)::bigint FROM " + relation, ""},
 		{"CTE", "WITH x AS (" + query + ") SELECT * FROM x", ""},
 		{"derived", "SELECT * FROM (" + query + ") x", ""},

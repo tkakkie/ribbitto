@@ -1,23 +1,17 @@
 # Query gate
 
-Two tools-module tests check every production query in `db/queries/`:
-[`tablecheck`](../../tools/tablecheck/table_test.go) for table ownership and
-the expressions a query may use, and
-[`scopecheck`](../../tools/scopecheck/check_test.go) for organisation scope.
-Table ownership, read exemptions and the migration allowlists are in
-[import checks](import-checks.md); migrations and `sqlc` are in
-[database development](../database.md).
+Every production query in `db/queries/` must pass
+[`tablecheck`](../../tools/tablecheck/table_test.go) (ownership and expressions)
+and [`scopecheck`](../../tools/scopecheck/check_test.go) (organisation scope).
+See [import checks](import-checks.md) for ownership/allowlists and
+[database development](../database.md) for migrations and sqlc.
 
 ## Shared infrastructure
 
-`make check` runs tools tests uncached (`go -C tools test -race -count=1 ./...`).
-Both use [`tools/internal/sqlwalk`](../../tools/internal/sqlwalk/doc.go) for
-`module.QueryName` query loading, unnamed SQL and duplicate rejection, `pg_query_go`
-JSON parsing, statement/CTE/subquery traversal and the FROM `unnest` permission
-rule. Organisation scope and table ownership policies stay in their respective
-checkers. Reasons
-reject pending approval and require issue, PR-comment or numbered decision
-provenance for maintainer claims (not approval verification).
+[`sqlwalk`](../../tools/internal/sqlwalk/doc.go) shares query loading, parsing,
+traversal and FROM `unnest` validation; ownership and scope remain separate.
+Exemption reasons reject pending approval and require issue, PR-comment or
+numbered-decision provenance for maintainer claims, without verifying approval.
 
 ## Organisation scope (scopecheck)
 
@@ -29,14 +23,13 @@ list; unknown ownership, scoped list entries (except singleton `setup`) and stal
 entries fail.
 
 Plain INSERT VALUES and INSERT SELECT with at most one source pass:
-a same-statement CTE or a FROM `unnest` of parameters (below). Each joined
+a same-statement CTE or a FROM `unnest` of parameters. Each joined
 table needs its scope. INSERT refuses subqueries in VALUES, RETURNING or SELECT,
-joins (including comma joins), physical-table SELECT reads, ON CONFLICT and other
-shapes; full checking is a follow-up.
+joins (including comma joins), physical-table SELECT reads and ON CONFLICT.
 
 CTE reads need no scope; LEFT/RIGHT/FULL joins fail.
 Reads accept FROM SELECTs and CROSS JOIN LATERAL or inner JOIN LATERAL
-SELECTs ON true (#741): ORDER BY/LIMIT bounds per-channel/topic counts. Each
+SELECTs ON true (#741). Each
 nested table needs its SELECT's WHERE scope, never ON. Derived aliases cannot
 shadow tables; derived INSERT/UPDATE/DELETE sources fail. Tablecheck still
 checks their ownership.
@@ -46,10 +39,8 @@ Read SELECTs accept `UNION ALL` at the top level and inside derived relations
 need that branch's own WHERE scope, never ON or an outer predicate. `UNION`
 (distinct), `INTERSECT` and `EXCEPT` (including ALL) fail with named errors.
 Any set operation in a statement containing INSERT, UPDATE or DELETE,
-including CTE sources or writes, also fails; this permission applies only
-to reads. Tablecheck's ownership
-walk validates every branch, including nested ones, as a SELECT and refuses
-SELECT INTO there too; both gates' other refusals are unchanged.
+including CTE sources or writes, also fails. Tablecheck checks every branch's
+ownership and refuses SELECT INTO; both gates' other refusals remain.
 
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
@@ -67,11 +58,19 @@ unqualified `uuid`, `bigint`, `jsonb`.
 
 Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743), with
 identifier/string names. Unqualified `@>` requires that cast or the qualified
-value column of an ordinal `int8multirange[]` parameter relation below (#2182)
+value column of an ordinal `int8multirange[]` parameter relation (#2182)
 on the left. The latter must resolve directly in the same statement, never
 through a CTE/derived output or a correlated reference. Ordinary table columns,
-uuid/bigint values and ordinal columns fail. The right side is a column (sqlc
-resolves its type) or an accepted expression cast to scalar `bigint`.
+uuid/bigint values and ordinal columns fail. Column permission needs a unique
+relation name, counting aliased-join contents and implicit `unnest` names; arrays
+inside aliased joins grant no permission.
+The right side accepts an expression explicitly cast to scalar `bigint`.
+If the query contains a permitted multirange array (including CTE/subquery
+bodies), an uncast right column must be `alias.column` from one plain table
+in that SELECT/UPDATE, without renamed columns. CTEs, derived/join aliases,
+outer references and every unnest column require the explicit cast. Otherwise,
+the existing unqualified/qualified column permission remains. Table-column
+types are not checked here; sqlc does not type-check `@>` operands.
 Qualified casts/operators, typmods, `sqlc.narg`, range constructors/aggregates,
 other range types/operators (`<@`, `&&`, etc.) and non-bigint right casts
 (`uuid`, `int`, `text`, range, array) fail. Foreign writes still fail.

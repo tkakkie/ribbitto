@@ -146,9 +146,8 @@ type javascriptFinding struct {
 }
 
 // checkJavaScript checks recognizable source patterns, not JavaScript semantics.
-// It is no parser or security boundary: aliases, computed properties, multiline
-// expressions and interpolations escape it; regex literals and delimiter depth
-// can mislead it about scope. Reviewers must check HTML and indirect global
+// It is no parser or security boundary: aliases, computed properties and interpolations
+// escape it; regex literals and delimiter depth can mislead it about scope. Reviewers must check HTML and indirect global
 // writes, including block-level var and implicit globals, by hand.
 func checkJavaScript(name, source string) []javascriptFinding {
 	var findings []javascriptFinding
@@ -182,11 +181,13 @@ func checkJavaScript(name, source string) []javascriptFinding {
 	// Delimiter depth bounds the declaration check without requiring an IIFE.
 	tokens := regexp.MustCompile(`\b(?:var|let|const)\b|\bfunction\b\s*\*?\s*[A-Za-z_$][\w$]*|[{}()]`)
 	braces, parentheses := 0, 0
-	rawLines := strings.Split(source, "\n")
-	for i, line := range strings.Split(maskJavaScript(source), "\n") {
-		if name != "stream-progress-adapter.ts" && cursorWrite(rawLines[i], line) {
-			findings = append(findings, javascriptFinding{i + 1, "Progress adapter owns cursor writes"})
+	masked := maskJavaScript(source)
+	if name != "stream-progress-adapter.ts" {
+		for _, position := range cursorWrites(source, masked) {
+			findings = append(findings, javascriptFinding{strings.Count(source[:position], "\n") + 1, "Progress adapter owns cursor writes"})
 		}
+	}
+	for i, line := range strings.Split(masked, "\n") {
 		for _, rule := range rules {
 			if rule.pattern.MatchString(line) {
 				findings = append(findings, javascriptFinding{i + 1, rule.name})
@@ -220,22 +221,38 @@ func checkJavaScript(name, source string) []javascriptFinding {
 }
 
 // Like the other checks, this covers recognizable writes; aliases remain a review concern.
-func cursorWrite(raw, masked string) bool {
-	if regexp.MustCompile(`\b(?:writeAttribute|removeAttribute)\s*\(.*\b(?:AppliedCursorAttribute|EventCursorAttribute)\b|\bdataset\s*\.\s*(?:appliedCursor|eventCursor)\s*(?:=(?:[^=]|$)|(?:\+|-|\*|/|%|&&|\|\||\?\?)=|\+\+|--)|\bdelete\s+\w+\.dataset\.(?:appliedCursor|eventCursor)`).MatchString(masked) {
-		return true
+func cursorWrites(raw, masked string) []int {
+	var positions []int
+	contracts := regexp.MustCompile(`\b(?:writeAttribute|removeAttribute)\s*\([^;)]*?\b(?:AppliedCursorAttribute|EventCursorAttribute)\b`)
+	for _, loc := range contracts.FindAllStringIndex(masked, -1) {
+		positions = append(positions, loc[0])
 	}
-	pattern := regexp.MustCompile(`\b(?:setAttribute|removeAttribute)\s*\(\s*["'](?:data-applied-cursor|data-event-cursor|sse-connect)["']|\bsearchParams\s*\.\s*(?:set|append|delete)\s*\(\s*["']after["']`)
+	quote := "[\"'`]"
+	cursor := `(?:appliedCursor|eventCursor)`
+	property := `\bdataset\s*(?:\.\s*` + cursor + `\b|\[\s*` + quote + cursor + quote + `\s*\])`
+	assignment := `(?:=(?:[^=]|$)|(?:\+|-|\*|/|%|&&|\|\||\?\?)=|\+\+|--)`
+	pattern := regexp.MustCompile(`\b(?:setAttribute|removeAttribute)\s*\(\s*` + quote +
+		`(?:data-applied-cursor|data-event-cursor|sse-connect)` + quote +
+		`|\bsearchParams\s*\.\s*(?:set|append|delete)\s*\(\s*` + quote + `after` + quote +
+		`|` + property + `\s*` + assignment + `|\bdelete\s+\w+\s*\.\s*` + property)
 	for _, loc := range pattern.FindAllStringIndex(raw, -1) {
-		// A call mentioned in a string or comment has no executable method name.
+		// Masking preserves offsets, so quoted examples and comments are not writes.
 		if masked[loc[0]] == raw[loc[0]] {
-			return true
+			positions = append(positions, loc[0])
 		}
 	}
-	return false
+	return positions
 }
 
 func TestCursorWriter(t *testing.T) {
 	for _, source := range []string{
+		"dom.writeAttribute(\n el,\n dom.AppliedCursorAttribute, id);",
+		"el.setAttribute(\n \"sse-connect\", u);",
+		"el.dataset.appliedCursor\n = id;",
+		"el.setAttribute(`data-applied-cursor`, id);",
+		"el.removeAttribute(`sse-connect`);",
+		`el.dataset["appliedCursor"] = id;`,
+		"u.searchParams.set(\n 'after', id);",
 		`dom.writeAttribute(node, dom.AppliedCursorAttribute, id);`,
 		`writeAttribute(node, EventCursorAttribute, id);`,
 		`node.dataset.appliedCursor = id;`,
@@ -255,7 +272,10 @@ func TestCursorWriter(t *testing.T) {
 					t.Fatalf("%s: got %v, want cursor ownership finding", name, got)
 				}
 			}
-			for _, text := range []string{"// " + source, "void " + strconv.Quote(source), source} {
+			if got := checkJavaScript("other.ts", "\n"+source); len(got) != 1 || got[0].line != 2 {
+				t.Fatalf("multiline diagnostic: got %v, want line 2", got)
+			}
+			for _, text := range []string{"// " + strings.ReplaceAll(source, "\n", "\n// "), "void " + strconv.Quote(source), source} {
 				name := "other.ts"
 				if text == source {
 					name = "stream-progress-adapter.ts"
@@ -266,7 +286,9 @@ func TestCursorWriter(t *testing.T) {
 			}
 		})
 	}
-	if got := checkJavaScript("other.ts", `dom.readAttribute(node, dom.AppliedCursorAttribute); node.getAttribute("sse-connect"); url.searchParams.get("after");`); len(got) != 0 {
+	if got := checkJavaScript("other.ts", `dom.readAttribute(node, dom.AppliedCursorAttribute); node.getAttribute("sse-connect"); url.searchParams.get("after"); node.dataset["appliedCursor"] === id; node.dataset.eventCursor == id; dom.readAttribute(
+ node, dom.EventCursorAttribute); node.getAttribute("data-applied-cursor"); url.searchParams.get(
+ "after");`); len(got) != 0 {
 		t.Fatalf("cursor readers: %v", got)
 	}
 }

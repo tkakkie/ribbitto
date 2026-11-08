@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStreamProgress } from '../src/stream-progress-projection.ts';
 
-function projection(snapshot: string | null = "42") {
-  let applied: string | undefined;
+function projection(snapshot: string | null = "42", initialURL = "/events?after=42&want=message", initialApplied?: string) {
+  let applied: string | undefined = initialApplied;
   let shown: string | undefined = snapshot ?? undefined;
-  let url = '/events?after=42&want=message';
+  let url = initialURL;
   let visible = true;
   const writes: string[] = [];
   const progress = createStreamProgress({
@@ -81,6 +81,58 @@ test('reporting separates connections, raw dispatch, failures, transport and vis
   assert.deepEqual(progress.snapshot()?.F, { reason: 'apply-exception', id: '51' });
   progress.report({ type: 'terminal' });
   show();
-  assert.equal(progress.snapshot()?.terminal, true);
+  assert.equal(progress.snapshot()?.terminal, false);
   assert.deepEqual(writes.slice(-2), ['shown:52', 'notify']);
+});
+
+test('compatible outcomes after terminal retain applied and transport progress', () => {
+  const { progress, writes } = projection();
+  progress.applied('50');
+  progress.report({ type: 'terminal' });
+  writes.length = 0;
+  progress.applied('51');
+  assert.deepEqual(writes, ['applied:51', 'url:/events?after=51&want=message', 'shown:51', 'notify']);
+  writes.length = 0;
+  progress.checkpoint('52');
+  assert.deepEqual(writes, ['url:/events?after=52&want=message']);
+});
+
+test('compatible initialization defers BigInt parsing to the legacy outcome boundary', () => {
+  for (const value of ['0x10', '007', ' 12', '', 'abc', '-1', '1e3', '9007199254740993']) {
+    for (const attribute of ['after', 'shown', 'applied']) {
+      const url = '/events?after=' + encodeURIComponent(attribute === 'after' ? value : '0');
+      const { progress, writes } = projection(attribute === 'shown' ? value : '0', url,
+        attribute === 'applied' ? value : undefined);
+      const name = `${attribute}: ${JSON.stringify(value)}`;
+      let openError: unknown;
+      try { progress.connectionCreated(url); } catch (error) { openError = error; }
+      assert.equal(openError, undefined, name);
+      const invalid = value === 'abc' || value === '1e3';
+      if (invalid) {
+        assert.throws(() => progress.applied('9007199254740994'), SyntaxError, name);
+        assert.deepEqual(writes, attribute === 'after' ? ['applied:9007199254740994'] : [], name);
+      } else {
+        progress.applied('9007199254740994');
+        assert.deepEqual(writes, ['applied:9007199254740994', 'url:/events?after=9007199254740994',
+          'shown:9007199254740994', 'notify'], name);
+      }
+      const checkpoint = projection(attribute === 'shown' ? value : '0', url,
+        attribute === 'applied' ? value : undefined);
+      checkpoint.progress.connectionCreated(url);
+      if (invalid && attribute === 'after') {
+        assert.throws(() => checkpoint.progress.checkpoint('9007199254740994'), SyntaxError, name);
+      } else {
+        checkpoint.progress.checkpoint('9007199254740994');
+        assert.deepEqual(checkpoint.writes, ['url:/events?after=9007199254740994'], name);
+      }
+    }
+  }
+  const empty = projection('', '/events?after=0x10', '');
+  empty.progress.connectionCreated('/events?after=0x10');
+  empty.progress.applied('007');
+  assert.deepEqual(empty.writes, ['applied:007', 'shown:007', 'notify']);
+  const missing = projection('42', '/events');
+  missing.progress.connectionCreated('/events');
+  assert.throws(() => missing.progress.checkpoint('51'), TypeError);
+  assert.deepEqual(missing.writes, []);
 });

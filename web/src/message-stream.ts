@@ -132,6 +132,8 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     const connection = event.target;
     if (connection.id !== dom.OrganizationStreamID) return;
     const source = event.detail.source;
+    source.addEventListener("reset", reset, { once: true });
+    source.addEventListener("checkpoint", onCheckpoint);
     if (!sources.has(source)) {
       sources.add(source);
       progress.connectionCreated(connection.getAttribute("sse-connect")!);
@@ -140,8 +142,6 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
           lastEventId: (event as MessageEvent).lastEventId }), { capture: true });
       }
     }
-    source.addEventListener("reset", reset, { once: true });
-    source.addEventListener("checkpoint", onCheckpoint);
   });
   const applyMove = (items: HTMLElement, markup: string, payload: Document) => {
     const moved = payload.querySelectorAll("li");

@@ -17,10 +17,24 @@ export type ProgressProjection = {
 /** Compatible projection retains the legacy equality writes and notification timing. */
 export function createStreamProgress(view: ProgressProjection) {
   let state: Progress | undefined;
+  const initialize = () => {
+    // Legacy attributes are parsed only when an outcome compares them, never at open.
+    if (!state) {
+      const snapshot = view.applied() || view.shown() || "0";
+      state = { ...createProgress("0", "compatible", view.visible()),
+        P0: snapshot, Ap: snapshot, Sh: snapshot, G: snapshot };
+    }
+    return state;
+  };
   const report = (input: ProgressInput) => {
-    state ??= createProgress(view.applied() || view.shown() ||
-      new URL(view.url() || view.base, view.base).searchParams.get("after") || "0", "compatible", view.visible());
-    state = advanceProgress(state, input);
+    const current = initialize();
+    // Compatible reset closes the source, but already scheduled outcomes still settle.
+    if (input.type === "terminal") return;
+    if (input.type === "connection-created") {
+      state = { ...current, Uc: input.after, Rc: null };
+      return;
+    }
+    state = advanceProgress(current, input);
   };
   const show = () => {
     report({ type: "visibility-changed", visible: view.visible() });
@@ -32,7 +46,9 @@ export function createStreamProgress(view: ProgressProjection) {
   const transport = (id: string) => {
     const url = new URL(view.url()!, view.base);
     if (!advancesCursor(id, url.searchParams.get("after"))) return;
-    view.writeURL(url, state!.G);
+    // Transport compares its own URL cursor, independently of the rendered snapshot.
+    state = advanceProgress({ ...initialize(), G: url.searchParams.get("after")! }, { type: "checkpoint", id });
+    view.writeURL(url, state.G);
   };
   return {
     report,
@@ -40,7 +56,6 @@ export function createStreamProgress(view: ProgressProjection) {
     connectionCreated: (url: string) => report({ type: "connection-created", after: new URL(url, view.base).searchParams.get("after")! }),
     show,
     checkpoint: (id: string) => {
-      report({ type: "checkpoint", id });
       transport(id);
     },
     applied: (id: string) => {

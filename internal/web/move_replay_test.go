@@ -177,7 +177,7 @@ func renderedPage(t *testing.T, entries []conversation.Entry) []string {
 	var items []string
 	for _, entry := range entries {
 		var rendered bytes.Buffer
-		if err := view.MessageItem(viewMessage("acme", entry)).Render(t.Context(), &rendered); err != nil {
+		if err := view.MessageItem(viewMessage(t.Context(), "acme", entry)).Render(t.Context(), &rendered); err != nil {
 			t.Fatal(err)
 		}
 		items = applyFeed(t, items, realtime.Outgoing{Name: "message", Data: rendered.Bytes()})
@@ -243,7 +243,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	var want []string
 	for _, entry := range page.Entries {
 		var rendered bytes.Buffer
-		if err := view.MessageItem(viewMessage("acme", entry)).Render(ctx, &rendered); err != nil {
+		if err := view.MessageItem(viewMessage(t.Context(), "acme", entry)).Render(ctx, &rendered); err != nil {
 			t.Fatal(err)
 		}
 		want = applyFeed(t, want, realtime.Outgoing{Name: "message", Data: rendered.Bytes()})
@@ -323,7 +323,7 @@ func topicPageBoundary(t *testing.T, destination conversation.Topic, page conver
 	selected := viewTopic(destination)
 	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &selected, Older: page.Older, Before: before}
 	for _, entry := range page.Entries {
-		model.Messages = append(model.Messages, viewMessage("acme", entry))
+		model.Messages = append(model.Messages, viewMessage(t.Context(), "acme", entry))
 	}
 	var markup bytes.Buffer
 	if err := view.ChannelScreen("", model).Render(t.Context(), &markup); err != nil {

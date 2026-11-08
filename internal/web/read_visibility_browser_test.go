@@ -162,6 +162,34 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("retry delay outside [%g,%g]: %s", low, high, page.MustEval(`() => JSON.stringify(readTest.delays())`).Str())
 		}
 	}
+	t.Run("initial-pageshow-retries-failed-read", func(t *testing.T) {
+		own := browser.MustIncognito()
+		contexts = append(contexts, own)
+		page := own.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+		pages["initial-pageshow"] = page
+		// Hold the first real pageshow until the initial read has failed, so
+		// network timing cannot turn this into a persisted-restore test.
+		page.MustEvalOnNewDocument(readBrowserClock + `;
+		 readTest.id = 'initial-pageshow';
+		 window.addEventListener('pageshow', event => {
+		  readTest.initialPersisted = event.persisted;
+		  event.stopImmediatePropagation();
+		 }, {capture: true, once: true});
+		`)
+		page.MustNavigate(server.URL + view.ChannelURL("acme", kernel.ID{1})).MustWaitLoad()
+		page.MustWait(`() => readTest.initialPersisted === false`)
+		first := next(t)
+		finish(t, first, 500, "", 1)
+		assertState(t, page, 0, 1)
+		page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: readTest.initialPersisted}))`)
+		assertState(t, page, 0, 2)
+		second := next(t)
+		if second.page != first.page || second.cursor != first.cursor {
+			t.Fatalf("initial pageshow retry=%s/%s, want %s/%s", second.page, second.cursor, first.page, first.cursor)
+		}
+		finish(t, second, 204, "", 2)
+		assertState(t, page, 0, 2)
+	})
 	t.Run("sixteen-pages", func(t *testing.T) {
 		pending := make([]readBrowserRequest, 16)
 		for i := range pending {

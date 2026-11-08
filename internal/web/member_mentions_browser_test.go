@@ -30,7 +30,7 @@ func testMemberMentionsViewBrowser(t *testing.T, browser *rod.Browser, topicView
 	viewer, other, unknown, topic := kernel.ID{1}, kernel.ID{2}, kernel.ID{3}, kernel.ID{4}
 	body := "<@" + realtime.FormatPayloadID(viewer) + "> <@" + realtime.FormatPayloadID(other) + "> <@" + realtime.FormatPayloadID(unknown) + ">"
 	message := func(seq byte) view.Message {
-		return viewMessage("acme", conversation.Entry{Message: conversation.Message{ID: kernel.ID{seq}, TopicID: topic, EventSeq: int64(seq)},
+		return viewMessage(t.Context(), "acme", conversation.Entry{Message: conversation.Message{ID: kernel.ID{seq}, TopicID: topic, EventSeq: int64(seq)},
 			Blocks: conversation.ParseChatV1(body), References: map[kernel.ID]conversation.Reference{viewer: {Handle: "alice"}, other: {Handle: "bob"}}})
 	}
 	snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Current: view.Channel{ID: kernel.ID{5}, Name: "general"},

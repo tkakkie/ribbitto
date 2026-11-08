@@ -107,7 +107,7 @@ func TestQuoteSelectionFixtures(t *testing.T) {
 			if !strings.Contains(text, fixture.quoteText) || text != fixture.quoteText {
 				t.Fatalf("Entry.Text = %q, want quote_text %q", text, fixture.quoteText)
 			}
-			markup := streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", entry)))
+			markup := streamTestMarkup(t, view.LiveMessageItem(viewMessage(t.Context(), "acme", entry)))
 			if fixture.name == "mention" && !strings.Contains(string(markup), `data-quote-handle="owner"`) {
 				t.Fatal("resolved mention lacks its viewer-independent extraction handle")
 			}

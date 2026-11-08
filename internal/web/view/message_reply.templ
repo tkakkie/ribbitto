@@ -1,0 +1,39 @@
+package view
+
+import (
+	"context"
+	"strings"
+
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// Reply holds the answered message's current preview; an empty URL is unavailable.
+type Reply struct {
+	DisplayName, Handle, Text, URL string
+}
+
+func replyAuthor(displayName, handle string) string {
+	if displayName == "" {
+		return "@" + handle
+	}
+	return displayName + " @" + handle
+}
+
+func replyLabel(ctx context.Context, author, text string) string {
+	return strings.NewReplacer("{author}", author, "{text}", text).Replace(i18n.T(ctx, "message.reply_target"))
+}
+
+// Every delivery path uses this preview without a lookup or htmx processing.
+templ messageReply(reply Reply) {
+	if reply.URL != "" {
+		<a href={ templ.SafeURL(reply.URL) } aria-label={ replyLabel(ctx, replyAuthor(reply.DisplayName, reply.Handle), reply.Text) } class="flex min-w-0 items-center gap-1 text-caption text-muted max-desk:min-h-11 max-desk:min-w-11">
+			<span dir="auto" class="shrink-0 max-w-1/2 truncate">{ replyAuthor(reply.DisplayName, reply.Handle) }</span>
+			<span dir="auto" class="truncate">{ reply.Text }</span>
+		</a>
+	} else {
+		<span class="flex gap-1 text-caption text-muted">
+			<span>{ i18n.T(ctx, "message.reply") }</span>
+			<span>{ i18n.T(ctx, "message.reply_unavailable") }</span>
+		</span>
+	}
+}

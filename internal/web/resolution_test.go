@@ -65,7 +65,7 @@ func TestResolutionRoutes(t *testing.T) {
 }
 
 func TestDefaultResolutionControl(t *testing.T) {
-	entry := viewMessage("acme", conversation.Entry{Message: conversation.Message{ID: kernel.ID{8}}, DefaultTopic: true})
+	entry := viewMessage(t.Context(), "acme", conversation.Entry{Message: conversation.Message{ID: kernel.ID{8}}, DefaultTopic: true})
 	if got := renderIn(t, "en", view.MessageActionsPage("", entry, "/")); strings.Contains(got, ">Resolve</button>") || entry.ResolveURL != "" {
 		t.Fatal("default topic offers Resolve")
 	}

@@ -371,7 +371,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	page.Messages = make([]view.Message, len(history.Entries))
 	for i, entry := range history.Entries {
-		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
+		page.Messages[i] = viewMessage(r.Context(), m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page = screenView(r, page, m, conversation.SidebarSnapshot{
@@ -640,14 +640,14 @@ func viewTopics(topics []conversation.Topic) []view.Topic {
 // viewMessage converts a history entry into what MessageItem renders, for
 // the page and the stream alike; slug is the organisation's, for the label's
 // link to the topic view.
-func viewMessage(slug string, entry conversation.Entry) view.Message {
+func viewMessage(ctx context.Context, slug string, entry conversation.Entry) view.Message {
 	return view.Message{
 		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),
 		PinURL: view.PinURL(slug, entry.ChannelID, entry.ID), Pinned: entry.Pinned, Blocks: viewBody(entry),
-		Quote: viewQuote(slug, entry),
+		Quote: viewQuote(slug, entry), Reply: viewReply(ctx, slug, entry),
 	}
 }
 

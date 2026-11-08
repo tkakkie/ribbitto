@@ -508,8 +508,17 @@ other = "Back to conversation"
 ["resolution.summary"]
 other = "Conclusion text"
 
+["message.reply"]
+other = "Reply"
+
 ["capacity.title"]
 other = "Server busy"
 
 ["capacity.message"]
 other = "Please wait a moment and try again."
+
+["message.reply_target"]
+other = "In reply to {author}: {text}"
+
+["message.reply_unavailable"]
+other = "Original unavailable"

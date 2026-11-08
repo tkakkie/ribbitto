@@ -12,7 +12,7 @@ import (
 // cannot borrow it; proving those types would require a broader resolver.
 func readSetRelations(tree any, unnests map[float64]bool) (map[float64]bool, map[float64]bool, map[float64]bool, error) {
 	arrays, columns, ordinary := map[float64]bool{}, map[float64]bool{}, map[float64]bool{}
-	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, LexicalCTEs: true, Visit: func(tag string, n map[string]any, statement sqlwalk.Scope) error {
+	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, LexicalCTEs: true, SelectBranches: true, Visit: func(tag string, n map[string]any, statement sqlwalk.Scope) error {
 		if tag != "SelectStmt" && tag != "UpdateStmt" {
 			return nil
 		}

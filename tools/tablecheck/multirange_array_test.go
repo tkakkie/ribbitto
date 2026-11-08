@@ -24,6 +24,7 @@ func TestReadSetArrayExpressions(t *testing.T) {
 		{"right_CTE", "WITH x AS (SELECT * FROM " + relation + ") SELECT sqlc.arg(x)::int8multirange @> x.read_set FROM x", "unsupported containment"},
 		{"right_correlated", "SELECT (SELECT sqlc.arg(x)::int8multirange @> m.event_seq FROM " + relation + ") FROM message m", "unsupported containment"},
 		{"right_join_alias", "SELECT c.read_set @> j.event_seq FROM " + relation + ", (message m JOIN message n ON true) j", "unsupported containment"},
+		{"right_renamed_table", "SELECT c.read_set @> m.a FROM " + relation + ", message m(a,b,c,d,e,f,g,h,i,j,k,l,n,o,p,q,r,s,t)", "unsupported containment"},
 		{"right_duplicate_table", "SELECT c.read_set @> m.event_seq FROM " + relation + ", message m, message m", "unsupported containment"},
 		{"aliased_join_clash", "SELECT 1 FROM (message c JOIN message m ON c.read_set @> m.event_seq) j, " + relation, "unsupported containment"},
 		{"aliased_join_clash_cast", "SELECT 1 FROM (message c JOIN message m ON c.read_set @> sqlc.arg(seq)::bigint) j, " + relation, "unsupported containment"},
@@ -111,6 +112,29 @@ func TestReadSetArrayArguments(t *testing.T) {
 			err := checkSQL(sql, "conversation", "conversation.Q", map[string]string{"message": "conversation"}, nil)
 			if err == nil || !strings.Contains(err.Error(), "unsupported") {
 				t.Fatalf("want relation refusal, got %v", err)
+			}
+		})
+	}
+}
+
+func TestReadSetArrayUnionOperands(t *testing.T) {
+	relation := "unnest(sqlc.arg(read_sets)::int8multirange[]) WITH ORDINALITY AS c(read_set, ord)"
+	message := "SELECT m.id FROM message m WHERE m.organization_id = sqlc.arg(organization_id)"
+	cte := "WITH x AS (SELECT c.read_set FROM " + relation + ") "
+	uuid := "WITH x AS (SELECT a.channel_id FROM unnest(sqlc.arg(channel_ids)::uuid[]) WITH ORDINALITY AS a(channel_id, ord)) "
+	exists := message + " AND EXISTS (SELECT 1 FROM " + relation + ", x WHERE c.read_set @> "
+	for _, tc := range []struct{ name, sql, want string }{
+		{"branch_CTE_multirange", "(" + cte + exists + "x.read_set)) UNION ALL " + message, "unsupported containment"},
+		{"branch_CTE_uuid", "(" + uuid + exists + "x.channel_id)) UNION ALL " + message, "unsupported containment"},
+		{"branch_CTE_scalar_left", "(" + cte + message + " AND EXISTS (SELECT 1 FROM x WHERE sqlc.arg(single_read_set)::int8multirange @> x.read_set)) UNION ALL " + message, "unsupported containment"},
+		{"branch_CTE_derived", "(" + cte + "SELECT d.id FROM (SELECT m.id FROM " + relation + " JOIN x ON true JOIN message m ON true WHERE m.organization_id = sqlc.arg(organization_id) AND NOT (c.read_set @> x.read_set)) d) UNION ALL " + message, "unsupported containment"},
+		{"branch_plain_table", cte + "SELECT m.id FROM x JOIN message m ON true WHERE m.organization_id = sqlc.arg(organization_id) AND NOT (sqlc.arg(single_read_set)::int8multirange @> m.event_seq) UNION ALL " + message, ""},
+		{"branch_plain_table_without_array", message + " AND NOT (sqlc.arg(single_read_set)::int8multirange @> m.event_seq) UNION ALL " + message, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkSQL(tc.sql, "conversation", "conversation.Q", map[string]string{"message": "conversation"}, nil)
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("want %q, got %v", tc.want, err)
 			}
 		})
 	}

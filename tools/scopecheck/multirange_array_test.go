@@ -69,3 +69,27 @@ func TestReadSetArrayArguments(t *testing.T) {
 		})
 	}
 }
+
+func TestReadSetArrayUnionScope(t *testing.T) {
+	relation := "unnest(sqlc.arg(read_sets)::int8multirange[]) WITH ORDINALITY AS c(read_set, ord)"
+	message := "SELECT m.id FROM message m WHERE m.organization_id = sqlc.arg(organization_id)"
+	cte := "WITH x AS (SELECT c.read_set FROM " + relation + ") "
+	uuid := "WITH x AS (SELECT a.channel_id FROM unnest(sqlc.arg(channel_ids)::uuid[]) WITH ORDINALITY AS a(channel_id, ord)) "
+	exists := message + " AND EXISTS (SELECT 1 FROM " + relation + ", x WHERE c.read_set @> "
+	for _, tc := range []struct{ name, sql, want string }{
+		{"branch_CTE_multirange", "(" + cte + exists + "x.read_set)) UNION ALL " + message, ""},
+		{"branch_CTE_uuid", "(" + uuid + exists + "x.channel_id)) UNION ALL " + message, ""},
+		{"branch_CTE_scalar_left", "(" + cte + message + " AND EXISTS (SELECT 1 FROM x WHERE sqlc.arg(single_read_set)::int8multirange @> x.read_set)) UNION ALL " + message, ""},
+		{"branch_CTE_derived", "(" + cte + "SELECT d.id FROM (SELECT m.id FROM " + relation + " JOIN x ON true JOIN message m ON true WHERE m.organization_id = sqlc.arg(organization_id) AND NOT (c.read_set @> x.read_set)) d) UNION ALL " + message, ""},
+		{"branch_plain_table", cte + "SELECT m.id FROM x JOIN message m ON true WHERE m.organization_id = sqlc.arg(organization_id) AND NOT (sqlc.arg(single_read_set)::int8multirange @> m.event_seq) UNION ALL " + message, ""},
+		{"branch_missing_scope", cte + "SELECT m.id FROM x JOIN message m ON true WHERE sqlc.arg(single_read_set)::int8multirange @> m.event_seq UNION ALL " + message, "missing scope: m.organization_id"},
+		{"branch_plain_table_without_array", message + " AND NOT (sqlc.arg(single_read_set)::int8multirange @> m.event_seq) UNION ALL " + message, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := check(tc.sql, map[string]string{"message": "organization_id"})
+			if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+}

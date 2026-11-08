@@ -97,8 +97,10 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 	}
 	for _, prev := range manifest.Previous {
 		for name, entry := range prev {
-			if scripts.urls[name] == "" {
-				return nil, fmt.Errorf("script manifest names unknown entry %q", name)
+			// Retained generations can predate a page-entry registry migration.
+			// Validate the old logical name as well as its file to exclude paths.
+			if !regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`).MatchString(name) {
+				return nil, fmt.Errorf("invalid bundle filename %q", entry.File)
 			}
 			if !regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-[A-Z0-9]{8}\.js$`).MatchString(entry.File) {
 				return nil, fmt.Errorf("invalid bundle filename %q", entry.File)

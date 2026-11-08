@@ -9,6 +9,9 @@ import (
 	"regexp"
 )
 
+// Mirror tools/webbuild/main.go entryNamePattern so retained build entries stay valid.
+var entryNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
 // Scripts resolves declared page entries to their generated bundles.
 // Its contents are immutable after construction.
 type Scripts struct {
@@ -99,7 +102,7 @@ func NewScripts(assets fs.FS) (*Scripts, error) {
 		for name, entry := range prev {
 			// Retained generations can predate a page-entry registry migration.
 			// Validate the old logical name as well as its file to exclude paths.
-			if !regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`).MatchString(name) {
+			if !entryNamePattern.MatchString(name) {
 				return nil, fmt.Errorf("invalid bundle filename %q", entry.File)
 			}
 			if !regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-[A-Z0-9]{8}\.js$`).MatchString(entry.File) {

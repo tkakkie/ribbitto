@@ -93,7 +93,7 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 				}
 			}
 			activate := func(selector string) {
-				for range 6 {
+				for range 7 {
 					if page.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
 						page.Keyboard.MustType(input.Enter)
 						return
@@ -104,7 +104,7 @@ func testMessageActionsPageBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			open()
 			// Native Tab order includes Resolve on a named topic.
-			for _, selector := range []string{"main a", "[name=quote]", "form[method=post] button", "button[name=message]", "main > div > a:last-child"} {
+			for _, selector := range []string{"main a", "[name=quote]", "[name=reply]", "form[method=post] button", "button[name=message]", "main > div > a:last-child"} {
 				page.Keyboard.MustType(input.Tab)
 				if !page.MustEval(`s => document.activeElement.matches(s)`, selector).Bool() {
 					t.Fatalf("Tab missed %s", selector)

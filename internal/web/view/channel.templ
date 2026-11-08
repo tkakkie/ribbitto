@@ -67,7 +67,9 @@ type ChannelPage struct {
 	Pins []Pin
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
-	// Quote is the selected original; QuoteUpdate limits swaps to quoted sends.
+	// Reply is the selected answer target, sharing the quote container.
+	Reply *Message
+	// Quote is the selected original; QuoteUpdate limits target swaps to sends with a target.
 	Quote *Message
 	// QuoteText is present even for an empty submitted part; nil means whole.
 	QuoteText    *string
@@ -565,7 +567,11 @@ templ messageComposer(page ChannelPage) {
 			aria-autocomplete="list"
 			aria-controls={ MentionListboxID }
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
-			aria-describedby={ MessageHelpID + " composer-quote-description" }
+			if page.Reply != nil {
+				aria-describedby={ MessageHelpID + " composer-quote-description composer-reply-description" }
+			} else {
+				aria-describedby={ MessageHelpID + " composer-quote-description" }
+			}
 			aria-description={ i18n.T(ctx, "mention.help") }
 			class="w-full field-sizing-content max-h-composer resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:min-h-11 max-desk:text-entry coarse:text-entry keyboard:min-h-0 keyboard:min-w-0 keyboard:flex-1"
 		>{ "\n" + page.Body }</textarea>

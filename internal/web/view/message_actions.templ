@@ -20,6 +20,9 @@ templ MessageActionsPage(stylesheetURL string, entry Message, conversationURL st
 				<form method="get" action={ templ.SafeURL(conversationURL + "#" + MessageComposerID) }>
 					<button type="submit" name="quote" value={ idValue(entry.ID) } class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
 				</form>
+				<form method="get" action={ templ.SafeURL(conversationURL + "#" + MessageComposerID) }>
+					<button type="submit" name="reply" value={ idValue(entry.ID) } class="min-h-11 w-full rounded-md px-3 text-left text-brand hover:bg-hover">{ i18n.T(ctx, "message.reply") }</button>
+				</form>
 				{{
 					action, label := entry.PinURL+"/pin", "message.pin"
 					if entry.Pinned {

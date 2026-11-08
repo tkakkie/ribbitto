@@ -6,12 +6,19 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 templ ComposerQuote(page ChannelPage, oob bool) {
 	<div
 		id={ ComposerQuoteID }
-		hidden?={ page.Quote == nil }
+		hidden?={ page.Quote == nil && page.Reply == nil }
 		if oob {
 			hx-swap-oob="outerHTML"
 		}
 		class="keyboard:order-first keyboard:w-full"
 	>
+		if page.Reply != nil {
+			<div class="flex min-w-0 items-center gap-2 text-caption">
+				<p id="composer-reply-description" role="status" class="min-w-0 flex-1 truncate">{ replyLabel(ctx, replyAuthor(page.Reply.DisplayName, page.Reply.Handle), page.Reply.Body) }</p>
+				<input type="hidden" name="reply" value={ idValue(page.Reply.ID) }/>
+				<button type="submit" name="clear_reply" value="1" class="min-h-11 min-w-11 px-2 text-muted">{ i18n.T(ctx, "message.reply_cancel") }</button>
+			</div>
+		}
 		if page.Quote != nil {
 			<div class="flex min-w-0 items-center gap-2 rounded-md border-l-4 border-border bg-surface px-3 py-1">
 				<div id="composer-quote-description" class="min-w-0 flex-1">

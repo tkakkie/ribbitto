@@ -168,3 +168,36 @@ func TestReplyPreviewMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestComposerReplyCost(t *testing.T) {
+	for _, page := range feedGuardPages() {
+		fixture := page.fixture(t, 50)
+		base := measureFeed(t, renderIn(t, "en", view.ChannelScreen("/static/css/app.css", fixture))).values
+		fixture.Reply = &view.Message{ID: kernel.ID{9}, Handle: "owner", Body: "Original"}
+		selected := measureFeed(t, renderIn(t, "en", view.ChannelScreen("/static/css/app.css", fixture))).values
+		want := [5]int{4, 0, 1, 0, 1}
+		for i, delta := range want {
+			if selected[i]-base[i] != delta {
+				t.Errorf("%s composer target %s delta %d, want %d", page.name, page.limits[i].metric, selected[i]-base[i], delta)
+			}
+		}
+		t.Logf("%s target deltas: elements=%d forms=%d submits=%d hx=%d selected=%d bytes=%d", page.name, selected[0]-base[0], selected[1]-base[1], selected[2]-base[2], selected[3]-base[3], selected[4]-base[4], selected[5]-base[5])
+	}
+	want := `<div id="composer-quote" hidden class="keyboard:order-first keyboard:w-full"><div id="composer-quote-description"></div></div>`
+	if got := renderIn(t, "en", view.ComposerQuote(view.ChannelPage{}, false)); got != want {
+		t.Fatalf("empty composer target markup changed: %s", got)
+	}
+	for _, lang := range []string{"en", "ja"} {
+		page := feedFixture(t, 50)
+		page.Reply = &view.Message{ID: kernel.ID{9}, Handle: "owner", Body: "Original"}
+		markup := renderIn(t, lang, view.ChannelScreen("/static/css/app.css", page))
+		if violations := checkMarkup(measureFeed(t, markup).doc, true); len(violations) != 0 {
+			t.Errorf("%s reply markup: %v", lang, violations)
+		}
+		for _, want := range []string{`composer-quote-description composer-reply-description`, `id="composer-reply-description" role="status"`, `name="clear_reply" value="1" class="min-h-11 min-w-11`, map[string]string{"en": "In reply to @owner: Original", "ja": "@owner への返信: Original"}[lang]} {
+			if !strings.Contains(markup, want) {
+				t.Errorf("%s target lacks %s", lang, want)
+			}
+		}
+	}
+}

@@ -522,3 +522,9 @@ other = "In reply to {author}: {text}"
 
 ["message.reply_unavailable"]
 other = "Reply to an unavailable message"
+
+["message.reply"]
+other = "Reply"
+
+["message.reply_cancel"]
+other = "Cancel reply"

@@ -66,17 +66,17 @@ distributed limits.
 
 ## Member admission for reads
 
-Read POSTs use a separate `MemberRateLimiter`: unmeasured 4 requests/s,
+Read POSTs have an independent, unmeasured budget: 4 requests/s,
 burst 16 and four concurrent requests per trusted organisation/member pair.
 Typing has an independent budget. Admission follows session and
 membership resolution (non-members still get 404), before channel/topic lookups,
 form parsing and the read transaction. Its body follows the
 [response rule](#member-rejection-responses). Refusal is immediate 429 with
-`Retry-After: 1`; a defer releases each admitted slot on success, error, panic
-or cancellation. The 10,000-bucket bound and full-refill eviction rule also
+`Retry-After: 1`; admitted slots release on success, error, panic or
+cancellation. The 10,000-bucket bound and full-refill eviction rule also
 apply here, but a bucket with an active slot is never evicted. Refusals take
 no tokens or slots and do not extend retention.
-PR #860's client retries 429s until success or no longer needed. Some of 16
+The client retries 429s until success or no longer needed. Some of 16
 tabs revealing together can be refused. With healthy service and subsiding
 competing load, all pending pages converge without another user action;
 there is no success guarantee under sustained overload.
@@ -95,11 +95,9 @@ The persistent count cap is described in
 
 The sidebar resync POST allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
-all tabs, sessions and addresses. The script's exponential backoff starts
-at 250 ms and is capped at 8 s, each wait between half and all of it: at the
-cap, 16 tabs retry at most 4 times/s.
-The budget leaves steady retry headroom and a burst of two requests per tab
-for visibility return, persisted `pageshow` and early recovery retries.
+all tabs, sessions and addresses.
+The budget leaves steady retry headroom for 16 tabs and a burst of two
+requests per tab for visibility return, persisted `pageshow` and early recovery retries.
 
 CSRF, session and membership checks precede admission; non-members still
 get 404. Admission precedes `RequestResync`. Refusal is 429 with

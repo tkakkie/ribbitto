@@ -7,6 +7,28 @@ export function composerSubmitMode(submitter: string | undefined, quote: boolean
   return quote || reply ? "target" : "pending";
 }
 
+/** An uncertain reply keeps its native key even after its target is cancelled. */
+export function createReplyAttempt() {
+  let uncertain: string | null = null;
+  return {
+    native(reply: boolean, key: string): boolean { return reply || uncertain === key; },
+    settle(status: number, key: string, reply: boolean) {
+      if (status === 200 || status === 409) uncertain = null;
+      else if (reply && ![400, 404, 413, 422, 429].includes(status)) uncertain = key;
+    },
+  };
+}
+
+/** Quote actions share a fragment with the independent reply target. */
+export function configureQuoteRequest(parameters: Record<string, string>, button: { name: string; value: string } | null | undefined,
+  field: (name: string) => { value: string } | null) {
+  if (button?.name) parameters[button.name] = button.value;
+  for (const name of button?.name === "reply" ? ["quote", "quote_text"] : ["reply"]) {
+    const control = field(name);
+    if (control) parameters[name] = control.value;
+  }
+}
+
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
   Record<typeof dom.CursorField | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement; reply?: HTMLInputElement } };
@@ -50,6 +72,7 @@ if (typeof window !== "undefined") (() => {
     if (active === dom.getMessageBody()) conversation!.scrollTop = conversation!.scrollHeight;
     else if (active === dom.getQuoteText()) active?.scrollIntoView({ block: "nearest" });
   };
+  const replyAttempt = createReplyAttempt();
   let rememberPost = () => {};
   let freshRestoredKey: string | null = null;
   let admitting: ComposerForm | undefined;
@@ -169,7 +192,7 @@ if (typeof window !== "undefined") (() => {
     const form = event.target, body = form.elements.body as ComposerBody;
     const list = dom.getMessagePending()!;
     let item!: HTMLLIElement, sending!: ComposerForm;
-    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), mode === "target", () => {
+    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), replyAttempt.native(mode === "target", form.elements.idempotency_key.value), () => {
       event.preventDefault();
       event.stopImmediatePropagation();
       item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
@@ -252,7 +275,8 @@ if (typeof window !== "undefined") (() => {
     // Closing the popover restores focus, clearing htmx's remembered button.
     // The native submit event retains it, including for live-delivered menus.
     const button = event.detail.triggeringEvent?.submitter as HTMLButtonElement | null | undefined;
-    if (button?.name) event.detail.parameters[button.name] = button.value;
+    configureQuoteRequest(event.detail.parameters, button, name =>
+      (dom.getMessageComposer() as ComposerForm).elements.namedItem(name) as HTMLInputElement | null);
   });
   document.addEventListener("click", (native) => {
     const event = native as PointerEvent & { target: HTMLElement };
@@ -510,6 +534,9 @@ if (typeof window !== "undefined") (() => {
     const state = event.target;
     if (state.id === dom.ComposerQuoteID) {
       updateQuoteHeight();
+      const body = dom.getMessageBody()!;
+      const description = body.getAttribute("aria-describedby")!.replace(" " + dom.ComposerReplyDescriptionID, "");
+      body.setAttribute("aria-describedby", description + (state.querySelector('[name="reply"]') ? " " + dom.ComposerReplyDescriptionID : ""));
       const text = dom.getQuoteText(state);
       // Keep server autofocus for native no-script navigation. htmx replays
       // it at settle, so swapped chips leave focus entirely to this handler.
@@ -527,6 +554,7 @@ if (typeof window !== "undefined") (() => {
       return;
     }
     if (state.id !== dom.MessageComposerStateID) return;
+    if (event.detail.requestConfig.formData.has("clear_reply")) return;
     updateEnterHint();
     const body = (dom.getMessageBody() as ComposerBody);
     body.setAttribute("aria-invalid", String(state.hasAttribute(dom.InvalidAttribute)));
@@ -607,8 +635,10 @@ if (typeof window !== "undefined") (() => {
   document.addEventListener("htmx:afterRequest", (native) => {
     const event = native as HtmxEvent<ComposerForm>;
     const form = event.target;
-    if (form.id !== dom.MessageComposerID) return;
+    if (form.id !== dom.MessageComposerID || event.detail.requestConfig.formData.has("clear_reply")) return;
     const status = event.detail.xhr.status;
+    replyAttempt.settle(status, event.detail.requestConfig.formData.get("idempotency_key") as string,
+      event.detail.requestConfig.formData.has("reply"));
     const key = form.elements.idempotency_key?.value;
     if (dom.readAttribute(form, dom.UnconfirmedKeyAttribute) !== key) form.removeAttribute(dom.UnconfirmedKeyAttribute);
     if (status === 200 || status === 409) return;

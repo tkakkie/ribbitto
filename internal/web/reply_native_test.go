@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -119,7 +120,7 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("native actions lack Reply")
 	}
 	key := *freshKey()
-	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
+	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "cursor": {"42"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
 	w = serveForm(handler, "POST", feed, cookie, cancel)
 	_, cancelledForm := composerForm(t, w)
 	target := replyTargetMarkup(t, w.Body.String())
@@ -128,6 +129,14 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 	}
 	if cancelledForm.Get("composer") == "" || cancelledForm.Get("composer") != selected.Get("composer") {
 		t.Fatal("cancel lost composer generation")
+	}
+	enhanced := serveForm(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("HX-Request", "true")
+		handler.ServeHTTP(w, r)
+	}), "POST", feed, cookie, cancel)
+	_, enhancedForm := composerForm(t, enhanced)
+	if enhanced.Code != 200 || enhancedForm.Get("cursor") != "42" {
+		t.Fatal("cancel lost cursor")
 	}
 	var cancelled int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM message WHERE idempotency_key = $1", key).Scan(&cancelled); err != nil || cancelled != 0 {
@@ -206,4 +215,51 @@ func replyTargetMarkup(t *testing.T, markup string) string {
 	}
 	t.Fatal("missing composer target container")
 	return ""
+}
+
+func TestReplyMenuTargetAgainstPostgreSQL(t *testing.T) {
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
+	original, err := fixturePoster(pool).Post(t.Context(), m, f.Channel.ID, "Original")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
+	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, postgresServices(t, pool, sessions, "", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, _, err := sessions.Create(t.Context(), f.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := realtime.FormatPayloadID(original.ID)
+	for _, tc := range []struct {
+		name, id string
+		status   int
+	}{
+		{"valid", id, 200}, {"malformed", "bad", 400}, {"unknown", realtime.FormatPayloadID(kernel.ID{99}), 404},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := serveForm(handler, "POST", view.ChannelURL("acme", f.Channel.ID)+"/quote", cookie, url.Values{"reply": {tc.id}, "quote": {id}})
+			if w.Code != tc.status {
+				t.Fatalf("status %d, want %d", w.Code, tc.status)
+			}
+			if tc.status == 200 {
+				for _, want := range []string{`name="reply" value="` + id + `"`, `name="quote" value="` + id + `"`, `role="status"`, "Original"} {
+					if !strings.Contains(w.Body.String(), want) {
+						t.Fatalf("target response lacks %s", want)
+					}
+				}
+				if strings.Contains(w.Body.String(), "message-composer-state") {
+					t.Fatal("target selection replaced send state/key")
+				}
+			}
+		})
+	}
 }

@@ -15,7 +15,8 @@ Edit restores text/key and uncertainty to an empty composer outside IME, focuses
 its end and removes the item; otherwise it is disabled with a description.
 State swaps and refusals retain the key and uncertainty; emptying renews the
 key and clears uncertainty. Pending responses keep text; failures never swap it.
-Idle blank/over-limit sends, or without
+Reply cancel keeps text/quote; retries and target changes keep the key.
+Idle reply, quote and blank/over-limit sends, or without
 `crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
 (#1173); 422 keeps text and a field error. The textarea stays usable.
 The stream delivers real items and replay. Older/scriptless posts
@@ -37,7 +38,7 @@ stays in the composer. Live appends announce; replay replaces IDs silently.
 NULL-proof rows require exact stored text without references (`plain_text`,
 or `chat_v1` with none). A prefix is not a retry. Unused keys post normally.
 Equal retries return the stored message without writing, even after a move
-or handle change; the composer stays on the requested feed/topic. Different typed text, quote or
+or handle change; the composer stays on the requested feed/topic. Different typed text, quote, reply target or
 channel gets 409 and a fresh key for Retry; pending 409 shows `message.error.repeat`.
 Malformed keys get 400; absent keys disable deduplication. Enhanced failures
 (#1179) keep text/key: 400/404/413/422/429 mean not sent unless an earlier send is

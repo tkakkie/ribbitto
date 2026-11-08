@@ -568,7 +568,7 @@ templ messageComposer(page ChannelPage) {
 			aria-controls={ MentionListboxID }
 			aria-invalid={ fmt.Sprint(page.BodyError != "") }
 			if page.Reply != nil {
-				aria-describedby={ MessageHelpID + " composer-quote-description composer-reply-description" }
+				aria-describedby={ MessageHelpID + " composer-quote-description " + ComposerReplyDescriptionID }
 			} else {
 				aria-describedby={ MessageHelpID + " composer-quote-description" }
 			}

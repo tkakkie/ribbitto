@@ -194,6 +194,7 @@ templ MessageActions(entry Message, topicPage bool) {
 			<span { CopiedLabelAttribute } class="hidden group-data-copied:inline">{ i18n.T(ctx, "message.link_copied") }</span>
 		</a>
 		<button form={ QuoteFormID } name="quote" value={ idValue(entry.ID) } class="flex min-h-11 w-full items-center rounded-md px-3 hover:bg-hover">{ i18n.T(ctx, "message.quote") }</button>
+		<button type="button" name="reply" class="min-h-11 w-full px-3 text-left">{ i18n.T(ctx, "message.reply") }</button>
 		<template id={ MessageActionsTemplateID }>
 			@PinControl(entry, "")
 		</template>

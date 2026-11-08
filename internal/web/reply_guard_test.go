@@ -205,3 +205,12 @@ func TestComposerReplyCost(t *testing.T) {
 		}
 	}
 }
+
+func TestReplySharedMenuMarkup(t *testing.T) {
+	for _, tc := range []struct{ lang, label string }{{"en", "Reply"}, {"ja", "返信"}} {
+		markup := renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", feedFixture(t, 50)))
+		if strings.Count(markup, `type="button" name="reply"`) != 1 || !strings.Contains(markup, `name="reply" class="min-h-11 w-full px-3 text-left">`+tc.label+`</button>`) {
+			t.Fatalf("%s: shared menu lacks its single localized Reply control", tc.lang)
+		}
+	}
+}

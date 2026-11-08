@@ -111,6 +111,9 @@ const (
 	// QuoteFormID identifies the quote-form hook in server markup.
 	//dom:id HTMLFormElement
 	QuoteFormID = "quote-form"
+	// ComposerReplyDescriptionID labels the selected reply target.
+	//dom:id HTMLParagraphElement
+	ComposerReplyDescriptionID = "composer-reply-description"
 	// ComposerQuoteID identifies the composer-quote hook in server markup.
 	//dom:id HTMLDivElement
 	ComposerQuoteID = "composer-quote"

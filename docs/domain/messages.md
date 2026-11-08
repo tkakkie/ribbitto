@@ -42,6 +42,7 @@ the answered topic (an explicit same-channel topic may override it). Quote and r
 independent, including on keyed retries. Previews show current text only,
 up to 200 code points, or a neutral unavailable state. Replies add only
 their message's unread count; preview reads leave read state unchanged.
+Available previews link to the target's stable URL.
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
@@ -119,12 +120,8 @@ resolved extraction (below). Its users are pins excerpts
 (trimmed; empty rejected) and part checks; later, notifications and search.
 A quote's snapshot is left out of the quoting message's extraction.
 
-A `chat_v1` body ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
-`conversation` into plain structs and rendered node by node with templ,
-each block and inline element isolated in direction; never `templ.Raw` or
-HTML built from strings, no raw HTML or images. Links allow only `http` and
-`https`, checked again when rendering, with `rel="noopener noreferrer"`, and are never fetched; a pasted
-message URL is an ordinary link. A member reference shows the current
+`chat_v1` rendering ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) isolates direction per element; no raw HTML or images.
+Links allow only `http`/`https`, rechecked at render, with `rel="noopener noreferrer"`; never fetched. Message URLs are ordinary links. A member reference shows the current
 `Display name @handle` (`view.MemberName`), or a localised placeholder when
 the organisation's directory does not return it. The markup is the same for
 every reader of one language. Its extraction

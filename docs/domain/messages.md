@@ -42,6 +42,7 @@ the answered topic (an explicit same-channel topic may override it). Quote and r
 independent, including on keyed retries. Previews show current text only,
 up to 200 code points, or a neutral unavailable state. Replies add only
 their message's unread count; preview reads leave read state unchanged.
+Available previews link to the target's stable URL.
 
 A message may quote one earlier message of the same channel
 ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).

@@ -61,9 +61,9 @@ and the contrast table are in [`ui-colours.md`](ui-colours.md).
 | Own mention | 2 px dashed `brand` outline, no offset; distinct from keyboard focus |
 | Motion | durations 100 · 150 · 200 · 250 ms; easings `standard`, `decelerate` (entering), `accelerate` (leaving), after Fluent 2 |
 
-The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`)
-and how templates and styles are written are in [`ui-code.md`](ui-code.md);
-the shared components are in [`ui-components.md`](ui-components.md).
+Layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`)
+and how to write templates and styles: [`ui-code.md`](ui-code.md);
+shared components: [`ui-components.md`](ui-components.md).
 
 **Motion** animates only `transform`, `opacity` and colours, never delays
 readable text, and is off under `prefers-reduced-motion: reduce`; uses:
@@ -155,11 +155,11 @@ poses, the channel illustrations and details are in [`brand.md`](brand.md).
 ## Markup and accessibility
 
 [Accessibility](accessibility.md) covers markup checks and browser verification.
-Messages share one native actions popover: Copy link, Quote and Pin/Unpin.
+Messages share one native actions popover: Copy link, Quote, Reply and Pin/Unpin.
 htmx enhances pins with focus restoration; requests keep their message identity.
 Without JavaScript the control links to
 `/organizations/{slug}/messages/{messageID}/actions`: the visible message,
-copyable permalink, Quote, POST/303 Pin/Unpin and Back to the conversation.
+copyable permalink, Quote, Reply, POST/303 Pin/Unpin and Back to the conversation.
 The page checks message visibility.
 
 ## Planned directions (from the maintainer, #9)

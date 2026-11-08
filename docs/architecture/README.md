@@ -47,7 +47,7 @@ Read the file for the area you change:
 | [`web-javascript-unread.md`](web-javascript-unread.md) | stream checkpoints, visible reads and sidebar badge scripts |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
 | [`web-contracts-generated.md`](web-contracts-generated.md) | the generated DOM contract (`internal/web/view/contracts.go`, `web/src/contracts.gen.ts` and `tools/contractliterals`) |
-| [`web-conventions.md`](web-conventions.md) | *planned* (decision 43): front-end module layout, pure logic versus DOM code, typed state, script registry, shared helpers and generated DOM contracts |
+| [`web-conventions.md`](web-conventions.md) | (decision 43): front-end module layout, pure logic versus DOM code, typed state, script registry, shared helpers and generated DOM contracts |
 | [`web-toolchain.md`](web-toolchain.md) | *planned* (decision 43): build, pins, generated contracts and transition (#1410–#1415) |
 | [`web-source-maps.md`](web-source-maps.md) | *planned*: private source-map storage and delivery (#1469, #1819) |
 | [`web-source-maps-store.md`](web-source-maps-store.md) | private store: retention, markers and verification (#1819, #2049) |

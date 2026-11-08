@@ -100,6 +100,14 @@ func pendingBrowserFixture(t *testing.T, browser *rod.Browser, topic bool, setup
 	page := browser.MustPage().Context(ctx).WithPanic(failAtTestLine(t))
 	t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
 	page.MustEvalOnNewDocument(`(() => {
+ window.starts=0; window.draftStarts=0; window.focusStarts=0;
+ const listen=EventTarget.prototype.addEventListener;
+ EventTarget.prototype.addEventListener=function(type,fn,options){
+  if(this===window && type==='storage')window.draftStarts++;
+  if(this===window.visualViewport && type==='resize')window.starts++;
+  if(this===document && type==='keydown' && /popover-focus-[A-Z0-9]{8}\.js/.test(new Error().stack))window.focusStarts++;
+  return listen.call(this,type,fn,options);
+ };
  window.answers=0; window.opens=0; window.requests=0; window.ordinaryRequests=0; window.failures=[];
  document.addEventListener('DOMContentLoaded',()=>new MutationObserver(records=>{
   if(records.some(r=>r.target.matches?.('[data-pending-form] [role=status]'))) {

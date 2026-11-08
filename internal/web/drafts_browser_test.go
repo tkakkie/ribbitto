@@ -133,7 +133,12 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		seed(tab, all)
 		listener := newTab(t, "/")
 		listener.MustEval(`() => { window.notices = []; addEventListener("storage", e => notices.push(e.key + "=" + e.newValue)); }`)
+		tab.MustEvalOnNewDocument(`window.noticeWrites=0;const write=Storage.prototype.setItem;
+ Storage.prototype.setItem=function(k,v){if(k==='ribbitto.signed-out.v1')window.noticeWrites++;return write.call(this,k,v)};`)
 		tab.MustNavigate(server.URL + "/signin").MustWaitLoad()
+		if tab.MustEval(`() => window.noticeWrites`).Int() != 1 {
+			t.Fatal("sign-in draft cleanup did not start exactly once")
+		}
 		expect(t, tab, []string{sameBelow, sameAbove, later, "ribbitto.other"}, horizon)
 		listener.MustWait(`() => notices.includes("` + notice + `=` + horizon + `")`)
 	})

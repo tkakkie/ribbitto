@@ -27,12 +27,13 @@ func replyLabel(ctx context.Context, author, text string) string {
 templ messageReply(reply Reply) {
 	if reply.URL != "" {
 		<a href={ templ.SafeURL(reply.URL) } aria-label={ replyLabel(ctx, replyAuthor(reply.DisplayName, reply.Handle), reply.Text) } class="flex min-w-0 items-center gap-1 text-caption text-muted max-desk:min-h-11 max-desk:min-w-11">
-			<span dir="auto" class="shrink-0 max-w-1/2 truncate">{ replyAuthor(reply.DisplayName, reply.Handle) }</span>
+			{ i18n.T(ctx, "message.reply_cue") }
+			<bdi class="shrink-0 max-w-1/2 truncate">{ replyAuthor(reply.DisplayName, reply.Handle) }</bdi>
 			<span dir="auto" class="truncate">{ reply.Text }</span>
 		</a>
 	} else {
 		<span class="flex gap-1 text-caption text-muted">
-			<span>{ i18n.T(ctx, "message.reply") }</span>
+			<span aria-hidden="true">{ i18n.T(ctx, "message.reply_cue") }</span>
 			<span>{ i18n.T(ctx, "message.reply_unavailable") }</span>
 		</span>
 	}

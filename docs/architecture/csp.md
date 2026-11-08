@@ -56,13 +56,14 @@ sizing copy has empty alternative text
 Hashed bundles are immutable; the fixed-name manifest is not public.
 Unconverted application scripts retain versioned URLs.
 
-Load the composer bundle with the response nonce, outside swaps, for
+Channel pages load the content-hashed composer bundle from `/static/dist/`
+(built from `web/src/composer.ts`) with the response nonce, outside swaps, for
 [composer growth](../ui-composer.md) and
 [quote focus and locking](web-javascript.md#javascript).
 `requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or
 100 ms after composition ends) never sends. Ordinary and pending sending,
 fallbacks and failures follow the [composer contract](web-composer.md#composer).
-Only the send button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
+While a send is in flight, only the send button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
 help, which keeps its space; the textarea stays usable.
 Older pages use a plain form. Every feed/topic composer, including older pages,
@@ -107,7 +108,8 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-The stream script appends server HTML or replaces the same ID,
+`web/src/message-stream.ts` listens to the vendored SSE extension’s
+`htmx:sseBeforeMessage` and passes server HTML to htmx for append or same-ID replacement,
 settling synchronously to order replay and localise
 timestamps before scrolling. Only appends update the separate polite
 status with templ-rendered text; scrolling follows only when already at the

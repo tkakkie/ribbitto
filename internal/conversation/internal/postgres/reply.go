@@ -10,7 +10,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
-// ListReplies reads one bounded source for the member, with no directory reads.
+// ListReplies filters readable channels and excludes self-replies within the
+// statement before LIMIT so pages fill with visible replies and the lookahead
+// row represents another visible reply.
 func (s ReadStore) ListReplies(ctx context.Context, organizationID, memberID kernel.ID, channelIDs []kernel.ID, before *int64) ([]conversation.Message, error) {
 	params := sqlcgen.ListRepliesParams{
 		OrganizationID: uuid(organizationID), MemberID: uuid(memberID), ChannelIds: uuids(channelIDs),

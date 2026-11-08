@@ -65,10 +65,6 @@ and `topic_read_floor`. Composite foreign keys include `organization_id`
 and enforce the member, channel and topic relationships; ranges and floors
 reference their channel lock row. Down drops the three tables.
 
-Migration 00013 adds nullable `channel.image` (text), an illustration key.
-Existing rows stay NULL; web picks a stable image from the channel ID for
-NULL or unknown keys. Down drops the column.
-
 Migration 00014 adds nullable `message.pinned_by_member_id` and `pinned_at`.
 A CHECK pairs their nullability; the pinner references `(organization_id, id)`
 in `member`. A partial index on `(organization_id, channel_id, pinned_at DESC, id)`
@@ -114,6 +110,10 @@ store NULL. Down drops it.
 [Migration 00020: channel names](channel-name-upgrade.md).
 
 [Migration 00022: topic conclusion](domain/topics.md#tables).
+
+Migrations 00023 (reply constraints) and 00024 (reply index) block writes to
+`message` during upgrade, acceptable at current sizes. The index builds without
+`CONCURRENTLY`, which would need goose's `NO TRANSACTION`.
 
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start

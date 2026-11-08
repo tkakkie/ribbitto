@@ -11,14 +11,12 @@ counters are described in [development metrics](dev-metrics.md).
 
 ## Assumptions and dispositions
 
-Three findings from the M3 security review (#249, tracked in #261) bound
-what a run measures. Each has a disposition, agreed by the maintainer on
-2026-10-02 (#298).
+Three findings bound what a run measures.
 
 | | What | Disposition |
 |---|---|---|
-| A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `internal/web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Measured; no byte budget for now** (maintainer, 2026-10-07, after #216). The cache keeps `renderCapacity` (4096) and its one-minute TTL. A full cache of worst-case renders is a theoretical case of about 167 MB of payload plus overhead. #216's worst-case step passed (1,000 streams, 10 posts/s, 300 renders of about 40.8 KB), and nothing measured shows the entry bound to be insufficient, so byte-based eviction would be speculative complexity. Revisit if the render cache proves to be a real memory limit: on small self-hosted machines, with more render variants, at higher event rates, or in profiling. |
-| A5 | #216 (2026-10-07; no process cap, per-account 16): 7,000 streams passed, 10,000 failed at 10 posts/s. | **Done (#623):** default 5,000 when `RIBBITTO_MAX_STREAMS` is unset (maintainer, 2026-10-07, after #216); kept 2026-11-06 after #671's rerun. [Resource limit; reason, override and no guarantee](stream-limits.md). |
+| A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `internal/web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Measured; no byte budget for now**. The cache keeps `renderCapacity` (4096) and its one-minute TTL. A full cache of worst-case renders is a theoretical case of about 167 MB of payload plus overhead. #216's worst-case step passed (1,000 streams, 10 posts/s, 300 renders of about 40.8 KB), and nothing measured shows the entry bound to be insufficient, so byte-based eviction would be speculative complexity. Revisit if the render cache proves to be a real memory limit: on small self-hosted machines, with more render variants, at higher event rates, or in profiling. |
+| A5 | #216 (2026-10-07; no process cap, per-account 16): 7,000 streams passed, 10,000 failed at 10 posts/s. | **Done (#623):** default 5,000 when `RIBBITTO_MAX_STREAMS` is unset. [Resource limit; reason, override and no guarantee](stream-limits.md). |
 | A7 | Detached cache loads (`realtime.Cache`) are neither bounded nor cancelled when every waiter leaves, and can delay exit after shutdown. | **Done first:** #297 (#316) bounds and cancels them before either run, so neither measures a pile-up of abandoned loads and #219's SIGTERM-to-exit time measures the fixed behaviour. |
 
 The event cache (`realtime.NewCachedEvents`, 1024 entries, one minute) is
@@ -57,39 +55,11 @@ numbers are named when #216 tunes them (#261 B13).
 
 ## Measurements (#216, 2026-10-07)
 
-From the run in [load results](../measurements/load-results.md); every step's figures are in
-[load results by step](../measurements/load-results-steps.md).
+See [load results](../measurements/load-results.md), [step results](../measurements/load-results-steps.md)
+and [restart results](../measurements/load-results-restart.md#exit-and-readiness).
 
-- **A4 (render cache):** at 1,000 streams and 10 posts/s for 30 s over
-  HTTP/1.1, on a freshly started server, each step delivered 300 renders.
-  - **Short bodies:** about 1.2 KB of payload each (365 KB in all); the heap
-    in use rose from 21 to 37 MiB.
-  - **Worst case:** 4,000-character bodies of `&` came to about 40.8 KB of
-    payload each (12.3 MB in all); the heap in use rose from 38 to 98 MiB.
-  - **The cache's memory is not measured.** A cached buffer can have more
-    capacity than its length, and entries carry overhead, so the cache can
-    hold more than the payloads. The run does not tell how the rest of the
-    heap's rise divides between the cache and other allocations.
-  - **Retained entries:** 600 distinct renders since the server started,
-    under the 4096 bound.
-  - **Full cache:** 4096 worst-case renders come to about 4096 × 40.8 KB ≈
-    167 MB of payload for this workload. That is a lower bound on such a
-    cache's memory, not a ceiling.
-- **A5 (process-wide cap):**
-  - **Highest passing idle step:** 60,000 streams over HTTP/1.1, the fixtures'
-    size. The server held 60,019 file descriptors and a peak RSS of 3,349 MiB.
-    Over the HTTP/1.1 idle steps, peak RSS per stream was 45.7–61.0 KiB.
-  - **First limits in #216's setup (before #670):**
-    - with 10 posts/s, the database pool, between 7,000 and 10,000 streams;
-    - idle through Caddy, the proxy's memory, between 40,000 and 50,000
-      streams.
-  - [Default and operator rules](stream-limits.md).
-- **A7 (detached loads):** within each series, on one server process, each
-  step's first snapshot showed 11–15 goroutines after the previous step's
-  thousands of streams had closed, which remained near the baseline of 11. The run saw no pile-up of abandoned loads; these counts alone
-  cannot prove that none remained. The snapshot 100 ms after closing can still
-  catch a large step's connections being torn down (49,638 goroutines at
-  40,000 streams).
-- **A7, SIGTERM to exit (#219, 2026-10-08):** 23–80 ms with 300 to 5,000
-  streams open and posts in flight, well within the 10 s exit deadline
-  ([reconnect storm results](../measurements/load-results-restart.md#exit-and-readiness)).
+The A4 short-body payload total was 365 KB; heap in use rose from 21 to
+37 MiB. Worst-case payloads totalled 12.3 MB; heap rose from 38 to 98 MiB.
+The 600 distinct renders stayed under the 4096-entry bound. These payloads
+are lower bounds on cache memory: buffer capacity and entry overhead add
+more, and the run did not isolate the cache's share of the heap rise.

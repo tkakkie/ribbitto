@@ -399,3 +399,32 @@ func testStreamResetBrowser(t *testing.T, browser *rod.Browser) {
 		})
 	}
 }
+
+func testStreamResetInvalidCursorsBrowser(t *testing.T, browser *rod.Browser) {
+	for _, row := range []struct{ name, url, cursor string }{
+		{"missing-after", "/events", "42"},
+		{"invalid-after", "/events?after=abc", "42"},
+		{"invalid-snapshot", "/events?after=42", "abc"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			page, _, _, _ := pendingBrowser(t, browser, false, "message-stream-")
+			page.MustEval(`() => new Promise((resolve,reject) => {
+ const script=document.createElement('script');
+ script.src=[...document.scripts].find(s=>s.src.includes('message-stream-')).src+'?late=1';
+ script.onload=()=>resolve(true);script.onerror=()=>reject(new Error('script load failed'));document.head.append(script);
+})`)
+			closed := page.MustEval(`(url, cursor) => {
+ const stream=document.getElementById('organization-stream');
+ stream.setAttribute('sse-connect',url);stream.dataset.eventCursor=cursor;
+ stream.removeAttribute('data-applied-cursor');
+ document.getElementById('message-composer').classList.add('htmx-request');
+ stream.dispatchEvent(new CustomEvent('htmx:sseOpen',{bubbles:true,detail:{source:window.source}}));
+ window.source.dispatchEvent(new MessageEvent('reset'));
+ return window.source.readyState === EventSource.CLOSED;
+}`, row.url, row.cursor).Bool()
+			if !closed {
+				t.Errorf("source closed on reset = false for %s (cursor %q)", row.url, row.cursor)
+			}
+		})
+	}
+}

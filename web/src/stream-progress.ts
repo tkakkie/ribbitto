@@ -30,7 +30,9 @@ export type ProgressInput =
   | { type: "visibility-changed"; visible: boolean };
 
 function decimal(id: string): boolean { return id.length > 0 && !/[^0-9]/.test(id); }
-function highest(current: string, incoming: string): string {
+function highest(current: string, incoming: string, mode: Progress["mode"]): string {
+  // Compatible projection retains the existing BigInt syntax and exceptions.
+  if (mode === "compatible") return BigInt(incoming) >= BigInt(current) ? incoming : current;
   return decimal(incoming) && BigInt(incoming) >= BigInt(current) ? incoming : current;
 }
 
@@ -41,12 +43,12 @@ export function createProgress(snapshot: string, mode: Progress["mode"], visible
     F: null, Uc: snapshot, Rc: null, visible, terminal: false };
 }
 
-/** No side effects lets both policies share the same delivery history before wiring. */
+/** Both policies consume the same delivery history without side effects. */
 export function advanceProgress(state: Progress, input: ProgressInput): Progress {
   switch (input.type) {
     case "connection-created":
       // A newly created source must not skip progress the page has not reached.
-      if (!decimal(input.after) || BigInt(input.after) > BigInt(state.G)) {
+      if ((state.mode === "strict" && !decimal(input.after)) || BigInt(input.after) > BigInt(state.G)) {
         throw new Error("invalid progress connection after");
       }
       return { ...state, Uc: input.after, Rc: null };
@@ -65,12 +67,12 @@ export function advanceProgress(state: Progress, input: ProgressInput): Progress
     case "failed":
       return state.F ? state : { ...state, F: { reason: input.reason, id: input.id !== null && decimal(input.id) ? input.id : null } };
     case "checkpoint":
-      return state.mode === "strict" && state.F ? state : { ...state, G: highest(state.G, input.id) };
+      return state.mode === "strict" && state.F ? state : { ...state, G: highest(state.G, input.id, state.mode) };
     case "applied":
     case "contract-no-op": {
       if (state.mode === "strict" && state.F) return state;
-      const Ap = highest(state.Ap, input.id);
-      return { ...state, Ap, Sh: state.visible ? Ap : state.Sh, G: highest(state.G, Ap) };
+      const Ap = highest(state.Ap, input.id, state.mode);
+      return { ...state, Ap, Sh: state.visible ? Ap : state.Sh, G: highest(state.G, Ap, state.mode) };
     }
   }
 }

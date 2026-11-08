@@ -1,21 +1,19 @@
 import * as dom from "./contracts.gen.ts";
-import { advancesCursor, shownCursor, admitsMove, higherSequence, announcementOverflow,
+import { admitsMove, higherSequence, announcementOverflow,
   resetHeld, resetDelay, pageHide, finishPageHide, parkSource, restoreSource, forgetSource, type SourceState } from "./stream-cursor.ts";
+
+import { streamProgressAdapter } from "./stream-progress-adapter.ts";
 
 // These structural read contracts describe htmx/extension inputs, not new transports.
 type StreamSource = EventTarget & { readyState: number; close(): void };
-type StreamMessage = { lastEventId: string; data: string; type: string };
 type HtmxEvent = CustomEvent<{ source: StreamSource; target?: HTMLElement; elt: HTMLElement;
   xhr: object; data: string; type: string; lastEventId: string }> & { target: HTMLElement };
-// htmx's extension attribute is outside the generated data/aria attribute set.
-const streamURL = {
-  read: (connection: Element): string | null => connection.getAttribute("sse-connect"),
-  write: (connection: Element, value: string): void => connection.setAttribute("sse-connect", value),
-};
 // Dataset absence is undefined (unlike getAttribute's null), including during BigInt parsing.
 const data = (element: Element, name: dom.ContractAttribute): string | undefined => dom.readAttribute(element, name) ?? undefined;
 
 (() => {
+  const progress = streamProgressAdapter();
+  const sources = new WeakSet<StreamSource>();
   let parked: StreamSource | null = null;
   let sourceState: SourceState = { hiding: false, parked: false };
   document.addEventListener("htmx:sseClose", (native) => {
@@ -125,35 +123,9 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     if (composer) observer.observe(composer, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     decide();
   };
-  const showApplied = () => {
-    const connection = dom.getOrganizationStream()!;
-    const applied = shownCursor(document.visibilityState === "visible",
-      () => connection ? data(connection, dom.AppliedCursorAttribute) : undefined);
-    if (!applied) return;
-    dom.writeAttribute(connection!, dom.EventCursorAttribute, data(connection, dom.AppliedCursorAttribute)!);
-    document.dispatchEvent(new Event(dom.ReadAppliedEvent));
-  };
-  document.addEventListener("visibilitychange", showApplied);
-  const progress = (message: Pick<StreamMessage, "lastEventId">) => {
-    // CLOSED sources are recreated from this URL, without Last-Event-ID.
-    const connection = dom.getOrganizationStream()!;
-    const url = new URL(streamURL.read(connection)!, location.href);
-    if (!advancesCursor(message.lastEventId, url.searchParams.get("after"))) return;
-    url.searchParams.set("after", message.lastEventId);
-    streamURL.write(connection, url.pathname + url.search);
-  };
+  document.addEventListener("visibilitychange", progress.show);
   // Native reconnects reopen the same source, so keep one listener identity.
-  const onCheckpoint = (event: Event) => progress(event as MessageEvent);
-  const resume = (message: StreamMessage) => {
-    const connection = dom.getOrganizationStream()!;
-    // Hidden applications may resume replay, but reading/composing must wait
-    // until this DOM is shown. Duplicate deliveries cannot lower either cursor.
-    const applied = data(connection, dom.AppliedCursorAttribute) || data(connection, dom.EventCursorAttribute);
-    if (!advancesCursor(message.lastEventId, applied)) return;
-    dom.writeAttribute(connection, dom.AppliedCursorAttribute, message.lastEventId);
-    progress(message);
-    showApplied();
-  };
+  const onCheckpoint = (event: Event) => progress.checkpoint((event as MessageEvent).lastEventId);
   document.addEventListener("htmx:sseOpen", (native) => {
     const event = native as HtmxEvent;
     const connection = event.target;
@@ -161,6 +133,14 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     const source = event.detail.source;
     source.addEventListener("reset", reset, { once: true });
     source.addEventListener("checkpoint", onCheckpoint);
+    if (!sources.has(source)) {
+      sources.add(source);
+      progress.connectionCreated(connection.getAttribute("sse-connect")!);
+      for (const kind of ["message", "messages-moved", "checkpoint", "reset", "unread", "sidebar", "presence", "typing", "pins"]) {
+        source.addEventListener(kind, event => progress.report({ type: "frame-dispatched", kind,
+          lastEventId: (event as MessageEvent).lastEventId }), { capture: true });
+      }
+    }
   });
   const applyMove = (items: HTMLElement, markup: string, payload: Document) => {
     const moved = payload.querySelectorAll("li");
@@ -189,9 +169,15 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     // Replacement clears selection; refresh single-source constraints too.
     dom.getBranchTo()?.dispatchEvent(new Event("change", { bubbles: true }));
   };
+  const observeApplication = (id: string, reason: "apply-exception" | "history-reapply", apply: () => void) => {
+    const failed = () => progress.report({ type: "failed", reason, id });
+    document.addEventListener("htmx:swapError", failed);
+    try { apply(); } catch (error) { failed(); throw error; }
+    finally { document.removeEventListener("htmx:swapError", failed); }
+  };
   // History may have taken its snapshot before a move. Retain only deliveries
   // that cross an in-flight request, including moves applied to loaded items.
-  const historyMoves = new Map<object, string[]>();
+  const historyMoves = new Map<object, { markup: string; id: string }[]>();
   document.addEventListener("htmx:beforeSend", (native) => {
     const event = native as HtmxEvent;
     if (event.detail.target?.id === dom.MessageItemsID && event.detail.elt.closest(dom.loadOlderSelector())) {
@@ -205,8 +191,9 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     // Both the out-of-band control and the prepended items are now swapped.
     // Delete first: the htmx swaps below emit their own afterSwap events.
     historyMoves.delete(event.detail.xhr);
-    for (const data of moves) {
-      applyMove(event.detail.target, data, new DOMParser().parseFromString(data, "text/html"));
+    for (const move of moves) {
+      observeApplication(move.id, "history-reapply", () =>
+        applyMove(event.detail.target!, move.markup, new DOMParser().parseFromString(move.markup, "text/html")));
     }
   });
   document.addEventListener("htmx:afterRequest", (native) => {
@@ -220,12 +207,15 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     if (items.id !== dom.MessageItemsID) return;
     const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
     const incoming = payload.querySelector("li");
-    if (!incoming) return;
+    if (!incoming) {
+      progress.report({ type: "failed", reason: "decode-missing-item", id: event.detail.lastEventId });
+      return;
+    }
     if (event.detail.type === "messages-moved") {
       event.preventDefault();
-      for (const moves of historyMoves.values()) moves.push(event.detail.data);
-      applyMove(items, event.detail.data, payload);
-      resume(event.detail);
+      for (const moves of historyMoves.values()) moves.push({ markup: event.detail.data, id: event.detail.lastEventId });
+      observeApplication(event.detail.lastEventId, "apply-exception", () => applyMove(items, event.detail.data, payload));
+      progress.applied(event.detail.lastEventId);
       return;
     }
     const existing = document.getElementById(incoming.id);
@@ -234,11 +224,11 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
     // Keep the extension's transport, but let htmx replace replay duplicates
     // instead of appending another item (or announcing it again).
     event.preventDefault();
-    htmx.swap(existing || items, event.detail.data, {
+    observeApplication(event.detail.lastEventId, "apply-exception", () => htmx.swap(existing || items, event.detail.data, {
       swapStyle: existing ? "outerHTML" : "beforeend", settleDelay: 0,
     }, {
       afterSettleCallback: () => {
-        resume(event.detail);
+        progress.applied(event.detail.lastEventId);
         if (!scrollPosted(incoming.id) && atBottom) pane.scrollTop = pane.scrollHeight;
         if (existing) dom.getBranchTo()?.dispatchEvent(new Event("change", { bubbles: true }));
         // Retain recent additions for replay bursts without growing forever.
@@ -251,6 +241,6 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
           while (announcementOverflow(status.childNodes.length)) status.firstChild!.remove();
         }
       },
-    });
+    }));
   });
 })();

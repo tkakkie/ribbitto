@@ -37,7 +37,7 @@ func sidebarView(ctx context.Context, page view.ChannelPage, m org.Membership, s
 	page.MemberID = m.Member.ID
 	page.Conclusion = nil
 	if snapshot.Conclusion != nil {
-		entry := viewMessage(m.Organization.Slug, *snapshot.Conclusion)
+		entry := viewMessage(ctx, m.Organization.Slug, *snapshot.Conclusion)
 		entry.Body = snapshot.Conclusion.Text(view.UnknownMember(ctx))
 		page.Conclusion = &entry
 	}

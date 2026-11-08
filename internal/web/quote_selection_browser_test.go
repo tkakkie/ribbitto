@@ -75,7 +75,7 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 			t.Fatal(err)
 		}
 		select {
-		case frames <- realtime.Outgoing{ID: message.EventSeq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", entry)))}:
+		case frames <- realtime.Outgoing{ID: message.EventSeq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage(t.Context(), "acme", entry)))}:
 		case <-ctx.Done():
 			t.Fatal("stream fixture: frame could not be queued")
 		}
@@ -131,7 +131,7 @@ func testQuoteSelectionBrowser(t *testing.T, browser *rod.Browser, width int, sc
 			}
 			message := history.Entries[len(history.Entries)-1]
 			select {
-			case frames <- realtime.Outgoing{ID: message.EventSeq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", message)))}:
+			case frames <- realtime.Outgoing{ID: message.EventSeq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage(t.Context(), "acme", message)))}:
 			case <-r.Context().Done():
 			}
 		}

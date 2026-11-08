@@ -112,7 +112,7 @@ func TestMessageActionsSharedRender(t *testing.T) {
 			t.Fatal(err)
 		}
 		var page bytes.Buffer
-		if err := view.MessageItem(viewMessage("acme", entry)).Render(ctx, &page); err != nil {
+		if err := view.MessageItem(viewMessage(t.Context(), "acme", entry)).Render(ctx, &page); err != nil {
 			t.Fatal(err)
 		}
 		live, err := messageRenderer{messages: messages, membership: member, renders: newRenderCache(t.Context())}.Render(ctx, eventOf(t, kernel.ID{1}, 9, conversation.KindPosted, conversation.Moved{ChannelID: kernel.ID{2}, ToTopicID: kernel.ID{6}}))

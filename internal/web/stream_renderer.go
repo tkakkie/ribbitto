@@ -114,7 +114,7 @@ func (r messageRenderer) renderPosted(ctx context.Context, event realtime.Event)
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}
-	item := viewMessage(r.membership.Organization.Slug, entry)
+	item := viewMessage(ctx, r.membership.Organization.Slug, entry)
 	// The announcement is plain text: chat_v1 markup and member UUIDs never
 	// reach it, and its references resolve in the organisation's scope only.
 	item.Text = entry.Text(view.UnknownMember(ctx))
@@ -138,7 +138,7 @@ func (r messageRenderer) renderMoved(ctx context.Context, event realtime.Event) 
 	}
 	items := make([]view.Message, 0, len(entries))
 	for _, entry := range entries {
-		items = append(items, viewMessage(r.membership.Organization.Slug, entry))
+		items = append(items, viewMessage(ctx, r.membership.Organization.Slug, entry))
 	}
 	var html bytes.Buffer
 	if err := view.MovedMessageItems(items, moved.FromTopicID, moved.ToTopicID).Render(ctx, &html); err != nil {

@@ -508,8 +508,17 @@ other = "会話に戻る"
 ["resolution.summary"]
 other = "結論の本文"
 
+["message.reply_cue"]
+other = "↳"
+
 ["capacity.title"]
 other = "サーバーが混み合っています"
 
 ["capacity.message"]
 other = "しばらく待ってから、もう一度お試しください。"
+
+["message.reply_target"]
+other = "{author} への返信: {text}"
+
+["message.reply_unavailable"]
+other = "利用できない投稿への返信"

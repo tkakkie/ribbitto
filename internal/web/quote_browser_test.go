@@ -62,7 +62,7 @@ func testQuoteBrowser(t *testing.T, browser *rod.Browser, scripts bool, width in
 			t.Error(err)
 			return
 		}
-		frames <- realtime.Outgoing{ID: seq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage("acme", entry)))}
+		frames <- realtime.Outgoing{ID: seq, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(viewMessage(t.Context(), "acme", entry)))}
 	}
 	quoteHolds, postHolds := make(chan chan struct{}, 1), make(chan chan struct{}, 1)
 	stop := make(chan struct{})

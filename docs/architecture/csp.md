@@ -25,7 +25,7 @@ These apply to SSE too; no separate JSON routes exist. `/static/`,
 The static handler sends `X-Content-Type-Options: nosniff`
 and `Content-Security-Policy: default-src 'none'; sandbox` on every response,
 found or not, including the explicit 405 (`Allow: GET, HEAD`) for any other
-method (#937): an SVG opened directly is a document on this origin, so
+method: an SVG opened directly is a document on this origin, so
 it runs nothing and loads nothing. Pages are unaffected, because a file used
 as `<img>`, `<use>`, a script or a stylesheet does not apply its own policy;
 `TestBrowser/static-headers` checks that icons and illustrations
@@ -56,23 +56,17 @@ sizing copy has empty alternative text
 Hashed bundles are immutable; the fixed-name manifest is not public.
 Unconverted application scripts retain versioned URLs.
 
-Channel pages load a content-hashed bundle from `/static/dist/`, built from
-`web/src/composer.ts`, with the response nonce.
-It anchors the list during [composer growth](../ui-composer.md) and handles
+Channel pages load the content-hashed composer bundle from `/static/dist/`
+(built from `web/src/composer.ts`) with the response nonce, outside swaps, for
+[composer growth](../ui-composer.md) and
 [quote focus and locking](web-javascript.md#javascript).
 `requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or
-100 ms after composition ends) never sends. The latest-page form uses
-htmx to replace only `#message-composer-state` (#1173). Latest feeds/topics instead
-show a pending own post immediately ([contract](web-composer.md#composer));
-these rules apply to idle feeds/topics with blank or over-limit text
-(after normalisation and trimming), or without `crypto.randomUUID()`. An ordinary
-form in flight blocks composer submits; valid pending sends queue. Only the send
-button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
+100 ms after composition ends) never sends. Ordinary and pending sending,
+fallbacks and failures follow the [composer contract](web-composer.md#composer).
+An ordinary form in flight blocks composer submits; valid pending sends queue.
+While a send is in flight, only the send button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
-help, which keeps its space; the textarea stays usable. A send times out after
-30 s (`hx-request`). Failures fill `#message-send-alert` (#1179,
-[web JavaScript](web-composer.md#composer)); a 409's state carries the
-verified typed prefix in `data-sent-body`; absent or mismatched proofs keep the draft.
+help, which keeps its space; the textarea stays usable.
 Older pages use a plain form. Every feed/topic composer, including older pages,
 submits a hidden server-issued `composer` generation scoped to the resolved
 organisation/member/channel and actual posting topic. A failed message post
@@ -86,15 +80,14 @@ generation to the resolved posting topic's `/typing` route, with matching plain/
 `hx-trigger="typing-input throttle:2s queue:none"`, `hx-sync="this:drop"` and
 `hx-swap="none"`. Composer responses replace it out of band alongside the
 state, keeping their generations equal. Each form coordinates its own requests;
-signals cannot disable the message controls or block submission. Delegated input
-and composition-end listeners trigger htmx for nonblank drafts, suppressing
-composing input. Draft restore emits neither event; send events confirm local
-snapshots ([drafts](web-composer.md#drafts)). Without scripts the form is inert.
+signals cannot disable the message controls or block submission. Nonblank drafts
+trigger typing signals, suppressing composing input; [draft restore](web-composer.md#drafts)
+sends none. Without scripts the form is inert.
 Without scripts CSS starts the latest page at the newest entry, and with
 scripts the composer scrolls there on load unless the URL's fragment names a
-message on the page ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
+message on the page ([decision 36](../decisions/36-one-message-has-a-stable-url.md)),
 keeping the browser's scroll to that `:target`-highlighted message. Focus left on the disabled send button returns to the
-textarea. Scripts stay outside the swap.
+textarea.
 
 `web/src/message-history.ts` keeps the reader's place when "Load older"
 prepends a page: the link selects the older page's `<li>` elements into
@@ -116,9 +109,9 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`web/src/message-stream.ts` listens to the vendored SSE extension's
-`htmx:sseBeforeMessage`. It passes server HTML to htmx for append or
-same-id replacement, settling synchronously to order replay and localise
+`web/src/message-stream.ts` listens to the vendored SSE extension’s
+`htmx:sseBeforeMessage` and passes server HTML to htmx for append or same-ID replacement,
+settling synchronously to order replay and localise
 timestamps before scrolling. Only appends update the separate polite
 status with templ-rendered text; scrolling follows only when already at the
 bottom, except for the sender's own post. A successful composer fragment's
@@ -140,4 +133,3 @@ It then drops the payloads; failed, aborted or unswapped responses drop them too
 Replacements clear checked state
 and refresh the branch form's source constraints. SSE swaps have no request
 target, so composer/history focus handlers ignore them.
-

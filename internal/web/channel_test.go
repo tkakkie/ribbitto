@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -347,6 +350,15 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	// The list root excludes the conversation's composer and reading modules.
 	if !scripts[streamURL] || hasConversation {
 		t.Errorf("list page scripts %v", scripts)
+	}
+	root, err := os.ReadFile("../../web/src/page-channel-list.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := regexp.MustCompile(`\bstart[A-Z]\w*\(\);`).FindAllString(string(root), -1)
+	wantStarts := []string{"startSidebarScroll();", "startSidebarUnread();", "startMessageStream();", "startMessageDrafts();"}
+	if !slices.Equal(starts, wantStarts) {
+		t.Errorf("list root starts %v, want %v", starts, wantStarts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
 		if strings.Contains(body, absent) {

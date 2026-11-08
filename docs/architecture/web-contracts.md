@@ -65,7 +65,7 @@ The stream retains that predicate and queues a microtask recheck, ignoring malfo
 payloads. After attaching its
 listener it dispatches `message-pending-query` (empty detail); the composer replies
 synchronously with the current predicate. The composer also publishes on startup,
-so either script order and changes before listener attachment work. Pending DOM
+so either start order and changes before listener attachment work. Pending DOM
 mutations never feed the reset guard; its request-class and alert inputs remain.
 
 See the [generated contract](web-contracts-generated.md#generated-contract).

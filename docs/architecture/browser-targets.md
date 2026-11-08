@@ -46,29 +46,16 @@ maintainer on 2026-10-20 (#1406).
 Both automated tests and manual checks count as verification evidence;
 anything without evidence is recorded as unverified.
 
-A record counts as verified only when it records all of the following (a
-record missing any of them is not a verification):
-
-- **Browser name.**
-- **Concrete version:** major and patch, and the OS or device version where
-  relevant (for example iOS / iPadOS and Safari).
-- **Date.**
-- **Environment:** real device, emulator or simulator, automated test, and
-  so on.
-- **Scope of the check:** what was exercised.
-- **Result.**
-- **Evidence:** a link or a pointer to where the run is recorded (for
-  example a CI job, a test name, or the review or issue comment).
-
-A result for one version counts for that version only, never for the whole
-browser family and never for "the latest two versions"; each target version
-is verified, or recorded unverified, on its own. A different environment
-(for example Playwright's WebKit versus real iOS Safari, or an emulator
-versus a device) is a different record: WebKit is not iOS Safari.
+Verification requires browser name, concrete major/patch version (OS/device version
+where relevant), date, environment (device/emulator/simulator/automation), scope,
+result and evidence link/pointer (CI job, test, review or issue comment).
+A missing field means unverified. Each target version needs its own record;
+one version never verifies a family or the latest two. Environments need separate
+records: Playwright WebKit is not real iOS Safari; emulators are not devices.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below | PASS for the recorded scope/version; latest two major versions remain unverified |
+| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below; every CI run records the Chrome version, shard, date and runner image in each browser job's step summary | PASS for the recorded scope/version; latest two major versions remain unverified |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |
@@ -79,20 +66,17 @@ versus a device) is a different record: WebKit is not iOS Safari.
 (2026-11-07, head `33d709a`):
 
 - **Level 1 — Chrome go-rod:** Chrome 157.0.8103.39, clean head extract,
-  `webbuild` bundles, `RIBBITTO_REQUIRE_BROWSER=1`. `TestBrowser` first ran
-  without a database: 1157 PASS, 0 FAIL, 59 SKIP (PostgreSQL required).
-  The database scenarios reran on disposable PostgreSQL 18: 58 PASS,
-  0 FAIL, 0 SKIP. `cmd/ribbitto` browser tests with
+  `webbuild` bundles, `RIBBITTO_REQUIRE_BROWSER=1`. `TestBrowser` without DB:
+  1157 PASS, 0 FAIL, 59 SKIP (PostgreSQL required); DB scenarios on disposable
+  PostgreSQL 18: 58 PASS, 0 FAIL, 0 SKIP. `cmd/ribbitto` with
   `RIBBITTO_REQUIRE_DB=1`: 73 PASS, 0 FAIL, 0 SKIP.
-- **Level 2 — Playwright WebKit:** Playwright 1.64.1 WebKit build,
-  local TLS proxy against the head server: **17/17 PASS**. Scope: CSP,
-  switching/title/focus/status, history/one stream request, overlapping
-  navigation, drafts, own/live posts, offline recovery, tab unread/title/
-  favicon, older messages and JavaScript-off reading/posting/paging/switching.
-  This is **WebKit, not iOS Safari**; no concrete WebKit engine version is
-  recorded, so it does not verify a supported Safari version.
-- **Levels 3–4 — real iOS Safari and Android Chrome:** **NOT RUN**;
-  tracked in [#2261]. Device keyboard, viewport and bfcache behaviour remain
-  unverified. WebKit and desktop Chrome do not substitute for device runs.
+- **Level 2 — Playwright WebKit:** 1.64.1 WebKit build, local TLS proxy to
+  head server: **17/17 PASS**. Scope: CSP, switching/title/focus/status,
+  history/one stream request, overlapping navigation, drafts, own/live posts,
+  offline recovery, tab unread/title/favicon, older messages, JavaScript-off
+  reading/posting/paging/switching. **WebKit, not iOS Safari**; engine version
+  unrecorded, so no supported Safari version verified.
+- **Levels 3–4 — real iOS Safari / Android Chrome:** **NOT RUN**; [#2261].
+  Device keyboard/viewport/bfcache unverified; WebKit/desktop Chrome cannot substitute.
 
 [#2261]: https://github.com/tkakkie/ribbitto/issues/2261

@@ -194,8 +194,12 @@ func TestComposerReplyCost(t *testing.T) {
 		if violations := checkMarkup(measureFeed(t, markup).doc, true); len(violations) != 0 {
 			t.Errorf("%s reply markup: %v", lang, violations)
 		}
-		for _, want := range []string{`composer-quote-description composer-reply-description`, `id="composer-reply-description" role="status"`, `name="clear_reply" value="1" class="min-h-11 min-w-11`, map[string]string{"en": "In reply to @owner: Original", "ja": "@owner への返信: Original"}[lang]} {
-			if !strings.Contains(markup, want) {
+		target := replyTargetMarkup(t, markup)
+		if !strings.Contains(markup, `aria-describedby="message-help composer-quote-description composer-reply-description"`) {
+			t.Errorf("%s body lacks target descriptions", lang)
+		}
+		for _, want := range []string{`id="composer-reply-description" role="status"`, `name="clear_reply" value="1" class="min-h-11 min-w-11`, map[string]string{"en": "In reply to @owner: Original", "ja": "@owner への返信: Original"}[lang]} {
+			if !strings.Contains(target, want) {
 				t.Errorf("%s target lacks %s", lang, want)
 			}
 		}

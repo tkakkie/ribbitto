@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"net/http/httptest"
@@ -17,8 +18,10 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
 )
 
 func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
@@ -47,6 +50,7 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 	}
 	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	services := postgresServices(t, pool, sessions, "", false)
+	services.Typing = typing.New(realtime.NewHub())
 	catalogues, err := i18n.New(slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +110,8 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("unreadable: %d", w.Code)
 	}
 	page := serveForm(handler, "GET", feed+"?reply="+id, cookie, nil)
-	if page.Code != 200 || !strings.Contains(page.Body.String(), `name="reply" value="`+id+`"`) || !strings.Contains(page.Body.String(), "Original") {
+	_, selected := composerForm(t, page)
+	if page.Code != 200 || selected.Get("reply") != id || !strings.Contains(replyTargetMarkup(t, page.Body.String()), "Original") {
 		t.Fatal("GET lost the target")
 	}
 	actions := serveForm(handler, "GET", view.MessageURL("acme", original.Message.ID)+"/actions", cookie, nil)
@@ -114,10 +119,15 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("native actions lack Reply")
 	}
 	key := *freshKey()
-	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "idempotency_key": {key}}
+	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
 	w = serveForm(handler, "POST", feed, cookie, cancel)
-	if w.Code != 200 || strings.Contains(w.Body.String(), `name="reply"`) || !strings.Contains(w.Body.String(), "Draft answer</textarea>") || !strings.Contains(w.Body.String(), `name="quote" value="`+id+`"`) || !strings.Contains(w.Body.String(), key) {
+	_, cancelledForm := composerForm(t, w)
+	target := replyTargetMarkup(t, w.Body.String())
+	if w.Code != 200 || cancelledForm.Has("reply") || cancelledForm.Get("body") != "Draft answer" || !strings.Contains(target, `<input type="hidden" name="quote" value="`+id+`"`) || strings.Contains(target, `id="composer-quote" hidden`) || cancelledForm.Get("idempotency_key") != key {
 		t.Fatal("cancel lost the draft, quote or key, or retained reply")
+	}
+	if cancelledForm.Get("composer") == "" || cancelledForm.Get("composer") != selected.Get("composer") {
+		t.Fatal("cancel lost composer generation")
 	}
 	var cancelled int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM message WHERE idempotency_key = $1", key).Scan(&cancelled); err != nil || cancelled != 0 {
@@ -126,11 +136,15 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 	for _, place := range []*kernel.ID{nil, &f.Channel.DefaultTopicID} {
 		path := view.ConversationURL("acme", f.Channel.ID, place)
 		key := *freshKey()
-		form := url.Values{"reply": {id}, "body": {"answer"}, "idempotency_key": {key}}
+		form := url.Values{"reply": {id}, "body": {"answer"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
 		if w := serveForm(handler, "POST", path, cookie, form); w.Code != 303 {
 			t.Fatalf("native reply: %d %s", w.Code, w.Body.String())
-		} else if next := serveForm(handler, "GET", w.Header().Get("Location"), cookie, nil); next.Code != 200 || strings.Contains(next.Body.String(), `name="reply"`) || strings.Contains(next.Body.String(), "answer</textarea>") {
-			t.Fatal("successful native reply retained text or target")
+		} else {
+			next := serveForm(handler, "GET", w.Header().Get("Location"), cookie, nil)
+			_, cleared := composerForm(t, next)
+			if next.Code != 200 || cleared.Has("reply") || strings.TrimSpace(cleared.Get("body")) != "" {
+				t.Fatal("successful native reply retained text or target")
+			}
 		}
 		var storedTopic, target kernel.ID
 		if err := pool.QueryRow(t.Context(), "SELECT topic_id, reply_to_message_id FROM message WHERE idempotency_key = $1", key).Scan(&storedTopic, &target); err != nil {
@@ -143,9 +157,18 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 		if storedTopic != want || target != original.Message.ID {
 			t.Fatal("reply topic/target changed")
 		}
+		// Validation preserves the submitted generation, just as a quoted send does.
+		initial := serveForm(handler, "GET", path+"?reply="+id, cookie, nil)
+		_, issued := composerForm(t, initial)
+		form.Set("composer", issued.Get("composer"))
 		form.Set("body", "")
-		if w := serveForm(handler, "POST", path, cookie, form); w.Code != 422 || !strings.Contains(w.Body.String(), key) || !strings.Contains(w.Body.String(), `name="reply" value="`+id+`"`) {
-			t.Fatal("validation lost target")
+		w := serveForm(handler, "POST", path, cookie, form)
+		_, invalid := composerForm(t, w)
+		if w.Code != 422 || invalid.Get("idempotency_key") != key || invalid.Get("reply") != id {
+			t.Fatal("validation lost target or key")
+		}
+		if invalid.Get("composer") == "" || invalid.Get("composer") != issued.Get("composer") {
+			t.Fatal("validation lost composer generation")
 		}
 		form.Set("body", "answer")
 		if w := serveForm(handler, "POST", path, cookie, form); w.Code != 303 {
@@ -168,4 +191,19 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("key stored %d messages: %v", count, err)
 		}
 	}
+}
+
+func replyTargetMarkup(t *testing.T, markup string) string {
+	t.Helper()
+	for n := range measureFeed(t, markup).doc.Descendants() {
+		if attr(n, "id") == view.ComposerQuoteID {
+			var output bytes.Buffer
+			if err := html.Render(&output, n); err != nil {
+				t.Fatal(err)
+			}
+			return output.String()
+		}
+	}
+	t.Fatal("missing composer target container")
+	return ""
 }

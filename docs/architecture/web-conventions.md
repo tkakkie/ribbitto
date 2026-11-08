@@ -1,4 +1,4 @@
-# Web front-end conventions (planned)
+# Web front-end conventions
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md);
 [web toolchain](web-toolchain.md).

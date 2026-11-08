@@ -126,9 +126,14 @@ func checkOwnedSQL(sql, module, query string, owners map[string]string, allow ma
 
 func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allow map[exemption]bool, migration *migrationPolicy, bigints map[float64]bool) error {
 	unnests := map[float64]bool{}
+	arrays, columns := map[float64]bool{}, map[float64]bool{}
 	if migration == nil {
 		var err error
 		unnests, err = sqlwalk.UnnestFrom(stmt, bigints)
+		if err != nil {
+			return err
+		}
+		arrays, columns, err = readSetRelations(stmt, unnests)
 		if err != nil {
 			return err
 		}
@@ -221,14 +226,16 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				switch name {
 				case "=", "<", ">", "<=", "+":
 				case "@>":
-					if tag != "A_Expr" || n["kind"] != "AEXPR_OP" || !readSetParameter(n["lexpr"]) || !bigintOperand(n["rexpr"], bigints) {
+					column := sqlwalk.Node(n["lexpr"], "ColumnRef")
+					location, ok := column["location"].(float64)
+					if tag != "A_Expr" || n["kind"] != "AEXPR_OP" || (!readSetParameter(n["lexpr"]) && !(ok && columns[location])) || !bigintOperand(n["rexpr"], bigints) {
 						return fmt.Errorf("unsupported containment: requires int8multirange sqlc.arg parameter and bigint expression")
 					}
 				default:
 					return fmt.Errorf("unsupported operator %s", name)
 				}
 			case "TypeCast":
-				if readSetParameter(map[string]any{"TypeCast": n}) {
+				if readSetParameter(map[string]any{"TypeCast": n}) || arrays[n["location"].(float64)] {
 					return nil
 				}
 				// Embedded type records have no node tag for the walker.

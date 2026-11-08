@@ -192,3 +192,15 @@ func TestUnnestOrdinalityRelations(t *testing.T) {
 		})
 	}
 }
+
+func TestUnnestReadSetArray(t *testing.T) {
+	relation := "unnest(sqlc.arg(read_sets)::int8multirange[]) WITH ORDINALITY AS c(read_set, ord)"
+	for _, sql := range []string{
+		"SELECT * FROM " + relation,
+		"WITH c AS (SELECT * FROM " + relation + ") SELECT * FROM c",
+		"UPDATE message m SET id=c.read_set FROM " + relation,
+		"INSERT INTO message(id) SELECT read_set FROM " + relation,
+	} {
+		checkUnnestFrom(t, sql, "", 1)
+	}
+}

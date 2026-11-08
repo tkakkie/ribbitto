@@ -39,7 +39,11 @@ func TestResolutionLiveBrowser(t *testing.T) {
 	actor.MustSetViewport(390, 844, 1, true)
 	acceptanceOK(t, (proto.EmulationSetEmulatedVisionDeficiency{Type: "achromatopsia"}).Call(actor))
 	actor.MustNavigate(actions).MustWaitLoad()
-	actor.Keyboard.MustType(input.Tab, input.Tab, input.Tab, input.Tab)
+	actor.Keyboard.MustType(input.Tab, input.Tab, input.Tab)
+	if !actor.MustEval(`() => document.activeElement.matches('button[name=reply]')`).Bool() {
+		t.Fatal("native Reply is unreachable by Tab")
+	}
+	actor.Keyboard.MustType(input.Tab, input.Tab)
 	if !actor.MustEval(`() => document.activeElement.matches('button[name=message]') && document.documentElement.scrollWidth <= innerWidth`).Bool() {
 		t.Fatal("native Resolve is unreachable by Tab or overflows the phone")
 	}

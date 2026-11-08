@@ -522,3 +522,9 @@ other = "{author} への返信: {text}"
 
 ["message.reply_unavailable"]
 other = "利用できない投稿への返信"
+
+["message.reply"]
+other = "返信"
+
+["message.reply_cancel"]
+other = "返信を取り消す"

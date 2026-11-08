@@ -349,11 +349,11 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
-	if (r.URL.Query().Has("quote") || r.URL.Query().Has("part")) && r.Method == http.MethodGet {
+	if (r.URL.Query().Has("quote") || r.URL.Query().Has("part") || r.URL.Query().Has("reply")) && r.Method == http.MethodGet {
 		if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
 			return
 		}
-		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) {
+		if !p.readQuote(w, r, m, id, r.URL.Query(), &page) || !p.readReply(w, r, m, id, r.URL.Query(), &page) {
 			return
 		}
 	}
@@ -363,7 +363,9 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		if history.Topic != nil {
 			place = history.Topic.ID
 		}
-		page.Composer, page.IdempotencyKey = p.issueComposer(m, history.Current.ID, place), freshKey()
+		if page.IdempotencyKey == nil {
+			page.Composer, page.IdempotencyKey = p.issueComposer(m, history.Current.ID, place), freshKey()
+		}
 	}
 	var snapshotSeq int64
 	if history.EventCursor != nil {
@@ -446,6 +448,15 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		quote = &parsed
 	}
+	var reply *kernel.ID
+	if submitted, present := r.PostForm["reply"]; present {
+		parsed, ok := pathID(r.PostForm.Get("reply"))
+		if !ok || len(submitted) != 1 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		reply = &parsed
+	}
 	var quoteText *string
 	if r.PostForm.Has("quote_text") {
 		quoteText = new(r.PostForm.Get("quote_text"))
@@ -455,7 +466,16 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	if _, present := r.PostForm["composer"]; present {
 		composer = new(r.PostForm.Get("composer"))
 	}
-	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, QuoteText: quoteText, UnknownMember: view.UnknownMember(r.Context())})
+	if r.PostForm.Has("clear_reply") {
+		r.PostForm.Del("reply")
+		var kept *string
+		if keyed {
+			kept = &submittedKey[0]
+		}
+		p.renderComposer(w, r, m, c, p.topicID, http.StatusOK, view.ChannelPage{Body: body, Composer: composer, IdempotencyKey: kept})
+		return
+	}
+	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, ReplyTo: reply, Quote: quote, QuoteText: quoteText, UnknownMember: view.UnknownMember(r.Context())})
 	posted := sent.Message
 	// A repeat closes the generation in the requested place it was issued
 	// for, not in the topic branching may have moved the message into.
@@ -498,7 +518,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case errors.Is(err, conversation.ErrPostKeyReused):
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
-		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, PostedTopicID: posted.TopicID, PostedEventSeq: posted.EventSeq, SentBody: recovered(enhanced, c.ID, body, quote != nil, posted), IdempotencyKey: freshKey()})
+		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, PostedTopicID: posted.TopicID, PostedEventSeq: posted.EventSeq, SentBody: recovered(enhanced, c.ID, body, quote != nil || reply != nil, posted), IdempotencyKey: freshKey()})
 	case isNotFound(err), errors.Is(err, conversation.ErrQuoteNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member. A quoted
@@ -518,16 +538,16 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // fragment's typing form signals there and its generation is scoped to it,
 // while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
-	_, page.QuoteUpdate = r.PostForm["quote"]
-	if page.BodyError != "" || (page.QuoteUpdate && status >= http.StatusBadRequest) {
+	page.QuoteUpdate = r.PostForm.Has("quote") || r.PostForm.Has("reply") || r.PostForm.Has("clear_reply")
+	if page.BodyError != "" || (page.QuoteUpdate && (status >= http.StatusBadRequest || r.PostForm.Has("clear_reply"))) {
 		// The part entry action belongs only to the chip route and GET.
 		values := url.Values{}
-		for _, name := range []string{"quote", "quote_text"} {
+		for _, name := range []string{"quote", "quote_text", "reply"} {
 			if value, present := r.PostForm[name]; present {
 				values[name] = value
 			}
 		}
-		if !p.readQuote(w, r, m, c.ID, values, &page) {
+		if !p.readQuote(w, r, m, c.ID, values, &page) || !p.readReply(w, r, m, c.ID, values, &page) {
 			return
 		}
 	}
@@ -537,7 +557,9 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 			place, page.Topic = *topic, &view.Topic{ID: *topic}
 		}
 		if page.BodyError == "" && !page.QuoteInvalid {
-			page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
+			if page.IdempotencyKey == nil {
+				page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
+			}
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		account, _ := middleware.Account(r.Context())
@@ -563,7 +585,7 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 // does a quote on either side: a stored one may still be in the composer for
 // the rest, and a requested one would be dropped with the text.
 func recovered(enhanced bool, channel kernel.ID, body string, quoted bool, stored conversation.Message) string {
-	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil {
+	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil || stored.Reply != nil {
 		return ""
 	}
 	return stored.TypedBodyPrefix(body)

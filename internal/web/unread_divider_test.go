@@ -109,7 +109,7 @@ func TestUnreadDivider(t *testing.T) {
 					catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 						for _, entry := range page.Entries {
 							var live bytes.Buffer
-							if err := view.LiveMessageItem(viewMessage("acme", entry)).Render(r.Context(), &live); err != nil {
+							if err := view.LiveMessageItem(viewMessage(t.Context(), "acme", entry)).Render(r.Context(), &live); err != nil {
 								t.Fatal(err)
 							}
 							if strings.Contains(live.String(), "unread-divider") || strings.Contains(live.String(), label) {

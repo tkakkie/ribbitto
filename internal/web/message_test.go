@@ -657,7 +657,7 @@ func TestFeedTopicLabels(t *testing.T) {
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					for _, entry := range populatedMessages().entries {
 						var live bytes.Buffer
-						if err := view.LiveMessageItem(viewMessage("acme", entry)).Render(r.Context(), &live); err != nil {
+						if err := view.LiveMessageItem(viewMessage(t.Context(), "acme", entry)).Render(r.Context(), &live); err != nil {
 							t.Fatal(err)
 						}
 						assertMessageTopicLink(t, live.String(), entry)

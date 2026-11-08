@@ -81,7 +81,7 @@ func FuzzMessageBodyHTML(f *testing.F) {
 			References: refs,
 		}
 		var out bytes.Buffer
-		if err := view.MessageItem(viewMessage("org", entry)).Render(t.Context(), &out); err != nil {
+		if err := view.MessageItem(viewMessage(t.Context(), "org", entry)).Render(t.Context(), &out); err != nil {
 			t.Fatal(err)
 		}
 		doc, err := html.Parse(&out)

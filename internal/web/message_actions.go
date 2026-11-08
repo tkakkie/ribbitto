@@ -29,7 +29,7 @@ func (p channelPages) messageActions(w http.ResponseWriter, r *http.Request, m o
 	case err != nil:
 		serverError(w, r, "reading message actions", err)
 	default:
-		entry := viewMessage(m.Organization.Slug, entries[0])
+		entry := viewMessage(r.Context(), m.Organization.Slug, entries[0])
 		conversationURL := view.ConversationURL(m.Organization.Slug, entries[0].ChannelID, &entries[0].TopicID)
 		if !entry.DefaultTopic {
 			entry.ResolveURL = conversationURL + "/resolve"

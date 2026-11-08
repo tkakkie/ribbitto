@@ -52,7 +52,7 @@ func TestMessageAuthorAvatar(t *testing.T) {
 			entry := conversation.Entry{Message: conversation.Message{
 				ID: kernel.ID{9}, MemberID: kernel.ID{4}, Body: "message text first",
 			}, DisplayName: tt.displayName, Handle: "alice"}
-			model := viewMessage("acme", entry)
+			model := viewMessage(t.Context(), "acme", entry)
 			if model.MemberID != entry.MemberID {
 				t.Fatal("author's member ID was lost in the view mapping")
 			}

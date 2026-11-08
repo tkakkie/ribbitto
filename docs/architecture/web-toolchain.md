@@ -1,7 +1,7 @@
 # Web toolchain
 
 [Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules;
-decision 45 sets `.test.ts` harnesses. Mechanics marked **confirmed**: [record][cf].
+decision 45 sets `.test.ts` harnesses.
 
 ## Language approval — #1410–#1413
 
@@ -32,11 +32,9 @@ browsers ([browser target rule 4](browser-targets.md#design-rules)).
 This syntax floor adds no Web API polyfills and does not complete browser
 verification; #1820 checks the served bundle.
 
-The builder validates esbuild's metafile and output, writes
-`manifest.json` last, then replaces the whole ignored `dist` directory
-under `web/static`. Logical entries record bundle filenames and SHA-256 content hashes;
-commit SHA and run id are inputs. Make passes HEAD and `GITHUB_RUN_ID`, defaulting
-locally to a UTC timestamp. Production output has no maps or source-map links.
+Logical manifest entries record bundle filenames and SHA-256 content hashes;
+commit SHA and run id are build inputs. Production output has no maps or
+source-map links.
 
 `web/static/scripts.go` owns the shared page-entry list; non-entry `web/src/`
 modules are never bundled standalone. Validate the manifest and bundle hashes
@@ -57,15 +55,8 @@ compiling and package that output (none exists).
 Host builds use the
 [writable-copy routes](../workflow/investigations.md#build-routes).
 
-In `make dev`, `cmd/dev` runs `webbuild -dev` and supervises `webbuild -watch`,
-writing dev bundles, `.js.map` files and `manifest.json` to `bin/dev-dist`
-without touching `web/static/dist` (recent generations kept, manifest replaced
-atomically). `RIBBITTO_DEV_ASSETS=bin/dev-dist` re-reads the manifest per
-request and serves `web/static` assets plus `bin/dev-dist` bundles and `.js.map`
-files with `Cache-Control: no-store` (#1821).
-#1819 adds private production maps, absent from the runtime manifest. ES modules,
-shared chunks, lazy loading and `modulepreload` need target-browser verification
-before adoption.
+Development bundles and the `RIBBITTO_DEV_ASSETS` serving rules are in
+[source maps](web-source-maps.md#source-maps--1411).
 
 ## Versions and installation — #1410, #1415
 
@@ -88,19 +79,14 @@ npm scripts are needed. Go wrappers must prevent inherited npm configuration
 from omitting the checker
 or platform package or enabling lifecycle scripts. The portable package selects
 the executable; no manual platform pins. Classic `6.0.3` replaces it only for a
-recorded migration/checker/editor incompatibility. #1410 checks CLI diagnostics
-on macOS arm64 and Linux x64; editor/language-service evidence is deferred to
-#1815 by the maintainer (2026-10-26). The spike tested no editors.
+recorded migration/checker/editor incompatibility.
 
 Run `make web-install` explicitly, then `make check-web`; checks never install.
 `make check` and `make prepush` print `NOT VERIFIED` and skip when pinned Node
 or the checker is missing/mismatched, unless `RIBBITTO_REQUIRE_NODE=1` makes
-that fail. CI's separate `web-types` job installs and checks with that flag,
-then runs the real checker/runner tests with `go -C tools test -count=1 -v ./webtypes ./domcontract -run '^TestReal(TypeScript|ContractTypeScript|NodeTests)$'`
-(the ill-typed TempDir input must produce TS2322; the second test also checks
-that the generated sidebar contract's valid consumers compile and its
-ill-typed consumers produce the expected diagnostics). Hermetic wrong-Node and
-lockfile tests run in `check-tools` in `checks`, without Node. The strict,
+that fail. CI's `web-types` job installs and checks with that flag.
+Checker/runner probes and hermetic wrapper tests are described in
+[checks](web-toolchain-checks.md#checks-and-measurement--1412-1414-1426). The strict,
 no-emit config includes web/src/**/*.ts (web/test/*.test.ts, node-test.d.ts from #2092); the empty
 `web/legacy-scripts.txt` rejects later additions (#1414). `globals.d.ts` supplies the first input and the htmx global.
 
@@ -124,29 +110,12 @@ path aliases. Client unit tests and `make test-web` follow
 
 ## Generated contract and state — #1413, #1416, #1417
 
-**Generated-file commitment — confirmed:**
-#1413 commits web/src/contracts.gen.ts.
-Go definitions used by templ own ids, attribute names, custom event names and
-payload fields/types. A Go generator under `tools/`, reached by `go generate`,
-produces constants/types and typed accessors; a Go freshness check fails on
-drift. Generated selectors/id helpers also cover dynamic id suffixes. #1823 adds
-the composer contract. Runtime validation/type narrowing remain in the modules:
-types cannot validate server attributes or htmx event detail.
+The [generated contract](web-contracts-generated.md) defines ownership,
+accessors, runtime validation and literal checks.
 
-Migrated modules use those accessors for contract hooks and events. No raw
-contract selectors, `dataset` keys, attribute names or custom event strings
-outside the adapter. A Go check with negative fixtures (#1822) rejects those literal
-bypasses in authored sources; exporting constants alone would let stale
-literals type-check. Review covers indirect/computed bypasses the check cannot
-prove. All authored scripts use the generated contract; the empty legacy list keeps
-contract coverage from shrinking (#1414).
-
-Keep server controls/attributes and necessary derived CSS/test projections.
-Typed modules hold the working copy of already-allowed state: pending posts,
-idempotency keys, drafts and bounded unread recovery (decisions 34/37/41 and
-UX settings). Persistence stays unchanged. JavaScript owns no application
-state, never the message list, sidebar or counts, subject to those exceptions.
-Other/new state and script-owned requests are for #1361. #1416/#1417 must
+[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the
+allowed typed working state, persistence and permissions.
+#1416/#1417 must
 coordinate composer and stream
 reset guards: changing queue state must notify/reset the guard even without
 DOM mutations. Keep immutable `draftKey` tied to the original draft snapshot,
@@ -158,13 +127,3 @@ assertions.
 See [source maps](web-source-maps.md#source-maps--1411).
 
 See [checks and measurement](web-toolchain-checks.md#checks-and-measurement--1412-1414-1426).
-
-## Transition from current rules — #1410–#1421
-
-Preserve current contracts, server HTML, the no-JavaScript core, request
-ownership, persistence and decisions 34/37/41's permissions. On conversion,
-typed modules replace authoritative `dataset` working state. Preserve check
-intent and browser tests. Authored code is typed;
-`web/static/embed.go` embeds only vendor and generated scripts.
-
-[cf]: https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6311498388

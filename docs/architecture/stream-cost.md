@@ -79,51 +79,11 @@ placement rules, commands and measured results;
 [sidebar counts history](../measurements/sidebar-counts-history.md) summarises
 the stopped server-recount comparisons.
 
-## Results, 2026-10-01
-
-Apple M-series, darwin/arm64, 10 CPUs, Go 1.27.1; PostgreSQL 18 in local
-Docker; pool 10; batch 100; 10 posts/s for 10 s. All 100 posts/step completed.
-These past figures bracket this setup's limit between pass and failure,
-not today's performance or absolute capacity. Commit dates here are JST.
-Fetch both measurement commits: `git fetch origin pull/228/head pull/233/head`.
-
-**First measurement (no shared reads, 1 to 1,000 streams):**
-`3c981fe185bcb435bd6050abe13e6fd6af60f581`; #228's author identifies this SHA,
-before cancellation incorrectly marked successful steps timed out. It predates
-the step deadline and zero-post guard added in `4393a08`.
-**Pre-deletion SHA (both tables):**
-`5fd630c8abcc7bf114674883ed1d02c1e70484fb`; retrieve the tables and past
-commands with `git show 5fd630c8abcc7bf114674883ed1d02c1e70484fb:docs/architecture/stream-cost.md`.
-
-Without shared event reads and message renders, **300 streams passed / 500
-failed** (p95 82 ms / 2.34 s). Each delivery cost about five queries: event
-read, membership check, message and its two author lookups; plus two
-transaction statements, and three queries per post. At 10 posts/s, the
-300-stream step needed about 15,000 queries/s; at 500 the pool saturated.
-No event read returned empty. Lagging streams batched events, lowering
-queries per delivery; caught-up streams read one new event per post.
-
 ## With shared reads (#227), 2026-10-01
 
-Same hardware, versions, pool, batch, rate and duration; `_CACHE=1` shares
-**event reads and message renders**, not #670's later authorization cache.
-**Shared-read re-run SHA:** `b33c82efbb298d60318fbf1237299e3e8f831b1d`
-(#233's author comment: after the joiner-freshness fix). Both SHAs are
-PR-branch commits. The no-shared-reads comparison's commit is unidentified
-beyond #233's branch on 2026-10-01.
-
-Without shared reads the comparison again measured **300 pass / 500 fail**
-(p95 83 ms / 2.55 s). With them, **2,000 passed / 3,000 failed**, both with
-one member (p95 89 ms / 2.93 s) and distinct members (90 ms / 2.44 s).
-The ladder stopped at 3,000; 5,000 was not run. Every step completed 100 posts.
-
-A post cost about `N + 10` queries: one membership check per stream, three
-posting queries, one shared message read with two author lookups, and about
-four event reads. Distinct members changed nothing, indicating sharing per
-organisation. Only full event batches are retained
-([consistency rules](stream-limits.md)); short batches can require repeated reads.
-The remaining per-stream query was the membership check, which saturated
-this setup's pool beyond the 2,000-stream passing step.
+The historical shared-read run passed at 2,000 streams and failed at 3,000;
+these are setup-specific results, not today's capacity. Full tables and commands
+remain at `5fd630c8abcc7bf114674883ed1d02c1e70484fb` in this file's history.
 
 ## What it points to
 

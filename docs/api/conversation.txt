@@ -184,6 +184,7 @@ func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn,
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, countRunner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
+func NewReplies(runner SnapshotRunner, reads ReplyReaderIn, channels ReadableChannelsIn) *Replies // NewReplies shares a snapshot between the read-access port and page source.
 func NewResolution(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Resolution // NewResolution builds resolution over transaction-bound factories; notifier may be nil.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
@@ -278,13 +279,21 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
 type Reference struct // Reference is a referenced member's current names.
   field DisplayName string
   field Handle string
+type Replies struct // Replies reads replies to one member's messages across readable channels.
+  func (*Replies).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, before *int64) (page ReplyPage, err error) // Page reads replies to the resolved member's messages, excluding their own messages.
 type Reply struct // Reply is an immutable link to an older message in the same channel.
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MessageID github.com/tkakkie/ribbitto/internal/kernel.ID
+type ReplyPage struct // ReplyPage contains up to 50 messages and the exclusive event_seq cursor for the next page, or nil when no older matching message exists.
+  field Messages []Message
+  field Next *int64
 type ReplyPreview struct // ReplyPreview exposes only current author names and text; unavailable targets leave Available false so web can supply a neutral localized placeholder.
   field Author Reference
   field Available bool
   func (ReplyPreview).Text(placeholder string) string // Text returns up to 200 code points of current text, with placeholder for unresolved member references, using the same excerpt rules as pins.
+type ReplyReader interface // ReplyReader reads at most 51 replies, newest first, applying both the readable-channel set and author exclusion before the limit in one statement.
+  func (ReplyReader).ListReplies(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *int64) ([]Message, error)
+type ReplyReaderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReplyReader // ReplyReaderIn binds the reply source to a caller's snapshot.
 type Resolution struct // Resolution commits a topic's conclusion with its durable invalidation.
   func (*Resolution).Reopen(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Reopen clears a topic's conclusion; an open topic is unchanged.
   func (*Resolution).Resolve(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Resolve sets or replaces a named topic's conclusion with a current message.

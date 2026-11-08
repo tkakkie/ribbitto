@@ -55,7 +55,7 @@ records: Playwright WebKit is not real iOS Safari; emulators are not devices.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below; every CI run records the Chrome version, shard, date and runner image in each browser job's step summary | PASS for the recorded scope/version; latest two major versions remain unverified |
+| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below; every CI run records the Chrome version (not pinned), shard, date and runner image in each browser job's step summary | PASS for the recorded scope/version; latest two major versions remain unverified |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |

@@ -2,10 +2,10 @@
 
 ## Outcomes
 
-1. **Typed, unit-tested client code.** Client code is typed and its logic unit-tested; no untyped script can be added.
-2. **Shared DOM contract and hashed delivery.** Scripts and templates share one DOM contract generated from Go; scripts are delivered under content-hashed names.
-3. **Written conventions and browser targets.** Front-end conventions and target browsers are written down.
-4. **Opening a conversation stays cheap.** The cost of opening a conversation stays bounded as messages and features grow: a smaller first render (#1477, with shown-interval read state, #1486, and permalinks to recent messages that still land on a page showing them), the phone first-paint fix (#1480), smaller per-message markup (#1466's F-series with #1455 and #1457) and a standing per-message budget check in CI (#1478).
+1. **Typed, unit-tested client code.** Client code is typed, its logic unit-tested; no untyped scripts allowed.
+2. **Shared DOM contract and hashed delivery.** Scripts and templates share a Go-generated DOM contract; scripts use content-hashed names.
+3. **Written conventions and browser targets.** Front-end conventions and target browsers are documented.
+4. **Opening a conversation stays cheap.** Opening cost stays bounded as messages and features grow: a smaller first render (#1477, with shown-interval read state, #1486, and permalinks to recent messages that still land on a page showing them), the phone first-paint fix (#1480), smaller per-message markup (#1466's F-series with #1455 and #1457) and a standing per-message budget check in CI (#1478).
 5. **Unread indicators on the tab.** Unread counts reach the tab title and favicon.
 
 ## Status: done with exceptions
@@ -22,7 +22,7 @@
 R3 failures stay FAIL at `33d709a`.
 
 - **E-1 — L4b/L4c phone feed (send→visible/composer enabled):** B1: slower head unreproduced; both group ~25/45 ms. Unknown cause; server/network/1–2 ms effect possible. No B2/new issue; revisit: slow-send reports, first post-M9 composer/send change, real-device run.
-- **E-2 — L6 desktop feed-ime p90:** C unreproduced; both commits slow in headless Chrome, absent that night headed. Headless cause unknown. No more runs/new issue. Revisit: typing lag, composer input changes, optional headed repeat.
+- **E-2 — L6 desktop feed-ime p90:** C unreproduced; both commits slow in Chrome, absent that night headed. The slow state's cause is unknown; it appeared only in headless runs. No more runs/new issue. Revisit: typing lag, composer input changes, optional headed repeat.
 - **E-3 — L3 phone feed first load:** 0.5 ms over limit; median **8.0 ms slower (74.6 → 82.6 ms)**. Head slower all four sessions (+17.1/+2.5/+4.4/+9.5 ms); no-slowdown unproven; no L3 rerun. p90 within limit (111.0 → 112.4 ms), other first-load cells pass: M9 nonblocking. #2262 (M10): alternate base `fdf5943`/head after method/cap approval; no measurement to close M9.
 - **E-4:** `sourcemaps-store` at `33d709a`: GitHub API 500 creating draft release, run 42061990718. **No source maps for `33d709a`**; later runs succeeded.
 
@@ -39,20 +39,20 @@ R3 failures stay FAIL at `33d709a`.
 - X-9: R5 B5/B7: Accepted moderate: read-state fragmentation cost; topic-count filtering/first-unread lookup bounded only by `statement_timeout`. Production load untested; revisit on trouble.
 - X-10: R5 minor: B2a guard coverage; A11 vendor libraries outside Dependabot; A1 Node tarball unhashed; nightly `tools/tbls` `vuln` advisories addressed after head (#2232). No follow-up.
 
-X-8 (§4): `33d709a`, disposable PostgreSQL 18, local `RIBBITTO_DEV_METRICS_ADDR`, Playwright Chrome 157.0.8103.39, one member/tab. 0.5/2/5 s readings: 1 after open, six overlapping-navigation rounds, timed `window.stop()`/CDP `Page.stopLoading`, five rapid Back/Forward pairs, each ending loaded; closed: 0. 15 ms sampled peak: 1. Mid-stream interruption unconfirmed; shorter overlaps may be missed. No second tab/real network/WebKit; long-lived stray connection possible.
+X-8 ([§4](https://github.com/tkakkie/ribbitto/issues/1426#issuecomment-6716626894)): `33d709a`, disposable PostgreSQL 18, local `RIBBITTO_DEV_METRICS_ADDR`, Playwright Chrome 157.0.8103.39, one member/tab. 0.5/2/5 s readings: 1 after open, six overlapping-navigation rounds, timed `window.stop()`/CDP `Page.stopLoading`, five rapid Back/Forward pairs, each ending loaded; closed: 0. 15 ms sampled peak: 1. Mid-stream interruption unconfirmed; shorter overlaps may be missed. No second tab/real network/WebKit; long-lived stray connection possible.
 
 ## Position in the roadmap
 
 Confirmed by the maintainer (2026-10-19): after M7 (the composer track),
-M9's foundation (phases 1–5) starts first and runs alongside the *Basics*
+M9's foundation starts first and runs alongside the *Basics*
 track (private channels → direct messages → invitations). *Basics* does not
-wait for M9 as a whole, and M9's UX items (phase 6) do not block *Basics*.
-Where both change the same code, the two issues state their dependency and
-order before either is made `ready`; in particular, if #1361's A1 is
+wait for M9 as a whole, and M9's UX items do not block *Basics*.
+When both change the same code, the issues state dependencies and
+order before either is `ready`; if #1361's A1 is
 revisited, private channels and the conversation cache share one access
 model (#1361), and whichever lands second adds the tests for the other.
 
-Swap/cache deferred; partial navigation: #1408, new design/measurement, explicit approval.
+Swap/cache remains deferred; partial navigation requires #1408, new design and measurement, and explicit approval.
 
 ## Out of scope
 
@@ -62,7 +62,7 @@ Swap/cache deferred; partial navigation: #1408, new design/measurement, explicit
   decision #1361.
 - **Later features (#1361 A2, A3 and B):** reactions, editing, deleting,
   uploads, emoji picker and quick switcher; pending decision #1361 records
-  their client-side design rules, and they are built in their own
+  their client-side design rules, and they have their own
   milestones.
 - **Not planned:** rendering the message list on the client, and native apps
   ([Not planned](roadmap.md#not-planned)).

@@ -6,7 +6,7 @@ import (
 )
 
 func TestUnnestFromArguments(t *testing.T) {
-	argument := "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"
+	argument := "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"
 	parameter := "unsupported unnest parameter name"
 	call := "unsupported unnest call shape"
 	relation := "unsupported unnest relation shape"
@@ -142,13 +142,13 @@ func TestUnnestOrdinalityArguments(t *testing.T) {
 		{"lateral", "LATERAL unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
 		{"rows_from", "ROWS FROM(unnest(sqlc.arg(lo)::bigint[])) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
 		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value bigint, n bigint)", "unsupported unnest relation shape"},
-		{"column", "unnest(lo::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"literal", "unnest('{1}'::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"computed", "unnest(lower(sqlc.arg(lo))::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"positional", "unnest($1::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"text", "unnest(sqlc.arg(lo)::text[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"qualified_uuid", "unnest(sqlc.arg(lo)::pg_catalog.uuid[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
-		{"sized", "unnest(sqlc.arg(lo)::bigint[2]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"column", "unnest(lo::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"literal", "unnest('{1}'::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"computed", "unnest(lower(sqlc.arg(lo))::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"positional", "unnest($1::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"text", "unnest(sqlc.arg(lo)::text[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"qualified_uuid", "unnest(sqlc.arg(lo)::pg_catalog.uuid[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
+		{"sized", "unnest(sqlc.arg(lo)::bigint[2]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, sql := range []string{
@@ -189,6 +189,42 @@ func TestUnnestOrdinalityRelations(t *testing.T) {
 				}
 				checkUnnestFrom(t, sql, tc.want, calls)
 			}
+		})
+	}
+}
+
+func TestUnnestReadSetArray(t *testing.T) {
+	relation := "unnest(sqlc.arg(read_sets)::int8multirange[]) WITH ORDINALITY AS c(read_set, ord)"
+	for _, sql := range []string{
+		"SELECT * FROM " + relation,
+		"WITH c AS (SELECT * FROM " + relation + ") SELECT * FROM c",
+		"UPDATE message m SET id=c.read_set FROM " + relation,
+		"INSERT INTO message(id) SELECT read_set FROM " + relation,
+	} {
+		checkUnnestFrom(t, sql, "", 1)
+	}
+}
+
+func TestUnnestReadSetArrayRejections(t *testing.T) {
+	argument := "unsupported unnest argument: requires bigint[], uuid[] or ordinal int8multirange[] sqlc.arg parameter"
+	for _, arg := range []string{
+		"sqlc.arg(x)::int8multirange[]", "sqlc.arg(x)::int8multirange[2]", "sqlc.arg(x)::int8multirange[][]",
+		"sqlc.arg(x)::int8multirange[2][]", "sqlc.arg(x)::int8multirange", "sqlc.arg(x)::_int8multirange",
+		"sqlc.arg(x)::_int8multirange[]", "sqlc.arg(x)::pg_catalog.int8multirange[]", "sqlc.arg(x)::public.int8multirange[]",
+		"sqlc.narg(x)::int8multirange[]", "sqlc.arg(x)::int8multirange(1)[]",
+		"sqlc.arg(x)::int4multirange[]", "sqlc.arg(x)::int8range[]", "sqlc.arg(x)::tsrange[]", "sqlc.arg(x)::nummultirange[]",
+		"sqlc.arg(x)::uuid[], sqlc.arg(y)::int8multirange[]",
+	} {
+		t.Run(arg, func(t *testing.T) {
+			checkUnnestFrom(t, "SELECT * FROM unnest("+arg+") AS c(read_set, ord)", argument, 0)
+			if arg == "sqlc.arg(x)::int8multirange[]" {
+				return
+			}
+			want := argument
+			if strings.Contains(arg, ",") {
+				want = "unsupported unnest ordinality: requires one argument"
+			}
+			checkUnnestFrom(t, "SELECT * FROM unnest("+arg+") WITH ORDINALITY AS c(read_set, ord)", want, 0)
 		})
 	}
 }

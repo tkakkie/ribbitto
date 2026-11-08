@@ -7,6 +7,90 @@ import (
 	"github.com/tkakkie/ribbitto/tools/internal/sqlwalk"
 )
 
+// Only direct, qualified value columns in the same statement inherit the array's
+// permission. CTE/derived outputs, correlated references and sibling statements
+// cannot borrow it; proving those types would require a broader resolver.
+func readSetRelations(tree any, unnests map[float64]bool) (map[float64]bool, map[float64]bool, map[float64]bool, error) {
+	arrays, columns, ordinary := map[float64]bool{}, map[float64]bool{}, map[float64]bool{}
+	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, LexicalCTEs: true, SelectBranches: true, Visit: func(tag string, n map[string]any, statement sqlwalk.Scope) error {
+		if tag != "SelectStmt" && tag != "UpdateStmt" {
+			return nil
+		}
+		aliases, counts := map[string]string{}, map[string]int{}
+		tables := map[string]bool{}
+		var relation func(any, bool)
+		relation = func(v any, visible bool) {
+			if j := sqlwalk.Node(v, "JoinExpr"); j != nil {
+				// Hidden names still clash with references walked inside the join's ON.
+				relation(j["larg"], visible && j["alias"] == nil)
+				relation(j["rarg"], visible && j["alias"] == nil)
+				if j["alias"] == nil {
+					return
+				}
+			}
+			for _, kind := range []string{"RangeVar", "RangeSubselect", "RangeFunction", "JoinExpr"} {
+				r := sqlwalk.Node(v, kind)
+				if r == nil {
+					continue
+				}
+				a := sqlwalk.Object(r["alias"])
+				name, _ := a["aliasname"].(string)
+				if name == "" {
+					name, _ = r["relname"].(string)
+					if kind == "RangeFunction" {
+						name = "unnest"
+					}
+				}
+				counts[name]++
+				if visible && kind == "RangeVar" && statement.Physical(r) && a["colnames"] == nil {
+					tables[name] = true
+				}
+				functions := sqlwalk.List(r["functions"])
+				if !visible || kind != "RangeFunction" || len(functions) != 1 {
+					continue
+				}
+				items := sqlwalk.List(sqlwalk.Node(functions[0], "List")["items"])
+				f := sqlwalk.Node(items[0], "FuncCall")
+				location, ok := f["location"].(float64)
+				if !ok || !unnests[location] || r["ordinality"] != true {
+					continue
+				}
+				cast := sqlwalk.Node(sqlwalk.List(f["args"])[0], "TypeCast")
+				if sqlwalk.Names(sqlwalk.Object(cast["typeName"])["names"]) != "int8multirange" {
+					continue
+				}
+				arrays[cast["location"].(float64)] = true
+				names := sqlwalk.List(a["colnames"])
+				value, _ := sqlwalk.Node(names[0], "String")["sval"].(string)
+				if value != sqlwalk.Node(names[1], "String")["sval"] {
+					aliases[name] = value
+				}
+			}
+		}
+		for _, ref := range sqlwalk.List(n["fromClause"]) {
+			relation(ref, true)
+		}
+		if r := sqlwalk.Object(n["relation"]); r != nil {
+			relation(map[string]any{"RangeVar": r}, true)
+		}
+		return sqlwalk.Walk(n, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(kind string, column map[string]any, scope sqlwalk.Scope) error {
+			fields := sqlwalk.List(column["fields"])
+			if kind == "ColumnRef" && scope.Level == 0 && len(fields) == 2 {
+				alias, _ := sqlwalk.Node(fields[0], "String")["sval"].(string)
+				value, _ := sqlwalk.Node(fields[1], "String")["sval"].(string)
+				if counts[alias] == 1 && tables[alias] && value != "" {
+					ordinary[column["location"].(float64)] = true
+				}
+				if counts[alias] == 1 && aliases[alias] != "" && aliases[alias] == value {
+					columns[column["location"].(float64)] = true
+				}
+			}
+			return nil
+		}})
+	}})
+	return arrays, columns, ordinary, err
+}
+
 // Only a value parameter may carry read state across the module boundary.
 // Permission belongs to this cast, never to another nearby cast or call.
 func readSetParameter(v any) bool {
@@ -27,16 +111,17 @@ func readSetParameter(v any) bool {
 	return len(fields) == 1 && sqlwalk.Node(fields[0], "String")["sval"] != nil || literal != nil
 }
 
-// sqlc resolves column types against the schema. Other expressions must declare
-// bigint explicitly; the ordinary walk still checks their casts, calls and reads.
-func bigintOperand(v any, bigints map[float64]bool) bool {
+// With multirange arrays, only local plain-table columns can remain uncast:
+// sqlc does not type-check containment and parameter relations add other types.
+// The ordinary walk still checks explicitly cast expressions' calls and reads.
+func bigintOperand(v any, bigints, ordinary map[float64]bool) bool {
 	if column := sqlwalk.Node(v, "ColumnRef"); column != nil {
 		for _, field := range sqlwalk.List(column["fields"]) {
 			if sqlwalk.Node(field, "String") == nil {
 				return false
 			}
 		}
-		return true
+		return ordinary == nil || ordinary[column["location"].(float64)]
 	}
 	typ := sqlwalk.Object(sqlwalk.Node(v, "TypeCast")["typeName"])
 	return len(sqlwalk.List(typ["names"])) == 2 && sqlwalk.Names(typ["names"]) == "pg_catalog.int8" &&

@@ -5,7 +5,7 @@ type LoadEvent = CustomEvent<{ elt: Element }>;
 // Keep dataset absence and access semantics while deriving the key from its contract.
 const sourceOf = (item: Element): string | undefined => (item as HTMLElement).dataset[dom.SourceAttribute.slice(5)];
 
-(() => {
+export function startBranchSelection() {
   function update() {
     const form = document.getElementById(dom.BranchFormID) as HTMLFormElement | null;
     if (!form) return;
@@ -32,4 +32,4 @@ const sourceOf = (item: Element): string | undefined => (item as HTMLElement).da
     for (const item of items) (item as HTMLInputElement).disabled = sourceOf(item) !== source;
   });
   update();
-})();
+}

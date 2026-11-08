@@ -1137,8 +1137,8 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
    const anchor=document.createElement('a'); anchor.href=location.pathname+'/topics/03000000-0000-0000-0000-000000000000';
    anchor.append(marker); document.querySelector('#sidebar-channels').append(anchor);
    window.refreshExpiry=()=>dispatchEvent(new StorageEvent('storage',{key:scope()})); refreshExpiry();
-   window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; // Only the drafts script counts: other scripts may fail on the removed sidebar.
-   addEventListener('error',e=>{if(String(e.filename).includes('/message-drafts-')) expiryErrors++;});
+   window.draftWrites=0; window.draftRemovals=[]; window.expiryErrors=0; // Drafts runs in the page root, or standalone on sign-in.
+   addEventListener('error',e=>{if(/\/(?:message-drafts|page-channel)-/.test(String(e.filename))) expiryErrors++;});
    const set=Storage.prototype.setItem, remove=Storage.prototype.removeItem;
    // Other scripts may touch unrelated keys while the page loads.
    Storage.prototype.setItem=function(k,v){if(String(k).startsWith('ribbitto.draft.v1:')) draftWrites++; return set.call(this,k,v);};
@@ -1177,7 +1177,7 @@ func testSaveDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				// later, so a missed restore guard would visibly restore seed text.
 				p = open(t, false, `document.addEventListener('readystatechange',()=>{
     if(document.readyState!=='interactive') return;
-    `+seedExpiry+` document.querySelector('#sidebar-channels').remove(); editNow=expires+1; });`)
+    `+seedExpiry+` document.querySelector('#sidebar-channels').remove(); document.querySelector('#sidebar-resync').remove(); editNow=expires+1; });`)
 				want = ""
 			} else {
 				p = openClean(t, false, "")

@@ -11,7 +11,7 @@ import {
 } from "./contracts.gen.ts";
 import { isControlPinned, isStalePinsSeq } from "./pins-seq.ts";
 
-(() => {
+export function startPinsSync() {
   const focused = new WeakSet<object>();
   const inFlight = new WeakSet<Element>();
   const pinControlSelector = `[${PinControlAttribute}]`;
@@ -104,4 +104,4 @@ import { isControlPinned, isStalePinsSeq } from "./pins-seq.ts";
     if (root.matches(pinControlSelector)) sync(root);
     root.querySelectorAll(pinControlSelector).forEach(sync);
   });
-})();
+}

@@ -11,7 +11,7 @@ type HtmxEvent = CustomEvent<{ source: StreamSource; target?: HTMLElement; elt: 
 // Dataset absence is undefined (unlike getAttribute's null), including during BigInt parsing.
 const data = (element: Element, name: dom.ContractAttribute): string | undefined => dom.readAttribute(element, name) ?? undefined;
 
-(() => {
+export function startMessageStream() {
   const progress = streamProgressAdapter();
   const sources = new WeakSet<StreamSource>();
   let parked: StreamSource | null = null;
@@ -243,4 +243,4 @@ const data = (element: Element, name: dom.ContractAttribute): string | undefined
       },
     }));
   });
-})();
+}

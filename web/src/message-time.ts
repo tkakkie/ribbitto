@@ -1,4 +1,4 @@
-(() => {
+export function startMessageTime() {
   const formatter = new Intl.DateTimeFormat(document.documentElement.lang, {
     year: "numeric", month: "numeric", day: "numeric",
     hour: "numeric", minute: "numeric", second: "numeric",
@@ -19,4 +19,4 @@
   };
   localizeWithin(document);
   document.addEventListener("htmx:load", (event) => localizeWithin((event as CustomEvent<{ elt: Element }>).detail.elt));
-})();
+}

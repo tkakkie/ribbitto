@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -312,12 +315,12 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 		t.Fatal(err)
 	}
 	stream := "/organizations/acme/events?after=42&want=sidebar&channel=" + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/")
-	streamURL, err := static.ScriptURL(t.Context(), "message-stream")
+	streamURL, err := static.ScriptURL(t.Context(), "page-channel-list")
 	if err != nil {
 		t.Fatal(err)
 	}
 	mains, topics, streams, scripts := 0, 0, 0, map[string]bool{}
-	hasComposer, hasRead := false, false
+	hasConversation := false
 	for n := range doc.Descendants() {
 		switch {
 		case n.DataAtom == atom.Main:
@@ -338,24 +341,24 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 		case n.DataAtom == atom.Script:
 			src := attr(n, "src")
 			scripts[src] = true
-			hasComposer = hasComposer || strings.HasPrefix(src, "/static/dist/composer-")
-			hasRead = hasRead || strings.HasPrefix(src, "/static/dist/read-visibility-")
+			hasConversation = hasConversation || (strings.HasPrefix(src, "/static/dist/page-channel-") && !strings.HasPrefix(src, "/static/dist/page-channel-list-"))
 		}
 	}
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
-	pinsSyncURL, err := static.ScriptURL(t.Context(), "pins-sync")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sidebarScrollURL, err := static.ScriptURL(t.Context(), "sidebar-scroll")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The list has no composer or read form, so their scripts must be absent.
-	if !scripts[sidebarScrollURL] || !scripts[streamURL] || hasRead || scripts[pinsSyncURL] || hasComposer {
+	// The list root excludes the conversation's composer and reading modules.
+	if !scripts[streamURL] || hasConversation {
 		t.Errorf("list page scripts %v", scripts)
+	}
+	root, err := os.ReadFile("../../web/src/page-channel-list.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := regexp.MustCompile(`\bstart[A-Z]\w*\([^;\n]*\);`).FindAllString(string(root), -1)
+	wantStarts := []string{"startModule(startSidebarScroll);", "startModule(startSidebarUnread);", "startModule(startMessageStream);", "startModule(startMessageDrafts);"}
+	if !slices.Equal(starts, wantStarts) {
+		t.Errorf("list root starts %v, want %v", starts, wantStarts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
 		if strings.Contains(body, absent) {
@@ -484,14 +487,14 @@ func TestStreamStoppedNotice(t *testing.T) {
 	} {
 		for _, topic := range []*view.Topic{nil, {ID: kernel.ID{2}}} {
 			t.Run(tc.lang+fmt.Sprint(topic), func(t *testing.T) {
-				pinsSyncURL, err := static.ScriptURL(t.Context(), "pins-sync")
+				pinsSyncURL, err := static.ScriptURL(t.Context(), "page-channel")
 				if err != nil {
 					t.Fatal(err)
 				}
 				snapshot := view.ChannelPage{Organization: view.Organization{Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, Topic: topic}
 				rendered := renderIn(t, tc.lang, view.ChannelScreen("/static/css/app.css", snapshot))
 				if !strings.Contains(rendered, `<script defer src="`+pinsSyncURL+`"`) {
-					t.Fatalf("channel page missing pins-sync bundle %q", pinsSyncURL)
+					t.Fatalf("channel page missing channel page bundle %q", pinsSyncURL)
 				}
 				doc, err := html.Parse(strings.NewReader(rendered))
 				if err != nil {

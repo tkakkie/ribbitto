@@ -1,9 +1,6 @@
 # Web toolchain
 
-[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md) sets the rules;
-decision 45 sets `.test.ts` harnesses.
-
-## Language approval — #1410–#1413
+## Language approval
 
 Under [decision 42](../decisions/42-repository-languages-and-formats.md), the
 maintainer's [approval record](https://github.com/tkakkie/ribbitto/issues/1356#issuecomment-6289973261)
@@ -22,9 +19,9 @@ Review checks Makefile/workflow node/npm commands against that limited approval
 (decision 42 leaves commands to review); languagecheck does not scan them and they
 need no table entries.
 
-## Build, manifest and embedding — #1411
+## Build, manifest and embedding
 
-**Naming — confirmed:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
+**Naming:** `make bundles` runs `tools/webbuild` via esbuild's Go API, pinned only in
 the tools module. Each named `web/src/<name>.ts` entry becomes a minified
 classic IIFE named by esbuild's `[name]-[hash].js`, without shared chunks or
 dynamic imports. ES2018 avoids needless object spread/rest helpers in supported
@@ -36,15 +33,17 @@ Logical manifest entries record bundle filenames and SHA-256 content hashes;
 commit SHA and run id are build inputs. Production output has no maps or
 source-map links.
 
-`web/static/scripts.go` owns the shared page-entry list; non-entry `web/src/`
-modules are never bundled standalone. Validate the manifest and bundle hashes
-at startup; missing/unknown entries or bundles and undeclared renders fail.
-Use no mutable globals. Type checking covers authored TypeScript, excluding
-SHA-256-pinned `web/static/vendor` and generated `web/static/dist` scripts.
-`web/legacy-scripts.txt` is empty.
-Classic bundle: deferred, with nonce; arrival stays synchronous.
-Converted bundles are strict-mode scripts (assignments to non-writable properties throw, which sloppy legacy scripts silently ignored).
-Registered hashed `/static/dist/` bundles are immutable; the manifest is private.
+`web/static/scripts.go` declares `page-channel`, `page-channel-list`,
+`message-drafts` (sign-in), `popover-focus` (layout) and synchronous `arrival`.
+Shared modules are bundled into each root, without shared chunks or lazy loading.
+Other `web/src/` modules are not standalone entries. Startup validates current
+entries and hashes strictly; retained development generations may name retired
+entries, with safe filenames and paths. Missing/unknown current entries or
+bundles and undeclared renders fail. Use no mutable globals.
+Type checking covers authored TypeScript, excluding SHA-256-pinned vendor and generated
+dist scripts. `web/legacy-scripts.txt` is empty.
+Classic bundles are deferred with a nonce, and strict-mode (writes to non-writable
+properties throw). Registered hashed bundles are immutable; the manifest is private.
 
 Fresh checkout: `make bundles` before direct `go build ./...`, `go test`,
 `go vet`, `go run` or tools loading the tree. Make build/check/run, CI schema
@@ -60,7 +59,7 @@ Development bundles and the `RIBBITTO_DEV_ASSETS` serving rules are in
 
 ## Versions and installation — #1410, #1415
 
-**Node pin mechanics — confirmed:** one root `.node-version` containing `26.8.1`. CI and local
+**Node pin mechanics:** one root `.node-version` containing `26.8.1`. CI and local
 development read this same pin; Go wrappers used by one-line
 Make recipes reject a different runtime version. Use that Node release's
 bundled npm, not a separately upgraded global npm. The wrapper resolves npm
@@ -90,25 +89,25 @@ Checker/runner probes and hermetic wrapper tests are described in
 no-emit config includes web/src/**/*.ts (web/test/*.test.ts, node-test.d.ts from #2092); the empty
 `web/legacy-scripts.txt` rejects later additions (#1414). `globals.d.ts` supplies the first input and the htmx global.
 
-**Pin updates — confirmed:** in a reviewed pin-update PR, change the exact
+**Pin updates:** in a reviewed pin-update PR, change the exact
 checker pin and lockfile together; for a Node update also change `.node-version`.
 When a pin or lockfile changes, regenerate `package-lock.json` with the pinned
 Node release's bundled npm: `npm install --ignore-scripts` is used only for
 lockfile creation or regeneration; `npm ci --ignore-scripts` verifies the lock.
 CI must prove installation, type checking and unit tests with the changed pins.
 
-**Dependabot — confirmed:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
+**Dependabot:** #1410 adds npm to `.github/dependabot.yml` with Go's seven-day
 cooldown; updates still need review and exact pins.
 
-**Syntax — confirmed:** erasable TypeScript only: no enums, runtime namespaces
+**Syntax:** erasable TypeScript only: no enums, runtime namespaces
 or parameter properties.
 
-**Imports — confirmed:** relative imports
+**Imports:** relative imports
 name `.ts` with `allowImportingTsExtensions` (#1410). Node ignores tsconfig
 path aliases. Client unit tests and `make test-web` follow
 [`web-tests.md`](web-tests.md) and [checks](web-toolchain-checks.md).
 
-## Generated contract and state — #1413, #1416, #1417
+## Generated contract and state
 
 The [generated contract](web-contracts-generated.md) defines ownership,
 accessors, runtime validation and literal checks.
@@ -123,7 +122,3 @@ separate from a 409-rotated retry request key; preserve
 stream-first/response-first settlement. Browser tests retain these guarantees,
 with contract-specific fixture updates where needed, never weakened
 assertions.
-
-See [source maps](web-source-maps.md#source-maps--1411).
-
-See [checks and measurement](web-toolchain-checks.md#checks-and-measurement--1412-1414-1426).

@@ -2,7 +2,7 @@ package web
 
 const (
 	// #1457: shared menu/template move actions to the fixed part; exact counts.
-	feedBudgetElementsFixed = 193
+	feedBudgetElementsFixed = 179
 	// #1478: each message's DOM must not grow without justification.
 	feedBudgetElementsSlope = 22
 	// #1478: fixed forms add request-processing work; zero headroom.
@@ -22,13 +22,13 @@ const (
 	// #1457: no per-message forms are processed at initial load.
 	feedBudgetHTMXSlope = 0
 	// #1478: bytes allow 5% (rounded up) above the measured fixed part for classes/text/translations.
-	feedBudgetBytesFixed = 24469
+	feedBudgetBytesFixed = 23328
 	// #1500: bytes allow 5% (rounded up) above the measured slope for classes/text/translations.
 	feedBudgetBytesSlope = 3639
 	// #1478: 256-byte middle-sample tolerance covers event_seq digit and cyclic seed-name lengths.
 	feedBudgetBytesLinearity = 256
 	// #1478, #1489: real first-render elements have zero headroom; a count change (#1477) is a visible, justified budget change.
-	feedBudgetElementsLatest = 1354
+	feedBudgetElementsLatest = 1340
 	// #1478: real first-render forms have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetFormsLatest = 12
 	// #1500: real first-render submits have zero headroom; a count change (#1477) is a visible, justified budget change.
@@ -38,11 +38,11 @@ const (
 	// #1500: real first-render htmx nodes have zero headroom; a count change (#1477) is a visible, justified budget change.
 	feedBudgetHTMXLatest = 22
 	// #1500: real first-render bytes allow 5% (rounded up) for classes/text/translations; a count change (#1477) is a visible, justified budget change.
-	feedBudgetBytesLatest = 214299
+	feedBudgetBytesLatest = 212511
 
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture;
 	// its selected topic is not in the sidebar list (a listed one adds about 8 elements, not budgeted).
-	feedBudgetResolvedElementsFixed = 212
+	feedBudgetResolvedElementsFixed = 198
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedFormsFixed = 13
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
@@ -54,7 +54,7 @@ const (
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic byte slope.
 	feedBudgetResolvedBytesSlope = 3467
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
-	feedBudgetResolvedElementsLatest = 1373
+	feedBudgetResolvedElementsLatest = 1359
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.
 	feedBudgetResolvedFormsLatest = 13
 	// #2183: https://github.com/tkakkie/ribbitto/issues/2183#issuecomment-6687852298 approves the resolved-topic fixture.

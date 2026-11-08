@@ -34,11 +34,11 @@ import (
 )
 
 func TestHandler(t *testing.T) {
-	bundleURL, err := static.ScriptURL(t.Context(), "message-time")
+	bundleURL, err := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil {
 		t.Fatal(err)
 	}
-	quoteSelectionURL, err := static.ScriptURL(t.Context(), "quote-selection")
+	quoteSelectionURL, err := static.ScriptURL(t.Context(), "page-channel-list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +91,11 @@ func TestHandler(t *testing.T) {
 }
 
 func TestStaticBundleRegistry(t *testing.T) {
-	bundleURL, err := static.ScriptURL(t.Context(), "message-time")
+	bundleURL, err := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil {
 		t.Fatal(err)
 	}
-	composerURL, err := static.ScriptURL(t.Context(), "composer")
+	composerURL, err := static.ScriptURL(t.Context(), "page-channel-list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,14 +601,14 @@ func TestDevelopmentAssets(t *testing.T) {
 		s.Setup, s.SetupSessions, s.SignUp = setup, setup, fakeSignUp{&fakeSetup{open: true}}
 	}))
 	prodHandler, prodErr := newTestHandler(t, "")
-	prodScriptURL, urlErr := static.ScriptURL(t.Context(), "message-time")
+	prodScriptURL, urlErr := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil || prodErr != nil || urlErr != nil {
 		t.Fatal(err, prodErr, urlErr)
 	}
-	scriptPattern := regexp.MustCompile(`/static/dist/message-time-[A-Z0-9]{8}\.js`)
+	scriptPattern := regexp.MustCompile(`/static/dist/page-channel-[A-Z0-9]{8}\.js`)
 	previousCSSURL, previousScriptURL := "", ""
 	for i, css := range []string{initialCSS, "body { color: blue; }"} {
-		if os.WriteFile(cssPath, []byte(css), 0o600) != nil || os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), fmt.Appendf(nil, "console.log(%q);\n", fmt.Sprintf("edit-%d", i)), 0o600) != nil {
+		if os.WriteFile(cssPath, []byte(css), 0o600) != nil || os.WriteFile(filepath.Join(root, "web", "src", "page-channel.ts"), fmt.Appendf(nil, "console.log(%q);\n", fmt.Sprintf("edit-%d", i)), 0o600) != nil {
 			t.Fatal("writing updated sources")
 		}
 		if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
@@ -652,7 +652,7 @@ func TestDevelopmentAssets(t *testing.T) {
 				}
 			}
 		}
-		for _, unknownURL := range []string{"/static/dist/message-time-00000000.js", "/static/dist/message-time-00000000.js.map"} {
+		for _, unknownURL := range []string{"/static/dist/page-channel-00000000.js", "/static/dist/page-channel-00000000.js.map"} {
 			w = httptest.NewRecorder()
 			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, unknownURL, nil))
 			if w.Code != http.StatusNotFound || w.Header().Get("Cache-Control") != "" {
@@ -663,7 +663,7 @@ func TestDevelopmentAssets(t *testing.T) {
 	}
 
 	// Failed rebuild leaves the previous generation fully servable; a subsequent valid build recovers.
-	if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), []byte("const broken = ;\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "web", "src", "page-channel.ts"), []byte("const broken = ;\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := exec.Command(builder, "-dev", root).Run(); err == nil {
@@ -676,7 +676,7 @@ func TestDevelopmentAssets(t *testing.T) {
 			t.Fatalf("GET %s after failed rebuild: status = %d", url, w.Code)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), []byte("console.log('recovered');\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "web", "src", "page-channel.ts"), []byte("console.log('recovered');\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
@@ -731,7 +731,7 @@ func TestDevelopmentAssets(t *testing.T) {
 		}
 	}()
 	for i := range 3 {
-		if err := os.WriteFile(filepath.Join(root, "web", "src", "message-time.ts"), fmt.Appendf(nil, "console.log('concurrent-%d');\n", i), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "web", "src", "page-channel.ts"), fmt.Appendf(nil, "console.log('concurrent-%d');\n", i), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if out, err := exec.Command(builder, "-dev", root).CombinedOutput(); err != nil {
@@ -986,7 +986,7 @@ func copyScriptAssets(t *testing.T, dir string) {
 func TestHandlerRejectsIncompleteScripts(t *testing.T) {
 	for _, tc := range []struct{ name, manifest, want string }{
 		{"missing declaration", `{"entries":{}}`, "missing declared entry"},
-		{"missing bundle", `{"entries":{"message-time":{"file":"message-time-ABCDEFGH.js"}}}`, "reading script bundle"},
+		{"missing bundle", `{"entries":{"arrival":{"file":"arrival-ABCDEFGH.js"}}}`, "reading script bundle"},
 		{"unknown entry", "", "unknown entry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -30,7 +30,8 @@ const sidebarUnreadBrowserClock = `(() => {
  window.setTimeout = (fn, ms, ...args) => {
   const stack = new Error().stack;
   // The SSE extension's own reconnect timer (started from a script-dispatched error) stays real.
-  if (!/sidebar-unread-[A-Z0-9]{8}\.js|message-stream-[A-Z0-9]{8}\.js/.test(stack) || /htmx-ext-sse/.test(stack)) return original(fn, ms, ...args);
+  if (!/page-channel(?:-list)?-[A-Z0-9]{8}\.js/.test(stack) || /htmx-ext-sse/.test(stack) ||
+      (!String(fn).includes('.losses') && !String(fn).includes('location.reload()'))) return original(fn, ms, ...args);
   window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };

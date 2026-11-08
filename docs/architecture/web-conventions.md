@@ -1,8 +1,5 @@
 # Web front-end conventions
 
-[Decision 43](../decisions/43-typescript-with-a-go-driven-build.md);
-[web toolchain](web-toolchain.md).
-
 ## Rules
 
 - **Modules:** new and converted modules live
@@ -16,7 +13,12 @@
   DOM code stays thin. Test rules:
   [`web-tests.md`](web-tests.md).
 
-- **Page lifecycle:** new modules use `web/src/lifecycle.ts` per module instance:
+- **Startup:** converted modules export start functions. `web/src/page-channel.ts`
+  (`ChannelScreen`) and `web/src/page-channel-list.ts` (`ChannelListScreen`)
+  start them explicitly, preserving #2066’s listener inventory.
+  Drafts retain a sign-in wrapper; popover focus starts from the layout, once per page.
+
+- **Page lifecycle:** roots and new modules use `web/src/lifecycle.ts` per module instance:
   synchronous start, freeze on persisted pagehide, thaw
   on persisted pageshow and dispose on ordinary pagehide or early removal.
   Every pageshow also reports persistence, including the initial ordinary one.

@@ -7,7 +7,7 @@ import {
 } from "./contracts.gen.ts";
 import { isOwnMention } from "./own-mention.ts";
 
-(() => {
+export function startMemberMentions() {
   const selector = `bdi[${MemberIDAttribute}]`;
   const streamSelector = organizationStreamSelector();
   const highlight = (element: Element) => {
@@ -20,4 +20,4 @@ import { isOwnMention } from "./own-mention.ts";
     root.querySelectorAll(selector).forEach(highlight);
   };
   document.addEventListener("htmx:load", (event) => highlightWithin((event as CustomEvent<{ elt: ParentNode }>).detail.elt));
-})();
+}

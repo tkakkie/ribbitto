@@ -3,7 +3,7 @@ import * as dom from "./contracts.gen.ts";
 // Keep each requested form's identity until its response arrives. Parking it
 // with its message lets late responses and SSE update it without stealing the
 // shared menu's current controls; replacing/pruning that message discards it.
-(() => {
+export function startMessageMenu() {
   const menu = dom.getMessageActions();
   const template = dom.getMessageActionsTemplate();
   const trigger = dom.getMessageActionsTrigger();
@@ -87,4 +87,4 @@ import * as dom from "./contracts.gen.ts";
     const root = (event as CustomEvent<{ elt: Element }>).detail.elt;
     if (opener && root.contains(opener)) dismiss();
   });
-})();
+}

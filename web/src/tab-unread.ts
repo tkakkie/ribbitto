@@ -1,7 +1,7 @@
 import { getSidebarChannels, LinkChannelDOMPrefix, UnreadCountAttribute, readAttribute } from "./contracts.gen.ts";
 import { tabUnread } from "./tab-unread-state.ts";
 
-(() => {
+export function startTabUnread() {
   const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!icon || !getSidebarChannels()) return;
   const plain = icon.href, title = document.title, image = new Image(), canvas = document.createElement("canvas"), paint = canvas.getContext("2d")!;
@@ -35,4 +35,4 @@ import { tabUnread } from "./tab-unread-state.ts";
   new MutationObserver(update).observe(getSidebarChannels()!.parentElement!, { subtree: true, childList: true, attributeFilter: [UnreadCountAttribute] });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", update);
   update();
-})();
+}

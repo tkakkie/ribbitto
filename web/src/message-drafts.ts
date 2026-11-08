@@ -14,6 +14,7 @@ import {
   restoredSendKey, selectKeysToTrim, shouldWriteDraft, sweepKeys,
 } from "./drafts.ts";
 
+export function startMessageDrafts() {
 try {
   const signInForm = document.querySelector(`form[${DraftsHorizonAttribute}]`);
   const signIn = signInForm ? readAttribute(signInForm, DraftsHorizonAttribute) : null;
@@ -170,3 +171,7 @@ try {
     }
   }
 } catch { /* Without storage there is nothing to clean up; the page still works. */ }
+}
+
+// Sign-in retains its standalone entry; channel pages start drafts from their root.
+if (document.currentScript?.getAttribute("src")?.includes("/message-drafts-")) startMessageDrafts();

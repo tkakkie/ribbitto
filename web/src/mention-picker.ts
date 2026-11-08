@@ -11,7 +11,7 @@ import {
 
 type HtmxSwapEvent = CustomEvent<{ target?: HTMLElement | null }>;
 
-(() => {
+export function startMentionPicker() {
   const body = getMessageBody();
   const picker = getMentionPicker();
   const search = getMentionSearch();
@@ -124,4 +124,4 @@ type HtmxSwapEvent = CustomEvent<{ target?: HTMLElement | null }>;
   picker.addEventListener("click", (event) => {
     if (!state.composing) pick((event.target as Element).closest<HTMLElement>('[role="option"]'));
   });
-})();
+}

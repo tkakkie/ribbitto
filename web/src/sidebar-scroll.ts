@@ -1,6 +1,6 @@
 import * as dom from "./contracts.gen.ts";
 
-(() => {
+export function startSidebarScroll() {
   // Channels are ordered by name, so the current one and its nested topics
   // can sit far down a long sidebar (#922). This runs once, on load: live
   // list replacements happen inside the scrolling pane, which keeps its own
@@ -21,4 +21,4 @@ import * as dom from "./contracts.gen.ts";
   // Setting scrollTop moves only this pane, instantly: never the window or
   // focus, and no motion that a reduced-motion preference would have to stop.
   pane.scrollTop += box.top - port.top - (pane.clientHeight - box.height) / 2;
-})();
+}

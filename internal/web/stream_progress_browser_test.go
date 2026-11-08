@@ -124,7 +124,7 @@ func testStreamProgressBrowser(t *testing.T, browser *rod.Browser) {
 func testCheckpointReopenBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	script, err := static.ScriptURL(ctx, "message-stream")
+	script, err := static.ScriptURL(ctx, "page-channel-list")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,7 @@ import {
   writeAttribute,
 } from "./contracts.gen.ts";
 
-(() => {
+export function startSidePanel() {
   // Closing a panel is a page load, so the opener's id crosses it in
   // sessionStorage: a focus hint whose loss only leaves focus at the top.
   const key = "panel-opener";
@@ -103,4 +103,4 @@ import {
     remember();
     location.assign(close.href);
   });
-})();
+}

@@ -17,15 +17,15 @@ import (
 )
 
 func TestScriptManifest(t *testing.T) {
-	const file = "message-time-ABCDEFGH.js"
+	const file = "page-channel-ABCDEFGH.js"
 	const bundle = "(()=>{})();"
 	sum := sha256.Sum256([]byte(bundle))
 	var embedded struct{ Entries map[string]struct{} }
 	if data, err := fs.ReadFile(static.FS(), "dist/manifest.json"); err != nil || json.Unmarshal(data, &embedded) != nil {
 		t.Fatal("reading embedded manifest")
 	}
-	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sum)
-	devEntry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":%q}`, file, sum, file+".map")
+	entry := fmt.Sprintf(`"page-channel":{"file":%q,"sha256":"%x"}`, file, sum)
+	devEntry := fmt.Sprintf(`"page-channel":{"file":%q,"sha256":"%x","map":%q}`, file, sum, file+".map")
 	previousEntry := func(name, file, mapFile string) string {
 		return fmt.Sprintf(`[{%q:{"file":%q,"map":%q}}]`, name, file, mapFile)
 	}
@@ -34,15 +34,15 @@ func TestScriptManifest(t *testing.T) {
 	}{
 		{"valid", entry, "", file, "", ""},
 		{"valid development map", devEntry, "", file, file + ".map", ""},
-		{"valid previous generation", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"message-time-OLDHASH1.js.map"}}]`, file, file + ".map", ""},
+		{"valid previous generation", devEntry, `[{"page-channel":{"file":"page-channel-OLDHASH1.js","map":"page-channel-OLDHASH1.js.map"}}]`, file, file + ".map", ""},
 		{"valid previous digit entry", devEntry, previousEntry("2fa", "2fa-OLDHASH1.js", "2fa-OLDHASH1.js.map"), file, file + ".map", ""},
 		{"invalid previous digit filename", devEntry, previousEntry("2fa", "other-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
 		{"invalid previous digit map filename", devEntry, previousEntry("2fa", "2fa-OLDHASH1.js", "other.js.map"), file, file + ".map", "invalid source map filename"},
 		{"missing declaration", "", "", file, "", "missing declared entry"},
-		{"missing composer", entry, "", file, "", "missing declared entry"},
+		{"missing channel list", entry, "", file, "", "missing declared entry"},
 		{"missing bundle", entry, "", "other.js", "", "reading script bundle"},
 		{"missing source map", devEntry, "", file, "", "reading source map"},
-		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), "", file, "other.js.map", "invalid source map filename"},
+		{"invalid source map filename", fmt.Sprintf(`"page-channel":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), "", file, "other.js.map", "invalid source map filename"},
 		{"unknown entry", entry + `,"other":{}`, "", file, "", "unknown entry"},
 		{"invalid previous entry name", devEntry, `[{"../other":{"file":"../other-OLDHASH1.js"}}]`, file, file + ".map", "invalid bundle filename"},
 		{"previous entry with slash", devEntry, previousEntry("a/b", "a/b-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
@@ -53,10 +53,10 @@ func TestScriptManifest(t *testing.T) {
 		{"previous entry with leading hyphen", devEntry, previousEntry("-a", "-a-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
 		{"previous entry with trailing hyphen", devEntry, previousEntry("a-", "a--OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
 		{"previous entry with double hyphen", devEntry, previousEntry("a--b", "a--b-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
-		{"invalid previous filename", devEntry, `[{"message-time":{"file":"../escape.js"}}]`, file, file + ".map", "invalid bundle filename"},
-		{"invalid previous map filename", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"other.js.map"}}]`, file, file + ".map", "invalid source map filename"},
-		{"invalid filename", `"message-time":{"file":"../escape.js"}`, "", file, "", "invalid bundle filename"},
-		{"wrong content", `"message-time":{"file":"message-time-ABCDEFGH.js","sha256":"bad"}`, "", file, "", "hash mismatch"},
+		{"invalid previous filename", devEntry, `[{"page-channel":{"file":"../escape.js"}}]`, file, file + ".map", "invalid bundle filename"},
+		{"invalid previous map filename", devEntry, `[{"page-channel":{"file":"page-channel-OLDHASH1.js","map":"other.js.map"}}]`, file, file + ".map", "invalid source map filename"},
+		{"invalid filename", `"page-channel":{"file":"../escape.js"}`, "", file, "", "invalid bundle filename"},
+		{"wrong content", `"page-channel":{"file":"page-channel-ABCDEFGH.js","sha256":"bad"}`, "", file, "", "hash mismatch"},
 		{"invalid JSON", "{", "", file, "", "decoding script manifest"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -66,10 +66,10 @@ func TestScriptManifest(t *testing.T) {
 				assets["dist/"+tc.mapFile] = &fstest.MapFile{Data: []byte("{}")}
 			}
 			for name := range embedded.Entries {
-				if name == "composer" && tc.name == "missing composer" {
+				if name == "page-channel-list" && tc.name == "missing channel list" {
 					continue
 				}
-				if name != "message-time" && entries != "" && entries != "{" {
+				if name != "page-channel" && entries != "" && entries != "{" {
 					entries += fmt.Sprintf(`,%q:{"file":"%s-ABCDEFGH.js","sha256":"%x"}`, name, name, sum)
 					assets["dist/"+name+"-ABCDEFGH.js"] = &fstest.MapFile{Data: []byte(bundle)}
 				}
@@ -93,7 +93,7 @@ func TestScriptManifest(t *testing.T) {
 				t.Fatal(err)
 			}
 			ctx := static.WithScripts(t.Context(), scripts)
-			url, err := static.ScriptURL(ctx, "message-time")
+			url, err := static.ScriptURL(ctx, "page-channel")
 			if err != nil || url != "/static/dist/"+file || !scripts.IsBundle("dist/"+file) {
 				t.Fatalf("URL = %q, %v", url, err)
 			}
@@ -101,7 +101,7 @@ func TestScriptManifest(t *testing.T) {
 				t.Fatalf("IsMap = %v for mapFile %q", scripts.IsMap("dist/"+file+".map"), tc.mapFile)
 			}
 			if tc.previous != "" {
-				name := "message-time"
+				name := "page-channel"
 				if tc.name == "valid previous digit entry" {
 					name = "2fa"
 				}
@@ -127,7 +127,7 @@ func TestEmbeddedProductionScripts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url, err := static.ScriptURL(t.Context(), "message-time")
+	url, err := static.ScriptURL(t.Context(), "page-channel")
 	if err != nil || !scripts.IsBundle(strings.TrimPrefix(url, "/static/")) {
 		t.Fatalf("embedded URL = %q, %v", url, err)
 	}
@@ -221,7 +221,7 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), registry, 0644); err != nil {
 		t.Fatal(err)
 	}
-	source := filepath.Join(root, "web/src/message-time.ts")
+	source := filepath.Join(root, "web/src/page-channel.ts")
 	previous := ""
 	for _, text := range []string{`console.log("first");`, `console.log("changed");`} {
 		if err := os.WriteFile(source, []byte(text), 0644); err != nil {
@@ -236,7 +236,7 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		url, err := scripts.URL("message-time")
+		url, err := scripts.URL("page-channel")
 		if err != nil || url == "" || url == previous {
 			t.Fatalf("source change did not change URL: %q, %v", url, err)
 		}
@@ -257,11 +257,11 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 	}
 	if scripts, err := static.NewScripts(os.DirFS(filepath.Join(root, "web/static"))); err != nil {
 		t.Fatalf("production scripts invalid after dev build: %v", err)
-	} else if url, err := scripts.URL("message-time"); err != nil || url != previous || scripts.IsMap(strings.TrimPrefix(url, "/static/")+".map") {
+	} else if url, err := scripts.URL("page-channel"); err != nil || url != previous || scripts.IsMap(strings.TrimPrefix(url, "/static/")+".map") {
 		t.Fatalf("production URL or map changed after dev build: %q, %v", url, err)
 	}
 	// Publish an old per-script generation, then migrate back to the current registry.
-	oldRegistry := strings.ReplaceAll(string(registry), `"message-time"`, `"retired-composer"`)
+	oldRegistry := strings.ReplaceAll(string(registry), `"page-channel"`, `"retired-composer"`)
 	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), []byte(oldRegistry), 0644); err != nil {
 		t.Fatal(err)
 	}

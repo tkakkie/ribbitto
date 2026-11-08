@@ -115,7 +115,7 @@ cap), and close to `N` in real use, where a member has one or two tabs.
 
 ## Decision
 
-**(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622).
+**(a2), with its triggers mandatory.**
 It is the only option that keeps #262's guarantee by the same ordering
 argument as before #670 (the deciding read starts
 after the render) and can stop the per-post cost following `N`. It also
@@ -129,6 +129,4 @@ authorization logic ([package boundary](packages.md)). Joins do not bump the
 epoch because only allows are cached; denies are never cached. A rolled-back
 access change must leave the committed epoch unchanged.
 
-The revisit condition was judged met at 0.72 `N` on #671; the maintainer
-kept (a2) on 2026-10-09. See the
-[measurements and reasons](../measurements/stream-authorization-results.md).
+See [measurements and the revisit disposition](../measurements/stream-authorization-results.md).

@@ -76,6 +76,7 @@
 | message_organization_id_id_key | CREATE UNIQUE INDEX message_organization_id_id_key ON public.message USING btree (organization_id, id) |
 | message_quoted_message_idx | CREATE INDEX message_quoted_message_idx ON public.message USING btree (organization_id, quoted_message_id) WHERE (quoted_message_id IS NOT NULL) |
 | message_org_channel_id_key | CREATE UNIQUE INDEX message_org_channel_id_key ON public.message USING btree (organization_id, channel_id, id) |
+| message_replies_idx | CREATE INDEX message_replies_idx ON public.message USING btree (organization_id, reply_to_member_id, event_seq DESC, channel_id) WHERE (reply_to_member_id IS NOT NULL) |
 
 ## Triggers
 

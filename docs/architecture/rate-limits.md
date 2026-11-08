@@ -96,8 +96,10 @@ The persistent count cap is described in
 The sidebar resync POST allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
 all tabs, sessions and addresses.
-The budget leaves steady retry headroom for 16 tabs and a burst of two
-requests per tab for visibility return, persisted `pageshow` and early recovery retries.
+The client's exponential backoff is capped at 8 s, with each wait between
+half and all of it. At the cap, 16 tabs retry at most 4 times/s, leaving
+steady retry headroom in the budget. A burst of two requests per tab covers
+visibility return, persisted `pageshow` and early recovery retries.
 
 CSRF, session and membership checks precede admission; non-members still
 get 404. Admission precedes `RequestResync`. Refusal is 429 with

@@ -182,7 +182,11 @@ func checkJavaScript(name, source string) []javascriptFinding {
 	// Delimiter depth bounds the declaration check without requiring an IIFE.
 	tokens := regexp.MustCompile(`\b(?:var|let|const)\b|\bfunction\b\s*\*?\s*[A-Za-z_$][\w$]*|[{}()]`)
 	braces, parentheses := 0, 0
+	rawLines := strings.Split(source, "\n")
 	for i, line := range strings.Split(maskJavaScript(source), "\n") {
+		if name != "stream-progress-adapter.ts" && cursorWrite(rawLines[i], line) {
+			findings = append(findings, javascriptFinding{i + 1, "Progress adapter owns cursor writes"})
+		}
 		for _, rule := range rules {
 			if rule.pattern.MatchString(line) {
 				findings = append(findings, javascriptFinding{i + 1, rule.name})
@@ -213,6 +217,58 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		}
 	}
 	return findings
+}
+
+// Like the other checks, this covers recognizable writes; aliases remain a review concern.
+func cursorWrite(raw, masked string) bool {
+	if regexp.MustCompile(`\b(?:writeAttribute|removeAttribute)\s*\(.*\b(?:AppliedCursorAttribute|EventCursorAttribute)\b|\bdataset\s*\.\s*(?:appliedCursor|eventCursor)\s*(?:=(?:[^=]|$)|(?:\+|-|\*|/|%|&&|\|\||\?\?)=|\+\+|--)|\bdelete\s+\w+\.dataset\.(?:appliedCursor|eventCursor)`).MatchString(masked) {
+		return true
+	}
+	pattern := regexp.MustCompile(`\b(?:setAttribute|removeAttribute)\s*\(\s*["'](?:data-applied-cursor|data-event-cursor|sse-connect)["']|\bsearchParams\s*\.\s*(?:set|append|delete)\s*\(\s*["']after["']`)
+	for _, loc := range pattern.FindAllStringIndex(raw, -1) {
+		// A call mentioned in a string or comment has no executable method name.
+		if masked[loc[0]] == raw[loc[0]] {
+			return true
+		}
+	}
+	return false
+}
+
+func TestCursorWriter(t *testing.T) {
+	for _, source := range []string{
+		`dom.writeAttribute(node, dom.AppliedCursorAttribute, id);`,
+		`writeAttribute(node, EventCursorAttribute, id);`,
+		`node.dataset.appliedCursor = id;`,
+		`node.dataset.eventCursor = id;`,
+		`node.dataset.eventCursor += id;`,
+		`delete node.dataset.appliedCursor;`,
+		`node.setAttribute("data-applied-cursor", id);`,
+		`node.removeAttribute('data-event-cursor');`,
+		`node.setAttribute("sse-connect", url);`,
+		`url.searchParams.set("after", id);`,
+		`url.searchParams.delete('after');`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			for _, name := range []string{"message-stream.ts", "other.ts", "stream-progress-adapter.ts.bak.ts"} {
+				got := checkJavaScript(name, source)
+				if len(got) != 1 || got[0].rule != "Progress adapter owns cursor writes" {
+					t.Fatalf("%s: got %v, want cursor ownership finding", name, got)
+				}
+			}
+			for _, text := range []string{"// " + source, "void " + strconv.Quote(source), source} {
+				name := "other.ts"
+				if text == source {
+					name = "stream-progress-adapter.ts"
+				}
+				if got := checkJavaScript(name, text); len(got) != 0 {
+					t.Fatalf("%s: unexpected findings %v", name, got)
+				}
+			}
+		})
+	}
+	if got := checkJavaScript("other.ts", `dom.readAttribute(node, dom.AppliedCursorAttribute); node.getAttribute("sse-connect"); url.searchParams.get("after");`); len(got) != 0 {
+		t.Fatalf("cursor readers: %v", got)
+	}
 }
 
 // Preserve positions and quote delimiters so diagnostics keep source line

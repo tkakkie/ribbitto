@@ -1,7 +1,5 @@
 # Web JavaScript: unread
 
-Unread-script contracts for [web JavaScript](web-javascript.md#javascript).
-
 During persisted `pagehide` cleanup of `#organization-stream`, park only a
 non-CLOSED source reported by `htmx:sseClose`. Persisted `pageshow` dispatches
 `error` on that closed source once, then forgets it. The vendored SSE extension
@@ -14,7 +12,8 @@ pending extension retry remains its only retry. Recreated sources have no
 The bubbling `htmx:beforeCleanupElement` on `#organization-stream` reaches every
 listener; each must leave state usable for the next persisted `pageshow`.
 
-- **Transport and visible reads:** `checkpoint` updates only `sse-connect`'s
+- **Transport and visible reads:** `stream-progress-adapter.ts` is the sole
+  cursor writer. `checkpoint` updates only `sse-connect`'s
   `after`, monotonically, independent of applied/shown cursors. `read-applied`
   emits only after successful DOM application is visibly shown, including
   hidden-tab return. Automatic reads send snapshot then latest applied cursor;

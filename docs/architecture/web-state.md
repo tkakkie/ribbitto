@@ -1,13 +1,14 @@
 # Web state and swap zones
 
-Owner names (Progress, conversation applier, unread owner, pins owner) are #2060 targets, not current code.
+Conversation applier, unread owner and pins owner are #2060 targets.
 
 ## Progress
 
-`web/src/stream-progress.ts` exists and is not yet wired into the page.
-It is a DOM-free model with `compatible` and `strict` modes; both take the
-same inputs. Wiring, decoding, application and recovery remain separate work
-in [M10](../roadmap-m10.md).
+`web/src/stream-progress.ts` is DOM-free; both modes take the same inputs.
+The stream reports in compatible mode.
+`web/src/stream-progress-adapter.ts` alone writes `data-applied-cursor`,
+`data-event-cursor` and `sse-connect`'s `after`. Decoding, verification and
+strict recovery remain [M10](../roadmap-m10.md) work.
 
 ### Sequence groups and cursors
 
@@ -25,8 +26,6 @@ groups, never compared with conversation cursors.
 | `F` | First failure, `{ reason, id }`; `id` is a decimal string when known, otherwise `null` | `null` | First failed decode, application or history re-application; later failures never replace it |
 | `Uc` | The `after` in the URL the source was created with | `P0` for the first source | Set on creation; recreate or bfcache uses `G`; the model rejects an `after` above `G` |
 | `Rc` | The id of the last id-bearing durable frame dispatched on that connection | Unset (`null`) | Dispatch of a durable frame with a decimal raw id; reset to `null` on source creation |
-
-Invariants:
 
 - `P0 ≤ Sh ≤ Ap ≤ G`; no page cursor decreases.
 - `Uc ≤ G` at all times, because `G` is monotonic.
@@ -97,7 +96,7 @@ dispatch ids leave `Rc` alone; frames without `id:` never move page cursors.
 ### Compatible and strict modes
 
 The root sets one mode flag. Strict recovery is the direction described in
-M10, not behaviour selected by the unwired module.
+M10; the page selects compatible mode.
 
 | | Compatible | Strict |
 |---|---|---|

@@ -1,9 +1,15 @@
 import * as dom from "./contracts.gen.ts";
 import { createComposerQueue, holdsReload, type PendingItem, type Delivery } from "./composer-queue.ts";
 
+/** Server-owned target changes and sends must retain the native form controls. */
+export function composerSubmitMode(submitter: string | undefined, quote: boolean, reply: boolean): "cancel" | "target" | "pending" {
+  if (submitter === "clear_reply") return "cancel";
+  return quote || reply ? "target" : "pending";
+}
+
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
-  Record<typeof dom.CursorField | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement } };
+  Record<typeof dom.CursorField | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement; reply?: HTMLInputElement } };
 type ComposerBody = HTMLTextAreaElement & { form: ComposerForm };
 // htmx supplies detail; target types are narrowed by each delegated hook below.
 type HtmxEvent<T extends HTMLElement = HTMLElement> = CustomEvent<{
@@ -16,7 +22,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
   notSent: dom.NotSentAttribute, recovered: dom.RecoveredAttribute, repeat: dom.RepeatAttribute,
   capacity: dom.CapacityAttribute, busy: dom.BusyAttribute } as const;
 
-(() => {
+if (typeof window !== "undefined") (() => {
   // Safari's keyboard shrinks/pans only the visual viewport, not dvh.
   const viewport = window.visualViewport;
   const updateViewport = () => {
@@ -141,6 +147,8 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
       return;
     }
     if (event.target.id !== dom.MessageComposerID) return;
+    const mode = composerSubmitMode((event.submitter as HTMLButtonElement | null)?.name, Boolean(event.target.elements.quote), Boolean(event.target.elements.reply));
+    if (mode === "cancel") return;
     // Quote shares the composer's htmx lock; guard the pending/plain paths too,
     // before either can submit stale quote state or clear the draft.
     if (dom.getQuoteForm()?.classList.contains("htmx-request")) {
@@ -161,7 +169,7 @@ const alerts = { unconfirmed: dom.UnconfirmedAttribute, stillUnconfirmed: dom.St
     const form = event.target, body = form.elements.body as ComposerBody;
     const list = dom.getMessagePending()!;
     let item!: HTMLLIElement, sending!: ComposerForm;
-    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), Boolean(form.elements.quote), () => {
+    const pending = queue.admit(body.value, place(form), form.classList.contains("htmx-request"), mode === "target", () => {
       event.preventDefault();
       event.stopImmediatePropagation();
       item = template.content.firstElementChild!.cloneNode(true) as HTMLLIElement;

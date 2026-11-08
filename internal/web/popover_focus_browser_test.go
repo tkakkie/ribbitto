@@ -41,6 +41,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	mux.Handle("GET /conversation", templ.Handler(view.ChannelScreen(css, conversation)))
+	mux.Handle("GET /signin", templ.Handler(view.SignIn(css, view.SignInForm{})))
 	mux.Handle("GET /list", templ.Handler(view.ChannelListScreen(css, list)))
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
@@ -50,6 +51,15 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	defer server.Close()
 	tab, closeTab := boundedPage(t, browser, ctx, "popover focus")
 	defer closeTab()
+
+	tab.MustNavigate(server.URL + "/signin").MustWaitLoad()
+	tab.MustEval(`() => {
+  const p=document.createElement('div');p.id='outside-channel';p.popover='manual';
+  const b=document.createElement('button');b.textContent='inside';p.append(b);document.body.append(p);
+  p.showPopover();b.focus();
+ }`)
+	tab.Keyboard.MustType(input.Tab)
+	tab.MustWait(`() => !document.getElementById('outside-channel').matches(':popover-open')`)
 
 	steps := newStepRunner(t, ctx, 20*time.Second)
 	base := tab.WithPanic(steps.fail)

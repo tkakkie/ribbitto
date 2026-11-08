@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
@@ -67,6 +68,16 @@ func swapSidebar(t *testing.T, page *rod.Page, events chan realtime.Outgoing) {
 }
 
 func testSwapZonesBrowser(t *testing.T, browser *rod.Browser) {
+	t.Run("single-start", func(t *testing.T) {
+		page, _, _, _ := pendingBrowserFixture(t, browser, false, func(p *view.ChannelPage, _ *http.ServeMux) {
+			p.Session, _ = pathID("019a1b2c-3d4e-7800-8800-000000000000")
+			p.Rendered = time.Now()
+			p.SessionExpires = p.Rendered.Add(time.Hour)
+		})
+		if !page.MustEval(`() => starts===1 && draftStarts===1 && focusStarts===1`).Bool() {
+			t.Fatal("composer, drafts or popover focus started more or less than once")
+		}
+	})
 	for _, tc := range []struct{ name, panel, target string }{
 		{"sidebar", "overview", "sidebar-channels"}, {"presence", "members", view.PresenceDOMID(kernel.ID{3})},
 		{"typing", "overview", "typing-status"}, {"pins", "overview", "pins-section"},

@@ -26,19 +26,33 @@ func TestScriptManifest(t *testing.T) {
 	}
 	entry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x"}`, file, sum)
 	devEntry := fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":%q}`, file, sum, file+".map")
+	previousEntry := func(name, file, mapFile string) string {
+		return fmt.Sprintf(`[{%q:{"file":%q,"map":%q}}]`, name, file, mapFile)
+	}
 	for _, tc := range []struct {
 		name, entries, previous, file, mapFile, want string
 	}{
 		{"valid", entry, "", file, "", ""},
 		{"valid development map", devEntry, "", file, file + ".map", ""},
 		{"valid previous generation", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"message-time-OLDHASH1.js.map"}}]`, file, file + ".map", ""},
+		{"valid previous digit entry", devEntry, previousEntry("2fa", "2fa-OLDHASH1.js", "2fa-OLDHASH1.js.map"), file, file + ".map", ""},
+		{"invalid previous digit filename", devEntry, previousEntry("2fa", "other-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"invalid previous digit map filename", devEntry, previousEntry("2fa", "2fa-OLDHASH1.js", "other.js.map"), file, file + ".map", "invalid source map filename"},
 		{"missing declaration", "", "", file, "", "missing declared entry"},
 		{"missing composer", entry, "", file, "", "missing declared entry"},
 		{"missing bundle", entry, "", "other.js", "", "reading script bundle"},
 		{"missing source map", devEntry, "", file, "", "reading source map"},
 		{"invalid source map filename", fmt.Sprintf(`"message-time":{"file":%q,"sha256":"%x","map":"other.js.map"}`, file, sum), "", file, "other.js.map", "invalid source map filename"},
 		{"unknown entry", entry + `,"other":{}`, "", file, "", "unknown entry"},
-		{"unknown previous entry", devEntry, `[{"other":{"file":"other-OLDHASH1.js"}}]`, file, file + ".map", "unknown entry"},
+		{"invalid previous entry name", devEntry, `[{"../other":{"file":"../other-OLDHASH1.js"}}]`, file, file + ".map", "invalid bundle filename"},
+		{"previous entry with slash", devEntry, previousEntry("a/b", "a/b-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"previous entry with backslash", devEntry, previousEntry(`a\b`, `a\b-OLDHASH1.js`, ""), file, file + ".map", "invalid bundle filename"},
+		{"previous entry with dot", devEntry, previousEntry("a.b", "a.b-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"empty previous entry", devEntry, previousEntry("", "-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"uppercase previous entry", devEntry, previousEntry("A", "A-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"previous entry with leading hyphen", devEntry, previousEntry("-a", "-a-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"previous entry with trailing hyphen", devEntry, previousEntry("a-", "a--OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
+		{"previous entry with double hyphen", devEntry, previousEntry("a--b", "a--b-OLDHASH1.js", ""), file, file + ".map", "invalid bundle filename"},
 		{"invalid previous filename", devEntry, `[{"message-time":{"file":"../escape.js"}}]`, file, file + ".map", "invalid bundle filename"},
 		{"invalid previous map filename", devEntry, `[{"message-time":{"file":"message-time-OLDHASH1.js","map":"other.js.map"}}]`, file, file + ".map", "invalid source map filename"},
 		{"invalid filename", `"message-time":{"file":"../escape.js"}`, "", file, "", "invalid bundle filename"},
@@ -86,8 +100,14 @@ func TestScriptManifest(t *testing.T) {
 			if scripts.IsMap("dist/"+file+".map") != (tc.mapFile != "") || scripts.IsMap("dist/manifest.json") {
 				t.Fatalf("IsMap = %v for mapFile %q", scripts.IsMap("dist/"+file+".map"), tc.mapFile)
 			}
-			if tc.previous != "" && (!scripts.IsBundle("dist/message-time-OLDHASH1.js") || !scripts.IsMap("dist/message-time-OLDHASH1.js.map") || scripts.IsBundle("dist/message-time-00000000.js")) {
-				t.Fatal("previous generation bundle/map registration mismatch")
+			if tc.previous != "" {
+				name := "message-time"
+				if tc.name == "valid previous digit entry" {
+					name = "2fa"
+				}
+				if !scripts.IsBundle("dist/"+name+"-OLDHASH1.js") || !scripts.IsMap("dist/"+name+"-OLDHASH1.js.map") || scripts.IsBundle("dist/"+name+"-00000000.js") {
+					t.Fatal("previous generation bundle/map registration mismatch")
+				}
 			}
 			if _, err := static.ScriptURL(ctx, "undeclared"); err == nil {
 				t.Fatal("undeclared script accepted")
@@ -239,5 +259,63 @@ func TestSourceChangeUpdatesScriptURL(t *testing.T) {
 		t.Fatalf("production scripts invalid after dev build: %v", err)
 	} else if url, err := scripts.URL("message-time"); err != nil || url != previous || scripts.IsMap(strings.TrimPrefix(url, "/static/")+".map") {
 		t.Fatalf("production URL or map changed after dev build: %q, %v", url, err)
+	}
+	// Publish an old per-script generation, then migrate back to the current registry.
+	oldRegistry := strings.ReplaceAll(string(registry), `"message-time"`, `"retired-composer"`)
+	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), []byte(oldRegistry), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web/src/retired-composer.ts"), []byte(`console.log("old generation")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	buildDev := func() {
+		t.Helper()
+		if out, err := exec.Command(binary, "-dev", root).CombinedOutput(); err != nil {
+			t.Fatalf("building dev migration: %v: %s", err, out)
+		}
+	}
+	buildDev()
+	devRoot := filepath.Join(root, "bin/dev-dist")
+	var old struct {
+		Entries map[string]struct{ File, Map string }
+	}
+	data, err := os.ReadFile(filepath.Join(devRoot, "manifest.json"))
+	if err != nil || json.Unmarshal(data, &old) != nil {
+		t.Fatal("reading old development manifest")
+	}
+	retired := old.Entries["retired-composer"]
+	if retired.File == "" || retired.Map == "" {
+		t.Fatal("old generation missing bundle/map")
+	}
+	if err := os.WriteFile(filepath.Join(root, "web/static/scripts.go"), registry, 0644); err != nil {
+		t.Fatal(err)
+	}
+	buildDev()
+	devAssets := fstest.MapFS{}
+	files, err := os.ReadDir(devRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(filepath.Join(devRoot, file.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		devAssets["dist/"+file.Name()] = &fstest.MapFile{Data: data}
+	}
+	scripts, err := static.NewScripts(devAssets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scripts.IsBundle("dist/"+retired.File) || !scripts.IsMap("dist/"+retired.Map) {
+		t.Fatal("retired bundle/map unavailable")
+	}
+	for _, file := range []string{retired.File, retired.Map} {
+		if _, err := os.ReadFile(filepath.Join(devRoot, file)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := scripts.URL("retired-composer"); err == nil {
+		t.Fatal("retired entry became current")
 	}
 }

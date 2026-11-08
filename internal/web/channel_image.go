@@ -51,9 +51,7 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	switch {
 	case errors.Is(err, conversation.ErrInvalidChannelImage):
 		p.overviewImageErr = "illustration.error"
-		request := r.Clone(r.Context())
-		request.Method = http.MethodGet
-		p.overview(w, request, m)
+		p.overview(w, r, m)
 	case isNotFound(err):
 		http.NotFound(w, r)
 	case err != nil:

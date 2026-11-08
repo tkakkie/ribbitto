@@ -9,7 +9,7 @@ import (
 // MemberLimits keeps each request kind's budget independent. Its zero value
 // is invalid; construct it once and share it across the process's handlers.
 type MemberLimits struct {
-	sendKey, mention, signal, read, create, image, resync, branch, post, pin, resolution *middleware.MemberRateLimiter
+	sendKey, mention, signal, read, create, image, resync, branch, post, pin, resolution, count *middleware.MemberRateLimiter
 }
 
 // MemberLimitsOption adjusts construction without accepting shared limiters.
@@ -32,7 +32,7 @@ func NewMemberLimits(now func() time.Time, options ...MemberLimitsOption) Member
 		signal: middleware.NewMemberRateLimiter(now), read: middleware.NewReadRateLimiter(now),
 		create: middleware.NewChannelCreationRateLimiter(now), image: middleware.NewChannelImageRateLimiter(now), resync: middleware.NewSidebarResyncRateLimiter(now),
 		branch: middleware.NewBranchRateLimiter(now), post: middleware.NewPostRateLimiter(now), pin: middleware.NewPinRateLimiter(now),
-		resolution: middleware.NewPinRateLimiter(now),
+		resolution: middleware.NewPinRateLimiter(now), count: middleware.NewCountRateLimiter(now),
 	}
 	for _, option := range options {
 		if option.apply != nil {

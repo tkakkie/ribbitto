@@ -470,7 +470,7 @@ func TestReadQuoteAmbiguousInput(t *testing.T) {
 }
 
 func TestQuoteInvalidPreservesPostStatus(t *testing.T) {
-	p := channelPages{messages: fakeMessages{}, pages: &pageRenderer{stylesheetURL: func() (string, error) { return "", nil }}}
+	p := channelPages{countLimit: middleware.NewCountRateLimiter(time.Now), messages: fakeMessages{}, pages: &pageRenderer{stylesheetURL: func() (string, error) { return "", nil }}}
 	r := httptest.NewRequest("POST", "/", nil)
 	w := httptest.NewRecorder()
 	p.render(w, r, org.Membership{}, kernel.ID{1}, 409, view.ChannelPage{QuoteInvalid: true, BodyError: "message.error.repeat"}, nil)

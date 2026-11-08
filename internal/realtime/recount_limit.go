@@ -9,7 +9,7 @@ import (
 
 var errRecountDeferred = errors.New("realtime: recount slot wait expired")
 
-// RecountLimit bounds computations across all sidebar triggers.
+// RecountLimit bounds page counts and computations across all sidebar triggers.
 // Registration capacity is independent; a deferred computation retains its stream.
 type RecountLimit struct {
 	slots  chan struct{}
@@ -37,20 +37,33 @@ func (l *RecountLimit) retryAt() time.Time {
 	return time.Now().Add(250*time.Millisecond + l.random(750*time.Millisecond))
 }
 
-func (s Stream) computeSidebar(ctx context.Context, sub Subscription) (Outgoing, error) {
-	if s.RecountLimit == nil {
-		return s.Sidebar.Recount(ctx, sub)
+// Acquire waits at most 25 ms for shared count capacity. A nil limit admits
+// without a slot. The caller must defer release until the computation returns.
+func (l *RecountLimit) Acquire(ctx context.Context) (release func(), err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, context.Cause(ctx)
+	}
+	if l == nil {
+		return func() {}, nil
 	}
 	wait, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
 	defer cancel()
 	select {
-	case s.RecountLimit.slots <- struct{}{}:
-		defer func() { <-s.RecountLimit.slots }()
+	case l.slots <- struct{}{}:
+		return func() { <-l.slots }, nil
 	case <-wait.Done():
 		if ctx.Err() != nil {
-			return Outgoing{}, context.Cause(ctx)
+			return nil, context.Cause(ctx)
 		}
-		return Outgoing{}, errRecountDeferred
+		return nil, errRecountDeferred
 	}
+}
+
+func (s Stream) computeSidebar(ctx context.Context, sub Subscription) (Outgoing, error) {
+	release, err := s.RecountLimit.Acquire(ctx)
+	if err != nil {
+		return Outgoing{}, err
+	}
+	defer release()
 	return s.Sidebar.Recount(ctx, sub)
 }

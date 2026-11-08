@@ -40,6 +40,11 @@ func NewMemberRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 1, memberBurst, 0)
 }
 
+// NewCountRateLimiter permits one concurrent page count per member, without a rate budget.
+func NewCountRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, float64(rate.Inf), 1, 1)
+}
+
 // NewReadRateLimiter returns initial, unmeasured read limits: 4/s, burst 16,
 // and four concurrent requests per member. State is in memory per process.
 func NewReadRateLimiter(now func() time.Time) *MemberRateLimiter {

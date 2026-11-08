@@ -507,3 +507,9 @@ other = "Back to conversation"
 
 ["resolution.summary"]
 other = "Conclusion text"
+
+["capacity.title"]
+other = "Server busy"
+
+["capacity.message"]
+other = "Please wait a moment and try again."

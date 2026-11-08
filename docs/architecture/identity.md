@@ -20,8 +20,9 @@ validated, normalised values and a password hash. The caller owns commit and
 rollback; `identitypg.AccountCreatorIn` never opens, commits or rolls back.
 The store maps `account_email_key` to `identity.ErrEmailTaken` and every
 `account_email_*` CHECK to `identity.ErrInvalidEmail`; other errors remain
-wrapped PostgreSQL errors. These distinct errors preserve sign-up's field
-mappings and let setup re-check completion after rollback for either.
+wrapped PostgreSQL errors. These distinct errors preserve sign-up's
+[field mappings](setup-and-signup.md#sign-up) and let setup re-check
+completion after rollback for either.
 
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
@@ -49,8 +50,9 @@ mappings and let setup re-check completion after rollback for either.
   still-valid session. Other sessions stay connected. `identity.ErrNoSession`
   (empty, malformed, unknown, deleted or expired token) preserves idempotent
   sign-out and replacement creation; an operational lookup error aborts
-  without changing sessions or cancelling streams. Setup and sign-up must
-  still decide availability before session lookup. `DeleteOthers` calls
+  without changing sessions or cancelling streams. Setup and sign-up decide
+  availability before any session lookup
+  ([`request-flow.md`](request-flow.md#middleware-order)). `DeleteOthers` calls
   `CancelSession` for each returned id. On a mutation error, ids may be
   missing even after a commit, so it calls `CancelAccount` instead: all the
   account's streams end, including the current session's. Reconnection
@@ -100,10 +102,9 @@ from email or chat), and cross-origin POSTs are stopped separately
 ([`request-flow.md`](request-flow.md#middleware-order)).
 
 **Sign-in and sign-out pages**. `GET /signin` shows the form (a signed-in
-request is redirected to `/`). Successful
-`POST /signin` sets the replacement cookie and redirects to `/` with 303.
-An unknown email and a wrong password get the same page, status (422) and
-message; the typed email is kept and the
+request is redirected to `/`). Successful `POST /signin` sets the replacement
+cookie and redirects to `/` with 303. An unknown email and a wrong password
+get the same page, status (422) and message; the typed email is kept and the
 password never echoed. An email rejected by `identity.ValidateEmail` or an
 empty password gets 422 with its own message, without revealing whether an
 account exists. A busy hasher answers 503. `POST /signout` deletes

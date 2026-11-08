@@ -46,37 +46,37 @@ maintainer on 2026-10-20 (#1406).
 Both automated tests and manual checks count as verification evidence;
 anything without evidence is recorded as unverified.
 
-A record counts as verified only when it records all of the following (a
-record missing any of them is not a verification):
-
-- **Browser name.**
-- **Concrete version:** major and patch, and the OS or device version where
-  relevant (for example iOS / iPadOS and Safari).
-- **Date.**
-- **Environment:** real device, emulator or simulator, automated test, and
-  so on.
-- **Scope of the check:** what was exercised.
-- **Result.**
-- **Evidence:** a link or a pointer to where the run is recorded (for
-  example a CI job, a test name, or the review or issue comment).
-
-A result for one version counts for that version only, never for the whole
-browser family and never for "the latest two versions"; each target version
-is verified, or recorded unverified, on its own. A different environment
-(for example Playwright's WebKit versus real iOS Safari, or an emulator
-versus a device) is a different record: WebKit is not iOS Safari.
+Verification requires browser name, concrete major/patch version (OS/device version
+where relevant), date, environment (device/emulator/simulator/automation), scope,
+result and evidence link/pointer (CI job, test, review or issue comment).
+A missing field means unverified. Each target version needs its own record;
+one version never verifies a family or the latest two. Environments need separate
+records: Playwright WebKit is not real iOS Safari; emulators are not devices.
 
 | Browser | Target versions | Verified how | Status |
 |---|---|---|---|
-| Desktop Chrome | latest two major versions | headless Chrome via go-rod in `TestBrowser` (`internal/web`) and `TestTopicPostBrowser` (`cmd/ribbitto`) with `RIBBITTO_REQUIRE_BROWSER=1`, using Chrome installed on the CI runner image (not pinned); every CI run records the version `TestBrowser` drives, shard, date and runner image in each browser job's step summary (`test (web-1/3)`, `test (web-2/3)`, `test (web-3/3)`) | unverified (no check yet covers the latest two major versions, including the older one; scope, result and evidence must be filled per check, planned in #1426) |
+| Desktop Chrome | latest two major versions | R4 level 1, Chrome 157.0.8103.39 via go-rod; see run record below; every CI run records the Chrome version (not pinned), shard, date and runner image in each browser job's step summary | PASS for the recorded scope/version; latest two major versions remain unverified |
 | Desktop Edge | latest two major versions | not verified | unverified |
 | Desktop Firefox | latest two major versions | not verified | unverified |
 | Desktop Safari | latest two major versions | not verified | unverified |
-| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | not verified (manual check on a real iOS device planned in #1426; see the planned levels below) | unverified |
-| Android Chrome | latest two major versions | not verified (check on a real Android device or an emulator planned in #1426; a real device and an emulator are different records, each recorded as what it is) | unverified |
+| iOS / iPadOS Safari | latest two generations of iOS / iPadOS | R4 level 3: real-device checklist in [#2261] (M10) | NOT RUN |
+| Android Chrome | latest two major versions | R4 level 4: device or emulator checklist in [#2261] (M10) | NOT RUN |
 
-[#1426](https://github.com/tkakkie/ribbitto/issues/1426) plans four
-separately recorded verification levels: the existing Chrome go-rod tests,
-a WebKit run recorded as WebKit and never as iOS Safari, a real iOS device
-run, and an Android Chrome run (on a real device or an emulator, each
-recorded as what it is).
+[R4 run record](https://github.com/tkakkie/ribbitto/issues/1426#issuecomment-6706152731)
+(2026-11-07, head `33d709a`):
+
+- **Level 1 — Chrome go-rod:** Chrome 157.0.8103.39, clean head extract,
+  `webbuild` bundles, `RIBBITTO_REQUIRE_BROWSER=1`. `TestBrowser` without DB:
+  1157 PASS, 0 FAIL, 59 SKIP (PostgreSQL required); DB scenarios on disposable
+  PostgreSQL 18: 58 PASS, 0 FAIL, 0 SKIP. `cmd/ribbitto` with
+  `RIBBITTO_REQUIRE_DB=1`: 73 PASS, 0 FAIL, 0 SKIP.
+- **Level 2 — Playwright WebKit:** 1.64.1 WebKit build, local TLS proxy to
+  head server: **17/17 PASS**. Scope: CSP, switching/title/focus/status,
+  history/one stream request, overlapping navigation, drafts, own/live posts,
+  offline recovery, tab unread/title/favicon, older messages, JavaScript-off
+  reading/posting/paging/switching. **WebKit, not iOS Safari**; engine version
+  unrecorded, so no supported Safari version verified.
+- **Levels 3–4 — real iOS Safari / Android Chrome:** **NOT RUN**; [#2261].
+  Device keyboard/viewport/bfcache unverified; WebKit/desktop Chrome cannot substitute.
+
+[#2261]: https://github.com/tkakkie/ribbitto/issues/2261

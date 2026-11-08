@@ -63,6 +63,7 @@ Channel pages load the content-hashed composer bundle from `/static/dist/`
 `requestSubmit` follows the [send-key preference](identity.md). IME (`isComposing`, keyCode 229, or
 100 ms after composition ends) never sends. Ordinary and pending sending,
 fallbacks and failures follow the [composer contract](web-composer.md#composer).
+An ordinary form in flight blocks composer submits; valid pending sends queue.
 While a send is in flight, only the send button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
 help, which keeps its space; the textarea stays usable.

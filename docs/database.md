@@ -90,7 +90,7 @@ Migration 00017 adds `account.send_key` (text, not null, default `enter`)
 with the CHECK `account_send_key_check` allowing `enter` and
 `modifier_enter` (#1175). Existing accounts become `enter` through the
 default without a table rewrite, so they keep sending on Enter; checking the
-CHECK scans `account` while `migrate up` runs. Down drops the column.
+CHECK scans `account` while `migrate up` runs.
 
 Migration 00018 adds a message's quote (#1176,
 [decision 38](decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)):

@@ -22,9 +22,8 @@ The decision is recorded in
 | default topic of a channel | chorus | exists | The one topic every channel has, where a message goes when no topic is chosen. |
 | `message` | ribbit | exists | A post in a channel, written by a member. |
 
-Status describes the concept. The UI shows the labels as
-[`ui.md`](../ui.md#product-labels) describes (#879): on the conversation
-screen a label is the noun for its thing — headings, list and panel names,
+Status describes the concept. On the conversation screen a label is the
+noun for its thing — headings, list and panel names,
 counts, the composer's field and the nouns in controls ("Create lilypad",
 "Load older ribbits") — while verbs, identity, roles and presence keep ordinary words.
 Errors, help and notices avoid a noun for the thing instead of using a label

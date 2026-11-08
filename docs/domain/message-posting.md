@@ -15,9 +15,7 @@ Edit restores text/key and uncertainty to an empty composer outside IME, focuses
 its end and removes the item; otherwise it is disabled with a description.
 State swaps and refusals retain the key and uncertainty; emptying renews the
 key and clears uncertainty. Pending responses keep text; failures never swap it.
-Replies keep their target in the composer until success; cancellation keeps
-text and any quote. Failure and target changes keep the send key until a
-confirmed answer, so an unconfirmed retry cannot create a second message.
+Cancel keeps text/quote; uncertain reply retries and target changes keep the key.
 Idle reply, quote and blank/over-limit sends, or without
 `crypto.randomUUID()`, use the ordinary path: success removes the sent prefix
 (#1173); 422 keeps text and a field error. The textarea stays usable.

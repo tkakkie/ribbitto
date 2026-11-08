@@ -11,6 +11,7 @@ Chosen by the maintainer from mock-ups for M5 (#870), replacing
 "B · Clear water" from #9: white rounded blocks on a lightly tinted base,
 with the calm reading column of a modern AI chat app, the order of a tool
 like Linear, and on desktop the rounded, layered feel of Microsoft's Fluent 2.
+The mock-ups are a direction, not a specification.
 
 - **Blocks on a base.** The page ground is the tinted `base`. The app bar,
   the conversation, and a side panel when one is open, are white rounded
@@ -120,7 +121,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
 
 ## Product labels
 
-Product labels follow [`vocabulary.md`](domain/vocabulary.md#product-labels):
+The frog labels (`docs/domain/vocabulary.md`) are names. Their meaning
+comes from presentation and placement, never from ordinary words added
+beside them (decisions 20 and 28):
 
 - **Placement shows the hierarchy.** The organisation's name sits at the
   top of the sidebar (an organisation image is not built yet); channels
@@ -157,9 +160,8 @@ Without JavaScript the control links to
 `/organizations/{slug}/messages/{messageID}/actions`: the visible message,
 copyable permalink, Quote, Reply, POST/303 Pin/Unpin and Back to the conversation.
 The page checks message visibility.
-Reply shows an announced target beside the composer, with a cancel control;
-cancelling keeps text and any quote. Replies show a one-line preview linking
-to the original, or an unavailable placeholder.
+Reply announces its target; cancel keeps text/quote. Previews link to the
+original when available.
 
 ## Planned directions (from the maintainer, #9)
 

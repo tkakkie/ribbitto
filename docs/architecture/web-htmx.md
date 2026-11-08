@@ -41,8 +41,8 @@ htmx does only requests/swaps; the server and templ own HTML.
   takes a `view.Message` and renders one `<li>` on its own or in the page.
 - `#quote-form` is a page-level GET to the current conversation and composer
   fragment; htmx posts it to the channel's `/quote`, swapping `#composer-quote`.
-  Each shared menu submits only `name="quote"` and the message UUID. The chip
-  lives inside the composer, submits a hidden `quote`, and describes the textarea
+  Menu Quote/Reply submit the message UUID; quote actions preserve `reply`.
+  The chip submits a hidden `quote` and describes the textarea
   through `#composer-quote-description` (author/excerpt or editable part; empty without a quote).
   Quoted post responses refresh it out of band: re-read on 422/409, empty on
   success. Unquoted pending responses leave it alone.

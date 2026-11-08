@@ -19,6 +19,16 @@ export function createReplyAttempt() {
   };
 }
 
+/** Quote actions share a fragment with the independent reply target. */
+export function configureQuoteRequest(parameters: Record<string, string>, button: { name: string; value: string } | null | undefined,
+  field: (name: string) => { value: string } | null) {
+  if (button?.name) parameters[button.name] = button.value;
+  for (const name of button?.name === "reply" ? ["quote", "quote_text"] : ["reply"]) {
+    const control = field(name);
+    if (control) parameters[name] = control.value;
+  }
+}
+
 // These controls belong to the server-rendered composer and pending template.
 type ComposerForm = HTMLFormElement & { elements: HTMLFormControlsCollection &
   Record<typeof dom.CursorField | "idempotency_key" | "composer", HTMLInputElement> & { body: ComposerBody | HTMLInputElement; quote?: HTMLInputElement; reply?: HTMLInputElement } };
@@ -265,14 +275,8 @@ if (typeof window !== "undefined") (() => {
     // Closing the popover restores focus, clearing htmx's remembered button.
     // The native submit event retains it, including for live-delivered menus.
     const button = event.detail.triggeringEvent?.submitter as HTMLButtonElement | null | undefined;
-    if (button?.name) event.detail.parameters[button.name] = button.value;
-    if (button?.name === "reply") {
-      const form = dom.getMessageComposer() as ComposerForm;
-      for (const name of ["quote", "quote_text"]) {
-        const field = form.elements.namedItem(name) as HTMLInputElement | null;
-        if (field) event.detail.parameters[name] = field.value;
-      }
-    }
+    configureQuoteRequest(event.detail.parameters, button, name =>
+      (dom.getMessageComposer() as ComposerForm).elements.namedItem(name) as HTMLInputElement | null);
   });
   document.addEventListener("click", (native) => {
     const event = native as PointerEvent & { target: HTMLElement };

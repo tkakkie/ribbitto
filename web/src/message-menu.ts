@@ -57,6 +57,7 @@ import * as dom from "./contracts.gen.ts";
     menu.querySelector<HTMLAnchorElement>(`[${dom.CopyLinkAttribute}]`)!.href = dom.readAttribute(link, dom.MessageURLAttribute)!;
     menu.querySelector<HTMLButtonElement>(`[form="${dom.QuoteFormID}"]`)!.value = id;
     const reply = menu.querySelector<HTMLButtonElement>('button[name="reply"]')!;
+    // Markup stays inert until opening the menu binds it to a message.
     reply.type = "submit";
     reply.setAttribute("form", dom.QuoteFormID);
     reply.value = id;

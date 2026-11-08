@@ -131,8 +131,9 @@ type HtmxConfigRequestEvent = CustomEvent<{
     const target = event.target as Element;
     if (target.id !== QuoteFormID) return;
     clear();
-    delete event.detail.parameters[QuoteTextField];
     const button = event.detail.triggeringEvent?.submitter;
+    // Reply carries the chip's current part; clearing it would select whole.
+    if (!button?.matches('[name="reply"]')) delete event.detail.parameters[QuoteTextField];
     if (!button?.matches(quoteSelectionButtons)) return;
     // Always re-read: keyboard/programmatic submits need no pointer press,
     // and a changed or lost selection must never become a whole quote.

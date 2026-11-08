@@ -37,10 +37,9 @@ to update only `middleware.Account` (invalid value: 400). Its 303 uses parsed
 `return_channel`/`return_topic` UUIDs and `view.ConversationURL`, or the channel
 list, dropping history, panels and scroll position. The choice follows the account.
 
-Quote selection writes nothing: `POST …/channels/{channel-id}/quote` uses
-an organisation- and channel-scoped read and returns only
-`#composer-quote`. The plain GET to the conversation with `?quote=<UUID>`
-uses the same scoped read. Malformed IDs get 400; missing or out-of-scope
+Read-only `POST …/channels/{channel-id}/quote` scopes `quote` and optional
+`reply` to organisation/channel and renders `#composer-quote`.
+Conversation GET `?quote=<UUID>` uses the same read. Malformed IDs get 400; missing or out-of-scope
 messages get the posting route's plain 404, without their text, before comparing
 any submitted part. `part=<UUID>` (also a conversation GET) fills an editable
 chip with the original's extracted text; GET ignores `quote_text` entirely.

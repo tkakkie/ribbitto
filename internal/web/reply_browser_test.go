@@ -43,6 +43,7 @@ func testReplySubmitBrowser(t *testing.T, browser *rod.Browser) {
 }
 
 func testReplyEnhancedBrowser(t *testing.T, browser *rod.Browser) {
+	testReplyQuoteActionsBrowser(t, browser)
 	for _, outcome := range []string{"success", "retry", "change", "cancel", "cancel-quote"} {
 		t.Run(outcome, func(t *testing.T) {
 			original := view.Message{ID: kernel.ID{9}, Handle: "owner", Body: "Original"}
@@ -141,7 +142,7 @@ func testReplyEnhancedBrowser(t *testing.T, browser *rod.Browser) {
 					if cancel.values.Get("clear_reply") != "1" || cancel.values.Get("idempotency_key") != key {
 						t.Fatal("cancel changed the unconfirmed key")
 					}
-					cancel.reply <- browserReply{status: 200, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{Quote: quote, QuoteUpdate: true, IdempotencyKey: &key})))}
+					cancel.reply <- browserReply{status: 200, body: []byte(renderIn(t, "en", view.MessageComposer(view.ChannelPage{Quote: quote, QuoteUpdate: true, EventCursor: new(int64(42)), IdempotencyKey: &key})))}
 					count++
 					page.MustWait(`n => window.replyAnswers === n`, count)
 					if !page.MustEval(`quoted => { const f = document.getElementById('message-composer'); return !f.elements.reply && Boolean(f.elements.quote) === quoted && f.elements.body.value === 'Draft answer'; }`, quote != nil).Bool() {
@@ -157,6 +158,9 @@ func testReplyEnhancedBrowser(t *testing.T, browser *rod.Browser) {
 					changed.ID = kernel.ID{10}
 					count++
 					answer(chip(&changed), count)
+					if page.MustEval(`() => document.getElementById('message-composer').elements.reply?.value`).Str() != realtime.FormatPayloadID(changed.ID) {
+						t.Fatal("changed-target fragment lost reply")
+					}
 				}
 				tabTo("#message-composer button[type=submit]:not([name]):not([form])")
 				page.Keyboard.MustType(input.Enter)
@@ -183,6 +187,83 @@ func testReplyEnhancedBrowser(t *testing.T, browser *rod.Browser) {
 			if !page.MustEval(`success => { const f = document.getElementById('message-composer'); return !f.elements.reply && f.elements.idempotency_key.value === 'fresh-key' && f.elements.body.value === (success ? '' : 'Draft answer'); }`, status == 200).Bool() {
 				t.Fatal("success/conflict did not clear or retain the expected composer state")
 			}
+		})
+	}
+}
+
+func testReplyQuoteActionsBrowser(t *testing.T, browser *rod.Browser) {
+	for _, action := range []string{"menu-quote", "remove-quote", "quote-part", "reply-part", "reply-empty-part"} {
+		t.Run(action, func(t *testing.T) {
+			original := view.Message{ID: kernel.ID{9}, Handle: "owner", Body: "Original"}
+			quoted := view.Message{ID: kernel.ID{8}, Handle: "owner", Body: "Quoted text"}
+			page, _, posts, _ := pendingBrowserFixture(t, browser, false, func(snapshot *view.ChannelPage, _ *http.ServeMux) {
+				snapshot.Reply, snapshot.Quote = &original, &quoted
+				snapshot.Messages = []view.Message{original, quoted}
+				if action == "reply-part" || action == "reply-empty-part" {
+					snapshot.QuoteText = new("Quoted")
+				}
+			})
+			page.MustEval(`() => {
+ window.quoteAnswers = 0;
+ document.addEventListener('htmx:afterRequest', e => { if (e.detail.requestConfig?.elt.id === 'quote-form') window.quoteAnswers++; });
+ document.getElementById('message-body').value = 'Answer';
+}`)
+			part := "text"
+			if action == "reply-empty-part" {
+				part = ""
+			}
+			switch action {
+			case "menu-quote", "reply-part", "reply-empty-part":
+				page.MustElement(fmt.Sprintf("#message-%x button[popovertarget]", quoted.ID)).MustClick()
+				name := "quote"
+				if action != "menu-quote" {
+					name = "reply"
+					page.MustEval(`text => document.getElementById('quote-text').value = text`, part)
+				}
+				page.MustElement("#message-actions [name=" + name + "]").MustClick()
+			case "remove-quote":
+				page.MustElement("#composer-quote button[form=quote-form]:not([name])").MustClick()
+			case "quote-part":
+				page.MustElement("#composer-quote [name=part]").MustClick()
+			}
+			request := receivePending(t, page, posts)
+			want := realtime.FormatPayloadID(original.ID)
+			if action == "reply-part" || action == "reply-empty-part" {
+				want = realtime.FormatPayloadID(quoted.ID)
+				if !request.values.Has("quote_text") || request.values.Get("quote_text") != part {
+					t.Fatalf("Reply lost present quote_text: %v", request.values)
+				}
+			}
+			if request.values.Get("reply") != want {
+				t.Fatalf("quote action lost reply target: %v", request.values)
+			}
+			fragment := view.ChannelPage{Reply: &original, Quote: &quoted}
+			switch action {
+			case "remove-quote":
+				fragment.Quote = nil
+			case "quote-part":
+				fragment.QuoteText = new(quoted.Body)
+			case "reply-part", "reply-empty-part":
+				fragment.Reply, fragment.QuoteText = &quoted, &part
+			}
+			status := 200
+			if action == "reply-empty-part" {
+				status, fragment.QuoteInvalid = 422, true
+			}
+			request.reply <- browserReply{status: status, body: []byte(renderIn(t, "en", view.ComposerQuote(fragment, false)))}
+			page.MustWait(`() => window.quoteAnswers === 1`)
+			if page.MustEval(`() => document.getElementById('message-composer').elements.reply?.value`).Str() != want {
+				t.Fatal("quote response lost reply chip")
+			}
+			page.MustElement("#message-composer button[type=submit]:not([name]):not([form])").MustClick()
+			sent := receivePending(t, page, posts)
+			if sent.values.Get("reply") != want || sent.values.Get("body") != "Answer" {
+				t.Fatal("send after quote action lost reply or text")
+			}
+			if (action == "reply-part" || action == "reply-empty-part") && (!sent.values.Has("quote_text") || sent.values.Get("quote_text") != part) {
+				t.Fatal("send after Reply lost the current quote part")
+			}
+			sent.reply <- browserReply{status: 500, body: []byte("unconfirmed")}
 		})
 	}
 }

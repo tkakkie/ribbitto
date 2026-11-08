@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -119,7 +120,7 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("native actions lack Reply")
 	}
 	key := *freshKey()
-	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
+	cancel := url.Values{"body": {"Draft answer"}, "reply": {id}, "quote": {id}, "clear_reply": {"1"}, "cursor": {"42"}, "idempotency_key": {key}, "composer": {selected.Get("composer")}}
 	w = serveForm(handler, "POST", feed, cookie, cancel)
 	_, cancelledForm := composerForm(t, w)
 	target := replyTargetMarkup(t, w.Body.String())
@@ -128,6 +129,14 @@ func TestNativeReplyAgainstPostgreSQL(t *testing.T) {
 	}
 	if cancelledForm.Get("composer") == "" || cancelledForm.Get("composer") != selected.Get("composer") {
 		t.Fatal("cancel lost composer generation")
+	}
+	enhanced := serveForm(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("HX-Request", "true")
+		handler.ServeHTTP(w, r)
+	}), "POST", feed, cookie, cancel)
+	_, enhancedForm := composerForm(t, enhanced)
+	if enhanced.Code != 200 || enhancedForm.Get("cursor") != "42" {
+		t.Fatal("cancel lost cursor")
 	}
 	var cancelled int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM message WHERE idempotency_key = $1", key).Scan(&cancelled); err != nil || cancelled != 0 {

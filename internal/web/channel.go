@@ -472,7 +472,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		if keyed {
 			kept = &submittedKey[0]
 		}
-		p.renderComposer(w, r, m, c, p.topicID, http.StatusOK, view.ChannelPage{Body: body, Composer: composer, IdempotencyKey: kept})
+		p.renderComposer(w, r, m, c, p.topicID, http.StatusOK, view.ChannelPage{Body: body, Composer: composer, EventCursor: cursor, IdempotencyKey: kept})
 		return
 	}
 	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, ReplyTo: reply, Quote: quote, QuoteText: quoteText, UnknownMember: view.UnknownMember(r.Context())})
